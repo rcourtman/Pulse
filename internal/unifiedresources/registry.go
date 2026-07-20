@@ -3142,7 +3142,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
-	existing.Metrics = mergeMetrics(existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus)
+	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus)
 
 	// Prefer agent naming when available
 	if incoming.Name != "" {
@@ -3728,7 +3728,7 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 		primary.Ceph = other.Ceph
 	}
 
-	primary.Metrics = mergeMetrics(primary.Metrics, other.Metrics, SourceAgent, time.Now().UTC(), primary.SourceStatus)
+	primary.Metrics = mergeMetrics(primary, primary.Metrics, other.Metrics, SourceAgent, time.Now().UTC(), primary.SourceStatus)
 	primary.Status = aggregateStatus(primary)
 }
 
@@ -4682,7 +4682,7 @@ func addSources(sources []DataSource, more []DataSource) []DataSource {
 	return out
 }
 
-func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source DataSource, now time.Time, status map[DataSource]SourceStatus) *ResourceMetrics {
+func mergeMetrics(target *Resource, existing *ResourceMetrics, incoming *ResourceMetrics, source DataSource, now time.Time, status map[DataSource]SourceStatus) *ResourceMetrics {
 	if existing == nil {
 		return incoming
 	}
@@ -4690,13 +4690,13 @@ func mergeMetrics(existing *ResourceMetrics, incoming *ResourceMetrics, source D
 		return existing
 	}
 	merged := *existing
-	merged.CPU = mergeMetric(existing.CPU, incoming.CPU, source, now, status)
-	merged.Memory = mergeMetric(existing.Memory, incoming.Memory, source, now, status)
-	merged.Disk = mergeMetric(existing.Disk, incoming.Disk, source, now, status)
-	merged.NetIn = mergeMetric(existing.NetIn, incoming.NetIn, source, now, status)
-	merged.NetOut = mergeMetric(existing.NetOut, incoming.NetOut, source, now, status)
-	merged.DiskRead = mergeMetric(existing.DiskRead, incoming.DiskRead, source, now, status)
-	merged.DiskWrite = mergeMetric(existing.DiskWrite, incoming.DiskWrite, source, now, status)
+	merged.CPU = mergeMetric(target, existing.CPU, incoming.CPU, source, now, status)
+	merged.Memory = mergeMetric(target, existing.Memory, incoming.Memory, source, now, status)
+	merged.Disk = mergeMetric(target, existing.Disk, incoming.Disk, source, now, status)
+	merged.NetIn = mergeMetric(target, existing.NetIn, incoming.NetIn, source, now, status)
+	merged.NetOut = mergeMetric(target, existing.NetOut, incoming.NetOut, source, now, status)
+	merged.DiskRead = mergeMetric(target, existing.DiskRead, incoming.DiskRead, source, now, status)
+	merged.DiskWrite = mergeMetric(target, existing.DiskWrite, incoming.DiskWrite, source, now, status)
 	return &merged
 }
 
@@ -4718,7 +4718,7 @@ func metricSourceStale(now time.Time, status map[DataSource]SourceStatus, source
 	return now.Sub(st.LastSeen) > threshold
 }
 
-func mergeMetric(existing *MetricValue, incoming *MetricValue, source DataSource, now time.Time, status map[DataSource]SourceStatus) *MetricValue {
+func mergeMetric(target *Resource, existing *MetricValue, incoming *MetricValue, source DataSource, now time.Time, status map[DataSource]SourceStatus) *MetricValue {
 	if incoming == nil {
 		return existing
 	}
@@ -4739,10 +4739,40 @@ func mergeMetric(existing *MetricValue, incoming *MetricValue, source DataSource
 		}
 		return existing
 	}
-	if sourcePriority(source) >= sourcePriority(existing.Source) {
+	if metricMergePriority(target, source) >= metricMergePriority(target, existing.Source) {
 		return &incomingCopy
 	}
 	return existing
+}
+
+// hypervisorManagedGuest reports whether the resource is a guest workload whose
+// utilisation is accounted by a hypervisor platform (Proxmox VM/LXC, VMware VM).
+func hypervisorManagedGuest(r *Resource) bool {
+	if r == nil {
+		return false
+	}
+	switch r.Type {
+	case ResourceTypeVM, ResourceTypeSystemContainer:
+		return true
+	}
+	if r.Proxmox != nil && (r.Proxmox.VMID > 0 || strings.TrimSpace(r.Proxmox.ContainerType) != "") {
+		return true
+	}
+	return false
+}
+
+// metricMergePriority resolves the priority a source's utilisation metrics get
+// on a specific resource. On hypervisor-managed guests the platform's numbers
+// are authoritative — an agent inside an LXC measures through the shared
+// kernel and reports the node's utilisation, and history charts follow the
+// platform series — so the agent must not outrank the platform there. The
+// freshness gate in mergeMetric still lets a live agent cover for a stale
+// platform source.
+func metricMergePriority(target *Resource, source DataSource) int {
+	if source == SourceAgent && hypervisorManagedGuest(target) {
+		return 1
+	}
+	return sourcePriority(source)
 }
 
 func sourcePriority(source DataSource) int {

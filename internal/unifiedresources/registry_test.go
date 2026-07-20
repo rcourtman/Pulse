@@ -4390,13 +4390,14 @@ func TestMergeMetric_LiveSourceOverridesStaleHigherPriority(t *testing.T) {
 	existing := &MetricValue{Value: 0, Percent: 0, Source: SourceAgent}
 	incoming := &MetricValue{Value: 6.2, Percent: 6.2, Source: SourceProxmox}
 
-	got := mergeMetric(existing, incoming, SourceProxmox, now, status)
+	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceProxmox, now, status)
 	if got == nil || got.Percent != 6.2 || got.Source != SourceProxmox {
 		t.Fatalf("expected live proxmox CPU to override stale agent CPU, got %+v", got)
 	}
 }
 
-// When both sources are fresh, static priority still decides: the agent wins.
+// When both sources are fresh, static priority still decides: the agent wins
+// on a host-shaped resource (its own kernel, its own numbers).
 func TestMergeMetric_FreshHigherPriorityStillWins(t *testing.T) {
 	now := time.Now().UTC()
 	status := map[DataSource]SourceStatus{
@@ -4406,9 +4407,75 @@ func TestMergeMetric_FreshHigherPriorityStillWins(t *testing.T) {
 	existing := &MetricValue{Percent: 6.2, Source: SourceProxmox}
 	incoming := &MetricValue{Percent: 12.5, Source: SourceAgent}
 
-	got := mergeMetric(existing, incoming, SourceAgent, now, status)
+	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceAgent, now, status)
 	if got == nil || got.Percent != 12.5 || got.Source != SourceAgent {
 		t.Fatalf("expected fresh agent CPU to win by priority, got %+v", got)
+	}
+}
+
+// Issue #1597: an agent inside an LXC measures through the shared kernel and
+// reports the node's CPU, not the container's. On a hypervisor-managed guest
+// the platform metric must survive an agent merge even though the agent
+// outranks Proxmox on host-shaped resources.
+func TestMergeMetric_GuestKeepsPlatformCPUOverInGuestAgent(t *testing.T) {
+	now := time.Now().UTC()
+	status := map[DataSource]SourceStatus{
+		SourceAgent:   {Status: "online", LastSeen: now},
+		SourceProxmox: {Status: "online", LastSeen: now},
+	}
+	guest := &Resource{
+		Type:    ResourceTypeSystemContainer,
+		Proxmox: &ProxmoxData{VMID: 301, ContainerType: "lxc"},
+	}
+	existing := &MetricValue{Percent: 0.58, Source: SourceProxmox}
+	incoming := &MetricValue{Percent: 58, Source: SourceAgent}
+
+	got := mergeMetric(guest, existing, incoming, SourceAgent, now, status)
+	if got == nil || got.Percent != 0.58 || got.Source != SourceProxmox {
+		t.Fatalf("expected platform CPU to survive in-guest agent merge, got %+v", got)
+	}
+}
+
+// Reverse ingest order for the same guest: the platform metric arrives while
+// the agent's value is already in place. The platform must take over.
+func TestMergeMetric_GuestPlatformOverridesEarlierAgentValue(t *testing.T) {
+	now := time.Now().UTC()
+	status := map[DataSource]SourceStatus{
+		SourceAgent:   {Status: "online", LastSeen: now},
+		SourceProxmox: {Status: "online", LastSeen: now},
+	}
+	guest := &Resource{
+		Type:    ResourceTypeSystemContainer,
+		Proxmox: &ProxmoxData{VMID: 301, ContainerType: "lxc"},
+	}
+	existing := &MetricValue{Percent: 58, Source: SourceAgent}
+	incoming := &MetricValue{Percent: 0.58, Source: SourceProxmox}
+
+	got := mergeMetric(guest, existing, incoming, SourceProxmox, now, status)
+	if got == nil || got.Percent != 0.58 || got.Source != SourceProxmox {
+		t.Fatalf("expected platform CPU to override earlier agent value on guest, got %+v", got)
+	}
+}
+
+// The freshness gate still lets a live in-guest agent cover for a platform
+// source that went stale (e.g. PVE API unreachable while the guest keeps
+// reporting).
+func TestMergeMetric_GuestStalePlatformFallsBackToAgent(t *testing.T) {
+	now := time.Now().UTC()
+	status := map[DataSource]SourceStatus{
+		SourceAgent:   {Status: "online", LastSeen: now},
+		SourceProxmox: {Status: "stale", LastSeen: now.Add(-2 * time.Hour)},
+	}
+	guest := &Resource{
+		Type:    ResourceTypeSystemContainer,
+		Proxmox: &ProxmoxData{VMID: 301, ContainerType: "lxc"},
+	}
+	existing := &MetricValue{Percent: 0.58, Source: SourceProxmox}
+	incoming := &MetricValue{Percent: 12.5, Source: SourceAgent}
+
+	got := mergeMetric(guest, existing, incoming, SourceAgent, now, status)
+	if got == nil || got.Percent != 12.5 || got.Source != SourceAgent {
+		t.Fatalf("expected live agent CPU to cover for stale platform source, got %+v", got)
 	}
 }
 
@@ -4422,7 +4489,7 @@ func TestMergeMetric_StaleSourceDoesNotClobberLive(t *testing.T) {
 	existing := &MetricValue{Percent: 6.2, Source: SourceProxmox}
 	incoming := &MetricValue{Percent: 0, Source: SourceAgent}
 
-	got := mergeMetric(existing, incoming, SourceAgent, now, status)
+	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceAgent, now, status)
 	if got == nil || got.Percent != 6.2 || got.Source != SourceProxmox {
 		t.Fatalf("expected live proxmox CPU to survive stale agent merge, got %+v", got)
 	}
