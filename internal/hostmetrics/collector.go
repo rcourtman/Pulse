@@ -71,7 +71,14 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	freeBytes := memStats.Free
 	usedPercent := memStats.UsedPercent
 
-	if runtime.GOOS == "freebsd" {
+	if runtime.GOOS != "freebsd" && memStats.Total > 0 && memStats.Available > 0 && memStats.Available <= memStats.Total {
+		// On Linux, MemAvailable is the kernel's estimate of memory that can be
+		// allocated without swapping. Prefer it over MemFree so reclaimable page
+		// cache/buffers are not reported as active pressure.
+		usedBytes = memStats.Total - memStats.Available
+		freeBytes = memStats.Available
+		usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
+	} else if runtime.GOOS == "freebsd" {
 		// ZFS ARC is counted as "wired" by FreeBSD but is reclaimable under pressure.
 		// Subtract it from Used to match actual memory pressure (same as how Linux
 		// classifies ZFS ARC as SReclaimable in /proc/meminfo). Refs: #1264/#1051
