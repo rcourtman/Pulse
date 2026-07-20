@@ -7,7 +7,6 @@ import { DockerPageSurface } from '../DockerPageSurface';
 const mocks = vi.hoisted(() => ({
   pathname: '/docker/overview',
   searchParams: {} as Record<string, string>,
-  navigate: vi.fn(),
   useUnifiedResources: vi.fn(),
   DockerHostsTable: vi.fn(
     (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
@@ -89,7 +88,6 @@ vi.mock('@solidjs/router', () => ({
       return mocks.pathname;
     },
   }),
-  useNavigate: () => mocks.navigate,
   useSearchParams: () => [mocks.searchParams, vi.fn()],
 }));
 
@@ -425,14 +423,12 @@ describe('DockerPageSurface', () => {
     );
   });
 
-  it('replaces the retired workloads route with the canonical Overview route', () => {
+  it('renders the Overview fallback when the router has not canonicalized a retired route', () => {
     mocks.pathname = '/docker/workloads';
 
     render(() => <DockerPageSurface />);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/docker/overview', {
-      replace: true,
-    });
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'overview');
   });
 
   it('shows the Swarm tab only when Docker hosts report Swarm evidence', () => {

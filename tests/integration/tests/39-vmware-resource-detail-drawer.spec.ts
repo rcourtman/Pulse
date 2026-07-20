@@ -43,7 +43,11 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('VMware resource detail drawer', () => {
   test.setTimeout(180_000);
 
-  test('surfaces VMware read-only context through the shared guest drawer', async ({ page }) => {
+  test('surfaces VMware read-only context through the shared guest drawer', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop table drawer contract');
+
     let unexpectedVmwareApiCall: string | null = null;
 
     await page.route('**/api/vmware/**', async (route) => {

@@ -76,8 +76,9 @@ services:
       - PULSE_DATA_DIR=/data
       # Enable debug logging
       - PULSE_LOG_LEVEL=debug
-      # Mock mode for faster testing
-      - PULSE_MOCK_MODE=true
+      # Mock mode is the default shared-estate contract. Dedicated lifecycle
+      # jobs can disable it without maintaining a second compose definition.
+      - PULSE_MOCK_MODE=${PULSE_MOCK_MODE:-true}
       # Dev-only endpoints the suite depends on (first-run reset in the
       # first-session specs) are gated on development mode.
       - PULSE_DEV=true

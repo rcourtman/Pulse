@@ -848,6 +848,9 @@ func TestStoreRetentionReclaimsFreePages(t *testing.T) {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
 	defer store.Close()
+	if err := store.WaitForMaintenance(10 * time.Second); err != nil {
+		t.Fatalf("wait for startup maintenance: %v", err)
+	}
 
 	// Build a freelist backlog: insert many rows (kept unique by timestamp) then
 	// delete them directly, so the rows are already gone before runRetention.

@@ -1059,7 +1059,10 @@ async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
       return true;
     }
 
-    forgetRejectedPrimaryAPIToken(candidate);
+    // The probe above already proved this token is valid. A transient app
+    // navigation or websocket delay must not permanently evict it and force
+    // later fixtures through the rate-limited password login path. Only a
+    // definitive 401/403 from the token probe rejects a candidate.
     await page
       .evaluate(() => {
         window.sessionStorage.removeItem("pulse_auth");
@@ -1539,12 +1542,32 @@ export async function apiRequest(
     });
   }
 
+  const cookies = await page.context().cookies(baseURL);
+  const hasSessionCookie = cookies.some(
+    (cookie) =>
+      cookie.name === "pulse_session" ||
+      cookie.name === "__Host-pulse_session",
+  );
+  if (!hasSessionCookie) {
+    const primaryAPIToken = configuredPrimaryAPIToken();
+    if (primaryAPIToken) {
+      // ensureAuthenticated may intentionally use the browser-only primary
+      // token path. Carry the same validated credential into API requests
+      // without introducing an ambient cookie that would activate CSRF.
+      headers["X-API-Token"] = primaryAPIToken;
+      const context = await getTokenAuthRequestContext();
+      return context.fetch(`${baseURL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+    }
+  }
+
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     const hasCSRFHeader = Object.keys(headers).some(
       (name) => name.toLowerCase() === "x-csrf-token",
     );
     if (!hasCSRFHeader) {
-      const cookies = await page.context().cookies(baseURL);
       const csrfCookie = cookies.find(
         (cookie) => cookie.name === "pulse_csrf",
       )?.value;

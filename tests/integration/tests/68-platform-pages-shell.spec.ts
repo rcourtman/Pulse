@@ -135,6 +135,36 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
   },
 ];
 
+// Every populated inventory tab — embedded canonical Workloads/Storage and
+// UnifiedResourceTable-backed infrastructure views — owns an operator search
+// input. Overview stacks are summary surfaces and intentionally suppress their
+// table toolbars. Keep each route as an independent browser test so one slow
+// navigation cannot consume the time budget or state of the remaining routes.
+const OPERATOR_SEARCH_CASES: ReadonlyArray<{ path: string; testId: string }> = [
+  { path: '/docker/images', testId: 'docker-page' },
+  { path: '/docker/storage', testId: 'docker-page' },
+  { path: '/docker/networks', testId: 'docker-page' },
+  // The default mock inventory intentionally has no Swarm resources. Empty
+  // inventory tabs omit search because there is nothing actionable to filter;
+  // populated Swarm table toolbars have component coverage.
+  { path: '/kubernetes/nodes', testId: 'kubernetes-page' },
+  { path: '/kubernetes/workloads', testId: 'kubernetes-page' },
+  { path: '/kubernetes/services', testId: 'kubernetes-page' },
+  { path: '/kubernetes/storage', testId: 'kubernetes-page' },
+  { path: '/kubernetes/configuration', testId: 'kubernetes-page' },
+  { path: '/kubernetes/events', testId: 'kubernetes-page' },
+  { path: '/truenas/storage', testId: 'truenas-page' },
+  { path: '/truenas/services', testId: 'truenas-page' },
+  { path: '/truenas/apps', testId: 'truenas-page' },
+  { path: '/truenas/vms', testId: 'truenas-page' },
+  { path: '/truenas/shares', testId: 'truenas-page' },
+  { path: '/truenas/protection', testId: 'truenas-page' },
+  { path: '/vmware/storage', testId: 'vmware-page' },
+  { path: '/vmware/networks', testId: 'vmware-page' },
+  { path: '/vmware/health', testId: 'vmware-page' },
+  { path: '/vmware/activity', testId: 'vmware-page' },
+];
+
 const stubEmptyResources = async (page: Page) => {
   await page.route('**/api/resources**', async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -241,46 +271,14 @@ test.describe('Platform pages shell', () => {
     }
   });
 
-  test('every platform inventory sub-tab exposes canonical operator search', async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop chrome audit');
+  for (const operatorSearchCase of OPERATOR_SEARCH_CASES) {
+    test(`operator search is available on ${operatorSearchCase.path}`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop chrome audit');
 
-    // Every populated inventory tab — embedded canonical Workloads/Storage AND
-    // UnifiedResourceTable-backed infra views — must render an operator
-    // search input under platform-page chrome. Overview stacks are summary
-    // surfaces and intentionally keep their table toolbars suppressed. The shared
-    // PlatformResourceTable wrapper provides the toolbar for the
-    // UnifiedResourceTable-backed tabs; the embedded surfaces use their
-    // own canonical FilterBar via `showFilterToolbar`.
-    const cases: ReadonlyArray<{ path: string; testId: string }> = [
-      { path: '/docker/images', testId: 'docker-page' },
-      { path: '/docker/storage', testId: 'docker-page' },
-      { path: '/docker/networks', testId: 'docker-page' },
-      // The default mock inventory intentionally has no Swarm resources.
-      // Empty inventory tabs omit search because there is nothing actionable
-      // to filter; populated Swarm table toolbars have component coverage.
-      { path: '/kubernetes/nodes', testId: 'kubernetes-page' },
-      { path: '/kubernetes/workloads', testId: 'kubernetes-page' },
-      { path: '/kubernetes/services', testId: 'kubernetes-page' },
-      { path: '/kubernetes/storage', testId: 'kubernetes-page' },
-      { path: '/kubernetes/configuration', testId: 'kubernetes-page' },
-      { path: '/kubernetes/events', testId: 'kubernetes-page' },
-      { path: '/truenas/storage', testId: 'truenas-page' },
-      { path: '/truenas/services', testId: 'truenas-page' },
-      { path: '/truenas/apps', testId: 'truenas-page' },
-      { path: '/truenas/vms', testId: 'truenas-page' },
-      { path: '/truenas/shares', testId: 'truenas-page' },
-      { path: '/truenas/protection', testId: 'truenas-page' },
-      { path: '/vmware/storage', testId: 'vmware-page' },
-      { path: '/vmware/networks', testId: 'vmware-page' },
-      { path: '/vmware/health', testId: 'vmware-page' },
-      { path: '/vmware/activity', testId: 'vmware-page' },
-    ];
-
-    for (const c of cases) {
-      await page.goto(c.path, { waitUntil: 'domcontentloaded' });
-      const pageRoot = page.getByTestId(c.testId);
+      await page.goto(operatorSearchCase.path, { waitUntil: 'domcontentloaded' });
+      const pageRoot = page.getByTestId(operatorSearchCase.testId);
       await expect(pageRoot).toBeVisible({ timeout: 30_000 });
 
       await expect(
@@ -290,6 +288,6 @@ test.describe('Platform pages shell', () => {
           )
           .first(),
       ).toBeVisible({ timeout: 30_000 });
-    }
-  });
+    });
+  }
 });

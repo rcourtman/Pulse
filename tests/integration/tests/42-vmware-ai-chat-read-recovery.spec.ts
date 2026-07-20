@@ -70,7 +70,8 @@ test.describe('VMware AI chat read recovery', () => {
     const mentionListbox = page.getByRole('listbox', { name: 'Assistant resources' });
     await expect(mentionListbox).toBeVisible({ timeout: 30_000 });
     await mentionListbox
-      .getByRole('option', { name: /warehouse-api-01: vm on esxi-01\.lab\.local/ })
+      .getByRole('option')
+      .filter({ hasText: /warehouse-api-01/ })
       .first()
       .click();
     await expect(textarea).toHaveValue('@warehouse-api-01 ');

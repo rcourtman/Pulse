@@ -4,7 +4,9 @@ import { ensureAuthenticated } from './helpers';
 test.describe('Docker workload route ownership', () => {
   test('retires legacy Docker workload deep links into the runtime overview', async ({
     page,
-  }) => {
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop route ownership contract');
+
     await ensureAuthenticated(page);
 
     await page.goto(

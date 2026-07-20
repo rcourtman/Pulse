@@ -392,7 +392,9 @@ test.describe.serial("First-session experience", () => {
     );
 
     await ensureAuthenticated(page);
-    await page.goto("/settings/system-pro", { waitUntil: "domcontentloaded" });
+    await page.goto("/settings/pulse-intelligence/billing/plan", {
+      waitUntil: "domcontentloaded",
+    });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
 
     // The self-hosted plan panel should always render with plan/recovery

@@ -25,6 +25,9 @@ export function UpdateBanner() {
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   onCleanup(() => {
+    // Invalidate any plan request still settling after this banner unmounts.
+    // Navigation-aborted requests are stale work, not user-visible failures.
+    latestPlanRequestID += 1;
     if (copiedTimer) clearTimeout(copiedTimer);
   });
 
@@ -46,9 +49,8 @@ export function UpdateBanner() {
         }
       })
       .catch((error) => {
-        if (requestID === latestPlanRequestID) {
-          setUpdatePlan(null);
-        }
+        if (requestID !== latestPlanRequestID) return;
+        setUpdatePlan(null);
         logger.error('Failed to fetch update plan', error);
       });
   });

@@ -1,6 +1,6 @@
 import { Show, lazy, createSignal, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { Router, Route, useNavigate, useLocation } from '@solidjs/router';
+import { Navigate, Router, Route, useNavigate, useLocation } from '@solidjs/router';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary';
 import { SecurityWarning } from './components/SecurityWarning';
@@ -107,6 +107,8 @@ const SetupCompletionPreviewPage = lazy(() =>
   })),
 );
 const ROOT_PATROL_PATH = PATROL_PATH;
+
+const RetiredDockerWorkloadsRoute = () => <Navigate href={buildDockerPath()} />;
 
 const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> = {
   proxmox: buildProxmoxPath(),
@@ -565,6 +567,7 @@ function App() {
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />
+      <Route path={`${DOCKER_PATH}/workloads`} component={RetiredDockerWorkloadsRoute} />
       <Route path={`${DOCKER_PATH}/*`} component={DockerPage} />
       <Route path={KUBERNETES_PATH} component={KubernetesPage} />
       <Route path={`${KUBERNETES_PATH}/*`} component={KubernetesPage} />

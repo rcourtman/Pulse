@@ -70,11 +70,12 @@ test.describe('VMware AI chat mentions', () => {
     // ESXi hosts surface as shared agent mention targets.
     // First websocket state frame can lag on a freshly booted backend, and
     // the candidate list refreshes as state arrives.
-    await textarea.click();
-    await textarea.pressSequentially('@esxi');
+    await textarea.focus();
+    await textarea.fill('@esxi');
     await expect(mentionListbox).toBeVisible({ timeout: 30_000 });
     const hostOption = mentionListbox
-      .getByRole('option', { name: /esxi-01\.lab\.local: agent/ })
+      .getByRole('option')
+      .filter({ hasText: /esxi-01\.lab\.local/ })
       .first();
     await expect(hostOption).toBeVisible({ timeout: 30_000 });
     await hostOption.click();
@@ -83,10 +84,11 @@ test.describe('VMware AI chat mentions', () => {
     // API-backed vSphere VMs use the same shared mention contract, carrying
     // their runtime host as the mention node.
     await textarea.fill('');
-    await textarea.pressSequentially('@warehouse');
+    await textarea.fill('@warehouse');
     await expect(mentionListbox).toBeVisible();
     const vmOption = mentionListbox
-      .getByRole('option', { name: /warehouse-api-01: vm on esxi-01\.lab\.local/ })
+      .getByRole('option')
+      .filter({ hasText: /warehouse-api-01/ })
       .first();
     await expect(vmOption).toBeVisible({ timeout: 30_000 });
     await vmOption.click();

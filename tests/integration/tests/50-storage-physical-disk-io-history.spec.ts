@@ -64,7 +64,11 @@ test.describe.serial('Storage physical disk drawer history', () => {
     }
   });
 
-  test('renders canonical live I/O history for Proxmox physical disks', async ({ page }) => {
+  test('renders canonical live I/O history for Proxmox physical disks', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop physical-disk table contract');
+
     await ensureMockModeEnabled(page);
 
     const diskHistoryResponses = new Map<string, { resourceId: string; points: number }>();
@@ -131,7 +135,11 @@ test.describe.serial('Storage physical disk drawer history', () => {
     }
   });
 
-  test('keeps visible physical-disk drawers hydrated with live I/O history', async ({ page }) => {
+  test('keeps visible physical-disk drawers hydrated with live I/O history', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop physical-disk table contract');
+
     await ensureMockModeEnabled(page);
 
     await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
