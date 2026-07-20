@@ -78,6 +78,7 @@ func TestAgentBuffering(t *testing.T) {
 		Interval:         50 * time.Millisecond,
 		HostnameOverride: "test-host",
 		Logger:           &logger,
+		Collector:        &mockCollector{},
 	}
 
 	agent, err := New(cfg)

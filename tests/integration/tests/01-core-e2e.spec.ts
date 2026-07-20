@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import {
   E2E_CREDENTIALS,
   ensureAuthenticated,
@@ -54,86 +54,129 @@ test.describe.serial('Core E2E flows', () => {
     // Virtualization Hosts only appears when PVE nodes exist in unified resources.
     // In v6 the unified registry may not include PVE nodes — skip gracefully in that case.
     const proxmoxNodesHeading = page.getByRole('heading', { name: 'Virtualization Hosts' });
-    const hasProxmoxNodes = await proxmoxNodesHeading.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasProxmoxNodes = await proxmoxNodesHeading
+      .waitFor({ state: 'visible', timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false);
     if (!hasProxmoxNodes) {
       test.skip(true, 'Virtualization Hosts section not present (nodes not in unified resources)');
     }
 
-    const proxmoxNodesSection = page
-      .getByRole('heading', { name: 'Virtualization Hosts' })
-      .locator('xpath=ancestor::*[.//table][1]');
-
-    const globalDefaultsRow = proxmoxNodesSection.locator('table tbody tr').filter({
-      hasText: 'Global Defaults',
-    });
-    await expect(globalDefaultsRow).toBeVisible();
-    const cpuDefaultValueRaw = await globalDefaultsRow.locator('input[type="number"]').first().inputValue();
+    const sectionToggle = proxmoxNodesHeading.locator('xpath=ancestor::button[1]');
+    if ((await sectionToggle.getAttribute('aria-expanded')) === 'false') {
+      await sectionToggle.click();
+    }
+    const proxmoxNodesSection = sectionToggle.locator('..');
+    const globalDefaultsContainer = proxmoxNodesSection
+      .getByText('Global Defaults', { exact: true })
+      .first()
+      .locator('xpath=ancestor::*[.//input[@type="number"]][1]');
+    await expect(globalDefaultsContainer).toBeVisible();
+    const cpuDefaultValueRaw = await globalDefaultsContainer
+      .locator('input[type="number"]')
+      .first()
+      .inputValue();
     const cpuDefault = Number(cpuDefaultValueRaw);
     if (!Number.isFinite(cpuDefault)) {
       test.skip(true, `Unable to read CPU default threshold (value="${cpuDefaultValueRaw}")`);
     }
 
-    const nodeRows = proxmoxNodesSection
-      .locator('table tbody tr')
-      .filter({ hasNotText: 'Global Defaults' });
-    const rowCount = await nodeRows.count();
-    let targetRowIndex = -1;
-    for (let i = 0; i < rowCount; i++) {
-      const row = nodeRows.nth(i);
-      const hasEdit = await row.locator('button[title="Edit thresholds"]').isVisible().catch(() => false);
-      if (!hasEdit) continue;
-      const hasCustom = await row.getByText('Custom', { exact: true }).isVisible().catch(() => false);
-      if (hasCustom) continue;
-      targetRowIndex = i;
+    const configResBeforeCreate = await page.request.get('/api/alerts/config');
+    expect(configResBeforeCreate.ok()).toBeTruthy();
+    const configBeforeCreate = (await configResBeforeCreate.json()) as {
+      overrides?: Record<string, unknown>;
+    };
+
+    const resourceContainerForEditControl = async (editControl: Locator): Promise<Locator> => {
+      const desktopRow = editControl.locator('xpath=ancestor::tr[1]');
+      if ((await desktopRow.count()) > 0) {
+        return desktopRow;
+      }
+      return editControl.locator(
+        'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " flex-col ")][1]',
+      );
+    };
+
+    const editControls = proxmoxNodesSection.getByRole('button', {
+      name: /^Edit thresholds for /,
+    });
+    let targetEditIndex = -1;
+    let resourceName = '';
+    let resourceNameOrdinal = 0;
+    const resourceNameCounts = new Map<string, number>();
+    for (let i = 0; i < (await editControls.count()); i++) {
+      const editControl = editControls.nth(i);
+      const label = (await editControl.getAttribute('aria-label')) ?? '';
+      const candidateName = label.replace(/^Edit thresholds for /, '');
+      const candidateOrdinal = resourceNameCounts.get(candidateName) ?? 0;
+      resourceNameCounts.set(candidateName, candidateOrdinal + 1);
+      const resourceContainer = await resourceContainerForEditControl(editControl);
+      const hasExistingOverride =
+        (await resourceContainer.getByRole('button', { name: /^Revert to defaults for / }).count()) >
+        0;
+      if (hasExistingOverride) {
+        continue;
+      }
+      targetEditIndex = i;
+      resourceName = candidateName;
+      resourceNameOrdinal = candidateOrdinal;
       break;
     }
-    if (targetRowIndex < 0) {
-      test.skip(true, 'No virtualization host row without an existing override was found');
+    if (targetEditIndex < 0 || !resourceName) {
+      test.skip(true, 'No virtualization host without an existing override was found');
+      return;
     }
-
-    const targetRow = nodeRows.nth(targetRowIndex);
-    await expect(targetRow).toBeVisible();
-
-    const resourceName = (await targetRow.locator('td').nth(1).locator('a, span').first().innerText()).trim();
-    const cpuCellBefore = (await targetRow.locator('td').nth(2).innerText()).trim();
 
     const overrideValue = cpuDefault === -1 ? 80 : Math.max(0, cpuDefault - 3);
     if (overrideValue === cpuDefault) {
       test.skip(true, `Computed overrideValue equals default (${cpuDefault})`);
     }
 
-    await targetRow.locator('button[title="Edit thresholds"]').click();
-    const cancelButton = proxmoxNodesSection.locator('button[title="Cancel editing"]').first();
+    await editControls.nth(targetEditIndex).click();
+    const cancelButton = page
+      .getByRole('button', { name: /^Cancel (editing|threshold edits)$/ })
+      .first();
     await expect(cancelButton).toBeVisible();
-    const editedRow = cancelButton.locator('xpath=ancestor::tr[1]');
-
-    const cpuInput = editedRow.locator('input[type="number"]').first();
+    const editorContainer = cancelButton.locator(
+      'xpath=ancestor::*[.//input[@type="number"]][1]',
+    );
+    const cpuInput = editorContainer.locator('input[type="number"]').first();
     await expect(cpuInput).toBeVisible();
     await cpuInput.fill(String(overrideValue));
     await cpuInput.blur();
+    const commitMobileEdit = page.getByRole('button', {
+      name: `Save threshold edits for ${resourceName}`,
+    });
+    if (await commitMobileEdit.isVisible().catch(() => false)) {
+      await commitMobileEdit.click();
+    }
 
     const unsaved = page.getByText('You have unsaved changes');
     await expect(unsaved).toBeVisible();
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
 
-    const updatedRow = proxmoxNodesSection.locator('table tbody tr').filter({ hasText: resourceName }).first();
-    await expect(updatedRow).toBeVisible();
-    await expect(updatedRow.getByText('Custom')).toBeVisible();
-    await expect(updatedRow.locator('button[title="Remove override"]')).toBeVisible();
-
-    const stateRes = await page.request.get('/api/state');
-    expect(stateRes.ok()).toBeTruthy();
-    const state = (await stateRes.json()) as { nodes?: Array<{ id: string; name: string }> };
-    const nodeId = state.nodes?.find((n) => n.name === resourceName)?.id;
-    expect(nodeId).toBeTruthy();
+    const updatedEditControl = page
+      .getByRole('button', { name: `Edit thresholds for ${resourceName}` })
+      .nth(resourceNameOrdinal);
+    const updatedResourceContainer =
+      await resourceContainerForEditControl(updatedEditControl);
+    const revertOverride = updatedResourceContainer.getByRole('button', {
+      name: `Revert to defaults for ${resourceName}`,
+    });
+    await expect(revertOverride).toBeVisible();
 
     const configResAfterCreate = await page.request.get('/api/alerts/config');
     expect(configResAfterCreate.ok()).toBeTruthy();
     const configAfterCreate = (await configResAfterCreate.json()) as { overrides?: Record<string, unknown> };
-    expect(configAfterCreate.overrides && Object.prototype.hasOwnProperty.call(configAfterCreate.overrides, nodeId as string)).toBeTruthy();
+    const previousOverrideIds = new Set(Object.keys(configBeforeCreate.overrides ?? {}));
+    const createdOverrideIds = Object.keys(configAfterCreate.overrides ?? {}).filter(
+      (id) => !previousOverrideIds.has(id),
+    );
+    expect(createdOverrideIds).toHaveLength(1);
+    const createdOverrideId = createdOverrideIds[0];
 
-    await updatedRow.locator('button[title="Remove override"]').click();
+    await revertOverride.click();
     await expect(unsaved).toBeVisible();
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
@@ -141,13 +184,10 @@ test.describe.serial('Core E2E flows', () => {
     const configResAfterDelete = await page.request.get('/api/alerts/config');
     expect(configResAfterDelete.ok()).toBeTruthy();
     const configAfterDelete = (await configResAfterDelete.json()) as { overrides?: Record<string, unknown> };
-    expect(configAfterDelete.overrides && Object.prototype.hasOwnProperty.call(configAfterDelete.overrides, nodeId as string)).toBeFalsy();
-
-    const parseNumericCell = (raw: string) => {
-      const cleaned = raw.replace(/[^\d.-]+/g, '');
-      const num = Number(cleaned);
-      return Number.isFinite(num) ? num : null;
-    };
+    expect(
+      configAfterDelete.overrides &&
+        Object.prototype.hasOwnProperty.call(configAfterDelete.overrides, createdOverrideId),
+    ).toBeFalsy();
 
     await page.reload();
     if (!/\/alerts\/thresholds/.test(page.url())) {
@@ -163,16 +203,23 @@ test.describe.serial('Core E2E flows', () => {
     }
 
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
-    const rowAfterReload = page
+    const sectionToggleAfterReload = page
       .getByRole('heading', { name: 'Virtualization Hosts' })
-      .locator('xpath=ancestor::*[.//table][1]')
-      .locator('table tbody tr')
-      .filter({ hasText: resourceName })
-      .first();
-    await expect(rowAfterReload).toBeVisible();
-    await expect(rowAfterReload.getByText('Custom')).not.toBeVisible();
-    const cpuCellAfter = (await rowAfterReload.locator('td').nth(2).innerText()).trim();
-    expect(parseNumericCell(cpuCellAfter)).toBe(parseNumericCell(cpuCellBefore));
+      .locator('xpath=ancestor::button[1]');
+    if ((await sectionToggleAfterReload.getAttribute('aria-expanded')) === 'false') {
+      await sectionToggleAfterReload.click();
+    }
+    const editControlAfterReload = page
+      .getByRole('button', { name: `Edit thresholds for ${resourceName}` })
+      .nth(resourceNameOrdinal);
+    await expect(editControlAfterReload).toBeVisible();
+    const resourceContainerAfterReload =
+      await resourceContainerForEditControl(editControlAfterReload);
+    await expect(
+      resourceContainerAfterReload.getByRole('button', {
+        name: `Revert to defaults for ${resourceName}`,
+      }),
+    ).toHaveCount(0);
 
     // Restore prior activation state to keep the test safe against real instances.
     if (!alertsInitiallyEnabled) {
