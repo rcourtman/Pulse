@@ -74,11 +74,11 @@ test.describe('VMware AI chat read recovery', () => {
       .filter({ hasText: /warehouse-api-01/ })
       .first();
     await expect(vmOption).toBeVisible({ timeout: 30_000 });
-    await textarea.press('Enter');
+    await page.keyboard.press('Enter');
     await expect(textarea).toHaveValue('@warehouse-api-01 ');
 
     await textarea.fill('@warehouse-api-01 show me recent status');
-    await textarea.press('Enter');
+    await page.keyboard.press('Enter');
 
     // Chat turns ride the shared assistant transport (websocket-backed since
     // the assistant modernization, so REST route interception cannot observe

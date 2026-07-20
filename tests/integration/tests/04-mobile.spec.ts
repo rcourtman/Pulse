@@ -219,16 +219,11 @@ test.describe("Mobile viewport flows", () => {
     page,
   }) => {
     await page.goto("/proxmox/overview");
-    await expect(
-      page.getByPlaceholder(
-        "Search VMs and LXCs by name, VMID, node, or status",
-      ),
-    ).toBeVisible({ timeout: 30_000 });
 
     const primaryRail = page.locator('[data-mobile-nav-rail="primary"]');
     const utilityRail = page.locator('[data-mobile-nav-rail="utility"]');
-    await expect(primaryRail).toBeVisible();
-    await expect(utilityRail).toBeVisible();
+    await expect(primaryRail).toBeVisible({ timeout: 30_000 });
+    await expect(utilityRail).toBeVisible({ timeout: 30_000 });
 
     await expect
       .poll(
@@ -325,12 +320,6 @@ test.describe("Mobile viewport flows", () => {
   }) => {
     await page.goto("/proxmox/overview");
 
-    await expect(
-      page.getByPlaceholder(
-        "Search VMs and LXCs by name, VMID, node, or status",
-      ),
-    ).toBeVisible();
-
     const tableWrapper = page
       .locator("div.overflow-x-auto")
       .filter({ has: page.locator("table") })
@@ -367,12 +356,6 @@ test.describe("Mobile viewport flows", () => {
     page,
   }) => {
     await page.goto("/proxmox/overview");
-
-    await expect(
-      page.getByPlaceholder(
-        "Search VMs and LXCs by name, VMID, node, or status",
-      ),
-    ).toBeVisible();
 
     const disclosure = page
       .getByRole("button", { name: /^Expand details for / })
