@@ -462,6 +462,15 @@ func TestConfigWatcher_ReloadConfig_RemovesMockSetting(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
 	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
+	previousMockValue, hadPreviousMockValue := os.LookupEnv("PULSE_MOCK_TEST")
+	require.NoError(t, os.Unsetenv("PULSE_MOCK_TEST"))
+	t.Cleanup(func() {
+		if hadPreviousMockValue {
+			_ = os.Setenv("PULSE_MOCK_TEST", previousMockValue)
+		} else {
+			_ = os.Unsetenv("PULSE_MOCK_TEST")
+		}
+	})
 
 	cfg := &Config{}
 	cw, err := NewConfigWatcher(cfg)
@@ -477,17 +486,34 @@ func TestConfigWatcher_ReloadConfig_RemovesMockSetting(t *testing.T) {
 	os.Unsetenv("PULSE_MOCK_TEST")
 }
 
-func TestConfigWatcher_ReloadConfig_MissingEnvRemovesMockSetting(t *testing.T) {
+func TestConfigWatcher_ReloadConfig_MissingEnvPreservesProcessMockSetting(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
-	os.Setenv("PULSE_MOCK_TEST", "stale")
-	t.Cleanup(func() { os.Unsetenv("PULSE_MOCK_TEST") })
+	t.Setenv("PULSE_MOCK_TEST", "deployment-owned")
 
 	cw, err := NewConfigWatcher(&Config{})
 	require.NoError(t, err)
 
 	cw.reloadConfig()
-	assert.Equal(t, "", os.Getenv("PULSE_MOCK_TEST"))
+	assert.Equal(t, "deployment-owned", os.Getenv("PULSE_MOCK_TEST"))
+}
+
+func TestConfigWatcher_ReloadConfig_RestoresProcessMockSettingAfterFileOverride(t *testing.T) {
+	tempDir := t.TempDir()
+	envPath := filepath.Join(tempDir, ".env")
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
+	t.Setenv("PULSE_MOCK_TEST", "deployment-owned")
+
+	cw, err := NewConfigWatcher(&Config{})
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(envPath, []byte(`PULSE_MOCK_TEST="file-owned"`), 0644))
+	cw.reloadConfig()
+	require.Equal(t, "file-owned", os.Getenv("PULSE_MOCK_TEST"))
+
+	require.NoError(t, os.WriteFile(envPath, []byte(""), 0644))
+	cw.reloadConfig()
+	assert.Equal(t, "deployment-owned", os.Getenv("PULSE_MOCK_TEST"))
 }
 
 func TestConfigWatcher_ReloadAPITokens_Retries(t *testing.T) {

@@ -43,6 +43,13 @@ type ConfigWatcher struct {
 	onMockReload         func() // Callback to trigger backend restart when PULSE_MOCK_* changes
 	onAPITokenReload     func() // Callback when API tokens are reloaded from disk
 	pollInterval         time.Duration
+	mockEnvOwned         map[string]struct{}
+	mockEnvFallbacks     map[string]mockEnvFallback
+}
+
+type mockEnvFallback struct {
+	value   string
+	present bool
 }
 
 // NewConfigWatcher creates a new config watcher
@@ -92,13 +99,15 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	}
 
 	cw := &ConfigWatcher{
-		config:        config,
-		envPath:       envPath,
-		apiTokensPath: apiTokensPath,
-		persistence:   persistence,
-		watcher:       watcher,
-		stopChan:      make(chan struct{}),
-		pollInterval:  5 * time.Second,
+		config:           config,
+		envPath:          envPath,
+		apiTokensPath:    apiTokensPath,
+		persistence:      persistence,
+		watcher:          watcher,
+		stopChan:         make(chan struct{}),
+		pollInterval:     5 * time.Second,
+		mockEnvOwned:     make(map[string]struct{}),
+		mockEnvFallbacks: make(map[string]mockEnvFallback),
 	}
 
 	// Get initial mod times and hash
@@ -107,6 +116,11 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		if content, err := os.ReadFile(envPath); err == nil {
 			hash := sha256.Sum256(content)
 			cw.lastEnvHash = hex.EncodeToString(hash[:])
+		}
+		if envMap, err := godotenv.Read(envPath); err == nil {
+			for key := range extractMockEnv(envMap) {
+				cw.mockEnvOwned[key] = struct{}{}
+			}
 		}
 	}
 	if stat, err := watcherOsStat(apiTokensPath); err == nil {
@@ -416,7 +430,6 @@ func (cw *ConfigWatcher) reloadConfig() {
 	// Update auth settings
 	oldAuthUser := cw.config.AuthUser
 	oldAuthPass := cw.config.AuthPass
-	oldMockEnv := currentMockEnv()
 	newMockEnv := extractMockEnv(envMap)
 
 	// Apply auth user
@@ -449,7 +462,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 	}
 	Mu.Unlock()
 
-	mockChanged := applyMockEnv(newMockEnv, oldMockEnv)
+	mockChanged := cw.applyMockEnv(newMockEnv)
 	if mockChanged {
 		changes = append(changes, "mock runtime updated")
 	}
@@ -620,23 +633,49 @@ func extractMockEnv(envMap map[string]string) map[string]string {
 	return mockEnv
 }
 
-func applyMockEnv(next map[string]string, current map[string]string) bool {
+func (cw *ConfigWatcher) applyMockEnv(next map[string]string) bool {
+	if cw.mockEnvOwned == nil {
+		cw.mockEnvOwned = make(map[string]struct{})
+	}
+	if cw.mockEnvFallbacks == nil {
+		cw.mockEnvFallbacks = make(map[string]mockEnvFallback)
+	}
+
+	current := currentMockEnv()
 	changed := false
 	seen := make(map[string]struct{}, len(next))
 	for key, value := range next {
 		seen[key] = struct{}{}
+		if _, owned := cw.mockEnvOwned[key]; !owned {
+			fallbackValue, fallbackPresent := current[key]
+			cw.mockEnvFallbacks[key] = mockEnvFallback{
+				value:   fallbackValue,
+				present: fallbackPresent,
+			}
+			cw.mockEnvOwned[key] = struct{}{}
+		}
 		if currentValue, ok := current[key]; !ok || currentValue != value {
 			_ = os.Setenv(key, value)
 			changed = true
 		}
 	}
-	for key := range current {
+	for key := range cw.mockEnvOwned {
 		if _, ok := seen[key]; ok {
 			continue
 		}
-		if err := os.Unsetenv(key); err == nil {
+		fallback, hasFallback := cw.mockEnvFallbacks[key]
+		currentValue, currentPresent := current[key]
+		if hasFallback && fallback.present {
+			if !currentPresent || currentValue != fallback.value {
+				_ = os.Setenv(key, fallback.value)
+				changed = true
+			}
+		} else if currentPresent {
+			_ = os.Unsetenv(key)
 			changed = true
 		}
+		delete(cw.mockEnvOwned, key)
+		delete(cw.mockEnvFallbacks, key)
 	}
 	if changed {
 		keys := make([]string, 0, len(next))
