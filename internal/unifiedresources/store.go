@@ -3576,45 +3576,15 @@ func (m *MemoryStore) GetActionAudit(actionID string) (ActionAuditRecord, bool, 
 	return ActionAuditRecord{}, false, nil
 }
 
-func (m *MemoryStore) GetLatestActionAuditByOrigin(surface, investigationID string) (ActionAuditRecord, bool, error) {
+// latestActionAuditMatching scans all audits and returns a clone of the most
+// recent record accepted by match (latest UpdatedAt, ties broken by CreatedAt).
+func (m *MemoryStore) latestActionAuditMatching(match func(ActionAuditRecord) bool) (ActionAuditRecord, bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	surface = strings.TrimSpace(surface)
-	investigationID = strings.TrimSpace(investigationID)
-	if surface == "" || investigationID == "" {
-		return ActionAuditRecord{}, false, nil
-	}
 	var latest ActionAuditRecord
 	found := false
 	for _, record := range m.actionAudits {
-		if record.Origin == nil || strings.TrimSpace(record.Origin.Surface) != surface || strings.TrimSpace(record.Origin.InvestigationID) != investigationID {
-			continue
-		}
-		if !found || record.UpdatedAt.After(latest.UpdatedAt) || (record.UpdatedAt.Equal(latest.UpdatedAt) && record.CreatedAt.After(latest.CreatedAt)) {
-			latest = record
-			found = true
-		}
-	}
-	if !found {
-		return ActionAuditRecord{}, false, nil
-	}
-	return cloneActionAuditRecordForRead(latest), true, nil
-}
-
-func (m *MemoryStore) GetLatestActionAuditByOperationalRecord(surface, operationalRecordID string) (ActionAuditRecord, bool, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	surface = strings.TrimSpace(surface)
-	operationalRecordID = strings.TrimSpace(operationalRecordID)
-	if surface == "" || operationalRecordID == "" {
-		return ActionAuditRecord{}, false, nil
-	}
-	var latest ActionAuditRecord
-	found := false
-	for _, record := range m.actionAudits {
-		if record.Origin == nil ||
-			strings.TrimSpace(record.Origin.Surface) != surface ||
-			strings.TrimSpace(record.Origin.OperationalRecordID) != operationalRecordID {
+		if !match(record) {
 			continue
 		}
 		if !found ||
@@ -3628,6 +3598,32 @@ func (m *MemoryStore) GetLatestActionAuditByOperationalRecord(surface, operation
 		return ActionAuditRecord{}, false, nil
 	}
 	return cloneActionAuditRecordForRead(latest), true, nil
+}
+
+func (m *MemoryStore) GetLatestActionAuditByOrigin(surface, investigationID string) (ActionAuditRecord, bool, error) {
+	surface = strings.TrimSpace(surface)
+	investigationID = strings.TrimSpace(investigationID)
+	if surface == "" || investigationID == "" {
+		return ActionAuditRecord{}, false, nil
+	}
+	return m.latestActionAuditMatching(func(record ActionAuditRecord) bool {
+		return record.Origin != nil &&
+			strings.TrimSpace(record.Origin.Surface) == surface &&
+			strings.TrimSpace(record.Origin.InvestigationID) == investigationID
+	})
+}
+
+func (m *MemoryStore) GetLatestActionAuditByOperationalRecord(surface, operationalRecordID string) (ActionAuditRecord, bool, error) {
+	surface = strings.TrimSpace(surface)
+	operationalRecordID = strings.TrimSpace(operationalRecordID)
+	if surface == "" || operationalRecordID == "" {
+		return ActionAuditRecord{}, false, nil
+	}
+	return m.latestActionAuditMatching(func(record ActionAuditRecord) bool {
+		return record.Origin != nil &&
+			strings.TrimSpace(record.Origin.Surface) == surface &&
+			strings.TrimSpace(record.Origin.OperationalRecordID) == operationalRecordID
+	})
 }
 
 func (m *MemoryStore) GetLatestActionAuditsByOperationalRecords(
