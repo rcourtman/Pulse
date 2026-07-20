@@ -1394,7 +1394,8 @@ describe('Workloads performance contract', () => {
       expect(guestRowStateSource).not.toContain('rowStyle');
       expect(guestRowStateSource).not.toContain('box-shadow');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
-      expect(guestRowCellsSource).toContain('export { AvailabilityProbeCell');
+      // Wrapping-tolerant: prettier may break the export list across lines.
+      expect(guestRowCellsSource).toMatch(/export \{[^}]*\bAvailabilityProbeCell\b/);
       expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
       expect(guestRowCellsSource).toContain('function OSInfoCell(');
       expect(guestRowCellsSource).toContain('useTooltip');

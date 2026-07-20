@@ -1053,19 +1053,24 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps settings copy aligned with Infrastructure as the default workspace', () => {
-    expect(settingsHeaderMetaSource).toContain(
+    // Copy phrases are matched against whitespace-normalized source so
+    // prettier line-wrapping inside JSX text cannot break the guard.
+    const normalize = (source: string) => source.replace(/\s+/g, ' ');
+    expect(normalize(settingsHeaderMetaSource)).toContain(
       'Manage appearance, layout, and default monitoring cadence.',
     );
-    expect(generalSettingsPanelSource).not.toContain('Dashboard, Infrastructure');
-    expect(networkBoundarySettingsSectionSource).toContain('Pulse URL for Notifications');
-    expect(networkBoundarySettingsSectionSource).not.toContain('Dashboard URL for Notifications');
-    expect(nodeModalBasicInfoSectionSource).toContain('monitoring views');
-    expect(nodeModalBasicInfoSectionSource).not.toContain('dashboards');
-    expect(nodeModalMonitoringSectionSource).toContain('trim workload noise');
-    expect(nodeModalMonitoringSectionSource).toContain('Existing monitoring readings');
-    expect(nodeModalMonitoringSectionSource).not.toContain('dashboard readings');
-    expect(recoverySettingsPanelSource).toContain('Required for workload backup status');
-    expect(recoverySettingsPanelSource).not.toContain('dashboard backup status');
+    expect(normalize(generalSettingsPanelSource)).not.toContain('Dashboard, Infrastructure');
+    expect(normalize(networkBoundarySettingsSectionSource)).toContain('Pulse URL for Notifications');
+    expect(normalize(networkBoundarySettingsSectionSource)).not.toContain(
+      'Dashboard URL for Notifications',
+    );
+    expect(normalize(nodeModalBasicInfoSectionSource)).toContain('monitoring views');
+    expect(normalize(nodeModalBasicInfoSectionSource)).not.toContain('dashboards');
+    expect(normalize(nodeModalMonitoringSectionSource)).toContain('trim workload noise');
+    expect(normalize(nodeModalMonitoringSectionSource)).toContain('Existing monitoring readings');
+    expect(normalize(nodeModalMonitoringSectionSource)).not.toContain('dashboard readings');
+    expect(normalize(recoverySettingsPanelSource)).toContain('Required for workload backup status');
+    expect(normalize(recoverySettingsPanelSource)).not.toContain('dashboard backup status');
   });
 
   it('keeps cluster member address edits on the durable IPOverride boundary', () => {
