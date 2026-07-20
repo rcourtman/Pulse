@@ -17,11 +17,11 @@
  * release (e.g. managed local backend without PULSE_UPDATE_SERVER).
  */
 
-import { expect, test, type Page } from '@playwright/test';
-import { apiRequest, ensureAuthenticated } from './helpers';
+import { expect, test, type Page } from "@playwright/test";
+import { apiRequest, ensureAuthenticated } from "./helpers";
 
-const MOCK_STABLE_VERSION = '99.0.0';
-const MOCK_RC_VERSION = '99.1.0-rc.1';
+const MOCK_STABLE_VERSION = "99.0.0";
+const MOCK_RC_VERSION = "99.1.0-rc.1";
 
 type UpdateInfo = {
   available: boolean;
@@ -38,25 +38,34 @@ type UpdateStatus = {
   error?: string;
 };
 
+type APITokenCreateResponse = {
+  record?: {
+    id?: string;
+  };
+};
+
 let mockUpdateServerWired: boolean | null = null;
 
-async function checkUpdates(page: Page, channel: 'stable' | 'rc'): Promise<UpdateInfo> {
+async function checkUpdates(
+  page: Page,
+  channel: "stable" | "rc",
+): Promise<UpdateInfo> {
   const res = await apiRequest(page, `/api/updates/check?channel=${channel}`);
   expect(res.ok(), await res.text()).toBeTruthy();
   return (await res.json()) as UpdateInfo;
 }
 
 async function fetchUpdateStatus(page: Page): Promise<UpdateStatus> {
-  const res = await apiRequest(page, '/api/updates/status');
+  const res = await apiRequest(page, "/api/updates/status");
   expect(res.ok(), await res.text()).toBeTruthy();
   return (await res.json()) as UpdateStatus;
 }
 
-test.describe.serial('update flow against the mock update server', () => {
+test.describe.serial("update flow against the mock update server", () => {
   test.beforeEach(async ({ page }) => {
     await ensureAuthenticated(page);
     if (mockUpdateServerWired === null) {
-      const res = await apiRequest(page, '/api/updates/check?channel=stable');
+      const res = await apiRequest(page, "/api/updates/check?channel=stable");
       if (!res.ok()) {
         mockUpdateServerWired = false;
       } else {
@@ -66,26 +75,34 @@ test.describe.serial('update flow against the mock update server', () => {
     }
     test.skip(
       !mockUpdateServerWired,
-      'update check is not served by the mock GitHub server (PULSE_UPDATE_SERVER not wired)',
+      "update check is not served by the mock GitHub server (PULSE_UPDATE_SERVER not wired)",
     );
   });
 
-  test('stable channel offers the latest stable release, not the prerelease', async ({ page }) => {
-    const info = await checkUpdates(page, 'stable');
+  test("stable channel offers the latest stable release, not the prerelease", async ({
+    page,
+  }) => {
+    const info = await checkUpdates(page, "stable");
     expect(info.available, JSON.stringify(info)).toBeTruthy();
     expect(info.latestVersion).toBe(MOCK_STABLE_VERSION);
     expect(info.isPrerelease).toBeFalsy();
-    expect(info.downloadUrl).toContain(`pulse-v${MOCK_STABLE_VERSION}-linux-amd64.tar.gz`);
+    expect(info.downloadUrl).toContain(
+      `pulse-v${MOCK_STABLE_VERSION}-linux-amd64.tar.gz`,
+    );
   });
 
-  test('rc channel surfaces the newer prerelease', async ({ page }) => {
-    const info = await checkUpdates(page, 'rc');
+  test("rc channel surfaces the newer prerelease", async ({ page }) => {
+    const info = await checkUpdates(page, "rc");
     expect(info.latestVersion, JSON.stringify(info)).toBe(MOCK_RC_VERSION);
     expect(info.isPrerelease).toBeTruthy();
-    expect(info.downloadUrl).toContain(`pulse-v${MOCK_RC_VERSION}-linux-amd64.tar.gz`);
+    expect(info.downloadUrl).toContain(
+      `pulse-v${MOCK_RC_VERSION}-linux-amd64.tar.gz`,
+    );
   });
 
-  test('update plan reports the simulated mock-mode execution contract', async ({ page }) => {
+  test("update plan reports the simulated mock-mode execution contract", async ({
+    page,
+  }) => {
     // This stack deliberately enables mock mode, whose registered updater
     // reports a deterministic simulated plan while retaining real readiness
     // evidence from the integration fixture.
@@ -97,16 +114,20 @@ test.describe.serial('update flow against the mock update server', () => {
     const plan = await res.json();
     expect(plan.canAutoUpdate, JSON.stringify(plan)).toBeTruthy();
     expect(plan.rollbackSupport).toBeTruthy();
-    expect(Array.isArray(plan.instructions) && plan.instructions.length > 0).toBeTruthy();
-    expect(plan.instructions).toContain('Simulated update flow (mock mode)');
+    expect(
+      Array.isArray(plan.instructions) && plan.instructions.length > 0,
+    ).toBeTruthy();
+    expect(plan.instructions).toContain("Simulated update flow (mock mode)");
     expect(plan.readiness?.status, JSON.stringify(plan.readiness)).toBeTruthy();
   });
 
-  test('stable channel refuses to apply a prerelease download URL', async ({ page }) => {
-    const rcInfo = await checkUpdates(page, 'rc');
-    const res = await apiRequest(page, '/api/updates/apply?channel=stable', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+  test("stable channel refuses to apply a prerelease download URL", async ({
+    page,
+  }) => {
+    const rcInfo = await checkUpdates(page, "rc");
+    const res = await apiRequest(page, "/api/updates/apply?channel=stable", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       data: { downloadUrl: rcInfo.downloadUrl },
     });
     const body = await res.text();
@@ -114,31 +135,69 @@ test.describe.serial('update flow against the mock update server', () => {
     expect(body).toMatch(/prerelease/i);
   });
 
-  test('apply of an unsigned artifact fails closed at signature verification', async ({ page }) => {
-    const info = await checkUpdates(page, 'stable');
-    const applyRes = await apiRequest(page, '/api/updates/apply?channel=stable', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      data: { downloadUrl: info.downloadUrl },
-    });
-    // A fast failure inside the start-ack window surfaces as a 5xx with a
-    // generic message; a slower one returns "started". Either way the real
-    // failure reason lands in /api/updates/status.
-    if (!applyRes.ok()) {
-      expect(applyRes.status(), await applyRes.text()).toBeGreaterThanOrEqual(500);
-    }
+  test("apply of an unsigned artifact fails closed at signature verification", async ({
+    page,
+  }) => {
+    let readinessTokenID = "";
+    try {
+      // The mock estate contains registered agents. Satisfy the production
+      // update-readiness contract so this test reaches the signature boundary
+      // it owns instead of being correctly rejected before installation.
+      const tokenRes = await apiRequest(page, "/api/security/tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        data: {
+          name: `e2e-update-readiness-${Date.now()}`,
+          scopes: ["agent:report"],
+        },
+      });
+      expect(tokenRes.ok(), await tokenRes.text()).toBeTruthy();
+      const tokenPayload = (await tokenRes.json()) as APITokenCreateResponse;
+      readinessTokenID = tokenPayload.record?.id?.trim() || "";
+      expect(readinessTokenID).toBeTruthy();
 
-    let last: UpdateStatus | null = null;
-    const deadline = Date.now() + 60_000;
-    while (Date.now() < deadline) {
-      last = await fetchUpdateStatus(page);
-      expect(last.status, JSON.stringify(last)).not.toBe('completed');
-      if (last.status === 'error') {
-        break;
+      const info = await checkUpdates(page, "stable");
+      const applyRes = await apiRequest(
+        page,
+        "/api/updates/apply?channel=stable",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          data: { downloadUrl: info.downloadUrl },
+        },
+      );
+      // A fast failure inside the start-ack window surfaces as a 5xx with a
+      // generic message; a slower one returns "started". Either way the real
+      // failure reason lands in /api/updates/status.
+      if (!applyRes.ok()) {
+        expect(applyRes.status(), await applyRes.text()).toBeGreaterThanOrEqual(
+          500,
+        );
       }
-      await page.waitForTimeout(500);
+
+      let last: UpdateStatus | null = null;
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        last = await fetchUpdateStatus(page);
+        expect(last.status, JSON.stringify(last)).not.toBe("completed");
+        if (last.status === "error") {
+          break;
+        }
+        await page.waitForTimeout(500);
+      }
+      expect(last?.status, JSON.stringify(last)).toBe("error");
+      expect(`${last?.error ?? ""} ${last?.message ?? ""}`).toMatch(
+        /signature/i,
+      );
+    } finally {
+      if (readinessTokenID) {
+        const deleteRes = await apiRequest(
+          page,
+          `/api/security/tokens/${encodeURIComponent(readinessTokenID)}`,
+          { method: "DELETE" },
+        );
+        expect(deleteRes.status()).toBe(204);
+      }
     }
-    expect(last?.status, JSON.stringify(last)).toBe('error');
-    expect(`${last?.error ?? ''} ${last?.message ?? ''}`).toMatch(/signature/i);
   });
 });
