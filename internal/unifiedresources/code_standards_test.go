@@ -1977,6 +1977,7 @@ func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
 	artifacts := []struct {
 		path             string
 		requiredSnippets []string
+		requiredPatterns []*regexp.Regexp
 		bannedPatterns   []*regexp.Regexp
 	}{
 		{
@@ -1990,7 +1991,9 @@ func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
 			),
 			requiredSnippets: []string{
 				"state.resources",
-				"type: 'unified'",
+			},
+			requiredPatterns: []*regexp.Regexp{
+				regexp.MustCompile(`type:\s*['"]unified['"]`),
 			},
 			bannedPatterns: []*regexp.Regexp{
 				regexp.MustCompile(`state\.hosts\b`),
@@ -2030,6 +2033,11 @@ func TestV6AgentRegistrationArtifactsStayCanonical(t *testing.T) {
 		for _, snippet := range artifact.requiredSnippets {
 			if !strings.Contains(content, snippet) {
 				t.Errorf("%s: missing required canonical v6 snippet %q", normalizedPath, snippet)
+			}
+		}
+		for _, pattern := range artifact.requiredPatterns {
+			if !pattern.MatchString(content) {
+				t.Errorf("%s: missing required canonical v6 pattern %q", normalizedPath, pattern.String())
 			}
 		}
 
