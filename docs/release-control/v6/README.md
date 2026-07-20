@@ -97,8 +97,11 @@ contract update to touch a substantive contract section such as `Purpose`,
 `Completion Obligations`, or `Current State`, not just metadata.
 Local pre-commit formatting is intentionally scoped to staged files so unrelated
 dirty worktree files are not mutated during commit.
-The staged Go formatter updates the git index directly and avoids broad
-restaging, so partially staged files do not silently absorb unrelated hunks.
+The staged Go formatter and the staged frontend prettier formatter both
+update the git index directly and avoid broad restaging, so partially staged
+files do not silently absorb unrelated hunks. The frontend formatter skips
+gracefully when prettier is not installed (fresh clones, linked worktrees
+without node_modules).
 Local pre-commit also blocks any unstaged edits to hook-sensitive governance
 files, so working-tree-only governance changes cannot make local validation
 disagree with the committed tree.

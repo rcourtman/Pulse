@@ -121,6 +121,7 @@ python3 scripts/release_control/canonical_completion_guard_test.py
 python3 scripts/release_control/control_plane_audit_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/format_staged_go_test.py
+python3 scripts/release_control/format_staged_frontend_test.py
 python3 scripts/release_control/governance_stage_guard_test.py
 python3 scripts/release_control/pulse_intelligence_gate_test.py
 python3 scripts/release_control/release_promotion_policy_support_test.py
@@ -151,6 +152,10 @@ fi
 
 # Run Go formatting
 python3 scripts/release_control/format_staged_go.py
+
+# Run frontend formatting (prettier over staged frontend-modern/src files,
+# index-directly like the Go formatter; skips if prettier is not installed)
+python3 scripts/release_control/format_staged_frontend.py
 
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then
