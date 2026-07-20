@@ -72,6 +72,18 @@ cd tests/integration
 npm test
 ```
 
+### CI Tiers (stable / probation / quarantine)
+CI splits the suite into a gating **stable** tier and a non-gating
+**probation** tier, selected with `PULSE_E2E_TIER=stable|probation`
+(unset = the full suite, which is what `npm test` runs locally). The
+tier lists, the classification data behind them, and the
+promotion/demotion rule (10 consecutive green main runs promotes a
+probation spec; one failure or retry-flake demotes it back) are
+documented next to `PROBATION_SPECS` and `QUARANTINED_SPECS` in
+`playwright.config.ts`. Quarantined specs are rotted and do not run at
+all; probation specs run on every push but cannot fail the
+`e2e-verdict` job in `.github/workflows/test-e2e.yml`.
+
 ### Eval Packs (No Manual Steps)
 Run the curated scenario pack (multi-tenant, retired-trial-acquisition, cloud-hosting, cloud-billing-lifecycle) and emit a report:
 ```bash

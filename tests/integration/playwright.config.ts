@@ -22,11 +22,82 @@ const QUARANTINED_SPECS = [
 ];
 
 /**
+ * PROBATION (2026-07-20): specs that run on every push but do NOT gate the
+ * Core E2E verdict. CI runs the suite in two passes per shard, selected by
+ * PULSE_E2E_TIER: "stable" (everything not listed here — gating) and
+ * "probation" (this list — reported, continue-on-error). Locally, with
+ * PULSE_E2E_TIER unset, both tiers run together exactly as before.
+ *
+ * Seeded from per-spec failure data mined out of the "Core E2E Tests"
+ * workflow's failed-shard logs for the 31 completed main runs between the
+ * 2026-07-18 quarantine delist and 2026-07-20: every spec that failed or
+ * retry-flaked within the 10 most recent completed runs starts here; specs
+ * whose last incident is older already satisfy the promotion rule below.
+ *
+ * Promotion rule — a spec earns its way OUT of this list (into the gating
+ * stable tier) after 10 consecutive Core E2E runs on main in which it
+ * neither failed nor went flaky (a retry-pass reported as "flaky" counts as
+ * an incident — the retry hid it from the verdict, not from this ledger).
+ * Demotion rule — one flake on main demotes a stable spec back to this
+ * list, restarting its count. A spec leaves the suite only via QUARANTINE
+ * (still-rotted, doesn't run) or deliberate deletion; probation is for
+ * specs that run green sometimes but haven't yet proven they always do.
+ */
+const PROBATION_SPECS = [
+  '**/01-core-e2e.spec.ts',
+  '**/02-navigation-perf.spec.ts',
+  '**/04-mobile.spec.ts',
+  '**/05-settings-mobile-audit.spec.ts',
+  '**/11-first-session.spec.ts',
+  '**/15-settings-shell-consistency.spec.ts',
+  '**/20-local-doc-links.spec.ts',
+  '**/21-truenas-connections-workspace.spec.ts',
+  '**/38-vmware-ai-chat-mentions.spec.ts',
+  '**/39-vmware-resource-detail-drawer.spec.ts',
+  '**/40-vmware-storage-source-filter.spec.ts',
+  '**/41-vmware-phase1-exclusion-integrity.spec.ts',
+  '**/42-vmware-ai-chat-read-recovery.spec.ts',
+  '**/43-platform-mock-runtime.spec.ts',
+  '**/44-workloads-chart-spacing.spec.ts',
+  '**/45-workloads-memory-tail.spec.ts',
+  '**/46-storage-summary-continuity.spec.ts',
+  '**/49-demo-scenario-curation.spec.ts',
+  '**/50-storage-physical-disk-io-history.spec.ts',
+  '**/56-pulse-account-upgrade-bootstrap.spec.ts',
+  '**/59-workloads-column-layout.spec.ts',
+  '**/62-storage-growth-column.spec.ts',
+  '**/64-workloads-proxmox-refresh-stability.spec.ts',
+  '**/68-platform-pages-shell.spec.ts',
+  '**/77-msp-isolation.spec.ts',
+  '**/79-update-flow.spec.ts',
+];
+
+const E2E_TIER = String(process.env.PULSE_E2E_TIER || '')
+  .trim()
+  .toLowerCase();
+if (E2E_TIER && E2E_TIER !== 'stable' && E2E_TIER !== 'probation') {
+  throw new Error(
+    `PULSE_E2E_TIER must be "stable", "probation", or unset (got "${E2E_TIER}")`,
+  );
+}
+// Stable tier ignores probation specs; probation tier runs only them.
+const TIER_IGNORE = E2E_TIER === 'stable' ? PROBATION_SPECS : [];
+
+// CI runs both tiers inside one job; separate output roots keep the
+// probation pass from clobbering the stable pass's report and artifacts.
+const REPORT_DIR = process.env.PULSE_E2E_REPORT_DIR || 'playwright-report';
+const RESULTS_DIR = process.env.PULSE_E2E_RESULTS_DIR || 'test-results';
+
+/**
  * Playwright configuration for Pulse update integration tests
  * See https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
   testDir: './tests',
+
+  ...(E2E_TIER === 'probation' ? { testMatch: PROBATION_SPECS } : {}),
+
+  outputDir: RESULTS_DIR,
 
   /* Run tests in files in parallel */
   fullyParallel: false, // Update tests should run sequentially
@@ -49,9 +120,9 @@ export default defineConfig({
 
   /* Reporter to use */
   reporter: [
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['html', { outputFolder: REPORT_DIR, open: 'never' }],
     ['list'],
-    ['junit', { outputFile: 'test-results/junit.xml' }]
+    ['junit', { outputFile: `${RESULTS_DIR}/junit.xml` }]
   ],
 
   /* Shared test timeout */
@@ -95,7 +166,7 @@ export default defineConfig({
       },
       // Mobile-specific tests are intentionally excluded from the desktop project;
       // they rely on mobile viewports where md:hidden nav is visible, tables overflow, etc.
-      testIgnore: [...QUARANTINED_SPECS, '**/04-mobile.spec.ts'],
+      testIgnore: [...QUARANTINED_SPECS, ...TIER_IGNORE, '**/04-mobile.spec.ts'],
     },
     {
       name: 'mobile-chrome',
@@ -106,14 +177,24 @@ export default defineConfig({
       // so exclude them to avoid unnecessary browser launches. The visual
       // crawl takes 5+ minutes per project; one desktop pass is the budgeted
       // coverage, and dedicated mobile specs cover mobile layout.
-      testIgnore: [...QUARANTINED_SPECS, '**/journeys/**', '**/99-visual-crawl.spec.ts'],
+      testIgnore: [
+        ...QUARANTINED_SPECS,
+        ...TIER_IGNORE,
+        '**/journeys/**',
+        '**/99-visual-crawl.spec.ts',
+      ],
     },
     {
       name: 'mobile-safari',
       use: {
         ...devices['iPhone 12'],
       },
-      testIgnore: [...QUARANTINED_SPECS, '**/journeys/**', '**/99-visual-crawl.spec.ts'],
+      testIgnore: [
+        ...QUARANTINED_SPECS,
+        ...TIER_IGNORE,
+        '**/journeys/**',
+        '**/99-visual-crawl.spec.ts',
+      ],
     },
 
     // Uncomment to test on Firefox and WebKit

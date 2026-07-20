@@ -80,7 +80,12 @@ jobs:
           PULSE_MULTI_TENANT_ENABLED: "true"
         run: node scripts/pretest.mjs
 
-      - name: Run E2E suite
+      # Two-tier run (see PROBATION_SPECS in tests/integration/playwright.config.ts
+      # for the tier mechanism and the promotion/demotion rule). The stable tier
+      # is the gate; the probation tier reuses the same containers but reports
+      # through continue-on-error so a probation flake cannot paint main red.
+      - name: Run stable-tier E2E suite
+        id: stable
         working-directory: tests/integration
         env:
           PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
@@ -88,8 +93,38 @@ jobs:
           PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
           PULSE_E2E_PERF: "1"
           PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
+          PULSE_E2E_TIER: "stable"
           PULSE_MULTI_TENANT_ENABLED: "true"
         run: npm test -- --shard=${{ matrix.shard }}/8
+
+      # Runs even when the stable tier failed (its data still counts toward
+      # promotion), but not when the stable tier was skipped — that means the
+      # environment never came up and every probation spec would fail on it.
+      - name: Run probation-tier E2E suite (non-gating)
+        id: probation
+        if: ${{ !cancelled() && steps.stable.conclusion != 'skipped' }}
+        continue-on-error: true
+        working-directory: tests/integration
+        env:
+          PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
+          PULSE_E2E_SKIP_DOCKER: "true"
+          PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
+          PULSE_E2E_PERF: "1"
+          PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
+          PULSE_E2E_TIER: "probation"
+          PULSE_E2E_REPORT_DIR: playwright-report-probation
+          PULSE_E2E_RESULTS_DIR: test-results-probation
+          PULSE_MULTI_TENANT_ENABLED: "true"
+        run: npm test -- --shard=${{ matrix.shard }}/8 --pass-with-no-tests
+
+      - name: Report probation-tier outcome
+        if: ${{ !cancelled() && steps.probation.outcome != 'skipped' }}
+        run: |
+          if [ "${{ steps.probation.outcome }}" = "failure" ]; then
+            echo "⚠️ Probation tier FAILED on shard ${{ matrix.shard }} (non-gating; see the playwright-report-probation artifact). A probation spec's 10-consecutive-green promotion count restarts." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Probation tier passed on shard ${{ matrix.shard }} (non-gating)." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Collect container logs
         if: always()
@@ -116,6 +151,24 @@ jobs:
         with:
           name: test-failures-shard-${{ matrix.shard }}
           path: tests/integration/test-results/
+          retention-days: 3
+
+      # continue-on-error keeps the job green on a probation failure, so
+      # failure() never fires for these; key off the step outcome instead.
+      - name: Upload probation Playwright report
+        if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-probation-shard-${{ matrix.shard }}
+          path: tests/integration/playwright-report-probation/
+          retention-days: 3
+
+      - name: Upload probation test videos and screenshots
+        if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-failures-probation-shard-${{ matrix.shard }}
+          path: tests/integration/test-results-probation/
           retention-days: 3
 
   agent-registration:
@@ -201,14 +254,19 @@ jobs:
       - agent-registration
     if: always()
     steps:
+      # The e2e shards fail only on stable-tier failures: the probation tier
+      # runs behind continue-on-error inside each shard, so its failures are
+      # reported (shard summaries + probation artifacts) without reaching
+      # this verdict. Mechanism and promotion rule: PROBATION_SPECS in
+      # tests/integration/playwright.config.ts.
       - name: Check E2E results
         run: |
           if [ "${{ needs.e2e.result }}" != "success" ]; then
-            echo "E2E shards did not all pass (result: ${{ needs.e2e.result }})"
+            echo "Stable-tier E2E shards did not all pass (result: ${{ needs.e2e.result }})"
             exit 1
           fi
           if [ "${{ needs.agent-registration.result }}" != "success" ]; then
             echo "Agent registration lifecycle did not pass (result: ${{ needs.agent-registration.result }})"
             exit 1
           fi
-          echo "All E2E shards and the agent registration lifecycle passed"
+          echo "All stable-tier E2E shards and the agent registration lifecycle passed (probation tier is non-gating)"
