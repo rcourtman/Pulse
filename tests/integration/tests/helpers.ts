@@ -1161,7 +1161,7 @@ async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
   await expect
     .poll(
       async () => {
-        const response = await page.request.get("/api/state").catch(() => null);
+        const response = await apiRequest(page, "/api/state").catch(() => null);
         if (!response?.ok()) {
           return false;
         }
@@ -1272,7 +1272,11 @@ export async function setMockMode(page: Page, enabled: boolean) {
       }
 
       if (res.ok()) {
-        return (await res.json()) as { enabled: boolean };
+        const result = (await res.json()) as { enabled: boolean };
+        if (enabled) {
+          await waitForDefaultMockRuntimeReady(page);
+        }
+        return result;
       }
 
       lastError = new Error(`HTTP ${res.status()}: ${await res.text()}`);

@@ -1,6 +1,7 @@
 import { test, expect, type Locator } from '@playwright/test';
 import {
   E2E_CREDENTIALS,
+  apiRequest,
   ensureAuthenticated,
   getMockMode,
   login,
@@ -81,7 +82,7 @@ test.describe.serial('Core E2E flows', () => {
       test.skip(true, `Unable to read CPU default threshold (value="${cpuDefaultValueRaw}")`);
     }
 
-    const configResBeforeCreate = await page.request.get('/api/alerts/config');
+    const configResBeforeCreate = await apiRequest(page, '/api/alerts/config');
     expect(configResBeforeCreate.ok()).toBeTruthy();
     const configBeforeCreate = (await configResBeforeCreate.json()) as {
       overrides?: Record<string, unknown>;
@@ -166,7 +167,7 @@ test.describe.serial('Core E2E flows', () => {
     });
     await expect(revertOverride).toBeVisible();
 
-    const configResAfterCreate = await page.request.get('/api/alerts/config');
+    const configResAfterCreate = await apiRequest(page, '/api/alerts/config');
     expect(configResAfterCreate.ok()).toBeTruthy();
     const configAfterCreate = (await configResAfterCreate.json()) as { overrides?: Record<string, unknown> };
     const previousOverrideIds = new Set(Object.keys(configBeforeCreate.overrides ?? {}));
@@ -181,7 +182,7 @@ test.describe.serial('Core E2E flows', () => {
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
 
-    const configResAfterDelete = await page.request.get('/api/alerts/config');
+    const configResAfterDelete = await apiRequest(page, '/api/alerts/config');
     expect(configResAfterDelete.ok()).toBeTruthy();
     const configAfterDelete = (await configResAfterDelete.json()) as { overrides?: Record<string, unknown> };
     expect(

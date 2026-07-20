@@ -279,21 +279,29 @@ test.describe.serial("First-session experience", () => {
         route: "/settings/support/reporting",
         expectedURL: /\/settings\/support\/reporting/,
         feature: "advanced_reporting",
+        paywallIndicator: /Advanced Reporting/i,
       },
       {
         route: "/settings/security-webhooks",
         expectedURL: /\/settings\/security-webhooks/,
         feature: "audit_logging",
+        paywallIndicator: /Audit (Logging|Webhooks)/i,
       },
       {
         route: "/settings/system-relay",
         expectedURL: /\/settings\/system-relay/,
         feature: "relay",
+        paywallIndicator: /Remote Access \(Relay\)/i,
       },
     ] as const;
 
     try {
-      for (const { route, expectedURL, feature } of gatedRoutes) {
+      for (const {
+        route,
+        expectedURL,
+        feature,
+        paywallIndicator: paywallPattern,
+      } of gatedRoutes) {
         const hasFeature = features.has(feature);
 
         if (!hasFeature) {
@@ -346,9 +354,8 @@ test.describe.serial("First-session experience", () => {
 
           // Paywall indicator should be visible.
           const paywallIndicator = page
-            .locator(
-              "text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial|Advanced Reporting|Audit Logging|Audit Webhooks|Pulse Relay/i",
-            )
+            .getByRole("main")
+            .getByText(paywallPattern)
             .first();
           const isPaywallVisible = await paywallIndicator
             .isVisible({ timeout: 5_000 })

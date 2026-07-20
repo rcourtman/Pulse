@@ -65,15 +65,16 @@ test.describe('VMware AI chat read recovery', () => {
     await expect(textarea).toBeVisible();
 
     // First websocket state frame can lag on a freshly booted backend.
-    await textarea.click();
-    await textarea.pressSequentially('@warehouse');
+    await textarea.focus();
+    await textarea.fill('@warehouse');
     const mentionListbox = page.getByRole('listbox', { name: 'Assistant resources' });
     await expect(mentionListbox).toBeVisible({ timeout: 30_000 });
-    await mentionListbox
+    const vmOption = mentionListbox
       .getByRole('option')
       .filter({ hasText: /warehouse-api-01/ })
-      .first()
-      .click();
+      .first();
+    await expect(vmOption).toBeVisible({ timeout: 30_000 });
+    await textarea.press('Enter');
     await expect(textarea).toHaveValue('@warehouse-api-01 ');
 
     await textarea.fill('@warehouse-api-01 show me recent status');
