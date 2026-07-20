@@ -70,6 +70,9 @@ const PROBATION_SPECS = [
   '**/68-platform-pages-shell.spec.ts',
   '**/77-msp-isolation.spec.ts',
   '**/79-update-flow.spec.ts',
+  // Demoted 2026-07-20: failed on main in run 29731882505, the first
+  // tiered run, one run after clearing the 10-green seeding window.
+  '**/90-operational-trust-protection-posture.spec.ts',
 ];
 
 const E2E_TIER = String(process.env.PULSE_E2E_TIER || '')
