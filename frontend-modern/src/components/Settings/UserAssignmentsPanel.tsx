@@ -44,8 +44,17 @@ export const UserAssignmentsPanel: Component = () => {
     };
 
     onMount(() => {
-        loadLicenseStatus();
-        loadData();
+        const initialize = async () => {
+            await loadLicenseStatus();
+            if (!hasFeature('rbac')) {
+                setAssignments([]);
+                setRoles([]);
+                setLoading(false);
+                return;
+            }
+            await loadData();
+        };
+        void initialize();
     });
 
     const filteredAssignments = createMemo(() => {
@@ -117,16 +126,18 @@ export const UserAssignmentsPanel: Component = () => {
                             <p class="text-sm text-gray-600 dark:text-gray-400">Manage user role assignments and view effective permissions</p>
                         </div>
                     </div>
-                    <div class="relative">
-                        <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search users..."
-                            value={searchQuery()}
-                            onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-800/60"
-                        />
-                    </div>
+                    <Show when={licenseLoaded() && hasFeature('rbac')}>
+                        <div class="relative">
+                            <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Search users..."
+                                value={searchQuery()}
+                                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                                class="pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-800/60"
+                            />
+                        </div>
+                    </Show>
                 </div>
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
@@ -156,7 +167,7 @@ export const UserAssignmentsPanel: Component = () => {
                     </div>
                 </Show>
 
-                <Show when={!loading() && filteredAssignments().length === 0}>
+                <Show when={!loading() && hasFeature('rbac') && filteredAssignments().length === 0}>
                     <div class="text-center py-12 px-6">
                         <Users class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                         <h4 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">No users yet</h4>
@@ -175,7 +186,7 @@ export const UserAssignmentsPanel: Component = () => {
                     </div>
                 </Show>
 
-                <Show when={!loading() && filteredAssignments().length > 0}>
+                <Show when={!loading() && hasFeature('rbac') && filteredAssignments().length > 0}>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>

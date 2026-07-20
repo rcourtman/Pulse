@@ -80,9 +80,17 @@ export const RolesPanel: Component = () => {
     };
 
     onMount(() => {
-        loadLicenseStatus();
-        loadRoles();
-        loadEnforcement();
+        const initialize = async () => {
+            await loadLicenseStatus();
+            if (!hasFeature('rbac')) {
+                setRoles([]);
+                setLoading(false);
+                setEnforcementLoaded(true);
+                return;
+            }
+            await Promise.all([loadRoles(), loadEnforcement()]);
+        };
+        void initialize();
     });
 
     const handleCreate = () => {
@@ -176,14 +184,16 @@ export const RolesPanel: Component = () => {
                             <p class="text-sm text-gray-600 dark:text-gray-400">Manage custom roles and view built-in roles</p>
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleCreate}
-                        class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
-                    >
-                        <Plus class="w-4 h-4" />
-                        New Role
-                    </button>
+                    <Show when={licenseLoaded() && hasFeature('rbac')}>
+                        <button
+                            type="button"
+                            onClick={handleCreate}
+                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+                        >
+                            <Plus class="w-4 h-4" />
+                            New Role
+                        </button>
+                    </Show>
                 </div>
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
@@ -235,7 +245,7 @@ export const RolesPanel: Component = () => {
                     </div>
                 </Show>
 
-                <Show when={!loading()}>
+                <Show when={!loading() && hasFeature('rbac')}>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
