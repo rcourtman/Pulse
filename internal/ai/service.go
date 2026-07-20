@@ -274,6 +274,10 @@ type Service struct {
 	// were last verified without re-running the call.
 	patrolPreflightCache patrolPreflightCache
 
+	// patrolModelReadinessCache holds the explicit, multi-scenario advisor
+	// evidence separately from the lightweight startup preflight.
+	patrolModelReadinessCache patrolModelReadinessCache
+
 	// License checker for Pro feature gating
 	licenseChecker LicenseChecker
 }
@@ -371,6 +375,8 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 			svc.resourceExportStoreOrgID = svc.orgID
 		}
 	}
+
+	svc.loadPatrolModelReadiness()
 
 	return svc
 }

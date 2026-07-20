@@ -121,6 +121,10 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// provider+model actually supports tool calling. Distinct from /api/ai/test
 	// (which only lists models) so a green test cannot mask a 100%-failing Patrol.
 	r.mux.HandleFunc("/api/ai/patrol/preflight", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandlePatrolPreflight)))
+	// Explicit multi-scenario model readiness advisor. Kept separate from the
+	// lightweight preflight because it is operator-triggered and may take longer
+	// on local hardware.
+	r.mux.HandleFunc("/api/ai/patrol/readiness", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandlePatrolModelReadiness)))
 	// SECURITY: AI Patrol mutation endpoints - require ai:execute scope to prevent low-privilege tokens from
 	// dismissing, suppressing, or otherwise hiding findings. This prevents attackers from blinding AI Patrol.
 	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, requireRelayMobileRuntimeRoute(

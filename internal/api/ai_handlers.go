@@ -2402,6 +2402,10 @@ type AISettingsResponse struct {
 	// to re-click Verify Patrol on every page load. nil when preflight
 	// has never run on this service instance.
 	PatrolPreflight *PatrolPreflightSnapshot `json:"patrol_preflight,omitempty"`
+	// Most recent explicit multi-scenario model readiness evaluation. This is
+	// separate from the lightweight startup preflight and persists across
+	// restarts while the provider/model configuration remains unchanged.
+	PatrolModelReadiness *PatrolModelReadinessSnapshot `json:"patrol_model_readiness,omitempty"`
 }
 
 // AIProviderDefinitionResponse exposes provider metadata without credentials.
@@ -2444,6 +2448,15 @@ type PatrolPreflightSnapshot struct {
 	Recommendation   string `json:"recommendation,omitempty"`
 	RecordedAt       string `json:"recorded_at"`
 	RecordedAtUnix   int64  `json:"recorded_at_unix"`
+}
+
+// PatrolModelReadinessSnapshot adds recording time to the versioned advisor
+// result. The embedded result contains no credentials, endpoint URLs, prompts,
+// or tool transcripts.
+type PatrolModelReadinessSnapshot struct {
+	*ai.PatrolModelReadinessResult
+	RecordedAt     string `json:"recorded_at"`
+	RecordedAtUnix int64  `json:"recorded_at_unix"`
 }
 
 func EmptyAISettingsResponse() AISettingsResponse {
@@ -2712,6 +2725,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		DiscoveryEnabled:          settings.IsDiscoveryEnabled(),
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
 		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
+		PatrolModelReadiness:      cachedPatrolModelReadinessSnapshot(aiService),
 		PatrolReadiness:           ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
 	}.NormalizeCollections()
 
@@ -3135,6 +3149,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// poll via patrol_preflight. Routine saves that don't touch Patrol
 	// transport skip this entirely so they don't burn provider tokens.
 	if aiSettingsUpdateRequiresPatrolPreflight(&originalSettings, settings) {
+		h.GetAIService(r.Context()).InvalidatePatrolModelReadiness()
 		h.GetAIService(r.Context()).TriggerPatrolPreflightAsync("", "")
 	}
 
@@ -3229,6 +3244,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
 		PatrolReadiness:           ptrToPatrolReadiness(patrolReadiness),
 		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
+		PatrolModelReadiness:      cachedPatrolModelReadinessSnapshot(aiService),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -3260,6 +3276,25 @@ func cachedPatrolPreflightSnapshot(aiService *ai.Service) *PatrolPreflightSnapsh
 		RecordedAt:       recordedAt.UTC().Format(time.RFC3339),
 		RecordedAtUnix:   recordedAt.Unix(),
 	}
+}
+
+func patrolModelReadinessSnapshot(result *ai.PatrolModelReadinessResult, recordedAt time.Time) *PatrolModelReadinessSnapshot {
+	if result == nil || recordedAt.IsZero() {
+		return nil
+	}
+	return &PatrolModelReadinessSnapshot{
+		PatrolModelReadinessResult: result,
+		RecordedAt:                 recordedAt.UTC().Format(time.RFC3339),
+		RecordedAtUnix:             recordedAt.Unix(),
+	}
+}
+
+func cachedPatrolModelReadinessSnapshot(aiService *ai.Service) *PatrolModelReadinessSnapshot {
+	if aiService == nil {
+		return nil
+	}
+	result, recordedAt := aiService.CachedPatrolModelReadiness()
+	return patrolModelReadinessSnapshot(result, recordedAt)
 }
 
 // HandleTestAIConnection tests the AI provider connection (POST /api/ai/test)
@@ -5094,6 +5129,50 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 
 	toolStatus, toolCause, toolMessage, toolAction := resolvePatrolToolsCheck(aiService, provider, model)
 	addCheck("tools", toolStatus, toolCause, "Patrol tools", toolMessage, toolAction)
+	if advisor, recordedAt := aiService.CachedPatrolModelReadiness(); advisor != nil && !recordedAt.IsZero() {
+		_, bareModel := config.ParseModelString(model)
+		if strings.EqualFold(advisor.Provider, provider) && advisor.Model == bareModel {
+			contextStatus := patrolReadinessWarning
+			contextCause := advisor.Cause
+			contextAction := ""
+			switch advisor.Dimensions.ContextQuality.Status {
+			case ai.PatrolModelReadinessPass:
+				contextStatus = patrolReadinessReady
+				contextCause = ai.PatrolFailureCauseNone
+			case ai.PatrolModelReadinessFail:
+				contextStatus = patrolReadinessNotReady
+				contextCause = ai.PatrolFailureCauseContextQualityFailed
+				contextAction = "open_provider_settings"
+			default:
+				if contextCause == ai.PatrolFailureCauseNone || contextCause == "" {
+					contextCause = ai.PatrolFailureCauseModelToolSupportUnverified
+				}
+			}
+			addCheck("context_quality", contextStatus, contextCause, "Patrol context quality", advisor.Dimensions.ContextQuality.Summary, contextAction)
+
+			latencyStatus := patrolReadinessWarning
+			latencyCause := advisor.Cause
+			latencyAction := ""
+			switch advisor.Dimensions.Latency.Status {
+			case ai.PatrolModelReadinessPass:
+				latencyStatus = patrolReadinessReady
+				latencyCause = ai.PatrolFailureCauseNone
+			case ai.PatrolModelReadinessWarning:
+				latencyStatus = patrolReadinessWarning
+				latencyCause = ai.PatrolFailureCauseLatencyUnsuitable
+				latencyAction = "open_provider_settings"
+			case ai.PatrolModelReadinessFail:
+				latencyStatus = patrolReadinessNotReady
+				latencyCause = ai.PatrolFailureCauseLatencyUnsuitable
+				latencyAction = "open_provider_settings"
+			default:
+				if latencyCause == ai.PatrolFailureCauseNone || latencyCause == "" {
+					latencyCause = ai.PatrolFailureCauseModelToolSupportUnverified
+				}
+			}
+			addCheck("latency", latencyStatus, latencyCause, "Patrol model latency", advisor.Dimensions.Latency.Summary, latencyAction)
+		}
+	}
 
 	return summarizePatrolReadiness(provider, model, checks)
 }
@@ -5115,6 +5194,22 @@ func resolvePatrolToolsCheck(aiService *ai.Service, provider, model string) (sta
 
 	if aiService == nil {
 		return staticStatus, staticCause, staticMessage, staticAction
+	}
+	if advisor, recordedAt := aiService.CachedPatrolModelReadiness(); advisor != nil && !recordedAt.IsZero() {
+		_, bareModel := config.ParseModelString(model)
+		if strings.EqualFold(advisor.Provider, provider) && advisor.Model == bareModel {
+			age := formatPatrolPreflightAge(time.Since(recordedAt))
+			if advisor.Dimensions.ToolProtocol.Status == ai.PatrolModelReadinessPass {
+				return patrolReadinessReady, ai.PatrolFailureCauseNone,
+					fmt.Sprintf("Exact streaming tool protocol passed %d/%d scenarios %s.", advisor.Dimensions.ToolProtocol.Passed, advisor.Dimensions.ToolProtocol.Attempts, age), ""
+			}
+			cause := advisor.Cause
+			if cause == ai.PatrolFailureCauseNone || cause == "" {
+				cause = ai.PatrolFailureCauseModelToolSupportUnverified
+			}
+			return patrolReadinessNotReady, cause,
+				fmt.Sprintf("%s (last readiness evaluation %s).", advisor.Dimensions.ToolProtocol.Summary, age), "open_provider_settings"
+		}
 	}
 	cached, recordedAt := aiService.CachedPatrolPreflight()
 	if cached == nil || recordedAt.IsZero() {
@@ -5961,6 +6056,54 @@ func (h *AISettingsHandler) HandlePatrolPreflight(w http.ResponseWriter, r *http
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write Patrol preflight response")
+	}
+}
+
+// HandlePatrolModelReadiness runs the explicit, multi-scenario Patrol model
+// advisor. Unlike the startup preflight, this uses Patrol's streaming
+// transport, exact typed arguments, two context fixtures, and a multi-turn tool
+// result. The request context makes the evaluation cancellable from the UI.
+func (h *AISettingsHandler) HandlePatrolModelReadiness(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
+		return
+	}
+	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writePatrolServiceUnavailableResponse(w)
+		return
+	}
+
+	var body aiPatrolPreflightRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"error":"Invalid JSON body"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if body.Provider != "" {
+		if len(body.Provider) > 64 || !isValidProviderName(body.Provider) {
+			http.Error(w, `{"error":"Invalid provider name"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	if len(body.Model) > 256 {
+		http.Error(w, `{"error":"Model id too long"}`, http.StatusBadRequest)
+		return
+	}
+
+	// An advisor run contains four streaming turns. Keep a firm total budget so
+	// slow local hardware cannot pin an HTTP handler indefinitely; provider-level
+	// request timeouts still apply inside this envelope.
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	result := aiService.RunPatrolModelReadiness(ctx, body.Provider, body.Model)
+	response := patrolModelReadinessSnapshot(&result, time.Now())
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to write Patrol model readiness response")
 	}
 }
 

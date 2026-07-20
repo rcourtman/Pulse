@@ -8,6 +8,7 @@ import { arrayOrEmpty, promoteLegacyAlertIdentifier } from './responseUtils';
 import type { InvestigationRecord } from './ai';
 import type { ResourceCriticality } from './resourceOperatorState';
 import type { PatrolActionReference } from '@/types/actionAudit';
+import type { PatrolModelReadinessSnapshot } from '@/types/ai';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory =
@@ -909,5 +910,30 @@ export async function runPatrolPreflight(
     method: 'POST',
     body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export interface PatrolModelReadinessRequest {
+  provider?: string;
+  model?: string;
+}
+
+export type PatrolModelReadinessResponse = PatrolModelReadinessSnapshot;
+
+/**
+ * Run the explicit Patrol model readiness advisor. The request exercises the
+ * streaming tool path with typed arguments, context fixtures, and a synthetic
+ * tool-result continuation. Passing an AbortSignal cancels the server-side
+ * provider request through the HTTP request context.
+ */
+export async function runPatrolModelReadiness(
+  body: PatrolModelReadinessRequest = {},
+  signal?: AbortSignal,
+): Promise<PatrolModelReadinessResponse> {
+  return apiFetchJSON<PatrolModelReadinessResponse>('/api/ai/patrol/readiness', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    signal,
   });
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { runPatrolPreflight } from '../patrol';
+import { runPatrolModelReadiness, runPatrolPreflight } from '../patrol';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 vi.mock('@/utils/apiClient', () => ({
@@ -177,5 +177,50 @@ describe('runPatrolPreflight', () => {
     expect(result.tool_call_observed).toBe(false);
     expect(result.cause).toBe('model_tool_support_unverified');
     expect(result.recommendation).toContain('real Patrol');
+  });
+});
+
+describe('runPatrolModelReadiness', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('runs the multi-scenario advisor through its explicit endpoint', async () => {
+    const controller = new AbortController();
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      probe_version: 'patrol-readiness/v1',
+      success: true,
+      status: 'pass',
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      duration_ms: 12_000,
+      max_verified_mode: 'monitor',
+      summary: 'Verified for Watch only on this install.',
+      dimensions: {
+        connectivity: { status: 'pass', summary: 'Connected.' },
+        tool_protocol: { status: 'pass', summary: 'Passed.', attempts: 3, passed: 3 },
+        context_quality: { status: 'pass', summary: 'Passed.', attempts: 2, passed: 2 },
+        latency: { status: 'pass', summary: 'Passed.' },
+      },
+      modes: {
+        monitor: { status: 'verified', summary: 'Verified.' },
+        approval: { status: 'not_suitable', summary: 'Continuation failed.' },
+        assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+        full: { status: 'not_assessed', summary: 'Governed canary required.' },
+      },
+      recorded_at: '2026-07-13T08:00:00Z',
+      recorded_at_unix: 1783929600,
+    });
+
+    const result = await runPatrolModelReadiness({ model: 'ollama:qwen3:8b' }, controller.signal);
+
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/ai/patrol/readiness', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'ollama:qwen3:8b' }),
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+    expect(result.max_verified_mode).toBe('monitor');
+    expect(result.dimensions.tool_protocol.passed).toBe(3);
   });
 });

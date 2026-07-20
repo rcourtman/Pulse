@@ -223,6 +223,20 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("Maximum evidence-tool calls per investigation", normalized_control)
         self.assertIn("separate model-response safety ceiling", normalized_control)
 
+    def test_public_ai_overview_describes_dimensioned_patrol_model_readiness(self) -> None:
+        content = read_repo_text("docs/AI.md")
+        normalized_content = " ".join(content.split())
+
+        self.assertIn("### Patrol model readiness advisor", content)
+        self.assertIn("synthetic data only and never calls infrastructure tools", normalized_content)
+        self.assertIn("provider connectivity, exact typed streaming tool calls", normalized_content)
+        self.assertIn("Patrol-shaped context fixtures", normalized_content)
+        self.assertIn("projected loop latency", normalized_content)
+        self.assertIn("never certifies **Safe auto-fix** or **Autopilot**", normalized_content)
+        self.assertIn("without replacing the last completed evidence", normalized_content)
+        self.assertIn("`patrol_readiness` usage category", normalized_content)
+        self.assertNotIn("Patrol model ready", content)
+
     def test_public_ai_docs_use_current_surface_naming(self) -> None:
         for doc_path in PUBLIC_AI_DOC_PATHS:
             with self.subTest(doc_path=doc_path):

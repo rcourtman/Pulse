@@ -1828,6 +1828,14 @@ If no subject-linked posture exists, the UI says protection is unknown rather
 than unprotected. The summary-only navigation path does not query recovery
 history.
 
+### Patrol model-readiness isolation
+
+Keep Patrol model-readiness context fixtures synthetic and isolated from
+storage/recovery state. The advisor may model backup failure and storage
+pressure to assess context selection, but it must not read live backup records,
+invoke recovery APIs, mutate storage, or treat a synthetic pass as evidence
+that Safe auto-fix or Autopilot remediation is verified.
+
 ## Current State
 
 Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation

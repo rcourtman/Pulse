@@ -1,9 +1,9 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { runDiscoveryRefresh } from '@/api/discovery';
-import { runPatrolPreflight, type PatrolPreflightResponse } from '@/api/patrol';
+import { runPatrolModelReadiness, type PatrolModelReadinessResponse } from '@/api/patrol';
 import {
   AI_PROVIDERS,
   createInitialProviderHealth,
@@ -260,36 +260,14 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   );
   const [preflightRunning, setPreflightRunning] = createSignal(false);
   const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
-  const [patrolPreflightRunning, setPatrolPreflightRunning] = createSignal(false);
-  const [patrolPreflightResult, setPatrolPreflightResult] =
-    createSignal<PatrolPreflightResponse | null>(null);
+  const [patrolModelReadinessRunning, setPatrolModelReadinessRunning] = createSignal(false);
+  const [patrolModelReadinessResult, setPatrolModelReadinessResult] =
+    createSignal<PatrolModelReadinessResponse | null>(null);
+  let patrolModelReadinessAbortController: AbortController | null = null;
   const [discoveryRunRunning, setDiscoveryRunRunning] = createSignal(false);
 
-  // hydratePatrolPreflightFromSettings projects the cached preflight
-  // snapshot from /api/settings/ai into the same response shape the
-  // manual Check Patrol model button writes, so the inline result panel can
-  // render the most-recent outcome on page load without forcing a
-  // re-click. Returns null when preflight has never run on the
-  // current Pulse instance.
-  const hydratePatrolPreflightFromSettings = (data: AISettingsType | null) => {
-    const snapshot = data?.patrol_preflight;
-    if (!snapshot) {
-      setPatrolPreflightResult(null);
-      return;
-    }
-    setPatrolPreflightResult({
-      success: snapshot.success,
-      provider: snapshot.provider,
-      model: snapshot.model,
-      tool_call_observed: snapshot.tool_call_observed,
-      duration_ms: snapshot.duration_ms,
-      message: snapshot.title || snapshot.summary || '',
-      cause: snapshot.cause,
-      summary: snapshot.summary,
-      recommendation: snapshot.recommendation,
-      recorded_at: snapshot.recorded_at,
-      recorded_at_unix: snapshot.recorded_at_unix,
-    });
+  const hydratePatrolModelReadinessFromSettings = (data: AISettingsType | null) => {
+    setPatrolModelReadinessResult(data?.patrol_model_readiness ?? null);
   };
 
   const [showSetupModal, setShowSetupModal] = createSignal(false);
@@ -698,36 +676,68 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     }
   };
 
-  // runPatrolToolPreflight verifies the configured Patrol provider+model
-  // can actually call tools end-to-end. Distinct from runProviderPreflight,
-  // which only confirms each provider's model catalog is reachable.
-  //
-  // Passes the form's pending patrolModel as a model override so clicking
-  // Check Patrol model after changing the dropdown actually tests the operator's
-  // pending selection, not whatever was previously saved. Empty form value
-  // means "use the shared default" — the backend handles the fallback.
-  const runPatrolToolPreflight = async () => {
-    setPatrolPreflightRunning(true);
+  // Run the heavier advisor only on explicit operator action. It uses the
+  // pending model selection, the same streaming transport as Patrol, and an
+  // AbortSignal so slow local models can be cancelled without leaving a
+  // provider request running in the backend.
+  const runPatrolModelReadinessAdvisor = async () => {
+    const controller = new AbortController();
+    patrolModelReadinessAbortController?.abort();
+    patrolModelReadinessAbortController = controller;
+    setPatrolModelReadinessRunning(true);
     try {
       const pendingModel = form.patrolModel.trim();
-      const result = await runPatrolPreflight(pendingModel ? { model: pendingModel } : {});
-      setPatrolPreflightResult(result);
+      const result = await runPatrolModelReadiness(
+        pendingModel ? { model: pendingModel } : {},
+        controller.signal,
+      );
+      setPatrolModelReadinessResult(result);
     } catch (error) {
+      const errorName =
+        typeof error === 'object' && error !== null && 'name' in error
+          ? String(error.name)
+          : '';
+      if (errorName === 'AbortError') {
+        notificationStore.info('Patrol model evaluation cancelled.');
+        return;
+      }
       const message =
         error instanceof Error && error.message
           ? error.message
-          : 'Pulse could not run the Patrol tool-call preflight.';
-      setPatrolPreflightResult({
+          : 'Pulse could not run the Patrol model readiness evaluation.';
+      setPatrolModelReadinessResult({
+        probe_version: 'patrol-readiness/v1',
         success: false,
-        tool_call_observed: false,
+        status: 'fail',
         duration_ms: 0,
-        message,
-        summary:
-          'Pulse could not reach the preflight endpoint. Check that the backend is running and you have settings-write permission.',
+        summary: message,
+        recommendation:
+          'Check that the backend is running and that you have settings-write permission, then retry.',
+        dimensions: {
+          connectivity: { status: 'fail', summary: message },
+          tool_protocol: { status: 'not_assessed', summary: 'Not assessed.' },
+          context_quality: { status: 'not_assessed', summary: 'Not assessed.' },
+          latency: { status: 'not_assessed', summary: 'Not assessed.' },
+        },
+        modes: {
+          monitor: { status: 'not_assessed', summary: 'Not assessed.' },
+          approval: { status: 'not_assessed', summary: 'Not assessed.' },
+          assisted: { status: 'not_assessed', summary: 'Extended verification required.' },
+          full: { status: 'not_assessed', summary: 'Governed canary required.' },
+        },
+        recorded_at: new Date().toISOString(),
+        recorded_at_unix: Math.floor(Date.now() / 1000),
       });
     } finally {
-      setPatrolPreflightRunning(false);
+      if (patrolModelReadinessAbortController === controller) {
+        patrolModelReadinessAbortController = null;
+        setPatrolModelReadinessRunning(false);
+      }
     }
+  };
+
+  const cancelPatrolModelReadinessAdvisor = () => {
+    patrolModelReadinessAbortController?.abort();
   };
 
   const loadSettings = async () => {
@@ -738,7 +748,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setSettings(data);
       resetForm(data);
       syncModelCatalogForSettings(data);
-      hydratePatrolPreflightFromSettings(data);
+      hydratePatrolModelReadinessFromSettings(data);
       void runProviderPreflight(data);
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
@@ -749,7 +759,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setModelsError('');
       setProviderHealth(createInitialProviderHealth());
       setPreflightLastCheckedAt(null);
-      setPatrolPreflightResult(null);
+      setPatrolModelReadinessResult(null);
     } finally {
       setLoading(false);
     }
@@ -844,7 +854,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setForm('enabled', true);
       resetForm(updated);
       syncModelCatalogForSettings(updated);
-      hydratePatrolPreflightFromSettings(updated);
+      hydratePatrolModelReadinessFromSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
       // First-time configuration is the moment of maximum intent:
@@ -1100,7 +1110,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setSettings(updated);
       resetForm(updated);
       syncModelCatalogForSettings(updated);
-      hydratePatrolPreflightFromSettings(updated);
+      hydratePatrolModelReadinessFromSettings(updated);
       void runProviderPreflight(updated);
       void aiChatStore.refreshEnabledFromServer();
       const savedLabel = options.savedLabel ?? 'Provider & Models settings saved';
@@ -1339,6 +1349,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     void loadSettings();
   });
 
+  onCleanup(() => patrolModelReadinessAbortController?.abort());
+
   return {
     alertAnalysisLocked,
     autoFixLocked,
@@ -1368,8 +1380,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     loadSettings,
     modelsError,
     modelsLoading,
-    patrolPreflightResult,
-    patrolPreflightRunning,
+    patrolModelReadinessResult,
+    patrolModelReadinessRunning,
     preflightLastCheckedAt,
     preflightRunning,
     providerHealth,
@@ -1377,7 +1389,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     providerTestResult,
     resetForm,
     runProviderPreflight,
-    runPatrolToolPreflight,
+    runPatrolModelReadinessAdvisor,
+    cancelPatrolModelReadinessAdvisor,
     saving,
     selectedChatSession,
     selectedSessionId,

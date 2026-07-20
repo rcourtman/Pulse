@@ -3885,6 +3885,20 @@ Assistant receives a selected attention item only after the operator opens it.
 The handoff is explanation-only and cannot infer a capability, approve an
 action, or replace evidence and lifecycle truth.
 
+### Patrol model-readiness evidence
+
+Keep the Patrol model-readiness advisor provider-neutral and evidence-based.
+`POST /api/ai/patrol/readiness` must use synthetic, read-only streaming
+scenarios to distinguish provider connectivity, typed tool-call protocol,
+context selection quality, continuation behavior, and latency rather than
+treating a successful model-list or chat request as proof of autonomy
+suitability. Apply the shared cost budget and record probe token usage under
+`patrol_readiness`. Persist only sanitized scores, timings, and model metadata;
+invalidate evidence when the selected provider, model, credential, endpoint, or
+relevant timeout budget changes. Monitor/Watch and Approval/Ask First may be
+verified independently, while Safe auto-fix and Autopilot remain explicitly
+unassessed until deterministic remediation evals exist.
+
 ## Current State
 
 First-session assistant discoverability is now a contract concern. Successful

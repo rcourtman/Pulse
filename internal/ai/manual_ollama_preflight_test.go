@@ -10,6 +10,12 @@ package ai
 //	PULSE_MANUAL_OLLAMA_PREFLIGHT_MODEL=<candidate> \
 //	go test ./internal/ai -run TestManualOllamaBlessedModelPreflight -v -count=1
 //
+// Run the full dimensioned advisor before blessing a model:
+//
+//	PULSE_MANUAL_OLLAMA_PREFLIGHT_URL=http://127.0.0.1:11434 \
+//	PULSE_MANUAL_OLLAMA_PREFLIGHT_MODEL=<candidate> \
+//	go test ./internal/ai -run TestManualOllamaPatrolModelReadiness -v -count=1
+//
 // Run it several times: qwen3:4b passed connectivity but emitted a tool
 // call in 0 of 4 preflight runs, which is why only qwen3:8b is blessed.
 
@@ -43,5 +49,49 @@ func TestManualOllamaBlessedModelPreflight(t *testing.T) {
 		res.Provider, res.Model, res.Success, res.ToolCallObserved, res.DurationMs, res.Cause, res.Title, res.Summary)
 	if !res.Success || !res.ToolCallObserved {
 		t.Fatalf("blessed model %q failed Patrol preflight: %+v", model, res)
+	}
+}
+
+func TestManualOllamaPatrolModelReadiness(t *testing.T) {
+	base := os.Getenv("PULSE_MANUAL_OLLAMA_PREFLIGHT_URL")
+	if base == "" {
+		t.Skip("manual readiness advisor: set PULSE_MANUAL_OLLAMA_PREFLIGHT_URL")
+	}
+	model := os.Getenv("PULSE_MANUAL_OLLAMA_PREFLIGHT_MODEL")
+	if model == "" {
+		model = config.OllamaSuggestedPatrolModel
+	}
+
+	svc := NewService(nil, nil)
+	svc.cfg = &config.AIConfig{
+		Enabled:                       true,
+		PatrolModel:                   config.AIProviderOllama + ":" + model,
+		OllamaBaseURL:                 base,
+		RequestTimeoutSeconds:         180,
+		PatrolInvestigationBudget:     config.DefaultPatrolInvestigationBudget,
+		PatrolInvestigationTimeoutSec: config.DefaultPatrolInvestigationTimeoutSec,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	result := svc.RunPatrolModelReadiness(ctx, config.AIProviderOllama, model)
+	t.Logf("provider=%s model=%s success=%v status=%s maxMode=%s durationMs=%d cause=%q tool=%d/%d context=%d/%d continuation=%v warmP50Ms=%d summary=%q",
+		result.Provider,
+		result.Model,
+		result.Success,
+		result.Status,
+		result.MaxVerifiedMode,
+		result.DurationMs,
+		result.Cause,
+		result.Dimensions.ToolProtocol.Passed,
+		result.Dimensions.ToolProtocol.Attempts,
+		result.Dimensions.ContextQuality.Passed,
+		result.Dimensions.ContextQuality.Attempts,
+		result.Dimensions.ToolProtocol.ContinuationObserved,
+		result.Dimensions.Latency.WarmP50Ms,
+		result.Summary,
+	)
+	if !result.Success || result.MaxVerifiedMode == "" {
+		t.Fatalf("candidate model %q failed Patrol readiness advisor: %+v", model, result)
 	}
 }

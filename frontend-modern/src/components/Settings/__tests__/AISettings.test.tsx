@@ -19,6 +19,7 @@ const getModelsMock = vi.fn();
 const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
 const runDiscoveryRefreshMock = vi.fn();
+const runPatrolModelReadinessMock = vi.fn();
 const fetchAgentCapabilitiesManifestMock = vi.fn();
 const listSessionsMock = vi.fn();
 const summarizeSessionMock = vi.fn();
@@ -54,6 +55,10 @@ vi.mock('@/api/aiChat', () => ({
 
 vi.mock('@/api/discovery', () => ({
   runDiscoveryRefresh: (...args: unknown[]) => runDiscoveryRefreshMock(...args),
+}));
+
+vi.mock('@/api/patrol', () => ({
+  runPatrolModelReadiness: (...args: unknown[]) => runPatrolModelReadinessMock(...args),
 }));
 
 vi.mock('@/api/agentCapabilities', async (importOriginal) => {
@@ -151,6 +156,7 @@ const resetAllMocks = () => {
   testProviderMock.mockReset();
   testConnectionMock.mockReset();
   runDiscoveryRefreshMock.mockReset();
+  runPatrolModelReadinessMock.mockReset();
   fetchAgentCapabilitiesManifestMock.mockReset();
   listSessionsMock.mockReset();
   summarizeSessionMock.mockReset();
@@ -1088,6 +1094,89 @@ describe('AISettings provider save failure context', () => {
     const message = String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '');
     expect(message).not.toContain('OpenRouter provider');
     expect(message).not.toContain('openrouter:deepseek/deepseek-r1');
+  });
+
+  it('renders dimensioned model readiness without certifying higher autonomy', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'ollama:qwen3:8b',
+      patrol_model: 'ollama:qwen3:8b',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+    });
+    runPatrolModelReadinessMock.mockResolvedValue({
+      probe_version: 'patrol-readiness/v1',
+      success: true,
+      status: 'pass',
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      duration_ms: 9_100,
+      max_verified_mode: 'monitor',
+      summary: 'Verified for Watch only on this install.',
+      recommendation: 'Keep higher autonomy disabled until an extended canary passes.',
+      dimensions: {
+        connectivity: { status: 'pass', summary: 'Connected.' },
+        tool_protocol: { status: 'pass', summary: 'Passed.', attempts: 3, passed: 3 },
+        context_quality: { status: 'pass', summary: 'Passed.', attempts: 2, passed: 2 },
+        latency: { status: 'pass', summary: 'Passed.', warm_p50_ms: 1_000 },
+      },
+      modes: {
+        monitor: { status: 'verified', summary: 'Verified.' },
+        approval: { status: 'not_suitable', summary: 'Continuation failed.' },
+        assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+        full: { status: 'not_assessed', summary: 'Governed canary required.' },
+      },
+      metadata: { context_window: 32768, quantization_level: 'Q4_K_M' },
+      recorded_at: '2026-07-13T08:00:00Z',
+      recorded_at_unix: 1783929600,
+    });
+
+    renderComponent('patrol');
+    const button = await screen.findByRole('button', { name: 'Check Patrol model' });
+    fireEvent.click(button);
+
+    expect(await screen.findByText('Verified for Watch only')).toBeInTheDocument();
+    expect(screen.getByText('Tool protocol')).toBeInTheDocument();
+    expect(screen.getByText('Context quality')).toBeInTheDocument();
+    expect(screen.getByText('Autonomy suitability')).toBeInTheDocument();
+    expect(screen.getByText('Safe auto-fix')).toBeInTheDocument();
+    expect(screen.getByText('Autopilot')).toBeInTheDocument();
+    expect(screen.getAllByText('Not assessed')).toHaveLength(2);
+    expect(screen.getByText(/Context 32,768 tokens/)).toBeInTheDocument();
+    expect(runPatrolModelReadinessMock).toHaveBeenCalledWith(
+      { model: 'ollama:qwen3:8b' },
+      expect.anything(),
+    );
+  });
+
+  it('cancels an in-flight local model readiness evaluation', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'ollama:qwen3:8b',
+      patrol_model: 'ollama:qwen3:8b',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+    });
+    runPatrolModelReadinessMock.mockImplementation(
+      (_body: unknown, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        }),
+    );
+
+    renderComponent('patrol');
+    fireEvent.click(await screen.findByRole('button', { name: 'Check Patrol model' }));
+    const cancelButton = await screen.findByRole('button', { name: 'Cancel check' });
+    fireEvent.click(cancelButton);
+
+    await waitFor(() => {
+      expect(notificationInfoMock).toHaveBeenCalledWith('Patrol model evaluation cancelled.');
+    });
+    expect(await screen.findByRole('button', { name: 'Check Patrol model' })).toBeInTheDocument();
   });
 });
 

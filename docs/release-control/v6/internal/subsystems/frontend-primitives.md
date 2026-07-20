@@ -2350,6 +2350,14 @@ not a detached element reference. Browser proof covers desktop and
 request, and focus restoration for both confirmed and contradicted
 verification.
 
+41. Keep the Patrol model-readiness panel on the canonical AI settings state
+    and shared model-selection surface. The panel must render connectivity,
+    tool protocol, context quality, latency, and per-mode suitability as
+    separate accessible evidence, support request cancellation, hydrate the
+    latest compatible snapshot, and label failed or stale runs as evaluations
+    rather than verified results. Safe auto-fix and Autopilot remain visibly
+    `not_assessed` until their governed canaries exist.
+
 ## Current State
 
 Assistant availability in the app shell is derived from the

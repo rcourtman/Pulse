@@ -1,5 +1,5 @@
 import { A } from '@solidjs/router';
-import { Component, Show } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
 import { AIProviderConfigurationSection } from '@/components/Settings/AIProviderConfigurationSection';
 import { isModelProviderConfigured } from '@/components/Settings/aiSettingsModel';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
@@ -58,16 +58,14 @@ const stripModelProvider = (modelId: string) => {
   return colon === -1 ? trimmed : trimmed.slice(colon + 1);
 };
 
-export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (controlProps) => {
+export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> = (
+  controlProps,
+) => {
   const { state } = controlProps;
-  const result = state.patrolPreflightResult;
+  const result = state.patrolModelReadinessResult;
 
-  // The cached result may be for a model the operator already moved away
-  // from in the form (e.g. they changed the dropdown but haven't clicked
-  // Check Patrol model yet). When that happens, surface a hint so the green
-  // "verified" badge doesn't silently mislead. The backend reads the
-  // form's pending patrolModel on Check Patrol model click, so refreshing
-  // resolves the staleness.
+  // A persisted result is valid only for the model that was evaluated. The
+  // backend additionally invalidates on endpoint and timeout changes.
   const pendingFormModel = () => stripModelProvider(state.form.patrolModel || '');
   const cachedResultModel = () => result()?.model?.trim() || '';
   const isStaleAgainstFormSelection = () => {
@@ -80,8 +78,8 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
     const r = result();
     if (!r) return 'idle';
     if (isStaleAgainstFormSelection()) return 'warning';
-    if (r.success) return 'success';
-    if (r.cause === 'model_tool_support_unverified') return 'warning';
+    if (r.status === 'pass') return 'success';
+    if (r.status === 'warning') return 'warning';
     return 'error';
   };
 
@@ -102,15 +100,12 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
     const r = result();
     if (!r) return '';
     if (isStaleAgainstFormSelection()) {
-      return `Verified result is for ${cachedResultModel()}, your current selection is ${pendingFormModel()}`;
+      return `Evaluation result is for ${cachedResultModel()}, your current selection is ${pendingFormModel()}`;
     }
-    if (r.success) {
-      return 'Patrol model ready';
-    }
-    if (r.cause === 'model_tool_support_unverified') {
-      return 'Patrol model needs a real run to confirm';
-    }
-    return r.message || 'Patrol model check failed';
+    if (r.max_verified_mode === 'approval') return 'Verified for Watch only and Ask first';
+    if (r.max_verified_mode === 'monitor') return 'Verified for Watch only';
+    if (r.status === 'warning') return 'Patrol model needs attention';
+    return 'Patrol model not verified';
   };
 
   const detail = () => {
@@ -119,16 +114,72 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
     if (isStaleAgainstFormSelection()) {
       return 'Click Check Patrol model to test the pending selection.';
     }
-    if (r.success) {
-      return 'The selected model can run Patrol work on this install.';
+    return r.summary || '';
+  };
+
+  const dimensionRows = () => {
+    const r = result();
+    if (!r) return [];
+    return [
+      { label: 'Connectivity', value: r.dimensions.connectivity },
+      { label: 'Tool protocol', value: r.dimensions.tool_protocol },
+      { label: 'Context quality', value: r.dimensions.context_quality },
+      { label: 'Latency', value: r.dimensions.latency },
+    ];
+  };
+
+  const modeRows = () => {
+    const r = result();
+    if (!r) return [];
+    return [
+      { label: 'Watch only', value: r.modes.monitor },
+      { label: 'Ask first', value: r.modes.approval },
+      { label: 'Safe auto-fix', value: r.modes.assisted },
+      { label: 'Autopilot', value: r.modes.full },
+    ];
+  };
+
+  const statusLabel = (status: string) => {
+    switch (status) {
+      case 'pass':
+      case 'verified':
+        return 'Passed';
+      case 'warning':
+        return 'Caution';
+      case 'fail':
+      case 'not_suitable':
+        return 'Failed';
+      default:
+        return 'Not assessed';
     }
-    if (r.cause === 'model_tool_support_unverified') {
-      return 'Run Patrol once to confirm this model works correctly in practice.';
+  };
+
+  const modeStatusLabel = (status: string) => {
+    switch (status) {
+      case 'verified':
+        return 'Verified';
+      case 'warning':
+        return 'Caution';
+      case 'not_suitable':
+        return 'Not suitable';
+      default:
+        return 'Not assessed';
     }
-    // Summary and message are often the same string on config-level
-    // failures; don't render the headline twice.
-    const fallback = r.summary || r.message || '';
-    return fallback === headline() ? '' : fallback;
+  };
+
+  const readinessStatusTextClass = (status: string) => {
+    switch (status) {
+      case 'pass':
+      case 'verified':
+        return 'text-green-700 dark:text-green-300';
+      case 'warning':
+        return 'text-amber-700 dark:text-amber-300';
+      case 'fail':
+      case 'not_suitable':
+        return 'text-red-700 dark:text-red-300';
+      default:
+        return 'text-muted';
+    }
   };
 
   const formatDuration = (ms: number) => {
@@ -154,17 +205,31 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
     <div class="mt-2 flex flex-col gap-2">
       <div class="flex items-center justify-between gap-2">
         <p class="text-[11px] text-muted">
-          Check that this model can run Patrol work, not just connect to the provider.
+          Evaluate connectivity, streaming tools, context handling, latency, and suitable Patrol
+          modes. Uses synthetic data only and may take up to two minutes.
         </p>
         <button
           type="button"
-          onClick={() => void state.runPatrolToolPreflight()}
-          disabled={state.patrolPreflightRunning() || state.saving()}
-          class="inline-flex min-h-9 items-center rounded-md px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50 whitespace-nowrap"
+          onClick={() =>
+            state.patrolModelReadinessRunning()
+              ? state.cancelPatrolModelReadinessAdvisor()
+              : void state.runPatrolModelReadinessAdvisor()
+          }
+          disabled={state.saving()}
+          class={`inline-flex min-h-9 items-center rounded-md px-3 py-1.5 text-sm disabled:opacity-50 whitespace-nowrap ${
+            state.patrolModelReadinessRunning()
+              ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800'
+              : 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800'
+          }`}
         >
-          {state.patrolPreflightRunning() ? 'Checking...' : 'Check Patrol model'}
+          {state.patrolModelReadinessRunning() ? 'Cancel check' : 'Check Patrol model'}
         </button>
       </div>
+      <Show when={state.patrolModelReadinessRunning()}>
+        <p class="text-[11px] text-muted" role="status">
+          Running synthetic streaming scenarios. Pulse will not call infrastructure tools.
+        </p>
+      </Show>
       <Show when={result()}>
         {(r) => (
           <div class={`rounded border px-3 py-2 ${toneClasses()}`}>
@@ -177,8 +242,61 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
             <Show when={detail()}>
               <p class="text-[11px] mt-1 opacity-90">{detail()}</p>
             </Show>
+            <div class="mt-2 grid gap-1 sm:grid-cols-2">
+              <For each={dimensionRows()}>
+                {(dimension) => (
+                  <div class="rounded bg-white/40 px-2 py-1 dark:bg-black/10">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-[11px]">{dimension.label}</span>
+                      <span
+                        class={`text-[11px] font-medium ${readinessStatusTextClass(dimension.value.status)}`}
+                      >
+                        {dimension.value.attempts
+                          ? `${dimension.value.passed ?? 0}/${dimension.value.attempts} · `
+                          : ''}
+                        {statusLabel(dimension.value.status)}
+                      </span>
+                    </div>
+                    <p class="mt-0.5 text-[10px] opacity-75">{dimension.value.summary}</p>
+                  </div>
+                )}
+              </For>
+            </div>
+            <div class="mt-2 border-t border-current/15 pt-2">
+              <p class="text-[11px] font-medium mb-1">Autonomy suitability</p>
+              <div class="grid gap-1 sm:grid-cols-2">
+                <For each={modeRows()}>
+                  {(mode) => (
+                    <div>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px]">{mode.label}</span>
+                        <span
+                          class={`text-[11px] font-medium ${readinessStatusTextClass(mode.value.status)}`}
+                        >
+                          {modeStatusLabel(mode.value.status)}
+                        </span>
+                      </div>
+                      <p class="text-[10px] opacity-75">{mode.value.summary}</p>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
             <Show when={r().recommendation}>
               <p class="text-[11px] mt-1 opacity-90">{r().recommendation}</p>
+            </Show>
+            <Show when={r().metadata?.context_window || r().metadata?.quantization_level}>
+              <p class="text-[11px] mt-1 opacity-70">
+                <Show when={r().metadata?.context_window}>
+                  Context {r().metadata?.context_window?.toLocaleString()} tokens
+                </Show>
+                <Show when={r().metadata?.context_window && r().metadata?.quantization_level}>
+                  {' · '}
+                </Show>
+                <Show when={r().metadata?.quantization_level}>
+                  {r().metadata?.quantization_level}
+                </Show>
+              </p>
             </Show>
             <Show when={r().provider || r().model || r().recorded_at_unix}>
               <p class="text-[11px] mt-1 opacity-70">
@@ -187,7 +305,7 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
                 {r().model}
                 <Show when={r().recorded_at_unix}>
                   {(r().provider || r().model ? ' · ' : '') +
-                    'last verified ' +
+                    'last evaluated ' +
                     formatRecordedAt(r().recorded_at_unix)}
                 </Show>
               </p>
@@ -202,7 +320,7 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
 export const AIModelOverrideField: Component<{
   state: AISettingsState;
   kind: AIModelOverrideKind;
-  includePatrolPreflight?: boolean;
+  includePatrolReadiness?: boolean;
 }> = (props) => {
   const { state } = props;
   const config = () => MODEL_OVERRIDE_CONFIG[props.kind];
@@ -303,8 +421,8 @@ export const AIModelOverrideField: Component<{
           to be configured. Add an API key on Provider & Models or select a different model.
         </p>
       </Show>
-      <Show when={props.includePatrolPreflight}>
-        <PatrolPreflightControl state={state} />
+      <Show when={props.includePatrolReadiness}>
+        <PatrolModelReadinessControl state={state} />
       </Show>
     </div>
   );

@@ -810,21 +810,16 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsDialogsSource).not.toContain('Session file changes');
   });
 
-  it('keeps Patrol tool-call preflight wired through the canonical settings state', () => {
-    // The Check Patrol model button must drive the canonical
-    // /api/ai/patrol/preflight endpoint via the typed runPatrolPreflight
-    // client and surface the result through state, not via inline fetch
-    // calls in the section component.
-    expect(aiSettingsStateSource).toContain('runPatrolPreflight');
-    expect(aiSettingsStateSource).toContain('runPatrolToolPreflight');
-    expect(aiSettingsStateSource).toContain('patrolPreflightResult');
-    expect(aiSettingsStateSource).toContain('patrolPreflightRunning');
-    expect(aiModelSelectionSectionSource).toContain('PatrolPreflightControl');
-    expect(aiModelSelectionSectionSource).toContain('runPatrolToolPreflight');
-    // The amber soft-warning tone is the operator's signal that the
-    // provider accepted the request but the model did not call the tool.
-    expect(aiModelSelectionSectionSource).toContain('model_tool_support_unverified');
-    expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/preflight");
+  it('keeps the Patrol model readiness advisor wired through canonical settings state', () => {
+    expect(aiSettingsStateSource).toContain('runPatrolModelReadiness');
+    expect(aiSettingsStateSource).toContain('runPatrolModelReadinessAdvisor');
+    expect(aiSettingsStateSource).toContain('patrolModelReadinessResult');
+    expect(aiSettingsStateSource).toContain('patrolModelReadinessRunning');
+    expect(aiSettingsStateSource).toContain('AbortController');
+    expect(aiModelSelectionSectionSource).toContain('PatrolModelReadinessControl');
+    expect(aiModelSelectionSectionSource).toContain('runPatrolModelReadinessAdvisor');
+    expect(aiModelSelectionSectionSource).toContain('Autonomy suitability');
+    expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/readiness");
   });
 
   it('keeps service context manual refresh on the canonical settings state', () => {
@@ -851,27 +846,21 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });
 
-  it('hydrates the Patrol preflight panel from the cached settings snapshot', () => {
-    // The cached preflight outcome arrives on /api/settings/ai as
-    // patrol_preflight; loadSettings and updateSettings must project it
-    // back into the inline result panel so the "last verified" state
-    // survives page reloads without forcing a re-click.
-    expect(aiSettingsStateSource).toContain('hydratePatrolPreflightFromSettings');
-    expect(aiSettingsStateSource).toContain('patrol_preflight');
-    expect(aiSettingsStateSource).toContain('recorded_at_unix');
+  it('hydrates the Patrol readiness advisor from the persisted settings snapshot', () => {
+    expect(aiSettingsStateSource).toContain('hydratePatrolModelReadinessFromSettings');
+    expect(aiSettingsStateSource).toContain('patrol_model_readiness');
     expect(aiModelSelectionSectionSource).toContain('formatRecordedAt');
-    expect(aiModelSelectionSectionSource).toContain('last verified');
+    expect(aiModelSelectionSectionSource).toContain('last evaluated');
   });
 
-  it("passes the form's pending patrolModel to runPatrolPreflight so the model check tests the unsaved selection", () => {
+  it("passes the form's pending patrolModel to the advisor so the model check tests the unsaved selection", () => {
     // Without this, clicking Check Patrol model after changing the model
     // dropdown silently tested the previously-saved model and the
     // operator would believe their pending selection was verified.
     expect(aiSettingsStateSource).toContain('form.patrolModel');
     expect(aiSettingsStateSource).toContain('pendingModel');
-    expect(aiSettingsStateSource).toContain(
-      'runPatrolPreflight(pendingModel ? { model: pendingModel } : {})',
-    );
+    expect(aiSettingsStateSource).toContain('runPatrolModelReadiness(');
+    expect(aiSettingsStateSource).toContain('pendingModel ? { model: pendingModel } : {}');
   });
 
   it("flags the inline preflight panel as stale when the cached result is for a different model than the form's current selection", () => {
@@ -882,7 +871,7 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain('isStaleAgainstFormSelection');
     expect(aiModelSelectionSectionSource).toContain('pendingFormModel');
     expect(aiModelSelectionSectionSource).toContain('cachedResultModel');
-    expect(aiModelSelectionSectionSource).toContain('Verified result is for');
+    expect(aiModelSelectionSectionSource).toContain('Evaluation result is for');
     expect(aiModelSelectionSectionSource).toContain(
       'Click Check Patrol model to test the pending selection',
     );
@@ -1130,7 +1119,7 @@ describe('settings architecture guardrails', () => {
       '<AIModelOverrideField state={props.state} kind="assistant" />',
     );
     expect(aiSettingsSource).toContain(
-      '<AIModelOverrideField state={props.state} kind="patrol" includePatrolPreflight />',
+      '<AIModelOverrideField state={props.state} kind="patrol" includePatrolReadiness />',
     );
     expect(aiSettingsSource).toContain(
       '<AIModelOverrideField state={props.state} kind="discovery" />',

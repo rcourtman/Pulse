@@ -475,6 +475,23 @@ You can set separate models for:
 - Patrol (`patrol_model`)
 - Patrol fix model (`auto_fix_model`, retained as the compatibility settings key)
 
+### Patrol model readiness advisor
+
+Open **Settings → Pulse Intelligence → Patrol → Model readiness** and select
+**Check Patrol model** to evaluate the exact provider, model, and local runtime.
+The advisor uses synthetic data only and never calls infrastructure tools. It
+checks provider connectivity, exact typed streaming tool calls, two
+Patrol-shaped context fixtures, a multi-turn tool-result continuation, and
+projected loop latency. Provider calls respect the configured cost budget and
+their token counts are recorded under the `patrol_readiness` usage category.
+
+Results are reported separately for **Watch only** and **Ask first**. A short
+synthetic evaluation never certifies **Safe auto-fix** or **Autopilot**; those
+modes remain `not_assessed` until an extended governed canary is available.
+Changing the selected model, provider credentials or endpoint, or relevant
+timeout settings invalidates the cached result. Slow evaluations can be
+cancelled from the UI without replacing the last completed evidence.
+
 ### Storage
 
 AI settings are stored encrypted at rest in `ai.enc` under the Pulse config directory. Related files:
@@ -484,6 +501,7 @@ AI settings are stored encrypted at rest in `ai.enc` under the Pulse config dire
 | `ai.enc` | Encrypted AI configuration and credentials |
 | `ai_findings.json` | Patrol findings |
 | `ai_patrol_runs.json` | Patrol run history |
+| `ai_patrol_model_readiness.json` | Last versioned Patrol model-readiness result; contains outcomes and timings, not prompts, credentials, or tool transcripts |
 | `ai_usage_history.json` | Token usage data |
 | `ai_chat_sessions.json` | Legacy chat sessions (UI sync) |
 | `baselines.json` | Learned resource baselines |
@@ -495,6 +513,7 @@ Config directory: `/etc/pulse` (systemd) or `/data` (Docker/Kubernetes)
 ### Testing
 
 - Test provider connectivity: `POST /api/ai/test` and `POST /api/ai/test/{provider}`
+- Evaluate Patrol model readiness: `POST /api/ai/patrol/readiness`
 - List available models: `GET /api/ai/models`
 
 ---

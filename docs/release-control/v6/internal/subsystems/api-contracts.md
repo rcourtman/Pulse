@@ -3488,6 +3488,16 @@ proof lives in `internal/api/attention_handlers_test.go`,
 `frontend-modern/src/api/__tests__/patrolAttention.test.ts`, and
 `internal/api/route_inventory_test.go`.
 
+### Patrol model-readiness transport
+
+Keep the Patrol model-readiness API and settings snapshot symmetric.
+`POST /api/ai/patrol/readiness` returns explicit connectivity, tool-call,
+context-quality, and latency dimensions plus per-autonomy-mode suitability;
+`/api/settings/ai` exposes the latest compatible snapshot as
+`patrol_model_readiness`. Advisor execution must remain cancellable, use the
+same settings-write permission boundary as other AI diagnostics, and avoid
+returning prompts, tool transcripts, credentials, or infrastructure data.
+
 ## Current State
 
 The public Patrol investigation boundary now carries independent

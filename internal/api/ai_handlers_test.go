@@ -3535,6 +3535,57 @@ func TestAISettingsHandler_PatrolPreflight_DelegatesDeadlineToAIRuntime(t *testi
 	require.NotContains(t, body, "context.WithTimeout")
 }
 
+func TestAISettingsHandler_PatrolModelReadiness_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, config.NewConfigPersistence(tmp), nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/readiness", nil)
+	rec := httptest.NewRecorder()
+	handler.HandlePatrolModelReadiness(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+}
+
+func TestAISettingsHandler_PatrolModelReadiness_AssistantDisabledReturnsDimensionedResult(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = false
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+	handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/readiness", nil)
+	rec := httptest.NewRecorder()
+	handler.HandlePatrolModelReadiness(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response PatrolModelReadinessSnapshot
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.NotNil(t, response.PatrolModelReadinessResult)
+	assert.False(t, response.Success)
+	assert.Equal(t, ai.PatrolModelReadinessProbeVersion, response.ProbeVersion)
+	assert.Equal(t, ai.PatrolFailureCauseAssistantDisabled, response.Cause)
+	assert.Equal(t, ai.PatrolModelReadinessNotAssessed, response.Dimensions.ToolProtocol.Status)
+	assert.Equal(t, ai.PatrolModeNotAssessed, response.Modes.Assisted.Status)
+	assert.NotZero(t, response.RecordedAtUnix)
+}
+
+func TestAISettingsHandler_PatrolModelReadiness_RejectsInvalidProviderName(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, config.NewConfigPersistence(tmp), nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/readiness",
+		bytes.NewReader([]byte(`{"provider":"../etc/passwd"}`)))
+	rec := httptest.NewRecorder()
+	handler.HandlePatrolModelReadiness(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 // TestOrchestratorAndChatAdaptersMapTheSameMessageFields keeps the deliberate
 // GetMessages mirror between orchestratorChatAdapter (ai_handlers.go) and
 // chatServiceAdapter (chat_service_adapter.go) honest: both convert the same

@@ -140,6 +140,8 @@ export interface AISettings {
   // operators to re-run preflight on every page load. Absent when
   // preflight has never run on this Pulse instance.
   patrol_preflight?: PatrolPreflightSnapshot;
+  // Most recent explicit multi-scenario Patrol model readiness evaluation.
+  patrol_model_readiness?: PatrolModelReadinessSnapshot;
 }
 
 export interface PatrolPreflightSnapshot {
@@ -152,6 +154,62 @@ export interface PatrolPreflightSnapshot {
   title?: string;
   summary?: string;
   recommendation?: string;
+  recorded_at: string;
+  recorded_at_unix: number;
+}
+
+export type PatrolModelReadinessStatus = 'pass' | 'warning' | 'fail' | 'not_assessed';
+export type PatrolModeSuitabilityStatus = 'verified' | 'warning' | 'not_suitable' | 'not_assessed';
+
+export interface PatrolModelReadinessDimension {
+  status: PatrolModelReadinessStatus;
+  summary: string;
+  attempts?: number;
+  passed?: number;
+  duration_ms?: number;
+  first_response_ms?: number;
+  warm_p50_ms?: number;
+  projected_watch_ms?: number;
+  projected_approval_ms?: number;
+  continuation_observed?: boolean;
+}
+
+export interface PatrolModeSuitability {
+  status: PatrolModeSuitabilityStatus;
+  summary: string;
+}
+
+export interface PatrolModelReadinessSnapshot {
+  probe_version: string;
+  success: boolean;
+  status: PatrolModelReadinessStatus;
+  provider?: string;
+  model?: string;
+  duration_ms: number;
+  max_verified_mode?: 'monitor' | 'approval';
+  cause?: string;
+  summary: string;
+  recommendation?: string;
+  metadata?: {
+    fingerprint?: string;
+    family?: string;
+    parameter_size?: string;
+    quantization_level?: string;
+    context_window?: number;
+    capabilities?: string[];
+  };
+  dimensions: {
+    connectivity: PatrolModelReadinessDimension;
+    tool_protocol: PatrolModelReadinessDimension;
+    context_quality: PatrolModelReadinessDimension;
+    latency: PatrolModelReadinessDimension;
+  };
+  modes: {
+    monitor: PatrolModeSuitability;
+    approval: PatrolModeSuitability;
+    assisted: PatrolModeSuitability;
+    full: PatrolModeSuitability;
+  };
   recorded_at: string;
   recorded_at_unix: number;
 }

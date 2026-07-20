@@ -406,3 +406,36 @@ func TestOllamaClient_TestConnection_ModelUnavailable(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `model "llama3" is not available`)
 }
+
+func TestOllamaClient_InspectModel_ReturnsRuntimeDiagnostics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/show", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		var body map[string]string
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, "qwen3:8b", body["model"])
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"modified_at": "2026-07-13T08:00:00Z",
+			"details": map[string]interface{}{
+				"family":             "qwen3",
+				"parameter_size":     "8.2B",
+				"quantization_level": "Q4_K_M",
+			},
+			"model_info": map[string]interface{}{
+				"qwen3.context_length": 32768,
+			},
+			"capabilities": []string{"completion", "tools"},
+		})
+	}))
+	defer server.Close()
+
+	client := newTestOllamaClient(t, "qwen3:8b", server.URL, "", "", 0)
+	diagnostics, err := client.InspectModel(context.Background(), "ollama:qwen3:8b")
+	require.NoError(t, err)
+	require.NotNil(t, diagnostics)
+	assert.Equal(t, "qwen3", diagnostics.Family)
+	assert.Equal(t, "Q4_K_M", diagnostics.QuantizationLevel)
+	assert.Equal(t, 32768, diagnostics.ContextWindow)
+	assert.Equal(t, []string{"completion", "tools"}, diagnostics.Capabilities)
+	assert.Contains(t, diagnostics.Fingerprint, "sha256:")
+}

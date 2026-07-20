@@ -1947,6 +1947,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
     carrier-grade NAT addresses. Any unresolved, public, or mixed public/local
     answer must keep requiring HTTPS/WSS.
 
+19. Keep the Patrol model-readiness advisor outside the agent command
+    lifecycle. `POST /api/ai/patrol/readiness` may exercise only synthetic
+    provider tools and in-memory tool results under settings-write authority;
+    it must not request `agent:exec`, dispatch an agent command, inspect agent
+    inventory, or turn a successful model probe into command authority.
+
 ## Current State
 
 Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation

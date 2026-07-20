@@ -150,6 +150,27 @@ type ModelInfo struct {
 	Provider    string `json:"provider,omitempty"`
 }
 
+// ModelDiagnostics captures optional runtime-owned metadata for a concrete
+// model. Providers that can inspect a locally installed model (currently
+// Ollama) expose this in addition to the ordinary model catalogue so Patrol
+// readiness can bind evidence to the model build that was actually tested.
+// Capability metadata is advisory; callers must still exercise the real chat
+// and tool-call transport before declaring the model ready.
+type ModelDiagnostics struct {
+	Fingerprint       string   `json:"fingerprint,omitempty"`
+	Family            string   `json:"family,omitempty"`
+	ParameterSize     string   `json:"parameter_size,omitempty"`
+	QuantizationLevel string   `json:"quantization_level,omitempty"`
+	ContextWindow     int      `json:"context_window,omitempty"`
+	Capabilities      []string `json:"capabilities,omitempty"`
+}
+
+// ModelDiagnosticsProvider is implemented by providers that can inspect the
+// exact installed model build without sending a chat completion.
+type ModelDiagnosticsProvider interface {
+	InspectModel(ctx context.Context, model string) (*ModelDiagnostics, error)
+}
+
 // Provider defines the interface for AI providers
 type Provider interface {
 	// Chat sends a chat request and returns the response

@@ -3,10 +3,12 @@ package providers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -615,6 +617,92 @@ func (c *OllamaClient) TestConnection(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type ollamaShowResponse struct {
+	ModifiedAt   string                 `json:"modified_at"`
+	Details      ollamaShowDetails      `json:"details"`
+	ModelInfo    map[string]interface{} `json:"model_info"`
+	Capabilities []string               `json:"capabilities"`
+}
+
+type ollamaShowDetails struct {
+	Family            string `json:"family"`
+	ParameterSize     string `json:"parameter_size"`
+	QuantizationLevel string `json:"quantization_level"`
+}
+
+// InspectModel reads Ollama's local model metadata. This binds readiness
+// evidence to a concrete model build and replaces the unsafe generic context
+// assumption for local models. It deliberately does not treat a declared
+// "tools" capability as proof; the readiness advisor still runs streaming,
+// multi-turn tool probes.
+func (c *OllamaClient) InspectModel(ctx context.Context, model string) (*ModelDiagnostics, error) {
+	model = normalizeOllamaModelRef(model)
+	if model == "" {
+		model = normalizeOllamaModelRef(c.model)
+	}
+	if model == "" {
+		return nil, fmt.Errorf("no model specified")
+	}
+
+	body, err := json.Marshal(map[string]string{"model": model})
+	if err != nil {
+		return nil, fmt.Errorf("marshal Ollama model inspection request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/show", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create Ollama model inspection request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.applyAuth(req)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("inspect Ollama model: %w", err)
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read Ollama model inspection response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Ollama model inspection failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
+	}
+
+	var inspected ollamaShowResponse
+	if err := json.Unmarshal(responseBody, &inspected); err != nil {
+		return nil, fmt.Errorf("parse Ollama model inspection response: %w", err)
+	}
+	contextWindow := 0
+	for key, value := range inspected.ModelInfo {
+		if !strings.HasSuffix(strings.ToLower(key), ".context_length") {
+			continue
+		}
+		if n, ok := value.(float64); ok && int(n) > contextWindow {
+			contextWindow = int(n)
+		}
+	}
+
+	capabilities := append([]string(nil), inspected.Capabilities...)
+	sort.Strings(capabilities)
+	fingerprintPayload, _ := json.Marshal(struct {
+		Model        string                 `json:"model"`
+		ModifiedAt   string                 `json:"modified_at"`
+		Details      ollamaShowDetails      `json:"details"`
+		ModelInfo    map[string]interface{} `json:"model_info"`
+		Capabilities []string               `json:"capabilities"`
+	}{model, inspected.ModifiedAt, inspected.Details, inspected.ModelInfo, capabilities})
+	fingerprint := sha256.Sum256(fingerprintPayload)
+
+	return &ModelDiagnostics{
+		Fingerprint:       fmt.Sprintf("sha256:%x", fingerprint[:]),
+		Family:            inspected.Details.Family,
+		ParameterSize:     inspected.Details.ParameterSize,
+		QuantizationLevel: inspected.Details.QuantizationLevel,
+		ContextWindow:     contextWindow,
+		Capabilities:      capabilities,
+	}, nil
 }
 
 func normalizeOllamaModelRef(model string) string {

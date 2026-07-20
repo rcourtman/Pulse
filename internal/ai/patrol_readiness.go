@@ -30,6 +30,8 @@ const (
 	PatrolFailureCauseMalformedToolHistory       PatrolFailureCause = "malformed_tool_history"
 	PatrolFailureCauseModelUnavailable           PatrolFailureCause = "model_unavailable"
 	PatrolFailureCauseContextWindowTooSmall      PatrolFailureCause = "context_window_too_small"
+	PatrolFailureCauseContextQualityFailed       PatrolFailureCause = "context_quality_failed"
+	PatrolFailureCauseLatencyUnsuitable          PatrolFailureCause = "latency_unsuitable"
 	PatrolFailureCauseProviderBilling            PatrolFailureCause = "provider_billing"
 	PatrolFailureCauseProviderRateLimited        PatrolFailureCause = "provider_rate_limited"
 	PatrolFailureCauseProviderAuth               PatrolFailureCause = "provider_auth"
@@ -170,5 +172,38 @@ func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 	s.mu.RLock()
 	cfg := s.cfg
 	s.mu.RUnlock()
-	return EvaluatePatrolConfigReadiness(cfg)
+	base := EvaluatePatrolConfigReadiness(cfg)
+	if !base.Ready || cfg == nil {
+		return base
+	}
+	advisor, _ := s.CachedPatrolModelReadiness()
+	if advisor == nil {
+		return base
+	}
+
+	selectedMode := cfg.GetPatrolAutonomyLevel()
+	var suitability PatrolModeSuitability
+	switch selectedMode {
+	case config.PatrolAutonomyApproval:
+		suitability = advisor.Modes.Approval
+	case config.PatrolAutonomyAssisted:
+		suitability = advisor.Modes.Assisted
+	case config.PatrolAutonomyFull:
+		suitability = advisor.Modes.Full
+	default:
+		suitability = advisor.Modes.Monitor
+	}
+
+	switch suitability.Status {
+	case PatrolModeVerified:
+		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessReady, PatrolFailureCauseNone, suitability.Summary)
+	case PatrolModeWarning, PatrolModeNotAssessed:
+		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessWarning, advisor.Cause, suitability.Summary)
+	default:
+		cause := advisor.Cause
+		if cause == PatrolFailureCauseNone || cause == "" {
+			cause = PatrolFailureCauseModelToolSupportUnverified
+		}
+		return patrolConfigReadiness(advisor.Provider, advisor.Model, PatrolReadinessNotReady, cause, suitability.Summary)
+	}
 }

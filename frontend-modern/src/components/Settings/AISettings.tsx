@@ -297,7 +297,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
 
       <div class="space-y-3">
         <h3 class="text-sm font-semibold text-base-content">Model readiness</h3>
-        <AIModelOverrideField state={props.state} kind="patrol" includePatrolPreflight />
+        <AIModelOverrideField state={props.state} kind="patrol" includePatrolReadiness />
       </div>
     </div>
   );
