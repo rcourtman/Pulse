@@ -168,7 +168,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       },
       {
         id: 'system-updates',
-        label: 'Updates',
+        label: 'Pulse server updates',
         icon: RefreshCw,
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',

@@ -143,6 +143,7 @@ product API routes free of maintainer commercial analytics.
     73b. `pkg/extensions/ai_autofix.go`
 83. `scripts/generate-types.go`
     83a. `internal/api/agent_fleet_doctor.go`
+    83b. `frontend-modern/src/api/agentDiagnostics.ts`
 84. `internal/api/notification_queue.go`
 
 The alert and notification transports expose the operational-trust contract
@@ -5563,9 +5564,23 @@ desired/applied disagreement into one enabled/disabled fact.
 The adjacent Agent Fleet Doctor endpoint, `GET /api/agents/diagnostics`, is a
 read-only admin `settings:read` API for deeper fleet triage. It may summarize
 liveness, version drift, profile deployment drift, missing expected telemetry,
-identity splits, removed-agent blocks, and supported repair handoff hints, but
-it must not mutate configuration, enqueue remote commands, or become the
-canonical `/api/connections` fleet row source.
+identity splits, updater/module state, removed-agent blocks, and supported
+repair handoff hints, but it must not mutate configuration, enqueue remote
+commands, or become the canonical `/api/connections` fleet row source.
+
+The response is a versioned additive payload. `schemaVersion` identifies the
+diagnostic schema, `serverVersion` describes the running application, and
+`agentUpdateTargetVersion` separately carries the canonical release target
+used for agent version drift. Each row retains stable agent and connection
+identity plus bounded platform, network, profile, updater, module, reason, and
+repair-handoff evidence. Raw machine identity is represented only by a
+one-way fingerprint; unbounded or secret-shaped updater/module errors are
+redacted before serialization; malformed interface addresses are omitted.
+Older consumers may ignore the additive fields, while the Agent Doctor client
+must tolerate absent optional fields and preserve `/api/connections` fallback
+rows. Repair objects describe whether an existing local handoff is supported
+and for which normalized platform; they are not executable commands or
+authorization grants.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

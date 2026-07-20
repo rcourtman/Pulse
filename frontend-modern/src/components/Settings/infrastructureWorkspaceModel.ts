@@ -14,6 +14,8 @@ export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
 
 const INFRASTRUCTURE_BASE_PATH = '/settings/infrastructure';
 export const INFRASTRUCTURE_ADD_QUERY_PARAM = 'add';
+export const INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM = 'agentDoctor';
+// Legacy deep links from platform update notices and bookmarks remain valid.
 export const INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM = 'agentUpdates';
 export const INFRASTRUCTURE_AGENT_UPDATE_IDS_QUERY_PARAM = 'agents';
 
@@ -49,11 +51,11 @@ const normalizeAgentUpdateConnectionID = (value: string | null | undefined): str
   return trimmed.startsWith('agent:') ? trimmed : `agent:${trimmed}`;
 };
 
-export function buildInfrastructureAgentUpdatesPath(
+export function buildInfrastructureAgentDoctorPath(
   agentIds: readonly (string | null | undefined)[] = [],
 ): string {
   const params = new URLSearchParams();
-  params.set(INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM, '1');
+  params.set(INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM, '1');
   const normalizedAgentIds = Array.from(
     new Set(agentIds.map(normalizeAgentUpdateConnectionID).filter(Boolean) as string[]),
   ).sort((left, right) => left.localeCompare(right));
@@ -62,6 +64,9 @@ export function buildInfrastructureAgentUpdatesPath(
   }
   return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
 }
+
+/** @deprecated Use buildInfrastructureAgentDoctorPath. */
+export const buildInfrastructureAgentUpdatesPath = buildInfrastructureAgentDoctorPath;
 
 export function buildInfrastructureOnboardingPath(step: InfrastructurePanelStep = 'agent'): string {
   const params = new URLSearchParams();
@@ -85,17 +90,20 @@ export function deriveAddStepFromLocation(
   return deriveAddStepFromSearch(search);
 }
 
-export function deriveAgentUpdatesFromLocation(pathname: string, search: string): boolean {
+export function deriveAgentDoctorFromLocation(pathname: string, search: string): boolean {
   if (pathname !== INFRASTRUCTURE_BASE_PATH && pathname !== `${INFRASTRUCTURE_BASE_PATH}/`) {
     return false;
   }
 
   const params = new URLSearchParams(search);
-  return params.get(INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM) === '1';
+  return (
+    params.get(INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM) === '1' ||
+    params.get(INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM) === '1'
+  );
 }
 
-export function deriveAgentUpdateScopeFromLocation(pathname: string, search: string): string[] {
-  if (!deriveAgentUpdatesFromLocation(pathname, search)) {
+export function deriveAgentDoctorScopeFromLocation(pathname: string, search: string): string[] {
+  if (!deriveAgentDoctorFromLocation(pathname, search)) {
     return [];
   }
 
@@ -109,3 +117,9 @@ export function deriveAgentUpdateScopeFromLocation(pathname: string, search: str
     ),
   ).sort((left, right) => left.localeCompare(right));
 }
+
+/** @deprecated Use deriveAgentDoctorFromLocation. */
+export const deriveAgentUpdatesFromLocation = deriveAgentDoctorFromLocation;
+
+/** @deprecated Use deriveAgentDoctorScopeFromLocation. */
+export const deriveAgentUpdateScopeFromLocation = deriveAgentDoctorScopeFromLocation;

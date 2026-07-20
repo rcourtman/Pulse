@@ -5142,3 +5142,26 @@ The focused browser proofs are
 `frontend-modern/src/components/Storage/__tests__/useDiskDetailModel.test.ts`,
 and
 `frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`.
+
+### Agent Doctor settings framing
+
+Settings labels the application update panel **Pulse server updates** and keeps
+agent lifecycle triage in the separate **Agent Doctor** dialog. Platform update
+notices, Diagnostics, and Infrastructure rows use the canonical Agent Doctor
+route handoff instead of recreating installer or repair controls. The dialog
+may enrich the shared connections ledger with structured diagnostics, but it
+must preserve loading, unavailable, unsupported, waiting-for-auto-update,
+removed, warning, and critical states rather than flattening them into a
+generic update badge.
+
+The canonical query is `agentDoctor`; `agentUpdates` remains a compatibility
+alias that opens the same dialog and does not create a second settings surface.
+Scoped connection IDs filter active rows without hiding removed-agent history
+from the unscoped view. Copy-command controls render only for a backend- and
+frontend-confirmed supported platform; unknown and unverified FreeBSD/pfSense
+states show bounded guidance with no executable command. The focused proofs are
+`frontend-modern/src/components/Settings/__tests__/infrastructureAgentDoctorModel.test.ts`,
+`frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx`,
+`frontend-modern/src/components/Settings/__tests__/DiagnosticsResultsPanel.test.tsx`,
+`frontend-modern/src/components/Settings/__tests__/settingsHeaderMeta.branchcov0713.test.ts`,
+and `frontend-modern/src/utils/__tests__/updatesPresentation.test.ts`.

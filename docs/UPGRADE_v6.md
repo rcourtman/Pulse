@@ -24,7 +24,7 @@ stable. Keep v5.1.35 as the explicit rollback target for the v6.0.0 cutover.
 ## Before You Upgrade
 
 - Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
-- Open **Settings → System → Updates** and review the upgrade checks on the update plan. Pulse checks the server update path, current agent continuity, and agent reporting token scope before you install.
+- Open **Settings → System → Updates** and review the upgrade checks on the update plan. Pulse checks the server update path, current agent continuity, and agent reporting token scope before you install. These checks describe the currently reported fleet; they do not prove every installed agent is online or already updated.
 - Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
 - If you have any external integrations or scripts: review the **API Changes** section below
 
@@ -82,18 +82,25 @@ No. Upgrade the existing Pulse server installation in place.
 
 No. Use the unified installer to upgrade existing agent deployments in place. Generate the current command from **Settings → Infrastructure → Install on a host**, then run it on the host that already has the v5 agent service. You do not need to remove the old service first.
 
-### Does upgrading the Pulse server to v6 automatically upgrade my agents?
+### Does upgrading the Pulse server prove that all agents have upgraded?
 
-No. The server upgrade and the Unified Agent upgrade are separate operations.
-After the server is on v6, use the generated install or upgrade command from
-**Settings → Infrastructure → Install on a host** when you want to move agents
-to v6. A v5 agent can be missing from v6 Reporting until it has upgraded,
-authenticated, and sent its first v6 report.
+No. The server and Unified Agent have separate update lifecycles. After the
+server changes the target version, eligible v6 agents normally discover and
+apply that update asynchronously during their update checks. The server being
+current is not proof that every installed agent has checked in or converged.
 
-Agent self-update still belongs to the agent update path and depends on the
-agent being able to authenticate, reach a trusted update channel, and accept
-the release signing key. Do not treat the server update alone as proof that
-every installed agent has moved to the same v6 version.
+Use the manual path for v5 agents, PVE host agents, agents with auto-update
+disabled, and agents blocked by authentication, missing connection state,
+download, trust, or self-test failures. For v5-to-v6 upgrades, generate the
+current command from **Settings → Infrastructure → Install on a host** and run it
+on the host with the existing agent service. A v5 agent can be missing from v6
+Reporting until it has upgraded, authenticated, and sent its first v6 report.
+
+For agents already visible to v6, open an outdated-agent notice or **Agent
+Doctor** at `/settings/infrastructure?agentDoctor=1`. It shows per-host commands
+for the operator to copy and run; it does not remotely execute fleet updates. Agent
+self-update and manual update both still depend on valid authentication, a
+reachable trusted update channel, and accepted release signing keys.
 
 ### Will an upgraded v5 agent keep the same identity in v6?
 

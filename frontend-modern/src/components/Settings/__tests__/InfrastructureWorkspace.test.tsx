@@ -143,6 +143,20 @@ vi.mock('../useConnectionsLedger', () => ({
   }),
 }));
 
+vi.mock('../useAgentFleetDiagnostics', () => ({
+  useAgentFleetDiagnostics: () => ({
+    data: () => ({
+      generatedAt: 0,
+      summary: { total: 0, healthy: 0, warning: 0, critical: 0, removed: 0 },
+      agents: [],
+    }),
+    error: () => null,
+    loading: () => false,
+    reload: vi.fn(),
+    resolvedOnce: () => false,
+  }),
+}));
+
 vi.mock('../InfrastructureInstallerSection', () => ({
   InfrastructureInstallerSection: (props: { focus?: string }) => (
     <div data-testid="install-section" data-focus={props.focus}>
@@ -343,7 +357,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByRole('button', { name: /^Monitor endpoint$/i })).toBeNull();
   });
 
-  it('opens stale agent update commands from the canonical route', async () => {
+  it('opens scoped Agent Doctor from a legacy agent update route', async () => {
     routeState.search = '?agentUpdates=1&agents=agent%3Aagent-zeus';
     const primaryConnection = connectionFixture();
     const attachedAgent = connectionFixture({
@@ -410,15 +424,16 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.getByText('Update Pulse Agents')).toBeInTheDocument();
+    expect(screen.getByText('Agent Doctor')).toBeInTheDocument();
     expect(screen.getByText('zeus')).toBeInTheDocument();
     expect(screen.queryByText('other')).not.toBeInTheDocument();
-    expect(screen.getByText(/5\.1\.34 -> 6\.0\.0-rc\.6/)).toBeInTheDocument();
+    expect(screen.getByText('5.1.34')).toBeInTheDocument();
+    expect(screen.getByText('6.0.0-rc.6')).toBeInTheDocument();
     expect(
       screen.getByText(/upgrade agent:agent-zeus --enable-proxmox --proxmox-type pve/),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close agent update commands' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Agent Doctor' }));
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure', {
       replace: true,
       scroll: false,
@@ -474,12 +489,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     const dialog = await screen.findByRole('dialog');
-    expect(
-      within(dialog).getByText(
-        'Pulse does not currently see any agents behind the target version.',
-      ),
-    ).toBeInTheDocument();
-    expect(within(dialog).queryByText('zeus')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('zeus')).toBeInTheDocument();
+    expect(within(dialog).getByText('Supported target')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('Unknown').length).toBeGreaterThan(0);
     expect(within(dialog).queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
   });
 

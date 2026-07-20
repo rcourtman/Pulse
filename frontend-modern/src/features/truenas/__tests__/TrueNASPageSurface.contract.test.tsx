@@ -158,7 +158,7 @@ describe('TrueNASPageSurface contract', () => {
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-truenas-scale',
+      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-truenas-scale',
     );
   });
 });

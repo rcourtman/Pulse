@@ -64,6 +64,12 @@ class RegistryAuditTest(unittest.TestCase):
             ("agent-lifecycle", "unified-agent-installer-runtime"): {
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",
             },
+            ("agent-lifecycle", "agent-doctor-settings-surface"): {
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/infrastructureAgentDoctorModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/infrastructureWorkspaceModel.test.ts",
+            },
             ("deployment-installability", "shell-installer-runtime"): {
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",
             },
@@ -84,6 +90,18 @@ class RegistryAuditTest(unittest.TestCase):
             ("api-contracts", "backend-payload-contracts"): {
                 "internal/api/ai_handlers_patrol_actions_additional_test.go",
             },
+            ("api-contracts", "agent-doctor-api-surface"): {
+                "frontend-modern/src/api/__tests__/agentDiagnostics.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/infrastructureAgentDoctorModel.test.ts",
+                "internal/api/agent_fleet_doctor_test.go",
+                "internal/api/connections_aggregator_test.go",
+                "internal/api/contract_test.go",
+                "internal/api/update_readiness_test.go",
+            },
+            ("frontend-primitives", "agent-doctor-settings-framing"): {
+                "frontend-modern/src/components/Settings/__tests__/DiagnosticsResultsPanel.test.tsx",
+                "frontend-modern/src/components/Settings/__tests__/settingsHeaderMeta.branchcov0713.test.ts",
+            },
             ("monitoring", "host-agent-ingest-runtime"): {
                 "internal/monitoring/issue1595_collection_trust_test.go",
             },
@@ -93,6 +111,13 @@ class RegistryAuditTest(unittest.TestCase):
             ("monitoring", "monitoring-runtime"): {
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/monitoring/monitor_alert_override_migration_test.go",
+            },
+            ("monitoring", "agent-fleet-diagnostics-runtime"): {
+                "internal/api/agent_fleet_doctor_test.go",
+                "internal/api/connections_aggregator_test.go",
+                "internal/fleethealth/agent_test.go",
+                "internal/monitoring/agent_fleet_doctor_test.go",
+                "internal/monitoring/monitoring_fleet_doctor_helpers_branchcov0716_test.go",
             },
             ("monitoring", "diskinventory-collection-trust"): {
                 "internal/hostagent/issue1595_sas_collection_test.go",

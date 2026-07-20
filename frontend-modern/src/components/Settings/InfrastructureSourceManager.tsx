@@ -65,6 +65,7 @@ interface InfrastructureSourceManagerProps {
   onRunDiscovery?: () => void;
   onOpenDiscoverySettings?: () => void;
   onOpenConnection?: (row: InfrastructureSystemRow) => void;
+  onOpenAgentDoctor?: (agentIds?: string[]) => void;
   onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
 }
 
@@ -230,6 +231,30 @@ const rowHasAgentCoverage = (row: InfrastructureSystemRow): boolean =>
   row.members.some(
     (member) => member.source === 'agent' || member.source === 'both' || member.agentConnection,
   );
+
+export const agentConnectionIDsForInfrastructureRow = (
+  row: InfrastructureSystemRow,
+  updatesOnly = false,
+): string[] => {
+  const connections = [
+    row.connection,
+    ...row.attachedConnections,
+    ...row.members.map((member) => member.agentConnection).filter(Boolean),
+  ];
+  return Array.from(
+    new Set(
+      connections
+        .filter(
+          (connection) =>
+            connection?.type === 'agent' &&
+            (!updatesOnly ||
+              Boolean(connection.agentUpdateAvailable) ||
+              connection.fleet?.versionDrift === 'behind'),
+        )
+        .map((connection) => connection!.id),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+};
 
 const agentHostProfileRouteStep = (
   row: InfrastructureSystemRow,
@@ -409,6 +434,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
   const connectedSystemCount = createMemo(() => infrastructureRows().length);
+  const agentConnectionIds = createMemo(() =>
+    Array.from(
+      new Set(infrastructureRows().flatMap((row) => agentConnectionIDsForInfrastructureRow(row))),
+    ),
+  );
   const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
   // Scoped to Proxmox VE: PBS/PMG/TrueNAS/etc. are fully covered by their
   // own API and don't benefit from a paired agent in the way PVE hosts do
@@ -722,18 +752,33 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             </span>
           </Show>
         </div>
-        <Show when={!props.readOnly && Boolean(setupConfidenceAction().onClick)}>
-          <Button
-            type="button"
-            variant="secondary"
-            size="mdCompact"
-            onClick={() => setupConfidenceAction().onClick?.()}
-            disabled={setupConfidenceAction().disabled}
-            class="min-h-9 gap-2 self-start sm:self-center"
-          >
-            {setupConfidenceActionIcon(setupConfidenceAction().kind)}
-            {setupConfidenceAction().label}
-          </Button>
+        <Show when={!props.readOnly}>
+          <div class="flex flex-wrap gap-2 self-start sm:self-center">
+            <Show when={agentConnectionIds().length > 0 && props.onOpenAgentDoctor}>
+              <Button
+                type="button"
+                variant={fleetAttentionSystemCount() > 0 ? 'primary' : 'secondary'}
+                size="mdCompact"
+                onClick={() => props.onOpenAgentDoctor?.()}
+                class="min-h-9"
+              >
+                Open Agent Doctor
+              </Button>
+            </Show>
+            <Show when={Boolean(setupConfidenceAction().onClick)}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="mdCompact"
+                onClick={() => setupConfidenceAction().onClick?.()}
+                disabled={setupConfidenceAction().disabled}
+                class="min-h-9 gap-2"
+              >
+                {setupConfidenceActionIcon(setupConfidenceAction().kind)}
+                {setupConfidenceAction().label}
+              </Button>
+            </Show>
+          </div>
         </Show>
       </div>
 
@@ -946,11 +991,34 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             {row.statusLabel}
                                           </span>
                                           <Show when={row.agentUpdateCount > 0}>
-                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                                              {row.agentUpdateCount === 1
-                                                ? 'Agent update'
-                                                : `${row.agentUpdateCount} updates`}
-                                            </span>
+                                            <Show
+                                              when={props.onOpenAgentDoctor}
+                                              fallback={
+                                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                                  {row.agentUpdateCount === 1
+                                                    ? 'Agent update'
+                                                    : `${row.agentUpdateCount} updates`}
+                                                </span>
+                                              }
+                                            >
+                                              <button
+                                                type="button"
+                                                class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 transition-colors hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800"
+                                                onClick={() =>
+                                                  props.onOpenAgentDoctor?.(
+                                                    agentConnectionIDsForInfrastructureRow(
+                                                      row,
+                                                      true,
+                                                    ),
+                                                  )
+                                                }
+                                                aria-label={`Open Agent Doctor for ${row.name}`}
+                                              >
+                                                {row.agentUpdateCount === 1
+                                                  ? 'Agent update'
+                                                  : `${row.agentUpdateCount} updates`}
+                                              </button>
+                                            </Show>
                                           </Show>
                                           <span
                                             class="truncate text-[12px] text-muted/90"
@@ -1466,11 +1534,31 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         {row.statusLabel}
                                       </span>
                                       <Show when={row.agentUpdateCount > 0}>
-                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                                          {row.agentUpdateCount === 1
-                                            ? 'Agent update'
-                                            : `${row.agentUpdateCount} agent updates`}
-                                        </span>
+                                        <Show
+                                          when={props.onOpenAgentDoctor}
+                                          fallback={
+                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                              {row.agentUpdateCount === 1
+                                                ? 'Agent update'
+                                                : `${row.agentUpdateCount} agent updates`}
+                                            </span>
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800"
+                                            onClick={() =>
+                                              props.onOpenAgentDoctor?.(
+                                                agentConnectionIDsForInfrastructureRow(row, true),
+                                              )
+                                            }
+                                            aria-label={`Open Agent Doctor for ${row.name}`}
+                                          >
+                                            {row.agentUpdateCount === 1
+                                              ? 'Agent update'
+                                              : `${row.agentUpdateCount} agent updates`}
+                                          </button>
+                                        </Show>
                                       </Show>
                                       <span
                                         class="text-[12px] text-muted/90"

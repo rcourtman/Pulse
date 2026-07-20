@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DiagnosticsResultsPanel } from '@/components/Settings/DiagnosticsResultsPanel';
 import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
@@ -35,11 +36,18 @@ describe('DiagnosticsResultsPanel', () => {
     } as DiagnosticsData;
 
     render(() => (
-      <DiagnosticsResultsPanel
-        diagnosticsData={diagnosticsData}
-        loading={false}
-        onRunDiagnostics={() => {}}
-      />
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <DiagnosticsResultsPanel
+              diagnosticsData={diagnosticsData}
+              loading={false}
+              onRunDiagnostics={() => {}}
+            />
+          )}
+        />
+      </Router>
     ));
 
     expect(screen.getByText('Pulse Assistant Service')).toBeInTheDocument();
@@ -204,11 +212,18 @@ describe('DiagnosticsResultsPanel', () => {
     } as DiagnosticsData;
 
     render(() => (
-      <DiagnosticsResultsPanel
-        diagnosticsData={diagnosticsData}
-        loading={false}
-        onRunDiagnostics={() => {}}
-      />
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <DiagnosticsResultsPanel
+              diagnosticsData={diagnosticsData}
+              loading={false}
+              onRunDiagnostics={() => {}}
+            />
+          )}
+        />
+      </Router>
     ));
 
     expect(screen.queryByText('Commercial Funnel')).not.toBeInTheDocument();
@@ -223,6 +238,10 @@ describe('DiagnosticsResultsPanel', () => {
     expect(screen.queryByText('TrueNAS SCALE')).not.toBeInTheDocument();
     expect(screen.getByText('Docker / Podman agents')).toBeInTheDocument();
     expect(screen.getByText('Agent-backed Docker / Podman monitoring')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Agent Doctor' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure?agentDoctor=1',
+    );
     expect(screen.queryByText('Container Runtime Agents')).not.toBeInTheDocument();
   });
 });

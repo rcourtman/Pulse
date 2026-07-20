@@ -15,7 +15,7 @@ import Server from 'lucide-solid/icons/server';
 import Shield from 'lucide-solid/icons/shield';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import XCircle from 'lucide-solid/icons/x-circle';
-import { Button } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
@@ -385,6 +385,15 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                   {props.diagnosticsData?.dockerAgents?.recommendedAgentVersion}
                 </div>
               </Show>
+              <div class="mt-3 border-t border-border-subtle pt-3">
+                <ButtonLink
+                  href="/settings/infrastructure?agentDoctor=1"
+                  variant="outline"
+                  size="sm"
+                >
+                  Open Agent Doctor
+                </ButtonLink>
+              </div>
             </Card>
           </Show>
 

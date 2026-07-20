@@ -236,7 +236,7 @@ describe('KubernetesPageSurface contract', () => {
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-k8s-node-1',
+      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-k8s-node-1',
     );
   });
 
@@ -280,7 +280,7 @@ describe('KubernetesPageSurface contract', () => {
     expect(notice).toHaveTextContent('Kubernetes nodes, workloads, services, storage');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-k8s-cluster',
+      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-k8s-cluster',
     );
   });
 

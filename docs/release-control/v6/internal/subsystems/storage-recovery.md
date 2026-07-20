@@ -1232,7 +1232,14 @@ recovery scope, or a storage/recovery-owned secret source.
     storage and recovery may read Agent Fleet Doctor evidence as operational
     context for stale agents, version drift, profile drift, or identity split
     investigation, but must not treat that endpoint as a storage/recovery
-    health source, repair API, or recovery-local fleet payload shape.
+    health source, repair API, or recovery-local fleet payload shape. Agent
+    updater/module failure, missing telemetry, machine fingerprint, network
+    evidence, and supported/unsupported installer handoffs remain lifecycle
+    diagnostics; none proves backup completeness, protection posture, restore
+    readiness, recovery-point identity, or storage mutation authority. An
+    Agent Doctor repair handoff may open an existing lifecycle flow or copy a
+    local installer command, but it must never be reinterpreted as a restore,
+    recovery, SMART, or cleanup action.
 24. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
 25. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
 26. Keep recovery filter/query state on the shared route-state parsing contract without restoring standalone recovery navigation. When platform pages or other embedded owners expose TrueNAS recovery context, they may reuse the canonical recovery query vocabulary with owned `platform` and `node` fields, but they must land inside an owning platform/runtime route instead of inventing drawer-local recovery URLs, treating PBS services as the only recovery path, or sending operators to the retired Recovery aggregate route.

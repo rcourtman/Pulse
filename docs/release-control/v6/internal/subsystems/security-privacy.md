@@ -1457,6 +1457,17 @@ the exact operational record and policy-shaped evidence IDs internally.
 Unauthorized, stale, partial, permission-limited, ambiguous, unsupported, or
 executor-unready records return no offer and no cross-resource detail.
 
+Agent Fleet Doctor is an authenticated admin `settings:read` projection, not a
+support-bundle export or command channel. Its identity evidence may expose only
+a one-way machine-ID fingerprint, normalized platform metadata, and validated
+IP/interface addresses. Raw machine IDs, credentials, tokens, environment
+values, command text, and unbounded updater or module errors must not cross the
+API boundary; secret-shaped error detail is reduced to bounded redacted
+evidence. A repair entry is descriptive support metadata only and never grants
+`settings:write`, local shell, agent execution, or action approval authority.
+Unknown platform and unverified installer state fail closed without rendering
+an executable upgrade command.
+
 ### Operational Trust evidence and mutation authorization
 
 Evidence detail is tenant-scoped through the selected canonical record and

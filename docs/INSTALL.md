@@ -3,7 +3,7 @@
 Pulse offers flexible installation options from Docker to enterprise-ready Kubernetes charts.
 
 > **Paid Pulse Pro / Relay / legacy customers:** GitHub release assets and the
-> public `rcourtman/pulse` Docker image are community builds. They can accept an
+> public `rcourtman/pulse` Docker image are Community builds. They can accept an
 > activation key, but they do not include the private Pulse Pro runtime hooks.
 > Use <https://pulserelay.pro/download.html> with your activation key to get the
 > private Pulse Pro Docker image or Linux archive. For Docker Compose, use the
@@ -45,7 +45,7 @@ bash install.sh --version "${PULSE_VERSION}"
 rm -f install.sh install.sh.sshsig
 ```
 
-> **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**).
+> **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**). Do not use the GitHub server installer to install or update `pulse-agent`.
 
 ### Docker
 Ideal for containerized environments or testing.
@@ -120,7 +120,7 @@ sudo bash install.sh --version "${PULSE_VERSION}"
 rm -f install.sh install.sh.sshsig
 ```
 
-> **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing `pulse-agent` on monitored hosts.
+> **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing or upgrading `pulse-agent` on monitored hosts.
 
 <details>
 <summary><strong>Manual systemd install (advanced)</strong></summary>
@@ -197,12 +197,16 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 ## 🔄 Updates
 
-### Automatic Updates (Systemd/LXC only)
-Pulse can self-update to the latest stable version.
+The Pulse server and installed Pulse Agents have independent update paths.
+
+### Pulse server updates
+
+#### Automatic Updates (Systemd/LXC only)
+Pulse can update the server runtime to the latest stable version.
 
 **Enable via UI**: Settings → System → Updates
 
-### Manual Update
+#### Manual Update
 
 | Platform | Command |
 |----------|---------|
@@ -211,6 +215,26 @@ Pulse can self-update to the latest stable version.
 | **Systemd / Proxmox LXC** | `sudo /bin/update` |
 
 Docker without Compose: `docker restart` keeps the old image running. Run `docker pull rcourtman/pulse:vX.Y.Z`, then `docker stop pulse && docker rm pulse` and re-run your original `docker run` command.
+
+The public image and commands above install the Community runtime. If the
+instance uses the private Pro runtime, keep it on the private image or archive
+shown by <https://pulserelay.pro/download.html>; replacing it with a public
+GitHub asset or `rcourtman/pulse` image removes the private runtime hooks.
+
+### Pulse Agent updates
+
+Eligible v6 agents check the Pulse server for updates and apply them
+asynchronously. A current server version therefore does not prove every agent is
+current. v5 agents, PVE host agents, agents with auto-update disabled, and agents
+whose authentication, connection state, download, trust, or self-test checks
+fail require manual handling.
+
+Open an outdated-agent notice, or use **Agent Doctor** at
+`/settings/infrastructure?agentDoctor=1`, to review the agents Pulse currently
+sees and copy the platform-specific command for each host. This surface provides
+commands for the operator to run on the host; it does not remotely execute the
+update. Use **Settings → Infrastructure → Install on a host** for a first install
+or a v5-to-v6 in-place upgrade.
 
 ### Rollback
 If an update causes issues on systemd installations, backups are created automatically during the update process.

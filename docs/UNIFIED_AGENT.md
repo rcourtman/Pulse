@@ -39,6 +39,9 @@ After an upgrade, check the relevant platform page or **Machines** view once
 the agent has reported, and confirm the host-local version with
 `pulse-agent --version` if the UI has not received a fresh report yet.
 
+This is the agent installer served by your Pulse server. It is separate from the
+top-level GitHub `install.sh`, which installs or updates the Pulse server itself.
+
 ### Linux (systemd)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
@@ -300,7 +303,10 @@ The agent can report S.M.A.R.T. disk temperatures, health status, identity, and 
 
 ## Auto-Update
 
-The unified agent automatically checks for updates every hour. When a new version is available:
+Eligible v6 agents automatically check the Pulse server for updates every hour.
+The check is asynchronous: updating the Pulse server changes the target version,
+but does not prove every agent is online, eligible, or already current. When a
+new version is available:
 
 1. Agent downloads the new binary from the Pulse server
 2. Verifies the checksum
@@ -309,12 +315,20 @@ The unified agent automatically checks for updates every hour. When a new versio
 5. Replaces itself atomically (with backup)
 6. Restarts with the same configuration
 
-When an already-installed v5 `pulse-agent` moves to v6, the first automatic hop
-is performed by the v5 updater. That hop verifies TLS by default, the SHA-256
-checksum, executable magic, size limits, and atomic replacement, but the newer
-v6 signature and `--self-test` checks apply only after the agent has landed on
-v6. Use HTTPS or a trusted local network for v5-to-v6 automatic migration. For
-high-assurance environments, reinstall the v6 `pulse-agent` through the signed
+Use the manual update path for v5 agents, PVE host agents, agents with
+auto-update disabled, and agents blocked by authentication, missing connection
+state, download, trust, or self-test failures. Open an outdated-agent notice or
+`/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
+copy the command for each reported host. Pulse does not remotely execute those
+commands.
+
+If an already-installed v5 `pulse-agent` follows its legacy automatic updater
+path instead of the supported manual installer path, the first hop is performed
+by the v5 updater. That hop verifies TLS by default, the SHA-256 checksum,
+executable magic, size limits, and atomic replacement, but the newer v6
+signature and `--self-test` checks apply only after the agent has landed on v6.
+Use HTTPS or a trusted local network for that legacy migration. For
+high-assurance environments, install the v6 `pulse-agent` through the signed
 installer path instead of relying on a plain-HTTP first hop.
 
 To disable auto-updates:
@@ -403,6 +417,14 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics 
 - Check logs: `journalctl -u pulse-agent -f`
 - Verify network connectivity to Pulse server
 - Ensure auto-update is not disabled
+- Confirm the agent can authenticate and that its saved connection state still
+  identifies the Pulse URL and token.
+- Open **Agent Doctor** from an outdated-agent notice or
+  `/settings/infrastructure?agentDoctor=1` and use the command for that reported
+  host. Do not substitute the public GitHub server installer.
+- Administrators can query the read-only Agent Fleet Doctor endpoint,
+  `GET /api/agents/diagnostics`, for liveness, version, profile, telemetry, and
+  identity evidence. The endpoint reports repair handoffs but does not run them.
 
 ### Duplicate Agents
 If cloned VMs appear as the same agent:
@@ -414,6 +436,11 @@ Or set a unique agent ID:
 ```bash
 --agent-id my-unique-agent-id
 ```
+
+The displayed or reported IP is not the durable agent identity. Pulse normally
+uses the machine ID (or an explicit `--agent-id`), so cloned systems must have
+unique machine and agent IDs even when their hostnames, MAC addresses, and IPs
+differ.
 
 ### Permission Denied (Docker)
 Ensure the agent can access the Docker socket:

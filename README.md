@@ -112,6 +112,12 @@ rm -f install.sh install.sh.sshsig
 
 Note: this installs the Pulse **server**. Agent installs and v5-to-v6 agent upgrades use the command generated in **Settings → Infrastructure → Install on a host** (served from `/install.sh` on your Pulse server).
 
+Server and agent updates are separate lifecycle paths. Updating the server sets
+the version eligible v6 agents should reach, but it does not prove the fleet has
+converged: those agents update asynchronously, while v5 agents, PVE host agents,
+and agents with auto-update disabled or failed update prerequisites need the
+manual per-host command from **Settings → Infrastructure**.
+
 ### Option 2: Docker
 ```bash
 docker run -d \

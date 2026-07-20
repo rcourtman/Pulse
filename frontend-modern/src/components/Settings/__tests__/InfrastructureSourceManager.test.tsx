@@ -1,6 +1,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { InfrastructureSourceManager } from '../InfrastructureSourceManager';
+import {
+  InfrastructureSourceManager,
+  agentConnectionIDsForInfrastructureRow,
+} from '../InfrastructureSourceManager';
 import {
   primaryRowProblem,
   type FleetGovernanceSignal,
@@ -307,6 +310,37 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(screen.queryByText(/needs attention/i)).toBeNull();
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
+  });
+
+  it('keeps fleet version-drift update chips scoped to the affected agent', () => {
+    const behindAgent = connectionFixture({
+      id: 'agent:behind-host',
+      agentUpdateAvailable: false,
+      fleet: { versionDrift: 'behind' } as Connection['fleet'],
+    });
+    const behindRow = row({
+      id: behindAgent.id,
+      name: 'behind-host',
+      agentUpdateCount: 1,
+      connection: behindAgent,
+    });
+    const onOpenAgentDoctor = vi.fn();
+
+    expect(agentConnectionIDsForInfrastructureRow(behindRow, true)).toEqual(['agent:behind-host']);
+
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [behindRow]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onOpenAgentDoctor={onOpenAgentDoctor}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Agent Doctor for behind-host' }));
+    expect(onOpenAgentDoctor).toHaveBeenCalledWith(['agent:behind-host']);
   });
 
   it('still counts actionable member posture when the cluster parent is healthy', () => {

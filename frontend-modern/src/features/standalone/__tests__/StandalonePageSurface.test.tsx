@@ -225,7 +225,7 @@ describe('StandalonePageSurface', () => {
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-tower',
+      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-tower',
     );
   });
 

@@ -70,6 +70,33 @@ If you only missed the token during a fresh install (no password set yet), skip 
 
 ### Monitoring Data
 
+#### Agent fleet update or identity issue
+
+- Open an outdated-agent notice or
+  `/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
+  copy the platform-specific command for each reported host. This is a manual
+  handoff; Pulse does not remotely execute the command.
+- Administrators can call the read-only Agent Fleet Doctor endpoint,
+  `GET /api/agents/diagnostics`, to inspect liveness, version drift, profile
+  deployment drift, expected telemetry gaps, and identity-split evidence. It
+  does not change agent configuration or enqueue a repair.
+- A current Pulse server does not prove fleet convergence. Eligible v6 agents
+  update asynchronously; v5, PVE, disabled, and failed updates require manual
+  handling.
+
+#### Removed Pulse server but `pulse-agent` still logs connection failures
+
+Removing the Pulse server does not remove agent services installed on monitored
+hosts. On a systemd host, stop and disable the orphaned service to halt retries:
+
+```bash
+sudo systemctl disable --now pulse-agent.service
+```
+
+If the Pulse server is still reachable, use its generated uninstall command so
+the agent can deregister cleanly. Otherwise, stopping the service is the safe
+first step before platform-local cleanup.
+
 #### VMs show "-" for disk usage
 - Install **QEMU Guest Agent** in the VM.
 - Enable "QEMU Guest Agent" in Proxmox VM Options.
@@ -85,6 +112,9 @@ If you only missed the token during a fresh install (no password set yet), skip 
 #### Docker hosts appearing/disappearing
 - **Duplicate IDs**: Cloned VMs often share `/etc/machine-id`.
 - **Fix**: Run `rm /etc/machine-id && systemd-machine-id-setup` on the clone.
+- **Identity note**: The displayed IP is not the durable identity. Pulse uses
+  the machine ID or an explicit agent ID, so two clones with the same value can
+  collapse into one record even when their hostnames or IP addresses differ.
 
 ### Notifications
 

@@ -232,6 +232,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "mock-runtime-fixtures",
                 "pbs-protection-evidence-runtime",
                 "diskinventory-collection-trust",
+                "agent-fleet-diagnostics-runtime",
                 "monitoring-runtime",
             ],
         )

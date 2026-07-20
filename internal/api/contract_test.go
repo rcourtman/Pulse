@@ -19688,14 +19688,19 @@ func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T)
 		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
 		t.Error("agent fleet diagnostics route must remain admin settings:read only")
 	}
-	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnostics(serverVersion, time.Now().UTC())") {
+	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion, time.Now().UTC())") {
 		t.Error("agent fleet diagnostics handler must delegate to the monitoring-owned read-only producer")
 	}
 	for _, required := range []string{
-		"GeneratedAt   int64                       `json:\"generatedAt\"`",
-		"ServerVersion string                      `json:\"serverVersion,omitempty\"`",
-		"Summary       AgentFleetDiagnosticSummary `json:\"summary\"`",
-		"Agents        []AgentFleetAgentDiagnostic `json:\"agents\"`",
+		"SchemaVersion            int                         `json:\"schemaVersion\"`",
+		"GeneratedAt              int64                       `json:\"generatedAt\"`",
+		"ServerVersion            string                      `json:\"serverVersion,omitempty\"`",
+		"AgentUpdateTargetVersion string                      `json:\"agentUpdateTargetVersion,omitempty\"`",
+		"Summary                  AgentFleetDiagnosticSummary `json:\"summary\"`",
+		"Agents                   []AgentFleetAgentDiagnostic `json:\"agents\"`",
+		"ConnectionID           string                       `json:\"connectionId,omitempty\"`",
+		"AgentUpdate            *AgentFleetDiagnosticUpdate  `json:\"agentUpdate,omitempty\"`",
+		"AgentModules           []AgentFleetDiagnosticModule `json:\"agentModules,omitempty\"`",
 		"Reasons                []AgentFleetDiagnosticReason `json:\"reasons\"`",
 		"RepairActions          []AgentFleetDiagnosticRepair `json:\"repairActions,omitempty\"`",
 	} {

@@ -19,6 +19,7 @@ func TestHandleAgentFleetDiagnosticsReturnsFleetPayload(t *testing.T) {
 		ID:              "agent-1",
 		Hostname:        "node-1",
 		DisplayName:     "Node One",
+		Platform:        "linux",
 		Status:          "online",
 		LastSeen:        now.Add(-30 * time.Second),
 		IntervalSeconds: 30,
@@ -45,7 +46,16 @@ func TestHandleAgentFleetDiagnosticsReturnsFleetPayload(t *testing.T) {
 	if payload.Summary.Total != 1 || len(payload.Agents) != 1 {
 		t.Fatalf("expected one agent diagnostic, summary=%+v agents=%+v", payload.Summary, payload.Agents)
 	}
+	if payload.SchemaVersion != monitoring.AgentFleetDiagnosticsSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", payload.SchemaVersion, monitoring.AgentFleetDiagnosticsSchemaVersion)
+	}
 	if payload.Agents[0].Name != "Node One" {
 		t.Fatalf("agent name = %q, want Node One", payload.Agents[0].Name)
+	}
+	if payload.Agents[0].ConnectionID != "agent:agent-1" || payload.Agents[0].Platform != "linux" {
+		t.Fatalf("agent identity = %+v", payload.Agents[0])
+	}
+	if payload.AgentUpdateTargetVersion != currentAgentTargetVersion() {
+		t.Fatalf("agent update target = %q, want %q", payload.AgentUpdateTargetVersion, currentAgentTargetVersion())
 	}
 }

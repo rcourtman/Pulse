@@ -158,6 +158,7 @@ resource health.
 56a. `internal/monitoring/pbs_protection_observation.go`
 57. `internal/monitoring/multi_tenant_monitor.go`
 58. `internal/monitoring/proxmox_action_observer.go`
+59. `internal/monitoring/agent_fleet_doctor.go`
 
 ## Shared Boundaries
 
@@ -1771,6 +1772,28 @@ delivery status and timestamp alongside guest power state. Downstream Patrol
 transition detection consumes that status instead of inventing a fixed stale
 window: a stopped guest can have fresh inventory, while a stale source cannot
 authoritatively prove either a stopped transition or recovery.
+
+### Agent fleet diagnostic derivation
+
+Monitoring owns the read-only Agent Fleet Doctor derivation over current host,
+Docker, Kubernetes, removed-agent, profile-assignment, and deployment state.
+`internal/fleethealth/agent.go` supplies the shared agent connection identity,
+heartbeat cutoff, and version-drift vocabulary used by both the monitoring
+diagnostic and API connections ledger. Five expected reports must be missed,
+with a five-minute minimum, before an agent becomes stale; missing timestamps
+remain pending/never-reported rather than silently healthy. Version comparison
+uses the canonical agent-update target independently from the running server
+build version.
+
+The diagnostic may derive bounded updater and module failure reasons, normalized
+platform and network evidence, profile drift, and safe repair-handoff support.
+It hashes raw machine IDs, filters malformed interface addresses, and redacts
+unbounded error strings before returning evidence. Derivation must not mutate
+monitor state, probe providers, enqueue commands, or turn a repair hint into
+execution authority. Unknown updater states remain explicit warnings; unknown
+platforms and unverified FreeBSD/pfSense installer state fail closed for
+upgrade-command support. `internal/fleethealth/agent_test.go` and
+`internal/monitoring/agent_fleet_doctor_test.go` are the focused runtime proofs.
 
 ### Unified Agent destination delivery metrics
 

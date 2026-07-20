@@ -1,11 +1,14 @@
 package monitoring
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 )
 
 func TestAgentFleetDiagnosticsDetectsStaleAgentVersion(t *testing.T) {
@@ -15,6 +18,7 @@ func TestAgentFleetDiagnosticsDetectsStaleAgentVersion(t *testing.T) {
 		ID:              "agent-1",
 		Hostname:        "pve-1",
 		DisplayName:     "PVE 1",
+		Platform:        "linux",
 		Status:          "online",
 		LastSeen:        now.Add(-30 * time.Second),
 		IntervalSeconds: 30,
@@ -30,6 +34,145 @@ func TestAgentFleetDiagnosticsDetectsStaleAgentVersion(t *testing.T) {
 	}
 	if !hasSupportedRepair(agent, "copy_upgrade_command") {
 		t.Fatalf("expected stale version diagnostic to expose the supported upgrade command action: %#v", agent.RepairActions)
+	}
+}
+
+func TestAgentFleetDiagnosticsSurfacesReportedUpdateModuleAndIdentityEvidence(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	checkedAt := now.Add(-time.Minute)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-identity",
+		Hostname:        "windows-node",
+		DisplayName:     "Windows Node",
+		Platform:        "Microsoft Windows 11 Pro",
+		OSName:          "Windows 11",
+		OSVersion:       "24H2",
+		KernelVersion:   "10.0.26100",
+		Architecture:    "amd64",
+		MachineID:       "raw-machine-id-must-not-leak",
+		ReportIP:        "192.0.2.10",
+		Status:          "online",
+		LastSeen:        now.Add(-30 * time.Second),
+		IntervalSeconds: 30,
+		AgentVersion:    "6.2.0",
+		NetworkInterfaces: []models.HostNetworkInterface{{
+			Name:      "Ethernet",
+			Addresses: []string{"192.0.2.10/24", "not-an-ip"},
+		}},
+		AgentUpdate: &models.AgentUpdateStatus{
+			State:         "error",
+			AutoUpdate:    true,
+			LastCheckedAt: &checkedAt,
+			LastError:     "download failed token=must-not-leak",
+		},
+		AgentModules: []models.AgentModuleStatus{{
+			Name:      "docker",
+			Enabled:   true,
+			State:     "failed",
+			LastError: "socket unavailable password=must-not-leak",
+			UpdatedAt: checkedAt,
+		}},
+	})
+	before := monitor.GetState()
+
+	diagnostics := monitor.GetAgentFleetDiagnosticsForTarget("6.2.0-pro", "6.2.0", now)
+	agent := requireAgentDiagnostic(t, diagnostics, "agent-agent-identity")
+	requireReasonCode(t, agent, AgentFleetReasonUpdateFailed)
+	requireReasonCode(t, agent, AgentFleetReasonModuleFailed)
+
+	if diagnostics.ServerVersion != "6.2.0-pro" || diagnostics.AgentUpdateTargetVersion != "6.2.0" {
+		t.Fatalf("version identities = server %q target %q", diagnostics.ServerVersion, diagnostics.AgentUpdateTargetVersion)
+	}
+	if agent.ConnectionID != "agent:agent-identity" || agent.Platform != "windows" || agent.Architecture != "amd64" {
+		t.Fatalf("canonical identity = %+v", agent)
+	}
+	if agent.MachineIDFingerprint == "" || strings.Contains(agent.MachineIDFingerprint, "raw-machine-id") {
+		t.Fatalf("unsafe machine identity fingerprint %q", agent.MachineIDFingerprint)
+	}
+	if agent.ReportIP != "192.0.2.10" || !reflect.DeepEqual(agent.InterfaceAddresses, []string{"192.0.2.10/24"}) {
+		t.Fatalf("safe IP evidence = report %q interfaces %#v", agent.ReportIP, agent.InterfaceAddresses)
+	}
+	if agent.AgentUpdate == nil || agent.AgentUpdate.LastCheckedAt == nil || strings.Contains(agent.AgentUpdate.LastError, "must-not-leak") {
+		t.Fatalf("update evidence was missing or unsafe: %+v", agent.AgentUpdate)
+	}
+	if len(agent.AgentModules) != 1 || strings.Contains(agent.AgentModules[0].LastError, "must-not-leak") {
+		t.Fatalf("module evidence was missing or unsafe: %+v", agent.AgentModules)
+	}
+	if after := monitor.GetState(); !reflect.DeepEqual(before, after) {
+		t.Fatal("fleet diagnostics mutated monitor state")
+	}
+}
+
+func TestAgentFleetDiagnosticsUpdaterReasonCodes(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name         string
+		version      string
+		updaterState string
+		wantReason   string
+	}{
+		{name: "disabled while behind", version: "6.1.0", updaterState: "disabled", wantReason: AgentFleetReasonUpdateDisabled},
+		{name: "failed", version: "6.2.0", updaterState: "error", wantReason: AgentFleetReasonUpdateFailed},
+		{name: "unknown state", version: "6.2.0", updaterState: "paused-by-policy", wantReason: AgentFleetReasonUpdateStateUnknown},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			monitor := newAgentFleetDoctorTestMonitor(t)
+			monitor.state.UpsertHost(models.Host{
+				ID:           "agent-1",
+				Hostname:     "node-1",
+				Platform:     "linux",
+				Status:       "online",
+				LastSeen:     now,
+				AgentVersion: test.version,
+				AgentUpdate:  &models.AgentUpdateStatus{State: test.updaterState},
+			})
+
+			agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-1")
+			requireReasonCode(t, agent, test.wantReason)
+		})
+	}
+}
+
+func TestAgentFleetDiagnosticsDoesNotOfferUpgradeCommandForUnknownPlatform(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:           "agent-unknown-platform",
+		Hostname:     "unknown-node",
+		Platform:     "plan9",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.1.0",
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-unknown-platform")
+	requireReasonCode(t, agent, AgentFleetReasonUpdatePlatformUnknown)
+	repair := requireRepairCode(t, agent, AgentFleetActionCopyUpgradeCommand)
+	if repair.Supported || repair.Platform != "" || repair.Mode != AgentFleetRepairModeHandoff {
+		t.Fatalf("unsafe platform repair = %+v", repair)
+	}
+}
+
+func TestAgentFleetDiagnosticsDoesNotOfferUpgradeCommandForUnverifiedFreeBSDState(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:           "agent-pfsense",
+		Hostname:     "firewall",
+		Platform:     "pfSense",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.1.0",
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-pfsense")
+	requireReasonCode(t, agent, AgentFleetReasonUpdateStateUnverified)
+	repair := requireRepairCode(t, agent, AgentFleetActionCopyUpgradeCommand)
+	if repair.Supported || repair.Platform != platformsupport.RuntimePlatformFreeBSD {
+		t.Fatalf("unverified FreeBSD repair = %+v", repair)
 	}
 }
 
@@ -186,6 +329,17 @@ func hasSupportedRepair(agent AgentFleetAgentDiagnostic, code string) bool {
 		}
 	}
 	return false
+}
+
+func requireRepairCode(t *testing.T, agent AgentFleetAgentDiagnostic, code string) AgentFleetDiagnosticRepair {
+	t.Helper()
+	for _, repair := range agent.RepairActions {
+		if repair.Code == code {
+			return repair
+		}
+	}
+	t.Fatalf("repair %q not found in %#v", code, agent.RepairActions)
+	return AgentFleetDiagnosticRepair{}
 }
 
 func containsString(values []string, want string) bool {

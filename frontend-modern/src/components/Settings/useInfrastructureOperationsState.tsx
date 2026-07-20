@@ -177,13 +177,14 @@ export const useInfrastructureOperationsState = (
   const getAgentConnectionUpgradeCommand = (
     connection: Connection,
     installFlags: string[] = [],
+    platformOverride?: AgentPlatform,
   ) => {
     const token = resolvedCommandToken();
     const url = installState.selectedAgentUrl();
     const agentId = getCanonicalConnectionAgentId(connection);
     const hostname = getCanonicalConnectionHostname(connection);
     const commandsEnabled = Boolean(connection.agentIdentity?.commandsEnabled);
-    const platform = getConnectionUpgradePlatform(connection);
+    const platform = platformOverride ?? getConnectionUpgradePlatform(connection);
     if (platform === 'windows') {
       const envAssignments = [
         ...getPowerShellInstallProfileEnvFromFlags(installFlags),
@@ -221,8 +222,12 @@ export const useInfrastructureOperationsState = (
     return withPrivilegeEscalation(command);
   };
 
-  const getAgentConnectionUpgradeCommandRequiresToken = (connection: Connection) =>
-    getConnectionUpgradePlatform(connection) === 'windows' && installState.requiresToken();
+  const getAgentConnectionUpgradeCommandRequiresToken = (
+    connection: Connection,
+    platformOverride?: AgentPlatform,
+  ) =>
+    (platformOverride ?? getConnectionUpgradePlatform(connection)) === 'windows' &&
+    installState.requiresToken();
 
   return {
     ...installState,

@@ -1,6 +1,14 @@
-# Automatic Updates
+# Pulse Server Automatic Updates
 
-Pulse supports one-click updates for supported deployment types, making it easy to keep your monitoring system up to date.
+Pulse supports one-click server updates for supported deployment types. This
+document describes the Pulse server runtime, not installed Pulse Agents.
+
+Eligible v6 agents update asynchronously through their own update client. A
+server update changes their target version but does not prove fleet convergence.
+For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
+`/settings/infrastructure?agentDoctor=1` or the installer in
+**Settings → Infrastructure → Install on a host**. See
+[Unified Agent](UNIFIED_AGENT.md#auto-update).
 
 ## Supported Deployment Types
 
@@ -80,6 +88,10 @@ docker pull rcourtman/pulse:vX.Y.Z
 # Restart container
 docker compose down && docker compose up -d
 ```
+
+This command uses the public Community image. Private Pro runtime installs must
+use the private image and credentials supplied by the private download/update
+path; replacing a Pro image with `rcourtman/pulse` changes the runtime edition.
 
 If you use the legacy `docker-compose` binary, replace `docker compose` with `docker-compose`.
 

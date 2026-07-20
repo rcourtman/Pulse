@@ -55,6 +55,7 @@ that binary, not separate customer-facing agent products.
     22a. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
 23. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
     23a. `frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx`
+    23b. `frontend-modern/src/components/Settings/useAgentFleetDiagnostics.ts`
 24. `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 25. `frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx`
 26. `frontend-modern/src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx`
@@ -416,10 +417,26 @@ equivalent saved-state update mode.
 Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
 surface: `GET /api/agents/diagnostics` may explain stale versions, missing
 reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,
-identity splits, and removed-agent blocks, and may advertise existing repair
-handoffs such as copy-upgrade-command or allow-reenroll. It must not perform
-the repair, create an action plan, or replace the canonical `/api/connections`
-fleet projection used by Infrastructure.
+identity splits, updater/module failures, and removed-agent blocks. The
+diagnostic target is the canonical agent-update target, not the Pulse server
+build string, so development builds and separately versioned agent artifacts
+do not create false drift. The Infrastructure workspace polls this read model
+only while Agent Doctor is open, enriches canonical connection-ledger rows by
+stable `connectionId`, and retains ledger-only fallback rows when structured
+evidence is absent.
+
+Repair entries remain handoffs to existing lifecycle operations:
+`copy_upgrade_command` renders a local operator command and
+`allow_reenroll` invokes the existing removed-agent flow. They never enqueue a
+remote command or create an action plan. A stale agent with an unknown or
+unsupported platform, or with FreeBSD/pfSense installer state that the server
+cannot verify, must receive an unsupported handoff rather than a guessed
+command. When automatic update is enabled and checking or applying, Agent
+Doctor waits and reports that state instead of prematurely offering a manual
+installer path. The `agentDoctor` route key is canonical; the older
+`agentUpdates` deep link remains a read-side compatibility alias only. Agent
+Doctor must not replace the canonical `/api/connections` fleet projection used
+by Infrastructure.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan

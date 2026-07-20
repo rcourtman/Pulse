@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/fleethealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
-	pulseutils "github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // connectionStaleThreshold is the baseline "haven't heard from this connection
@@ -501,15 +501,13 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 	reason := ""
 	currentAgentVersion := strings.TrimSpace(host.AgentVersion)
 	expectedAgentVersion = strings.TrimSpace(expectedAgentVersion)
-	updateAvailable := false
-	if currentAgentVersion != "" && expectedAgentVersion != "" {
-		updateAvailable = pulseutils.CompareVersions(currentAgentVersion, expectedAgentVersion) < 0
-	}
+	versionDrift := fleethealth.DeriveAgentVersionDrift(currentAgentVersion, expectedAgentVersion)
+	updateAvailable := versionDrift == fleethealth.AgentVersionBehind
 	agentIdentity := connectionAgentIdentityForHost(host)
-	switch {
-	case lastSeen == nil:
+	switch fleethealth.DeriveAgentLiveness(host.LastSeen, now, host.IntervalSeconds) {
+	case fleethealth.AgentLivenessPending:
 		state = ConnectionStatePending
-	case now.Sub(*lastSeen) > connectionStaleThreshold:
+	case fleethealth.AgentLivenessStale:
 		state = ConnectionStateStale
 		reason = fmt.Sprintf("no heartbeat in %s", now.Sub(*lastSeen).Round(time.Second))
 	default:
@@ -517,7 +515,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 	}
 
 	conn := withFleetGovernance(Connection{
-		ID:                   "agent:" + host.ID,
+		ID:                   fleethealth.AgentConnectionID(host.ID),
 		Type:                 ConnectionTypeAgent,
 		Name:                 name,
 		Address:              address,
@@ -626,13 +624,14 @@ func connectionFleetVersionDrift(conn Connection) string {
 	if conn.Type != ConnectionTypeAgent {
 		return fleetStateNotApplicable
 	}
-	if strings.TrimSpace(conn.AgentVersion) == "" || strings.TrimSpace(conn.ExpectedAgentVersion) == "" {
+	switch fleethealth.DeriveAgentVersionDrift(conn.AgentVersion, conn.ExpectedAgentVersion) {
+	case fleethealth.AgentVersionBehind:
+		return fleetStateBehind
+	case fleethealth.AgentVersionCurrent:
+		return fleetStateCurrent
+	default:
 		return fleetStateUnknown
 	}
-	if conn.AgentUpdateAvailable {
-		return fleetStateBehind
-	}
-	return fleetStateCurrent
 }
 
 func connectionFleetAdapterHealth(conn Connection) string {

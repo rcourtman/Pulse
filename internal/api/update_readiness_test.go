@@ -130,10 +130,11 @@ func TestBuildUpdateReadiness_WarnsOnStaleAgent(t *testing.T) {
 	readiness := buildUpdateReadiness(updateReadinessInputs{
 		cfg: &config.Config{APITokens: []config.APITokenRecord{*record}},
 		hosts: []models.Host{{
-			ID:           "host-1",
-			Hostname:     "host-1",
-			LastSeen:     now.Add(-5 * time.Minute),
-			AgentVersion: "6.0.0-rc.6",
+			ID:              "host-1",
+			Hostname:        "host-1",
+			LastSeen:        now.Add(-5*time.Minute - time.Second),
+			IntervalSeconds: 30,
+			AgentVersion:    "6.0.0-rc.6",
 		}},
 		targetVersion: "v6.0.0",
 		plan: updates.UpdatePlan{

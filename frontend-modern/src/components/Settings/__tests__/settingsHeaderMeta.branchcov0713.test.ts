@@ -118,8 +118,9 @@ describe('getSettingsHeaderMeta', () => {
 
     it('localizes system-updates to the English baseline', () => {
       expect(en['system-updates']).toEqual({
-        title: 'Updates',
-        description: 'Manage version checks, update channels, and automatic update behavior.',
+        title: 'Pulse server updates',
+        description:
+          'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
       });
     });
 
@@ -415,9 +416,9 @@ describe('getSettingsHeaderMeta', () => {
 
     it('localizes system-updates', () => {
       expect(de['system-updates']).toEqual({
-        title: 'Updates',
+        title: 'Pulse-Server-Updates',
         description:
-          'Verwalten Sie Versionspruefungen, Update-Kanaele und automatisches Update-Verhalten.',
+          'Verwalten Sie Versionspruefungen, Update-Kanaele und automatische Updates der Pulse-Server-Laufzeit. Agent-Updates bleiben unter Infrastruktur.',
       });
     });
 
@@ -611,9 +612,9 @@ describe('getSettingsHeaderMeta', () => {
 
     it('localizes system-updates', () => {
       expect(es['system-updates']).toEqual({
-        title: 'Actualizaciones',
+        title: 'Actualizaciones del servidor Pulse',
         description:
-          'Administra comprobaciones de versión, canales de actualización y comportamiento de actualización automática.',
+          'Administra las comprobaciones de versión, los canales y las actualizaciones automáticas del servidor Pulse. Las actualizaciones de agentes permanecen en Infraestructura.',
       });
     });
 

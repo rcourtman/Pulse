@@ -33,7 +33,7 @@ describe('settings localization catalog', () => {
     const groups = getSettingsNavGroups('de');
     expect(groups[0]?.label).toBe('Infrastruktur');
     expect(groups[0]?.items[0]?.label).toBe('Infrastruktur');
-    expect(getSettingsNavItem('system-updates', 'de')?.label).toBe('Updates');
+    expect(getSettingsNavItem('system-updates', 'de')?.label).toBe('Pulse-Server-Updates');
     expect(getSettingsNavItem('system-ai-assistant', 'de')?.label).toBe('Assistant');
     expect(getSettingsNavItem('system-ai-discovery', 'de')).toBeUndefined();
     expect(getSettingsNavItem('security-data-handling', 'de')?.label).toBe('Ressourcenschutz');

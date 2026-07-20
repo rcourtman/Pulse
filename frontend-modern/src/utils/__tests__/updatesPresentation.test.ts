@@ -19,9 +19,10 @@ describe('updatesPresentation', () => {
 
   it('returns canonical updates panel framing copy', () => {
     expect(UPDATES_PANEL_COPY).toEqual({
-      title: 'Updates',
-      description: 'Manage version checks and automatic update preferences.',
-      currentVersionLabel: 'Current Version',
+      title: 'Pulse server updates',
+      description:
+        'Manage the Pulse server runtime. Pulse Agent updates are diagnosed under Infrastructure.',
+      currentVersionLabel: 'Server version',
       checkNowLabel: 'Check Now',
       checkingLabel: 'Checking...',
       updatePreferencesTitle: 'Update Preferences',

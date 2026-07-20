@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,8 +20,9 @@ import (
 // Tests are prefixed with BranchCov so `-run BranchCov` selects them.
 
 // identitySplitReason always emits the two base evidence lines ("Peer type:"
-// and "Peer ID:") and conditionally appends agent/token lines only when those
-// values are non-empty. The returned Code/Severity/Message are invariant.
+// and "Peer ID:") and conditionally appends agent/bounded token-binding lines
+// only when those values are non-empty. Raw token IDs are never evidence. The
+// returned Code/Severity/Message are invariant.
 func TestBranchCovIdentitySplitReason(t *testing.T) {
 	t.Parallel()
 
@@ -78,8 +80,9 @@ func TestBranchCovIdentitySplitReason(t *testing.T) {
 				t.Fatalf("Evidence[1] = %q, want %q", got, "Peer ID: "+tc.peerID)
 			}
 
-			// When the optional IDs are supplied they must be appended, in
-			// order, after the base lines.
+			// When the optional identities are supplied they must be appended,
+			// in order, after the base lines. Token binding stays descriptive
+			// without disclosing the token identifier.
 			offset := 2
 			if tc.peerAgentID != "" {
 				if got := reason.Evidence[offset]; got != "Peer agent ID: "+tc.peerAgentID {
@@ -88,8 +91,11 @@ func TestBranchCovIdentitySplitReason(t *testing.T) {
 				offset++
 			}
 			if tc.peerTokenID != "" {
-				if got := reason.Evidence[offset]; got != "Peer token ID: "+tc.peerTokenID {
-					t.Fatalf("token evidence = %q, want %q", got, "Peer token ID: "+tc.peerTokenID)
+				if got := reason.Evidence[offset]; got != "Peer shares the reporting token binding" {
+					t.Fatalf("token evidence = %q, want bounded token-binding description", got)
+				}
+				if strings.Contains(reason.Evidence[offset], tc.peerTokenID) {
+					t.Fatalf("token evidence disclosed raw token ID %q", tc.peerTokenID)
 				}
 			}
 		})

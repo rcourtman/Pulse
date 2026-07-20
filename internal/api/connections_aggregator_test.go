@@ -157,8 +157,8 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{
 		hosts: []models.Host{
-			{ID: "fresh", Hostname: "h1", LastSeen: now.Add(-10 * time.Second)},
-			{ID: "stale", Hostname: "h2", LastSeen: now.Add(-5 * time.Minute)},
+			{ID: "fresh", Hostname: "h1", LastSeen: now.Add(-10 * time.Second), IntervalSeconds: 30},
+			{ID: "stale", Hostname: "h2", LastSeen: now.Add(-5*time.Minute - time.Second), IntervalSeconds: 30},
 			{ID: "never", Hostname: "h3"},
 		},
 		now: now,

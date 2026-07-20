@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildInfrastructureAgentDoctorPath,
   buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
@@ -27,11 +28,13 @@ describe('infrastructureWorkspaceModel', () => {
     expect(buildInfrastructureOnboardingPath('vmware')).toBe('/settings/infrastructure?add=vmware');
   });
 
-  it('builds and derives the canonical agent update command route', () => {
-    expect(buildInfrastructureAgentUpdatesPath()).toBe('/settings/infrastructure?agentUpdates=1');
+  it('builds the canonical Agent Doctor route and accepts legacy update deep links', () => {
+    expect(buildInfrastructureAgentDoctorPath()).toBe('/settings/infrastructure?agentDoctor=1');
+    expect(buildInfrastructureAgentUpdatesPath()).toBe('/settings/infrastructure?agentDoctor=1');
     expect(buildInfrastructureAgentUpdatesPath(['agent:agent-delly', 'agent-pi'])).toBe(
-      '/settings/infrastructure?agentUpdates=1&agents=agent%3Aagent-delly&agents=agent%3Aagent-pi',
+      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-delly&agents=agent%3Aagent-pi',
     );
+    expect(deriveAgentUpdatesFromLocation('/settings/infrastructure', '?agentDoctor=1')).toBe(true);
     expect(deriveAgentUpdatesFromLocation('/settings/infrastructure', '?agentUpdates=1')).toBe(
       true,
     );

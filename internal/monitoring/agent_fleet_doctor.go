@@ -1,29 +1,51 @@
 package monitoring
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/fleethealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
 
 const (
+	AgentFleetDiagnosticsSchemaVersion = 1
+
 	AgentFleetStatusHealthy  = "healthy"
 	AgentFleetStatusWarning  = "warning"
 	AgentFleetStatusCritical = "critical"
 	AgentFleetStatusRemoved  = "removed"
+
+	AgentFleetReasonUpdateDisabled        = "agent_update_disabled"
+	AgentFleetReasonUpdateFailed          = "agent_update_failed"
+	AgentFleetReasonUpdateStateUnknown    = "agent_update_state_unknown"
+	AgentFleetReasonUpdatePlatformUnknown = "agent_update_platform_unknown"
+	AgentFleetReasonUpdateStateUnverified = "agent_update_installer_state_unverified"
+	AgentFleetReasonModuleFailed          = "agent_module_failed"
+	AgentFleetReasonModuleDegraded        = "agent_module_degraded"
+
+	AgentFleetActionAllowReenroll      = "allow_reenroll"
+	AgentFleetActionCopyUpgradeCommand = "copy_upgrade_command"
+	AgentFleetRepairModeHandoff        = "handoff"
 )
 
 type AgentFleetDiagnostics struct {
-	GeneratedAt   int64                       `json:"generatedAt"`
-	ServerVersion string                      `json:"serverVersion,omitempty"`
-	Summary       AgentFleetDiagnosticSummary `json:"summary"`
-	Agents        []AgentFleetAgentDiagnostic `json:"agents"`
+	SchemaVersion            int                         `json:"schemaVersion"`
+	GeneratedAt              int64                       `json:"generatedAt"`
+	ServerVersion            string                      `json:"serverVersion,omitempty"`
+	AgentUpdateTargetVersion string                      `json:"agentUpdateTargetVersion,omitempty"`
+	Summary                  AgentFleetDiagnosticSummary `json:"summary"`
+	Agents                   []AgentFleetAgentDiagnostic `json:"agents"`
 }
 
 type AgentFleetDiagnosticSummary struct {
@@ -38,8 +60,17 @@ type AgentFleetAgentDiagnostic struct {
 	RowKey                 string                       `json:"rowKey"`
 	ID                     string                       `json:"id"`
 	AgentID                string                       `json:"agentId,omitempty"`
+	ConnectionID           string                       `json:"connectionId,omitempty"`
 	Name                   string                       `json:"name"`
 	Hostname               string                       `json:"hostname,omitempty"`
+	Platform               string                       `json:"platform,omitempty"`
+	OSName                 string                       `json:"osName,omitempty"`
+	OSVersion              string                       `json:"osVersion,omitempty"`
+	KernelVersion          string                       `json:"kernelVersion,omitempty"`
+	Architecture           string                       `json:"architecture,omitempty"`
+	MachineIDFingerprint   string                       `json:"machineIdFingerprint,omitempty"`
+	ReportIP               string                       `json:"reportIp,omitempty"`
+	InterfaceAddresses     []string                     `json:"interfaceAddresses,omitempty"`
 	Types                  []string                     `json:"types"`
 	Status                 string                       `json:"status"`
 	RawStatus              string                       `json:"rawStatus,omitempty"`
@@ -50,8 +81,29 @@ type AgentFleetAgentDiagnostic struct {
 	ProfileName            string                       `json:"profileName,omitempty"`
 	ProfileVersion         int                          `json:"profileVersion,omitempty"`
 	DeployedProfileVersion int                          `json:"deployedProfileVersion,omitempty"`
+	AgentUpdate            *AgentFleetDiagnosticUpdate  `json:"agentUpdate,omitempty"`
+	AgentModules           []AgentFleetDiagnosticModule `json:"agentModules,omitempty"`
 	Reasons                []AgentFleetDiagnosticReason `json:"reasons"`
 	RepairActions          []AgentFleetDiagnosticRepair `json:"repairActions,omitempty"`
+}
+
+type AgentFleetDiagnosticUpdate struct {
+	State            string     `json:"state"`
+	AutoUpdate       bool       `json:"autoUpdate"`
+	UpdatedFrom      string     `json:"updatedFrom,omitempty"`
+	AvailableVersion string     `json:"availableVersion,omitempty"`
+	LastCheckedAt    *time.Time `json:"lastCheckedAt,omitempty"`
+	LastAttemptAt    *time.Time `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt    *time.Time `json:"lastSuccessAt,omitempty"`
+	LastError        string     `json:"lastError,omitempty"`
+}
+
+type AgentFleetDiagnosticModule struct {
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	State     string    `json:"state"`
+	LastError string    `json:"lastError,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type AgentFleetDiagnosticReason struct {
@@ -66,6 +118,8 @@ type AgentFleetDiagnosticRepair struct {
 	Label       string `json:"label"`
 	Description string `json:"description"`
 	Supported   bool   `json:"supported"`
+	Mode        string `json:"mode"`
+	Platform    string `json:"platform,omitempty"`
 	Scope       string `json:"scope,omitempty"`
 }
 
@@ -88,17 +142,26 @@ type agentFleetSubject struct {
 	removedAt       time.Time
 }
 
-// GetAgentFleetDiagnostics returns a read-only fleet health view derived from
-// reported agent state, server version, and existing profile deployment state.
+// GetAgentFleetDiagnostics preserves the original call contract for callers
+// where the server version is also the agent update target.
 func (m *Monitor) GetAgentFleetDiagnostics(serverVersion string, now time.Time) AgentFleetDiagnostics {
+	return m.GetAgentFleetDiagnosticsForTarget(serverVersion, serverVersion, now)
+}
+
+// GetAgentFleetDiagnosticsForTarget returns a read-only fleet health view
+// derived from reported state, the canonical agent update target, and existing
+// profile deployment state.
+func (m *Monitor) GetAgentFleetDiagnosticsForTarget(serverVersion, agentUpdateTargetVersion string, now time.Time) AgentFleetDiagnostics {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 	now = now.UTC()
 
 	out := AgentFleetDiagnostics{
-		GeneratedAt:   now.UnixMilli(),
-		ServerVersion: strings.TrimSpace(serverVersion),
+		SchemaVersion:            AgentFleetDiagnosticsSchemaVersion,
+		GeneratedAt:              now.UnixMilli(),
+		ServerVersion:            strings.TrimSpace(serverVersion),
+		AgentUpdateTargetVersion: strings.TrimSpace(agentUpdateTargetVersion),
 	}
 	if m == nil || m.state == nil {
 		return out
@@ -112,7 +175,7 @@ func (m *Monitor) GetAgentFleetDiagnostics(serverVersion string, now time.Time) 
 	subjects := buildAgentFleetSubjects(state)
 
 	for i := range subjects {
-		diagnostic := diagnoseAgentFleetSubject(subjects[i], state, out.ServerVersion, now, profileByID, assignmentByAgent, deploymentByAgentProfile)
+		diagnostic := diagnoseAgentFleetSubject(subjects[i], state, out.AgentUpdateTargetVersion, now, profileByID, assignmentByAgent, deploymentByAgentProfile)
 		out.Agents = append(out.Agents, diagnostic)
 	}
 
@@ -290,16 +353,28 @@ func diagnoseAgentFleetSubject(
 	assignmentByAgent map[string]models.AgentProfileAssignment,
 	deploymentByAgentProfile map[string]models.ProfileDeploymentStatus,
 ) AgentFleetAgentDiagnostic {
+	identity := agentFleetIdentityForSubject(subject)
 	result := AgentFleetAgentDiagnostic{
-		RowKey:          subject.rowKey,
-		ID:              subject.id,
-		AgentID:         subject.agentID,
-		Name:            firstNonEmpty(subject.name, subject.hostname, subject.id),
-		Hostname:        subject.hostname,
-		Types:           sortedAgentTypes(subject.types),
-		RawStatus:       subject.rawStatus,
-		IntervalSeconds: subject.intervalSeconds,
-		Version:         subject.version,
+		RowKey:               subject.rowKey,
+		ID:                   subject.id,
+		AgentID:              subject.agentID,
+		ConnectionID:         identity.connectionID,
+		Name:                 firstNonEmpty(subject.name, subject.hostname, subject.id),
+		Hostname:             subject.hostname,
+		Platform:             identity.platform,
+		OSName:               identity.osName,
+		OSVersion:            identity.osVersion,
+		KernelVersion:        identity.kernelVersion,
+		Architecture:         identity.architecture,
+		MachineIDFingerprint: identity.machineIDFingerprint,
+		ReportIP:             identity.reportIP,
+		InterfaceAddresses:   identity.interfaceAddresses,
+		Types:                sortedAgentTypes(subject.types),
+		RawStatus:            subject.rawStatus,
+		IntervalSeconds:      subject.intervalSeconds,
+		Version:              subject.version,
+		AgentUpdate:          agentFleetUpdateForSubject(subject),
+		AgentModules:         agentFleetModulesForSubject(subject),
 	}
 	if !subject.lastSeen.IsZero() {
 		result.LastSeen = subject.lastSeen.UnixMilli()
@@ -319,10 +394,11 @@ func diagnoseAgentFleetSubject(
 			},
 		})
 		result.RepairActions = append(result.RepairActions, AgentFleetDiagnosticRepair{
-			Code:        "allow_reenroll",
+			Code:        AgentFleetActionAllowReenroll,
 			Label:       "Allow re-enroll",
 			Description: "Uses the existing allow re-enroll action for removed agents.",
 			Supported:   true,
+			Mode:        AgentFleetRepairModeHandoff,
 			Scope:       "settings:write",
 		})
 		return result
@@ -330,6 +406,8 @@ func diagnoseAgentFleetSubject(
 
 	result.Reasons = append(result.Reasons, diagnoseAgentConnectivity(subject, now)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentVersion(subject, serverVersion)...)
+	result.Reasons = append(result.Reasons, diagnoseAgentUpdate(subject, serverVersion)...)
+	result.Reasons = append(result.Reasons, diagnoseAgentModules(subject)...)
 	result.Reasons = append(result.Reasons, diagnoseAgentIdentitySplit(subject, state)...)
 
 	assignment, hasAssignment := findAgentAssignment(subject, assignmentByAgent)
@@ -359,11 +437,28 @@ func diagnoseAgentFleetSubject(
 
 	for _, reason := range result.Reasons {
 		if reason.Code == "agent_version_stale" {
+			platform, supported := safeAgentUpdatePlatform(subject)
+			if !supported {
+				result.Reasons = append(result.Reasons, AgentFleetDiagnosticReason{
+					Code:     AgentFleetReasonUpdatePlatformUnknown,
+					Severity: AgentFleetStatusWarning,
+					Message:  "Pulse cannot safely choose an agent installer command because the reported platform is missing or unsupported.",
+				})
+			} else if platform == platformsupport.RuntimePlatformFreeBSD {
+				supported = false
+				result.Reasons = append(result.Reasons, AgentFleetDiagnosticReason{
+					Code:     AgentFleetReasonUpdateStateUnverified,
+					Severity: AgentFleetStatusWarning,
+					Message:  "Pulse cannot verify the saved FreeBSD or pfSense installer state required for a safe in-place update.",
+				})
+			}
 			result.RepairActions = append(result.RepairActions, AgentFleetDiagnosticRepair{
-				Code:        "copy_upgrade_command",
+				Code:        AgentFleetActionCopyUpgradeCommand,
 				Label:       "Copy upgrade command",
 				Description: "Uses the existing installer command from Settings -> Agents; no remote command is queued.",
-				Supported:   true,
+				Supported:   supported,
+				Mode:        AgentFleetRepairModeHandoff,
+				Platform:    platform,
 				Scope:       "local_admin_shell",
 			})
 			break
@@ -384,25 +479,21 @@ func diagnoseAgentConnectivity(subject agentFleetSubject, now time.Time) []Agent
 	if interval <= 0 {
 		interval = 30
 	}
-	staleAfter := time.Duration(interval*5) * time.Second
-	if staleAfter < 5*time.Minute {
-		staleAfter = 5 * time.Minute
-	}
 
-	if subject.lastSeen.IsZero() {
+	staleThreshold := fleethealth.AgentStaleThreshold(subject.intervalSeconds)
+	switch fleethealth.DeriveAgentLiveness(subject.lastSeen, now, subject.intervalSeconds) {
+	case fleethealth.AgentLivenessPending:
 		return append(reasons, AgentFleetDiagnosticReason{
 			Code:     "agent_never_reported",
 			Severity: AgentFleetStatusCritical,
 			Message:  "This agent has no last-seen timestamp, so Pulse cannot confirm it is reporting.",
 		})
-	}
-
-	age := now.Sub(subject.lastSeen)
-	if age > staleAfter {
+	case fleethealth.AgentLivenessStale:
+		age := now.Sub(subject.lastSeen)
 		reasons = append(reasons, AgentFleetDiagnosticReason{
 			Code:     "agent_disconnected",
 			Severity: AgentFleetStatusCritical,
-			Message:  fmt.Sprintf("No report has arrived for %s; this is beyond the %s stale threshold for a %ds reporting interval.", roundDuration(age), roundDuration(staleAfter), interval),
+			Message:  fmt.Sprintf("No report has arrived for %s; this is beyond the canonical %s agent stale threshold.", roundDuration(age), roundDuration(staleThreshold)),
 			Evidence: []string{
 				"Last seen: " + subject.lastSeen.UTC().Format(time.RFC3339),
 				fmt.Sprintf("Expected report interval: %ds", interval),
@@ -421,7 +512,7 @@ func diagnoseAgentConnectivity(subject agentFleetSubject, now time.Time) []Agent
 	return reasons
 }
 
-func diagnoseAgentVersion(subject agentFleetSubject, serverVersion string) []AgentFleetDiagnosticReason {
+func diagnoseAgentVersion(subject agentFleetSubject, targetVersion string) []AgentFleetDiagnosticReason {
 	if subject.removed {
 		return nil
 	}
@@ -434,37 +525,332 @@ func diagnoseAgentVersion(subject agentFleetSubject, serverVersion string) []Age
 		}}
 	}
 
-	serverVersion = strings.TrimSpace(serverVersion)
-	if serverVersion == "" || strings.EqualFold(serverVersion, "dev") {
+	targetVersion = strings.TrimSpace(targetVersion)
+	if targetVersion == "" || strings.EqualFold(targetVersion, "dev") {
 		return nil
 	}
 
-	serverParsed, err := updates.ParseVersion(serverVersion)
-	if err != nil {
+	if _, err := updates.ParseVersion(targetVersion); err != nil {
 		return nil
 	}
-	agentParsed, err := updates.ParseVersion(agentVersion)
-	if err != nil {
+	if _, err := updates.ParseVersion(agentVersion); err != nil {
 		return []AgentFleetDiagnosticReason{{
 			Code:     "agent_version_unparseable",
 			Severity: AgentFleetStatusWarning,
-			Message:  fmt.Sprintf("The agent reported version %q, which cannot be compared with server version %q.", agentVersion, serverVersion),
+			Message:  fmt.Sprintf("The agent reported version %q, which cannot be compared with update target %q.", agentVersion, targetVersion),
 		}}
 	}
 
-	if serverParsed.IsNewerThan(agentParsed) {
+	if fleethealth.DeriveAgentVersionDrift(agentVersion, targetVersion) == fleethealth.AgentVersionBehind {
 		return []AgentFleetDiagnosticReason{{
 			Code:     "agent_version_stale",
 			Severity: AgentFleetStatusWarning,
-			Message:  fmt.Sprintf("Agent version %s is older than the Pulse server version %s.", agentVersion, serverVersion),
+			Message:  fmt.Sprintf("Agent version %s is older than the agent update target %s.", agentVersion, targetVersion),
 			Evidence: []string{
 				"Agent version: " + agentVersion,
-				"Server version: " + serverVersion,
+				"Agent update target: " + targetVersion,
 			},
 		}}
 	}
 
 	return nil
+}
+
+func diagnoseAgentUpdate(subject agentFleetSubject, targetVersion string) []AgentFleetDiagnosticReason {
+	if subject.host == nil || subject.host.AgentUpdate == nil {
+		return nil
+	}
+
+	update := subject.host.AgentUpdate
+	state := strings.ToLower(strings.TrimSpace(update.State))
+	evidence := updateStatusEvidence(update)
+	switch state {
+	case "", "idle", "checking", "update-available", "updating":
+		return nil
+	case "disabled":
+		if fleethealth.DeriveAgentVersionDrift(subject.version, targetVersion) != fleethealth.AgentVersionBehind {
+			return nil
+		}
+		return []AgentFleetDiagnosticReason{{
+			Code:     AgentFleetReasonUpdateDisabled,
+			Severity: AgentFleetStatusWarning,
+			Message:  "The agent is behind the update target and its automatic updater is disabled.",
+			Evidence: evidence,
+		}}
+	case "error":
+		return []AgentFleetDiagnosticReason{{
+			Code:     AgentFleetReasonUpdateFailed,
+			Severity: AgentFleetStatusWarning,
+			Message:  "The agent's most recent self-update check or attempt failed.",
+			Evidence: evidence,
+		}}
+	default:
+		return []AgentFleetDiagnosticReason{{
+			Code:     AgentFleetReasonUpdateStateUnknown,
+			Severity: AgentFleetStatusWarning,
+			Message:  fmt.Sprintf("The agent reported an unrecognized updater state %q.", update.State),
+			Evidence: evidence,
+		}}
+	}
+}
+
+func diagnoseAgentModules(subject agentFleetSubject) []AgentFleetDiagnosticReason {
+	if subject.host == nil {
+		return nil
+	}
+
+	reasons := make([]AgentFleetDiagnosticReason, 0)
+	for _, module := range subject.host.AgentModules {
+		if !module.Enabled {
+			continue
+		}
+		state := strings.ToLower(strings.TrimSpace(module.State))
+		if state == "running" {
+			continue
+		}
+		severity := AgentFleetStatusWarning
+		code := AgentFleetReasonModuleDegraded
+		message := fmt.Sprintf("Enabled agent module %q is not running.", strings.TrimSpace(module.Name))
+		if state == "error" || state == "failed" {
+			severity = AgentFleetStatusCritical
+			code = AgentFleetReasonModuleFailed
+			message = fmt.Sprintf("Enabled agent module %q failed.", strings.TrimSpace(module.Name))
+		}
+		reasons = append(reasons, AgentFleetDiagnosticReason{
+			Code:     code,
+			Severity: severity,
+			Message:  message,
+			Evidence: moduleStatusEvidence(module),
+		})
+	}
+	return reasons
+}
+
+type agentFleetIdentityEvidence struct {
+	connectionID         string
+	platform             string
+	osName               string
+	osVersion            string
+	kernelVersion        string
+	architecture         string
+	machineIDFingerprint string
+	reportIP             string
+	interfaceAddresses   []string
+}
+
+func agentFleetIdentityForSubject(subject agentFleetSubject) agentFleetIdentityEvidence {
+	identity := agentFleetIdentityEvidence{}
+	var machineID string
+	var interfaces []models.HostNetworkInterface
+
+	if subject.host != nil {
+		host := subject.host
+		identity.connectionID = fleethealth.AgentConnectionID(host.ID)
+		identity.platform, _ = safeAgentUpdatePlatform(subject)
+		if identity.platform == "" {
+			identity.platform = platformsupport.NormalizeAgentReportedPlatform(host.Platform)
+		}
+		identity.osName = strings.TrimSpace(host.OSName)
+		identity.osVersion = strings.TrimSpace(host.OSVersion)
+		identity.kernelVersion = strings.TrimSpace(host.KernelVersion)
+		identity.architecture = strings.TrimSpace(host.Architecture)
+		identity.reportIP = safeDiagnosticIPAddress(host.ReportIP)
+		machineID = host.MachineID
+		interfaces = append(interfaces, host.NetworkInterfaces...)
+	}
+
+	if subject.docker != nil {
+		docker := subject.docker
+		if identity.platform == "" {
+			identity.platform, _ = safeAgentUpdatePlatform(subject)
+			if identity.platform == "" {
+				identity.platform = platformsupport.NormalizeAgentReportedPlatform(docker.OS)
+			}
+		}
+		identity.osName = firstNonEmpty(identity.osName, docker.OS)
+		identity.kernelVersion = firstNonEmpty(identity.kernelVersion, docker.KernelVersion)
+		identity.architecture = firstNonEmpty(identity.architecture, docker.Architecture)
+		machineID = firstNonEmpty(machineID, docker.MachineID)
+		interfaces = append(interfaces, docker.NetworkInterfaces...)
+	}
+
+	identity.machineIDFingerprint = machineIDFingerprint(machineID)
+	identity.interfaceAddresses = safeDiagnosticInterfaceAddresses(interfaces)
+	return identity
+}
+
+func agentFleetUpdateForSubject(subject agentFleetSubject) *AgentFleetDiagnosticUpdate {
+	if subject.host == nil || subject.host.AgentUpdate == nil {
+		return nil
+	}
+	update := subject.host.AgentUpdate
+	return &AgentFleetDiagnosticUpdate{
+		State:            strings.TrimSpace(update.State),
+		AutoUpdate:       update.AutoUpdate,
+		UpdatedFrom:      strings.TrimSpace(update.UpdatedFrom),
+		AvailableVersion: strings.TrimSpace(update.AvailableVersion),
+		LastCheckedAt:    cloneFleetDiagnosticTime(update.LastCheckedAt),
+		LastAttemptAt:    cloneFleetDiagnosticTime(update.LastAttemptAt),
+		LastSuccessAt:    cloneFleetDiagnosticTime(update.LastSuccessAt),
+		LastError:        safeDiagnosticError(update.LastError),
+	}
+}
+
+func agentFleetModulesForSubject(subject agentFleetSubject) []AgentFleetDiagnosticModule {
+	if subject.host == nil || len(subject.host.AgentModules) == 0 {
+		return nil
+	}
+	modules := make([]AgentFleetDiagnosticModule, 0, len(subject.host.AgentModules))
+	for _, module := range subject.host.AgentModules {
+		modules = append(modules, AgentFleetDiagnosticModule{
+			Name:      strings.TrimSpace(module.Name),
+			Enabled:   module.Enabled,
+			State:     strings.TrimSpace(module.State),
+			LastError: safeDiagnosticError(module.LastError),
+			UpdatedAt: module.UpdatedAt.UTC(),
+		})
+	}
+	sort.Slice(modules, func(i, j int) bool {
+		return strings.ToLower(modules[i].Name) < strings.ToLower(modules[j].Name)
+	})
+	return modules
+}
+
+func safeAgentUpdatePlatform(subject agentFleetSubject) (string, bool) {
+	values := make([]string, 0, 3)
+	if subject.host != nil {
+		values = append(values, subject.host.Platform, subject.host.OSName)
+	}
+	if subject.docker != nil {
+		values = append(values, subject.docker.OS)
+	}
+
+	for _, value := range values {
+		appliance := strings.ToLower(strings.TrimSpace(value))
+		if strings.Contains(appliance, "pfsense") || strings.Contains(appliance, "opnsense") {
+			return platformsupport.RuntimePlatformFreeBSD, true
+		}
+		normalized := platformsupport.NormalizeAgentReportedPlatform(value)
+		switch normalized {
+		case platformsupport.RuntimePlatformWindows,
+			platformsupport.RuntimePlatformMacOS,
+			platformsupport.RuntimePlatformFreeBSD,
+			platformsupport.RuntimePlatformLinux:
+			return normalized, true
+		}
+		if knownLinuxAgentPlatform(normalized) {
+			return platformsupport.RuntimePlatformLinux, true
+		}
+	}
+	return "", false
+}
+
+func knownLinuxAgentPlatform(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	for _, token := range []string{
+		"almalinux", "alpine", "amazon linux", "arch", "centos", "debian",
+		"fedora", "gentoo", "linux", "nixos", "opensuse", "oracle linux",
+		"proxmox", "qnap", "raspbian", "red hat", "rhel", "rocky", "suse",
+		"synology", "ubuntu", "unraid",
+	} {
+		if value == token || strings.Contains(value, token+" ") || strings.Contains(value, token+"-") {
+			return true
+		}
+	}
+	return false
+}
+
+func machineIDFingerprint(machineID string) string {
+	machineID = strings.TrimSpace(machineID)
+	if machineID == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(machineID))
+	return "sha256:" + hex.EncodeToString(digest[:8])
+}
+
+func safeDiagnosticInterfaceAddresses(interfaces []models.HostNetworkInterface) []string {
+	const maxAddresses = 32
+	set := make(map[string]struct{})
+	for _, iface := range interfaces {
+		for _, value := range iface.Addresses {
+			if normalized := safeDiagnosticIPAddress(value); normalized != "" {
+				set[normalized] = struct{}{}
+			}
+		}
+	}
+	addresses := make([]string, 0, len(set))
+	for value := range set {
+		addresses = append(addresses, value)
+	}
+	sort.Strings(addresses)
+	if len(addresses) > maxAddresses {
+		addresses = addresses[:maxAddresses]
+	}
+	return addresses
+}
+
+func safeDiagnosticIPAddress(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if address, err := netip.ParseAddr(value); err == nil {
+		return address.String()
+	}
+	if prefix, err := netip.ParsePrefix(value); err == nil {
+		return prefix.String()
+	}
+	return ""
+}
+
+func updateStatusEvidence(update *models.AgentUpdateStatus) []string {
+	if update == nil {
+		return nil
+	}
+	evidence := nonEmptyStrings("Updater state: " + strings.TrimSpace(update.State))
+	if update.LastCheckedAt != nil {
+		evidence = append(evidence, "Last checked: "+update.LastCheckedAt.UTC().Format(time.RFC3339))
+	}
+	if update.LastAttemptAt != nil {
+		evidence = append(evidence, "Last attempted: "+update.LastAttemptAt.UTC().Format(time.RFC3339))
+	}
+	if lastError := safeDiagnosticError(update.LastError); lastError != "" {
+		evidence = append(evidence, "Last error: "+lastError)
+	}
+	return evidence
+}
+
+func moduleStatusEvidence(module models.AgentModuleStatus) []string {
+	evidence := nonEmptyStrings(
+		"Module: "+strings.TrimSpace(module.Name),
+		"Module state: "+strings.TrimSpace(module.State),
+	)
+	if !module.UpdatedAt.IsZero() {
+		evidence = append(evidence, "Updated at: "+module.UpdatedAt.UTC().Format(time.RFC3339))
+	}
+	if lastError := safeDiagnosticError(module.LastError); lastError != "" {
+		evidence = append(evidence, "Last error: "+lastError)
+	}
+	return evidence
+}
+
+func safeDiagnosticError(value string) string {
+	const maxErrorLength = 512
+	value = strings.TrimSpace(unifiedresources.RedactAuditText(value))
+	runes := []rune(value)
+	if len(runes) > maxErrorLength {
+		value = string(runes[:maxErrorLength]) + "..."
+	}
+	return value
+}
+
+func cloneFleetDiagnosticTime(value *time.Time) *time.Time {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+	cloned := value.UTC()
+	return &cloned
 }
 
 func diagnoseAgentIdentitySplit(subject agentFleetSubject, state models.StateSnapshot) []AgentFleetDiagnosticReason {
@@ -618,7 +1004,7 @@ func identitySplitReason(peerType, peerID, peerAgentID, peerTokenID string) Agen
 		evidence = append(evidence, "Peer agent ID: "+peerAgentID)
 	}
 	if peerTokenID != "" {
-		evidence = append(evidence, "Peer token ID: "+peerTokenID)
+		evidence = append(evidence, "Peer shares the reporting token binding")
 	}
 	return AgentFleetDiagnosticReason{
 		Code:     "agent_identity_split",

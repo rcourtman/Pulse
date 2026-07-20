@@ -25,8 +25,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.',
   },
   'system-updates': {
-    title: 'Updates',
-    description: 'Manage version checks, update channels, and automatic update behavior.',
+    title: 'Pulse server updates',
+    description:
+      'Manage Pulse server runtime version checks, update channels, and automatic updates. Agent updates stay under Infrastructure.',
   },
   'system-recovery': {
     title: 'Recovery',

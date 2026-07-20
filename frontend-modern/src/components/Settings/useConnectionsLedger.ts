@@ -164,7 +164,9 @@ const sourceFor = (connections: readonly Connection[]): InfrastructureSourceKind
 
 const agentUpdateCountFor = (connections: readonly Connection[]): number =>
   connections.filter(
-    (connection) => connection.type === 'agent' && Boolean(connection.agentUpdateAvailable),
+    (connection) =>
+      connection.type === 'agent' &&
+      (Boolean(connection.agentUpdateAvailable) || connection.fleet?.versionDrift === 'behind'),
   ).length;
 
 const moreSevereState = (
@@ -222,6 +224,8 @@ const connectionRowSignature = (connection: Connection): string =>
     agentVersion: connection.agentVersion,
     expectedAgentVersion: connection.expectedAgentVersion,
     agentUpdateAvailable: connection.agentUpdateAvailable,
+    agentUpdate: connection.agentUpdate,
+    agentModules: connection.agentModules,
     agentIdentity: connection.agentIdentity,
     hostAliases: connection.hostAliases,
     fleet: connection.fleet,

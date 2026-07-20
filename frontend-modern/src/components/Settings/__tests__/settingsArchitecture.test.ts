@@ -307,6 +307,15 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps Pulse server updates separate from Agent Doctor lifecycle triage', () => {
+    const updatesNavBlock = settingsNavCatalogSource.match(
+      /id: 'system-updates',[\s\S]*?id: 'system-recovery',/,
+    );
+    expect(updatesNavBlock?.[0]).toContain("label: 'Pulse server updates'");
+    expect(settingsHeaderMetaSource).toContain("title: 'Pulse server updates'");
+    expect(settingsNavCatalogSource).not.toContain("label: 'Agent Doctor'");
+  });
+
   it('keeps resource privacy route-backed instead of sidebar-promoted', () => {
     expect(settingsNavCatalogSource).toMatch(
       /id: 'security-data-handling',[\s\S]*label: 'Resource Privacy',[\s\S]*hideFromSidebar: true/,

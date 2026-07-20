@@ -33,16 +33,18 @@ import {
 } from './connectionsTableModel';
 import {
   buildInfrastructureOnboardingPath,
+  buildInfrastructureAgentDoctorPath,
   buildInfrastructureWorkspacePath,
-  deriveAgentUpdateScopeFromLocation,
-  deriveAgentUpdatesFromLocation,
+  deriveAgentDoctorScopeFromLocation,
+  deriveAgentDoctorFromLocation,
   deriveAddStepFromLocation,
   type InfrastructureAddStep,
   type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
-import { collectInfrastructureAgentUpdateTargets } from './infrastructureAgentUpdateCommandsModel';
+import { collectInfrastructureAgentDoctorTargets } from './infrastructureAgentUpdateCommandsModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useConnectionsLedger } from './useConnectionsLedger';
+import { useAgentFleetDiagnostics } from './useAgentFleetDiagnostics';
 import { useConnectionRowActions } from './useConnectionRowActions';
 import {
   InfrastructureOperationsStateProvider,
@@ -133,15 +135,16 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (readOnly()) return null;
     return deriveAddStepFromLocation(location.pathname, location.search ?? '');
   });
-  const showAgentUpdateCommands = createMemo(
+  const showAgentDoctor = createMemo(
     () =>
       !readOnly() &&
-      deriveAgentUpdatesFromLocation(location.pathname, location.search ?? '') &&
+      deriveAgentDoctorFromLocation(location.pathname, location.search ?? '') &&
       routeStep() === null,
   );
-  const agentUpdateScope = createMemo(() =>
-    deriveAgentUpdateScopeFromLocation(location.pathname, location.search ?? ''),
+  const agentDoctorScope = createMemo(() =>
+    deriveAgentDoctorScopeFromLocation(location.pathname, location.search ?? ''),
   );
+  const agentDiagnostics = useAgentFleetDiagnostics(showAgentDoctor);
   const activeAddType = createMemo<ConnectionType | null>(() => {
     const step = routeStep();
     if (!step || step === 'pick' || step === 'detect') return null;
@@ -189,12 +192,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const rows = createMemo(() => ledger.rows());
-  const agentUpdateTargets = createMemo(() =>
-    collectInfrastructureAgentUpdateTargets(
-      rows(),
-      updateStore.versionInfo()?.agentUpdateTargetVersion,
-      agentUpdateScope(),
-    ),
+  const agentDoctorTargets = createMemo(() =>
+    collectInfrastructureAgentDoctorTargets({
+      rows: rows(),
+      connections: ledger.connections(),
+      diagnostics: agentDiagnostics.data().agents,
+      diagnosticsAvailable: agentDiagnostics.resolvedOnce() && !agentDiagnostics.error(),
+      targetVersion: updateStore.versionInfo()?.agentUpdateTargetVersion,
+      scopedAgentIds: agentDoctorScope(),
+    }),
   );
   const visibleDiscoveredNodes = createMemo(() =>
     filterRepresentedDiscoveredServers(
@@ -254,8 +260,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     navigateToWorkspace(Boolean(routeStep()));
   };
 
-  const closeAgentUpdateCommands = () => {
-    navigateToWorkspace(Boolean(showAgentUpdateCommands()));
+  const closeAgentDoctor = () => {
+    navigateToWorkspace(Boolean(showAgentDoctor()));
   };
 
   const closeEditFlow = () => {
@@ -906,6 +912,12 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         }
         onOpenDiscoverySettings={readOnly() ? undefined : () => setShowDiscoverySettings(true)}
         onOpenConnection={readOnly() ? undefined : (row) => setEditingRow(row)}
+        onOpenAgentDoctor={
+          readOnly()
+            ? undefined
+            : (agentIds = []) =>
+                navigate(buildInfrastructureAgentDoctorPath(agentIds), { scroll: false })
+        }
         onReviewDiscoveredSource={
           readOnly() ? undefined : (server) => reviewDiscoveredSource(server)
         }
@@ -934,11 +946,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         discoverySubnetInputRef={props.discoverySubnetInputRef}
       />
 
-      <Show when={showAgentUpdateCommands()}>
+      <Show when={showAgentDoctor()}>
         <InfrastructureAgentUpdatesDialog
           isOpen={true}
-          targets={agentUpdateTargets()}
-          onClose={closeAgentUpdateCommands}
+          targets={agentDoctorTargets()}
+          diagnosticsLoading={agentDiagnostics.loading()}
+          diagnosticsError={agentDiagnostics.error()}
+          onRetryDiagnostics={() => void agentDiagnostics.reload()}
+          onClose={closeAgentDoctor}
         />
       </Show>
 

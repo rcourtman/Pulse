@@ -1123,6 +1123,8 @@
         "frontend-modern/src/components/Settings/connectionsTableModel.ts",
         "frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx",
         "frontend-modern/src/components/Settings/discoverySettingsModel.ts",
+        "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts",
+        "frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx",
         "frontend-modern/src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx",
         "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
@@ -1138,6 +1140,7 @@
         "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/proxmoxSettingsModel.ts",
+        "frontend-modern/src/components/Settings/useAgentFleetDiagnostics.ts",
         "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
         "frontend-modern/src/components/Settings/useConnectionRowActions.ts",
         "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
@@ -1470,6 +1473,29 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPanel.guardrails.test.ts"
+            ]
+          },
+          {
+            "id": "agent-doctor-settings-surface",
+            "label": "Agent Doctor lifecycle and safe update-handoff proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts",
+              "frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx",
+              "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+              "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+              "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
+              "frontend-modern/src/components/Settings/useAgentFleetDiagnostics.ts",
+              "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/infrastructureAgentDoctorModel.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/infrastructureWorkspaceModel.test.ts"
             ]
           },
           {
@@ -2590,6 +2616,27 @@
               "frontend-modern/src/types/recovery.ts",
               "internal/api/recovery_handlers_test.go",
               "internal/api/route_inventory_test.go"
+            ]
+          },
+          {
+            "id": "agent-doctor-api-surface",
+            "label": "Agent Doctor diagnostics payload and consumer proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentDiagnostics.ts",
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
+              "internal/api/agent_fleet_doctor.go",
+              "internal/api/connections_aggregator.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentDiagnostics.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/infrastructureAgentDoctorModel.test.ts",
+              "internal/api/agent_fleet_doctor_test.go",
+              "internal/api/connections_aggregator_test.go",
+              "internal/api/contract_test.go",
+              "internal/api/update_readiness_test.go"
             ]
           },
           {
@@ -4446,6 +4493,21 @@
             ]
           },
           {
+            "id": "agent-doctor-settings-framing",
+            "label": "Agent Doctor settings framing and diagnostic handoff proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
+              "frontend-modern/src/components/Settings/settingsHeaderMeta.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/DiagnosticsResultsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsHeaderMeta.branchcov0713.test.ts"
+            ]
+          },
+          {
             "id": "settings-shell-and-framing",
             "label": "settings shell framing proof",
             "match_prefixes": [],
@@ -4893,6 +4955,7 @@
       "lane": "L13",
       "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
       "owned_prefixes": [
+        "internal/fleethealth/",
         "internal/monitoring/",
         "internal/storagehealth/",
         "internal/truenas/",
@@ -5243,6 +5306,25 @@
               "internal/monitoring/issue1595_collection_trust_test.go",
               "pkg/diskinventory/identity_test.go",
               "pkg/diskinventory/status_test.go"
+            ]
+          },
+          {
+            "id": "agent-fleet-diagnostics-runtime",
+            "label": "Agent fleet liveness, update, identity, and redaction proof",
+            "match_prefixes": [
+              "internal/fleethealth/"
+            ],
+            "match_files": [
+              "internal/monitoring/agent_fleet_doctor.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/agent_fleet_doctor_test.go",
+              "internal/api/connections_aggregator_test.go",
+              "internal/fleethealth/agent_test.go",
+              "internal/monitoring/agent_fleet_doctor_test.go",
+              "internal/monitoring/monitoring_fleet_doctor_helpers_branchcov0716_test.go"
             ]
           },
           {
