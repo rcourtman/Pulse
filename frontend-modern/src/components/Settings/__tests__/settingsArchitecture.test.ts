@@ -1060,7 +1060,9 @@ describe('settings architecture guardrails', () => {
       'Manage appearance, layout, and default monitoring cadence.',
     );
     expect(normalize(generalSettingsPanelSource)).not.toContain('Dashboard, Infrastructure');
-    expect(normalize(networkBoundarySettingsSectionSource)).toContain('Pulse URL for Notifications');
+    expect(normalize(networkBoundarySettingsSectionSource)).toContain(
+      'Pulse URL for Notifications',
+    );
     expect(normalize(networkBoundarySettingsSectionSource)).not.toContain(
       'Dashboard URL for Notifications',
     );

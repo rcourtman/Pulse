@@ -74,21 +74,17 @@ describe('alerts helpers — branch coverage (batch 2)', () => {
     });
 
     it('falls back to UTC when the resolved timezone is empty', () => {
-      const spy = vi
-        .spyOn(Intl, 'DateTimeFormat')
-        .mockImplementation((() => ({
-          resolvedOptions: () => ({ timeZone: '' }),
-        })) as unknown as typeof Intl.DateTimeFormat);
+      const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((() => ({
+        resolvedOptions: () => ({ timeZone: '' }),
+      })) as unknown as typeof Intl.DateTimeFormat);
       expect(getLocalTimezone()).toBe('UTC');
       spy.mockRestore();
     });
 
     it('returns the resolved IANA timezone when one is available', () => {
-      const spy = vi
-        .spyOn(Intl, 'DateTimeFormat')
-        .mockImplementation((() => ({
-          resolvedOptions: () => ({ timeZone: 'Australia/Sydney' }),
-        })) as unknown as typeof Intl.DateTimeFormat);
+      const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((() => ({
+        resolvedOptions: () => ({ timeZone: 'Australia/Sydney' }),
+      })) as unknown as typeof Intl.DateTimeFormat);
       expect(getLocalTimezone()).toBe('Australia/Sydney');
       spy.mockRestore();
     });
