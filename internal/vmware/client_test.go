@@ -371,6 +371,81 @@ func TestClientResolveVIJSONReleaseFallsBackToSupportedProbeFloor(t *testing.T) 
 	}
 }
 
+// Issue #1596: vCenter 8.0.3 answers the newer 9.0.0.0 release path with
+// HTTP 500 rather than 404. The negotiation must fall through to the next
+// release instead of aborting on the first probe.
+func TestClientResolveVIJSONReleaseFallsThroughServerErrorProbe(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/ServiceInstance/ServiceInstance/content", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/sdk/vim25/8.0.3/ServiceInstance/ServiceInstance/content", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"sessionManager": map[string]any{"value": "SessionManager"},
+			"perfManager":    map[string]any{"value": "PerformanceManager"},
+			"eventManager":   map[string]any{"value": "EventManager"},
+		}); err != nil {
+			t.Fatalf("encode service content: %v", err)
+		}
+	})
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	release, refs, err := client.resolveVIJSONRelease(context.Background())
+	if err != nil {
+		t.Fatalf("resolveVIJSONRelease: %v", err)
+	}
+	if release != "8.0.3" {
+		t.Fatalf("release = %q, want 8.0.3", release)
+	}
+	if refs.SessionManagerMoID != "SessionManager" {
+		t.Fatalf("unexpected refs: %+v", refs)
+	}
+}
+
+// Auth failures on the probe must still abort immediately: retrying other
+// release strings cannot fix credentials.
+func TestClientResolveVIJSONReleaseAbortsOnAuthProbe(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	})
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, _, err = client.resolveVIJSONRelease(context.Background())
+	connectionErr, ok := err.(*ConnectionError)
+	if !ok {
+		t.Fatalf("expected ConnectionError, got %T (%v)", err, err)
+	}
+	if connectionErr.Category != "auth" {
+		t.Fatalf("connection error category = %q, want auth", connectionErr.Category)
+	}
+}
+
 func TestClientResolveVIJSONReleaseClassifiesUnsupportedVersionFloor(t *testing.T) {
 	server := httptest.NewTLSServer(http.NewServeMux())
 	defer server.Close()

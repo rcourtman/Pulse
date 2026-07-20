@@ -422,7 +422,7 @@ func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, viJSONServic
 			return release, refs, nil
 		}
 		lastErr = err
-		if !isVIJSONNotFound(err) {
+		if !isVIJSONReleaseProbeRetryable(err) {
 			return "", viJSONServiceContentRefs{}, err
 		}
 	}
@@ -444,6 +444,26 @@ func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, viJSONServic
 			"VMware vCenter version is outside the implemented VI JSON probe floor; Pulse currently probes %s",
 			strings.Join(supportedVIJSONReleases, ", "),
 		),
+	}
+}
+
+// isVIJSONReleaseProbeRetryable reports whether a failed service-content probe
+// for one vim25 release string should fall through to the next release in the
+// list. vCenter answers a newer-than-supported release path with 404 on some
+// builds and HTTP 500 on others (8.0.x returns 500 for the 9.0.0.0 path), so
+// both "not_found" and generic endpoint failures continue the negotiation.
+// Auth, permission, TLS, and network errors abort: they will not change with a
+// different release string.
+func isVIJSONReleaseProbeRetryable(err error) bool {
+	connectionErr, ok := err.(*ConnectionError)
+	if !ok {
+		return false
+	}
+	switch connectionErr.Category {
+	case "not_found", "endpoint":
+		return true
+	default:
+		return false
 	}
 }
 
