@@ -238,6 +238,7 @@ type NotificationManager struct {
 	cooldown           time.Duration
 	notifyOnResolve    bool
 	lastNotified       map[string]notificationRecord
+	deliveryReceipts   map[string]struct{}
 	groupWindow        time.Duration
 	pendingAlerts      []*alerts.Alert
 	groupTimer         *time.Timer
@@ -686,11 +687,12 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 	}
 
 	nm := &NotificationManager{
-		enabled:         true,
-		cooldown:        5 * time.Minute,
-		notifyOnResolve: true,
-		lastNotified:    make(map[string]notificationRecord),
-		webhooks:        []WebhookConfig{},
+		enabled:          true,
+		cooldown:         5 * time.Minute,
+		notifyOnResolve:  true,
+		lastNotified:     make(map[string]notificationRecord),
+		deliveryReceipts: make(map[string]struct{}),
+		webhooks:         []WebhookConfig{},
 		appriseConfig: AppriseConfig{
 			Enabled:        false,
 			Mode:           AppriseModeCLI,
@@ -1075,13 +1077,14 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 			time.Time{},
 			options.target,
 		)
+		if len(jobs) == 0 {
+			n.markAlertsNotified(alertsToSend, time.Now())
+			return
+		}
 		if queue != nil {
-			if anyFailed := n.enqueueNotificationJobs(queue, jobs); anyFailed {
-				n.markAlertsNotified(alertsToSend, time.Now())
-			}
+			n.enqueueNotificationJobs(queue, jobs)
 		} else {
 			n.dispatchNotificationJobsAsync(jobs)
-			n.markAlertsNotified(alertsToSend, time.Now())
 		}
 		return
 	}
@@ -1128,6 +1131,155 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 	n.mu.Unlock()
 }
 
+func notificationDeliveryDestinationKey(job notificationDeliveryJob) string {
+	var identity string
+	switch job.Type {
+	case "email":
+		if job.EmailConfig == nil {
+			return ""
+		}
+		recipients := append([]string(nil), job.EmailConfig.To...)
+		if len(recipients) == 0 && strings.TrimSpace(job.EmailConfig.From) != "" {
+			recipients = append(recipients, job.EmailConfig.From)
+		}
+		for i := range recipients {
+			recipients[i] = strings.ToLower(strings.TrimSpace(recipients[i]))
+		}
+		sort.Strings(recipients)
+		identity = strings.Join(recipients, "\x1f")
+	case "webhook":
+		if job.WebhookConfig == nil {
+			return ""
+		}
+		// Include both the logical configuration ID and the actual endpoint.
+		// Reusing an ID after changing its URL must not send a recovery to an
+		// endpoint that never received the firing occurrence.
+		webhookID := strings.TrimSpace(job.WebhookConfig.ID)
+		webhookURL := strings.TrimSpace(job.WebhookConfig.URL)
+		if webhookID == "" && webhookURL == "" {
+			return ""
+		}
+		identity = strings.Join([]string{webhookID, webhookURL}, "\x1f")
+	case "apprise":
+		if job.AppriseConfig == nil {
+			return ""
+		}
+		targets := append([]string(nil), job.AppriseConfig.Targets...)
+		for i := range targets {
+			targets[i] = strings.TrimSpace(targets[i])
+		}
+		sort.Strings(targets)
+		identity = strings.Join([]string{
+			string(job.AppriseConfig.Mode),
+			strings.TrimSpace(job.AppriseConfig.ServerURL),
+			strings.TrimSpace(job.AppriseConfig.ConfigKey),
+			strings.Join(targets, "\x1f"),
+		}, "\x1e")
+	default:
+		return ""
+	}
+	if identity == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(job.Type + "\x00" + identity))
+	return job.Type + ":" + hex.EncodeToString(digest[:16])
+}
+
+func notificationDeliveryReceiptKey(alert *alerts.Alert, destinationKey string) string {
+	if alert == nil || alert.ID == "" || alert.StartTime.IsZero() || destinationKey == "" {
+		return ""
+	}
+	return alert.ID + "\x00" + strconv.FormatInt(alert.StartTime.UnixNano(), 10) + "\x00" + destinationKey
+}
+
+func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJob, deliveredAt time.Time) {
+	destinationKey := notificationDeliveryDestinationKey(job)
+	if destinationKey == "" {
+		return
+	}
+	queue := n.GetQueue()
+	for _, alert := range job.Alerts {
+		if alert == nil || alert.StartTime.IsZero() {
+			continue
+		}
+		if queue != nil {
+			var err error
+			if job.Event == eventResolved {
+				err = queue.DeleteDeliveryReceipt(alert.ID, alert.StartTime, destinationKey)
+			} else {
+				err = queue.RecordDeliveryReceipt(alert.ID, alert.StartTime, destinationKey, deliveredAt)
+			}
+			if err != nil {
+				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Failed to update notification delivery receipt")
+			}
+			continue
+		}
+
+		key := notificationDeliveryReceiptKey(alert, destinationKey)
+		if key == "" {
+			continue
+		}
+		n.mu.Lock()
+		if n.deliveryReceipts == nil {
+			n.deliveryReceipts = make(map[string]struct{})
+		}
+		if job.Event == eventResolved {
+			delete(n.deliveryReceipts, key)
+		} else {
+			n.deliveryReceipts[key] = struct{}{}
+		}
+		n.mu.Unlock()
+	}
+	if job.Event == eventAlert {
+		// Publish the cooldown/delivered marker only after the per-destination
+		// receipts are durable. Resolution can race the delivery goroutine and
+		// uses this marker as proof that receipt recording has completed.
+		n.markAlertsNotified(job.Alerts, deliveredAt)
+	}
+}
+
+func (n *NotificationManager) filterResolvedJobsByDeliveryReceipt(jobs []notificationDeliveryJob) []notificationDeliveryJob {
+	queue := n.GetQueue()
+	filtered := make([]notificationDeliveryJob, 0, len(jobs))
+	for _, job := range jobs {
+		destinationKey := notificationDeliveryDestinationKey(job)
+		if destinationKey == "" {
+			continue
+		}
+		eligibleAlerts := make([]*alerts.Alert, 0, len(job.Alerts))
+		for _, alert := range job.Alerts {
+			if alert == nil || alert.StartTime.IsZero() {
+				continue
+			}
+			eligible := false
+			if queue != nil {
+				var err error
+				eligible, err = queue.HasDeliveryReceipt(alert.ID, alert.StartTime, destinationKey)
+				if err != nil {
+					log.Error().Err(err).Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Failed to read notification delivery receipt; suppressing recovery")
+					continue
+				}
+			} else {
+				key := notificationDeliveryReceiptKey(alert, destinationKey)
+				n.mu.RLock()
+				_, eligible = n.deliveryReceipts[key]
+				n.mu.RUnlock()
+			}
+			if eligible {
+				eligibleAlerts = append(eligibleAlerts, alert)
+				continue
+			}
+			log.Debug().Str("alertID", alert.ID).Str("destination", destinationKey).Msg("Resolved notification suppressed because this destination did not receive the firing occurrence")
+		}
+		if len(eligibleAlerts) == 0 {
+			continue
+		}
+		job.Alerts = eligibleAlerts
+		filtered = append(filtered, job)
+	}
+	return filtered
+}
+
 // SendResolvedAlert delivers notifications for a resolved alert immediately.
 func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) {
 	if resolved == nil || resolved.Alert == nil {
@@ -1163,6 +1315,7 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 
 	alertsToSend := []*alerts.Alert{alertCopy}
 	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertsToSend, eventResolved, resolvedAt)
+	jobs = n.filterResolvedJobsByDeliveryReceipt(jobs)
 
 	if queue != nil {
 		n.enqueueNotificationJobs(queue, jobs)
@@ -1265,17 +1418,20 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	n.mu.Unlock()
 
 	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertsToSend, eventAlert, time.Time{})
+	if len(jobs) == 0 {
+		// Preserve cooldown semantics when notifications are globally enabled
+		// but no destination is configured. Delivery receipts remain empty, so
+		// a later recovery is still correctly suppressed.
+		n.markAlertsNotified(alertsToSend, time.Now())
+		return
+	}
 
 	// Use persistent queue if available, otherwise send directly
 	if queue != nil {
-		if anyFailed := n.enqueueNotificationJobs(queue, jobs); anyFailed {
-			n.markAlertsNotified(alertsToSend, time.Now())
-		}
+		n.enqueueNotificationJobs(queue, jobs)
 		// Note: Cooldown will be marked after successful dequeue and send
 	} else {
 		n.dispatchNotificationJobsAsync(jobs)
-		// For direct sends, mark cooldown immediately (fire-and-forget)
-		n.markAlertsNotified(alertsToSend, time.Now())
 	}
 }
 
@@ -1512,7 +1668,9 @@ func (n *NotificationManager) dispatchNotificationJobAsync(job notificationDeliv
 	spawnAsync(func() {
 		if err := n.deliverNotificationJob(job); err != nil {
 			n.logNotificationJobError(job, err, failureMessage)
+			return
 		}
+		n.recordSuccessfulDelivery(job, time.Now())
 	})
 }
 
@@ -3469,7 +3627,10 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		Int("alertCount", len(notif.Alerts)).
 		Msg("processing queued notification")
 
-	var err error
+	var (
+		err          error
+		deliveredJob notificationDeliveryJob
+	)
 	switch baseType {
 	case "email":
 		var emailConfig EmailConfig
@@ -3485,13 +3646,14 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 				Msg("skipping queued email notification because email delivery is disabled")
 			return nil
 		}
-		err = n.deliverNotificationJob(notificationDeliveryJob{
+		deliveredJob = notificationDeliveryJob{
 			Type:        "email",
 			Event:       event,
 			Alerts:      notif.Alerts,
 			ResolvedAt:  resolvedTimeFromAlerts(notif.Alerts),
 			EmailConfig: &emailConfig,
-		})
+		}
+		err = n.deliverNotificationJob(deliveredJob)
 
 	case "webhook":
 		var webhookConfig WebhookConfig
@@ -3507,13 +3669,14 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 				Msg("skipping queued webhook notification because delivery is disabled")
 			return nil
 		}
-		err = n.deliverNotificationJob(notificationDeliveryJob{
+		deliveredJob = notificationDeliveryJob{
 			Type:          "webhook",
 			Event:         event,
 			Alerts:        notif.Alerts,
 			ResolvedAt:    resolvedTimeFromAlerts(notif.Alerts),
 			WebhookConfig: &webhookConfig,
-		})
+		}
+		err = n.deliverNotificationJob(deliveredJob)
 
 	case "apprise":
 		var appriseConfig AppriseConfig
@@ -3529,21 +3692,21 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 				Msg("skipping queued Apprise notification because delivery is disabled")
 			return nil
 		}
-		err = n.deliverNotificationJob(notificationDeliveryJob{
+		deliveredJob = notificationDeliveryJob{
 			Type:          "apprise",
 			Event:         event,
 			Alerts:        notif.Alerts,
 			ResolvedAt:    resolvedTimeFromAlerts(notif.Alerts),
 			AppriseConfig: &appriseConfig,
-		})
+		}
+		err = n.deliverNotificationJob(deliveredJob)
 
 	default:
 		return fmt.Errorf("unknown notification type: %s", baseType)
 	}
 
-	// Mark cooldown after successful send for active alerts only
-	if err == nil && event == eventAlert {
-		n.markAlertsNotified(notif.Alerts, time.Now())
+	if err == nil {
+		n.recordSuccessfulDelivery(deliveredJob, time.Now())
 	}
 
 	if err != nil {

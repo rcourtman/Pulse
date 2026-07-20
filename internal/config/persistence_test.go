@@ -589,8 +589,8 @@ func TestExportConfigIncludesAPITokens(t *testing.T) {
 
 	decoded := mustDecodeExport(t, exported, passphrase)
 
-	if decoded.Version != "4.2" {
-		t.Fatalf("expected export version 4.2, got %q", decoded.Version)
+	if decoded.Version != "4.3" {
+		t.Fatalf("expected export version 4.3, got %q", decoded.Version)
 	}
 
 	assertJSONEqual(t, decoded.APITokens, tokens, "api tokens")

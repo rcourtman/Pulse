@@ -750,6 +750,126 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 }
 
+func TestProcessNotificationReloadsAlertsAfterCancellationRewrite(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(time.Hour)
+	queued := &QueuedNotification{
+		ID: "notif-rewritten-before-claim", Type: "webhook", Status: QueueStatusPending,
+		MaxAttempts: 3, Config: []byte(`{}`), NextRetryAt: &futureRetry,
+		Alerts: []*alerts.Alert{{ID: "alert-1"}, {ID: "alert-2"}},
+	}
+	if err := nq.Enqueue(queued); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	// Model a worker snapshot returned by GetPending before resolution rewrites
+	// the durable grouped row.
+	workerSnapshot := *queued
+	workerSnapshot.Alerts = append([]*alerts.Alert(nil), queued.Alerts...)
+	if count, err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+		t.Fatalf("CancelByAlertIdentifiers: %v", err)
+	} else if count != 1 {
+		t.Fatalf("cancelled alert count = %d, want 1", count)
+	}
+
+	var delivered []string
+	nq.SetProcessor(func(notif *QueuedNotification) error {
+		for _, alert := range notif.Alerts {
+			if alert != nil {
+				delivered = append(delivered, alert.ID)
+			}
+		}
+		return nil
+	})
+	nq.processNotification(&workerSnapshot)
+
+	if len(delivered) != 1 || delivered[0] != "alert-2" {
+		t.Fatalf("delivered alerts = %v, want only alert-2", delivered)
+	}
+}
+
+func TestCancelByAlertIdentifiersWaitsForInFlightDelivery(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(time.Hour)
+	queued := &QueuedNotification{
+		ID: "notif-in-flight", Type: "webhook", Status: QueueStatusPending,
+		MaxAttempts: 3, Config: []byte(`{}`), NextRetryAt: &futureRetry,
+		Alerts: []*alerts.Alert{{ID: "alert-1"}},
+	}
+	if err := nq.Enqueue(queued); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	nq.SetProcessor(func(*QueuedNotification) error {
+		close(started)
+		<-release
+		return nil
+	})
+	processed := make(chan struct{})
+	go func() {
+		nq.processNotification(queued)
+		close(processed)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("delivery did not start")
+	}
+
+	cancelled := make(chan int, 1)
+	cancelErr := make(chan error, 1)
+	go func() {
+		count, err := nq.CancelByAlertIdentifiers([]string{"alert-1"})
+		cancelled <- count
+		cancelErr <- err
+	}()
+	select {
+	case count := <-cancelled:
+		close(release)
+		t.Fatalf("cancellation returned before in-flight delivery completed: %d", count)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case <-processed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("delivery did not finish")
+	}
+	select {
+	case err := <-cancelErr:
+		if err != nil {
+			t.Fatalf("CancelByAlertIdentifiers: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancellation did not finish")
+	}
+	if count := <-cancelled; count != 0 {
+		t.Fatalf("cancelled alert count = %d, want 0 after delivery", count)
+	}
+
+	var status string
+	if err := nq.db.QueryRow(`SELECT status FROM notification_queue WHERE id = ?`, queued.ID).Scan(&status); err != nil {
+		t.Fatalf("read notification status: %v", err)
+	}
+	if status != string(QueueStatusSent) {
+		t.Fatalf("status = %q, want %q", status, QueueStatusSent)
+	}
+}
+
 func TestCancelByAlertIdentifiers_SendingRowsCancelledButNotCounted(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)

@@ -23,6 +23,7 @@ type guestSnapshot struct {
 	Node     string
 	Instance string
 	Status   string
+	Lock     string
 
 	CPUPercent float64
 	MemUsage   float64
@@ -98,6 +99,7 @@ func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 		Node:       vm.Node,
 		Instance:   vm.Instance,
 		Status:     vm.Status,
+		Lock:       vm.Lock,
 		CPUPercent: vm.CPU * 100,
 		MemUsage:   vm.Memory.Usage,
 		DiskUsage:  vm.Disk.Usage,
@@ -120,6 +122,7 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		Node:       container.Node,
 		Instance:   container.Instance,
 		Status:     container.Status,
+		Lock:       container.Lock,
 		CPUPercent: container.CPU * 100,
 		MemUsage:   container.Memory.Usage,
 		DiskUsage:  container.Disk.Usage,

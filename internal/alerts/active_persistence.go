@@ -117,6 +117,9 @@ func (m *Manager) SaveActiveAlerts() error {
 	if err := os.Chmod(finalFile, alertsFilePerm); err != nil {
 		return fmt.Errorf("failed to set active alerts file permissions: %w", err)
 	}
+	if err := m.saveIntentPendingSnapshot(); err != nil {
+		return err
+	}
 
 	log.Debug().Int("count", len(alerts)).Msg("saved active alerts to disk")
 	return nil
@@ -132,7 +135,7 @@ func (m *Manager) LoadActiveAlerts() error {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			log.Info().Msg("No active alerts file found, starting fresh")
-			return nil
+			return m.loadIntentPendingNoLock()
 		}
 		return fmt.Errorf("failed to read active alerts: %w", err)
 	}
@@ -259,6 +262,9 @@ func (m *Manager) LoadActiveAlerts() error {
 				}
 			}(alertCopy)
 		}
+	}
+	if err := m.loadIntentPendingNoLock(); err != nil {
+		return err
 	}
 
 	log.Info().

@@ -29,6 +29,7 @@ type AvailabilityProbeStatus struct {
 	TargetKind          string    `json:"targetKind,omitempty"`
 	Address             string    `json:"address"`
 	Protocol            string    `json:"protocol"`
+	Outcome             string    `json:"outcome,omitempty"`
 	Enabled             bool      `json:"enabled"`
 	Available           bool      `json:"available"`
 	LastChecked         time.Time `json:"lastChecked,omitempty"`
@@ -38,6 +39,14 @@ type AvailabilityProbeStatus struct {
 	LastError           string    `json:"lastError,omitempty"`
 	FailureThreshold    int       `json:"failureThreshold,omitempty"`
 }
+
+type AvailabilityProbeOutcome string
+
+const (
+	AvailabilityProbeReachable     AvailabilityProbeOutcome = "reachable"
+	AvailabilityProbeUnreachable   AvailabilityProbeOutcome = "unreachable"
+	AvailabilityProbeIndeterminate AvailabilityProbeOutcome = "indeterminate"
+)
 
 type availabilityPollProvider struct{}
 
@@ -255,10 +264,10 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) {
 	target = config.NormalizeAvailabilityTarget(target)
 	start := time.Now()
-	err := ProbeAvailabilityTarget(ctx, target)
+	outcome, err := ProbeAvailabilityTargetResult(ctx, target)
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.setAvailabilityStatus(target, checkedAt, latency, err)
+	m.setAvailabilityStatus(target, checkedAt, latency, outcome, err)
 
 	if err == nil {
 		if m.stalenessTracker != nil {
@@ -275,11 +284,12 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 	m.updateResourceStore(m.GetState())
 }
 
-func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checkedAt time.Time, latency time.Duration, probeErr error) {
+func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checkedAt time.Time, latency time.Duration, outcome AvailabilityProbeOutcome, probeErr error) {
 	if m == nil {
 		return
 	}
 	status := availabilityStatusFromTarget(target)
+	status.Outcome = string(outcome)
 	status.LastChecked = checkedAt
 	latencyMs := latency.Milliseconds()
 	if probeErr == nil && latencyMs == 0 {
@@ -287,8 +297,13 @@ func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checke
 	}
 	status.LatencyMillis = latencyMs
 	if probeErr == nil {
-		status.Available = true
-		status.LastSuccess = checkedAt
+		// An open-or-filtered UDP timeout is healthy probe execution but does
+		// not prove endpoint reachability. Keep it non-failing without claiming
+		// the endpoint is available.
+		status.Available = outcome == AvailabilityProbeReachable
+		if outcome == AvailabilityProbeReachable {
+			status.LastSuccess = checkedAt
+		}
 	} else {
 		status.Available = false
 		status.LastError = probeErr.Error()
@@ -303,7 +318,9 @@ func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checke
 		if probeErr == nil {
 			status.ConsecutiveFailures = 0
 			status.LastError = ""
-			status.LastSuccess = checkedAt
+			if outcome == AvailabilityProbeReachable {
+				status.LastSuccess = checkedAt
+			}
 		} else {
 			status.ConsecutiveFailures = previous.ConsecutiveFailures + 1
 		}
@@ -316,9 +333,16 @@ func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checke
 
 // ProbeAvailabilityTarget executes one agentless availability check.
 func ProbeAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) error {
+	_, err := ProbeAvailabilityTargetResult(ctx, target)
+	return err
+}
+
+// ProbeAvailabilityTargetResult preserves UDP's open-or-filtered state rather
+// than incorrectly claiming that a silent UDP endpoint was proven reachable.
+func ProbeAvailabilityTargetResult(ctx context.Context, target config.AvailabilityTarget) (AvailabilityProbeOutcome, error) {
 	target = config.NormalizeAvailabilityTarget(target)
 	if err := target.Validate(); err != nil {
-		return err
+		return AvailabilityProbeUnreachable, err
 	}
 
 	timeout := time.Duration(target.EffectiveTimeoutMillis()) * time.Millisecond
@@ -330,14 +354,85 @@ func ProbeAvailabilityTarget(ctx context.Context, target config.AvailabilityTarg
 
 	switch target.Protocol {
 	case config.AvailabilityProbeICMP:
-		return probeICMP(probeCtx, target)
+		return outcomeFromProbeError(probeICMP(probeCtx, target))
 	case config.AvailabilityProbeTCP:
-		return probeTCP(probeCtx, target)
+		return outcomeFromProbeError(probeTCP(probeCtx, target))
+	case config.AvailabilityProbeUDP:
+		return probeUDP(probeCtx, target)
 	case config.AvailabilityProbeHTTP, config.AvailabilityProbeHTTPS:
-		return probeHTTP(probeCtx, target, timeout)
+		return outcomeFromProbeError(probeHTTP(probeCtx, target, timeout))
 	default:
-		return fmt.Errorf("unsupported availability protocol %q", target.Protocol)
+		return AvailabilityProbeUnreachable, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
 	}
+}
+
+func outcomeFromProbeError(err error) (AvailabilityProbeOutcome, error) {
+	if err != nil {
+		return AvailabilityProbeUnreachable, err
+	}
+	return AvailabilityProbeReachable, nil
+}
+
+func probeUDP(ctx context.Context, target config.AvailabilityTarget) (AvailabilityProbeOutcome, error) {
+	host := target.ProbeAddress()
+	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return AvailabilityProbeUnreachable, fmt.Errorf("resolve UDP availability target: %w", err)
+	}
+	var selected net.IP
+	for _, address := range addresses {
+		if address.IP == nil || address.IP.IsUnspecified() || address.IP.IsMulticast() || address.IP.Equal(net.IPv4bcast) {
+			continue
+		}
+		selected = address.IP
+		break
+	}
+	if selected == nil {
+		return AvailabilityProbeUnreachable, fmt.Errorf("UDP availability target did not resolve to an allowed unicast address")
+	}
+
+	dialer := net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "udp", net.JoinHostPort(selected.String(), strconv.Itoa(target.Port)))
+	if err != nil {
+		return AvailabilityProbeUnreachable, fmt.Errorf("UDP probe dial failed: %w", err)
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return AvailabilityProbeUnreachable, fmt.Errorf("set UDP probe deadline: %w", err)
+		}
+	}
+	payload := []byte(target.UDPRequest)
+	if len(payload) == 0 {
+		// A one-byte datagram gives the kernel an opportunity to surface an
+		// ICMP port-unreachable result in open-or-filtered mode.
+		payload = []byte{0}
+	}
+	if _, err := conn.Write(payload); err != nil {
+		return AvailabilityProbeUnreachable, fmt.Errorf("UDP probe write failed: %w", err)
+	}
+
+	response := make([]byte, 4096)
+	n, err := conn.Read(response)
+	if err == nil {
+		if target.UDPExpected != "" && string(response[:n]) != target.UDPExpected {
+			return AvailabilityProbeUnreachable, fmt.Errorf("UDP response did not match the expected payload")
+		}
+		return AvailabilityProbeReachable, nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if target.UDPMode == config.AvailabilityUDPOpenOrFiltered && ctxErr == context.DeadlineExceeded {
+			return AvailabilityProbeIndeterminate, nil
+		}
+		return AvailabilityProbeUnreachable, ctxErr
+	}
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		if target.UDPMode == config.AvailabilityUDPOpenOrFiltered {
+			return AvailabilityProbeIndeterminate, nil
+		}
+		return AvailabilityProbeUnreachable, fmt.Errorf("UDP probe timed out waiting for a response")
+	}
+	return AvailabilityProbeUnreachable, fmt.Errorf("UDP probe failed: %w", err)
 }
 
 func probeICMP(ctx context.Context, target config.AvailabilityTarget) error {
@@ -522,6 +617,8 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		TargetKind:          string(target.TargetKind),
 		Address:             target.Address,
 		Protocol:            string(target.Protocol),
+		ProbeOutcome:        status.Outcome,
+		UDPMode:             string(target.UDPMode),
 		Port:                target.Port,
 		Path:                target.Path,
 		Enabled:             target.Enabled,

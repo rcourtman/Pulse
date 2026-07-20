@@ -144,8 +144,21 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	triggered := alertspecsMetricTriggered(spec.MetricThreshold, value)
 	alertStartTime := observedAt
 	if !exists && triggered {
-		timeThreshold := m.getTimeThreshold(spec.ResourceID, resourceType, metricType)
-		if timeThreshold > 0 {
+		effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType))
+		if effectiveIntent.Explicit {
+			decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, true, BackupIntentContext{})
+			if pending, ok := m.intentPending[trackingKey]; ok && !pending.FirstMatchedAt.IsZero() {
+				alertStartTime = pending.FirstMatchedAt
+			}
+			if decision.StateChanged {
+				m.saveActiveAlertsAsync("canonical metric intent pending state")
+			}
+			if !decision.ShouldActivate {
+				return
+			}
+			delete(m.intentPending, trackingKey)
+			m.saveActiveAlertsAsync("canonical metric intent activated")
+		} else if timeThreshold := m.getTimeThreshold(spec.ResourceID, resourceType, metricType); timeThreshold > 0 {
 			if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {
 				if time.Since(pendingTime) >= time.Duration(timeThreshold)*time.Second {
 					delete(m.pendingAlerts, trackingKey)
@@ -171,6 +184,10 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	}
 
 	if !triggered {
+		decision := m.evaluateIntentNoLock(spec.ResourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, observedAt, false, BackupIntentContext{})
+		if decision.StateChanged {
+			m.saveActiveAlertsAsync("canonical metric intent cleared")
+		}
 		delete(m.pendingAlerts, trackingKey)
 	}
 

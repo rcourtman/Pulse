@@ -113,6 +113,53 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Availability failure thresholds establish that an incident exists;
+	// intent grace is a second, operator-controlled gate before activation.
+	// Track observed keys separately so a pending incident is not mistaken for
+	// a cleared condition when it is intentionally removed from desired.
+	observedAvailability := make(map[string]struct{})
+	intentStateChanged := false
+	for storageKey, alert := range desired {
+		if !isAvailabilityIncidentAlert(alert) {
+			continue
+		}
+		observedAvailability[storageKey] = struct{}{}
+		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && existing != nil {
+			if _, pending := m.intentPending[storageKey]; pending {
+				delete(m.intentPending, storageKey)
+				intentStateChanged = true
+			}
+			continue
+		}
+
+		decision := m.evaluateIntentNoLock(alert.ResourceID, alertMetadataString(alert, "resourceType"), string(AlertIntentSignalAvailability), storageKey, alert.LastSeen, true, BackupIntentContext{})
+		intentStateChanged = intentStateChanged || decision.StateChanged
+		if decision.Effective.Explicit && !decision.ShouldActivate {
+			delete(desired, storageKey)
+			continue
+		}
+		if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {
+			alert.StartTime = pending.FirstMatchedAt
+		}
+		if _, ok := m.intentPending[storageKey]; ok {
+			delete(m.intentPending, storageKey)
+			intentStateChanged = true
+		}
+	}
+	for storageKey, pending := range m.intentPending {
+		if pending.Signal != string(AlertIntentSignalAvailability) {
+			continue
+		}
+		if _, observed := observedAvailability[storageKey]; observed {
+			continue
+		}
+		delete(m.intentPending, storageKey)
+		intentStateChanged = true
+	}
+	if intentStateChanged {
+		m.saveActiveAlertsAsync("availability intent state")
+	}
+
 	for storageKey, alert := range m.activeAlerts {
 		if !strings.HasPrefix(storageKey, unifiedresources.CanonicalResourceID(alert.ResourceID)+canonicalStateSeparator+"alertspec:provider-incident:") {
 			continue
@@ -145,6 +192,18 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.historyManager.AddAlert(*alert)
 		m.dispatchAlert(alert, false)
 	}
+}
+
+func isAvailabilityIncidentAlert(alert *Alert) bool {
+	return alertMetadataString(alert, "incidentCode") == "availability_unreachable"
+}
+
+func alertMetadataString(alert *Alert, key string) string {
+	if alert == nil || alert.Metadata == nil {
+		return ""
+	}
+	value, _ := alert.Metadata[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func shouldSuppressCanonicalUnifiedIncidentSpec(spec alertspecs.ResourceAlertSpec, providerSpecsByResource map[string][]alertspecs.ResourceAlertSpec) bool {

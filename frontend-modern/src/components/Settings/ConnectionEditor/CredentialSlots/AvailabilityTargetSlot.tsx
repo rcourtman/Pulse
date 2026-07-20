@@ -15,6 +15,7 @@ import {
   type AvailabilityTarget,
   type AvailabilityTargetKind,
   type AvailabilityTestResponse,
+  type AvailabilityUDPMode,
 } from '@/api/availabilityTargets';
 import {
   AVAILABILITY_TARGET_PRESETS,
@@ -37,6 +38,9 @@ interface AvailabilityForm {
   protocol: AvailabilityProbeProtocol;
   port: string;
   path: string;
+  udpMode: AvailabilityUDPMode;
+  udpRequest: string;
+  udpExpectedResponse: string;
   linkedResourceId: string;
   enabled: boolean;
   pollIntervalSeconds: string;
@@ -68,6 +72,9 @@ const newAvailabilityForm = (
   protocol: 'icmp',
   port: '',
   path: '',
+  udpMode: 'response_required',
+  udpRequest: '',
+  udpExpectedResponse: '',
   linkedResourceId: '',
   enabled: true,
   pollIntervalSeconds: '60',
@@ -83,6 +90,9 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
   protocol: target.protocol ?? 'icmp',
   port: target.port ? String(target.port) : '',
   path: target.path ?? '',
+  udpMode: target.udpMode ?? 'response_required',
+  udpRequest: target.udpRequest ?? '',
+  udpExpectedResponse: target.udpExpectedResponse ?? '',
   linkedResourceId: target.linkedResourceId ?? '',
   enabled: target.enabled ?? true,
   pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
@@ -104,7 +114,10 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     address: form.address.trim(),
     protocol: form.protocol,
     port: form.protocol === 'icmp' ? undefined : port,
-    path: form.protocol === 'http' ? form.path.trim() : undefined,
+    path: form.protocol === 'http' || form.protocol === 'https' ? form.path.trim() : undefined,
+    udpMode: form.protocol === 'udp' ? form.udpMode : undefined,
+    udpRequest: form.protocol === 'udp' ? form.udpRequest : undefined,
+    udpExpectedResponse: form.protocol === 'udp' ? form.udpExpectedResponse : undefined,
     linkedResourceId: form.linkedResourceId.trim() || undefined,
     enabled: form.enabled,
     pollIntervalSeconds: parsePositiveInt(form.pollIntervalSeconds),
@@ -118,6 +131,9 @@ const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
   'port',
   'protocol',
   'targetKind',
+  'udpMode',
+  'udpRequest',
+  'udpExpectedResponse',
 ]);
 
 const initialPresetForTargetKind = (
@@ -189,8 +205,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
 
   const addressPlaceholder = () =>
     selectedPresetConfig()?.addressPlaceholder ??
-    (form().protocol === 'http'
-      ? 'http://service.local/status'
+    (form().protocol === 'http' || form().protocol === 'https'
+      ? `${form().protocol}://service.local/status`
       : form().targetKind === 'machine'
         ? 'server.local'
         : form().targetKind === 'service'
@@ -198,7 +214,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
           : 'device.local');
 
   const portPlaceholder = () =>
-    selectedPresetConfig()?.portPlaceholder ?? (form().protocol === 'http' ? 'Optional' : '1883');
+    selectedPresetConfig()?.portPlaceholder ??
+    (form().protocol === 'http' || form().protocol === 'https' ? 'Optional' : '1883');
 
   const namePlaceholder = () =>
     form().targetKind === 'machine'
@@ -330,10 +347,14 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
         >
           <option value="icmp">ICMP ping</option>
           <option value="tcp">TCP port</option>
+          <option value="udp">UDP datagram</option>
           <option value="http">HTTP</option>
+          <option value="https">HTTPS</option>
         </FormSelect>
         <label class={`${formField} sm:col-span-2`}>
-          <span class={formLabel}>{form().protocol === 'http' ? 'URL or host' : 'Address'}</span>
+          <span class={formLabel}>
+            {form().protocol === 'http' || form().protocol === 'https' ? 'URL or host' : 'Address'}
+          </span>
           <input
             class={formControl}
             value={form().address}
@@ -345,7 +366,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               ? 'Use a hostname or IP address. Pulse will run one ping per poll.'
               : form().protocol === 'tcp'
                 ? 'Use a hostname or IP address and the port to open.'
-                : 'Use a full URL or a hostname. HTTP statuses below 500 count as reachable.'}
+                : form().protocol === 'udp'
+                  ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
+                  : 'Use a full URL or a hostname. HTTP statuses below 500 count as reachable.'}
           </span>
         </label>
         <FormSelect
@@ -391,7 +414,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             />
           </label>
         </Show>
-        <Show when={form().protocol === 'http'}>
+        <Show when={form().protocol === 'http' || form().protocol === 'https'}>
           <label class={formField}>
             <span class={formLabel}>Path override</span>
             <input
@@ -400,6 +423,41 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               onInput={(event) => updateForm({ path: event.currentTarget.value })}
               placeholder="/health"
             />
+          </label>
+        </Show>
+        <Show when={form().protocol === 'udp'}>
+          <FormSelect
+            label="UDP result policy"
+            value={form().udpMode}
+            onChange={(event) =>
+              updateForm({ udpMode: event.currentTarget.value as AvailabilityUDPMode })
+            }
+            help="Response required is alert-safe. Open or filtered reports silence as indeterminate and only fails on an explicit port-unreachable response."
+          >
+            <option value="response_required">Require a response</option>
+            <option value="open_or_filtered">Accept open or filtered</option>
+          </FormSelect>
+          <label class={formField}>
+            <span class={formLabel}>Request payload</span>
+            <input
+              class={formControl}
+              value={form().udpRequest}
+              onInput={(event) => updateForm({ udpRequest: event.currentTarget.value })}
+              placeholder={form().udpMode === 'response_required' ? 'PING' : 'Optional'}
+            />
+            <span class={formHelpText}>UTF-8 bytes, up to 512 bytes.</span>
+          </label>
+          <label class={`${formField} sm:col-span-2`}>
+            <span class={formLabel}>Expected response (optional)</span>
+            <input
+              class={formControl}
+              value={form().udpExpectedResponse}
+              onInput={(event) => updateForm({ udpExpectedResponse: event.currentTarget.value })}
+              placeholder="PONG"
+            />
+            <span class={formHelpText}>
+              When set, the response must match these UTF-8 bytes exactly.
+            </span>
           </label>
         </Show>
         <label class={formField}>
@@ -452,13 +510,21 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
         {(result) => (
           <CalloutCard
             role={result().success ? 'status' : 'alert'}
-            tone={result().success ? 'success' : 'danger'}
+            tone={
+              result().outcome === 'indeterminate'
+                ? 'warning'
+                : result().success
+                  ? 'success'
+                  : 'danger'
+            }
             scale="compact"
             padding="sm"
             description={
-              result().success
-                ? `Probe reached the target in ${result().latencyMillis} ms.`
-                : result().error || 'Probe failed.'
+              result().outcome === 'indeterminate'
+                ? `No UDP rejection was received in ${result().latencyMillis} ms; the port is open or filtered, not proven reachable.`
+                : result().success
+                  ? `Probe reached the target in ${result().latencyMillis} ms.`
+                  : result().error || 'Probe failed.'
             }
           />
         )}

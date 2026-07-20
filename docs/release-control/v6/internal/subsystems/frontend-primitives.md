@@ -5165,3 +5165,28 @@ states show bounded guidance with no executable command. The focused proofs are
 `frontend-modern/src/components/Settings/__tests__/DiagnosticsResultsPanel.test.tsx`,
 `frontend-modern/src/components/Settings/__tests__/settingsHeaderMeta.branchcov0713.test.ts`,
 and `frontend-modern/src/utils/__tests__/updatesPresentation.test.ts`.
+
+### Alert intent and three-state availability presentation
+
+The Alerts thresholds surface composes the versioned intent-policy editor from
+the shared form, status, disclosure, and loading primitives. It must preserve
+field-wise inheritance: omitted fields inherit, while explicit false and zero
+values remain deliberate overrides. Save uses the displayed revision, reports
+revision conflict without replacing local edits, and refreshes from the
+server-owned document after success. Preview renders clear,
+expected-transient, pending-grace, and would-activate as distinct states and
+never presents preview as a write.
+
+Availability controls expose UDP mode, request payload, and optional expected
+response only where valid for the selected protocol. Unified-resource
+presentation keeps `indeterminate` visibly distinct from reachable and
+unreachable: open-or-filtered UDP uses warning treatment and bounded evidence
+copy, never a green success tone or a fabricated latency. The primitive layer
+does not infer detector, operator-intent, or recovery truth.
+
+The focused proofs are
+`frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx`,
+`frontend-modern/src/features/alerts/__tests__/ThresholdsTab.test.tsx`,
+`frontend-modern/src/components/Settings/ConnectionEditor/__tests__/AvailabilityTargetSlot.test.tsx`,
+and
+`frontend-modern/src/utils/__tests__/availabilityProbePresentation.test.ts`.

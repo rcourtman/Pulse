@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -42,6 +43,17 @@ type ConfigPersistence interface {
 	SaveAlertConfig(alerts.AlertConfig) error
 }
 
+type alertIntentPolicyManager interface {
+	GetIntentPolicies() alerts.AlertIntentPolicyDocument
+	LoadIntentPolicies(alerts.AlertIntentPolicyDocument) error
+	UpdateIntentPolicies(alerts.AlertIntentPolicyDocument) (alerts.AlertIntentPolicyDocument, error)
+	PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest) (alerts.AlertIntentPolicyPreview, error)
+}
+
+type alertIntentPolicyPersistence interface {
+	SaveAlertIntentPolicies(alerts.AlertIntentPolicyDocument) error
+}
+
 // AlertMonitor defines the interface for monitoring operations used by alert handlers.
 type AlertMonitor interface {
 	GetAlertManager() AlertManager
@@ -55,6 +67,7 @@ type AlertMonitor interface {
 // AlertHandlers handles alert-related HTTP endpoints
 type AlertHandlers struct {
 	stateMu        sync.RWMutex
+	intentPolicyMu sync.Mutex
 	mtMonitor      *monitoring.MultiTenantMonitor
 	defaultMonitor AlertMonitor
 	wsHub          *websocket.Hub
@@ -294,6 +307,88 @@ func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) 
 
 	if err := utils.WriteJSONResponse(w, alerts); err != nil {
 		log.Error().Err(err).Msg("Failed to write active alerts response")
+	}
+}
+
+func (h *AlertHandlers) GetAlertIntentPolicies(w http.ResponseWriter, r *http.Request) {
+	h.intentPolicyMu.Lock()
+	defer h.intentPolicyMu.Unlock()
+	manager, ok := h.getMonitor(r.Context()).GetAlertManager().(alertIntentPolicyManager)
+	if !ok {
+		http.Error(w, "alert intent policies are unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, manager.GetIntentPolicies()); err != nil {
+		log.Error().Err(err).Msg("Failed to write alert intent policies response")
+	}
+}
+
+func (h *AlertHandlers) UpdateAlertIntentPolicies(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+	var document alerts.AlertIntentPolicyDocument
+	if err := json.NewDecoder(r.Body).Decode(&document); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Treat revision check, in-memory install, and durable save as one API
+	// transaction. This also prevents a failed earlier writer from rolling
+	// back a later successful update.
+	h.intentPolicyMu.Lock()
+	defer h.intentPolicyMu.Unlock()
+	monitor := h.getMonitor(r.Context())
+	manager, ok := monitor.GetAlertManager().(alertIntentPolicyManager)
+	if !ok {
+		http.Error(w, "alert intent policies are unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	persistence, ok := monitor.GetConfigPersistence().(alertIntentPolicyPersistence)
+	if !ok {
+		http.Error(w, "alert intent policy persistence is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	previous := manager.GetIntentPolicies()
+	updated, err := manager.UpdateIntentPolicies(document)
+	if err != nil {
+		if errors.Is(err, alerts.ErrAlertIntentPolicyRevisionConflict) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := persistence.SaveAlertIntentPolicies(updated); err != nil {
+		if rollbackErr := manager.LoadIntentPolicies(previous); rollbackErr != nil {
+			log.Error().Err(rollbackErr).Msg("Failed to roll back in-memory alert intent policies after persistence failure")
+		}
+		http.Error(w, fmt.Sprintf("Failed to save alert intent policies: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, updated); err != nil {
+		log.Error().Err(err).Msg("Failed to write updated alert intent policies response")
+	}
+}
+
+func (h *AlertHandlers) PreviewAlertIntentPolicy(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var request alerts.AlertIntentPolicyPreviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	h.intentPolicyMu.Lock()
+	defer h.intentPolicyMu.Unlock()
+	manager, ok := h.getMonitor(r.Context()).GetAlertManager().(alertIntentPolicyManager)
+	if !ok {
+		http.Error(w, "alert intent policy preview is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	preview, err := manager.PreviewIntentPolicy(request)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := utils.WriteJSONResponse(w, preview); err != nil {
+		log.Error().Err(err).Msg("Failed to write alert intent policy preview response")
 	}
 }
 
@@ -1049,6 +1144,21 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.UpdateAlertConfig(w, r)
+	case path == "intent-policies" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetAlertIntentPolicies(w, r)
+	case path == "intent-policies" && r.Method == http.MethodPut:
+		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+			return
+		}
+		h.UpdateAlertIntentPolicies(w, r)
+	case path == "intent-policies/preview" && r.Method == http.MethodPost:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.PreviewAlertIntentPolicy(w, r)
 	case path == "activate" && r.Method == http.MethodPost:
 		if !ensureScope(w, r, config.ScopeMonitoringWrite) {
 			return

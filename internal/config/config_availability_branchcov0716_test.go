@@ -225,7 +225,7 @@ func TestBranchCovValidate(t *testing.T) {
 		// --- Protocol switch: default arm. ---
 		{
 			name:            "unsupported protocol rejected",
-			target:          AvailabilityTarget{Address: "device.local", TargetKind: AvailabilityTargetService, Protocol: AvailabilityProbeProtocol("udp")},
+			target:          AvailabilityTarget{Address: "device.local", TargetKind: AvailabilityTargetService, Protocol: AvailabilityProbeProtocol("smtp")},
 			wantErr:         true,
 			wantErrContains: "unsupported availability protocol",
 		},

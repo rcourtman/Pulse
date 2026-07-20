@@ -2064,6 +2064,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/alerts/intent_policy_test.go",
               "internal/alerts/migration_characterization_test.go",
               "internal/alerts/operational_contract_test.go",
               "internal/alerts/unified_eval_parity_test.go",
@@ -2110,11 +2111,13 @@
               "frontend-modern/src/components/Alerts/Thresholds/hooks/__tests__/useCollapsedSections.test.ts",
               "frontend-modern/src/components/Alerts/Thresholds/sections/__tests__/CollapsibleSection.test.tsx",
               "frontend-modern/src/components/Alerts/WebhookConfig.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
               "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
               "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
+              "frontend-modern/src/features/alerts/__tests__/ThresholdsTab.test.tsx",
               "frontend-modern/src/features/alerts/identity.test.ts",
               "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
               "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",
@@ -2270,6 +2273,7 @@
               "internal/alerts/guest_snapshot_test.go",
               "internal/alerts/history_concurrency_test.go",
               "internal/alerts/history_test.go",
+              "internal/alerts/intent_policy_test.go",
               "internal/alerts/operational_contract_test.go",
               "internal/alerts/synology_test.go",
               "internal/alerts/threshold_resolution_shared_test.go",
@@ -2637,6 +2641,21 @@
               "internal/api/connections_aggregator_test.go",
               "internal/api/contract_test.go",
               "internal/api/update_readiness_test.go"
+            ]
+          },
+          {
+            "id": "alert-intent-policy-api",
+            "label": "alert intent policy transport proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/alertIntentPolicies.ts",
+              "internal/api/alerts.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts",
+              "internal/api/alerts_endpoints_test.go"
             ]
           },
           {
@@ -5190,6 +5209,7 @@
               "internal/models/deepcopy_test.go",
               "internal/models/state_host_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
+              "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_package_updates_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
@@ -5286,6 +5306,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/monitor_alert_intent_test.go",
+              "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
@@ -5338,8 +5360,10 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/availability_poller_test.go",
+              "internal/monitoring/availability_udp_test.go",
               "internal/monitoring/canonical_guardrails_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
+              "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_alert_override_migration_test.go",
               "internal/monitoring/monitor_backups_readstate_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
@@ -6782,6 +6806,7 @@
               "internal/hostagent/issue1595_sas_collection_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/truenas/contract_test.go",
+              "internal/unifiedresources/availability_projection_test.go",
               "internal/unifiedresources/canonical_identity_test.go",
               "internal/unifiedresources/canonical_ids_types_test.go",
               "internal/unifiedresources/code_standards_test.go",

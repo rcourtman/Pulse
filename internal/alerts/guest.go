@@ -184,7 +184,22 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.mu.RLock()
 				thresholds := m.getGuestThresholds(guest, guestID)
 				m.mu.RUnlock()
-				m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, thresholds, monitorOnly)
+				backupContext := BackupIntentContext{
+					Active:     strings.EqualFold(strings.TrimSpace(snapshot.Lock), "backup"),
+					ObservedAt: time.Now(),
+					Evidence:   "guest_lock",
+				}
+				if !backupContext.Active {
+					m.mu.RLock()
+					resolver := m.backupIntentResolver
+					m.mu.RUnlock()
+					if resolver != nil {
+						if resolved, ok := resolver(guestID, instanceName, node, snapshot.VMID, backupContext.ObservedAt); ok {
+							backupContext = resolved
+						}
+					}
+				}
+				m.checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, backupContext)
 			}
 		} else {
 			// For paused/suspended, clear powered-off alert
@@ -359,6 +374,10 @@ func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestT
 }
 
 func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool) {
+	m.checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, BackupIntentContext{})
+}
+
+func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool, backupContext BackupIntentContext) {
 	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
 	severity := NormalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
 	resourceType := unifiedresources.ResourceTypeVM
@@ -400,6 +419,7 @@ func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instan
 		AddToRecent:   true,
 		AddToHistory:  true,
 		DispatchAsync: false,
+		IntentBackup:  backupContext,
 	})
 }
 
@@ -423,6 +443,9 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 			Int("previousCount", count).
 			Msg("Guest is running, resetting powered-off confirmation count")
 		delete(m.offlineConfirmations, guestID)
+	}
+	if decision := m.evaluateIntentNoLock(guestID, "", string(AlertIntentSignalOffline), alertID, time.Now(), false, BackupIntentContext{}); decision.StateChanged {
+		m.saveActiveAlertsAsync("guest offline intent cleared")
 	}
 
 	// Check if powered-off alert exists. A guest that moved nodes may still

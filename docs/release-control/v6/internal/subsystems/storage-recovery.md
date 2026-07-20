@@ -2187,6 +2187,21 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+### Backup-aware alert intent is not recovery assurance
+
+The alerts subsystem may defer an offline alert while monitoring supplies
+fresh, matching evidence of an active PVE backup task. That evidence is a
+short-lived operational context only. It does not create or update a recovery
+point, prove backup completeness, validate restore permissions, establish
+retention, or change protected/attention/unprotected/unknown posture.
+
+Storage and recovery remain the sole owners of deterministic collection trust
+and recovery assurance. Stale, future-skewed, terminal, or mismatched task
+evidence fails closed for alert deferral, while PBS and provider recovery
+evidence continues through its independent mapper and posture rules. An alert
+grace period or hard-cap expiry cannot be interpreted as backup success or
+failure and grants no restore or infrastructure mutation authority.
+
 ### Physical-disk collection truth
 
 Storage surfaces consume the unified physical-disk collection contract without

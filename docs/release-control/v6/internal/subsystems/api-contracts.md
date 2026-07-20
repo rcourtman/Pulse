@@ -7907,3 +7907,28 @@ authorize an alternate execution route.
 acceptance and typed-conflict payloads, while
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`
 proves bounded status/history reconciliation against the returned run ID.
+
+### Alert intent and UDP availability transport
+
+`GET /api/alerts/intent-policies` and
+`POST /api/alerts/intent-policies/preview` require `monitoring:read`;
+`PUT /api/alerts/intent-policies` requires `monitoring:write`. The versioned
+document carries schema version, revision, optional update time, and typed
+default, resource-type, and canonical-resource rules. A stale revision returns
+`409 Conflict`; invalid policy or preview input returns `400`; unavailable
+runtime or persistence ownership returns `503`. A save failure restores the
+previous in-memory document and returns `500`. Preview is bounded and read-only
+and cannot advance pending grace state.
+
+Availability targets add `udp` plus `response_required` and
+`open_or_filtered` modes. Request and expected-response payloads remain
+explicit configuration fields. Test responses add the probe `outcome` while
+retaining the existing success, latency, and error fields for compatible
+clients. A silent open-or-filtered result is `indeterminate`, not successful
+reachability and not a transport failure that may be promoted to an outage.
+
+`internal/api/alerts_endpoints_test.go` proves scopes, revision conflicts,
+rollback, and preview behavior.
+`frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts` and the
+availability target API and settings tests prove the canonical browser routes
+and additive UDP wire fields.

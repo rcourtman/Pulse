@@ -46,20 +46,30 @@ func getThresholdForMetricFromConfig(config ThresholdConfig, metricType string) 
 }
 
 // getTimeThreshold determines the delay to apply for a metric/resource combination.
-func (m *Manager) getTimeThreshold(_ string, resourceType, metricType string) int {
+func (m *Manager) getTimeThreshold(resourceID string, resourceType, metricType string) int {
+	effective := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType))
+	return effective.GraceSeconds
+}
+
+func (m *Manager) getLegacyTimeThresholdWithSource(resourceType, metricType string) (int, string, bool) {
 	if delay, ok := m.getMetricTimeThreshold(resourceType, metricType); ok {
-		return delay
+		return delay, "legacy.metricTimeThresholds." + strings.ToLower(strings.TrimSpace(resourceType)) + "." + strings.ToLower(strings.TrimSpace(metricType)), true
 	}
 
 	base, hasTypeSpecific := m.getBaseTimeThreshold(resourceType)
 
 	if !hasTypeSpecific {
 		if delay, ok := m.getGlobalMetricTimeThreshold(metricType); ok {
-			return delay
+			return delay, "legacy.metricTimeThresholds.all." + strings.ToLower(strings.TrimSpace(metricType)), true
 		}
 	}
-
-	return base
+	if hasTypeSpecific {
+		return base, "legacy.timeThresholds." + strings.ToLower(strings.TrimSpace(resourceType)), true
+	}
+	if base != 0 {
+		return base, "legacy.timeThresholds.all", true
+	}
+	return 0, "", false
 }
 
 // getMetricTimeThreshold returns a metric-specific delay if configured at the resource-type level.
@@ -215,11 +225,21 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		if !exists {
 			alertStartTime := time.Now()
 
-			// Determine the appropriate time threshold based on resource/metric type
-			timeThreshold := m.getTimeThreshold(resourceID, resourceType, metricType)
-
-			// Check if we have a time threshold configured
-			if timeThreshold > 0 {
+			effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType))
+			if effectiveIntent.Explicit {
+				decision := m.evaluateIntentNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, alertStartTime, true, BackupIntentContext{})
+				if pending, ok := m.intentPending[trackingKey]; ok && !pending.FirstMatchedAt.IsZero() {
+					alertStartTime = pending.FirstMatchedAt
+				}
+				if decision.StateChanged {
+					m.saveActiveAlertsAsync("metric intent pending state")
+				}
+				if !decision.ShouldActivate {
+					return
+				}
+				delete(m.intentPending, trackingKey)
+				m.saveActiveAlertsAsync("metric intent activated")
+			} else if timeThreshold := m.getTimeThreshold(resourceID, resourceType, metricType); timeThreshold > 0 {
 				// Check if this threshold was already pending
 				if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {
 					// Check if enough time has passed
@@ -472,6 +492,10 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		}
 	} else {
 		// Value is below trigger threshold
+		intentDecision := m.evaluateIntentNoLock(resourceID, resourceType, MetricAlertIntentSignal(metricType), trackingKey, time.Now(), false, BackupIntentContext{})
+		if intentDecision.StateChanged {
+			m.saveActiveAlertsAsync("metric intent cleared")
+		}
 		// Clear any pending alert for this metric
 		if _, isPending := m.pendingAlerts[trackingKey]; isPending {
 			delete(m.pendingAlerts, trackingKey)

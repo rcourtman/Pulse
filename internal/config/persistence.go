@@ -29,6 +29,7 @@ type ConfigPersistence struct {
 	tx                         *importTransaction
 	configDir                  string
 	alertFile                  string
+	alertIntentFile            string
 	emailFile                  string
 	webhookFile                string
 	appriseFile                string
@@ -107,6 +108,7 @@ type alertScheduleGroupingPresence struct {
 
 type resolvedConfigPersistencePaths struct {
 	alertFile                  string
+	alertIntentFile            string
 	emailFile                  string
 	webhookFile                string
 	appriseFile                string
@@ -145,6 +147,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	alertFile, err := resolveLeaf("alerts.json")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve alerts.json: %w", err)
+	}
+	alertIntentFile, err := resolveLeaf("alert_intent_policies.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve alert_intent_policies.json: %w", err)
 	}
 	emailFile, err := resolveLeaf("email.enc")
 	if err != nil {
@@ -241,6 +247,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 
 	return normalizedConfigDir, resolvedConfigPersistencePaths{
 		alertFile:                  alertFile,
+		alertIntentFile:            alertIntentFile,
 		emailFile:                  emailFile,
 		webhookFile:                webhookFile,
 		appriseFile:                appriseFile,
@@ -296,6 +303,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	cp := &ConfigPersistence{
 		configDir:                  resolvedConfigDir,
 		alertFile:                  resolvedPaths.alertFile,
+		alertIntentFile:            resolvedPaths.alertIntentFile,
 		emailFile:                  resolvedPaths.emailFile,
 		webhookFile:                resolvedPaths.webhookFile,
 		appriseFile:                resolvedPaths.appriseFile,

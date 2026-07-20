@@ -1186,3 +1186,34 @@ unambiguous/live/ambiguous decision matrix,
 reload behavior, and
 `frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`
 proves the browser-side TrueNAS save/refetch contract.
+
+### Versioned alert-intent policy
+
+The alerts runtime owns one versioned alert-intent document and its durable
+pending-condition state. Stable signal keys are `*`, `state.offline`,
+`incident.availability`, and `metric.<name>`. Effective fields resolve
+independently from legacy metric behavior, document defaults, resource-type
+overrides, and canonical-resource overrides, in that order. Keys are
+normalized before validation and collisions fail closed; updates use revision
+compare-and-swap so a stale browser cannot overwrite a newer document.
+
+Intent affects when detector truth becomes eligible for an active alert; it
+does not mutate the underlying observation or create a second alert identity.
+Without an explicit applicable rule, established alert behavior remains
+compatible. With a rule, the first matched time is durable across restart and
+becomes the canonical alert start time once eligible. Preview evaluates the
+same resolver but restores pending state before returning, so it is read-only.
+Invalid documents, persistence failures, or revision conflicts must leave the
+prior in-memory and durable policy active.
+
+Operator maintenance and intentionally-offline state are read only through the
+canonical unified-resource identity. Backup-aware offline deferral consumes
+fresh, matching, active task evidence, applies the configured post-backup grace,
+and always terminates at its hard cap. Missing, stale, future-skewed,
+finished, or mismatched backup evidence cannot suppress an outage. This policy
+changes alert activation only: notification delivery, recovery assurance, and
+customer-infrastructure mutation retain their existing owners.
+
+`internal/alerts/intent_policy_test.go` proves precedence, normalization,
+operator and backup contexts, preview immutability, restart continuity, and
+first-match lifecycle identity.

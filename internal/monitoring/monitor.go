@@ -1716,6 +1716,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 
 	m.executor = newRealExecutor(m)
+	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
 	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)
 
@@ -1740,6 +1741,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 		m.notificationMgr.SetNotifyOnResolve(alertConfig.Schedule.NotifyOnResolve)
 	} else {
 		log.Warn().Err(err).Msg("failed to load alert configuration")
+	}
+	if intentPolicies, err := m.configPersist.LoadAlertIntentPolicies(); err == nil {
+		if err := m.alertManager.LoadIntentPolicies(*intentPolicies); err != nil {
+			log.Warn().Err(err).Msg("failed to install alert intent policies")
+		}
+	} else {
+		log.Warn().Err(err).Msg("failed to load alert intent policies")
 	}
 
 	if emailConfig, err := m.configPersist.LoadEmailConfig(); err == nil {
@@ -4281,6 +4289,7 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.resourceStore = store
 	incidentStore := m.incidentStore
 	m.mu.Unlock()
+	m.installOperatorIntentResolver(store)
 	log.Info().Msg("resource store set for polling optimization")
 
 	if incidentStore != nil {

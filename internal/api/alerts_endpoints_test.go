@@ -72,6 +72,82 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("AlertIntentPolicies", func(t *testing.T) {
+		res, err := http.Get(srv.server.URL + "/api/alerts/intent-policies")
+		if err != nil {
+			t.Fatalf("get policies: %v", err)
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("get policies status = %d, want %d", res.StatusCode, http.StatusOK)
+		}
+		var document alerts.AlertIntentPolicyDocument
+		if err := json.NewDecoder(res.Body).Decode(&document); err != nil {
+			t.Fatalf("decode policies: %v", err)
+		}
+
+		grace := 45
+		if document.Defaults == nil {
+			document.Defaults = make(map[string]alerts.AlertIntentRule)
+		}
+		document.Defaults[string(alerts.AlertIntentSignalOffline)] = alerts.AlertIntentRule{GraceSeconds: &grace}
+		body, err := json.Marshal(document)
+		if err != nil {
+			t.Fatalf("marshal policies: %v", err)
+		}
+		req, err := http.NewRequest(http.MethodPut, srv.server.URL+"/api/alerts/intent-policies", bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("create policy update: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		updatedResponse, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("update policies: %v", err)
+		}
+		defer updatedResponse.Body.Close()
+		if updatedResponse.StatusCode != http.StatusOK {
+			t.Fatalf("update policies status = %d, want %d", updatedResponse.StatusCode, http.StatusOK)
+		}
+		var updated alerts.AlertIntentPolicyDocument
+		if err := json.NewDecoder(updatedResponse.Body).Decode(&updated); err != nil {
+			t.Fatalf("decode updated policies: %v", err)
+		}
+		if updated.Revision != document.Revision+1 {
+			t.Fatalf("updated revision = %d, want %d", updated.Revision, document.Revision+1)
+		}
+
+		staleReq, err := http.NewRequest(http.MethodPut, srv.server.URL+"/api/alerts/intent-policies", bytes.NewReader(body))
+		if err != nil {
+			t.Fatalf("create stale update: %v", err)
+		}
+		staleReq.Header.Set("Content-Type", "application/json")
+		staleResponse, err := http.DefaultClient.Do(staleReq)
+		if err != nil {
+			t.Fatalf("stale update: %v", err)
+		}
+		defer staleResponse.Body.Close()
+		if staleResponse.StatusCode != http.StatusConflict {
+			t.Fatalf("stale update status = %d, want %d", staleResponse.StatusCode, http.StatusConflict)
+		}
+
+		previewBody := []byte(`{"resourceId":"vm:101","resourceType":"vm","signal":"state.offline","conditionActive":true}`)
+		previewResponse, err := http.Post(srv.server.URL+"/api/alerts/intent-policies/preview", "application/json", bytes.NewReader(previewBody))
+		if err != nil {
+			t.Fatalf("preview policy: %v", err)
+		}
+		defer previewResponse.Body.Close()
+		if previewResponse.StatusCode != http.StatusOK {
+			t.Fatalf("preview status = %d, want %d", previewResponse.StatusCode, http.StatusOK)
+		}
+		var preview alerts.AlertIntentPolicyPreview
+		if err := json.NewDecoder(previewResponse.Body).Decode(&preview); err != nil {
+			t.Fatalf("decode preview: %v", err)
+		}
+		if preview.Status != "pending_grace" || preview.Effective.GraceSeconds != grace {
+			t.Fatalf("preview = %+v", preview)
+		}
+	})
+
 	// 3. Activate alerts
 	t.Run("ActivateAlerts", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/activate", nil)

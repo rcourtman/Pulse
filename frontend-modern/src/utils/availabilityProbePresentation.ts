@@ -31,8 +31,9 @@ export const getAvailabilityProbeMethodLabel = (
 ): string => {
   const protocol = normalizeAvailabilityProtocol(availability?.protocol);
   if (protocol === 'icmp') return 'ICMP';
-  if (protocol === 'tcp') {
-    return availability?.port ? `TCP ${availability.port}` : 'TCP';
+  if (protocol === 'tcp' || protocol === 'udp') {
+    const label = protocol.toUpperCase();
+    return availability?.port ? `${label} ${availability.port}` : label;
   }
   if (protocol === 'http' || protocol === 'https') {
     const path = (availability?.path ?? '').trim();
@@ -45,7 +46,7 @@ export const getAvailabilityProbeTargetLabel = (
   availability?: ResourceAvailabilityMeta | null,
 ): string | null => {
   const protocol = normalizeAvailabilityProtocol(availability?.protocol);
-  if (protocol === 'tcp') {
+  if (protocol === 'tcp' || protocol === 'udp') {
     const port = availability?.port;
     return typeof port === 'number' && Number.isFinite(port) && port > 0 ? String(port) : null;
   }
@@ -98,6 +99,7 @@ const getAvailabilityProbeResultLabel = (
 ): string => {
   const latency = availability.latencyMillis;
   const normalizedStatus = (resource.status ?? '').trim().toLowerCase();
+  if (availability.probeOutcome === 'indeterminate') return 'open or filtered';
   if (availability.available === false || ['offline', 'degraded'].includes(normalizedStatus)) {
     return getAvailabilityProbeFailureLabel(availability);
   }
@@ -116,6 +118,9 @@ const getAvailabilityProbeToneClassName = (
   freshnessLabel: AvailabilityProbePresentation['freshnessLabel'],
 ): string => {
   const normalizedStatus = (resource.status ?? '').trim().toLowerCase();
+  if (availability.probeOutcome === 'indeterminate') {
+    return AVAILABILITY_PROBE_WARNING_CLASS;
+  }
   if (availability.available === false || normalizedStatus === 'offline') {
     return AVAILABILITY_PROBE_ERROR_CLASS;
   }

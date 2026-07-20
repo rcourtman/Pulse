@@ -295,6 +295,7 @@ func TestMonitor_HandleAlertResolved_SendsRecoveryForGuestPoweredOffState(t *tes
 	t.Cleanup(srv.Close)
 
 	notifMgr := notifications.NewNotificationManagerWithDataDir("http://pulse.example", t.TempDir())
+	t.Cleanup(notifMgr.Stop)
 	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
 		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
 	}
@@ -308,7 +309,8 @@ func TestMonitor_HandleAlertResolved_SendsRecoveryForGuestPoweredOffState(t *tes
 	notifMgr.SetNotifyOnResolve(true)
 	notifMgr.SetGroupingWindow(0)
 
-	alertMgr := alerts.NewManager()
+	alertMgr := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(alertMgr.Stop)
 	cfg := alertMgr.GetConfig()
 	cfg.Enabled = true
 	cfg.ActivationState = alerts.ActivationActive

@@ -44,6 +44,25 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
+  it('retains three-state UDP availability evidence on canonical resources', () => {
+    const resource = createResource({
+      type: 'network-endpoint',
+      availability: {
+        protocol: 'udp',
+        probeOutcome: 'indeterminate',
+        udpMode: 'open_or_filtered',
+        available: false,
+      },
+    });
+
+    expect(resource.availability).toMatchObject({
+      protocol: 'udp',
+      probeOutcome: 'indeterminate',
+      udpMode: 'open_or_filtered',
+      available: false,
+    });
+  });
+
   it('keeps host maintenance posture scoped to agent metadata', () => {
     const resource = createResource({
       type: 'agent',

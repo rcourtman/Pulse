@@ -1639,6 +1639,8 @@ type AvailabilityData struct {
 	TargetKind            string                             `json:"targetKind,omitempty"`
 	Address               string                             `json:"address,omitempty"`
 	Protocol              string                             `json:"protocol,omitempty"`
+	ProbeOutcome          string                             `json:"probeOutcome,omitempty"`
+	UDPMode               string                             `json:"udpMode,omitempty"`
 	Port                  int                                `json:"port,omitempty"`
 	Path                  string                             `json:"path,omitempty"`
 	Enabled               bool                               `json:"enabled"`

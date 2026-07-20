@@ -763,6 +763,9 @@ func TestMonitor_PollBackupAndReplication(t *testing.T) {
 	if len(state.PVEBackups.BackupTasks) != 1 {
 		t.Errorf("Expected 1 backup task, got %d", len(state.PVEBackups.BackupTasks))
 	}
+	if len(state.PVEBackups.BackupTasks) == 1 && state.PVEBackups.BackupTasks[0].ObservedAt.IsZero() {
+		t.Error("Expected polled backup task to carry producer observation time")
+	}
 
 	m.pollReplicationStatus(context.Background(), "pve-test", client, []models.VM{{VMID: 101, Name: "vm1"}})
 	state = m.state.GetSnapshot()

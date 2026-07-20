@@ -118,6 +118,28 @@ func (a *MonitorAdapter) GetRecentChanges(canonicalID string, since time.Time, l
 	return registry.store.GetRecentChanges(canonicalID, since, limit)
 }
 
+// GetResourceOperatorState exposes the durable operator-intent record through
+// the monitor adapter without widening monitoring's core resource-store
+// interface. Alert policy resolution discovers this capability optionally.
+func (a *MonitorAdapter) GetResourceOperatorState(canonicalID string) (ResourceOperatorState, bool, error) {
+	registry := a.currentRegistry()
+	if registry == nil || registry.store == nil {
+		return ResourceOperatorState{}, false, nil
+	}
+	return registry.store.GetResourceOperatorState(canonicalID)
+}
+
+// ResolveCanonicalResourceID bridges source-native alert identifiers to the
+// canonical resource identity used by durable operator state and policy UI.
+func (a *MonitorAdapter) ResolveCanonicalResourceID(ref string) (string, bool) {
+	registry := a.currentRegistry()
+	if registry == nil {
+		return "", false
+	}
+	_, canonicalID, ok := registry.GetByReference(ref)
+	return canonicalID, ok
+}
+
 func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
 	registry := a.currentRegistry()
 	if registry == nil {

@@ -26,6 +26,7 @@ type canonicalLifecycleAlertParams struct {
 	AddToHistory  bool
 	RateLimit     bool
 	DispatchAsync bool
+	IntentBackup  BackupIntentContext
 }
 
 type canonicalStatefulAlertParams struct {
@@ -362,11 +363,41 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		return alertspecs.EvaluationResult{}, false
 	}
 
+	// Persist the canonical confirmation state before applying intent policy.
+	// Grace and operator context are an additional gate; they must not prevent
+	// the underlying evaluator from reaching its configured confirmation count.
 	if params.Tracking != nil {
 		if result.State.ConsecutiveMatches > 0 {
 			params.Tracking[params.TrackingKey] = result.State.ConsecutiveMatches
 		} else {
 			delete(params.Tracking, params.TrackingKey)
+		}
+	}
+
+	intentSignal := ""
+	if params.Spec.Kind == alertspecs.AlertSpecKindConnectivity || params.Spec.Kind == alertspecs.AlertSpecKindPoweredState {
+		intentSignal = string(AlertIntentSignalOffline)
+	}
+	if intentSignal != "" && existing == nil {
+		conditionActive := result.State.State == alertspecs.AlertStatePending || result.State.State == alertspecs.AlertStateFiring
+		decision := m.evaluateIntentNoLock(params.Spec.ResourceID, string(params.Spec.ResourceType), intentSignal, storageKey, params.Evidence.ObservedAt, conditionActive, params.IntentBackup)
+		if decision.StateChanged {
+			m.saveActiveAlertsAsync("lifecycle intent state")
+		}
+		if decision.Effective.Explicit && conditionActive && !decision.ShouldActivate {
+			result.State.State = alertspecs.AlertStatePending
+			result.State.Reason = decision.Reason
+			if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {
+				result.State.FirstMatchedAt = pending.FirstMatchedAt
+			}
+			return result, true
+		}
+		if decision.Effective.Explicit && result.State.State == alertspecs.AlertStateFiring {
+			if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {
+				result.State.FirstMatchedAt = pending.FirstMatchedAt
+			}
+			delete(m.intentPending, storageKey)
+			m.saveActiveAlertsAsync("lifecycle intent activated")
 		}
 	}
 
@@ -400,6 +431,9 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			alert.Metadata["resourceType"] = string(params.Spec.ResourceType)
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
+		if !result.State.FirstMatchedAt.IsZero() {
+			alert.StartTime = result.State.FirstMatchedAt
+		}
 		applyCanonicalOperationalEvidence(alert, params.Spec, params.Evidence, time.Now())
 		m.preserveAlertState(storageKey, alert)
 		m.setActiveAlertNoLock(storageKey, alert)

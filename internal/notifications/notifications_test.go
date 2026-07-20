@@ -3927,12 +3927,13 @@ func TestSendResolvedAlert(t *testing.T) {
 	defer server.Close()
 
 	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
-	nm.AddWebhook(WebhookConfig{
+	webhook := WebhookConfig{
 		ID:      "test-webhook",
 		Name:    "Test",
 		URL:     server.URL,
 		Enabled: true,
-	})
+	}
+	nm.AddWebhook(webhook)
 
 	nm.SetNotifyOnResolve(true)
 
@@ -3948,6 +3949,9 @@ func TestSendResolvedAlert(t *testing.T) {
 		Alert:        alert,
 		ResolvedTime: time.Now(),
 	}
+	nm.recordSuccessfulDelivery(notificationDeliveryJob{
+		Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &webhook,
+	}, time.Now())
 
 	// This should send immediately (no grouping)
 	nm.SendResolvedAlert(resolved)
@@ -4770,8 +4774,8 @@ func TestSendGroupedAlertsQueueEnqueueFailureDoesNotDeadlock(t *testing.T) {
 	nm.mu.RLock()
 	_, notified := nm.lastNotified[alert.ID]
 	nm.mu.RUnlock()
-	if !notified {
-		t.Fatal("expected cooldown record to be marked for fallback direct send")
+	if notified {
+		t.Fatal("did not expect a cooldown record when fallback delivery never ran")
 	}
 }
 
@@ -4815,21 +4819,21 @@ func TestSendResolvedAlertQueueEnqueueFailureFallsBackToSharedDeliveryExecutor(t
 	}))
 	defer server.Close()
 
-	nm := NewNotificationManager("https://pulse.local")
+	nm := NewNotificationManagerWithDataDir("https://pulse.local", t.TempDir())
 	defer nm.Stop()
 	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
-	nm.AddWebhook(WebhookConfig{
+	webhook := WebhookConfig{
 		ID:      "resolved-fallback-hook",
 		Name:    "resolved-fallback",
 		URL:     server.URL + "/hook",
 		Enabled: true,
-	})
+	}
+	nm.AddWebhook(webhook)
 
 	queue := nm.GetQueue()
 	if queue == nil {
 		t.Skip("queue unavailable in this environment")
 	}
-	_ = queue.Stop()
 
 	alert := &alerts.Alert{
 		ID:           "resolved-fallback-1",
@@ -4843,6 +4847,15 @@ func TestSendResolvedAlertQueueEnqueueFailureFallsBackToSharedDeliveryExecutor(t
 		StartTime:    time.Now().Add(-5 * time.Minute),
 	}
 	resolvedAt := time.Now()
+	nm.recordSuccessfulDelivery(notificationDeliveryJob{
+		Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{alert}, WebhookConfig: &webhook,
+	}, resolvedAt.Add(-time.Minute))
+	// Keep the receipt store available while forcing only queue insertion to
+	// fail. Recovery delivery must remain fail-closed if receipt lookup itself
+	// is unavailable.
+	if _, err := queue.db.Exec(`DROP TABLE notification_queue`); err != nil {
+		t.Fatalf("force queue enqueue failure: %v", err)
+	}
 
 	nm.SendResolvedAlert(&alerts.ResolvedAlert{
 		Alert:        alert,

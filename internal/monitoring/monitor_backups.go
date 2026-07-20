@@ -1993,13 +1993,14 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		taskID := fmt.Sprintf("%s-%s", instanceName, task.UPID)
 
 		backupTask := models.BackupTask{
-			ID:        taskID,
-			Node:      task.Node,
-			Instance:  instanceName,
-			Type:      task.Type,
-			VMID:      vmid,
-			Status:    task.Status,
-			StartTime: time.Unix(task.StartTime, 0),
+			ID:         taskID,
+			Node:       task.Node,
+			Instance:   instanceName,
+			Type:       task.Type,
+			VMID:       vmid,
+			Status:     task.Status,
+			StartTime:  time.Unix(task.StartTime, 0),
+			ObservedAt: time.Now().UTC(),
 		}
 
 		if task.EndTime > 0 {

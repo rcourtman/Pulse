@@ -48,6 +48,14 @@ type Manager struct {
 	resolvedMutex    sync.RWMutex // Secondary lock - see Lock Ordering Documentation above
 	// Time threshold tracking
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
+	// Intent-policy pending state retains wall-clock and transient-context
+	// evidence for policy-enabled candidates. It is keyed by canonical alert
+	// tracking key and persisted with the alert manager's transition state.
+	intentPending          map[string]IntentPendingState
+	intentPolicies         AlertIntentPolicyDocument
+	operatorIntentResolver OperatorIntentContextResolver
+	backupIntentResolver   BackupIntentContextResolver
+	resourceIntentResolver ResourceIntentIdentityResolver
 	// Offline confirmation tracking
 	nodeOfflineCount             map[string]int                  // Track consecutive offline counts for nodes (legacy)
 	connectionDegradedCount      map[string]int                  // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
@@ -128,6 +136,8 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		recentlyResolved:                make(map[string]*ResolvedAlert),
 		resolvedAlias:                   make(map[string]string),
 		pendingAlerts:                   make(map[string]time.Time),
+		intentPending:                   make(map[string]IntentPendingState),
+		intentPolicies:                  NewAlertIntentPolicyDocument(),
 		nodeOfflineCount:                make(map[string]int),
 		connectionDegradedCount:         make(map[string]int),
 		offlineConfirmations:            make(map[string]int),

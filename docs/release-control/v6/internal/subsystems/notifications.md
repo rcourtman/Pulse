@@ -256,3 +256,28 @@ retry/sent/failed/dead-letter/cancelled outcomes and open-to-enqueue latency
 without destination, record, resource, or evidence labels. Delivery state
 remains notification truth only and cannot resolve or reopen the alert
 lifecycle.
+
+### Occurrence-bound delivery receipts
+
+The notification owner records successful firing delivery by exact alert ID,
+nanosecond start time, and a normalized destination identity. Email recipients,
+webhook ID plus URL, and Apprise mode/base/config/targets are part of that
+identity, so a later occurrence or reconfigured destination cannot inherit an
+older receipt. A resolved notification is eligible only for destinations that
+received that exact firing occurrence. Successful recovery delivery deletes
+the receipt; persistent receipts survive restart and are retention-bounded.
+Receipt read failure suppresses recovery rather than inventing prior delivery.
+
+Cooldown state is published only after firing receipts are recorded. Persistent
+workers atomically claim a still-pending row after taking per-alert delivery
+gates, and resolution cancellation takes the corresponding exclusive gates.
+This prevents a stale pending snapshot from being sent after cancellation while
+preserving grouped-row and operational-link lifecycle semantics. A destination
+with delivery disabled or failed has no receipt and receives no misleading
+recovery. These rules remain delivery truth only and cannot resolve the
+alerts-owned lifecycle.
+
+`internal/notifications/delivery_receipts_test.go`,
+`internal/notifications/notifications_test.go`, and
+`internal/notifications/queue_test.go` prove occurrence and destination
+isolation, persistence, cleanup, and cancellation/claim ordering.

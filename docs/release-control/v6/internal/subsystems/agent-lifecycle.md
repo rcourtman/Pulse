@@ -4716,3 +4716,14 @@ mutations require `monitoring:write`, and slash-containing canonical record IDs
 are parsed as opaque identities. Governed action planning still enters the
 existing action lifecycle and entitlement boundary before any agent executor
 is considered.
+
+### Alert intent remains outside agent authority
+
+Alert-intent policy reads and writes, UDP availability probes, operator-state
+lookups, and backup-task context do not widen the agent lifecycle. The server
+evaluates these read-state inputs without issuing an agent command, accepting a
+new report shape, rotating credentials, or changing remote configuration.
+Neither an expected-transient decision nor an indeterminate UDP outcome may be
+translated into an agent action. Any later customer-infrastructure mutation
+still requires the canonical Actions planner, approval, executor, receipt,
+audit, and verification boundaries.

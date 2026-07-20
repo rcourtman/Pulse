@@ -22,8 +22,20 @@ const (
 	AvailabilityProbeTCP   AvailabilityProbeProtocol = "tcp"
 	AvailabilityProbeHTTP  AvailabilityProbeProtocol = "http"
 	AvailabilityProbeHTTPS AvailabilityProbeProtocol = "https"
+	AvailabilityProbeUDP   AvailabilityProbeProtocol = "udp"
 
 	availabilityProbePingAlias AvailabilityProbeProtocol = "ping"
+)
+
+type AvailabilityUDPMode string
+
+const (
+	// AvailabilityUDPResponseRequired requires a datagram response and treats
+	// silence as failure. This is the safe default for alerting.
+	AvailabilityUDPResponseRequired AvailabilityUDPMode = "response_required"
+	// AvailabilityUDPOpenOrFiltered treats silence as an indeterminate,
+	// non-failing result; an ICMP port-unreachable response still fails.
+	AvailabilityUDPOpenOrFiltered AvailabilityUDPMode = "open_or_filtered"
 )
 
 type AvailabilityTargetKind string
@@ -44,6 +56,9 @@ type AvailabilityTarget struct {
 	Protocol         AvailabilityProbeProtocol `json:"protocol"`
 	Port             int                       `json:"port,omitempty"`
 	Path             string                    `json:"path,omitempty"`
+	UDPMode          AvailabilityUDPMode       `json:"udpMode,omitempty"`
+	UDPRequest       string                    `json:"udpRequest,omitempty"`
+	UDPExpected      string                    `json:"udpExpectedResponse,omitempty"`
 	Enabled          bool                      `json:"enabled"`
 	PollIntervalSecs int                       `json:"pollIntervalSeconds,omitempty"`
 	TimeoutMillis    int                       `json:"timeoutMillis,omitempty"`
@@ -87,6 +102,12 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 	}
 	if t.FailureThreshold <= 0 {
 		t.FailureThreshold = DefaultAvailabilityFailureThreshold
+	}
+	if t.Protocol == AvailabilityProbeUDP {
+		t.UDPMode = normalizeAvailabilityUDPMode(t.UDPMode)
+		if t.UDPMode == "" {
+			t.UDPMode = AvailabilityUDPResponseRequired
+		}
 	}
 }
 
@@ -137,9 +158,9 @@ func (t AvailabilityTarget) Validate() error {
 		if t.Port != 0 {
 			return fmt.Errorf("icmp availability targets must not set a port")
 		}
-	case AvailabilityProbeTCP:
+	case AvailabilityProbeTCP, AvailabilityProbeUDP:
 		if t.Port <= 0 || t.Port > 65535 {
-			return fmt.Errorf("tcp availability targets require a valid port")
+			return fmt.Errorf("%s availability targets require a valid port", protocol)
 		}
 	case AvailabilityProbeHTTP, AvailabilityProbeHTTPS:
 		if t.Port < 0 || t.Port > 65535 {
@@ -147,6 +168,25 @@ func (t AvailabilityTarget) Validate() error {
 		}
 	default:
 		return fmt.Errorf("unsupported availability protocol %q", t.Protocol)
+	}
+	if protocol == AvailabilityProbeUDP {
+		mode := normalizeAvailabilityUDPMode(t.UDPMode)
+		switch mode {
+		case AvailabilityUDPResponseRequired, AvailabilityUDPOpenOrFiltered:
+		default:
+			return fmt.Errorf("unsupported UDP availability mode %q", t.UDPMode)
+		}
+		if mode == AvailabilityUDPResponseRequired && len(t.UDPRequest) == 0 {
+			return fmt.Errorf("UDP response-required checks require a request payload")
+		}
+		if len(t.UDPRequest) > 512 {
+			return fmt.Errorf("UDP request payload must be 512 bytes or less")
+		}
+		if len(t.UDPExpected) > 4096 {
+			return fmt.Errorf("UDP expected response must be 4096 bytes or less")
+		}
+	} else if t.UDPMode != "" || t.UDPRequest != "" || t.UDPExpected != "" {
+		return fmt.Errorf("UDP settings may only be used with UDP availability targets")
 	}
 	if t.PollIntervalSecs > 0 && t.PollIntervalSecs < 10 {
 		return fmt.Errorf("availability poll interval must be at least 10 seconds")
@@ -218,9 +258,19 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 		target.Address = normalizeAvailabilityAddress(target.Address)
 	}
 	target.Path = strings.TrimSpace(target.Path)
+	target.UDPMode = normalizeAvailabilityUDPMode(target.UDPMode)
+	if target.Protocol != AvailabilityProbeUDP {
+		target.UDPMode = ""
+		target.UDPRequest = ""
+		target.UDPExpected = ""
+	}
 	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
 	target.ApplyDefaults()
 	return target
+}
+
+func normalizeAvailabilityUDPMode(mode AvailabilityUDPMode) AvailabilityUDPMode {
+	return AvailabilityUDPMode(strings.ToLower(strings.TrimSpace(string(mode))))
 }
 
 func normalizeAvailabilityProbeProtocol(protocol AvailabilityProbeProtocol) AvailabilityProbeProtocol {

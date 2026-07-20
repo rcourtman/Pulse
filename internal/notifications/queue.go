@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,8 @@ type QueuedNotification struct {
 // NotificationQueue manages persistent notification delivery with retries and DLQ
 type NotificationQueue struct {
 	mu              sync.RWMutex
+	deliveryGateMu  sync.Mutex
+	deliveryGates   map[string]*notificationDeliveryGate
 	stopOnce        sync.Once
 	stopErr         error
 	db              *sql.DB
@@ -76,6 +79,14 @@ type NotificationQueue struct {
 	notifyChan      chan struct{}                   // Signal when new notifications are added
 	processor       func(*QueuedNotification) error // Notification processor function
 	workerSem       chan struct{}                   // Semaphore for limiting concurrent workers
+}
+
+// notificationDeliveryGate orders delivery and cancellation for a single
+// alert identifier. References are counted so high-cardinality alert IDs do
+// not accumulate in the queue for the lifetime of the process.
+type notificationDeliveryGate struct {
+	mu   sync.RWMutex
+	refs int
 }
 
 func queueSQLiteDSN(path string) string {
@@ -131,6 +142,7 @@ func newNotificationQueueFromDSN(dbPath, dsn string) (*NotificationQueue, error)
 	nq := &NotificationQueue{
 		db:              db,
 		dbPath:          dbPath,
+		deliveryGates:   make(map[string]*notificationDeliveryGate),
 		stopChan:        make(chan struct{}),
 		processorTicker: time.NewTicker(5 * time.Second),
 		cleanupTicker:   time.NewTicker(1 * time.Hour),
@@ -189,6 +201,86 @@ func NewInMemoryNotificationQueue() (*NotificationQueue, error) {
 	return newNotificationQueueFromDSN(":memory:", queueSQLiteDSN("file::memory:?mode=memory"))
 }
 
+func normalizeAlertIdentifiers(alertIdentifiers []string) []string {
+	seen := make(map[string]struct{}, len(alertIdentifiers))
+	normalized := make([]string, 0, len(alertIdentifiers))
+	for _, identifier := range alertIdentifiers {
+		identifier = strings.TrimSpace(identifier)
+		if identifier == "" {
+			continue
+		}
+		if _, exists := seen[identifier]; exists {
+			continue
+		}
+		seen[identifier] = struct{}{}
+		normalized = append(normalized, identifier)
+	}
+	sort.Strings(normalized)
+	return normalized
+}
+
+func alertIdentifiersFromAlerts(alertList []*alerts.Alert) []string {
+	identifiers := make([]string, 0, len(alertList))
+	for _, alert := range alertList {
+		if alert != nil {
+			identifiers = append(identifiers, alert.ID)
+		}
+	}
+	return normalizeAlertIdentifiers(identifiers)
+}
+
+// acquireAlertDeliveryGates coordinates a firing delivery with resolution
+// cancellation for only the alert IDs involved in that operation. Acquiring
+// IDs in sorted order prevents grouped notifications from deadlocking when
+// different alerts resolve concurrently.
+func (nq *NotificationQueue) acquireAlertDeliveryGates(alertIdentifiers []string, write bool) func() {
+	identifiers := normalizeAlertIdentifiers(alertIdentifiers)
+	if len(identifiers) == 0 {
+		return func() {}
+	}
+
+	nq.deliveryGateMu.Lock()
+	gates := make([]*notificationDeliveryGate, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		gate := nq.deliveryGates[identifier]
+		if gate == nil {
+			gate = &notificationDeliveryGate{}
+			nq.deliveryGates[identifier] = gate
+		}
+		gate.refs++
+		gates = append(gates, gate)
+	}
+	nq.deliveryGateMu.Unlock()
+
+	for _, gate := range gates {
+		if write {
+			gate.mu.Lock()
+		} else {
+			gate.mu.RLock()
+		}
+	}
+
+	return func() {
+		for i := len(gates) - 1; i >= 0; i-- {
+			if write {
+				gates[i].mu.Unlock()
+			} else {
+				gates[i].mu.RUnlock()
+			}
+		}
+
+		nq.deliveryGateMu.Lock()
+		for i, identifier := range identifiers {
+			gate := gates[i]
+			gate.refs--
+			if gate.refs == 0 && nq.deliveryGates[identifier] == gate {
+				delete(nq.deliveryGates, identifier)
+			}
+		}
+		nq.deliveryGateMu.Unlock()
+	}
+}
+
 // initSchema creates the database tables
 func (nq *NotificationQueue) initSchema() error {
 	schema := `
@@ -235,6 +327,17 @@ func (nq *NotificationQueue) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON notification_audit(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_audit_notification_id ON notification_audit(notification_id);
 	CREATE INDEX IF NOT EXISTS idx_audit_status ON notification_audit(status);
+
+	CREATE TABLE IF NOT EXISTS notification_delivery_receipts (
+		alert_id TEXT NOT NULL,
+		alert_start_nanos INTEGER NOT NULL,
+		destination_key TEXT NOT NULL,
+		delivered_at INTEGER NOT NULL,
+		PRIMARY KEY (alert_id, alert_start_nanos, destination_key)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_delivery_receipts_delivered_at
+		ON notification_delivery_receipts(delivered_at);
 	`
 
 	if _, err := nq.db.Exec(schema); err != nil {
@@ -254,6 +357,63 @@ func (nq *NotificationQueue) initSchema() error {
 		"notification_audit",
 		notificationOperationalLinksColumn,
 	)
+}
+
+func (nq *NotificationQueue) RecordDeliveryReceipt(alertID string, alertStart time.Time, destinationKey string, deliveredAt time.Time) error {
+	if nq == nil || strings.TrimSpace(alertID) == "" || strings.TrimSpace(destinationKey) == "" || alertStart.IsZero() {
+		return fmt.Errorf("alert occurrence and destination are required for a delivery receipt")
+	}
+	if deliveredAt.IsZero() {
+		deliveredAt = time.Now()
+	}
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+	_, err := nq.db.Exec(`
+		INSERT INTO notification_delivery_receipts
+			(alert_id, alert_start_nanos, destination_key, delivered_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(alert_id, alert_start_nanos, destination_key)
+		DO UPDATE SET delivered_at = excluded.delivered_at
+	`, alertID, alertStart.UnixNano(), destinationKey, deliveredAt.Unix())
+	if err != nil {
+		return fmt.Errorf("record notification delivery receipt: %w", err)
+	}
+	return nil
+}
+
+func (nq *NotificationQueue) HasDeliveryReceipt(alertID string, alertStart time.Time, destinationKey string) (bool, error) {
+	if nq == nil || strings.TrimSpace(alertID) == "" || strings.TrimSpace(destinationKey) == "" || alertStart.IsZero() {
+		return false, nil
+	}
+	nq.mu.RLock()
+	defer nq.mu.RUnlock()
+	var marker int
+	err := nq.db.QueryRow(`
+		SELECT 1 FROM notification_delivery_receipts
+		WHERE alert_id = ? AND alert_start_nanos = ? AND destination_key = ?
+	`, alertID, alertStart.UnixNano(), destinationKey).Scan(&marker)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read notification delivery receipt: %w", err)
+	}
+	return true, nil
+}
+
+func (nq *NotificationQueue) DeleteDeliveryReceipt(alertID string, alertStart time.Time, destinationKey string) error {
+	if nq == nil || strings.TrimSpace(alertID) == "" || strings.TrimSpace(destinationKey) == "" || alertStart.IsZero() {
+		return nil
+	}
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+	if _, err := nq.db.Exec(`
+		DELETE FROM notification_delivery_receipts
+		WHERE alert_id = ? AND alert_start_nanos = ? AND destination_key = ?
+	`, alertID, alertStart.UnixNano(), destinationKey); err != nil {
+		return fmt.Errorf("delete notification delivery receipt: %w", err)
+	}
+	return nil
 }
 
 func (nq *NotificationQueue) migrateAlertIdentifierColumns() error {
@@ -698,7 +858,10 @@ func (nq *NotificationQueue) IncrementAttempt(id string) error {
 	return nil
 }
 
-// IncrementAttemptAndSetStatus atomically increments attempt counter and sets status in a single operation
+// IncrementAttemptAndSetStatus updates a queue row and its operational links
+// atomically. Delivery workers use claimPendingForDelivery so a concurrent
+// resolution can cancel a pending row before it is claimed; this method
+// remains available for explicit lifecycle transitions and compatibility.
 func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status NotificationQueueStatus) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
@@ -725,11 +888,73 @@ func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status Noti
 		    operational_links = ?
 		WHERE id = ?
 	`
-	_, err = nq.db.Exec(query, status, now.Unix(), string(linksJSON), id)
-	if err != nil {
+	if _, err := nq.db.Exec(query, status, now.Unix(), string(linksJSON), id); err != nil {
 		return fmt.Errorf("failed to increment attempt and set status: %w", err)
 	}
 	return nil
+}
+
+// claimPendingForDelivery atomically claims a pending queue row and refreshes
+// its alert list. The refresh is required because resolution cancellation may
+// have rewritten a grouped row after GetPending returned its snapshot.
+func (nq *NotificationQueue) claimPendingForDelivery(notif *QueuedNotification) (bool, error) {
+	nq.mu.Lock()
+	defer nq.mu.Unlock()
+
+	now := time.Now()
+	links, err := nq.readNotificationLinksNoLock(notif.ID)
+	if err != nil {
+		return false, err
+	}
+	links = transitionNotificationLinks(
+		links,
+		notificationDeliveryStateForQueueStatus(QueueStatusSending),
+		now,
+	)
+	linksJSON, err := json.Marshal(links)
+	if err != nil {
+		return false, fmt.Errorf("marshal notification links for attempt: %w", err)
+	}
+	query := `
+		UPDATE notification_queue
+		SET attempts = attempts + 1,
+		    status = ?,
+		    last_attempt = ?,
+		    operational_links = ?
+		WHERE id = ? AND status = 'pending'
+	`
+	result, err := nq.db.Exec(
+		query,
+		QueueStatusSending,
+		now.Unix(),
+		string(linksJSON),
+		notif.ID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to claim pending notification: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("read claimed notification row count: %w", err)
+	}
+	if rows == 0 {
+		return false, nil
+	}
+
+	var alertsJSON []byte
+	if err := nq.db.QueryRow(`SELECT alerts FROM notification_queue WHERE id = ?`, notif.ID).Scan(&alertsJSON); err != nil {
+		return false, fmt.Errorf("reload claimed notification alerts: %w", err)
+	}
+	var refreshedAlerts []*alerts.Alert
+	if err := json.Unmarshal(alertsJSON, &refreshedAlerts); err != nil {
+		return false, fmt.Errorf("decode claimed notification alerts: %w", err)
+	}
+	notif.Alerts = refreshedAlerts
+	notif.Attempts++
+	notif.Status = QueueStatusSending
+	notif.LastAttempt = &now
+	notif.Links = links
+	return true, nil
 }
 
 // GetPending returns notifications ready for processing
@@ -1106,9 +1331,13 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			Msg("Skipping cancelled notification")
 		return
 	}
+	releaseDeliveryGates := nq.acquireAlertDeliveryGates(alertIdentifiersFromAlerts(notif.Alerts), false)
+	defer releaseDeliveryGates()
 
-	// Atomically increment attempt counter and set status to sending
-	if err := nq.IncrementAttemptAndSetStatus(notif.ID, QueueStatusSending); err != nil {
+	// Atomically claim the pending row. A concurrent resolution may have
+	// cancelled it while it was waiting for its per-alert delivery gate.
+	claimed, err := nq.claimPendingForDelivery(notif)
+	if err != nil {
 		log.Error().
 			Err(err).
 			Str("component", "notification_queue").
@@ -1117,19 +1346,18 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			Str("type", notif.Type).
 			Int("attempt", notif.Attempts+1).
 			Int("maxAttempts", notif.MaxAttempts).
-			Msg("Failed to increment attempt and set status")
+			Msg("Failed to claim pending notification")
 		return
 	}
-	attemptedAt := time.Now()
-	notif.Attempts++
-	notif.Status = QueueStatusSending
-	notif.LastAttempt = &attemptedAt
-	notif.Links = transitionNotificationLinks(
-		notif.Links,
-		operationaltrust.NotificationDelivering,
-		attemptedAt,
-	)
-
+	if !claimed {
+		log.Debug().
+			Str("component", "notification_queue").
+			Str("action", "skip_unclaimed").
+			Str("id", notif.ID).
+			Str("type", notif.Type).
+			Msg("Skipping notification because it is no longer pending")
+		return
+	}
 	// Call processor if set
 	nq.mu.RLock()
 	processor := nq.processor
@@ -1138,7 +1366,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		return
 	}
 
-	err := processor(notif)
+	err = processor(notif)
 
 	success := err == nil
 	errorMsg := ""
@@ -1285,6 +1513,26 @@ func (nq *NotificationQueue) performCleanup() {
 	// Keep completed/failed for 7 days, DLQ for 30 days
 	completedCutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	dlqCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
+	receiptCutoff := dlqCutoff
+
+	// Receipts are only needed to correlate a later recovery with a firing
+	// occurrence. Bound their lifetime so installations with recovery delivery
+	// disabled do not grow this side table indefinitely.
+	if result, err := nq.db.Exec(`DELETE FROM notification_delivery_receipts WHERE delivered_at < ?`, receiptCutoff); err != nil {
+		log.Error().
+			Err(err).
+			Str("component", "notification_queue").
+			Str("action", "cleanup_delivery_receipts").
+			Int64("receiptCutoff", receiptCutoff).
+			Msg("Failed to cleanup old notification delivery receipts")
+	} else if rows, _ := result.RowsAffected(); rows > 0 {
+		log.Debug().
+			Str("component", "notification_queue").
+			Str("action", "cleanup_delivery_receipts").
+			Int64("count", rows).
+			Int64("receiptCutoff", receiptCutoff).
+			Msg("Cleaned up old notification delivery receipts")
+	}
 
 	// Delete audit records for notifications about to be cleaned up (FK constraint)
 	auditCleanup := `DELETE FROM notification_audit WHERE notification_id IN (
@@ -1419,9 +1667,12 @@ func calculateBackoff(attempt int) time.Duration {
 // mid-send ('sending') are cancelled best-effort but not counted, because
 // their delivery may still complete.
 func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string) (int, error) {
+	alertIdentifiers = normalizeAlertIdentifiers(alertIdentifiers)
 	if len(alertIdentifiers) == 0 {
 		return 0, nil
 	}
+	releaseDeliveryGates := nq.acquireAlertDeliveryGates(alertIdentifiers, true)
+	defer releaseDeliveryGates()
 
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
@@ -1439,16 +1690,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 
 	alertIdentifierSet := make(map[string]struct{})
 	for _, id := range alertIdentifiers {
-		id = strings.TrimSpace(id)
-		if id != "" {
-			alertIdentifierSet[id] = struct{}{}
-		}
-	}
-	if len(alertIdentifierSet) == 0 {
-		if err := rows.Close(); err != nil {
-			return 0, fmt.Errorf("failed to close cancellation query: %w", err)
-		}
-		return 0, nil
+		alertIdentifierSet[id] = struct{}{}
 	}
 
 	type queuedAlertCancellation struct {

@@ -47,6 +47,32 @@ describe('availabilityProbePresentation', () => {
     expect(presentation?.toneClassName).toContain('emerald');
   });
 
+  it('presents open-or-filtered UDP as indeterminate rather than reachable', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-05-06T13:00:20Z').getTime());
+
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({
+        status: 'warning',
+        availability: {
+          protocol: 'udp',
+          port: 514,
+          available: false,
+          probeOutcome: 'indeterminate',
+          udpMode: 'open_or_filtered',
+          lastChecked: '2026-05-06T13:00:18Z',
+        },
+      }),
+    );
+
+    expect(presentation).toMatchObject({
+      methodLabel: 'UDP 514',
+      targetLabel: '514',
+      resultLabel: 'open or filtered',
+      netIoLabel: '514: open or filtered',
+    });
+    expect(presentation?.toneClassName).toContain('amber');
+  });
+
   it('also reads availability evidence from platform data for live state rows', () => {
     vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-05-06T13:00:20Z').getTime());
 

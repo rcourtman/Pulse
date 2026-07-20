@@ -99,6 +99,39 @@ func TestMonitorAdapterReadStateForwardsToRegistry(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterResolvesCanonicalOperatorIntentCapabilities(t *testing.T) {
+	registry := NewRegistry(NewMemoryStore())
+	adapter := NewMonitorAdapter(registry)
+	adapter.PopulateSupplementalRecords(SourceProxmox, []IngestRecord{{
+		SourceID: "pve-a:vm:101",
+		Resource: Resource{
+			ID:   "vm:pve-a:101",
+			Type: ResourceTypeVM,
+			Name: "vm-101",
+		},
+	}})
+
+	canonicalID, found := adapter.ResolveCanonicalResourceID("pve-a:vm:101")
+	if !found || canonicalID == "" {
+		t.Fatalf("ResolveCanonicalResourceID() = %q, %v", canonicalID, found)
+	}
+	operatorState := ResourceOperatorState{
+		CanonicalID:          canonicalID,
+		IntentionallyOffline: true,
+		MaintenanceReason:    "planned hardware work",
+	}
+	if err := registry.store.SetResourceOperatorState(operatorState); err != nil {
+		t.Fatalf("SetResourceOperatorState() error = %v", err)
+	}
+	got, found, err := adapter.GetResourceOperatorState(canonicalID)
+	if err != nil || !found {
+		t.Fatalf("GetResourceOperatorState() found=%v error=%v", found, err)
+	}
+	if !got.IntentionallyOffline || got.MaintenanceReason != operatorState.MaintenanceReason {
+		t.Fatalf("operator state = %+v, want persisted intent", got)
+	}
+}
+
 func TestMonitorAdapterPhysicalDiskReadStateRetainsProxmoxIdentityAfterSMARTMerge(t *testing.T) {
 	adapter := NewMonitorAdapter(NewRegistry(nil))
 	now := time.Date(2026, 7, 7, 10, 0, 0, 0, time.UTC)

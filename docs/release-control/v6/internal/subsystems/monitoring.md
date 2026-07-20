@@ -1830,3 +1830,29 @@ before point reconciliation so completeness and permission failure cannot be
 lost behind a successful cached-artifact path. Shared protection semantics stay
 in `internal/recovery/`; PBS monitoring owns only this explicit evidence-quality
 adapter.
+
+### Alert-intent evidence adapters and UDP outcomes
+
+Monitoring supplies read-only context to the alerts-owned intent resolver. The
+operator-state adapter resolves source-native references to one canonical
+unified-resource ID before reading durable operator intent. Lookup failure,
+ambiguity, absence, or store error yields no suppression context; monitoring
+does not synthesize maintenance state.
+
+Backup-aware offline intent consumes a PVE task only when VMID, instance, and
+node match and the task is active. `pollBackupTasks` stamps server observation
+time. Evidence older than five minutes, more than one minute in the future,
+finished, terminal, or missing an observation time fails closed. This
+short-lived alert context is separate from PBS protection evidence and from
+recovery assurance; it cannot claim that a backup is restorable or authorize a
+restore.
+
+Availability probing owns three outcomes: reachable, unreachable, and
+indeterminate. UDP response-required mode needs a request and treats timeout or
+mismatch as unreachable. Open-or-filtered mode may return indeterminate after
+the full response deadline. Indeterminate clears accumulated failure count,
+projects warning evidence, and emits no availability incident; it never claims
+reachability. `internal/monitoring/availability_udp_test.go`,
+`internal/monitoring/monitor_alert_intent_test.go`, and the backup polling
+assertion in `internal/monitoring/monitor_full_coverage_test.go` are the focused
+proofs.

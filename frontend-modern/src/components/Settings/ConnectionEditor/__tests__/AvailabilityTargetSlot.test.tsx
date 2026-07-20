@@ -146,4 +146,34 @@ describe('AvailabilityTargetSlot', () => {
       ),
     );
   });
+
+  it('creates response-validated UDP checks', async () => {
+    const onSaved = vi.fn();
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={onSaved} />);
+
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'udp' } });
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'DNS health' } });
+    fireEvent.input(screen.getByLabelText(/^Address/), { target: { value: 'dns.internal' } });
+    fireEvent.input(screen.getByLabelText('Port'), { target: { value: '53' } });
+    fireEvent.input(screen.getByLabelText(/^Request payload/), { target: { value: 'PING' } });
+    fireEvent.input(screen.getByLabelText(/^Expected response \(optional\)/), {
+      target: { value: 'PONG' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'DNS health',
+          address: 'dns.internal',
+          protocol: 'udp',
+          port: 53,
+          udpMode: 'response_required',
+          udpRequest: 'PING',
+          udpExpectedResponse: 'PONG',
+        }),
+      ),
+    );
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
 });

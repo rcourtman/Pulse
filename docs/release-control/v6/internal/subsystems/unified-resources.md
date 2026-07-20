@@ -1815,6 +1815,30 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+### Alert-intent identity and availability evidence projection
+
+The monitor adapter may expose two optional read capabilities to the alert
+intent resolver: source-reference resolution to the current canonical resource
+ID and durable operator-state lookup for that ID. These are read-only views over
+the existing registry and store. Display aliases do not become persistence
+keys, an unresolved reference supplies no operator suppression, and the adapter
+does not mutate operator state or alert policy.
+
+The canonical availability facet additively carries `probeOutcome` and
+`udpMode`. `indeterminate` is evidence that UDP reachability could not be
+distinguished from filtering; it is neither available nor unavailable truth.
+Backend and frontend resource types must retain these values through JSON and
+read-state projection without changing canonical identity, correlation, or
+incident ownership. Legacy clients may ignore the additive fields and continue
+reading the established boolean and status fields, but new consumers must not
+convert an indeterminate outcome into a successful check.
+
+`internal/unifiedresources/availability_projection_test.go` proves the wire
+shape, `internal/unifiedresources/monitor_adapter_read_state_test.go` proves
+canonical identity and operator-state forwarding, and
+`frontend-modern/src/types/__tests__/resource.test.ts` proves the browser
+projection.
+
 ### Physical-disk identity and collection read state
 
 `pkg/diskinventory` owns deterministic physical-disk fallback identity and

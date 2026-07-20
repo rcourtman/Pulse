@@ -27,14 +27,38 @@ type SnapshotAlertConfig = alertconfig.SnapshotAlertConfig
 type BackupAlertConfig = alertconfig.BackupAlertConfig
 type GuestLookup = alertconfig.GuestLookup
 type AlertConfig = alertconfig.AlertConfig
+type AlertIntentSignal = alertconfig.AlertIntentSignal
+type BackupOfflineIntentPolicy = alertconfig.BackupOfflineIntentPolicy
+type AlertIntentRule = alertconfig.AlertIntentRule
+type AlertIntentPolicyDocument = alertconfig.AlertIntentPolicyDocument
 
 const (
-	AlertLevelWarning  = alertconfig.AlertLevelWarning
-	AlertLevelCritical = alertconfig.AlertLevelCritical
-	ActivationPending  = alertconfig.ActivationPending
-	ActivationActive   = alertconfig.ActivationActive
-	ActivationSnoozed  = alertconfig.ActivationSnoozed
+	AlertLevelWarning                     = alertconfig.AlertLevelWarning
+	AlertLevelCritical                    = alertconfig.AlertLevelCritical
+	ActivationPending                     = alertconfig.ActivationPending
+	ActivationActive                      = alertconfig.ActivationActive
+	ActivationSnoozed                     = alertconfig.ActivationSnoozed
+	CurrentAlertIntentPolicySchemaVersion = alertconfig.CurrentAlertIntentPolicySchemaVersion
+	AlertIntentSignalDefault              = alertconfig.AlertIntentSignalDefault
+	AlertIntentSignalOffline              = alertconfig.AlertIntentSignalOffline
+	AlertIntentSignalAvailability         = alertconfig.AlertIntentSignalAvailability
 )
+
+func NewAlertIntentPolicyDocument() AlertIntentPolicyDocument {
+	return alertconfig.NewAlertIntentPolicyDocument()
+}
+
+func MetricAlertIntentSignal(metric string) string {
+	return alertconfig.MetricAlertIntentSignal(metric)
+}
+
+func NormalizeAlertIntentPolicyDocument(document AlertIntentPolicyDocument) AlertIntentPolicyDocument {
+	return alertconfig.NormalizeAlertIntentPolicyDocument(document)
+}
+
+func ValidateAlertIntentPolicyDocument(document AlertIntentPolicyDocument) error {
+	return alertconfig.ValidateAlertIntentPolicyDocument(document)
+}
 
 var ErrAlertNotFound = errors.New("alert not found")
 

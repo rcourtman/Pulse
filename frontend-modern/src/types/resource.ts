@@ -1390,6 +1390,8 @@ export interface ResourceAvailabilityMeta {
   targetKind?: 'machine' | 'service' | 'device' | string;
   address?: string;
   protocol?: string;
+  probeOutcome?: string;
+  udpMode?: string;
   port?: number;
   path?: string;
   enabled?: boolean;

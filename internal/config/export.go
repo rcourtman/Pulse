@@ -24,17 +24,18 @@ const (
 
 // ExportData contains all configuration data for export
 type ExportData struct {
-	Version       string                        `json:"version"`
-	ExportedAt    time.Time                     `json:"exportedAt"`
-	Nodes         NodesConfig                   `json:"nodes"`
-	Alerts        alerts.AlertConfig            `json:"alerts"`
-	Email         notifications.EmailConfig     `json:"email"`
-	Webhooks      []notifications.WebhookConfig `json:"webhooks"`
-	Apprise       notifications.AppriseConfig   `json:"apprise"`
-	System        SystemSettings                `json:"system"`
-	GuestMetadata map[string]*GuestMetadata     `json:"guestMetadata,omitempty"`
-	SSO           *SSOConfig                    `json:"sso,omitempty"`
-	APITokens     []APITokenRecord              `json:"apiTokens,omitempty"`
+	Version       string                            `json:"version"`
+	ExportedAt    time.Time                         `json:"exportedAt"`
+	Nodes         NodesConfig                       `json:"nodes"`
+	Alerts        alerts.AlertConfig                `json:"alerts"`
+	AlertIntent   *alerts.AlertIntentPolicyDocument `json:"alertIntentPolicies,omitempty"`
+	Email         notifications.EmailConfig         `json:"email"`
+	Webhooks      []notifications.WebhookConfig     `json:"webhooks"`
+	Apprise       notifications.AppriseConfig       `json:"apprise"`
+	System        SystemSettings                    `json:"system"`
+	GuestMetadata map[string]*GuestMetadata         `json:"guestMetadata,omitempty"`
+	SSO           *SSOConfig                        `json:"sso,omitempty"`
+	APITokens     []APITokenRecord                  `json:"apiTokens,omitempty"`
 }
 
 // ExportConfig exports all configuration with passphrase-based encryption
@@ -54,6 +55,10 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	alertConfig, err := c.LoadAlertConfig()
 	if err != nil {
 		return "", fmt.Errorf("failed to load alert config: %w", err)
+	}
+	alertIntent, err := c.LoadAlertIntentPolicies()
+	if err != nil {
+		return "", fmt.Errorf("failed to load alert intent policies: %w", err)
 	}
 
 	emailConfig, err := c.LoadEmailConfig()
@@ -97,10 +102,11 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 
 	// Create export data
 	exportData := ExportData{
-		Version:       "4.2",
+		Version:       "4.3",
 		ExportedAt:    time.Now(),
 		Nodes:         *nodes,
 		Alerts:        *alertConfig,
+		AlertIntent:   alertIntent,
 		Email:         *emailConfig,
 		Webhooks:      webhooks,
 		Apprise:       *appriseConfig,
@@ -152,8 +158,10 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	// Check version compatibility (warn but don't fail)
 	switch exportData.Version {
-	case "4.2", "":
+	case "4.3", "":
 		// current version, nothing to do
+	case "4.2":
+		log.Info().Msg("Config was exported from version 4.2. Alert intent policies were not included in that format.")
 	case "4.1":
 		log.Info().Msg("Config was exported from version 4.1. SSO settings were not included in that format.")
 	case "4.0":
@@ -185,6 +193,14 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 
 	if err := c.SaveAlertConfig(exportData.Alerts); err != nil {
 		return fmt.Errorf("failed to import alert config: %w", err)
+	}
+	intentPolicies := exportData.AlertIntent
+	if intentPolicies == nil {
+		defaults := alerts.NewAlertIntentPolicyDocument()
+		intentPolicies = &defaults
+	}
+	if err := c.SaveAlertIntentPolicies(*intentPolicies); err != nil {
+		return fmt.Errorf("failed to import alert intent policies: %w", err)
 	}
 
 	if err := c.SaveEmailConfig(exportData.Email); err != nil {

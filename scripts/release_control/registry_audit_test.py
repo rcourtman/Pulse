@@ -81,11 +81,21 @@ class RegistryAuditTest(unittest.TestCase):
                 "internal/api/ai_handlers_patrol_actions_additional_test.go",
             },
             ("alerts", "alerts-frontend-surface"): {
+                "frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx",
+                "frontend-modern/src/features/alerts/__tests__/ThresholdsTab.test.tsx",
                 "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",
+            },
+            ("alerts", "canonical-alert-runtime"): {
+                "internal/alerts/intent_policy_test.go",
             },
             ("alerts", "alerts-runtime-support"): {
                 "internal/alerts/canonical_override_migration_test.go",
+                "internal/alerts/intent_policy_test.go",
                 "internal/monitoring/monitor_alert_override_migration_test.go",
+            },
+            ("api-contracts", "alert-intent-policy-api"): {
+                "frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts",
+                "internal/api/alerts_endpoints_test.go",
             },
             ("api-contracts", "backend-payload-contracts"): {
                 "internal/api/ai_handlers_patrol_actions_additional_test.go",
@@ -107,9 +117,16 @@ class RegistryAuditTest(unittest.TestCase):
             },
             ("monitoring", "runtime-report-model"): {
                 "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/monitor_full_coverage_test.go",
+            },
+            ("monitoring", "pbs-protection-evidence-runtime"): {
+                "internal/monitoring/monitor_alert_intent_test.go",
+                "internal/monitoring/monitor_full_coverage_test.go",
             },
             ("monitoring", "monitoring-runtime"): {
+                "internal/monitoring/availability_udp_test.go",
                 "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/monitor_alert_intent_test.go",
                 "internal/monitoring/monitor_alert_override_migration_test.go",
             },
             ("monitoring", "agent-fleet-diagnostics-runtime"): {
@@ -138,6 +155,7 @@ class RegistryAuditTest(unittest.TestCase):
                 "internal/hostagent/issue1595_sas_collection_test.go",
                 "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/truenas/contract_test.go",
+                "internal/unifiedresources/availability_projection_test.go",
                 "pkg/diskinventory/identity_test.go",
                 "pkg/diskinventory/status_test.go",
             },

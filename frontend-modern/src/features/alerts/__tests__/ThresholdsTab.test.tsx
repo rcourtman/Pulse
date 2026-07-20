@@ -5,10 +5,18 @@ import { ThresholdsTab } from '../tabs/ThresholdsTab';
 import type { ThresholdsTabProps } from '../thresholds/thresholdsTabModel';
 
 const captureThresholdsTableProps = vi.fn();
+const captureIntentPolicyProps = vi.fn();
 
 vi.mock('@/components/Alerts/ThresholdsTable', () => ({
   ThresholdsTable: (props: unknown) => {
     captureThresholdsTableProps(props);
+    return null;
+  },
+}));
+
+vi.mock('../AlertIntentPolicyPanel', () => ({
+  AlertIntentPolicyPanel: (props: unknown) => {
+    captureIntentPolicyProps(props);
     return null;
   },
 }));

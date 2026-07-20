@@ -2944,16 +2944,17 @@ func (b PVEBackups) NormalizeCollections() PVEBackups {
 
 // BackupTask represents a PVE backup task
 type BackupTask struct {
-	ID        string    `json:"id"`
-	Node      string    `json:"node"`
-	Instance  string    `json:"instance"` // Unique instance identifier
-	Type      string    `json:"type"`
-	VMID      int       `json:"vmid"`
-	Status    string    `json:"status"`
-	StartTime time.Time `json:"startTime"`
-	EndTime   time.Time `json:"endTime,omitempty"`
-	Size      int64     `json:"size,omitempty"`
-	Error     string    `json:"error,omitempty"`
+	ID         string    `json:"id"`
+	Node       string    `json:"node"`
+	Instance   string    `json:"instance"` // Unique instance identifier
+	Type       string    `json:"type"`
+	VMID       int       `json:"vmid"`
+	Status     string    `json:"status"`
+	StartTime  time.Time `json:"startTime"`
+	EndTime    time.Time `json:"endTime,omitempty"`
+	ObservedAt time.Time `json:"observedAt,omitempty"`
+	Size       int64     `json:"size,omitempty"`
+	Error      string    `json:"error,omitempty"`
 }
 
 // StorageBackup represents a backup file in storage

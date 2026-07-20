@@ -2,7 +2,8 @@ import { apiFetchJSON } from '@/utils/apiClient';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
-export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'http' | 'https';
+export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'http' | 'https';
+export type AvailabilityUDPMode = 'response_required' | 'open_or_filtered';
 export type AvailabilityTargetKind = 'machine' | 'service' | 'device';
 
 export interface AvailabilityProbeStatus {
@@ -11,6 +12,7 @@ export interface AvailabilityProbeStatus {
   targetKind?: AvailabilityTargetKind | string;
   address: string;
   protocol: AvailabilityProbeProtocol | string;
+  outcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
   enabled: boolean;
   available: boolean;
   lastChecked?: string;
@@ -29,6 +31,9 @@ export interface AvailabilityTarget {
   protocol: AvailabilityProbeProtocol;
   port?: number;
   path?: string;
+  udpMode?: AvailabilityUDPMode;
+  udpRequest?: string;
+  udpExpectedResponse?: string;
   linkedResourceId?: string;
   enabled: boolean;
   pollIntervalSeconds?: number;
@@ -40,6 +45,7 @@ export interface AvailabilityTarget {
 export interface AvailabilityTestResponse {
   success: boolean;
   latencyMillis: number;
+  outcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
   error?: string;
 }
 

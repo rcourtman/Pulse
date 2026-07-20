@@ -59,6 +59,8 @@ export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): st
       return 'ICMP ping';
     case 'tcp':
       return target.port ? `TCP ${target.port}` : 'TCP port';
+    case 'udp':
+      return target.port ? `UDP ${target.port}` : 'UDP port';
     case 'http':
       return 'HTTP check';
     default:
@@ -90,7 +92,7 @@ export function getAvailabilityTargetAddressLabel(target: AvailabilityTarget): s
     }
     return target.address;
   }
-  if (target.protocol === 'tcp' && target.port) {
+  if ((target.protocol === 'tcp' || target.protocol === 'udp') && target.port) {
     return `${target.address}:${target.port}`;
   }
   return target.address;
@@ -100,6 +102,7 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
   if (!target.enabled) return 'Paused';
   const status = target.status;
   if (!status) return 'Not checked yet';
+  if (status.outcome === 'indeterminate') return 'Open or filtered';
   if (status.available) {
     return typeof status.latencyMillis === 'number'
       ? `Online · ${status.latencyMillis} ms`
@@ -111,6 +114,9 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
 export function getAvailabilityTargetStatusClass(target: AvailabilityTarget): string {
   if (!target.enabled) return 'bg-surface-alt text-muted';
   if (!target.status) return 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
+  if (target.status.outcome === 'indeterminate') {
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+  }
   if (target.status.available) {
     return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300';
   }
