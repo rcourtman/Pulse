@@ -325,7 +325,19 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 		}
 	}
 
-	// Resolve from multi-tenant managers first.
+	// The default org is the primary runtime owned by Router. Its config and
+	// monitor are updated in place by setup and reload flows, while the
+	// multi-tenant manager keeps isolated tenant copies. Never route default-org
+	// requests back through that tenant-copy path or they can observe stale auth
+	// and setup state.
+	if orgID == "default" &&
+		(defaultConfig != nil || defaultPersistence != nil || defaultMonitor != nil) {
+		return defaultConfig, defaultPersistence, defaultMonitor
+	}
+
+	// Resolve non-default organizations, plus initialization-only handlers
+	// that have not yet been given the primary default runtime, from the
+	// multi-tenant managers.
 	if mtMonitor != nil {
 		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			cfg := m.GetConfig()
@@ -335,18 +347,25 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 			}
 			return cfg, p, m
 		} else {
-			if orgID != "default" {
-				log.Warn().Str("orgID", orgID).Err(err).Msg("Tenant config resolution failed for non-default org")
-				return nil, nil, nil
+			if orgID == "default" {
+				log.Warn().Str("orgID", orgID).Err(err).Msg("Default config resolution failed before primary runtime initialization")
+				return defaultConfig, defaultPersistence, defaultMonitor
 			}
-			if err != nil {
-				log.Warn().Str("orgID", orgID).Err(err).Msg("Falling back to default-org config after default tenant monitor lookup failure")
-			}
+			log.Warn().Str("orgID", orgID).Err(err).Msg("Tenant config resolution failed for non-default org")
+			return nil, nil, nil
 		}
 	}
 
-	// Fallback to default-org state (primarily for "default" org or initialization).
-	return defaultConfig, defaultPersistence, defaultMonitor
+	if orgID == "default" {
+		return defaultConfig, defaultPersistence, defaultMonitor
+	}
+	// Single-runtime handlers have no tenant manager and therefore no
+	// alternate state to resolve. Keep their historical default-state
+	// behavior; multi-tenant handlers above continue to fail closed.
+	if mtMonitor == nil {
+		return defaultConfig, defaultPersistence, defaultMonitor
+	}
+	return nil, nil, nil
 }
 
 func (h *ConfigHandlers) getConfig(ctx context.Context) *config.Config {

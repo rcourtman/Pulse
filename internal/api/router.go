@@ -478,7 +478,7 @@ func (r *Router) setupRoutes() {
 	r.vmwarePoller.Start(r.lifecycleCtx)
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	updateHandlers.SetUpdateReadinessSources(
-		r.configHandlers.getConfig,
+		r.updateReadinessConfigSnapshot,
 		func(context.Context) []models.Host {
 			if r.monitor == nil {
 				return nil

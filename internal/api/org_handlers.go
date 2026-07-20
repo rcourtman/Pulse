@@ -387,7 +387,8 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.mtMonitor != nil {
-		h.mtMonitor.RemoveTenant(orgID)
+		h.mtMonitor.BeginTenantDeletion(orgID)
+		defer h.mtMonitor.FinishTenantDeletion(orgID)
 	}
 
 	if err := h.persistence.DeleteOrganization(orgID); err != nil {

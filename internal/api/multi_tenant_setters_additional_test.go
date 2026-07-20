@@ -98,6 +98,40 @@ func TestConfigHandlersNonDefaultMissingTenantMonitorFailsClosed(t *testing.T) {
 	}
 }
 
+func TestConfigHandlersDefaultContextUsesPrimaryRuntimeState(t *testing.T) {
+	tenantCopyConfig := &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()}
+	tenantCopyMonitor, _, _ := newTestMonitor(t)
+	setUnexportedField(t, tenantCopyMonitor, "config", tenantCopyConfig)
+
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{
+		"default": tenantCopyMonitor,
+	})
+
+	primaryConfig := &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()}
+	primaryMonitor, _, _ := newTestMonitor(t)
+	setUnexportedField(t, primaryMonitor, "config", primaryConfig)
+	primaryPersistence := config.NewConfigPersistence(primaryConfig.ConfigPath)
+
+	handler := &ConfigHandlers{
+		defaultConfig:      primaryConfig,
+		defaultPersistence: primaryPersistence,
+		defaultMonitor:     primaryMonitor,
+		mtMonitor:          mtm,
+	}
+
+	cfg, persistence, monitor := handler.getContextState(context.Background())
+	if cfg != primaryConfig {
+		t.Fatalf("default config = %#v, want primary config %#v", cfg, primaryConfig)
+	}
+	if persistence != primaryPersistence {
+		t.Fatalf("default persistence = %#v, want primary persistence %#v", persistence, primaryPersistence)
+	}
+	if monitor != primaryMonitor {
+		t.Fatalf("default monitor = %#v, want primary monitor %#v", monitor, primaryMonitor)
+	}
+}
+
 func TestNewRouterWiresTenantResourceStateProvider(t *testing.T) {
 	cfg := &config.Config{
 		DataPath:   t.TempDir(),

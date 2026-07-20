@@ -489,10 +489,20 @@ func normalizeMockMetricTimestamp(at time.Time, interval time.Duration) time.Tim
 }
 
 func canonicalMetricSeries(resourceType, resourceID, metric string, timestamps []time.Time) []float64 {
+	return canonicalMetricSeriesWithSampler(
+		mock.NewMetricSampler(mock.CurrentFixtureGraph()),
+		resourceType,
+		resourceID,
+		metric,
+		timestamps,
+	)
+}
+
+func canonicalMetricSeriesWithSampler(sampler mock.MetricSampler, resourceType, resourceID, metric string, timestamps []time.Time) []float64 {
 	if len(timestamps) == 0 || strings.TrimSpace(resourceID) == "" {
 		return nil
 	}
-	return mock.SampleMetricSeries(resourceType, resourceID, metric, timestamps)
+	return sampler.SampleMetricSeries(resourceType, resourceID, metric, timestamps)
 }
 
 func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.FixtureGraph, now time.Time, seedDuration, interval time.Duration) {
@@ -503,6 +513,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	if seedDuration <= 0 || interval <= 0 {
 		return
 	}
+	sampler := mock.NewMetricSampler(graph)
 	now = normalizeMockMetricTimestamp(now, interval)
 
 	// Build one canonical timestamp list so seeded history and subsequent live
@@ -584,7 +595,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			for _, plan := range mockStoreSeedPlans {
 				coverageKey := metrics.NormalizedSeriesKey(resourceType, resourceID, metricType)
 				for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
-					queueStorePoint(resourceType, resourceID, metricType, mock.SampleMetric(resourceType, resourceID, metricType, ts), ts, plan.tier)
+					queueStorePoint(resourceType, resourceID, metricType, sampler.SampleMetric(resourceType, resourceID, metricType, ts), ts, plan.tier)
 				}
 			}
 		}
@@ -600,7 +611,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		for _, plan := range mockStoreSeedPlans {
 			coverageKey := metrics.NormalizedSeriesKey("storage", storageID, "usage")
 			for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
-				usage := clampFloat(mock.SampleMetric("storage", storageID, "usage", ts), 0, 100)
+				usage := clampFloat(sampler.SampleMetric("storage", storageID, "usage", ts), 0, 100)
 				used := currentTotal * (usage / 100.0)
 				avail := math.Max(0, currentTotal-used)
 				queueStorePoint("storage", storageID, "usage", usage, ts, plan.tier)
@@ -615,7 +626,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		usageSeries := canonicalMetricSeries("storage", storageID, "usage", seedTimestamps)
+		usageSeries := canonicalMetricSeriesWithSampler(sampler, "storage", storageID, "usage", seedTimestamps)
 		usedSeries := make([]float64, numPoints)
 		availSeries := make([]float64, numPoints)
 		totalSeries := make([]float64, numPoints)
@@ -639,9 +650,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		cpuSeries := canonicalMetricSeries("node", node.ID, "cpu", seedTimestamps)
-		memSeries := canonicalMetricSeries("node", node.ID, "memory", seedTimestamps)
-		diskSeries := canonicalMetricSeries("node", node.ID, "disk", seedTimestamps)
+		cpuSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "cpu", seedTimestamps)
+		memSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "memory", seedTimestamps)
+		diskSeries := canonicalMetricSeriesWithSampler(sampler, "node", node.ID, "disk", seedTimestamps)
 
 		mh.addNodeMetricSeries(node.ID, "cpu", cpuSeries, seedTimestamps)
 		mh.addNodeMetricSeries(node.ID, "memory", memSeries, seedTimestamps)
@@ -675,20 +686,20 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		cpuSeries := canonicalMetricSeries(storeType, storeID, "cpu", seedTimestamps)
-		memSeries := canonicalMetricSeries(storeType, storeID, "memory", seedTimestamps)
+		cpuSeries := canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "cpu", seedTimestamps)
+		memSeries := canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "memory", seedTimestamps)
 		var diskSeries []float64
 		if includeDisk {
-			diskSeries = canonicalMetricSeries(storeType, storeID, "disk", seedTimestamps)
+			diskSeries = canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "disk", seedTimestamps)
 		}
 		var diskReadSeries, diskWriteSeries, netInSeries, netOutSeries []float64
 		if includeDiskIO {
-			diskReadSeries = canonicalMetricSeries(storeType, storeID, "diskread", seedTimestamps)
-			diskWriteSeries = canonicalMetricSeries(storeType, storeID, "diskwrite", seedTimestamps)
+			diskReadSeries = canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "diskread", seedTimestamps)
+			diskWriteSeries = canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "diskwrite", seedTimestamps)
 		}
 		if includeNetwork {
-			netInSeries = canonicalMetricSeries(storeType, storeID, "netin", seedTimestamps)
-			netOutSeries = canonicalMetricSeries(storeType, storeID, "netout", seedTimestamps)
+			netInSeries = canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "netin", seedTimestamps)
+			netOutSeries = canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "netout", seedTimestamps)
 		}
 
 		for _, metricID := range uniqueMetricIDs {
@@ -815,10 +826,10 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	// series for one physical disk, shared by the native and TrueNAS fixture
 	// disk loops below.
 	seedDiskTelemetry := func(resourceID string) {
-		tempSeries := canonicalMetricSeries("disk", resourceID, "smart_temp", seedTimestamps)
-		busySeries := canonicalMetricSeries("disk", resourceID, "disk", seedTimestamps)
-		diskReadSeries := canonicalMetricSeries("disk", resourceID, "diskread", seedTimestamps)
-		diskWriteSeries := canonicalMetricSeries("disk", resourceID, "diskwrite", seedTimestamps)
+		tempSeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "smart_temp", seedTimestamps)
+		busySeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "disk", seedTimestamps)
+		diskReadSeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "diskread", seedTimestamps)
+		diskWriteSeries := canonicalMetricSeriesWithSampler(sampler, "disk", resourceID, "diskwrite", seedTimestamps)
 		mh.addDiskMetricSeries(resourceID, "smart_temp", tempSeries, seedTimestamps)
 		mh.addDiskMetricSeries(resourceID, "disk", busySeries, seedTimestamps)
 		mh.addDiskMetricSeries(resourceID, "diskread", diskReadSeries, seedTimestamps)
@@ -920,7 +931,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 
 	for _, pool := range trueNASFixtures.Pools {
 		poolKey := mock.TrueNASPoolMetricID(trueNASFixtures.System.Hostname, pool.Name)
-		diskSeries := canonicalMetricSeries("storage", poolKey, "usage", seedTimestamps)
+		diskSeries := canonicalMetricSeriesWithSampler(sampler, "storage", poolKey, "usage", seedTimestamps)
 		mh.addGuestMetricSeries(poolKey, "disk", diskSeries, seedTimestamps)
 		recordStorageTimeline(poolKey, float64(pool.TotalBytes))
 	}
@@ -928,7 +939,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	for _, dataset := range trueNASFixtures.Datasets {
 		dsKey := mock.TrueNASDatasetMetricID(trueNASFixtures.System.Hostname, dataset.Name)
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
-		diskSeries := canonicalMetricSeries("storage", dsKey, "usage", seedTimestamps)
+		diskSeries := canonicalMetricSeriesWithSampler(sampler, "storage", dsKey, "usage", seedTimestamps)
 		mh.addGuestMetricSeries(dsKey, "disk", diskSeries, seedTimestamps)
 		recordStorageTimeline(dsKey, float64(totalBytes))
 	}
@@ -1057,17 +1068,17 @@ func prepareMockMetricsHistory(
 
 // recordTrueNASFixturesMetrics records live fixture ticks for TrueNAS host,
 // storage, and app-container metrics.
-func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures mock.PlatformFixtures, ts time.Time) {
+func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, sampler mock.MetricSampler, fixtures mock.PlatformFixtures, ts time.Time) {
 	snapshot := fixtures.TrueNAS
 
 	if strings.TrimSpace(snapshot.System.Hostname) != "" {
-		systemCPU := mock.SampleMetric("agent", snapshot.System.Hostname, "cpu", ts)
-		systemMemory := mock.SampleMetric("agent", snapshot.System.Hostname, "memory", ts)
-		systemDisk := mock.SampleMetric("agent", snapshot.System.Hostname, "disk", ts)
-		systemDiskRead := mock.SampleMetric("agent", snapshot.System.Hostname, "diskread", ts)
-		systemDiskWrite := mock.SampleMetric("agent", snapshot.System.Hostname, "diskwrite", ts)
-		systemNetIn := mock.SampleMetric("agent", snapshot.System.Hostname, "netin", ts)
-		systemNetOut := mock.SampleMetric("agent", snapshot.System.Hostname, "netout", ts)
+		systemCPU := sampler.SampleMetric("agent", snapshot.System.Hostname, "cpu", ts)
+		systemMemory := sampler.SampleMetric("agent", snapshot.System.Hostname, "memory", ts)
+		systemDisk := sampler.SampleMetric("agent", snapshot.System.Hostname, "disk", ts)
+		systemDiskRead := sampler.SampleMetric("agent", snapshot.System.Hostname, "diskread", ts)
+		systemDiskWrite := sampler.SampleMetric("agent", snapshot.System.Hostname, "diskwrite", ts)
+		systemNetIn := sampler.SampleMetric("agent", snapshot.System.Hostname, "netin", ts)
+		systemNetOut := sampler.SampleMetric("agent", snapshot.System.Hostname, "netout", ts)
 		systemMetricIDs := []string{
 			"system:" + snapshot.System.Hostname,
 			"agent:" + snapshot.System.Hostname,
@@ -1096,7 +1107,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 		if pool.TotalBytes > 0 {
 			poolKey := mock.TrueNASPoolMetricID(snapshot.System.Hostname, pool.Name)
 			total := float64(pool.TotalBytes)
-			usage := clampFloat(mock.SampleMetric("storage", poolKey, "usage", ts), 0, 100)
+			usage := clampFloat(sampler.SampleMetric("storage", poolKey, "usage", ts), 0, 100)
 			used := total * (usage / 100.0)
 			avail := math.Max(0, total-used)
 			mh.AddGuestMetric(poolKey, "disk", usage, ts)
@@ -1119,7 +1130,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 		if totalBytes > 0 {
 			dsKey := mock.TrueNASDatasetMetricID(snapshot.System.Hostname, dataset.Name)
 			total := float64(totalBytes)
-			usage := clampFloat(mock.SampleMetric("storage", dsKey, "usage", ts), 0, 100)
+			usage := clampFloat(sampler.SampleMetric("storage", dsKey, "usage", ts), 0, 100)
 			used := total * (usage / 100.0)
 			avail := math.Max(0, total-used)
 			mh.AddGuestMetric(dsKey, "disk", usage, ts)
@@ -1145,10 +1156,10 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 		if resourceID == "" {
 			continue
 		}
-		temp := mock.SampleMetric("disk", resourceID, "smart_temp", ts)
-		busy := mock.SampleMetric("disk", resourceID, "disk", ts)
-		diskRead := mock.SampleMetric("disk", resourceID, "diskread", ts)
-		diskWrite := mock.SampleMetric("disk", resourceID, "diskwrite", ts)
+		temp := sampler.SampleMetric("disk", resourceID, "smart_temp", ts)
+		busy := sampler.SampleMetric("disk", resourceID, "disk", ts)
+		diskRead := sampler.SampleMetric("disk", resourceID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("disk", resourceID, "diskwrite", ts)
 
 		mh.AddDiskMetric(resourceID, "smart_temp", temp, ts)
 		mh.AddDiskMetric(resourceID, "disk", busy, ts)
@@ -1167,13 +1178,13 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 		if strings.TrimSpace(appID) == "" {
 			continue
 		}
-		cpu := mock.SampleMetric("dockerContainer", appID, "cpu", ts)
-		memPercent := mock.SampleMetric("dockerContainer", appID, "memory", ts)
-		diskPercent := mock.SampleMetric("dockerContainer", appID, "disk", ts)
-		diskRead := mock.SampleMetric("dockerContainer", appID, "diskread", ts)
-		diskWrite := mock.SampleMetric("dockerContainer", appID, "diskwrite", ts)
-		netIn := mock.SampleMetric("dockerContainer", appID, "netin", ts)
-		netOut := mock.SampleMetric("dockerContainer", appID, "netout", ts)
+		cpu := sampler.SampleMetric("dockerContainer", appID, "cpu", ts)
+		memPercent := sampler.SampleMetric("dockerContainer", appID, "memory", ts)
+		diskPercent := sampler.SampleMetric("dockerContainer", appID, "disk", ts)
+		diskRead := sampler.SampleMetric("dockerContainer", appID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("dockerContainer", appID, "diskwrite", ts)
+		netIn := sampler.SampleMetric("dockerContainer", appID, "netin", ts)
+		netOut := sampler.SampleMetric("dockerContainer", appID, "netout", ts)
 		metricKey := "docker:" + appID
 		mh.AddGuestMetric(metricKey, "cpu", cpu, ts)
 		mh.AddGuestMetric(metricKey, "memory", memPercent, ts)
@@ -1194,7 +1205,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 	}
 }
 
-func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures mock.PlatformFixtures, ts time.Time) {
+func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, sampler mock.MetricSampler, fixtures mock.PlatformFixtures, ts time.Time) {
 	snapshot := fixtures.VMware
 
 	for _, host := range snapshot.Hosts {
@@ -1202,13 +1213,13 @@ func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures
 		if sourceID == "" {
 			continue
 		}
-		cpu := mock.SampleMetric("agent", sourceID, "cpu", ts)
-		memory := mock.SampleMetric("agent", sourceID, "memory", ts)
-		disk := mock.SampleMetric("agent", sourceID, "disk", ts)
-		diskRead := mock.SampleMetric("agent", sourceID, "diskread", ts)
-		diskWrite := mock.SampleMetric("agent", sourceID, "diskwrite", ts)
-		netIn := mock.SampleMetric("agent", sourceID, "netin", ts)
-		netOut := mock.SampleMetric("agent", sourceID, "netout", ts)
+		cpu := sampler.SampleMetric("agent", sourceID, "cpu", ts)
+		memory := sampler.SampleMetric("agent", sourceID, "memory", ts)
+		disk := sampler.SampleMetric("agent", sourceID, "disk", ts)
+		diskRead := sampler.SampleMetric("agent", sourceID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("agent", sourceID, "diskwrite", ts)
+		netIn := sampler.SampleMetric("agent", sourceID, "netin", ts)
+		netOut := sampler.SampleMetric("agent", sourceID, "netout", ts)
 		mh.AddGuestMetric("agent:"+sourceID, "cpu", cpu, ts)
 		mh.AddGuestMetric("agent:"+sourceID, "memory", memory, ts)
 		mh.AddGuestMetric("agent:"+sourceID, "disk", disk, ts)
@@ -1232,13 +1243,13 @@ func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures
 		if sourceID == "" {
 			continue
 		}
-		cpu := mock.SampleMetric("vm", sourceID, "cpu", ts)
-		memory := mock.SampleMetric("vm", sourceID, "memory", ts)
-		disk := mock.SampleMetric("vm", sourceID, "disk", ts)
-		diskRead := mock.SampleMetric("vm", sourceID, "diskread", ts)
-		diskWrite := mock.SampleMetric("vm", sourceID, "diskwrite", ts)
-		netIn := mock.SampleMetric("vm", sourceID, "netin", ts)
-		netOut := mock.SampleMetric("vm", sourceID, "netout", ts)
+		cpu := sampler.SampleMetric("vm", sourceID, "cpu", ts)
+		memory := sampler.SampleMetric("vm", sourceID, "memory", ts)
+		disk := sampler.SampleMetric("vm", sourceID, "disk", ts)
+		diskRead := sampler.SampleMetric("vm", sourceID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("vm", sourceID, "diskwrite", ts)
+		netIn := sampler.SampleMetric("vm", sourceID, "netin", ts)
+		netOut := sampler.SampleMetric("vm", sourceID, "netout", ts)
 		mh.AddGuestMetric(sourceID, "cpu", cpu, ts)
 		mh.AddGuestMetric(sourceID, "memory", memory, ts)
 		mh.AddGuestMetric(sourceID, "disk", disk, ts)
@@ -1262,7 +1273,7 @@ func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures
 		if sourceID == "" {
 			continue
 		}
-		usage := clampFloat(mock.SampleMetric("storage", sourceID, "usage", ts), 0, 100)
+		usage := clampFloat(sampler.SampleMetric("storage", sourceID, "usage", ts), 0, 100)
 		total := datastore.Capacity
 		used := int64(float64(total) * (usage / 100.0))
 		if used > total {
@@ -1300,20 +1311,20 @@ type containerAdapter struct{ *models.Container }
 func (c containerAdapter) GetID() string     { return c.Container.ID }
 func (c containerAdapter) GetStatus() string { return c.Container.Status }
 
-func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Store, guests []T, prefix string, ts time.Time) {
+func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Store, sampler mock.MetricSampler, guests []T, prefix string, ts time.Time) {
 	for _, guest := range guests {
 		if guest.GetID() == "" || guest.GetStatus() != "running" {
 			continue
 		}
 
 		id := guest.GetID()
-		cpu := mock.SampleMetric(prefix, id, "cpu", ts)
-		memory := mock.SampleMetric(prefix, id, "memory", ts)
-		disk := mock.SampleMetric(prefix, id, "disk", ts)
-		diskread := mock.SampleMetric(prefix, id, "diskread", ts)
-		diskwrite := mock.SampleMetric(prefix, id, "diskwrite", ts)
-		netin := mock.SampleMetric(prefix, id, "netin", ts)
-		netout := mock.SampleMetric(prefix, id, "netout", ts)
+		cpu := sampler.SampleMetric(prefix, id, "cpu", ts)
+		memory := sampler.SampleMetric(prefix, id, "memory", ts)
+		disk := sampler.SampleMetric(prefix, id, "disk", ts)
+		diskread := sampler.SampleMetric(prefix, id, "diskread", ts)
+		diskwrite := sampler.SampleMetric(prefix, id, "diskwrite", ts)
+		netin := sampler.SampleMetric(prefix, id, "netin", ts)
+		netout := sampler.SampleMetric(prefix, id, "netout", ts)
 
 		mh.AddGuestMetric(id, "cpu", cpu, ts)
 		mh.AddGuestMetric(id, "memory", memory, ts)
@@ -1356,15 +1367,16 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		return
 	}
 	state := graph.State
+	sampler := mock.NewMetricSampler(graph)
 
 	for _, node := range state.Nodes {
 		if node.ID == "" || node.Status != "online" {
 			continue
 		}
 
-		cpu := mock.SampleMetric("node", node.ID, "cpu", ts)
-		memory := mock.SampleMetric("node", node.ID, "memory", ts)
-		disk := mock.SampleMetric("node", node.ID, "disk", ts)
+		cpu := sampler.SampleMetric("node", node.ID, "cpu", ts)
+		memory := sampler.SampleMetric("node", node.ID, "memory", ts)
+		disk := sampler.SampleMetric("node", node.ID, "disk", ts)
 		mh.AddNodeMetric(node.ID, "cpu", cpu, ts)
 		mh.AddNodeMetric(node.ID, "memory", memory, ts)
 		mh.AddNodeMetric(node.ID, "disk", disk, ts)
@@ -1382,18 +1394,18 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		}
 	}
 
-	recordGuestMetrics(mh, ms, adaptVMs(state.VMs), "vm", ts)
-	recordGuestMetrics(mh, ms, adaptContainers(state.Containers), "container", ts)
+	recordGuestMetrics(mh, ms, sampler, adaptVMs(state.VMs), "vm", ts)
+	recordGuestMetrics(mh, ms, sampler, adaptContainers(state.Containers), "container", ts)
 
 	recordKubernetesMetric := func(metricID string, includeDiskIO bool) {
 		if metricID == "" {
 			return
 		}
-		cpu := mock.SampleMetric("k8s", metricID, "cpu", ts)
-		memory := mock.SampleMetric("k8s", metricID, "memory", ts)
-		disk := mock.SampleMetric("k8s", metricID, "disk", ts)
-		netIn := mock.SampleMetric("k8s", metricID, "netin", ts)
-		netOut := mock.SampleMetric("k8s", metricID, "netout", ts)
+		cpu := sampler.SampleMetric("k8s", metricID, "cpu", ts)
+		memory := sampler.SampleMetric("k8s", metricID, "memory", ts)
+		disk := sampler.SampleMetric("k8s", metricID, "disk", ts)
+		netIn := sampler.SampleMetric("k8s", metricID, "netin", ts)
+		netOut := sampler.SampleMetric("k8s", metricID, "netout", ts)
 
 		mh.AddGuestMetric(metricID, "cpu", cpu, ts)
 		mh.AddGuestMetric(metricID, "memory", memory, ts)
@@ -1413,8 +1425,8 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			return
 		}
 
-		diskRead := mock.SampleMetric("k8s", metricID, "diskread", ts)
-		diskWrite := mock.SampleMetric("k8s", metricID, "diskwrite", ts)
+		diskRead := sampler.SampleMetric("k8s", metricID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("k8s", metricID, "diskwrite", ts)
 		mh.AddGuestMetric(metricID, "diskread", diskRead, ts)
 		mh.AddGuestMetric(metricID, "diskwrite", diskWrite, ts)
 		if ms != nil {
@@ -1448,7 +1460,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		if total <= 0 {
 			total = currentUsed + currentAvail
 		}
-		usage := mock.SampleMetric("storage", storage.ID, "usage", ts)
+		usage := sampler.SampleMetric("storage", storage.ID, "usage", ts)
 		usage = clampFloat(usage, 0, 100)
 		used := total * (usage / 100.0)
 		if used < 0 {
@@ -1479,10 +1491,10 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		if resourceID == "" {
 			continue
 		}
-		temp := mock.SampleMetric("disk", resourceID, "smart_temp", ts)
-		busy := mock.SampleMetric("disk", resourceID, "disk", ts)
-		diskRead := mock.SampleMetric("disk", resourceID, "diskread", ts)
-		diskWrite := mock.SampleMetric("disk", resourceID, "diskwrite", ts)
+		temp := sampler.SampleMetric("disk", resourceID, "smart_temp", ts)
+		busy := sampler.SampleMetric("disk", resourceID, "disk", ts)
+		diskRead := sampler.SampleMetric("disk", resourceID, "diskread", ts)
+		diskWrite := sampler.SampleMetric("disk", resourceID, "diskwrite", ts)
 
 		mh.AddDiskMetric(resourceID, "smart_temp", temp, ts)
 		mh.AddDiskMetric(resourceID, "disk", busy, ts)
@@ -1519,9 +1531,9 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		}
 
 		hostKey := "dockerHost:" + host.ID
-		cpu := mock.SampleMetric("dockerHost", host.ID, "cpu", ts)
-		memory := mock.SampleMetric("dockerHost", host.ID, "memory", ts)
-		disk := mock.SampleMetric("dockerHost", host.ID, "disk", ts)
+		cpu := sampler.SampleMetric("dockerHost", host.ID, "cpu", ts)
+		memory := sampler.SampleMetric("dockerHost", host.ID, "memory", ts)
+		disk := sampler.SampleMetric("dockerHost", host.ID, "disk", ts)
 		mh.AddGuestMetric(hostKey, "cpu", cpu, ts)
 		mh.AddGuestMetric(hostKey, "memory", memory, ts)
 		mh.AddGuestMetric(hostKey, "disk", disk, ts)
@@ -1538,9 +1550,9 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			}
 
 			metricKey := "docker:" + container.ID
-			cpu := mock.SampleMetric("dockerContainer", container.ID, "cpu", ts)
-			memory := mock.SampleMetric("dockerContainer", container.ID, "memory", ts)
-			disk := mock.SampleMetric("dockerContainer", container.ID, "disk", ts)
+			cpu := sampler.SampleMetric("dockerContainer", container.ID, "cpu", ts)
+			memory := sampler.SampleMetric("dockerContainer", container.ID, "memory", ts)
+			disk := sampler.SampleMetric("dockerContainer", container.ID, "disk", ts)
 			mh.AddGuestMetric(metricKey, "cpu", cpu, ts)
 			mh.AddGuestMetric(metricKey, "memory", memory, ts)
 			mh.AddGuestMetric(metricKey, "disk", disk, ts)
@@ -1559,13 +1571,13 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		}
 
 		hostKey := "agent:" + host.ID
-		cpu := mock.SampleMetric("agent", host.ID, "cpu", ts)
-		memory := mock.SampleMetric("agent", host.ID, "memory", ts)
-		disk := mock.SampleMetric("agent", host.ID, "disk", ts)
-		diskread := mock.SampleMetric("agent", host.ID, "diskread", ts)
-		diskwrite := mock.SampleMetric("agent", host.ID, "diskwrite", ts)
-		netin := mock.SampleMetric("agent", host.ID, "netin", ts)
-		netout := mock.SampleMetric("agent", host.ID, "netout", ts)
+		cpu := sampler.SampleMetric("agent", host.ID, "cpu", ts)
+		memory := sampler.SampleMetric("agent", host.ID, "memory", ts)
+		disk := sampler.SampleMetric("agent", host.ID, "disk", ts)
+		diskread := sampler.SampleMetric("agent", host.ID, "diskread", ts)
+		diskwrite := sampler.SampleMetric("agent", host.ID, "diskwrite", ts)
+		netin := sampler.SampleMetric("agent", host.ID, "netin", ts)
+		netout := sampler.SampleMetric("agent", host.ID, "netout", ts)
 		temperature := hostPrimaryTemperatureCelsius(host.Sensors)
 		mh.AddGuestMetric(hostKey, "cpu", cpu, ts)
 		mh.AddGuestMetric(hostKey, "memory", memory, ts)
@@ -1593,8 +1605,8 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 	}
 
 	// Record TrueNAS pool/dataset disk-usage live ticks
-	recordTrueNASFixturesMetrics(mh, ms, graph.PlatformFixtures, ts)
-	recordVMwareFixturesMetrics(mh, ms, graph.PlatformFixtures, ts)
+	recordTrueNASFixturesMetrics(mh, ms, sampler, graph.PlatformFixtures, ts)
+	recordVMwareFixturesMetrics(mh, ms, sampler, graph.PlatformFixtures, ts)
 }
 
 func diskMetricsResourceID(disk models.PhysicalDisk) string {

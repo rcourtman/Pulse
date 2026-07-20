@@ -1578,6 +1578,45 @@ func TestRecordMockStateToMetricsHistory_ContinuesCanonicalKubernetesClusterNode
 	}
 }
 
+func TestMockMetricsHistoryKeepsGraphPersonaAcrossSeedAndLiveBoundary(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	next := now.Add(time.Minute)
+	resourceID := "persona-boundary-7c9f0b33"
+	graph := fixtureGraphWithState(models.StateSnapshot{
+		Containers: []models.Container{{
+			ID:     resourceID,
+			Name:   "backup-orchestrator",
+			Status: "running",
+		}},
+	})
+	sampler := mock.NewMetricSampler(graph)
+
+	mh := NewMetricsHistory(5000, boundedMockHistoryProofWindow)
+	seedMockMetricsHistory(mh, nil, graph, now, boundedMockHistoryProofWindow, time.Minute)
+	recordMockStateToMetricsHistory(mh, nil, graph, next)
+
+	series := mh.GetGuestMetrics(resourceID, "memory", boundedMockHistoryProofWindow)
+	if len(series) < 2 {
+		t.Fatalf("expected seeded and live memory points, got %d", len(series))
+	}
+	for _, expected := range []struct {
+		index int
+		at    time.Time
+	}{
+		{index: len(series) - 2, at: now},
+		{index: len(series) - 1, at: next},
+	} {
+		point := series[expected.index]
+		if !point.Timestamp.Equal(expected.at) {
+			t.Fatalf("point %d timestamp = %v, want %v", expected.index, point.Timestamp, expected.at)
+		}
+		want := sampler.SampleMetric("container", resourceID, "memory", expected.at)
+		if diff := math.Abs(point.Value - want); diff > 1e-9 {
+			t.Fatalf("point %d value = %f, want graph-bound %f", expected.index, point.Value, want)
+		}
+	}
+}
+
 func TestSeedMockMetricsHistory_UsesCanonicalMetricModelForPlatformFixtures(t *testing.T) {
 	ts := time.Now().UTC().Truncate(time.Minute)
 	graph := mock.FixtureGraph{

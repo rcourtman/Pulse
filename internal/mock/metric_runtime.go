@@ -140,8 +140,11 @@ func MetricBounds(resourceClass, metric string) (float64, float64) {
 }
 
 func MetricBoundsForResource(resourceClass, resourceID, metric string) (float64, float64) {
+	return metricBoundsForRole(resourceClass, metric, MetricRole(resourceClass, resourceID))
+}
+
+func metricBoundsForRole(resourceClass, metric, role string) (float64, float64) {
 	min, max := MetricBounds(resourceClass, metric)
-	role := MetricRole(resourceClass, resourceID)
 	metricKey := strings.ToLower(strings.TrimSpace(metric))
 
 	switch metricKey {
@@ -205,6 +208,49 @@ func MetricBoundsForResource(resourceClass, resourceID, metric string) (float64,
 		max = min + 1
 	}
 	return min, max
+}
+
+// MetricSampler binds metric persona resolution to one immutable fixture
+// graph snapshot. Historical seeding and its live continuation must not depend
+// on the process-global persona registry changing while another monitor or
+// fixture update is initializing.
+type MetricSampler struct {
+	roles map[string]string
+}
+
+func NewMetricSampler(graph FixtureGraph) MetricSampler {
+	return MetricSampler{roles: buildMetricRoleRegistry(graph)}
+}
+
+func (s MetricSampler) role(resourceClass, resourceID string) string {
+	if role := strings.TrimSpace(s.roles[metricRoleRegistryKey(resourceClass, resourceID)]); role != "" {
+		return role
+	}
+	return inferMetricRole(resourceClass, resourceID)
+}
+
+func (s MetricSampler) SampleMetric(resourceClass, resourceID, metric string, at time.Time) float64 {
+	role := s.role(resourceClass, resourceID)
+	min, max := metricBoundsForRole(resourceClass, metric, role)
+	seed := MetricSeed(resourceClass, resourceID, metric)
+	return mockmodel.ValueAtMetricWithRole(seed, min, max, metric, metricSpeed(metric), role, at)
+}
+
+func (s MetricSampler) SampleMetricSeries(resourceClass, resourceID, metric string, timestamps []time.Time) []float64 {
+	if len(timestamps) == 0 {
+		return nil
+	}
+
+	role := s.role(resourceClass, resourceID)
+	min, max := metricBoundsForRole(resourceClass, metric, role)
+	seed := MetricSeed(resourceClass, resourceID, metric)
+	speed := metricSpeed(metric)
+
+	values := make([]float64, len(timestamps))
+	for i, at := range timestamps {
+		values[i] = mockmodel.ValueAtMetricWithRole(seed, min, max, metric, speed, role, at)
+	}
+	return values
 }
 
 func metricSpeed(metric string) float64 {

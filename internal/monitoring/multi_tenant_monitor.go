@@ -15,31 +15,33 @@ import (
 
 // MultiTenantMonitor manages a dedicated Monitor instance for each organization.
 type MultiTenantMonitor struct {
-	mu           sync.RWMutex
-	monitors     map[string]*Monitor
-	tenantCancel map[string]context.CancelFunc
-	tenantDone   map[string]chan struct{}
-	persistence  *config.MultiTenantPersistence
-	baseConfig   *config.Config
-	wsHub        *websocket.Hub
-	recoveryMgr  *recoverymanager.Manager
-	initializer  func(*Monitor)
-	globalCtx    context.Context
-	globalCancel context.CancelFunc
+	mu             sync.RWMutex
+	monitors       map[string]*Monitor
+	tenantCancel   map[string]context.CancelFunc
+	tenantDone     map[string]chan struct{}
+	tenantDeleting map[string]struct{}
+	persistence    *config.MultiTenantPersistence
+	baseConfig     *config.Config
+	wsHub          *websocket.Hub
+	recoveryMgr    *recoverymanager.Manager
+	initializer    func(*Monitor)
+	globalCtx      context.Context
+	globalCancel   context.CancelFunc
 }
 
 // NewMultiTenantMonitor creates a new multi-tenant monitor manager.
 func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTenantPersistence, wsHub *websocket.Hub) *MultiTenantMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &MultiTenantMonitor{
-		monitors:     make(map[string]*Monitor),
-		tenantCancel: make(map[string]context.CancelFunc),
-		tenantDone:   make(map[string]chan struct{}),
-		persistence:  persistence,
-		baseConfig:   baseCfg, // Used as a template or for global settings
-		wsHub:        wsHub,
-		globalCtx:    ctx,
-		globalCancel: cancel,
+		monitors:       make(map[string]*Monitor),
+		tenantCancel:   make(map[string]context.CancelFunc),
+		tenantDone:     make(map[string]chan struct{}),
+		tenantDeleting: make(map[string]struct{}),
+		persistence:    persistence,
+		baseConfig:     baseCfg, // Used as a template or for global settings
+		wsHub:          wsHub,
+		globalCtx:      ctx,
+		globalCancel:   cancel,
 	}
 }
 
@@ -137,8 +139,12 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 
 	mtm.mu.RLock()
 	monitor, exists := mtm.monitors[orgID]
+	_, deleting := mtm.tenantDeleting[orgID]
 	mtm.mu.RUnlock()
 
+	if deleting {
+		return nil, fmt.Errorf("organization %q is being deleted", orgID)
+	}
 	if exists {
 		return monitor, nil
 	}
@@ -155,8 +161,14 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	if mtm.tenantDone == nil {
 		mtm.tenantDone = make(map[string]chan struct{})
 	}
+	if mtm.tenantDeleting == nil {
+		mtm.tenantDeleting = make(map[string]struct{})
+	}
 
 	// Double-check locking pattern
+	if _, deleting = mtm.tenantDeleting[orgID]; deleting {
+		return nil, fmt.Errorf("organization %q is being deleted", orgID)
+	}
 	if monitor, exists = mtm.monitors[orgID]; exists {
 		return monitor, nil
 	}
@@ -305,12 +317,43 @@ func (mtm *MultiTenantMonitor) Stop() {
 // RemoveTenant stops and removes a specific tenant's monitor.
 // Useful for offboarding or manual reloading.
 func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
+	mtm.removeTenant(orgID, false)
+}
+
+// BeginTenantDeletion prevents lazy monitor initialization while a tenant's
+// persistence is being removed. Call FinishTenantDeletion after the
+// persistence operation completes, whether it succeeds or fails.
+func (mtm *MultiTenantMonitor) BeginTenantDeletion(orgID string) {
+	mtm.removeTenant(orgID, true)
+}
+
+// FinishTenantDeletion releases the temporary lifecycle guard installed by
+// BeginTenantDeletion. Once persistence has been removed, GetMonitor remains
+// unable to recreate the tenant because the organization no longer exists.
+func (mtm *MultiTenantMonitor) FinishTenantDeletion(orgID string) {
 	orgID = strings.TrimSpace(orgID)
 	if orgID == "" {
 		return
 	}
 
 	mtm.mu.Lock()
+	delete(mtm.tenantDeleting, orgID)
+	mtm.mu.Unlock()
+}
+
+func (mtm *MultiTenantMonitor) removeTenant(orgID string, deleting bool) {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return
+	}
+
+	mtm.mu.Lock()
+	if deleting {
+		if mtm.tenantDeleting == nil {
+			mtm.tenantDeleting = make(map[string]struct{})
+		}
+		mtm.tenantDeleting[orgID] = struct{}{}
+	}
 	monitor, exists := mtm.monitors[orgID]
 	cancel := mtm.tenantCancel[orgID]
 	done := mtm.tenantDone[orgID]

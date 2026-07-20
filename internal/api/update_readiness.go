@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,6 +28,18 @@ type updateReadinessInputs struct {
 	targetVersion string
 	plan          updates.UpdatePlan
 	now           time.Time
+}
+
+// updateReadinessConfigSnapshot reads the canonical runtime configuration.
+// Tenant monitors own isolated infrastructure config copies, while API token
+// mutations are system-level state held by Router.config.
+func (r *Router) updateReadinessConfigSnapshot(context.Context) *config.Config {
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	if r == nil || r.config == nil {
+		return nil
+	}
+	return r.config.DeepCopy()
 }
 
 func buildUpdateReadiness(in updateReadinessInputs) *updates.UpdateReadiness {

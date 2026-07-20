@@ -75,6 +75,39 @@ func TestMultiTenantMonitorRemoveTenantCancelsTenantRuntime(t *testing.T) {
 	}
 }
 
+func TestMultiTenantMonitorTenantDeletionBlocksLazyRecreation(t *testing.T) {
+	mtp, _ := newTestTenantPersistence(t)
+	baseCfg := &config.Config{DataPath: t.TempDir()}
+	mtm := NewMultiTenantMonitor(baseCfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          "org-delete",
+		DisplayName: "Org Delete",
+	}); err != nil {
+		t.Fatalf("SaveOrganization(org-delete) error = %v", err)
+	}
+
+	first, err := mtm.GetMonitor("org-delete")
+	if err != nil {
+		t.Fatalf("GetMonitor(org-delete) error = %v", err)
+	}
+
+	mtm.BeginTenantDeletion("org-delete")
+	if _, err := mtm.GetMonitor("org-delete"); err == nil {
+		t.Fatal("expected tenant deletion guard to block lazy monitor recreation")
+	}
+
+	mtm.FinishTenantDeletion("org-delete")
+	second, err := mtm.GetMonitor("org-delete")
+	if err != nil {
+		t.Fatalf("GetMonitor(org-delete) after deletion guard error = %v", err)
+	}
+	if second == first {
+		t.Fatal("expected a fresh monitor after the deletion guard is released")
+	}
+}
+
 func TestMultiTenantMonitorGetMonitor_MetricsIsolationByTenant(t *testing.T) {
 	orgAMonitor := &Monitor{
 		metricsHistory: NewMetricsHistory(32, time.Hour),

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
 import { createAuthenticatedStorageState } from './helpers';
+import { installVmwareWorkloadResourceRoute } from './vmware-workload-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCREENSHOT_PATH = '/tmp/vmware-ai-chat-read-recovery.png';
@@ -15,23 +16,26 @@ const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
   },
-  authStorageStatePath: [async ({ browser }, use, workerInfo) => {
-    const storageStatePath = path.resolve(
-      __dirname,
-      '..',
-      '..',
-      'tmp',
-      'playwright-auth',
-      `vmware-ai-chat-read-recovery-${workerInfo.project.name}.json`,
-    );
-    fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
-    await createAuthenticatedStorageState(browser, storageStatePath);
-    try {
-      await use(storageStatePath);
-    } finally {
-      fs.rmSync(storageStatePath, { force: true });
-    }
-  }, { scope: 'worker' }],
+  authStorageStatePath: [
+    async ({ browser }, use, workerInfo) => {
+      const storageStatePath = path.resolve(
+        __dirname,
+        '..',
+        '..',
+        'tmp',
+        'playwright-auth',
+        `vmware-ai-chat-read-recovery-${workerInfo.project.name}.json`,
+      );
+      fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+      await createAuthenticatedStorageState(browser, storageStatePath);
+      try {
+        await use(storageStatePath);
+      } finally {
+        fs.rmSync(storageStatePath, { force: true });
+      }
+    },
+    { scope: 'worker' },
+  ],
 });
 
 // The assistant transport moved from the retired /api/ai/chat SSE endpoint
@@ -57,6 +61,8 @@ test.describe('VMware AI chat read recovery', () => {
       await route.abort();
     });
 
+    await installVmwareWorkloadResourceRoute(page);
+
     await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('[data-testid="vmware-page"]')).toBeVisible();
 
@@ -67,7 +73,9 @@ test.describe('VMware AI chat read recovery', () => {
     // First websocket state frame can lag on a freshly booted backend.
     await textarea.focus();
     await textarea.fill('@warehouse');
-    const mentionListbox = page.getByRole('listbox', { name: 'Assistant resources' });
+    const mentionListbox = page.getByRole('listbox', {
+      name: 'Assistant resources',
+    });
     await expect(mentionListbox).toBeVisible({ timeout: 30_000 });
     const vmOption = mentionListbox
       .getByRole('option')
@@ -77,12 +85,15 @@ test.describe('VMware AI chat read recovery', () => {
     await page.keyboard.press('Enter');
     await expect(textarea).toHaveValue('@warehouse-api-01 ');
 
-    await textarea.fill('@warehouse-api-01 show me recent status');
+    await textarea.pressSequentially('show me recent status');
+    await expect(textarea).toHaveValue('@warehouse-api-01 show me recent status');
     // Submit through the composer control that phone users actually tap.
     // A page-global keyboard action is not a stable submission primitive in
     // mobile WebKit and can remain pending after the textarea has accepted the
     // completed prompt.
-    await page.getByRole('button', { name: 'Send message' }).click();
+    const sendButton = page.getByRole('button', { name: 'Send message' });
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
 
     // Chat turns ride the shared assistant transport (websocket-backed since
     // the assistant modernization, so REST route interception cannot observe
@@ -90,9 +101,9 @@ test.describe('VMware AI chat read recovery', () => {
     // user message lands in the conversation and the mock assistant answers
     // the turn, all without the browser touching provider-local vmware
     // endpoints.
-    await expect(
-      page.getByText('@warehouse-api-01 show me recent status').first(),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('@warehouse-api-01 show me recent status').first()).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.getByText('Pulse mock Assistant').first()).toBeVisible({
       timeout: 30_000,
     });

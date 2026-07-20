@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,6 +9,34 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
+
+func TestRouterUpdateReadinessConfigSnapshotUsesCanonicalRuntimeTokens(t *testing.T) {
+	token, err := config.NewAPITokenRecord(
+		"0123456789abcdef0123456789abcdef",
+		"agent",
+		[]string{config.ScopeAgentReport},
+	)
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord() error = %v", err)
+	}
+
+	r := &Router{
+		config: &config.Config{APITokens: []config.APITokenRecord{*token}},
+		configHandlers: &ConfigHandlers{
+			defaultConfig: &config.Config{},
+		},
+	}
+
+	snapshot := r.updateReadinessConfigSnapshot(context.Background())
+	if snapshot == nil || len(snapshot.APITokens) != 1 {
+		t.Fatalf("snapshot APITokens = %#v, want canonical runtime token", snapshot)
+	}
+
+	r.config.APITokens = nil
+	if len(snapshot.APITokens) != 1 {
+		t.Fatal("expected update readiness snapshot to be independent of later runtime mutations")
+	}
+}
 
 func TestBuildUpdateReadiness_ActiveV5AgentWarnsForFirstHopTransport(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)

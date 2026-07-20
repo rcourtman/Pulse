@@ -128,10 +128,17 @@ const prepareOrganizationAuditFixture = async (
       {
         method: "POST",
         data: { userId: "mobile-audit-viewer", role: "viewer" },
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Org-ID": source.id,
+          "X-Pulse-Org-ID": source.id,
+        },
       },
     );
-    expect(invitation.ok(), "mobile access fixture invitation").toBeTruthy();
+    expect(
+      invitation.ok(),
+      `mobile access fixture invitation: ${invitation.status()} ${await invitation.text()}`,
+    ).toBeTruthy();
   }
 
   if (route === "/settings/organization/sharing") {
@@ -147,10 +154,17 @@ const prepareOrganizationAuditFixture = async (
           resourceName: "Mobile Audit Shared View",
           accessRole: "viewer",
         },
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Org-ID": source.id,
+          "X-Pulse-Org-ID": source.id,
+        },
       },
     );
-    expect(share.ok(), "mobile sharing fixture").toBeTruthy();
+    expect(
+      share.ok(),
+      `mobile sharing fixture: ${share.status()} ${await share.text()}`,
+    ).toBeTruthy();
   }
 
   return createdOrgIDs;
@@ -330,10 +344,6 @@ test.describe("Settings mobile optimization audit", () => {
             await expect(organizationSwitcher).toHaveValue("default", {
               timeout: 20000,
             });
-            await page.reload({ waitUntil: "domcontentloaded" });
-            await expect(
-              page.getByRole("combobox", { name: "Organization" }),
-            ).toHaveValue("default", { timeout: 20000 });
           }
         }
         for (const orgID of [...createdOrgIDs].reverse()) {
@@ -348,9 +358,11 @@ test.describe("Settings mobile optimization audit", () => {
               },
             },
           );
+          const responseBody =
+            response.status() === 204 ? "" : await response.text();
           expect(
             [204, 404].includes(response.status()),
-            `cleanup organization ${orgID}`,
+            `cleanup organization ${orgID}: ${response.status()} ${responseBody}`,
           ).toBeTruthy();
         }
       }

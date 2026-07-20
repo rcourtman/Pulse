@@ -2009,8 +2009,9 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 		{
 			file: "mock_metrics_history.go",
 			snippets: []string{
-				`cpu := mock.SampleMetric("k8s", metricID, "cpu", ts)`,
-				`memory := mock.SampleMetric("k8s", metricID, "memory", ts)`,
+				"sampler := mock.NewMetricSampler(graph)",
+				`cpu := sampler.SampleMetric("k8s", metricID, "cpu", ts)`,
+				`memory := sampler.SampleMetric("k8s", metricID, "memory", ts)`,
 				`ms.Write("k8s", metricID, "memory", memory, ts)`,
 				"m.prewarmMockDashboardChartCaches()",
 			},
