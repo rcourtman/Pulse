@@ -78,7 +78,11 @@ test.describe('VMware AI chat read recovery', () => {
     await expect(textarea).toHaveValue('@warehouse-api-01 ');
 
     await textarea.fill('@warehouse-api-01 show me recent status');
-    await page.keyboard.press('Enter');
+    // Submit through the composer control that phone users actually tap.
+    // A page-global keyboard action is not a stable submission primitive in
+    // mobile WebKit and can remain pending after the textarea has accepted the
+    // completed prompt.
+    await page.getByRole('button', { name: 'Send message' }).click();
 
     // Chat turns ride the shared assistant transport (websocket-backed since
     // the assistant modernization, so REST route interception cannot observe
