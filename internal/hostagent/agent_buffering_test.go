@@ -71,14 +71,19 @@ func TestAgentBuffering(t *testing.T) {
 	defer server.Close()
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).Level(zerolog.WarnLevel)
+	packageUpdates := newPackageUpdateManager("windows", nil)
+	storageCleanup := newStorageCleanupManager("windows", nil)
 
 	cfg := Config{
 		PulseURL:         server.URL,
 		APIToken:         "test-token",
 		Interval:         50 * time.Millisecond,
 		HostnameOverride: "test-host",
+		StateDir:         t.TempDir(),
 		Logger:           &logger,
 		Collector:        &mockCollector{},
+		packageUpdates:   packageUpdates,
+		storageCleanup:   storageCleanup,
 	}
 
 	agent, err := New(cfg)
