@@ -1696,8 +1696,9 @@ func TestCanonicalIdentityIsCanonicalResourceField(t *testing.T) {
 	requiredSnippets := []string{
 		"json:\"canonicalIdentity,omitempty\"",
 		"type CanonicalIdentity struct {",
-		"DisplayName string   `json:\"displayName,omitempty\"`",
-		"Aliases     []string `json:\"aliases,omitempty\"`",
+		"DisplayName   string   `json:\"displayName,omitempty\"`",
+		"Aliases       []string `json:\"aliases,omitempty\"`",
+		"SupersededIDs []string `json:\"supersededIds,omitempty\"`",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(typesSource, snippet) {

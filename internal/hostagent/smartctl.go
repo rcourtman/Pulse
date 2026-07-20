@@ -15,10 +15,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
 
@@ -39,21 +41,27 @@ var (
 
 	timeNow     = time.Now
 	runtimeGOOS = runtime.GOOS
+
+	smartCollectionConcurrency       = 6
+	smartCollectionParallelThreshold = 12
 )
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string           `json:"device"`              // Block device name (e.g., sda, nvme0n1)
-	Model       string           `json:"model,omitempty"`     // Disk model
-	Serial      string           `json:"serial,omitempty"`    // Serial number
-	WWN         string           `json:"wwn,omitempty"`       // World Wide Name
-	Type        string           `json:"type,omitempty"`      // Transport type: sata, sas, nvme
-	SizeBytes   int64            `json:"sizeBytes,omitempty"` // Capacity in bytes (0 when unknown)
-	Temperature int              `json:"temperature"`         // Temperature in Celsius
-	Health      string           `json:"health,omitempty"`    // PASSED, FAILED, UNKNOWN
-	Standby     bool             `json:"standby,omitempty"`   // True if disk was in standby
-	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
-	LastUpdated time.Time        `json:"lastUpdated"` // When this reading was taken
+	Device      string                          `json:"device"`               // Block device name (e.g., sda, nvme0n1)
+	Model       string                          `json:"model,omitempty"`      // Disk model
+	Serial      string                          `json:"serial,omitempty"`     // Serial number
+	WWN         string                          `json:"wwn,omitempty"`        // World Wide Name
+	Type        string                          `json:"type,omitempty"`       // Transport type: sata, sas, nvme
+	Controller  string                          `json:"controller,omitempty"` // PCI/controller association when reported
+	Target      string                          `json:"target,omitempty"`     // HCTL or smartctl controller-member target
+	SizeBytes   int64                           `json:"sizeBytes,omitempty"`  // Capacity in bytes (0 when unknown)
+	Temperature int                             `json:"temperature"`          // Temperature in Celsius
+	Health      string                          `json:"health,omitempty"`     // PASSED, FAILED, UNKNOWN
+	Standby     bool                            `json:"standby,omitempty"`    // True if disk was in standby
+	Collection  *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	Attributes  *SMARTAttributes                `json:"attributes,omitempty"`
+	LastUpdated time.Time                       `json:"lastUpdated"` // When this reading was taken
 }
 
 // SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.
@@ -205,6 +213,7 @@ var (
 	smartTextCurrentTempRE   = regexp.MustCompile(`(?i)^current(?: drive)? temperature:\s*(\d{1,3})\b`)
 	smartTextTemperatureRE   = regexp.MustCompile(`(?i)^temperature:\s*(\d{1,3})\b`)
 	linuxDirectSATDeviceRE   = regexp.MustCompile(`^(sd|hd)[a-z]+$`)
+	pciControllerAddressRE   = regexp.MustCompile(`(?i)^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$`)
 )
 
 type smartctlTarget struct {
@@ -236,6 +245,38 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 		return nil, nil
 	}
 
+	type smartOutcome struct {
+		smart *DiskSMART
+		err   error
+	}
+	outcomes := make([]smartOutcome, len(targets))
+	workerCount := smartCollectionConcurrency
+	if len(targets) < smartCollectionParallelThreshold {
+		workerCount = 1
+	}
+	if workerCount < 1 {
+		workerCount = 1
+	}
+	if workerCount > len(targets) {
+		workerCount = len(targets)
+	}
+	jobs := make(chan int)
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for worker := 0; worker < workerCount; worker++ {
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				outcomes[index].smart, outcomes[index].err = collectSMARTTarget(ctx, targets[index])
+			}
+		}()
+	}
+	for index := range targets {
+		jobs <- index
+	}
+	close(jobs)
+	workers.Wait()
+
 	var results []DiskSMART
 	var missed []smartctlTarget
 	collected := make(map[string]struct{}, len(targets))
@@ -245,7 +286,10 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 		if isMultiplexedDeviceType(target.DeviceType) && block != "" {
 			multiplexed[block] = struct{}{}
 		}
-		smart, err := collectSMARTTarget(ctx, target)
+	}
+	for index, target := range targets {
+		block := canonicalBlockDeviceForScanPath(target.Path)
+		smart, err := outcomes[index].smart, outcomes[index].err
 		if err != nil {
 			if errors.Is(err, errSMARTDataUnavailable) {
 				log.Debug().
@@ -801,20 +845,112 @@ func refineLinuxBlockDeviceIdentity(smart *DiskSMART, target smartctlTarget) {
 	if smart == nil || runtimeGOOS != "linux" {
 		return
 	}
+	block := canonicalBlockDeviceForScanPath(target.Path)
+	if block == "" {
+		return
+	}
 	// Disks addressed behind a multiplexing controller (megaraid,7; cciss,1;
 	// areca,1/1; ...) all share a single /dev path, so the smartctl scan label is
 	// the only thing that disambiguates them and /sys/block describes the array,
 	// not the member. Leave those as-is and trust the smartctl-reported capacity.
 	if isMultiplexedDeviceType(target.DeviceType) {
-		return
-	}
-	block := canonicalBlockDeviceForScanPath(target.Path)
-	if block == "" {
+		smart.Controller = block
+		smart.Target = strings.TrimSpace(target.DeviceType)
+		ensureControllerCollectionStatus(smart, "smartctl_scan")
 		return
 	}
 	smart.Device = block
+	smart.Controller, smart.Target = linuxBlockDeviceTopology(block)
+	ensureControllerCollectionStatus(smart, "sysfs")
 	if size := blockDeviceSizeBytes(block); size > 0 {
 		smart.SizeBytes = size
+	}
+}
+
+func ensureControllerCollectionStatus(smart *DiskSMART, source string) {
+	if smart.Collection == nil {
+		smart.Collection = &diskinventory.CollectionStatus{}
+	}
+	if smart.Controller != "" || smart.Target != "" {
+		smart.Collection.Controller = diskinventory.Available(source)
+		return
+	}
+	smart.Collection.Controller = diskinventory.Missing(source, "controller association was not reported")
+}
+
+// linuxBlockDeviceTopology derives a stable controller association and SCSI
+// target from the resolved /sys/block device path. The controller prefers the
+// PCI address immediately preceding hostN; the target is the terminal H:C:T:L
+// segment. Neither value is fabricated when sysfs does not expose it.
+func linuxBlockDeviceTopology(block string) (string, string) {
+	resolved, err := smartctlEvalSymlinks(filepath.Join("/sys/block", block, "device"))
+	if err != nil {
+		return "", ""
+	}
+	parts := strings.Split(filepath.Clean(resolved), string(filepath.Separator))
+	controller := ""
+	controllerFallback := ""
+	target := ""
+	for index, part := range parts {
+		if pciControllerAddressRE.MatchString(part) {
+			controller = part
+		}
+		if strings.HasPrefix(part, "host") && hasNumericSuffix(part, "host") && index > 0 {
+			controllerFallback = parts[index-1]
+		}
+		if isSCSITargetAddress(part) {
+			target = part
+		}
+	}
+	if controller == "" {
+		controller = controllerFallback
+	}
+	return controller, target
+}
+
+func isSCSITargetAddress(value string) bool {
+	parts := strings.Split(value, ":")
+	if len(parts) != 4 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" || !isAllDigits(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func linuxBlockDeviceTransport(block string, target smartctlTarget) string {
+	for _, candidate := range []string{
+		readTrimmedFile(filepath.Join("/sys/block", block, "device", "protocol")),
+		readTrimmedFile(filepath.Join("/sys/block", block, "device", "transport")),
+	} {
+		switch normalized := strings.ToLower(strings.TrimSpace(candidate)); {
+		case strings.Contains(normalized, "nvme"):
+			return "nvme"
+		case strings.Contains(normalized, "sas"):
+			return "sas"
+		case strings.Contains(normalized, "sata"), strings.Contains(normalized, "ata"):
+			return "sata"
+		case strings.Contains(normalized, "usb"):
+			return "usb"
+		}
+	}
+	if strings.HasPrefix(block, "nvme") {
+		return "nvme"
+	}
+	deviceType := strings.ToLower(strings.TrimSpace(target.DeviceType))
+	switch {
+	case strings.HasPrefix(deviceType, "nvme"):
+		return "nvme"
+	case strings.HasPrefix(deviceType, "sat"):
+		return "sata"
+	default:
+		// Preserve the legacy direct sdX fallback when the kernel supplies no
+		// transport evidence. Successful smartctl probes still override this
+		// with their protocol field before this fallback is needed.
+		return "sata"
 	}
 }
 
@@ -863,17 +999,31 @@ func linuxIdentityOnlyDisks(missed []smartctlTarget, collected, multiplexed map[
 			continue
 		}
 
-		diskType := "sata"
-		if strings.HasPrefix(block, "nvme") {
-			diskType = "nvme"
+		serial := readTrimmedFile(filepath.Join("/sys/block", block, "device", "serial"))
+		controller, controllerTarget := linuxBlockDeviceTopology(block)
+		collection := &diskinventory.CollectionStatus{
+			Temperature: diskinventory.Unavailable("smartctl", "SMART probe returned no usable temperature data"),
+		}
+		if serial != "" {
+			collection.Serial = diskinventory.Available("sysfs")
+		} else {
+			collection.Serial = diskinventory.Missing("sysfs", "disk serial was not reported")
+		}
+		if controller != "" || controllerTarget != "" {
+			collection.Controller = diskinventory.Available("sysfs")
+		} else {
+			collection.Controller = diskinventory.Missing("sysfs", "controller association was not reported")
 		}
 		results = append(results, DiskSMART{
 			Device:      block,
 			Model:       readTrimmedFile(filepath.Join("/sys/block", block, "device", "model")),
-			Serial:      readTrimmedFile(filepath.Join("/sys/block", block, "device", "serial")),
-			Type:        diskType,
+			Serial:      serial,
+			Type:        linuxBlockDeviceTransport(block, target),
+			Controller:  controller,
+			Target:      controllerTarget,
 			SizeBytes:   size,
 			Health:      "UNKNOWN",
+			Collection:  collection,
 			LastUpdated: timeNow(),
 		})
 		log.Debug().
@@ -1056,8 +1206,12 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 				exitCode := exitErr.ExitCode()
 				if (exitCode == smartctlStandbyExitStatus || exitCode&2 != 0) && len(output) == 0 {
 					standbyResult := &DiskSMART{
-						Device:      filepath.Base(target.Path),
-						Standby:     true,
+						Device:  filepath.Base(target.Path),
+						Standby: true,
+						Collection: &diskinventory.CollectionStatus{
+							Serial:      diskinventory.Unavailable("smartctl", "disk is in standby"),
+							Temperature: diskinventory.Unavailable("smartctl", "disk is in standby"),
+						},
 						LastUpdated: timeNow(),
 					}
 					if runtimeGOOS == "freebsd" && i < len(attempts)-1 && target.DeviceType == "" {
@@ -1338,6 +1492,7 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 		Type:        detectDiskType(smartData),
 		Standby:     isStandbyPowerMode(smartData.PowerMode),
 		LastUpdated: timeNow(),
+		Collection:  &diskinventory.CollectionStatus{},
 	}
 
 	if smartData.WWN.NAA != 0 {
@@ -1380,6 +1535,19 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 	}
 
 	applySMARTTextFallback(result, parseSMARTTextFallback(strings.Join(smartData.Smartctl.Output, "\n")))
+	if result.Serial != "" {
+		result.Collection.Serial = diskinventory.Available("smartctl")
+	} else {
+		result.Collection.Serial = diskinventory.Missing("smartctl", "disk serial was not reported")
+	}
+	switch {
+	case result.Temperature > 0:
+		result.Collection.Temperature = diskinventory.Available("smartctl")
+	case result.Standby:
+		result.Collection.Temperature = diskinventory.Unavailable("smartctl", "disk is in standby")
+	default:
+		result.Collection.Temperature = diskinventory.Unsupported("smartctl", "device did not expose a temperature reading")
+	}
 	if result.Health == "" {
 		result.Health = "UNKNOWN"
 	}
@@ -1403,6 +1571,7 @@ func parseSMARTTextOutput(text string, target smartctlTarget) (*DiskSMART, error
 		Health:      fallback.Health,
 		Standby:     fallback.Standby,
 		LastUpdated: timeNow(),
+		Collection:  &diskinventory.CollectionStatus{},
 	}
 	if result.Type == "" {
 		switch {
@@ -1417,6 +1586,19 @@ func parseSMARTTextOutput(text string, target smartctlTarget) (*DiskSMART, error
 	}
 	if result.Health == "" {
 		result.Health = "UNKNOWN"
+	}
+	if result.Serial != "" {
+		result.Collection.Serial = diskinventory.Available("smartctl_text")
+	} else {
+		result.Collection.Serial = diskinventory.Missing("smartctl_text", "disk serial was not reported")
+	}
+	switch {
+	case result.Temperature > 0:
+		result.Collection.Temperature = diskinventory.Available("smartctl_text")
+	case result.Standby:
+		result.Collection.Temperature = diskinventory.Unavailable("smartctl_text", "disk is in standby")
+	default:
+		result.Collection.Temperature = diskinventory.Unsupported("smartctl_text", "device did not expose a temperature reading")
 	}
 	if result.Health == "UNKNOWN" && result.Temperature == 0 && !result.Standby {
 		return nil, errSMARTDataUnavailable

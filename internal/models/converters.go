@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // ToFrontend converts a State to StateFrontend
@@ -925,16 +927,28 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 				Serial:      disk.Serial,
 				WWN:         disk.WWN,
 				Type:        disk.Type,
+				Controller:  disk.Controller,
+				Target:      disk.Target,
 				SizeBytes:   disk.SizeBytes,
 				Temperature: disk.Temperature,
 				Health:      disk.Health,
 				Standby:     disk.Standby,
-				Attributes:  disk.Attributes,
+				IO:          cloneDiskIOForFrontend(disk.IO),
+				Collection:  diskinventory.CloneStatus(disk.Collection),
+				Attributes:  cloneSMARTAttributes(disk.Attributes),
 			}
 		}
 	}
 	normalized := dest.NormalizeCollections()
 	return &normalized
+}
+
+func cloneDiskIOForFrontend(src *DiskIO) *DiskIO {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	return &dest
 }
 
 func copyHostThermalState(src *HostThermalState) *HostThermalState {

@@ -18,6 +18,8 @@ import {
   PHYSICAL_DISK_TABLE_CLASS,
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   getPhysicalDiskEmptyStatePresentation,
+  getPhysicalDiskCollectionMessages,
+  getPhysicalDiskFieldStatusMessage,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
@@ -61,6 +63,47 @@ function makeDiskData(
 }
 
 describe('diskPresentation', () => {
+  it('distinguishes unsupported, unavailable, and unexpectedly missing disk evidence', () => {
+    expect(
+      getPhysicalDiskFieldStatusMessage('Disk I/O', {
+        state: 'unsupported',
+        source: 'controller',
+        reason: 'per-member counters unavailable',
+      }),
+    ).toBe('Disk I/O is unsupported: per-member counters unavailable');
+    expect(
+      getPhysicalDiskFieldStatusMessage('Temperature', {
+        state: 'unavailable',
+        source: 'smartctl',
+        reason: 'collection deadline exceeded',
+      }),
+    ).toBe('Temperature is temporarily unavailable: collection deadline exceeded');
+    expect(
+      getPhysicalDiskFieldStatusMessage('Serial number', {
+        state: 'missing',
+        source: 'smartctl',
+        reason: 'serial absent from successful response',
+      }),
+    ).toBe('Serial number is unexpectedly missing: serial absent from successful response');
+    expect(
+      getPhysicalDiskCollectionMessages(
+        makeDiskData({
+          collection: {
+            serial: { state: 'available', source: 'smartctl' },
+            temperature: { state: 'unavailable', source: 'smartctl' },
+            io: { state: 'unsupported', source: 'controller' },
+            controller: { state: 'missing', source: 'linux-sysfs' },
+            pool: { state: 'available', source: 'zpool-status' },
+          },
+        }),
+      ),
+    ).toEqual([
+      'Temperature is temporarily unavailable.',
+      'Disk I/O is unsupported.',
+      'Controller association is unexpectedly missing.',
+    ]);
+  });
+
   it('returns critical presentation for failed disks', () => {
     expect(PHYSICAL_DISK_EMPTY_CARD_CLASS).toBe('text-center');
     expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full table-fixed text-xs');

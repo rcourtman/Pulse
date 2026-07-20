@@ -56,6 +56,8 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     attributeCards,
     historyCharts,
     metricResourceId,
+    collectionMessages,
+    liveIOAvailable,
   } = useDiskDetailModel({
     disk: () => props.disk,
   });
@@ -115,6 +117,12 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
         </div>
       </div>
 
+      <Show when={collectionMessages().length > 0}>
+        <div class={STORAGE_DETAIL_EMPTY_CLASS} role="status">
+          <For each={collectionMessages()}>{(message) => <p>{message}</p>}</For>
+        </div>
+      </Show>
+
       {/* SMART attribute cards */}
       <Show when={diskData().smartAttributes}>
         <div class={STORAGE_DISK_DETAIL_ATTRIBUTE_GRID_CLASS}>
@@ -131,7 +139,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
       </Show>
 
       {/* Live Performance Sparklines */}
-      <Show when={metricResourceId()}>
+      <Show when={metricResourceId() && liveIOAvailable()}>
         <div class={STORAGE_DISK_DETAIL_SECTION_CLASS}>
           <h4
             class={`${STORAGE_DETAIL_SECTION_TITLE_CLASS} ${STORAGE_DISK_DETAIL_SECTION_HEADING_CLASS}`}

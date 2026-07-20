@@ -85,6 +85,9 @@ func TestEnroll_Success(t *testing.T) {
 	if agent.cfg.APIToken != "runtime-tok-123" {
 		t.Errorf("expected token runtime-tok-123, got %s", agent.cfg.APIToken)
 	}
+	if agent.agentID != "host-test-host" || agent.cfg.AgentID != "host-test-host" {
+		t.Fatalf("running agent identity was not updated after enrollment: agent=%q config=%q", agent.agentID, agent.cfg.AgentID)
+	}
 
 	// Verify runtime token was persisted.
 	tokenPath := filepath.Join(stateDir, runtimeTokenFile)

@@ -294,6 +294,15 @@ TLS floor in the dynamic config.
    path must run the reusable lifecycle harness rather than stopping at a
    parser check or foreground self-test.
 8. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+   A caller-supplied `--state-dir` must remain canonical across rendered
+   systemd, launchd, OpenRC, rc.d, SysV, NAS wrapper, bootstrap, and reference
+   environment artifacts. Update and uninstall without a repeated custom path
+   must discover it from the active process or managed service before looking
+   at default-path state; explicit custom-path operations must not fall back
+   to another default instance. `connection.env` records the canonical state
+   and token-file paths without storing the token value, update rewrites the
+   same secure service shape, and uninstall removes the discovered canonical
+   directory rather than only `/var/lib/pulse-agent`.
    Existing-agent update commands copied from the settings UI must use the
    installer-owned `--update` mode rather than serializing a fresh enrollment
    token into platform notice links. In `--update` mode, `scripts/install.sh`

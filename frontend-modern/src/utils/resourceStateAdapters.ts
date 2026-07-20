@@ -693,10 +693,12 @@ const mergeCanonicalIdentity = (
   if (!incoming) return existing;
   if (!existing) return incoming;
   const aliases = mergeStringArrays(incoming.aliases, existing.aliases);
+  const supersededIds = mergeStringArrays(incoming.supersededIds, existing.supersededIds);
   return {
     ...existing,
     ...incoming,
     aliases,
+    supersededIds,
   };
 };
 

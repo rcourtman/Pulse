@@ -1,6 +1,7 @@
 import { Accessor, createMemo, createSignal } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
 import {
+  getPhysicalDiskCollectionMessages,
   extractPhysicalDiskPresentationData,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
@@ -29,6 +30,11 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   );
   const historyCharts = createMemo(() => getDiskDetailHistoryCharts(diskData()));
   const metricResourceId = createMemo(() => historyResourceId());
+  const collectionMessages = createMemo(() => getPhysicalDiskCollectionMessages(diskData()));
+  const liveIOAvailable = createMemo(() => {
+    const state = diskData().collection?.io?.state;
+    return !state || state === 'available';
+  });
 
   return {
     chartRange,
@@ -38,5 +44,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
     attributeCards,
     historyCharts,
     metricResourceId,
+    collectionMessages,
+    liveIOAvailable,
   };
 };

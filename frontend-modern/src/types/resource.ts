@@ -189,6 +189,7 @@ export interface ResourceCanonicalIdentity {
   platformId?: string;
   primaryId?: string;
   aliases?: string[];
+  supersededIds?: string[];
 }
 
 export type ResourceSensitivity = 'public' | 'internal' | 'sensitive' | 'restricted';
@@ -451,6 +452,33 @@ export interface ResourcePhysicalDiskRisk {
   reasons?: ResourceStorageRiskReason[];
 }
 
+export type PhysicalDiskFieldState = 'available' | 'unavailable' | 'unsupported' | 'missing';
+
+export interface PhysicalDiskFieldStatus {
+  state: PhysicalDiskFieldState;
+  source?: string;
+  reason?: string;
+}
+
+export interface PhysicalDiskCollectionStatus {
+  serial?: PhysicalDiskFieldStatus;
+  temperature?: PhysicalDiskFieldStatus;
+  io?: PhysicalDiskFieldStatus;
+  controller?: PhysicalDiskFieldStatus;
+  pool?: PhysicalDiskFieldStatus;
+}
+
+export interface ResourcePhysicalDiskIO {
+  device?: string;
+  readBytes?: number;
+  writeBytes?: number;
+  readOps?: number;
+  writeOps?: number;
+  readTimeMs?: number;
+  writeTimeMs?: number;
+  ioTimeMs?: number;
+}
+
 export interface ResourceCephPoolMeta {
   name: string;
   storedBytes: number;
@@ -485,6 +513,8 @@ export interface ResourcePhysicalDiskMeta {
   serial?: string;
   wwn?: string;
   diskType?: string;
+  controller?: string;
+  target?: string;
   sizeBytes?: number;
   health?: string;
   wearout?: number;
@@ -498,6 +528,8 @@ export interface ResourcePhysicalDiskMeta {
   readCount?: number;
   writeCount?: number;
   errorCount?: number;
+  io?: ResourcePhysicalDiskIO;
+  collection?: PhysicalDiskCollectionStatus;
   smart?: {
     powerOnHours?: number;
     powerCycles?: number;

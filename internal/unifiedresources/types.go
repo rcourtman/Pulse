@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // Resource represents a unified resource aggregated across multiple data sources.
@@ -23,9 +24,15 @@ type Resource struct {
 	DiscoveryReadiness *ResourceDiscoveryReadiness `json:"discoveryReadiness,omitempty"`
 	MetricsTarget      *MetricsTarget              `json:"metricsTarget,omitempty"`
 	Canonical          *CanonicalIdentity          `json:"canonicalIdentity,omitempty"`
-	Policy             *ResourcePolicy             `json:"policy,omitempty"`
-	AISafeSummary      string                      `json:"aiSafeSummary,omitempty"`
-	PlatformScopes     []string                    `json:"platformScopes,omitempty"`
+	// SupersededCanonicalIDs carries retired canonical IDs that are known to
+	// identify this same resource. Providers declare them on IngestRecord when
+	// an identity derivation changes; the registry retains them so alert
+	// overrides and other operator-authored configuration can migrate onto the
+	// current canonical ID instead of becoming orphaned.
+	SupersededCanonicalIDs []string        `json:"-"`
+	Policy                 *ResourcePolicy `json:"policy,omitempty"`
+	AISafeSummary          string          `json:"aiSafeSummary,omitempty"`
+	PlatformScopes         []string        `json:"platformScopes,omitempty"`
 
 	Sources      []DataSource                `json:"sources"`
 	SourceStatus map[DataSource]SourceStatus `json:"sourceStatus,omitempty"`
@@ -151,11 +158,12 @@ type MetricsTarget struct {
 // unified resource so frontend surfaces do not need to reconstruct labels and
 // host hints from source-specific facets.
 type CanonicalIdentity struct {
-	DisplayName string   `json:"displayName,omitempty"`
-	Hostname    string   `json:"hostname,omitempty"`
-	PlatformID  string   `json:"platformId,omitempty"`
-	PrimaryID   string   `json:"primaryId,omitempty"`
-	Aliases     []string `json:"aliases,omitempty"`
+	DisplayName   string   `json:"displayName,omitempty"`
+	Hostname      string   `json:"hostname,omitempty"`
+	PlatformID    string   `json:"platformId,omitempty"`
+	PrimaryID     string   `json:"primaryId,omitempty"`
+	Aliases       []string `json:"aliases,omitempty"`
+	SupersededIDs []string `json:"supersededIds,omitempty"`
 }
 
 // ResourceType represents the kind of resource.
@@ -438,27 +446,44 @@ type ResourceIncident struct {
 
 // PhysicalDiskMeta contains physical disk-specific metadata.
 type PhysicalDiskMeta struct {
-	DevPath              string                    `json:"devPath"`
-	Model                string                    `json:"model,omitempty"`
-	Serial               string                    `json:"serial,omitempty"`
-	WWN                  string                    `json:"wwn,omitempty"`
-	DiskType             string                    `json:"diskType"` // nvme, sata, sas
-	SizeBytes            int64                     `json:"sizeBytes"`
-	Health               string                    `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout              int                       `json:"wearout"`     // 0-100, -1 unavailable
-	Temperature          int                       `json:"temperature"` // Celsius
-	TemperatureAggregate *TemperatureAggregateMeta `json:"temperatureAggregate,omitempty"`
-	RPM                  int                       `json:"rpm"`
-	Used                 string                    `json:"used,omitempty"`
-	StorageRole          string                    `json:"storageRole,omitempty"`
-	StorageGroup         string                    `json:"storageGroup,omitempty"`
-	StorageState         string                    `json:"storageState,omitempty"`
-	SpunDown             bool                      `json:"spunDown,omitempty"`
-	ReadCount            int64                     `json:"readCount,omitempty"`
-	WriteCount           int64                     `json:"writeCount,omitempty"`
-	ErrorCount           int64                     `json:"errorCount,omitempty"`
-	SMART                *SMARTMeta                `json:"smart,omitempty"`
-	Risk                 *PhysicalDiskRisk         `json:"risk,omitempty"`
+	DevPath              string                          `json:"devPath"`
+	Model                string                          `json:"model,omitempty"`
+	Serial               string                          `json:"serial,omitempty"`
+	WWN                  string                          `json:"wwn,omitempty"`
+	DiskType             string                          `json:"diskType"` // nvme, sata, sas
+	Controller           string                          `json:"controller,omitempty"`
+	Target               string                          `json:"target,omitempty"`
+	SizeBytes            int64                           `json:"sizeBytes"`
+	Health               string                          `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout              int                             `json:"wearout"`     // 0-100, -1 unavailable
+	Temperature          int                             `json:"temperature"` // Celsius
+	TemperatureAggregate *TemperatureAggregateMeta       `json:"temperatureAggregate,omitempty"`
+	RPM                  int                             `json:"rpm"`
+	Used                 string                          `json:"used,omitempty"`
+	StorageRole          string                          `json:"storageRole,omitempty"`
+	StorageGroup         string                          `json:"storageGroup,omitempty"`
+	StorageState         string                          `json:"storageState,omitempty"`
+	SpunDown             bool                            `json:"spunDown,omitempty"`
+	ReadCount            int64                           `json:"readCount,omitempty"`
+	WriteCount           int64                           `json:"writeCount,omitempty"`
+	ErrorCount           int64                           `json:"errorCount,omitempty"`
+	IO                   *PhysicalDiskIOMeta             `json:"io,omitempty"`
+	Collection           *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	SMART                *SMARTMeta                      `json:"smart,omitempty"`
+	Risk                 *PhysicalDiskRisk               `json:"risk,omitempty"`
+}
+
+// PhysicalDiskIOMeta preserves the cumulative kernel counters attributed to a
+// physical disk. Rates are derived separately by the monitoring layer.
+type PhysicalDiskIOMeta struct {
+	Device      string `json:"device,omitempty"`
+	ReadBytes   uint64 `json:"readBytes,omitempty"`
+	WriteBytes  uint64 `json:"writeBytes,omitempty"`
+	ReadOps     uint64 `json:"readOps,omitempty"`
+	WriteOps    uint64 `json:"writeOps,omitempty"`
+	ReadTimeMs  uint64 `json:"readTimeMs,omitempty"`
+	WriteTimeMs uint64 `json:"writeTimeMs,omitempty"`
+	IOTimeMs    uint64 `json:"ioTimeMs,omitempty"`
 }
 
 // TemperatureAggregateMeta stores recent aggregate temperature history for a
@@ -568,17 +593,21 @@ type HostThermalState struct {
 
 // HostSMARTMeta describes a disk's SMART data.
 type HostSMARTMeta struct {
-	Device      string                  `json:"device"`
-	Model       string                  `json:"model,omitempty"`
-	Serial      string                  `json:"serial,omitempty"`
-	WWN         string                  `json:"wwn,omitempty"`
-	Type        string                  `json:"type,omitempty"`
-	SizeBytes   int64                   `json:"sizeBytes,omitempty"`
-	Temperature int                     `json:"temperature"`
-	Health      string                  `json:"health"`
-	Standby     bool                    `json:"standby,omitempty"`
-	Pool        string                  `json:"pool,omitempty"`
-	Attributes  *models.SMARTAttributes `json:"attributes,omitempty"`
+	Device      string                          `json:"device"`
+	Model       string                          `json:"model,omitempty"`
+	Serial      string                          `json:"serial,omitempty"`
+	WWN         string                          `json:"wwn,omitempty"`
+	Type        string                          `json:"type,omitempty"`
+	Controller  string                          `json:"controller,omitempty"`
+	Target      string                          `json:"target,omitempty"`
+	SizeBytes   int64                           `json:"sizeBytes,omitempty"`
+	Temperature int                             `json:"temperature"`
+	Health      string                          `json:"health"`
+	Standby     bool                            `json:"standby,omitempty"`
+	Pool        string                          `json:"pool,omitempty"`
+	IO          *PhysicalDiskIOMeta             `json:"io,omitempty"`
+	Collection  *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	Attributes  *models.SMARTAttributes         `json:"attributes,omitempty"`
 }
 
 // HostRAIDDeviceMeta describes a device in a RAID array.

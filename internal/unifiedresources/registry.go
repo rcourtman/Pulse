@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
 
@@ -525,6 +526,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 			}
 		}
 		newID := rr.ingest(source, sourceID, resource, record.Identity)
+		rr.retainSupersededCanonicalIDs(newID, record.SupersededCanonicalIDs)
 		for _, superseded := range record.SupersededCanonicalIDs {
 			superseded = CanonicalResourceID(superseded)
 			if superseded == "" || newID == "" || superseded == newID {
@@ -550,6 +552,35 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	rr.buildChildCounts()
 	rr.viewsDirty = true
 	rr.mu.Unlock()
+}
+
+// retainSupersededCanonicalIDs keeps record-declared identity eras on the
+// live resource. Canonical metadata exposes them as aliases, and alert
+// configuration migration consumes the explicit field so display aliases
+// such as hostnames are never mistaken for persistence keys.
+func (rr *ResourceRegistry) retainSupersededCanonicalIDs(resourceID string, supersededIDs []string) {
+	resourceID = CanonicalResourceID(resourceID)
+	if resourceID == "" || len(supersededIDs) == 0 {
+		return
+	}
+
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	resource := rr.resources[resourceID]
+	if resource == nil {
+		return
+	}
+
+	ids := append([]string(nil), resource.SupersededCanonicalIDs...)
+	for _, supersededID := range supersededIDs {
+		supersededID = CanonicalResourceID(supersededID)
+		if supersededID == "" || supersededID == resourceID {
+			continue
+		}
+		ids = append(ids, supersededID)
+	}
+	resource.SupersededCanonicalIDs = uniqueTrimmed(ids...)
 }
 
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
@@ -2524,6 +2555,13 @@ func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType Re
 }
 
 func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
+	if resource.Type == ResourceTypePhysicalDisk &&
+		(source == SourceAgent || source == SourceProxmox) {
+		if linked := rr.resolveLinkedPhysicalDisk(source, resource); linked != "" {
+			return linked
+		}
+	}
+
 	switch source {
 	case SourceProxmox:
 		if resource.Proxmox != nil && resource.Proxmox.LinkedAgentID != "" {
@@ -2560,6 +2598,76 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 		}
 	}
 	return ""
+}
+
+// resolveLinkedPhysicalDisk correlates agent and Proxmox observations inside
+// one already-linked host boundary. This is the durable join for cases where
+// Proxmox reports a SAS address in its serial field while smartctl reports the
+// drive's real serial. Device paths are safe only inside the common parent and
+// only when the topology match is unique.
+func (rr *ResourceRegistry) resolveLinkedPhysicalDisk(source DataSource, incoming Resource) string {
+	if incoming.PhysicalDisk == nil || incoming.ParentID == nil {
+		return ""
+	}
+	parentID := strings.TrimSpace(*incoming.ParentID)
+	if parentID == "" {
+		return ""
+	}
+
+	incomingDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(incoming.PhysicalDisk.DevPath))
+	incomingSerial := strings.TrimSpace(incoming.PhysicalDisk.Serial)
+	incomingWWN := strings.TrimSpace(incoming.PhysicalDisk.WWN)
+	matchID := ""
+	for resourceID, existing := range rr.resources {
+		if existing == nil ||
+			existing.Type != ResourceTypePhysicalDisk ||
+			existing.PhysicalDisk == nil ||
+			existing.ParentID == nil ||
+			strings.TrimSpace(*existing.ParentID) != parentID ||
+			hasDataSource(existing.Sources, source) {
+			continue
+		}
+		if source == SourceProxmox && !hasDataSource(existing.Sources, SourceAgent) {
+			continue
+		}
+		if source == SourceAgent && !hasDataSource(existing.Sources, SourceProxmox) {
+			continue
+		}
+
+		identityMatch :=
+			(incomingSerial != "" && strings.EqualFold(incomingSerial, existing.PhysicalDisk.Serial)) ||
+				(incomingWWN != "" && strings.EqualFold(incomingWWN, existing.PhysicalDisk.WWN))
+		existingDevice := strings.ToLower(normalizePhysicalDiskDeviceToken(existing.PhysicalDisk.DevPath))
+		agentReportsSAS := (source == SourceProxmox && strings.EqualFold(existing.PhysicalDisk.DiskType, "sas")) ||
+			(source == SourceAgent && strings.EqualFold(incoming.PhysicalDisk.DiskType, "sas"))
+		deviceMatch := agentReportsSAS &&
+			incomingDevice != "" &&
+			incomingDevice == existingDevice &&
+			physicalDiskTopologyCompatible(incoming.PhysicalDisk, existing.PhysicalDisk)
+		if !identityMatch && !deviceMatch {
+			continue
+		}
+		if matchID != "" && matchID != resourceID {
+			return ""
+		}
+		matchID = resourceID
+	}
+	return matchID
+}
+
+func physicalDiskTopologyCompatible(left, right *PhysicalDiskMeta) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	if left.Controller != "" && right.Controller != "" &&
+		!strings.EqualFold(strings.TrimSpace(left.Controller), strings.TrimSpace(right.Controller)) {
+		return false
+	}
+	if left.Target != "" && right.Target != "" &&
+		!strings.EqualFold(strings.TrimSpace(left.Target), strings.TrimSpace(right.Target)) {
+		return false
+	}
+	return true
 }
 
 type availabilityLinkResolution struct {
@@ -2939,6 +3047,24 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		previous := existing.PhysicalDisk
 		existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
 		if source == SourceProxmox && previous != nil && hasDataSource(existing.Sources, SourceAgent) {
+			if previous.Serial != "" &&
+				(previous.Collection == nil ||
+					(previous.Collection.Serial.State == diskinventory.FieldAvailable &&
+						strings.HasPrefix(strings.ToLower(previous.Collection.Serial.Source), "smartctl"))) {
+				existing.PhysicalDisk.Serial = previous.Serial
+			}
+			if previous.WWN != "" {
+				existing.PhysicalDisk.WWN = previous.WWN
+			}
+			if previous.DiskType != "" {
+				existing.PhysicalDisk.DiskType = previous.DiskType
+			}
+			if previous.Controller != "" {
+				existing.PhysicalDisk.Controller = previous.Controller
+			}
+			if previous.Target != "" {
+				existing.PhysicalDisk.Target = previous.Target
+			}
 			if previous.Temperature > 0 {
 				existing.PhysicalDisk.Temperature = previous.Temperature
 			}
@@ -2949,6 +3075,13 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 				smart := *previous.SMART
 				existing.PhysicalDisk.SMART = &smart
 			}
+			if previous.IO != nil {
+				existing.PhysicalDisk.IO = clonePhysicalDiskIOMeta(previous.IO)
+			}
+			existing.PhysicalDisk.Collection = diskinventory.MergeStatus(
+				incoming.PhysicalDisk.Collection,
+				previous.Collection,
+			)
 		}
 	}
 	if existing.PhysicalDisk != nil && (mergedPhysicalDisk || len(incoming.Incidents) > 0) {
@@ -3181,6 +3314,12 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.DiskType != "" {
 		merged.DiskType = incoming.DiskType
 	}
+	if incoming.Controller != "" {
+		merged.Controller = incoming.Controller
+	}
+	if incoming.Target != "" {
+		merged.Target = incoming.Target
+	}
 	if incoming.SizeBytes > 0 {
 		merged.SizeBytes = incoming.SizeBytes
 	}
@@ -3223,6 +3362,10 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.ErrorCount > 0 {
 		merged.ErrorCount = incoming.ErrorCount
 	}
+	if incoming.IO != nil {
+		merged.IO = clonePhysicalDiskIOMeta(incoming.IO)
+	}
+	merged.Collection = diskinventory.MergeStatus(merged.Collection, incoming.Collection)
 	if incoming.SMART != nil {
 		smart := *incoming.SMART
 		merged.SMART = &smart

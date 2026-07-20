@@ -444,14 +444,32 @@ func (p *PatrolService) GetFindingsHistory(startTime *time.Time) []*Finding {
 	return findings
 }
 
-// ForcePatrol triggers an immediate patrol run.
-// Uses context.Background() since this runs async after the HTTP response.
-func (p *PatrolService) ForcePatrol(ctx context.Context) {
+// PatrolRunAcceptance is the durable acknowledgement returned when a manual
+// run has reserved the single Patrol execution slot.
+type PatrolRunAcceptance struct {
+	RunID     string
+	StartedAt time.Time
+}
+
+// ForcePatrol atomically accepts and starts an immediate patrol run.
+// The reservation is visible through GetStatus before this method returns, so
+// callers never have to infer backend acceptance from the first provider event.
+// The detached context lets the accepted run continue after the HTTP request
+// that initiated it has completed.
+func (p *PatrolService) ForcePatrol(ctx context.Context) (PatrolRunAcceptance, bool) {
 	runCtx := context.Background()
 	if ctx != nil {
 		runCtx = context.WithoutCancel(ctx)
 	}
-	go p.runPatrolWithTrigger(runCtx, TriggerReasonManual, nil)
+	runStart, accepted := p.beginRun("full")
+	if !accepted {
+		return PatrolRunAcceptance{}, false
+	}
+	go p.runPatrolWithTriggerStart(runCtx, TriggerReasonManual, nil, runStart)
+	return PatrolRunAcceptance{
+		RunID:     runStart.id,
+		StartedAt: runStart.startedAt,
+	}, true
 }
 
 // chatServiceExecutorAccessor is satisfied by *chat.Service, allowing patrol to

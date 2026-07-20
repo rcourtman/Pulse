@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/proxmoxidentity"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // State represents the current state of all monitored resources
@@ -464,17 +465,21 @@ func (s HostSensorSummary) NormalizeCollections() HostSensorSummary {
 
 // HostDiskSMART represents S.M.A.R.T. data for a disk from a host agent.
 type HostDiskSMART struct {
-	Device      string           `json:"device"`              // Block device name (e.g., sda, nvme0n1)
-	Model       string           `json:"model,omitempty"`     // Disk model
-	Serial      string           `json:"serial,omitempty"`    // Serial number
-	WWN         string           `json:"wwn,omitempty"`       // World Wide Name
-	Type        string           `json:"type,omitempty"`      // Transport type: sata, sas, nvme
-	SizeBytes   int64            `json:"sizeBytes,omitempty"` // Capacity in bytes (0 when unknown)
-	Temperature int              `json:"temperature"`         // Temperature in Celsius
-	Health      string           `json:"health,omitempty"`    // PASSED, FAILED, UNKNOWN
-	Standby     bool             `json:"standby,omitempty"`   // True if disk was in standby
-	Pool        string           `json:"pool,omitempty"`      // ZFS pool this disk belongs to (empty if not a ZFS member)
-	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
+	Device      string                          `json:"device"`               // Block device name (e.g., sda, nvme0n1)
+	Model       string                          `json:"model,omitempty"`      // Disk model
+	Serial      string                          `json:"serial,omitempty"`     // Serial number
+	WWN         string                          `json:"wwn,omitempty"`        // World Wide Name
+	Type        string                          `json:"type,omitempty"`       // Transport type: sata, sas, nvme
+	Controller  string                          `json:"controller,omitempty"` // Stable controller association when reported
+	Target      string                          `json:"target,omitempty"`     // Controller target/HCTL or smartctl member target
+	SizeBytes   int64                           `json:"sizeBytes,omitempty"`  // Capacity in bytes (0 when unknown)
+	Temperature int                             `json:"temperature"`          // Temperature in Celsius
+	Health      string                          `json:"health,omitempty"`     // PASSED, FAILED, UNKNOWN
+	Standby     bool                            `json:"standby,omitempty"`    // True if disk was in standby
+	Pool        string                          `json:"pool,omitempty"`       // ZFS pool this disk belongs to (empty if not a ZFS member)
+	IO          *DiskIO                         `json:"io,omitempty"`
+	Collection  *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	Attributes  *SMARTAttributes                `json:"attributes,omitempty"`
 }
 
 // SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.
@@ -2395,23 +2400,27 @@ type CephServiceStatus struct {
 
 // PhysicalDisk represents a physical disk on a node
 type PhysicalDisk struct {
-	ID              string           `json:"id"` // "{instance}-{node}-{devpath}"
-	Node            string           `json:"node"`
-	Instance        string           `json:"instance"`
-	DevPath         string           `json:"devPath"` // /dev/nvme0n1, /dev/sda
-	Model           string           `json:"model"`
-	Serial          string           `json:"serial"`
-	WWN             string           `json:"wwn"`          // World Wide Name
-	Type            string           `json:"type"`         // nvme, sata, sas
-	Size            int64            `json:"size"`         // bytes
-	Health          string           `json:"health"`       // PASSED, FAILED, UNKNOWN
-	Wearout         int              `json:"wearout"`      // SSD wear metric from Proxmox (0-100, -1 when unavailable)
-	Temperature     int              `json:"temperature"`  // Celsius (if available)
-	RPM             int              `json:"rpm"`          // 0 for SSDs
-	Used            string           `json:"used"`         // Filesystem or partition usage
-	StorageGroup    string           `json:"storageGroup"` // Pool/VG/array this disk belongs to (e.g. ZFS pool name); empty if not matched
-	SmartAttributes *SMARTAttributes `json:"smartAttributes,omitempty"`
-	LastChecked     time.Time        `json:"lastChecked"`
+	ID              string                          `json:"id"` // "{instance}-{node}-{devpath}"
+	Node            string                          `json:"node"`
+	Instance        string                          `json:"instance"`
+	DevPath         string                          `json:"devPath"` // /dev/nvme0n1, /dev/sda
+	Model           string                          `json:"model"`
+	Serial          string                          `json:"serial"`
+	WWN             string                          `json:"wwn"`                  // World Wide Name
+	Type            string                          `json:"type"`                 // nvme, sata, sas
+	Controller      string                          `json:"controller,omitempty"` // Controller association when reported
+	Target          string                          `json:"target,omitempty"`     // Controller target/HCTL when reported
+	Size            int64                           `json:"size"`                 // bytes
+	Health          string                          `json:"health"`               // PASSED, FAILED, UNKNOWN
+	Wearout         int                             `json:"wearout"`              // SSD wear metric from Proxmox (0-100, -1 when unavailable)
+	Temperature     int                             `json:"temperature"`          // Celsius (if available)
+	RPM             int                             `json:"rpm"`                  // 0 for SSDs
+	Used            string                          `json:"used"`                 // Filesystem or partition usage
+	StorageGroup    string                          `json:"storageGroup"`         // Pool/VG/array this disk belongs to (e.g. ZFS pool name); empty if not matched
+	SmartAttributes *SMARTAttributes                `json:"smartAttributes,omitempty"`
+	IO              *DiskIO                         `json:"io,omitempty"`
+	Collection      *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	LastChecked     time.Time                       `json:"lastChecked"`
 }
 
 // PBSInstance represents a Proxmox Backup Server instance

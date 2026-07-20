@@ -1126,6 +1126,8 @@ export interface PhysicalDisk {
   serial: string;
   wwn: string;
   type: 'nvme' | 'sata' | 'sas' | string;
+  controller?: string;
+  target?: string;
   size: number;
   health: 'PASSED' | 'FAILED' | 'UNKNOWN' | string;
   wearout: number; // 0-100, 100 is best, -1 when the controller doesn't report it
@@ -1134,6 +1136,17 @@ export interface PhysicalDisk {
   used: string;
   lastChecked: string;
   smartAttributes?: SMARTAttributes;
+  io?: {
+    device?: string;
+    readBytes?: number;
+    writeBytes?: number;
+    readOps?: number;
+    writeOps?: number;
+    readTimeMs?: number;
+    writeTimeMs?: number;
+    ioTimeMs?: number;
+  };
+  collection?: import('./resource').PhysicalDiskCollectionStatus;
 }
 
 export interface CPUInfo {

@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog"
@@ -1003,10 +1004,13 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			// knows which ZFS pool (if any) it belongs to. Errors are
 			// non-fatal; we simply leave StorageGroup empty.
 			var poolAssignment *diskPoolAssignment
+			poolStatus := diskinventory.Unavailable("proxmox_zfs", "ZFS pool monitoring is disabled")
 			if zfsPoolingEnabled {
 				if pools, pErr := pveClient.GetZFSPoolsWithDetails(nodeCtx, node.Node); pErr == nil {
 					poolAssignment = buildDiskPoolAssignment(pools)
+					poolStatus = diskinventory.Available("proxmox_zfs")
 				} else {
+					poolStatus = diskinventory.Unavailable("proxmox_zfs", "ZFS pool membership query failed")
 					log.Debug().
 						Err(pErr).
 						Str("node", node.Node).
@@ -1020,20 +1024,31 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			for _, disk := range disks {
 				diskID := fmt.Sprintf("%s-%s-%s", inst, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
 				physicalDisk := models.PhysicalDisk{
-					ID:          diskID,
-					Node:        node.Node,
-					Instance:    inst,
-					DevPath:     disk.DevPath,
-					Model:       disk.Model,
-					Serial:      disk.Serial,
-					WWN:         disk.WWN,
-					Type:        disk.Type,
-					Size:        disk.Size,
-					Health:      disk.Health,
-					Wearout:     disk.Wearout,
-					RPM:         disk.RPM,
-					Used:        disk.Used,
+					ID:       diskID,
+					Node:     node.Node,
+					Instance: inst,
+					DevPath:  disk.DevPath,
+					Model:    disk.Model,
+					Serial:   disk.Serial,
+					WWN:      disk.WWN,
+					Type:     disk.Type,
+					Size:     disk.Size,
+					Health:   disk.Health,
+					Wearout:  disk.Wearout,
+					RPM:      disk.RPM,
+					Used:     disk.Used,
+					Collection: &diskinventory.CollectionStatus{
+						Temperature: diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose temperature"),
+						IO:          diskinventory.Unsupported("proxmox_disks", "Proxmox disk inventory does not expose physical-disk I/O counters"),
+						Controller:  diskinventory.Missing("proxmox_disks", "controller association was not reported"),
+						Pool:        poolStatus,
+					},
 					LastChecked: time.Now(),
+				}
+				if strings.TrimSpace(disk.Serial) != "" {
+					physicalDisk.Collection.Serial = diskinventory.Available("proxmox_disks")
+				} else {
+					physicalDisk.Collection.Serial = diskinventory.Missing("proxmox_disks", "disk serial was not reported")
 				}
 				if poolAssignment != nil {
 					physicalDisk.StorageGroup = poolAssignment.lookup(physicalDisk)
@@ -1058,6 +1073,11 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 
 		allDisks = mergeNVMeTempsIntoDisks(allDisks, nodesFromState)
 		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)
+		for index := range allDisks {
+			if previous, ok := existingDisksMap[allDisks[index].ID]; ok {
+				allDisks[index] = preserveUnavailablePhysicalDiskEvidence(allDisks[index], previous)
+			}
+		}
 		for _, disk := range allDisks {
 			if !polledNodes[disk.Node] {
 				continue
@@ -1134,16 +1154,58 @@ func physicalDisksFromHostAgentSMART(inst, nodeName string, smartEntries []model
 			Serial:          strings.TrimSpace(smart.Serial),
 			WWN:             strings.TrimSpace(smart.WWN),
 			Type:            strings.TrimSpace(smart.Type),
+			Controller:      strings.TrimSpace(smart.Controller),
+			Target:          strings.TrimSpace(smart.Target),
 			Size:            smart.SizeBytes,
 			Health:          health,
 			Wearout:         deriveWearoutFromSMARTAttributes(smart.Attributes),
 			Temperature:     smart.Temperature,
 			StorageGroup:    strings.TrimSpace(smart.Pool),
+			IO:              cloneDiskIO(smart.IO),
+			Collection:      diskinventory.CloneStatus(smart.Collection),
 			SmartAttributes: smartAttributesCopy(smart.Attributes),
 			LastChecked:     now,
 		})
 	}
 	return disks
+}
+
+func cloneDiskIO(in *models.DiskIO) *models.DiskIO {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDisk) models.PhysicalDisk {
+	if current.Collection == nil {
+		return current
+	}
+	if current.Collection.Serial.State != diskinventory.FieldAvailable &&
+		strings.TrimSpace(current.Serial) == "" {
+		current.Serial = previous.Serial
+	}
+	if current.Collection.Temperature.State != diskinventory.FieldAvailable &&
+		current.Temperature <= 0 {
+		current.Temperature = previous.Temperature
+	}
+	if current.Collection.Controller.State != diskinventory.FieldAvailable {
+		if current.Controller == "" {
+			current.Controller = previous.Controller
+		}
+		if current.Target == "" {
+			current.Target = previous.Target
+		}
+	}
+	if current.Collection.Pool.State != diskinventory.FieldAvailable &&
+		strings.TrimSpace(current.StorageGroup) == "" {
+		current.StorageGroup = previous.StorageGroup
+	}
+	if current.Collection.IO.State != diskinventory.FieldAvailable && current.IO == nil {
+		current.IO = cloneDiskIO(previous.IO)
+	}
+	return current
 }
 
 func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {

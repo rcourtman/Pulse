@@ -284,6 +284,37 @@ go run ./cmd/patrol-qualify \
   -artifacts tmp/patrol-qualification/<model-and-revision>
 ```
 
+### Local-provider cold-start matrix
+
+Manual-run release validation must also cover a cold local model independently
+of finding-quality qualification. This matrix needs no cloud API key: use a
+local Ollama model that passes Patrol preflight (for example a locally installed
+`qwen3:8b`) and an already authenticated local Pulse session.
+
+| Case | Preparation | First provider progress target | Required observations |
+|---|---|---:|---|
+| Warm control | Keep the model loaded | 0–5 seconds | POST returns one accepted `run_id`; status immediately reports the same `current_run_id` |
+| Short cold load | Unload, then restart immediately | about 15 seconds | no start-timeout toast; one provider execution; one matching history record |
+| Medium cold load | Unload and apply representative local memory pressure | about 30 seconds | accepted run remains running before provider progress; SSE reconnect does not retrigger POST |
+| Long cold load | Use a deliberately cold model/runtime on representative hardware | about 60 seconds | no false error; completion or provider failure is recorded against the accepted `run_id` |
+
+For Ollama, unload without deleting the model:
+
+```sh
+curl -fsS http://127.0.0.1:11434/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3:8b","keep_alive":0}'
+```
+
+For every row, capture the `POST /api/ai/patrol/run` response, poll
+`GET /api/ai/patrol/status`, observe `/api/ai/patrol/stream`, and finally query
+`GET /api/ai/patrol/runs?limit=30`. Pass only when the accepted ID is immediately
+visible in status, the provider is invoked once, exactly one terminal history
+record has that ID, browser/network and HTTP rejection errors remain distinct
+from a recorded provider/runtime failure, and cancel/retry does not reuse stale
+client tracking. The provider request timeout remains the terminal bound; a
+quiet local model is never treated as a failed backend start.
+
 `live-suite` selects every checked-in scenario for the requested track. The
 remediation track still requires `--authorize-remediation`; selecting the
 track does not broaden mutation authority.

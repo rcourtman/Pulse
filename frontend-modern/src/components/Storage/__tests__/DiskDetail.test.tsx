@@ -64,4 +64,35 @@ describe('DiskDetail', () => {
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('14d');
     expect(Array.from(rangeSelector.options).map((option) => option.value)).not.toContain('90d');
   });
+
+  it('shows explicit collection status and does not render misleading live I/O', () => {
+    const disk = buildDisk();
+    disk.physicalDisk!.collection = {
+      serial: { state: 'available', source: 'smartctl' },
+      temperature: {
+        state: 'unavailable',
+        source: 'smartctl',
+        reason: 'collection deadline exceeded',
+      },
+      io: {
+        state: 'unsupported',
+        source: 'controller',
+        reason: 'per-member counters unavailable',
+      },
+      controller: { state: 'available', source: 'linux-sysfs' },
+      pool: { state: 'available', source: 'zpool-status' },
+    };
+
+    render(() => <DiskDetail disk={disk} nodes={[]} />);
+
+    expect(
+      screen.getByText('Temperature is temporarily unavailable: collection deadline exceeded'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Disk I/O is unsupported: per-member counters unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Live I/O (30m)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/:diskread:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/:diskwrite:/)).not.toBeInTheDocument();
+  });
 });

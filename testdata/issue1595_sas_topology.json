@@ -1,0 +1,47 @@
+{
+  "issue": 1595,
+  "description": "Synthetic public-evidence topology: 24 same-model SAS disks, two HBAs, two ZFS pools. Serial values and counters are synthetic.",
+  "node": "nuclear",
+  "instance": "pve-lab",
+  "agentId": "agent-nuclear",
+  "model": "ST18000NM019J",
+  "sizeBytes": 18000207937536,
+  "controllers": [
+    {
+      "id": "0000:03:00.0",
+      "pool": "tank-a",
+      "disks": [
+        {"device":"sda","target":"6:0:0:0","serial":"ZR5TESTA0001","providerSerial":"5000c500a0000001","temperature":30,"readBytes":1000000,"writeBytes":2000000,"ioTimeMs":100},
+        {"device":"sdb","target":"6:0:1:0","serial":"ZR5TESTA0002","providerSerial":"5000c500a0000002","temperature":31,"readBytes":1100000,"writeBytes":2100000,"ioTimeMs":110},
+        {"device":"sdc","target":"6:0:2:0","serial":"ZR5TESTA0003","providerSerial":"5000c500a0000003","temperature":32,"readBytes":1200000,"writeBytes":2200000,"ioTimeMs":120},
+        {"device":"sdd","target":"6:0:3:0","serial":"ZR5TESTA0004","providerSerial":"5000c500a0000004","temperature":33,"readBytes":1300000,"writeBytes":2300000,"ioTimeMs":130},
+        {"device":"sde","target":"6:0:4:0","serial":"ZR5TESTA0005","providerSerial":"5000c500a0000005","temperature":34,"readBytes":1400000,"writeBytes":2400000,"ioTimeMs":140},
+        {"device":"sdf","target":"6:0:5:0","serial":"ZR5TESTA0006","providerSerial":"5000c500a0000006","temperature":35,"readBytes":1500000,"writeBytes":2500000,"ioTimeMs":150},
+        {"device":"sdg","target":"6:0:6:0","serial":"ZR5TESTA0007","providerSerial":"5000c500a0000007","temperature":36,"readBytes":1600000,"writeBytes":2600000,"ioTimeMs":160},
+        {"device":"sdh","target":"6:0:7:0","serial":"ZR5TESTA0008","providerSerial":"5000c500a0000008","temperature":37,"readBytes":1700000,"writeBytes":2700000,"ioTimeMs":170},
+        {"device":"sdi","target":"6:0:8:0","serial":"ZR5TESTA0009","providerSerial":"5000c500a0000009","temperature":38,"readBytes":1800000,"writeBytes":2800000,"ioTimeMs":180},
+        {"device":"sdj","target":"6:0:9:0","serial":"ZR5TESTA0010","providerSerial":"5000c500a0000010","temperature":39,"readBytes":1900000,"writeBytes":2900000,"ioTimeMs":190},
+        {"device":"sdk","target":"6:0:10:0","serial":"ZR5TESTA0011","providerSerial":"5000c500a0000011","temperature":40,"readBytes":2000000,"writeBytes":3000000,"ioTimeMs":200},
+        {"device":"sdl","target":"6:0:11:0","serial":"ZR5TESTA0012","providerSerial":"5000c500a0000012","temperature":41,"readBytes":2100000,"writeBytes":3100000,"ioTimeMs":210}
+      ]
+    },
+    {
+      "id": "0000:04:00.0",
+      "pool": "tank-b",
+      "disks": [
+        {"device":"sdm","target":"7:0:0:0","serial":"ZR5TESTB0001","providerSerial":"5000c500b0000001","temperature":30,"readBytes":3000000,"writeBytes":4000000,"ioTimeMs":300},
+        {"device":"sdn","target":"7:0:1:0","serial":"ZR5TESTB0002","providerSerial":"5000c500b0000002","temperature":31,"readBytes":3100000,"writeBytes":4100000,"ioTimeMs":310},
+        {"device":"sdo","target":"7:0:2:0","serial":"ZR5TESTB0003","providerSerial":"5000c500b0000003","temperature":32,"readBytes":3200000,"writeBytes":4200000,"ioTimeMs":320},
+        {"device":"sdp","target":"7:0:3:0","serial":"ZR5TESTB0004","providerSerial":"5000c500b0000004","temperature":33,"readBytes":3300000,"writeBytes":4300000,"ioTimeMs":330},
+        {"device":"sdq","target":"7:0:4:0","serial":"ZR5TESTB0005","providerSerial":"5000c500b0000005","temperature":34,"readBytes":3400000,"writeBytes":4400000,"ioTimeMs":340},
+        {"device":"sdr","target":"7:0:5:0","serial":"ZR5TESTB0006","providerSerial":"5000c500b0000006","temperature":35,"readBytes":3500000,"writeBytes":4500000,"ioTimeMs":350},
+        {"device":"sds","target":"7:0:6:0","serial":"ZR5TESTB0007","providerSerial":"5000c500b0000007","temperature":36,"readBytes":3600000,"writeBytes":4600000,"ioTimeMs":360},
+        {"device":"sdt","target":"7:0:7:0","serial":"ZR5TESTB0008","providerSerial":"5000c500b0000008","temperature":37,"readBytes":3700000,"writeBytes":4700000,"ioTimeMs":370},
+        {"device":"sdu","target":"7:0:8:0","serial":"ZR5TESTB0009","providerSerial":"5000c500b0000009","temperature":38,"readBytes":3800000,"writeBytes":4800000,"ioTimeMs":380},
+        {"device":"sdv","target":"7:0:9:0","serial":"ZR5TESTB0010","providerSerial":"5000c500b0000010","temperature":39,"readBytes":3900000,"writeBytes":4900000,"ioTimeMs":390},
+        {"device":"sdw","target":"7:0:10:0","serial":"ZR5TESTB0011","providerSerial":"5000c500b0000011","temperature":40,"readBytes":4000000,"writeBytes":5000000,"ioTimeMs":400},
+        {"device":"sdx","target":"7:0:11:0","serial":"ZR5TESTB0012","providerSerial":"5000c500b0000012","temperature":41,"readBytes":4100000,"writeBytes":5100000,"ioTimeMs":410}
+      ]
+    }
+  ]
+}

@@ -351,6 +351,14 @@ the `white_label` branding entitlement.
     retain that sink when remote configuration changes log level, and never
     place runtime tokens or enrollment secrets in the service command or log
     output.
+    Custom agent state directories share that same credential boundary: the
+    directory is owner-only, token, runtime-token, identity, and connection
+    files are mode `0600`, and implicit token lookup is confined to the
+    resolved directory instead of falling through to another instance's
+    default token. Installer health, lookup, and uninstall HTTP calls must feed
+    token headers through private curl configuration rather than exposing the
+    token in curl process arguments; generated service definitions and
+    `connection.env` may contain only protected token-file paths.
     Global resource timeline reads through `/api/resources/timeline` are
     adjacent monitoring-read surfaces, not a privacy bypass. Provider activity
     filters may expose backend-authored task/event metadata, but the endpoint

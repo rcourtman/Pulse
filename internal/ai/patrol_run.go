@@ -285,8 +285,51 @@ func (p *PatrolService) runPatrol(ctx context.Context) {
 	p.runPatrolWithTrigger(ctx, TriggerReasonScheduled, nil)
 }
 
+type patrolRunStart struct {
+	id        string
+	startedAt time.Time
+}
+
+func (p *PatrolService) recordAcceptedRunFailure(start *patrolRunStart, trigger TriggerReason, summary, detail string) {
+	if start == nil || p.runHistoryStore == nil {
+		return
+	}
+	completedAt := time.Now()
+	duration := completedAt.Sub(start.startedAt)
+	p.runHistoryStore.Add(PatrolRunRecord{
+		ID:              start.id,
+		StartedAt:       start.startedAt,
+		CompletedAt:     completedAt,
+		Duration:        duration,
+		DurationMs:      duration.Milliseconds(),
+		Type:            "patrol",
+		TriggerReason:   string(trigger),
+		FindingsSummary: "Analysis incomplete (1 error)",
+		FindingIDs:      []string{},
+		ErrorCount:      1,
+		Status:          "error",
+		ErrorSummary:    summary,
+		ErrorDetail:     detail,
+	})
+	p.mu.Lock()
+	p.lastActivity = completedAt
+	p.lastFullPatrol = completedAt
+	p.lastDuration = duration
+	p.resourcesChecked = 0
+	p.errorCount = 1
+	p.mu.Unlock()
+}
+
 // runPatrolWithTrigger executes a patrol run with trigger context
 func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger TriggerReason, scope *PatrolScope) {
+	p.runPatrolWithTriggerStart(ctx, trigger, scope, nil)
+}
+
+// runPatrolWithTriggerStart executes a patrol run, optionally using a start
+// reservation that was accepted synchronously by the manual-run API. Keeping
+// acceptance and execution on the same reservation removes the interval where
+// the API has returned success but status still reports no active run.
+func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger TriggerReason, scope *PatrolScope, acceptedStart *patrolRunStart) {
 	p.mu.RLock()
 	cfg := p.config
 	breaker := p.circuitBreaker
@@ -296,21 +339,42 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	// (not from the boot-time config snapshot) because release demo instances
 	// enable mock fixtures only after the license sync authorizes them.
 	if IsDemoMode() {
-		p.runDemoPatrolCycle(trigger)
+		if !p.runDemoPatrolCycleWithStart(trigger, acceptedStart) && acceptedStart != nil {
+			p.recordAcceptedRunFailure(acceptedStart, trigger,
+				"Patrol demo state unavailable",
+				"Pulse accepted the run, but demo infrastructure state was not available.")
+		}
 		return
 	}
 
 	if !cfg.Enabled {
+		if acceptedStart != nil {
+			p.recordAcceptedRunFailure(acceptedStart, trigger,
+				"Patrol disabled before execution",
+				"Pulse accepted the run, but Patrol was disabled before execution began.")
+			p.endRun()
+		}
 		return
 	}
 	if reason := strings.TrimSpace(cfg.RuntimeBlockedReason); reason != "" {
+		if acceptedStart != nil {
+			p.recordAcceptedRunFailure(acceptedStart, trigger,
+				"Patrol runtime became unavailable",
+				reason)
+			p.endRun()
+		}
 		p.setBlockedReasonWithCause(reason, cfg.RuntimeBlockedCause)
 		log.Info().Str("reason", reason).Str("cause", string(cfg.RuntimeBlockedCause)).Msg("AI Patrol: Skipping run - runtime readiness blocked")
 		return
 	}
 
-	if !p.tryStartRun("full") {
-		return
+	runStart := acceptedStart
+	if runStart == nil {
+		var accepted bool
+		runStart, accepted = p.beginRun("full")
+		if !accepted {
+			return
+		}
 	}
 	defer p.endRun()
 
@@ -320,8 +384,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		log.Warn().Msg("AI Patrol: Circuit breaker is open (LLM calls blocked)")
 	}
 
-	start := time.Now()
-	runID := fmt.Sprintf("%d", start.UnixNano())
+	start := runStart.startedAt
+	runID := runStart.id
 	executionID := uuid.NewString()
 	patrolType := "patrol"
 	GetPatrolMetrics().RecordRun(string(trigger), "full")
@@ -358,6 +422,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	// Get current state
 	if !p.hasPatrolRuntimeInputs() {
 		log.Warn().Msg("AI Patrol: No runtime state available")
+		if acceptedStart != nil {
+			p.recordAcceptedRunFailure(runStart, trigger,
+				"Patrol runtime state unavailable",
+				"Pulse accepted the run, but no infrastructure state was available for analysis.")
+		}
 		return
 	}
 
@@ -496,10 +565,10 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		}
 		p.setBlockedReasonWithCause(reason, cause)
 		log.Info().Str("reason", reason).Str("cause", string(cause)).Msg("AI Patrol: Skipping run - AI unavailable")
-		return
-	}
-
-	{
+		runStats.errors++
+		runStats.errorSummary = "Patrol provider unavailable"
+		runStats.errorDetail = reason
+	} else {
 		p.clearBlockedReason()
 		// Ensure stream state is clean for this run before the first streamed event.
 		p.resetStreamForRun(runID)
@@ -792,7 +861,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		return
 	}
 
-	if !p.tryStartRun("scoped") {
+	runStart, accepted := p.beginRun("scoped")
+	if !accepted {
 		// Re-queue with backoff if retries remain
 		if scope.RetryCount < scopedPatrolMaxRetries {
 			scope.RetryCount++
@@ -826,8 +896,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		log.Warn().Msg("AI Patrol: Circuit breaker is open for scoped patrol (LLM calls blocked)")
 	}
 
-	start := time.Now()
-	runID := fmt.Sprintf("%d", start.UnixNano())
+	start := runStart.startedAt
+	runID := runStart.id
 	executionID := uuid.NewString()
 	GetPatrolMetrics().RecordRun(string(scope.Reason), "scoped")
 	var runStats struct {
@@ -1793,6 +1863,7 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	status := PatrolStatus{
 		RuntimeState:     PatrolRuntimeStateActive,
 		Running:          analysisInProgress,
+		CurrentRunID:     p.currentRunID,
 		Enabled:          p.config.Enabled,
 		LastDuration:     p.lastDuration,
 		ResourcesChecked: p.resourcesChecked,
@@ -1801,6 +1872,10 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		IntervalMs:       intervalMs,
 		BlockedReason:    p.lastBlockedReason,
 		BlockedCause:     p.lastBlockedCause,
+	}
+	if analysisInProgress && !p.runStartedAt.IsZero() {
+		startedAt := p.runStartedAt
+		status.CurrentRunStartedAt = &startedAt
 	}
 	if p.triggerManager != nil {
 		triggerStatus := p.triggerManager.GetStatus()
@@ -2730,7 +2805,7 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	}
 }
 
-func (p *PatrolService) tryStartRun(kind string) bool {
+func (p *PatrolService) beginRun(kind string) (*patrolRunStart, bool) {
 	p.mu.Lock()
 	if p.runInProgress {
 		// Detect stuck runs: if the current run has been going for >20 minutes,
@@ -2751,18 +2826,28 @@ func (p *PatrolService) tryStartRun(kind string) bool {
 			} else {
 				log.Debug().Str("kind", kind).Msg("AI Patrol: Run already in progress, skipping")
 			}
-			return false
+			return nil, false
 		}
 	}
+	startedAt := time.Now()
+	runID := fmt.Sprintf("%d", startedAt.UnixNano())
 	p.runInProgress = true
-	p.runStartedAt = time.Now()
+	p.currentRunID = runID
+	p.runStartedAt = startedAt
 	p.mu.Unlock()
-	return true
+	return &patrolRunStart{id: runID, startedAt: startedAt}, true
+}
+
+func (p *PatrolService) tryStartRun(kind string) bool {
+	_, accepted := p.beginRun(kind)
+	return accepted
 }
 
 func (p *PatrolService) endRun() {
 	p.mu.Lock()
 	p.runInProgress = false
+	p.currentRunID = ""
+	p.runStartedAt = time.Time{}
 	orch := p.investigationOrchestrator
 	p.mu.Unlock()
 

@@ -3,6 +3,7 @@ package monitoring
 import (
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -93,6 +94,17 @@ func (m *Monitor) recentlyResolvedAlertsSnapshot() []models.ResolvedAlert {
 func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.Resource) {
 	if m == nil || m.alertManager == nil {
 		return
+	}
+
+	config := m.alertManager.GetConfig()
+	if alerts.MigrateCanonicalOverrideKeys(&config, resources) {
+		if m.configPersist == nil {
+			log.Warn().Msg("cannot persist canonical alert override migration without config persistence")
+		} else if err := m.configPersist.SaveAlertConfig(config); err != nil {
+			log.Error().Err(err).Msg("failed to persist canonical alert override migration")
+		} else {
+			m.alertManager.UpdateConfig(config)
+		}
 	}
 
 	m.alertManager.CheckUnifiedResourceMetrics(resources)

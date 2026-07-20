@@ -954,11 +954,41 @@ func TestHandleForcePatrol_ConfigDisabled(t *testing.T) {
 
 	handler.HandleForcePatrol(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "Triggered patrol run") {
-		t.Fatalf("expected success message")
+	var payload APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "patrol_disabled" {
+		t.Fatalf("code = %q, want patrol_disabled", payload.Code)
+	}
+}
+
+func TestHandleForcePatrolRejectsDuplicateAfterSynchronousAcceptance(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	seedReadyAnthropicPatrolRuntime(t, handler)
+	setUnexportedField(t, patrol, "runInProgress", true)
+	setUnexportedField(t, patrol, "currentRunID", "run-active")
+	setUnexportedField(t, patrol, "runStartedAt", time.Now())
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleForcePatrol(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	var payload APIError
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "patrol_already_running" {
+		t.Fatalf("code = %q, want patrol_already_running", payload.Code)
+	}
+	if payload.Details["current_run_id"] != "run-active" {
+		t.Fatalf("current_run_id = %q, want run-active", payload.Details["current_run_id"])
 	}
 }
 
@@ -1018,6 +1048,17 @@ func TestHandleForcePatrol_CommunityTierIgnoresRecentScopedActivityForFullPatrol
 	}
 	if strings.Contains(rec.Body.String(), "patrol_rate_limited") {
 		t.Fatalf("expected community force patrol to ignore scoped-only activity, got %s", rec.Body.String())
+	}
+	var response struct {
+		Accepted  bool   `json:"accepted"`
+		RunID     string `json:"run_id"`
+		StartedAt string `json:"started_at"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode acceptance response: %v", err)
+	}
+	if !response.Accepted || response.RunID == "" || response.StartedAt == "" {
+		t.Fatalf("incomplete acceptance response: %+v", response)
 	}
 }
 

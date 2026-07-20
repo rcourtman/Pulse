@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rs/zerolog/log"
 )
 
@@ -616,11 +617,27 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 			Serial:      disk.Serial,
 			WWN:         disk.WWN,
 			Type:        disk.Type,
+			Controller:  disk.Controller,
+			Target:      disk.Target,
 			SizeBytes:   disk.SizeBytes,
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,
 			Pool:        disk.Pool,
+			Collection:  diskinventory.CloneStatus(disk.Collection),
+		}
+		if disk.IO != nil {
+			ioCopy := models.DiskIO{
+				Device:     disk.IO.Device,
+				ReadBytes:  disk.IO.ReadBytes,
+				WriteBytes: disk.IO.WriteBytes,
+				ReadOps:    disk.IO.ReadOps,
+				WriteOps:   disk.IO.WriteOps,
+				ReadTime:   disk.IO.ReadTime,
+				WriteTime:  disk.IO.WriteTime,
+				IOTime:     disk.IO.IOTime,
+			}
+			entry.IO = &ioCopy
 		}
 		if disk.Attributes != nil {
 			entry.Attributes = convertAgentSMARTAttributes(disk.Attributes)

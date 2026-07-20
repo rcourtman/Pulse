@@ -5,6 +5,7 @@ import {
   PATROL_REFRESH_TIMEOUT_MS,
   buildPatrolSettingsReadinessFailure,
   openPatrolAssistantWorkflowHandoff,
+  patrolStartFailureMessage,
   recordPatrolControlStarterActivity,
   recordPatrolWorkflowStarterActivity,
   resolvePatrolAutonomyLevelForSave,
@@ -68,6 +69,20 @@ describe('usePatrolIntelligenceState', () => {
     expect(patrolIntelligenceStateSource).toContain('clearRefreshTimeout();');
     expect(patrolIntelligenceStateSource).toContain('clearManualRefreshTimeout();');
     expect(patrolIntelligenceStateSource).toContain('PATROL_MANUAL_SYNC_TIMEOUT_MS');
+  });
+
+  it('keeps browser/network start failures distinct from backend rejections', () => {
+    expect(patrolStartFailureMessage(new TypeError('Failed to fetch'))).toBe(
+      'Could not reach Pulse to start Patrol: Failed to fetch',
+    );
+    expect(
+      patrolStartFailureMessage(
+        Object.assign(new Error('Patrol is already running.'), {
+          code: 'patrol_already_running',
+          status: 409,
+        }),
+      ),
+    ).toBe('Patrol is already running.');
   });
 
   it('fails soft when Patrol data refreshes reject', () => {

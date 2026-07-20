@@ -7,6 +7,8 @@ export type ThresholdsActiveTab =
 
 export interface Resource {
   id: string;
+  overrideIdCandidates?: string[];
+  overrideStorageId?: string;
   name: string;
   displayName?: string;
   policy?: ResourcePolicy;

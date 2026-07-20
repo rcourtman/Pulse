@@ -77,6 +77,8 @@ func (a *Agent) runEnrollmentLoop(ctx context.Context) error {
 			a.persistRuntimeToken(result.RuntimeToken)
 			canonicalID := strings.TrimSpace(result.AgentID)
 			if canonicalID != "" {
+				a.agentID = canonicalID
+				a.cfg.AgentID = canonicalID
 				a.persistAgentID(canonicalID)
 			}
 			a.logger.Info().
@@ -202,6 +204,10 @@ func (a *Agent) persistRuntimeToken(token string) {
 	}
 	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to create state directory for runtime token")
+		return
+	}
+	if err := a.collector.Chmod(a.stateDir, 0700); err != nil {
+		a.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions for runtime token")
 		return
 	}
 	tokenPath := filepath.Join(a.stateDir, runtimeTokenFile)

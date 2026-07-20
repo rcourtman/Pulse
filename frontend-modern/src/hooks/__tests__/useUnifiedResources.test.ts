@@ -1303,6 +1303,7 @@ describe('useUnifiedResources', () => {
               platformId: 'pve1',
               primaryId: 'node:instance-pve1',
               aliases: ['node:instance-pve1', 'instance-pve1', 'tower.local'],
+              supersededIds: ['agent-retired'],
             },
           },
         ],
@@ -1324,6 +1325,7 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0].canonicalIdentity).toMatchObject({
       primaryId: 'node:instance-pve1',
       hostname: 'tower.local',
+      supersededIds: ['agent-retired'],
     });
 
     dispose();

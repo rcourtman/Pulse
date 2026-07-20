@@ -40,6 +40,7 @@ import {
 } from '@/stores/license';
 import { PATROL_AUTONOMY_FEATURE_KEY } from './patrolAutonomyAvailability';
 import type { AISettings } from '@/types/ai';
+import { apiErrorStatus } from '@/api/responseUtils';
 import {
   hasFindingInvestigationHandoffPointer,
   isPatrolRuntimeFinding,
@@ -63,6 +64,7 @@ import {
   type PatrolAssistantFindingHandoff,
   type PatrolConfigurationFailureInput,
 } from './patrolInvestigationContextModel';
+import { schedulePatrolRunAcceptanceReconciliation } from './patrolRunAcceptance';
 
 type PatrolTab = 'findings' | 'history';
 
@@ -93,6 +95,8 @@ const recordPatrolWorkflowStarterActivityForSurface = async (
 
 export const PATROL_REFRESH_TIMEOUT_MS = 15000;
 export const PATROL_MANUAL_SYNC_TIMEOUT_MS = 5000;
+export const PATROL_ACCEPTANCE_RECONCILE_MS = 15000;
+export const PATROL_ACCEPTANCE_REFRESH_TIMEOUT_MS = 5000;
 
 export function recordPatrolWorkflowStarterActivity(): void {
   void recordPatrolWorkflowStarterActivityForSurface(
@@ -131,6 +135,11 @@ export function openPatrolAssistantWorkflowHandoff(
 
 const patrolErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
+
+export const patrolStartFailureMessage = (error: unknown): string =>
+  apiErrorStatus(error) === null
+    ? `Could not reach Pulse to start Patrol: ${patrolErrorMessage(error, 'network request failed')}`
+    : patrolErrorMessage(error, 'Pulse rejected the Patrol run');
 
 const buildReadinessDetails = (
   readiness: NonNullable<AISettings['patrol_readiness']>,
@@ -239,6 +248,7 @@ export function usePatrolIntelligenceState() {
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
   const [activityRefreshTrigger, setActivityRefreshTrigger] = createSignal(0);
   const [manualRunRequested, setManualRunRequested] = createSignal(false);
+  const [acceptedManualRunId, setAcceptedManualRunId] = createSignal('');
   const [patrolEnabledLocal, setPatrolEnabledLocal] = createSignal<boolean>(true);
   const [liveRunStartedAt, setLiveRunStartedAt] = createSignal('');
   const [investigationBudget, setInvestigationBudget] = createSignal(15);
@@ -250,20 +260,27 @@ export function usePatrolIntelligenceState() {
   const [assistantHandoffFindingId, setAssistantHandoffFindingId] = createSignal('');
   const [patrolLoadError, setPatrolLoadError] = createSignal('');
 
-  let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let cancelAcceptanceReconciliation: (() => void) | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
   let refreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
   let manualRefreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
   let refreshRequestId = 0;
   let manualRefreshRequestId = 0;
+  let manualRunRequestId = 0;
   let refreshInterval: ReturnType<typeof setInterval>;
   let approvalPollInterval: ReturnType<typeof setInterval>;
 
-  const clearSafetyTimer = () => {
-    if (safetyTimerRef !== undefined) {
-      clearTimeout(safetyTimerRef);
-      safetyTimerRef = undefined;
+  const clearAcceptanceReconcileTimer = () => {
+    if (cancelAcceptanceReconciliation !== undefined) {
+      cancelAcceptanceReconciliation();
+      cancelAcceptanceReconciliation = undefined;
     }
+  };
+
+  const finishManualRunTracking = () => {
+    clearAcceptanceReconcileTimer();
+    setAcceptedManualRunId('');
+    setManualRunRequested(false);
   };
 
   const clearRefreshTimeout = () => {
@@ -323,15 +340,12 @@ export function usePatrolIntelligenceState() {
   const patrolStream = usePatrolStream({
     running: () =>
       patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested()),
-    onStart: () => {
-      clearSafetyTimer();
-    },
     onComplete: () => {
-      setManualRunRequested(false);
+      finishManualRunTracking();
       loadAllData();
     },
     onError: () => {
-      setManualRunRequested(false);
+      finishManualRunTracking();
       loadAllData();
     },
   });
@@ -377,8 +391,9 @@ export function usePatrolIntelligenceState() {
     const newValue = !previousValue;
     setPatrolEnabledLocal(newValue);
     if (!newValue) {
-      setManualRunRequested(false);
-      clearSafetyTimer();
+      manualRunRequestId += 1;
+      finishManualRunTracking();
+      setIsTriggeringPatrol(false);
     }
     try {
       const data = await AIAPI.updateSettings({ patrol_enabled: newValue });
@@ -413,41 +428,60 @@ export function usePatrolIntelligenceState() {
     ) {
       return;
     }
+    const requestId = ++manualRunRequestId;
     setIsTriggeringPatrol(true);
     setManualRunRequested(true);
-    clearSafetyTimer();
-    safetyTimerRef = setTimeout(() => {
-      safetyTimerRef = undefined;
-      if (!manualRunRequested() || patrolStream.isStreaming()) {
-        return;
-      }
-      // The trigger request already succeeded, so a quiet stream can also mean
-      // a slow provider (a self-hosted model cold-loading can take well over
-      // 15s to emit its first event). Only report a failure when the refreshed
-      // status confirms no run is in progress; otherwise let the running state
-      // carry the button.
-      void loadAllData()
-        .catch(() => undefined)
-        .then(() => {
-          setManualRunRequested(false);
-          if (!patrolStream.isStreaming() && !(patrolStatus()?.running ?? false)) {
-            notificationStore.error(
-              'Patrol run did not start. The provider did not respond; check the AI provider settings or run the Patrol preflight.',
-            );
-          }
-        });
-    }, 15000);
+    clearAcceptanceReconcileTimer();
 
     try {
-      await triggerPatrolRun();
+      const acceptance = await triggerPatrolRun();
+      if (requestId !== manualRunRequestId || !manualRunRequested()) {
+        return;
+      }
+      const runId = acceptance?.run_id?.trim() || '';
+      setAcceptedManualRunId(runId);
+      cancelAcceptanceReconciliation = schedulePatrolRunAcceptanceReconciliation({
+        runId,
+        delayMs: PATROL_ACCEPTANCE_RECONCILE_MS,
+        refreshTimeoutMs: PATROL_ACCEPTANCE_REFRESH_TIMEOUT_MS,
+        getStatus: refetchPatrolStatus,
+        getHistory: () => getPatrolRunHistory(30),
+        isCurrent: () =>
+          requestId === manualRunRequestId &&
+          manualRunRequested() &&
+          acceptedManualRunId() === runId,
+        onResult: (outcome) => {
+          cancelAcceptanceReconciliation = undefined;
+          finishManualRunTracking();
+          if (outcome.kind === 'running' || outcome.kind === 'recorded') {
+            setActivityRefreshTrigger((prev) => prev + 1);
+            return;
+          }
+          if (outcome.kind === 'refresh_failed') {
+            rememberPatrolLoadError(
+              outcome.error,
+              'Patrol accepted the run, but its live status could not be refreshed.',
+            );
+            return;
+          }
+          notificationStore.error(
+            runId
+              ? `Pulse accepted Patrol run ${runId}, but the backend no longer reports it as running and did not record it in history.`
+              : 'Pulse accepted the Patrol run, but the backend no longer reports it as running and did not record it in history.',
+          );
+        },
+      });
     } catch (err) {
       console.error('Failed to trigger patrol run:', err);
-      setManualRunRequested(false);
-      notificationStore.error(patrolErrorMessage(err, 'Failed to start patrol run'));
-      clearSafetyTimer();
+      if (requestId === manualRunRequestId) {
+        finishManualRunTracking();
+        notificationStore.error(patrolStartFailureMessage(err));
+      }
       return;
     } finally {
-      setIsTriggeringPatrol(false);
+      if (requestId === manualRunRequestId) {
+        setIsTriggeringPatrol(false);
+      }
     }
 
     void loadAllData().catch((err) => {
@@ -993,7 +1027,8 @@ export function usePatrolIntelligenceState() {
 
   onCleanup(() => {
     stopPolling();
-    clearSafetyTimer();
+    manualRunRequestId += 1;
+    clearAcceptanceReconcileTimer();
     clearManualRefreshTimeout();
     if (findingScrollTimerRef !== undefined) {
       clearTimeout(findingScrollTimerRef);
@@ -1005,6 +1040,7 @@ export function usePatrolIntelligenceState() {
     activeTab,
     activePatrolFindings,
     activityRefreshTrigger,
+    acceptedManualRunId,
     assistantHandoffFindingId,
     autonomyLevel,
     requestedAutonomyLevel,
