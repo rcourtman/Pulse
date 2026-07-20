@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - pulse/v6-release
     paths:
       - 'frontend-modern/**'
       - 'internal/**'
@@ -14,6 +15,7 @@ on:
     branches:
       - main
       - master
+      - pulse/v6-release
     paths:
       - 'frontend-modern/**'
       - 'internal/**'
