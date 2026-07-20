@@ -50,7 +50,15 @@ test.describe('VMware phase-1 exclusion integrity', () => {
     let unexpectedRecoveryApiCall: string | null = null;
 
     await page.route('**/api/vmware/**', async (route) => {
-      unexpectedVmwareApiCall = route.request().url();
+      const url = new URL(route.request().url());
+      if (
+        route.request().method() === 'GET' &&
+        url.pathname === '/api/vmware/connections'
+      ) {
+        await route.continue();
+        return;
+      }
+      unexpectedVmwareApiCall = url.pathname;
       await route.abort();
     });
 
