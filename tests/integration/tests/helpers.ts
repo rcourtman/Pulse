@@ -1171,7 +1171,7 @@ const resourceHasSource = (
   source: string,
 ): boolean => resource.sources?.includes(source) === true;
 
-async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
+export async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
   if (!requiresDefaultMockRuntimeReadiness()) {
     return;
   }
@@ -1206,6 +1206,18 @@ async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
             (resource) =>
               resource.name === "tank" &&
               resourceHasSource(resource, "truenas"),
+          ) &&
+          resources.some(
+            (resource) =>
+              (resource.type === "vm" ||
+                resource.type === "system-container") &&
+              resourceHasSource(resource, "proxmox"),
+          ) &&
+          resources.some(
+            (resource) =>
+              resource.name === "esxi-01.lab.local" &&
+              resource.type === "agent" &&
+              resourceHasSource(resource, "vmware"),
           ) &&
           resources.some((resource) => resource.type === "docker-host") &&
           resources.some((resource) => resource.type === "pbs") &&

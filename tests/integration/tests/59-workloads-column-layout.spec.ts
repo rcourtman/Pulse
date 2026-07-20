@@ -1,6 +1,11 @@
 import { expect, test as base, type Page } from '@playwright/test';
 
-import { getMockMode, setMockMode } from './helpers';
+import {
+  ensureAuthenticated,
+  getMockMode,
+  setMockMode,
+  waitForDefaultMockRuntimeReady,
+} from './helpers';
 
 type ColumnHeaderMetric = {
   colId: string | null;
@@ -45,12 +50,15 @@ test.use({
 });
 
 async function ensureMockModeEnabled(page: Page): Promise<void> {
+  await ensureAuthenticated(page);
   const state = await getMockMode(page);
   if (mockModeWasEnabled === null) {
     mockModeWasEnabled = state.enabled;
   }
   if (!state.enabled) {
     await setMockMode(page, true);
+  } else {
+    await waitForDefaultMockRuntimeReady(page);
   }
 }
 
@@ -118,6 +126,8 @@ async function readWorkloadsColumnLayout(page: Page): Promise<WorkloadsColumnLay
 }
 
 test.describe.serial('Workloads column layout', () => {
+  test.setTimeout(240_000);
+
   test.afterAll(async ({ browser }) => {
     if (mockModeWasEnabled === null) {
       return;

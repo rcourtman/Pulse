@@ -7,7 +7,7 @@ import {
   apiRequest,
   createOrg,
   deleteOrg,
-  ensureAuthenticated,
+  ensureSessionAuthenticated,
   isMultiTenantEnabled,
 } from './helpers';
 
@@ -88,7 +88,7 @@ test.describe('MSP isolation E2E', () => {
   });
 
   test('org-bound token is scoped away from other orgs and the default org', async ({ page }) => {
-    await ensureAuthenticated(page);
+    await ensureSessionAuthenticated(page);
     const mtEnabled = await isMultiTenantEnabled(page);
     test.skip(!mtEnabled, 'Multi-tenant feature not enabled in this environment');
 
@@ -147,7 +147,7 @@ test.describe('MSP isolation E2E', () => {
   });
 
   test('client org webhook delivery: instance-wide allowlist, tenant stamp, HMAC signature', async ({ page }) => {
-    await ensureAuthenticated(page);
+    await ensureSessionAuthenticated(page);
     const mtEnabled = await isMultiTenantEnabled(page);
     test.skip(!mtEnabled, 'Multi-tenant feature not enabled in this environment');
 
@@ -232,7 +232,7 @@ test.describe('MSP isolation E2E', () => {
           )
           .toBe(200);
 
-        await ensureAuthenticated(page);
+        await ensureSessionAuthenticated(page);
         await fire();
         expect(deliveries.length).toBe(2);
         const second = deliveries[1];

@@ -1,5 +1,5 @@
 import { test, expect, devices } from "@playwright/test";
-import { ensureAuthenticated } from "./helpers";
+import { ensureAuthenticated, setMockMode } from "./helpers";
 
 const getViewportWidth = async (
   page: import("@playwright/test").Page,
@@ -189,6 +189,8 @@ test.describe("Mobile viewport flows", () => {
   test("shared Workloads table preserves its mobile width and scroll contract", async ({
     page,
   }) => {
+    test.setTimeout(240_000);
+    await setMockMode(page, true);
     await page.goto("/proxmox/workloads");
 
     const table = page.locator("table.workload-table--mobile");
