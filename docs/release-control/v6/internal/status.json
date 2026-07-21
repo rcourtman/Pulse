@@ -8227,6 +8227,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-read-only-reconciliation-2026-07-21.md",
+          "kind": "file",
+          "evidence_tier": "production-observed"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-remediation-prepared-2026-07-14.md",
           "kind": "file",
           "evidence_tier": "test-proof"

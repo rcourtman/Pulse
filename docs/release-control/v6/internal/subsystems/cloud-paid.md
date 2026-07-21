@@ -1364,9 +1364,14 @@ Stripe state even when the requested flag already matches, newly created
 subscription schedules are durably attached to their quote before later Stripe
 or local completion steps, schedule-release retries repair the local quote, and
 the authoritative backfill can reopen a terminal inbox event through the
-cursor-aware retry path. The implementation is not yet a released self-
-service capability: the governed external Stripe transition matrix, event-
-order/reconciliation exercise and Relay version-floor proof remain required by
+cursor-aware retry path. Payment-failure delivery also re-fetches and projects
+the current authoritative Stripe subscription instead of trusting the invoice
+event's historical failure state or the locally cached plan. Inbox-level proof
+covers a missed recovery, a later-delivered historical invoice failure, and a
+duplicate replay without state or license-version regression. The
+implementation is not yet a released self-service capability: the governed
+external Stripe transition matrix, event-order/reconciliation exercise and
+Relay version-floor proof remain required by
 `self-hosted-commercial-transition-coherence`. Cloud remains unavailable and
 MSP remains an assisted preview.
 
@@ -1400,6 +1405,19 @@ is closed, but `self-hosted-commercial-transition-coherence` remains blocked
 until the external Stripe lifecycle transition/event-reconciliation matrix and
 real Relay license-version-floor exercise pass. The evidence record is
 `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-remediation-2026-07-15.md`.
+
+The 2026-07-21 safe re-audit kept that production catalog/portal result green
+and found a missing-event defect in local payment-failure handling: the shared
+subscription cursor rejects a failure older than an observed recovery, but it
+cannot protect against a recovery event that never arrived. A later-delivered
+historical invoice failure could therefore regress already-recovered Stripe
+state. The license server now re-fetches the current Stripe subscription before
+payment-failure projection, and inbox-level proof covers a missed recovery, the
+delayed failure, and a duplicate replay. The dated record also contains the
+executable isolated Stripe test-mode and joined Relay/Pulse operator packet:
+`docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-read-only-reconciliation-2026-07-21.md`.
+This is test/read-only evidence, not the missing real-external exercise, so the
+gate remains blocked.
 
 The Relay side now fails closed on missing feed authority, drains the feed
 before serving, exposes feed staleness through readiness, and tears down stale
