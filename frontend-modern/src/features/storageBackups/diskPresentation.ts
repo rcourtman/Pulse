@@ -188,6 +188,10 @@ const PHYSICAL_DISK_BAD_HEALTH_STATES = new Set([
   'UNHEALTHY',
 ]);
 
+// PVE reports SCSI/SAS drives as OK (ATA drives say PASSED); older server
+// builds pass that raw value through, so accept it here as well (#1595).
+const PHYSICAL_DISK_HEALTHY_STATES = new Set(['PASSED', 'GOOD', 'OK']);
+
 const normalizePhysicalDiskState = (value: string | undefined | null): string =>
   (value || '').trim().toLowerCase();
 
@@ -559,11 +563,10 @@ export function getPhysicalDiskHealthStatus(
   }
 
   return {
-    label: normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD' ? 'Healthy' : 'Unknown',
-    summary:
-      normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD'
-        ? 'No active disk-health issues.'
-        : 'Health state is not reported.',
+    label: PHYSICAL_DISK_HEALTHY_STATES.has(normalizedHealth) ? 'Healthy' : 'Unknown',
+    summary: PHYSICAL_DISK_HEALTHY_STATES.has(normalizedHealth)
+      ? 'No active disk-health issues.'
+      : 'Health state is not reported.',
     tone: 'text-base-content',
   };
 }

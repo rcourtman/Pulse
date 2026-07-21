@@ -1033,7 +1033,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					WWN:      disk.WWN,
 					Type:     disk.Type,
 					Size:     disk.Size,
-					Health:   disk.Health,
+					Health:   normalizeProxmoxDiskHealth(disk.Health),
 					Wearout:  disk.Wearout,
 					RPM:      disk.RPM,
 					Used:     disk.Used,
@@ -1118,6 +1118,25 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			Msg("Updating physical disks in state")
 		m.state.UpdatePhysicalDisks(inst, allDisks)
 	}(instanceName, client, nodes, nodeEffectiveStatus, modelNodes)
+}
+
+// normalizeProxmoxDiskHealth maps the raw health strings the Proxmox disks API
+// reports onto the canonical PASSED/FAILED vocabulary the disk model carries.
+// ATA drives come back as PASSED or FAILED!, while SCSI/SAS drives report OK
+// or a failure sentence, and the raw OK previously rendered as Unknown in the
+// UI (#1595). Unrecognized values pass through untouched so nothing real is
+// masked.
+func normalizeProxmoxDiskHealth(health string) string {
+	trimmed := strings.TrimSpace(health)
+	upper := strings.ToUpper(trimmed)
+	switch {
+	case upper == "OK", strings.Contains(upper, "PASS"):
+		return "PASSED"
+	case strings.Contains(upper, "FAIL"):
+		return "FAILED"
+	default:
+		return trimmed
+	}
 }
 
 // physicalDisksFromHostAgentSMART builds PhysicalDisk entries for a node from

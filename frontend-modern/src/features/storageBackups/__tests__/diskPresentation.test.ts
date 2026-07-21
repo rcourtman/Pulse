@@ -234,6 +234,8 @@ describe('diskPresentation', () => {
       }),
     ).toBe('Pending sectors detected.');
     expect(getPhysicalDiskHealthStatus(makeDiskData({ health: 'UNKNOWN' })).label).toBe('Unknown');
+    // PVE reports SCSI/SAS drives as OK; older servers pass it through raw (#1595)
+    expect(getPhysicalDiskHealthStatus(makeDiskData({ health: 'OK' })).label).toBe('Healthy');
 
     expect(
       getPhysicalDiskEmptyStatePresentation({
