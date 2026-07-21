@@ -727,6 +727,16 @@ TLS floor in the dynamic config.
    fingerprint, per `internal/updates/pro_update.go`), verifying the private
    archive against the same pinned `pulse-installer` SSHSIG key plus the
    broker manifest sha256, and refusing GitHub-shaped download URLs outright.
+   The broker is dual-channel (pulse-pro side, 2026-07-22): the stable
+   manifest slot answers every request by default, and a separate rc slot
+   answers `channel=rc`. The Pro updater must send `channel=rc` on the broker
+   request for rc-channel installs and must leave the channel parameter unset
+   for stable-channel installs, keeping the stable request byte-identical for
+   brokers that predate the parameter. A stable-channel install therefore
+   tracks the broker's stable slot; the existing client-side guard (a
+   stable-channel install refuses a prerelease broker pin and reports "no
+   update" with a warning) stays as the backstop for a single-manifest or
+   drifted broker.
    An unactivated Pro binary refuses to apply and directs the operator to
    `https://pulserelay.pro/download.html` and the `install.sh --archive` path.
    This is required because the community self-update flow (the in-app GitHub

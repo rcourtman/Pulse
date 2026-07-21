@@ -28,9 +28,10 @@ type proBrokerFixture struct {
 	omitSSHSig  bool           // drop the sshsig_url from the manifest
 	dockerBlock map[string]any // broker docker block; nil for the default digest-pinned one
 
-	brokerCalls  int
-	tarballCalls int
-	sshsigCalls  int
+	brokerCalls    int
+	tarballCalls   int
+	sshsigCalls    int
+	channelQueries []string
 }
 
 func newProBrokerFixture(t *testing.T, version string, prerelease bool) *proBrokerFixture {
@@ -57,6 +58,7 @@ func newProBrokerFixture(t *testing.T, version string, prerelease bool) *proBrok
 		if got := r.URL.Query().Get("target"); got != proUpdateTarget() {
 			t.Errorf("broker got target %q, want %q", got, proUpdateTarget())
 		}
+		f.channelQueries = append(f.channelQueries, r.URL.Query().Get("channel"))
 
 		artifact := map[string]any{
 			"target":       proUpdateTarget(),
@@ -189,6 +191,40 @@ func TestCheckForUpdatesProUsesBroker(t *testing.T) {
 		}
 		if target != "v6.0.5" {
 			t.Fatalf("inferred target version = %q, want v6.0.5", target)
+		}
+	})
+
+	t.Run("stable channel leaves the broker channel parameter unset", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.0.5", false)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		if _, err := manager.CheckForUpdatesWithChannel(context.Background(), "stable"); err != nil {
+			t.Fatalf("CheckForUpdatesWithChannel: %v", err)
+		}
+		if len(fixture.channelQueries) == 0 {
+			t.Fatal("expected the update check to query the download broker")
+		}
+		// The stable default stays implicit so the request is byte-identical
+		// for brokers that predate the dual-channel parameter.
+		if got := fixture.channelQueries[len(fixture.channelQueries)-1]; got != "" {
+			t.Fatalf("stable check sent channel=%q, want no channel parameter", got)
+		}
+	})
+
+	t.Run("rc channel requests the broker rc slot", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.1.0-rc.1", true)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		if _, err := manager.CheckForUpdatesWithChannel(context.Background(), "rc"); err != nil {
+			t.Fatalf("CheckForUpdatesWithChannel: %v", err)
+		}
+		if len(fixture.channelQueries) == 0 {
+			t.Fatal("expected the update check to query the download broker")
+		}
+		if got := fixture.channelQueries[len(fixture.channelQueries)-1]; got != "rc" {
+			t.Fatalf("rc check sent channel=%q, want rc", got)
 		}
 	})
 

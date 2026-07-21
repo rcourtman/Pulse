@@ -228,7 +228,7 @@ func validateProApplyRequestURL(rawURL, licenseServerURL string) error {
 // fetchProDownloadManifest queries the license server download broker for the
 // current private Pulse Pro release and signed artifact URLs for this
 // architecture.
-func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateCredentials) (*proBrokerResponse, error) {
+func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateCredentials, channel string) (*proBrokerResponse, error) {
 	baseURL, err := proBrokerBaseURL(creds.LicenseServerURL)
 	if err != nil {
 		return nil, err
@@ -239,6 +239,12 @@ func (m *Manager) fetchProDownloadManifest(ctx context.Context, creds ProUpdateC
 	}
 	query := target.Query()
 	query.Set("target", proUpdateTarget())
+	// rc-channel installs ask the dual-channel broker for the RC slot; the
+	// stable default is left implicit so the URL is unchanged for brokers
+	// that predate the channel parameter.
+	if channel == "rc" {
+		query.Set("channel", "rc")
+	}
 	target.RawQuery = query.Encode()
 
 	headers := map[string]string{
@@ -307,7 +313,7 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 		}, nil
 	}
 
-	manifest, err := m.fetchProDownloadManifest(ctx, creds)
+	manifest, err := m.fetchProDownloadManifest(ctx, creds, channel)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +382,7 @@ func (m *Manager) resolveProUpdateArtifact(ctx context.Context, channel string) 
 		return resolvedUpdateArtifact{}, errProUpdateNotActivated()
 	}
 
-	manifest, err := m.fetchProDownloadManifest(ctx, creds)
+	manifest, err := m.fetchProDownloadManifest(ctx, creds, channel)
 	if err != nil {
 		return resolvedUpdateArtifact{}, err
 	}
