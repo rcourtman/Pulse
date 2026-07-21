@@ -264,6 +264,13 @@ non-TLS remote targets, and missing isolated webhook authority. Its output
 records event identity, order, payload digest, timestamp, and HTTP result
 without recording the signing secret or response body.
 
+The packet's Stripe command shapes are also exercised with the installed
+Stripe CLI in `--dry-run` mode and a dummy test key, which performs no network
+request. This caught and removed the obsolete `--format json` flag rejected by
+Stripe CLI 1.42; the supported commands emit JSON without that flag. The test
+now covers balance retrieval, webhook retrieval/deletion/listing, subscription
+retrieval, and event retrieval before an operator receives real test authority.
+
 ## Residual And Approval Boundary
 
 The remaining proof requires fresh Stripe test-mode authority and controlled
