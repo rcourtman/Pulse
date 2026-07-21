@@ -5,7 +5,7 @@
 - Result: `local reconciliation hardened; external transition gate remains blocked`
 - Evidence posture: `test-proof` plus `production-observed` read-only checks
 - Reconciliation implementation commit: `pulse-pro:4fc4820`
-- Current operator-packet commit: `pulse-pro:d18ebb3`
+- Current operator-packet commit: `pulse-pro:fe74452`
 
 ## Safety Boundary
 
@@ -83,7 +83,7 @@ tests. `bash -n scripts/license_ssh.sh` and `git diff --check` also passed.
 > evidence directory and assumes a Checkout-created customer can use an
 > existing Stripe test clock. The reviewed executable packet is
 > `pulse-pro:docs/self-hosted-commercial-transition-gate-operator-packet.md` at
-> commit `d18ebb3`; use only that version or a later reviewed replacement.
+> commit `fe74452`; use only that version or a later reviewed replacement.
 
 Run this only against a new isolated rehearsal license server, Relay server,
 Pulse installation, and Stripe **test-mode** account. It intentionally refuses
@@ -317,6 +317,21 @@ change. All seven license-database evidence queries and the Relay registry
 query execute against freshly initialized real schemas; both complete Go
 suites, all 387 script tests, and the ten focused packet tests pass. No
 production request or mutation was made while preparing this packet.
+
+Commit `pulse-pro:fe74452` closes the approval-record ambiguity before the
+production mutation block. A no-network validator now requires a private
+non-symlink JSON manifest that exactly binds the proof license, subscription,
+Relay instance, normalized proof-email digest, immediate target tier/cadence,
+explicit production-billing/proof-email-contact/Relay-disconnect authority,
+and one approved restoration action. It rejects unknown fields, placeholder
+references, mismatched subject/action, false or missing authority, future or
+expired approval, approval windows longer than 24 hours, oversized/non-regular
+files, symlinks, and group/world-readable manifests. Successful output contains
+only the gate, expiry, restoration action and manifest digest; it does not emit
+the proof email or subject identifiers. All 393 script tests pass, including
+the validator's mismatch, expiry, file-permission, symlink and output-redaction
+cases. No approval was fabricated and no production request or mutation was
+made.
 
 ## Residual And Approval Boundary
 
