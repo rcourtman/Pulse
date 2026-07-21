@@ -4,7 +4,8 @@
 - Gate: `self-hosted-commercial-transition-coherence`
 - Result: `local reconciliation hardened; external transition gate remains blocked`
 - Evidence posture: `test-proof` plus `production-observed` read-only checks
-- Implementation commit: `pulse-pro:4fc4820`
+- Reconciliation implementation commit: `pulse-pro:4fc4820`
+- Current operator-packet commit: `pulse-pro:bea4295`
 
 ## Safety Boundary
 
@@ -75,6 +76,14 @@ Stripe catalog/remediation/runtime/price-creation/SSH Python suites passed 24
 tests. `bash -n scripts/license_ssh.sh` and `git diff --check` also passed.
 
 ## Executable Operator Packet For The Remaining Gate
+
+> **Superseded outline — do not execute the embedded commands below.** This
+> record preserves the first operator outline for audit history, but it writes
+> one-use Checkout URLs, quote tokens, and raw Stripe Event envelopes into the
+> evidence directory and assumes a Checkout-created customer can use an
+> existing Stripe test clock. The reviewed executable packet is
+> `pulse-pro:docs/self-hosted-commercial-transition-gate-operator-packet.md` at
+> commit `bea4295`; use only that version or a later reviewed replacement.
 
 Run this only against a new isolated rehearsal license server, Relay server,
 Pulse installation, and Stripe **test-mode** account. It intentionally refuses
@@ -269,7 +278,27 @@ Stripe CLI in `--dry-run` mode and a dummy test key, which performs no network
 request. This caught and removed the obsolete `--format json` flag rejected by
 Stripe CLI 1.42; the supported commands emit JSON without that flag. The test
 now covers balance retrieval, webhook retrieval/deletion/listing, subscription
-retrieval, and event retrieval before an operator receives real test authority.
+retrieval/update, invoice listing/payment, and event retrieval before an
+operator receives real test authority.
+
+Commit `pulse-pro:87cf91f` further makes each transition-matrix row use a fresh
+subject in its exact starting state, supplies executable scheduled-cancel,
+payment-failure/recovery, self-refund, and dispute paths, and replaces the
+inapplicable test-clock step with an explicit test-mode billing-anchor reset.
+It retains one-use Checkout and portal URLs and quote/activation secrets only
+in shell memory, stores raw Event envelopes only in a private temporary
+directory for exact-byte replay, and removes those temporary files after a
+successful delivery. Tests parse every Bash block with `bash -n`, bind all 13
+Stripe CLI invocations to the explicit test key, validate all supported CLI
+shapes without network access, and execute all four evidence SELECTs against a
+freshly initialized license-server schema. The full license-server suite and
+all 386 script tests pass at that commit.
+
+Commit `pulse-pro:bea4295` adds `set -euo pipefail` to the operator session and
+an exit/signal cleanup trap for the private Event-envelope directory, so a
+failed pipeline cannot be mistaken for passing evidence and an interrupted
+replay does not strand the raw envelopes. The nine focused packet/replay tests
+pass at the current packet commit.
 
 ## Residual And Approval Boundary
 
