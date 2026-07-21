@@ -144,6 +144,13 @@ func buildConnections(in aggregatorInputs) []Connection {
 		out = append(out, buildAvailabilityConnection(target, in.availabilityStatuses[target.ID], now))
 	}
 	for _, host := range in.hosts {
+		// Integration-monitored machines (vSphere ESXi hosts, TrueNAS boxes)
+		// are represented by their owning platform connection; fabricating an
+		// agent row for them would list machines with no Pulse Agent under
+		// agent-only surfaces and inflate connected-system counts.
+		if strings.TrimSpace(host.IntegrationSource) != "" {
+			continue
+		}
 		desiredConfig := connectionAgentDesiredConfigForHost(in.agentDesiredConfigs, host.ID)
 		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now, desiredConfig))
 	}

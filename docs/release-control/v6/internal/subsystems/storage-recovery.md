@@ -1840,10 +1840,12 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ### Connection integration provenance is telemetry-only evidence
 
-The connections ledger's `integrationSource` field (set on agent-type rows
-whose host telemetry comes from a platform integration such as vSphere or
-TrueNAS rather than a Pulse Agent) is host-telemetry provenance only. Storage
-and recovery surfaces must not read it as evidence about backup coverage,
+The connections ledger's `integrationSource` discriminator (host telemetry
+supplied by a platform integration such as vSphere or TrueNAS rather than a
+Pulse Agent) is host-telemetry provenance only, and the ledger now drops
+agent-type rows for such machines entirely — they are represented by their
+owning platform connection. Storage and recovery surfaces must not read the
+presence or absence of these ledger rows as evidence about backup coverage,
 protection posture, restore chains, or recoverability, and the update
 readiness change that excludes integration-backed machines from
 registered-agent counts does not alter any Recovery Assurance domain:

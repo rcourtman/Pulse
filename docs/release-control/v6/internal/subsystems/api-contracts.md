@@ -3500,19 +3500,26 @@ returning prompts, tool transcripts, credentials, or infrastructure data.
 
 ## Current State
 
-### Connections ledger declares integration-monitored machines
+### Connections ledger excludes integration-monitored machines
 
-Agent-type rows in `GET /api/connections` carry an optional
-`integrationSource` string ("vmware", "truenas", ...) when the underlying
-unified host resource has no `SourceAgent` ingest — i.e. the machine's
-telemetry comes from a platform integration, not a Pulse Agent. The field is
-omitted (never empty-string) for real Pulse Agents, so existing agent payload
-shapes are unchanged. Agent-only client workflows (Agent Doctor target
-collection, host-local update commands) must skip rows with a value; ledger
-membership itself is unchanged so machine surfaces keep rendering these rows.
-Update readiness follows the same rule: the `agent-continuity`,
-`agent-migration-security`, and agent-token checks count only
-non-integration-backed hosts as registered agents.
+The ledger does not fabricate agent-type rows for unified host resources
+whose telemetry comes from a platform integration rather than a Pulse Agent
+(`models.Host.IntegrationSource` non-empty, e.g. "vmware", "truenas"):
+`buildConnections` skips them, so `GET /api/connections` and the grouped
+systems list represent those machines solely through their owning platform
+connection (the vCenter or TrueNAS source row), and connected-system counts
+no longer include them. These rows previously rendered as unmanageable
+standalone entries under "Pulse Agent hosts" — they can never attach to their
+platform system because attachment requires a shared host, and they carry no
+credentials, pause, or remove semantics of their own. Per-machine visibility
+stays on the platform pages and Machines, which read the unified fabric
+directly. The `Connection.integrationSource` field remains declared as
+defense-in-depth: any row carrying a value must be skipped by agent-only
+client workflows (Agent Doctor target collection, host-local update
+commands), and it is omitted (never empty-string) for real Pulse Agents so
+agent payload shapes are unchanged. Update readiness follows the same rule:
+the `agent-continuity`, `agent-migration-security`, and agent-token checks
+count only non-integration-backed hosts as registered agents.
 
 ### Action execution revalidates live readiness
 

@@ -1957,11 +1957,17 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ### Agent Doctor covers exactly the Pulse Agent fleet
 
-Agent Doctor target collection
-(`collectInfrastructureAgentDoctorTargets`) excludes ledger agent connections
-that carry `integrationSource` — integration-monitored machines (vSphere ESXi
-hosts, TrueNAS boxes) have no Pulse Agent to diagnose and previously rendered
-as permanent "Unknown / no structured reason" rows. In the other direction,
+The connections ledger no longer fabricates agent-type rows for
+integration-monitored machines at all (`buildConnections` skips hosts with a
+non-empty `IntegrationSource`), so vSphere ESXi hosts and TrueNAS boxes no
+longer appear under "Pulse Agent hosts" in Infrastructure settings — their
+owning platform connection is the source representation, and per-machine
+visibility stays on the platform pages and Machines. Agent Doctor target
+collection (`collectInfrastructureAgentDoctorTargets`) additionally excludes
+any ledger agent connection that carries `integrationSource` as
+defense-in-depth — integration-monitored machines have no Pulse Agent to
+diagnose and previously rendered as permanent "Unknown / no structured
+reason" rows. In the other direction,
 structured fleet diagnostics that have no ledger binding (agents reporting
 only workload telemetry, e.g. Docker-only or Kubernetes-only agents) are now
 appended as diagnostics-only targets, honoring the scoped-agent filter, so a
