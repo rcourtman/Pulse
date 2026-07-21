@@ -258,7 +258,11 @@ func NewStore(config StoreConfig) (*Store, error) {
 			"busy_timeout(30000)",
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
-			"auto_vacuum(INCREMENTAL)",
+			// auto_vacuum is deliberately NOT set here. It is a persistent
+			// database property that migrateAutoVacuum establishes once at
+			// startup; as a per-connection pragma it replays as a header
+			// write on every new pool connection, which blocks connection
+			// creation behind the active writer (#1601).
 			// Checkpoint less aggressively so high-cardinality installs don't
 			// keep rewriting tiny WAL segments back into the main DB file.
 			"wal_autocheckpoint(4000)",
@@ -269,9 +273,15 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to open metrics database: %w", err)
 	}
 
-	// Configure connection pool (SQLite works best with single writer)
-	rawDB.SetMaxOpenConns(1)
-	rawDB.SetMaxIdleConns(1)
+	// Configure connection pool. Writes are already funnelled: the flush,
+	// rollup, retention, and maintenance paths run on the single background
+	// worker goroutine, and the WriteBatchSync poller path serializes on the
+	// WAL write lock via busy_timeout. What a pool of one actually did was
+	// queue every UI history read behind those commits, which froze charts
+	// whenever a commit picked up a WAL checkpoint (#1601). WAL mode reads
+	// snapshot-isolated on their own connections, so give readers room.
+	rawDB.SetMaxOpenConns(4)
+	rawDB.SetMaxIdleConns(4)
 	rawDB.SetConnMaxLifetime(0)
 
 	db := pdb.Wrap(rawDB, "metrics")
