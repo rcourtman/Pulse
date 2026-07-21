@@ -716,7 +716,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_arg_stream`,
 		`recover_token_from_default_agent_token_file() {`,
 		`normalize_recovered_agent_arg_key() {`,
-		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
+		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
 		`--enable-host|-enable-host|--enable-host=true|-enable-host=true)`,
 		`recover_connection_state_from_env_stream`,
 		`recovered_connection_state_ready() {`,
@@ -2582,6 +2582,7 @@ func TestInstallSHConnectionEnvPersistsCanonicalStateDirWithoutTokenValue(t *tes
 		RUNTIME_TOKEN_FILE="$STATE_DIR/token"
 		AGENT_ID="agent-custom"
 		HOSTNAME_OVERRIDE="host-custom"
+		REPORT_IP="192.168.1.9"
 		INSECURE="false"
 		SERVER_FINGERPRINT=""
 		CURL_CA_BUNDLE=""
@@ -2600,6 +2601,9 @@ func TestInstallSHConnectionEnvPersistsCanonicalStateDirWithoutTokenValue(t *tes
 	if !strings.Contains(got, "PULSE_STATE_DIR='"+stateDir+"'") ||
 		!strings.Contains(got, "PULSE_TOKEN_FILE='"+filepath.Join(stateDir, "token")+"'") {
 		t.Fatalf("connection.env did not persist canonical state paths:\n%s", got)
+	}
+	if !strings.Contains(got, "PULSE_REPORT_IP='192.168.1.9'") {
+		t.Fatalf("connection.env did not persist the report IP:\n%s", got)
 	}
 	if strings.Contains(got, "PULSE_TOKEN='") || strings.Contains(got, "deadbeef") {
 		t.Fatalf("connection.env leaked the token value:\n%s", got)
@@ -2643,6 +2647,7 @@ func TestInstallSHStateWritesReplaceSymlinksAtomically(t *testing.T) {
 		ENROLL="false"
 		AGENT_ID="agent-one"
 		HOSTNAME_OVERRIDE="host-one"
+		REPORT_IP=""
 		INSECURE="false"
 		SERVER_FINGERPRINT=""
 		CURL_CA_BUNDLE=""

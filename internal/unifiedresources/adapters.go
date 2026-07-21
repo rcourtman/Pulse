@@ -93,7 +93,10 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 func identityFromHost(host models.Host) ResourceIdentity {
 	ips, macs := collectInterfaceIDs(host.NetworkInterfaces)
 	if host.ReportIP != "" {
-		ips = append(ips, host.ReportIP)
+		// --report-ip is the user naming the primary address on a multi-NIC
+		// host, and consumers treat the first entry as primary, so it must
+		// lead the list rather than trail the auto-detected ones (#829).
+		ips = append([]string{host.ReportIP}, ips...)
 	}
 
 	return ResourceIdentity{

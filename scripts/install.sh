@@ -83,6 +83,7 @@ SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"
 OBSERVERS_FILE="${PULSE_OBSERVERS_FILE:-}"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
+REPORT_IP=""
 ENABLE_COMMANDS="false"
 HEALTH_ADDR="${PULSE_HEALTH_ADDR:-}"
 HEALTH_ADDR_SET="false"
@@ -331,6 +332,7 @@ Options:
   --enable-proxmox        Force enable Proxmox integration
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
+  --report-ip <ip>        IP address to report to Pulse (for multi-NIC systems)
   --state-dir <path>      Override persistent state directory
   --disk-exclude <path>   Exclude mount point (repeatable)
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
@@ -1530,6 +1532,7 @@ build_exec_arg_items() {
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARG_ITEMS+=(--kube-include-all-deployments); fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARG_ITEMS+=(--agent-id "$AGENT_ID"); fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARG_ITEMS+=(--hostname "$HOSTNAME_OVERRIDE"); fi
+    if [[ -n "$REPORT_IP" ]]; then EXEC_ARG_ITEMS+=(--report-ip "$REPORT_IP"); fi
     if [[ -n "$STATE_DIR" ]]; then EXEC_ARG_ITEMS+=(--state-dir "$STATE_DIR"); fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
@@ -1749,6 +1752,9 @@ recover_connection_state() {
     if [[ -z "$HOSTNAME_OVERRIDE" ]]; then
         HOSTNAME_OVERRIDE=$(read_connection_state_value "$file" "PULSE_HOSTNAME")
     fi
+    if [[ -z "$REPORT_IP" ]]; then
+        REPORT_IP=$(read_connection_state_value "$file" "PULSE_REPORT_IP")
+    fi
     if [[ "$INSECURE" != "true" ]]; then
         local saved_insecure=""
         saved_insecure=$(read_connection_state_value "$file" "PULSE_INSECURE_SKIP_VERIFY")
@@ -1815,6 +1821,10 @@ apply_recovered_agent_arg_value() {
             ;;
         hostname)
             if [[ -z "$HOSTNAME_OVERRIDE" ]]; then HOSTNAME_OVERRIDE="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        report-ip)
+            if [[ -z "$REPORT_IP" ]]; then REPORT_IP="$value"; fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         cacert)
@@ -1888,10 +1898,10 @@ recover_connection_state_from_arg_stream() {
         fi
 
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--server-fingerprint|--observers-file|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
                 pending_key=$(normalize_recovered_agent_arg_key "$arg")
                 ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
                 key="${arg%%=*}"
                 value="${arg#*=}"
                 apply_recovered_agent_arg_value "$key" "$value"
@@ -2019,6 +2029,11 @@ recover_connection_state_from_env_stream() {
             PULSE_HOSTNAME=*)
                 value="${env_line#*=}"
                 if [[ -z "$HOSTNAME_OVERRIDE" ]]; then HOSTNAME_OVERRIDE="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_REPORT_IP=*)
+                value="${env_line#*=}"
+                if [[ -z "$REPORT_IP" ]]; then REPORT_IP="$value"; fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
             PULSE_INSECURE_SKIP_VERIFY=true)
@@ -2409,6 +2424,7 @@ save_connection_info() {
     write_connection_state_value "$conn_tmp" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"
     write_connection_state_value "$conn_tmp" "PULSE_AGENT_ID" "$AGENT_ID"
     write_connection_state_value "$conn_tmp" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"
+    write_connection_state_value "$conn_tmp" "PULSE_REPORT_IP" "$REPORT_IP"
     if [[ "$INSECURE" == "true" ]]; then
         write_connection_state_value "$conn_tmp" "PULSE_INSECURE_SKIP_VERIFY" "true"
     fi
@@ -2477,6 +2493,7 @@ while [[ $# -gt 0 ]]; do
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
+        --report-ip) REPORT_IP="$2"; shift 2 ;;
         --state-dir) STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;

@@ -178,6 +178,7 @@ func renderLifecycleService(t *testing.T, stateDir, stateSource, unitPath, pulse
 			PULSE_TOKEN=""
 			AGENT_ID=""
 			HOSTNAME_OVERRIDE=""
+			REPORT_IP=""
 			INSECURE="false"
 			SERVER_FINGERPRINT=""
 			CURL_CA_BUNDLE=""
@@ -211,6 +212,7 @@ func renderLifecycleService(t *testing.T, stateDir, stateSource, unitPath, pulse
 		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 		AGENT_ID=""
 		HOSTNAME_OVERRIDE="state-lifecycle-host"
+		REPORT_IP=""
 		DISK_EXCLUDES=()
 		CURL_CA_BUNDLE=""
 		RUNTIME_TOKEN_FILE=""

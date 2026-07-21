@@ -1752,6 +1752,22 @@ func TestCollectInterfaceIDsOrdersPhysicalInterfacesFirst(t *testing.T) {
 	}
 }
 
+func TestIdentityFromHostReportIPLeadsAddresses(t *testing.T) {
+	host := models.Host{
+		Hostname: "multi-nic",
+		ReportIP: "192.168.1.9",
+		NetworkInterfaces: []models.HostNetworkInterface{
+			{Name: "eth0", Addresses: []string{"2.2.2.10/24"}},
+			{Name: "eth1", Addresses: []string{"192.168.1.9/24"}},
+		},
+	}
+
+	identity := identityFromHost(host)
+	if len(identity.IPAddresses) == 0 || identity.IPAddresses[0] != "192.168.1.9" {
+		t.Fatalf("expected --report-ip to lead identity addresses, got %v", identity.IPAddresses)
+	}
+}
+
 func TestCollectInterfaceIDsAllVirtualStillCollects(t *testing.T) {
 	interfaces := []models.HostNetworkInterface{
 		{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
