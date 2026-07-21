@@ -922,7 +922,27 @@ describe('collectInfrastructureAgentDoctorTargets (commandBlockedReason arms)', 
     expect(target?.commandBlockedReason).toContain('cannot verify saved FreeBSD');
   });
 
-  it('blocks while the eligible v6 updater is handling the update', () => {
+  it('blocks while the updater is actively applying an update', () => {
+    const [target] = runDoctor(
+      [
+        agentConnection({
+          state: 'active',
+          agentUpdateAvailable: true,
+          expectedAgentVersion: '6.2.0',
+          agentIdentity: { hostname: 'host-1', platform: 'ubuntu', architecture: 'amd64' },
+          agentUpdate: {
+            state: 'updating',
+            autoUpdate: true,
+            lastAttemptAt: '2026-07-13T09:01:00Z',
+          },
+        }),
+      ],
+      { nowMs: Date.parse('2026-07-13T09:03:00Z') },
+    );
+    expect(target?.commandBlockedReason).toContain('applying an update right now');
+  });
+
+  it('keeps the manual command available while the updater merely waits', () => {
     const [target] = runDoctor([
       agentConnection({
         state: 'active',
@@ -932,7 +952,7 @@ describe('collectInfrastructureAgentDoctorTargets (commandBlockedReason arms)', 
         agentUpdate: { state: 'checking', autoUpdate: true },
       }),
     ]);
-    expect(target?.commandBlockedReason).toContain('handling the update asynchronously');
+    expect(target?.commandBlockedReason).toBeUndefined();
   });
 
   it('blocks when diagnostics offer no supported structured upgrade action', () => {

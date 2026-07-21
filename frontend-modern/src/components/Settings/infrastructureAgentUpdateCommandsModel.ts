@@ -48,6 +48,7 @@ export interface InfrastructureAgentDoctorOptions {
   diagnosticsAvailable: boolean;
   targetVersion?: string | null;
   scopedAgentIds?: readonly string[];
+  nowMs?: number;
 }
 
 const maybeAdd = (flags: Set<string>, flag: string) => {
@@ -396,6 +397,22 @@ const evidenceFor = (
   return Array.from(evidence);
 };
 
+// A live self-update should finish well inside this window. Past it, the
+// updater is treated as stalled and the manual command comes back.
+const UPDATER_IN_FLIGHT_STALL_MS = 10 * 60 * 1000;
+
+const updaterApplyingNow = (
+  connection: Connection,
+  diagnostic: AgentFleetAgentDiagnostic | undefined,
+  nowMs: number,
+): boolean => {
+  const update = connection.agentUpdate ?? diagnostic?.agentUpdate;
+  if (update?.state?.trim().toLowerCase() !== 'updating') return false;
+  const startedAt = Date.parse(update.lastAttemptAt || update.lastCheckedAt || '');
+  if (Number.isNaN(startedAt)) return true;
+  return nowMs - startedAt < UPDATER_IN_FLIGHT_STALL_MS;
+};
+
 const updaterPresentation = (
   connection: Connection,
   diagnostic: AgentFleetAgentDiagnostic | undefined,
@@ -443,7 +460,8 @@ const doctorTargetFromBinding = (
   binding: AgentConnectionBinding,
   diagnostic: AgentFleetAgentDiagnostic | undefined,
   diagnosticsAvailable: boolean,
-  targetVersion?: string | null,
+  targetVersion: string | null | undefined,
+  nowMs: number,
 ): InfrastructureAgentDoctorTarget => {
   const connection = binding.connection;
   const expectedVersion = expectedVersionFor(connection, targetVersion);
@@ -482,9 +500,9 @@ const doctorTargetFromBinding = (
   } else if (needsUpdate && commandPlatform === 'freebsd') {
     commandBlockedReason =
       'Pulse cannot verify saved FreeBSD or pfSense installer state yet. Open Install on a host for the reviewed manual path instead of running a guessed update command.';
-  } else if (updater.waiting) {
+  } else if (needsUpdate && updaterApplyingNow(connection, diagnostic, nowMs)) {
     commandBlockedReason =
-      'This eligible v6 agent is handling the update asynchronously. Wait for its updater result before using a manual command.';
+      'This agent is applying an update right now. Wait for its updater result before running a manual command.';
   }
 
   const hasStructuredUpgradeAction = Boolean(
@@ -571,6 +589,7 @@ export const collectInfrastructureAgentDoctorTargets = ({
   diagnosticsAvailable,
   targetVersion,
   scopedAgentIds = [],
+  nowMs = Date.now(),
 }: InfrastructureAgentDoctorOptions): InfrastructureAgentDoctorTarget[] => {
   const bindings = collectAgentConnectionBindings(rows, connections);
   const diagnosticsByConnectionID = new Map(
@@ -590,6 +609,7 @@ export const collectInfrastructureAgentDoctorTargets = ({
         diagnosticsByConnectionID.get(binding.connection.id),
         diagnosticsAvailable,
         targetVersion,
+        nowMs,
       ),
     );
 

@@ -144,7 +144,7 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toContain('will not guess');
   });
 
-  it('classifies eligible v6 convergence as waiting and withholds a premature manual command', () => {
+  it('classifies eligible v6 convergence as waiting but keeps the manual command available', () => {
     const connection = connectionFixture({
       agentUpdate: {
         state: 'checking',
@@ -172,8 +172,48 @@ describe('Agent Doctor model', () => {
       status: 'waiting',
       updaterLabel: 'Checking for an automatic update',
     });
-    expect(targets[0].commandBlockedReason).toContain('handling the update asynchronously');
+    expect(targets[0].commandBlockedReason).toBeUndefined();
     expect(targets[0].evidence).toContain('Last updater check: 2026-07-13T09:01:00Z');
+  });
+
+  it('withholds the manual command only while an update is actively applying', () => {
+    const nowMs = Date.parse('2026-07-13T09:05:00Z');
+    const agentUpdate = {
+      state: 'updating' as const,
+      autoUpdate: true,
+      lastAttemptAt: '2026-07-13T09:01:00Z',
+    };
+    const connection = connectionFixture({ agentUpdate });
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture({ agentUpdate })],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+      nowMs,
+    });
+
+    expect(targets[0].commandBlockedReason).toContain('applying an update right now');
+  });
+
+  it('restores the manual command when an in-flight update stalls', () => {
+    const nowMs = Date.parse('2026-07-13T10:00:00Z');
+    const agentUpdate = {
+      state: 'updating' as const,
+      autoUpdate: true,
+      lastAttemptAt: '2026-07-13T09:01:00Z',
+    };
+    const connection = connectionFixture({ agentUpdate });
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture({ agentUpdate })],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+      nowMs,
+    });
+
+    expect(targets[0].commandBlockedReason).toBeUndefined();
   });
 
   it('withholds FreeBSD and pfSense update commands until installer state is proven', () => {
