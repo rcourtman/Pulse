@@ -631,7 +631,12 @@ func (a *patrolFindingCreatorAdapter) trackCollectedFinding(finding *Finding) {
 func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAssessmentInput) error {
 	finding := a.patrol.findings.Get(input.FindingID)
 	if finding == nil || !finding.IsActive() {
-		return fmt.Errorf("finding %s not found or no longer active", input.FindingID)
+		finding = a.resolveAssessableFinding(input.FindingID)
+	}
+	if finding == nil {
+		return fmt.Errorf(
+			"finding %s not found or no longer active; pass one of the active finding ids exactly: %s",
+			input.FindingID, strings.Join(a.activeScopedFindingIDs(), ", "))
 	}
 	if !a.findingInCurrentScope(finding) {
 		return fmt.Errorf("finding %s is outside the current patrol scope", input.FindingID)
@@ -639,7 +644,7 @@ func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAss
 
 	verdict := strings.ToLower(strings.TrimSpace(input.Verdict))
 	assessment := PatrolFindingAssessment{
-		FindingID:  strings.TrimSpace(input.FindingID),
+		FindingID:  finding.ID,
 		Verdict:    verdict,
 		Evidence:   strings.TrimSpace(input.Evidence),
 		Reason:     strings.TrimSpace(input.Reason),
@@ -683,6 +688,59 @@ func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAss
 		Str("verdict", assessment.Verdict).
 		Msg("AI Patrol: Existing finding assessed")
 	return nil
+}
+
+// resolveAssessableFinding maps a model-mangled finding ID onto the single
+// active in-scope finding it unambiguously identifies. Weak models routinely
+// drop the key prefix ("update-analysis-docker:") or the digest tail from the
+// long canonical IDs, which used to fail the whole run's verdict contract.
+// Only an unambiguous match resolves; hallucinated or ambiguous IDs stay
+// unresolved so the fail-closed contract holds.
+func (a *patrolFindingCreatorAdapter) resolveAssessableFinding(rawID string) *Finding {
+	id := strings.TrimSpace(rawID)
+	// Short fragments are too likely to collide to trust as identification.
+	if len(id) < 8 {
+		return nil
+	}
+	var match *Finding
+	for _, f := range a.patrol.findings.GetActive(FindingSeverityInfo) {
+		if f == nil || !f.IsActive() || !a.findingInCurrentScope(f) {
+			continue
+		}
+		candidate := strings.EqualFold(f.ID, id) ||
+			strings.HasSuffix(f.ID, ":"+id) ||
+			strings.HasSuffix(f.ID, "/"+id) ||
+			strings.HasPrefix(f.ID, id) ||
+			strings.Contains(f.ID, ":"+id+"/")
+		if !candidate {
+			continue
+		}
+		if match != nil {
+			return nil
+		}
+		match = f
+	}
+	return match
+}
+
+// activeScopedFindingIDs lists the assessable finding IDs so a failed lookup
+// tells the model exactly what to retry with instead of leaving it guessing.
+func (a *patrolFindingCreatorAdapter) activeScopedFindingIDs() []string {
+	const maxListed = 20
+	var ids []string
+	for _, f := range a.patrol.findings.GetActive(FindingSeverityInfo) {
+		if f == nil || !f.IsActive() || !a.findingInCurrentScope(f) {
+			continue
+		}
+		ids = append(ids, f.ID)
+		if len(ids) == maxListed {
+			break
+		}
+	}
+	if len(ids) == 0 {
+		return []string{"(none active in scope)"}
+	}
+	return ids
 }
 
 // actionabilityThreshold returns the threshold below which a metric finding is rejected as noise.

@@ -1432,3 +1432,89 @@ func TestPatrolFindingAssessmentLifecycle(t *testing.T) {
 		t.Fatal("expected duplicate terminal assessment to be rejected")
 	}
 }
+
+func TestPatrolFindingAssessmentTolerantIDResolution(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-402", Name: "web2", VMID: 402}},
+	})
+	ps := NewPatrolService(nil, nil)
+	longID := "update-analysis-docker:2d51085a-447a-4f4d-9245-b0858467d0ea/503c70797abd93f0a209e10e499eb20f93f604cb87762aa262d521caf054b14a"
+	finding := &Finding{
+		ID: longID, Key: "docker-update", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, ResourceID: "vm-402",
+		ResourceName: "web2", ResourceType: "vm", Title: "Docker update pending",
+		Description: "update analysis", Evidence: "old evidence",
+	}
+	ps.findings.Add(finding)
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	// The dominant weak-model failure: the key prefix is dropped.
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: "2d51085a-447a-4f4d-9245-b0858467d0ea/503c70797abd93f0a209e10e499eb20f93f604cb87762aa262d521caf054b14a",
+		Verdict:   "present", Evidence: "still pending", Reason: "reconfirmed",
+	}); err != nil {
+		t.Fatalf("prefix-stripped ID should resolve to the active finding: %v", err)
+	}
+	assessments := adapter.getAssessments()
+	if len(assessments) != 1 || assessments[0].FindingID != longID {
+		t.Fatalf("assessment must record the canonical finding ID, got %+v", assessments)
+	}
+
+	// A retry with another mangled variant of the same ID must hit the
+	// duplicate-verdict guard, not create a second assessment.
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: "update-analysis-docker:2d51085a-447a-4f4d-9245-b0858467d0ea",
+		Verdict:   "present", Evidence: "dup", Reason: "dup",
+	}); err == nil {
+		t.Fatal("expected duplicate assessment via mangled variant to be rejected")
+	}
+}
+
+func TestPatrolFindingAssessmentUnknownIDListsActiveIDs(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-403", Name: "web3", VMID: 403}},
+	})
+	ps := NewPatrolService(nil, nil)
+	finding := &Finding{
+		ID: "reliability:vm-403:service-down", Key: "service-down", Severity: FindingSeverityWarning,
+		Category: FindingCategoryReliability, ResourceID: "vm-403",
+		ResourceName: "web3", ResourceType: "vm", Title: "Service down",
+		Description: "down", Evidence: "probe",
+	}
+	ps.findings.Add(finding)
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+		Verdict:   "present", Evidence: "e", Reason: "r",
+	})
+	if err == nil {
+		t.Fatal("hallucinated ID must not resolve")
+	}
+	if !strings.Contains(err.Error(), "reliability:vm-403:service-down") {
+		t.Fatalf("error must list the valid active finding ids, got %v", err)
+	}
+}
+
+func TestPatrolFindingAssessmentAmbiguousFragmentDoesNotResolve(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-404", Name: "web4", VMID: 404}},
+	})
+	ps := NewPatrolService(nil, nil)
+	for _, id := range []string{"update-analysis-docker:aaaa-shared-prefix-1", "update-analysis-docker:aaaa-shared-prefix-2"} {
+		ps.findings.Add(&Finding{
+			ID: id, Key: id, Severity: FindingSeverityWarning,
+			Category: FindingCategoryReliability, ResourceID: "vm-404",
+			ResourceName: "web4", ResourceType: "vm", Title: id,
+			Description: "d", Evidence: "e",
+		})
+	}
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: "update-analysis-docker:aaaa-shared-prefix",
+		Verdict:   "present", Evidence: "e", Reason: "r",
+	}); err == nil {
+		t.Fatal("ambiguous fragment matching two findings must not resolve")
+	}
+}
