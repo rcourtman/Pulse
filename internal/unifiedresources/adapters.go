@@ -3672,19 +3672,52 @@ func convertSwarm(info *models.DockerSwarmInfo) *DockerSwarmInfo {
 func collectInterfaceIDs(interfaces []models.HostNetworkInterface) ([]string, []string) {
 	var ips []string
 	var macs []string
-	for _, iface := range interfaces {
-		if iface.MAC != "" {
-			macs = append(macs, iface.MAC)
-		}
-		for _, addr := range iface.Addresses {
-			ip := addr
-			if strings.Contains(ip, "/") {
-				ip = strings.Split(ip, "/")[0]
+	// Agents report interfaces sorted by name, which places docker0/br-* bridges
+	// ahead of eth*/en*, and consumers treat the first IP as the host's primary
+	// address. Collect physical-looking interfaces first so bridge and overlay
+	// addresses never lead the list. Mirrors hostagent.isLikelyVirtualInterfaceName.
+	for pass := 0; pass < 2; pass++ {
+		for _, iface := range interfaces {
+			if (pass == 0) == isLikelyVirtualInterfaceName(iface.Name) {
+				continue
 			}
-			ips = append(ips, ip)
+			if iface.MAC != "" {
+				macs = append(macs, iface.MAC)
+			}
+			for _, addr := range iface.Addresses {
+				ip := addr
+				if strings.Contains(ip, "/") {
+					ip = strings.Split(ip, "/")[0]
+				}
+				ips = append(ips, ip)
+			}
 		}
 	}
 	return ips, macs
+}
+
+func isLikelyVirtualInterfaceName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	switch {
+	case name == "" || name == "lo":
+		return true
+	case strings.HasPrefix(name, "docker"):
+		return true
+	case strings.HasPrefix(name, "veth"):
+		return true
+	case strings.HasPrefix(name, "br-"):
+		return true
+	case strings.HasPrefix(name, "cni"):
+		return true
+	case strings.HasPrefix(name, "flannel"):
+		return true
+	case strings.HasPrefix(name, "virbr"):
+		return true
+	case strings.HasPrefix(name, "zt"):
+		return true
+	default:
+		return false
+	}
 }
 
 func extractHostname(raw string) string {

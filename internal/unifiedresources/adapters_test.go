@@ -1731,3 +1731,34 @@ func TestResourceFromDockerContainerAdvertisesUpdateCapabilityOnlyWithDigest(t *
 		t.Fatalf("capabilities without available update = %#v, want stop/restart only", got)
 	}
 }
+
+func TestCollectInterfaceIDsOrdersPhysicalInterfacesFirst(t *testing.T) {
+	interfaces := []models.HostNetworkInterface{
+		{Name: "br-8f2a1c3d", MAC: "02:42:aa:bb:cc:01", Addresses: []string{"172.18.0.1/16"}},
+		{Name: "docker0", MAC: "02:42:aa:bb:cc:02", Addresses: []string{"172.17.0.1/16"}},
+		{Name: "eth0", MAC: "aa:bb:cc:dd:ee:ff", Addresses: []string{"192.168.1.50/24"}},
+	}
+
+	ips, macs := collectInterfaceIDs(interfaces)
+
+	if len(ips) != 3 || ips[0] != "192.168.1.50" {
+		t.Fatalf("expected physical interface IP first, got %v", ips)
+	}
+	if ips[1] != "172.18.0.1" || ips[2] != "172.17.0.1" {
+		t.Fatalf("expected bridge IPs to follow in report order, got %v", ips)
+	}
+	if len(macs) != 3 || macs[0] != "aa:bb:cc:dd:ee:ff" {
+		t.Fatalf("expected physical interface MAC first, got %v", macs)
+	}
+}
+
+func TestCollectInterfaceIDsAllVirtualStillCollects(t *testing.T) {
+	interfaces := []models.HostNetworkInterface{
+		{Name: "docker0", Addresses: []string{"172.17.0.1/16"}},
+	}
+
+	ips, _ := collectInterfaceIDs(interfaces)
+	if len(ips) != 1 || ips[0] != "172.17.0.1" {
+		t.Fatalf("expected virtual-only host to keep its address, got %v", ips)
+	}
+}
