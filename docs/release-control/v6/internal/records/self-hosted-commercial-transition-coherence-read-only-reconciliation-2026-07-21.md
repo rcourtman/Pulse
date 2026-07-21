@@ -253,6 +253,17 @@ and Pulse authority, replay/order/missing delivery produces the same result,
 and protected customer data survives downgrade/cancellation. Otherwise record
 the exact failed row and keep the gate blocked.
 
+The follow-on executable packet at
+`pulse-pro:docs/self-hosted-commercial-transition-gate-operator-packet.md`
+binds every Stripe CLI request to an explicit `sk_test_` key. Its controlled
+delivery phase deletes only the disposable test webhook endpoint before event
+creation, retrieves real test-mode Stripe Event envelopes, and replays their
+exact bytes through `pulse-pro:scripts/replay_stripe_test_events.py`. The helper
+fails closed on live envelopes, the production license origin, redirects,
+non-TLS remote targets, and missing isolated webhook authority. Its output
+records event identity, order, payload digest, timestamp, and HTTP result
+without recording the signing secret or response body.
+
 ## Residual And Approval Boundary
 
 The remaining proof requires fresh Stripe test-mode authority and controlled

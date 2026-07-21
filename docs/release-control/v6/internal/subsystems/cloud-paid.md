@@ -1416,6 +1416,10 @@ payment-failure projection, and inbox-level proof covers a missed recovery, the
 delayed failure, and a duplicate replay. The dated record also contains the
 executable isolated Stripe test-mode and joined Relay/Pulse operator packet:
 `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-read-only-reconciliation-2026-07-21.md`.
+The repository packet now binds every Stripe CLI request to an explicit test
+key and uses a fail-closed exact-envelope replay helper after removing the
+disposable automatic webhook endpoint, so duplicate, reordered, and missing
+delivery can be exercised rather than inferred from already-delivered events.
 This is test/read-only evidence, not the missing real-external exercise, so the
 gate remains blocked.
 
