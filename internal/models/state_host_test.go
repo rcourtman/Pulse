@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1379,5 +1381,47 @@ func TestUpdateStorageBackupsForInstance(t *testing.T) {
 		if b.ID == "pve-1-backup-1" || b.ID == "pve-1-backup-2" {
 			t.Error("Old pve-1 backups should have been replaced")
 		}
+	}
+}
+
+// Host.IntegrationSource is fabric-only provenance: it must survive host
+// upserts, serialize when set, and stay entirely absent from JSON for real
+// agent-report hosts so existing payloads do not change shape.
+func TestHostIntegrationSourceRoundTrip(t *testing.T) {
+	state := NewState()
+	state.UpsertHost(Host{ID: "host-esxi", Hostname: "esxi-01", IntegrationSource: "vmware"})
+	state.UpsertHost(Host{ID: "host-agent", Hostname: "apollo-114"})
+
+	var esxi, agent *Host
+	hosts := state.GetHosts()
+	for i := range hosts {
+		switch hosts[i].ID {
+		case "host-esxi":
+			esxi = &hosts[i]
+		case "host-agent":
+			agent = &hosts[i]
+		}
+	}
+	if esxi == nil || esxi.IntegrationSource != "vmware" {
+		t.Fatalf("expected upserted host to preserve IntegrationSource %q, got %+v", "vmware", esxi)
+	}
+	if agent == nil || agent.IntegrationSource != "" {
+		t.Fatalf("expected agent host to keep empty IntegrationSource, got %+v", agent)
+	}
+
+	marked, err := json.Marshal(esxi)
+	if err != nil {
+		t.Fatalf("marshal integration host: %v", err)
+	}
+	if !strings.Contains(string(marked), `"integrationSource":"vmware"`) {
+		t.Fatalf("expected integrationSource in payload, got %s", marked)
+	}
+
+	unmarked, err := json.Marshal(agent)
+	if err != nil {
+		t.Fatalf("marshal agent host: %v", err)
+	}
+	if strings.Contains(string(unmarked), "integrationSource") {
+		t.Fatalf("expected integrationSource omitted for agent hosts, got %s", unmarked)
 	}
 }

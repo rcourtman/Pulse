@@ -276,6 +276,81 @@ describe('Agent Doctor model', () => {
     ).not.toContain('removed');
   });
 
+  it('keeps integration-monitored machines out of the doctor', () => {
+    const agent = connectionFixture({ agentUpdateAvailable: false });
+    const esxi = connectionFixture({
+      id: 'agent:vc-1:host:host-101',
+      name: 'esxi-01.lab.local',
+      agentVersion: undefined,
+      expectedAgentVersion: undefined,
+      agentUpdateAvailable: false,
+      integrationSource: 'vmware',
+      agentIdentity: { hostname: 'esxi-01.lab.local', platform: 'vmware-vsphere' },
+      fleet: {} as Connection['fleet'],
+    });
+
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(agent), rowFixture(esxi)],
+      connections: [agent, esxi],
+      diagnostics: [diagnosticFixture()],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(targets.map((target) => target.connectionId)).toEqual(['agent:host-1']);
+  });
+
+  it('surfaces diagnostics-only agents the ledger does not carry', () => {
+    const connection = connectionFixture({ agentUpdateAvailable: false });
+    const dockerOnly = diagnosticFixture({
+      connectionId: 'agent:docker-edge-1',
+      rowKey: 'agent-docker-edge-1',
+      id: 'docker-edge-1',
+      agentId: 'docker-edge-1',
+      name: 'Edge Apps 01',
+      hostname: 'edge-apps-01',
+      types: ['docker'],
+      status: 'critical',
+      profileId: undefined,
+      profileName: undefined,
+      profileVersion: undefined,
+      deployedProfileVersion: undefined,
+      reasons: [
+        {
+          code: 'agent_module_failed',
+          severity: 'critical',
+          message: 'Enabled agent module "docker" failed.',
+        },
+      ],
+      repairActions: [],
+    });
+    const base = {
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [dockerOnly],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    };
+
+    const targets = collectInfrastructureAgentDoctorTargets(base);
+    const surfaced = targets.find((target) => target.connectionId === 'agent:docker-edge-1');
+    expect(surfaced).toMatchObject({
+      status: 'critical',
+      source: 'diagnostics',
+      needsUpdate: false,
+      commandPlatform: null,
+    });
+    expect(surfaced?.reasons[0]?.code).toBe('agent_module_failed');
+
+    // Scoping still applies to diagnostics-only rows.
+    expect(
+      collectInfrastructureAgentDoctorTargets({
+        ...base,
+        scopedAgentIds: ['agent:host-1'],
+      }).map((target) => target.connectionId),
+    ).toEqual(['agent:host-1']);
+  });
+
   it('canonicalizes compatibility diagnostics that predate connectionId', () => {
     expect(
       diagnosticConnectionID(

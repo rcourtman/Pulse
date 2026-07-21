@@ -150,6 +150,12 @@ export interface Connection {
   agentIdentity?: ConnectionAgentIdentity;
   agentVersion?: string;
   expectedAgentVersion?: string;
+  /**
+   * Platform integration ("vmware", "truenas", ...) that supplies this host's
+   * telemetry when no Pulse Agent reports for it. Empty/absent means the row
+   * is backed by a real Pulse Agent; agent-only workflows skip rows with a value.
+   */
+  integrationSource?: string;
   agentUpdateAvailable?: boolean;
   agentUpdate?: ConnectionAgentUpdateStatus;
   agentModules?: ConnectionAgentModuleStatus[];

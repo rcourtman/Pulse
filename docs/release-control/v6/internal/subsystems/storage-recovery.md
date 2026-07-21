@@ -1838,6 +1838,18 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
 
+### Connection integration provenance is telemetry-only evidence
+
+The connections ledger's `integrationSource` field (set on agent-type rows
+whose host telemetry comes from a platform integration such as vSphere or
+TrueNAS rather than a Pulse Agent) is host-telemetry provenance only. Storage
+and recovery surfaces must not read it as evidence about backup coverage,
+protection posture, restore chains, or recoverability, and the update
+readiness change that excludes integration-backed machines from
+registered-agent counts does not alter any Recovery Assurance domain:
+recovery evidence still comes exclusively from its own deterministic
+verification paths.
+
 ### Recovery actions retain execution-time readiness checks
 
 Recovery-oriented capabilities admitted to canonical Actions are subject to

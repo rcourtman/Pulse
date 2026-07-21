@@ -3826,3 +3826,35 @@ func TestApplyHostReportNormalizesLegacyAgentPlatformAcceptedIngestProof(t *test
 		})
 	}
 }
+
+// hostFromReadStateView must carry the fabric's integration-source
+// discriminator onto models.Host so ledger consumers (connections aggregator,
+// update readiness) can tell real Pulse Agents from integration-monitored
+// machines, while agent-sourced hosts stay unmarked.
+func TestHostFromReadStateViewMapsIntegrationSource(t *testing.T) {
+	t.Parallel()
+
+	vmwareResource := unifiedresources.Resource{
+		ID:      "vc-1:host:host-101",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "esxi-01.lab.local",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceVMware},
+		Agent:   &unifiedresources.AgentData{AgentID: "vc-1:host:host-101", Platform: "vmware-vsphere"},
+	}
+	vmwareView := unifiedresources.NewHostView(&vmwareResource)
+	if got := hostFromReadStateView(&vmwareView).IntegrationSource; got != "vmware" {
+		t.Fatalf("vSphere-only host must map IntegrationSource %q, got %q", "vmware", got)
+	}
+
+	agentResource := unifiedresources.Resource{
+		ID:      "host-linux-1",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Name:    "apollo-114",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		Agent:   &unifiedresources.AgentData{AgentID: "host-linux-1", AgentVersion: "6.1.0"},
+	}
+	agentView := unifiedresources.NewHostView(&agentResource)
+	if got := hostFromReadStateView(&agentView).IntegrationSource; got != "" {
+		t.Fatalf("agent-sourced host must map empty IntegrationSource, got %q", got)
+	}
+}

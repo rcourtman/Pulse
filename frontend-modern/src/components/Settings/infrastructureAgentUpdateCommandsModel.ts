@@ -247,6 +247,10 @@ const collectAgentConnectionBindings = (
   const bindings = new Map<string, AgentConnectionBinding>();
   const add = (row: InfrastructureSystemRow | undefined, connection?: Connection) => {
     if (!connection || connection.type !== 'agent' || bindings.has(connection.id)) return;
+    // Machines whose telemetry comes from a platform integration (vSphere,
+    // TrueNAS, ...) have no Pulse Agent to diagnose; keep them out of the
+    // doctor instead of rendering permanent "Unknown" rows.
+    if (connection.integrationSource) return;
     bindings.set(connection.id, {
       connection,
       displayName: connectionDisplayName(connection),
@@ -550,28 +554,60 @@ const doctorTargetFromBinding = (
   };
 };
 
-const removedDoctorTarget = (
+const DIAGNOSTIC_ONLY_STATUSES = new Set<InfrastructureAgentDoctorStatus>([
+  'healthy',
+  'warning',
+  'critical',
+  'removed',
+]);
+
+const diagnosticDoctorStatus = (
   diagnostic: AgentFleetAgentDiagnostic,
-): InfrastructureAgentDoctorTarget => ({
-  key: `removed:${diagnostic.rowKey || diagnostic.id}`,
-  connectionId: diagnosticConnectionID(diagnostic),
-  diagnostic,
-  displayName: diagnostic.name || diagnostic.hostname || diagnostic.id,
-  contextLabel: diagnostic.types?.join(' + ') || 'Removed agent',
-  currentVersion: diagnostic.version?.trim() || undefined,
-  installFlags: [],
-  status: 'removed',
-  reasons: diagnostic.reasons ?? [],
-  evidence: evidenceFor(undefined, diagnostic),
-  needsUpdate: false,
-  commandPlatform: null,
-  profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
-  profileVersionLabel: diagnostic.profileVersion
-    ? `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion || 0}`
-    : undefined,
-  lastSeen: diagnostic.lastSeen,
-  source: 'removed',
-});
+): InfrastructureAgentDoctorStatus =>
+  DIAGNOSTIC_ONLY_STATUSES.has(diagnostic.status as InfrastructureAgentDoctorStatus)
+    ? (diagnostic.status as InfrastructureAgentDoctorStatus)
+    : 'unknown';
+
+const DIAGNOSTIC_TYPE_LABELS: Record<string, string> = {
+  host: 'Host',
+  docker: 'Docker',
+  kubernetes: 'Kubernetes',
+};
+
+const diagnosticContextLabel = (
+  diagnostic: AgentFleetAgentDiagnostic,
+  removed: boolean,
+): string => {
+  const labels = (diagnostic.types ?? []).map((type) => DIAGNOSTIC_TYPE_LABELS[type] ?? type);
+  if (labels.length === 0) return removed ? 'Removed agent' : 'Agent';
+  return `${labels.join(' + ')} agent`;
+};
+
+const diagnosticOnlyDoctorTarget = (
+  diagnostic: AgentFleetAgentDiagnostic,
+): InfrastructureAgentDoctorTarget => {
+  const removed = diagnostic.status === 'removed';
+  return {
+    key: `${removed ? 'removed' : 'diagnostic'}:${diagnostic.rowKey || diagnostic.id}`,
+    connectionId: diagnosticConnectionID(diagnostic),
+    diagnostic,
+    displayName: diagnostic.name || diagnostic.hostname || diagnostic.id,
+    contextLabel: diagnosticContextLabel(diagnostic, removed),
+    currentVersion: diagnostic.version?.trim() || undefined,
+    installFlags: [],
+    status: removed ? 'removed' : diagnosticDoctorStatus(diagnostic),
+    reasons: diagnostic.reasons ?? [],
+    evidence: evidenceFor(undefined, diagnostic),
+    needsUpdate: false,
+    commandPlatform: null,
+    profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
+    profileVersionLabel: diagnostic.profileVersion
+      ? `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion || 0}`
+      : undefined,
+    lastSeen: diagnostic.lastSeen,
+    source: removed ? 'removed' : 'diagnostics',
+  };
+};
 
 const DOCTOR_STATUS_RANK: Record<InfrastructureAgentDoctorStatus, number> = {
   critical: 6,
@@ -613,9 +649,19 @@ export const collectInfrastructureAgentDoctorTargets = ({
       ),
     );
 
-  if (diagnosticsAvailable && scoped.size === 0) {
+  if (diagnosticsAvailable) {
+    // The ledger can miss agents that report only workload telemetry (for
+    // example Docker-only or Kubernetes-only agents). The fleet diagnostics
+    // endpoint still knows them, so surface every diagnostic that found no
+    // ledger binding instead of silently dropping it.
     for (const diagnostic of diagnostics) {
-      if (diagnostic.status === 'removed') targets.push(removedDoctorTarget(diagnostic));
+      if (diagnostic.status === 'removed') {
+        if (scoped.size === 0) targets.push(diagnosticOnlyDoctorTarget(diagnostic));
+        continue;
+      }
+      const connectionId = diagnosticConnectionID(diagnostic);
+      if (bindings.has(connectionId) || !inScope(connectionId)) continue;
+      targets.push(diagnosticOnlyDoctorTarget(diagnostic));
     }
   }
 

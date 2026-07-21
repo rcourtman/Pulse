@@ -537,13 +537,15 @@ describe('collectInfrastructureAgentDoctorTargets (removed records)', () => {
     expect(nothing.find((target) => target.status === 'removed')?.displayName).toBe('only-id');
   });
 
-  it('derives contextLabel from types joined by " + ", falling back to "Removed agent"', () => {
+  it('derives contextLabel from labelled types joined by " + ", falling back to "Removed agent"', () => {
     const live = agentConnection({ agentUpdateAvailable: false });
     const typed = runDoctor([live], {
       diagnostics: [removedDiag({ types: ['host', 'docker'] })],
       diagnosticsAvailable: true,
     });
-    expect(typed.find((target) => target.status === 'removed')?.contextLabel).toBe('host + docker');
+    expect(typed.find((target) => target.status === 'removed')?.contextLabel).toBe(
+      'Host + Docker agent',
+    );
 
     const untyped = runDoctor([live], {
       diagnostics: [removedDiag({ types: [] })],

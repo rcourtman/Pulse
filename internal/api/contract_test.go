@@ -15459,6 +15459,50 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+// integrationSource marks ledger agent rows whose telemetry comes from a
+// platform integration rather than a Pulse Agent. It must serialize when set
+// and stay entirely absent for real agents so existing payloads keep shape.
+func TestContract_AgentConnectionPayloadDeclaresIntegrationSource(t *testing.T) {
+	host := models.Host{
+		ID:                "vc-1:host:host-101",
+		Hostname:          "esxi-01.lab.local",
+		Platform:          "vmware-vsphere",
+		Status:            "online",
+		LastSeen:          time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+		IntervalSeconds:   60,
+		IntegrationSource: "vmware",
+	}
+	conn := buildAgentConnection(host, "6.1.0", host.LastSeen.Add(30*time.Second), nil)
+	if conn.IntegrationSource != "vmware" {
+		t.Fatalf("expected integration source %q on connection, got %q", "vmware", conn.IntegrationSource)
+	}
+	body, err := json.Marshal(conn)
+	if err != nil {
+		t.Fatalf("marshal integration-backed agent Connection: %v", err)
+	}
+	if !strings.Contains(string(body), `"integrationSource":"vmware"`) {
+		t.Fatalf("expected integrationSource in payload, got %s", body)
+	}
+
+	agentHost := models.Host{
+		ID:              "host-linux-1",
+		Hostname:        "apollo-114",
+		Platform:        "linux",
+		Status:          "online",
+		AgentVersion:    "6.1.0",
+		LastSeen:        time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+		IntervalSeconds: 60,
+	}
+	agentConn := buildAgentConnection(agentHost, "6.1.0", agentHost.LastSeen.Add(30*time.Second), nil)
+	agentBody, err := json.Marshal(agentConn)
+	if err != nil {
+		t.Fatalf("marshal agent-backed Connection: %v", err)
+	}
+	if strings.Contains(string(agentBody), "integrationSource") {
+		t.Fatalf("expected integrationSource omitted for Pulse-Agent rows, got %s", agentBody)
+	}
+}
+
 func TestContract_AgentDefaultDesiredConfigDoesNotCreateRolloutAttention(t *testing.T) {
 	now := time.Date(2026, 5, 14, 10, 30, 0, 0, time.UTC)
 	connections := buildConnections(aggregatorInputs{

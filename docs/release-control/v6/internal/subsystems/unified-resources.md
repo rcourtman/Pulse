@@ -1538,6 +1538,23 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+### Host views expose the integration-source discriminator
+
+`HostView.IntegrationSource()` names the platform integration ("vmware",
+"truenas", ...) that supplies a host resource's telemetry when the resource
+has never ingested under `SourceAgent`; it returns empty for Pulse-Agent-backed
+hosts. The check is deliberately source-set-based: integration providers
+(vSphere, TrueNAS) fabricate an `Agent` payload so machine surfaces can render
+host facts, so `Resource.Agent != nil` is not evidence of a real Pulse Agent —
+only `Sources` containing `SourceAgent` is. When multiple non-agent sources
+contribute, the accessor prefers vmware, then truenas, then the remaining
+platform sources in a fixed order, and falls back to the generic marker
+`"integration"` for a sourceless non-agent resource. Downstream fleet
+consumers (`hostFromReadStateView` → `models.Host.IntegrationSource` → the
+connections ledger's `integrationSource`) use this to keep
+integration-monitored machines out of agent-only workflows without changing
+fabric membership.
+
 ### Governed action live-readiness refusal
 
 The unified action model owns `ErrActionExecutionUnavailable` as a permanent

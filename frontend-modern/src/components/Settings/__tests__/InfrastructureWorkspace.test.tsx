@@ -490,8 +490,9 @@ describe('InfrastructureWorkspace', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('zeus')).toBeInTheDocument();
-    expect(within(dialog).getByText('Supported target')).toBeInTheDocument();
-    expect(within(dialog).getAllByText('Unknown').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Reported agent')).toBeInTheDocument();
+    // With no published target there is no "Supported target" cell to guess at.
+    expect(within(dialog).queryByText('Supported target')).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
   });
 

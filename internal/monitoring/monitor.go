@@ -3265,6 +3265,7 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 		IntervalSeconds:   view.IntervalSeconds(),
 		LastSeen:          view.LastSeen(),
 		AgentVersion:      view.AgentVersion(),
+		IntegrationSource: view.IntegrationSource(),
 		MachineID:         view.MachineID(),
 		CommandsEnabled:   view.CommandsEnabled(),
 		ReportIP:          view.ReportIP(),

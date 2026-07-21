@@ -1955,6 +1955,25 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Agent Doctor covers exactly the Pulse Agent fleet
+
+Agent Doctor target collection
+(`collectInfrastructureAgentDoctorTargets`) excludes ledger agent connections
+that carry `integrationSource` — integration-monitored machines (vSphere ESXi
+hosts, TrueNAS boxes) have no Pulse Agent to diagnose and previously rendered
+as permanent "Unknown / no structured reason" rows. In the other direction,
+structured fleet diagnostics that have no ledger binding (agents reporting
+only workload telemetry, e.g. Docker-only or Kubernetes-only agents) are now
+appended as diagnostics-only targets, honoring the scoped-agent filter, so a
+critical workload-only agent can no longer vanish from the fleet view.
+Diagnostics-only rows render the diagnostic's status, reasons, and evidence
+but offer no host-local command (there is no ledger connection to derive one
+from). Dialog presentation follows the same honesty rule: the
+"Supported target" cell renders only when a target version is actually
+published, the host-local command explainer renders only when at least one
+row offers a command, and the summary strip lists only non-zero status
+counts.
+
 ### Governed action readiness remains outside agent lifecycle authority
 
 The canonical Actions lifecycle may ask an executor-owned

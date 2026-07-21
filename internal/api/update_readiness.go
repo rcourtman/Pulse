@@ -48,11 +48,12 @@ func buildUpdateReadiness(in updateReadinessInputs) *updates.UpdateReadiness {
 		now = time.Now()
 	}
 
+	agentHosts := agentBackedHosts(in.hosts)
 	checks := []updates.UpdateReadinessCheck{
 		buildUpdatePathReadinessCheck(in.plan),
-		buildAgentContinuityReadinessCheck(in.hosts, in.targetVersion, now),
-		buildAgentMigrationSecurityReadinessCheck(in.hosts),
-		buildAgentTokenReadinessCheck(in.cfg, len(in.hosts), now),
+		buildAgentContinuityReadinessCheck(agentHosts, in.targetVersion, now),
+		buildAgentMigrationSecurityReadinessCheck(agentHosts),
+		buildAgentTokenReadinessCheck(in.cfg, len(agentHosts), now),
 	}
 
 	status := updateReadinessReady
@@ -127,6 +128,20 @@ func buildUpdatePathReadinessCheck(plan updates.UpdatePlan) updates.UpdateReadin
 		Summary: "This deployment uses a manual update path.",
 		Details: []string{"Follow the generated update instructions and keep a backup available before restarting Pulse."},
 	}
+}
+
+// agentBackedHosts drops unified-fabric host rows whose telemetry comes from a
+// platform integration (vSphere, TrueNAS, ...) rather than a Pulse Agent, so
+// agent readiness checks only count real agents.
+func agentBackedHosts(hosts []models.Host) []models.Host {
+	out := make([]models.Host, 0, len(hosts))
+	for _, host := range hosts {
+		if strings.TrimSpace(host.IntegrationSource) != "" {
+			continue
+		}
+		out = append(out, host)
+	}
+	return out
 }
 
 func buildAgentContinuityReadinessCheck(hosts []models.Host, targetVersion string, now time.Time) updates.UpdateReadinessCheck {

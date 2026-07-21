@@ -104,6 +104,32 @@ describe('ConnectionsAPI', () => {
     });
   });
 
+  it('list() preserves integration provenance on integration-monitored machine rows', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:vc-1:host:host-101',
+        type: 'agent',
+        name: 'esxi-01.lab.local',
+        address: 'esxi-01.lab.local',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-07-21T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        integrationSource: 'vmware',
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0].integrationSource).toBe('vmware');
+  });
+
   it('list() preserves fleet governance metadata on connection rows', async () => {
     const connections: Connection[] = [
       {

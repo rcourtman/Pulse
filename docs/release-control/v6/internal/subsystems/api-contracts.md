@@ -3500,6 +3500,20 @@ returning prompts, tool transcripts, credentials, or infrastructure data.
 
 ## Current State
 
+### Connections ledger declares integration-monitored machines
+
+Agent-type rows in `GET /api/connections` carry an optional
+`integrationSource` string ("vmware", "truenas", ...) when the underlying
+unified host resource has no `SourceAgent` ingest — i.e. the machine's
+telemetry comes from a platform integration, not a Pulse Agent. The field is
+omitted (never empty-string) for real Pulse Agents, so existing agent payload
+shapes are unchanged. Agent-only client workflows (Agent Doctor target
+collection, host-local update commands) must skip rows with a value; ledger
+membership itself is unchanged so machine surfaces keep rendering these rows.
+Update readiness follows the same rule: the `agent-continuity`,
+`agent-migration-security`, and agent-token checks count only
+non-integration-backed hosts as registered agents.
+
 ### Action execution revalidates live readiness
 
 `POST /api/actions/{actionId}/execute` routes through the transport-independent

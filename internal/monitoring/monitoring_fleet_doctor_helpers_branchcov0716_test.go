@@ -12,7 +12,7 @@ import (
 //   - sameAgentIdentity
 //   - hasType
 //   - nonEmptyStrings
-//   - roundDuration
+//   - formatFleetDuration
 //
 // It targets genuinely-uncovered branches (both sides of each conditional,
 // short-circuit ordering, empty/nil/zero and boundary inputs) and asserts real
@@ -274,12 +274,11 @@ func TestBranchCovNonEmptyStrings(t *testing.T) {
 	}
 }
 
-// roundDuration takes one of two formatting paths split at exactly one second.
-// Durations strictly below one second are stringified verbatim; durations of at
-// least one second are rounded to whole seconds first (Go rounds ties away from
-// zero). Negative durations are always less than time.Second and therefore take
-// the verbatim branch.
-func TestBranchCovRoundDuration(t *testing.T) {
+// formatFleetDuration renders human-friendly durations at four scales
+// (seconds, minutes, hours, days), dropping the smaller unit when it is zero
+// and clamping negative inputs to zero. Sub-second values round to whole
+// seconds first (Go rounds ties away from zero).
+func TestBranchCovFormatFleetDuration(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -287,28 +286,25 @@ func TestBranchCovRoundDuration(t *testing.T) {
 		duration time.Duration
 		want     string
 	}{
-		// Sub-second branch (duration < time.Second): verbatim .String().
+		// Negative clamp and second-scale branch.
+		{name: "negative clamps to zero", duration: -2 * time.Second, want: "0s"},
 		{name: "zero", duration: 0, want: "0s"},
-		{name: "one millisecond", duration: time.Millisecond, want: "1ms"},
-		{name: "five hundred ms", duration: 500 * time.Millisecond, want: "500ms"},
-		{name: "just under one second", duration: 999 * time.Millisecond, want: "999ms"},
+		{name: "sub-second rounds down", duration: 400 * time.Millisecond, want: "0s"},
+		{name: "sub-second rounds half away from zero", duration: 500 * time.Millisecond, want: "1s"},
+		{name: "whole seconds", duration: 45 * time.Second, want: "45s"},
 
-		// Boundary: exactly one second is NOT < time.Second, so it takes the
-		// rounding branch and stays "1s".
-		{name: "exactly one second via round branch", duration: time.Second, want: "1s"},
+		// Minute scale: seconds shown only when non-zero.
+		{name: "exact minutes drop seconds", duration: 5 * time.Minute, want: "5m"},
+		{name: "minutes and seconds compose", duration: 90 * time.Second, want: "1m 30s"},
+		{name: "ten minutes two seconds", duration: 10*time.Minute + 2*time.Second, want: "10m 2s"},
 
-		// Rounding branch (>= 1s): whole-second .String() after rounding.
-		{name: "rounds down 1.4s", duration: 1400 * time.Millisecond, want: "1s"},
-		{name: "rounds half away from zero 1.5s -> 2s", duration: 1500 * time.Millisecond, want: "2s"},
-		{name: "rounds 2.6s -> 3s", duration: 2600 * time.Millisecond, want: "3s"},
-		{name: "truncated sub-second over one second", duration: 2300 * time.Millisecond, want: "2s"},
-		{name: "ninety seconds composes m+s", duration: 90 * time.Second, want: "1m30s"},
-		{name: "compound h+m+s", duration: time.Hour + 2*time.Minute + 3*time.Second, want: "1h2m3s"},
+		// Hour scale: minutes shown only when non-zero, seconds dropped.
+		{name: "exact hours drop minutes", duration: 2 * time.Hour, want: "2h"},
+		{name: "hours and minutes compose", duration: time.Hour + 2*time.Minute + 3*time.Second, want: "1h 2m"},
 
-		// Negative durations are always < time.Second (positive), so they take
-		// the verbatim branch regardless of magnitude.
-		{name: "negative sub-second verbatim", duration: -500 * time.Millisecond, want: "-500ms"},
-		{name: "negative whole second still verbatim", duration: -2 * time.Second, want: "-2s"},
+		// Day scale: hours shown only when non-zero, minutes dropped.
+		{name: "exact days drop hours", duration: 48 * time.Hour, want: "2d"},
+		{name: "days and hours compose", duration: 52*time.Hour + 30*time.Minute, want: "2d 4h"},
 	}
 
 	for _, tc := range cases {
@@ -316,8 +312,8 @@ func TestBranchCovRoundDuration(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := roundDuration(tc.duration); got != tc.want {
-				t.Fatalf("roundDuration(%v) = %q, want %q", tc.duration, got, tc.want)
+			if got := formatFleetDuration(tc.duration); got != tc.want {
+				t.Fatalf("formatFleetDuration(%v) = %q, want %q", tc.duration, got, tc.want)
 			}
 		})
 	}

@@ -517,6 +517,23 @@ resource health.
 
 ## Current State
 
+### Host snapshots carry integration provenance; doctor copy is user-facing
+
+`models.Host.IntegrationSource` mirrors the unified fabric's
+`HostView.IntegrationSource()` discriminator on hosts produced by
+`hostFromReadStateView` (the source behind `Monitor.HostsSnapshot()`); hosts
+built from agent reports leave it empty by construction, so state-side host
+records never claim integration provenance. Agent fleet doctor reason
+messages are user-facing copy: stale detection now reads "No report has
+arrived for 10m 2s. Pulse marks an agent stale after 5m without a report."
+with durations humanized by `formatFleetDuration` ("45s", "5m", "10m 2s",
+"1h 3m", "2d 4h") instead of Go's `5m0s` form, and the non-online status
+reason quotes the reported status without leaking the internal
+online/running/healthy vocabulary. The diagnostics subject set is unchanged:
+`GetAgentFleetDiagnosticsForTarget` still derives subjects from the state
+snapshot (real agents), which now matches what agent-only surfaces show once
+integration-backed ledger rows are excluded.
+
 Unified Agent host reports now make module readiness and updater/config
 lifecycle evidence monitoring-owned observed state. Monitoring preserves the
 last successful one-shot update transition across subsequent reports, forwards

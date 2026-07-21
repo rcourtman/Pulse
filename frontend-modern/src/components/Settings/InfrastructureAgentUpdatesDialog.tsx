@@ -66,6 +66,19 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
 ) => {
   const operations = useInfrastructureOperationsContext();
   const summary = createMemo(() => summarizeInfrastructureAgentDoctorTargets(props.targets));
+  const anyTargetNeedsUpdate = createMemo(() => props.targets.some((target) => target.needsUpdate));
+  const summaryChips = createMemo(() => {
+    const counts = summary();
+    const order: { status: InfrastructureAgentDoctorStatus; count: number }[] = [
+      { status: 'critical', count: counts.critical },
+      { status: 'warning', count: counts.warning },
+      { status: 'waiting', count: counts.waiting },
+      { status: 'unknown', count: counts.unknown },
+      { status: 'removed', count: counts.removed },
+      { status: 'healthy', count: counts.healthy },
+    ];
+    return order.filter((entry) => entry.count > 0);
+  });
   const commandTargets = createMemo(() =>
     props.targets.filter(
       (target) =>
@@ -165,23 +178,26 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
               </Show>
             }
           >
-            <section
-              aria-label="Agent Doctor summary"
-              class="grid grid-cols-2 gap-2 sm:grid-cols-6"
-            >
-              <SummaryItem label="Critical" value={summary().critical} tone="critical" />
-              <SummaryItem label="Attention" value={summary().warning} tone="warning" />
-              <SummaryItem label="Waiting" value={summary().waiting} />
-              <SummaryItem label="Healthy" value={summary().healthy} tone="healthy" />
-              <SummaryItem label="Unknown" value={summary().unknown} />
-              <SummaryItem label="Removed" value={summary().removed} />
+            <section aria-label="Agent Doctor summary" class="flex flex-wrap items-center gap-2">
+              <For each={summaryChips()}>
+                {(chip) => (
+                  <span
+                    class={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_PRESENTATION[chip.status].badgeClass}`}
+                  >
+                    <span class="font-semibold">{chip.count}</span>
+                    {STATUS_PRESENTATION[chip.status].label}
+                  </span>
+                )}
+              </For>
             </section>
 
-            <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
-              Update commands are host-local: copy one to the affected machine to update its Pulse
-              Agent from this server. They do not update the Pulse server runtime and Pulse does not
-              run them remotely.
-            </div>
+            <Show when={anyTargetNeedsUpdate()}>
+              <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+                Update commands are host-local: copy one to the affected machine to update its Pulse
+                Agent from this server. They do not update the Pulse server runtime and Pulse does
+                not run them remotely.
+              </div>
+            </Show>
 
             <Show
               when={
@@ -288,14 +304,12 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
 
                       <Show when={target.currentVersion || target.expectedVersion}>
                         <div class="grid gap-2 text-xs sm:grid-cols-2">
-                          <Detail
-                            label="Reported agent"
-                            value={target.currentVersion || 'Unknown'}
-                          />
-                          <Detail
-                            label="Supported target"
-                            value={target.expectedVersion || 'Unknown'}
-                          />
+                          <Show when={target.currentVersion}>
+                            <Detail label="Reported agent" value={target.currentVersion!} />
+                          </Show>
+                          <Show when={target.expectedVersion}>
+                            <Detail label="Supported target" value={target.expectedVersion!} />
+                          </Show>
                         </div>
                       </Show>
 
@@ -318,7 +332,7 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
                           <p class="text-xs text-muted">
                             {target.status === 'healthy'
                               ? 'No fleet-health issues detected.'
-                              : 'No structured reason is available for this connection yet.'}
+                              : 'Pulse has not received a structured diagnostic for this agent yet. This usually clears after its next report.'}
                           </p>
                         }
                       >
@@ -404,26 +418,6 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
         </div>
       </div>
     </Dialog>
-  );
-};
-
-const SummaryItem: Component<{
-  label: string;
-  value: number;
-  tone?: 'critical' | 'warning' | 'healthy';
-}> = (props) => {
-  const toneClass = () => {
-    if (props.tone === 'critical' && props.value > 0) return 'text-rose-700 dark:text-rose-300';
-    if (props.tone === 'warning' && props.value > 0) return 'text-amber-700 dark:text-amber-300';
-    if (props.tone === 'healthy' && props.value > 0)
-      return 'text-emerald-700 dark:text-emerald-300';
-    return 'text-base-content';
-  };
-  return (
-    <div class="rounded-md border border-border bg-surface-alt px-3 py-2">
-      <div class={`text-lg font-semibold ${toneClass()}`}>{props.value}</div>
-      <div class="text-[11px] text-muted">{props.label}</div>
-    </div>
   );
 };
 

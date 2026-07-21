@@ -812,6 +812,52 @@ func TestView_HostViewAccessors(t *testing.T) {
 	}
 }
 
+func TestView_HostViewIntegrationSource(t *testing.T) {
+	agentBacked := NewHostView(&Resource{
+		ID:      "host-agent",
+		Type:    ResourceTypeAgent,
+		Name:    "agent-host",
+		Sources: []DataSource{SourceAgent, SourceProxmox},
+		Agent:   &AgentData{AgentID: "agent-1"},
+	})
+	if got := agentBacked.IntegrationSource(); got != "" {
+		t.Fatalf("agent-sourced host must report empty integration source, got %q", got)
+	}
+
+	// Integration providers fabricate an Agent payload so machine surfaces can
+	// render host facts; only the ingest source decides agent-backedness.
+	vmwareHost := NewHostView(&Resource{
+		ID:      "host-esxi",
+		Type:    ResourceTypeAgent,
+		Name:    "esxi-01",
+		Sources: []DataSource{SourceVMware},
+		Agent:   &AgentData{AgentID: "vc-1:host:host-101", Platform: "vmware-vsphere"},
+	})
+	if got := vmwareHost.IntegrationSource(); got != "vmware" {
+		t.Fatalf("vSphere-only host must report %q, got %q", "vmware", got)
+	}
+
+	truenasHost := NewHostView(&Resource{
+		ID:      "host-truenas",
+		Type:    ResourceTypeAgent,
+		Name:    "truenas-main",
+		Sources: []DataSource{SourceTrueNAS},
+	})
+	if got := truenasHost.IntegrationSource(); got != "truenas" {
+		t.Fatalf("TrueNAS-only host must report %q, got %q", "truenas", got)
+	}
+
+	sourceless := NewHostView(&Resource{ID: "host-none", Type: ResourceTypeAgent})
+	if got := sourceless.IntegrationSource(); got != "integration" {
+		t.Fatalf("sourceless non-agent host must report the generic %q marker, got %q", "integration", got)
+	}
+
+	var nilView HostView
+	if got := nilView.IntegrationSource(); got != "" {
+		t.Fatalf("nil-backed view must report empty integration source, got %q", got)
+	}
+}
+
 func TestView_HostViewMetricsTargetAccessor(t *testing.T) {
 	r := &Resource{
 		ID:   "host-metrics",

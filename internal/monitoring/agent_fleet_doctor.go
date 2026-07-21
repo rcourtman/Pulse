@@ -493,7 +493,7 @@ func diagnoseAgentConnectivity(subject agentFleetSubject, now time.Time) []Agent
 		reasons = append(reasons, AgentFleetDiagnosticReason{
 			Code:     "agent_disconnected",
 			Severity: AgentFleetStatusCritical,
-			Message:  fmt.Sprintf("No report has arrived for %s; this is beyond the canonical %s agent stale threshold.", roundDuration(age), roundDuration(staleThreshold)),
+			Message:  fmt.Sprintf("No report has arrived for %s. Pulse marks an agent stale after %s without a report.", formatFleetDuration(age), formatFleetDuration(staleThreshold)),
 			Evidence: []string{
 				"Last seen: " + subject.lastSeen.UTC().Format(time.RFC3339),
 				fmt.Sprintf("Expected report interval: %ds", interval),
@@ -505,7 +505,7 @@ func diagnoseAgentConnectivity(subject agentFleetSubject, now time.Time) []Agent
 		reasons = append(reasons, AgentFleetDiagnosticReason{
 			Code:     "agent_status_not_online",
 			Severity: AgentFleetStatusWarning,
-			Message:  fmt.Sprintf("The agent reports status %q instead of online/running/healthy.", subject.rawStatus),
+			Message:  fmt.Sprintf("The agent's most recent report described it as %q rather than online.", subject.rawStatus),
 		})
 	}
 
@@ -1192,9 +1192,34 @@ func nonEmptyStrings(values ...string) []string {
 	return out
 }
 
-func roundDuration(duration time.Duration) string {
-	if duration < time.Second {
-		return duration.String()
+// formatFleetDuration renders a duration the way a person would say it
+// ("45s", "5m", "10m 2s", "1h 3m", "2d 4h") instead of Go's "5m0s" form.
+func formatFleetDuration(duration time.Duration) string {
+	if duration < 0 {
+		duration = 0
 	}
-	return duration.Round(time.Second).String()
+	duration = duration.Round(time.Second)
+	days := int(duration.Hours()) / 24
+	hours := int(duration.Hours()) % 24
+	minutes := int(duration.Minutes()) % 60
+	seconds := int(duration.Seconds()) % 60
+	switch {
+	case days > 0:
+		if hours == 0 {
+			return fmt.Sprintf("%dd", days)
+		}
+		return fmt.Sprintf("%dd %dh", days, hours)
+	case duration >= time.Hour:
+		if minutes == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	case duration >= time.Minute:
+		if seconds == 0 {
+			return fmt.Sprintf("%dm", minutes)
+		}
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	default:
+		return fmt.Sprintf("%ds", seconds)
+	}
 }

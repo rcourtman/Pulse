@@ -531,6 +531,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentIdentity:        agentIdentity,
 		AgentVersion:         currentAgentVersion,
 		ExpectedAgentVersion: expectedAgentVersion,
+		IntegrationSource:    strings.TrimSpace(host.IntegrationSource),
 		AgentUpdateAvailable: updateAvailable,
 		AgentUpdate:          connectionAgentUpdateStatus(host.AgentUpdate),
 		AgentModules:         connectionAgentModuleStatuses(host.AgentModules),

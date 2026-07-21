@@ -1027,6 +1027,31 @@ func (v HostView) AgentID() string {
 	return v.r.Agent.AgentID
 }
 
+// IntegrationSource names the platform integration that supplies this host's
+// telemetry when no Pulse Agent reports for it (e.g. "vmware", "truenas").
+// Empty means the host is Pulse-Agent-backed. Agent-fleet surfaces use this
+// to keep integration-monitored machines out of agent-only workflows.
+// The check is source-based on purpose: integration providers (vSphere,
+// TrueNAS) fabricate an Agent payload so machine surfaces render host facts,
+// but only a real Pulse Agent ingests under SourceAgent.
+func (v HostView) IntegrationSource() string {
+	if v.r == nil {
+		return ""
+	}
+	if hasDataSource(v.r.Sources, SourceAgent) {
+		return ""
+	}
+	for _, source := range []DataSource{SourceVMware, SourceTrueNAS, SourceProxmox, SourceDocker, SourceK8s, SourcePBS, SourcePMG} {
+		if hasDataSource(v.r.Sources, source) {
+			return string(source)
+		}
+	}
+	if len(v.r.Sources) > 0 {
+		return string(v.r.Sources[0])
+	}
+	return "integration"
+}
+
 func (v HostView) MetricsTarget() *MetricsTarget {
 	if v.r == nil {
 		return nil

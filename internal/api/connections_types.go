@@ -155,22 +155,27 @@ type ConnectionAgentIdentity struct {
 // per-type shapes that today require separate fetches and separate table
 // renderers.
 type Connection struct {
-	ID                   string                        `json:"id"`
-	Type                 ConnectionType                `json:"type"`
-	Name                 string                        `json:"name"`
-	Address              string                        `json:"address"`
-	HostAliases          []string                      `json:"hostAliases,omitempty"`
-	State                ConnectionState               `json:"state"`
-	StateReason          string                        `json:"stateReason,omitempty"`
-	Enabled              bool                          `json:"enabled"`
-	Surfaces             []string                      `json:"surfaces"`
-	Scope                map[string]bool               `json:"scope"`
-	LastSeen             *time.Time                    `json:"lastSeen,omitempty"`
-	LastError            *ConnectionError              `json:"lastError,omitempty"`
-	Source               ConnectionSource              `json:"source"`
-	AgentIdentity        *ConnectionAgentIdentity      `json:"agentIdentity,omitempty"`
-	AgentVersion         string                        `json:"agentVersion,omitempty"`
-	ExpectedAgentVersion string                        `json:"expectedAgentVersion,omitempty"`
+	ID                   string                   `json:"id"`
+	Type                 ConnectionType           `json:"type"`
+	Name                 string                   `json:"name"`
+	Address              string                   `json:"address"`
+	HostAliases          []string                 `json:"hostAliases,omitempty"`
+	State                ConnectionState          `json:"state"`
+	StateReason          string                   `json:"stateReason,omitempty"`
+	Enabled              bool                     `json:"enabled"`
+	Surfaces             []string                 `json:"surfaces"`
+	Scope                map[string]bool          `json:"scope"`
+	LastSeen             *time.Time               `json:"lastSeen,omitempty"`
+	LastError            *ConnectionError         `json:"lastError,omitempty"`
+	Source               ConnectionSource         `json:"source"`
+	AgentIdentity        *ConnectionAgentIdentity `json:"agentIdentity,omitempty"`
+	AgentVersion         string                   `json:"agentVersion,omitempty"`
+	ExpectedAgentVersion string                   `json:"expectedAgentVersion,omitempty"`
+	// IntegrationSource names the platform integration ("vmware", "truenas", ...)
+	// that supplies this host's telemetry when no Pulse Agent reports for it.
+	// Empty means the row is backed by a real Pulse Agent. Agent-only workflows
+	// (Agent Doctor, update commands) skip rows with a non-empty value.
+	IntegrationSource    string                        `json:"integrationSource,omitempty"`
 	AgentUpdateAvailable bool                          `json:"agentUpdateAvailable,omitempty"`
 	AgentUpdate          *ConnectionAgentUpdateStatus  `json:"agentUpdate,omitempty"`
 	AgentModules         []ConnectionAgentModuleStatus `json:"agentModules,omitempty"`
