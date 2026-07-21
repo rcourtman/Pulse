@@ -13,6 +13,8 @@ This is not the canonical Pulse MSP model for separate customer businesses. MSP 
 
 Without these, all API calls return `501 Not Implemented` (flag off) or `402 Payment Required` (no license). The **default** organization always works regardless.
 
+The Community, Relay, and Pro tiers do not include the `multi_tenant` capability, and Enterprise licensing is not sold self-serve on the pricing page. Email [support@pulserelay.pro](mailto:support@pulserelay.pro) to arrange an Enterprise license.
+
 ## Quick Start
 
 1. Set `PULSE_MULTI_TENANT_ENABLED=true` in your environment and restart Pulse.
