@@ -125,6 +125,14 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+// Connection tests fail with a generic top-level message ("Failed to connect
+// to TrueNAS") while the actionable cause — e.g. the exact x509 verification
+// error — rides in details.error. Prefer it so users can tell an untrusted CA
+// from a hostname mismatch instead of reaching for Skip TLS Verification
+// (#1602). Mirrors getVMwareErrorMessage.
+const getTrueNASErrorMessage = (error: unknown, fallback: string): string =>
+  apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
+
 const monitoredSystemImpactPreviewUnavailableStateFromError = (error: unknown) => {
   return buildMonitoredSystemImpactPreviewUnavailableState({
     code: apiErrorCode(error),
@@ -294,7 +302,7 @@ export function useTrueNASSettingsPanelState() {
       notificationStore.success('TrueNAS connection successful');
       return true;
     } catch (error) {
-      const message = getErrorMessage(error, 'TrueNAS connection failed');
+      const message = getTrueNASErrorMessage(error, 'TrueNAS connection failed');
       notificationStore.error(message);
       logger.error('[TrueNAS Settings] Connection test failed', error);
       return false;
@@ -311,7 +319,7 @@ export function useTrueNASSettingsPanelState() {
         `TrueNAS connection successful for ${connection.name || connection.host}`,
       );
     } catch (error) {
-      const message = getErrorMessage(error, 'TrueNAS connection failed');
+      const message = getTrueNASErrorMessage(error, 'TrueNAS connection failed');
       notificationStore.error(message);
       logger.error('[TrueNAS Settings] Saved connection test failed', error);
     } finally {
@@ -342,7 +350,7 @@ export function useTrueNASSettingsPanelState() {
       } else {
         setMonitoredSystemPreviewUnavailableState(null);
         setMonitoredSystemPreviewGenericError(
-          getErrorMessage(error, 'Could not preview monitored-system impact'),
+          getTrueNASErrorMessage(error, 'Could not preview monitored-system impact'),
         );
       }
       logger.error('[TrueNAS Settings] Preview failed', error);

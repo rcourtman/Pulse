@@ -123,7 +123,19 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const rowActions = useConnectionRowActions({ onMutated: () => ledger.reload() });
 
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
-  const [editingRow, setEditingRow] = createSignal<InfrastructureSystemRow | null>(null);
+  // Keep the row under edit synced to the live ledger: mutations inside the
+  // manage flow (e.g. removing an attached Pulse Agent) reload the ledger, and
+  // a frozen snapshot would keep rendering the removed attachment as if the
+  // action had no effect (#1602). Fall back to the snapshot while the ledger
+  // catches up so the flow doesn't flash empty mid-reload.
+  const [editingRowSource, setEditingRowSource] = createSignal<InfrastructureSystemRow | null>(
+    null,
+  );
+  const editingRow = createMemo<InfrastructureSystemRow | null>(() => {
+    const source = editingRowSource();
+    if (!source) return null;
+    return ledger.rows().find((row) => row.id === source.id) ?? source;
+  });
   const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
   const [selectedDiscoveredSource, setSelectedDiscoveredSource] =
     createSignal<DiscoveredServer | null>(null);
@@ -273,7 +285,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       rowActions.cancelRemove(attached.id);
     }
     resetInlineEditorState();
-    setEditingRow(null);
+    setEditingRowSource(null);
   };
 
   const handleAddSaved = () => {
@@ -911,7 +923,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               }
         }
         onOpenDiscoverySettings={readOnly() ? undefined : () => setShowDiscoverySettings(true)}
-        onOpenConnection={readOnly() ? undefined : (row) => setEditingRow(row)}
+        onOpenConnection={readOnly() ? undefined : (row) => setEditingRowSource(row)}
         onOpenAgentDoctor={
           readOnly()
             ? undefined
