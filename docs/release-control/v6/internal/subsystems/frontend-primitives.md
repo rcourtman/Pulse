@@ -2360,6 +2360,17 @@ verification.
 
 ## Current State
 
+### System member rows are source-type aware
+
+The Infrastructure source manager's member composition primitives now label
+by owning system type instead of assuming Proxmox: `buildMemberRow` threads
+the system type so vSphere host members present the "vSphere host" subtitle
+(table mode carries it in the row tooltip, exactly like Proxmox cluster
+members), and the expand toggle counts "hosts" for vmware rows and "nodes"
+elsewhere. No new member primitive was introduced — vSphere composition
+reuses the same expandable member-row rendering, status presentation, and
+merge semantics Proxmox clusters already use.
+
 Assistant availability in the app shell is derived from the
 `sessionCapabilities.assistantEnabled` security-status capability, and
 `aiChatStore.refreshEnabledFromServer()` is the canonical way to re-derive it

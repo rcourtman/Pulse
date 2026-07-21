@@ -507,3 +507,54 @@ func TestBuildConnectionSystems_AttachesHostAgentToMatchingProxmoxSourceWithoutN
 		t.Fatalf("minipc should remain standalone without a direct source host match, got %+v", minipcSystem.Components)
 	}
 }
+
+// One vCenter connection spans many ESXi hosts, so vSphere host resources
+// compose as members of their owning vmware connection the way Proxmox
+// cluster nodes compose under their cluster source. Resources pointing at an
+// unknown or differently-typed connection produce no member.
+func TestConnectionSystemMemberFromVMwareHost(t *testing.T) {
+	lastSeen := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	hostResource := unified.Resource{
+		ID:       "vc-1:host:host-101",
+		Name:     "esxi-01.lab.local",
+		Status:   unified.StatusOnline,
+		LastSeen: lastSeen,
+		VMware: &unified.VMwareData{
+			ConnectionID:    "vc-1",
+			EntityType:      "host",
+			ManagedObjectID: "host-101",
+		},
+	}
+	connections := map[string]Connection{
+		"vmware:vc-1": {ID: "vmware:vc-1", Type: ConnectionTypeVMware, Name: "Lab vCenter"},
+	}
+
+	member, primaryID, ok := connectionSystemMemberFromVMwareHost(hostResource, connections)
+	if !ok {
+		t.Fatal("expected ESXi host resource to produce a vmware system member")
+	}
+	if primaryID != "vmware:vc-1" {
+		t.Fatalf("primary = %q, want %q", primaryID, "vmware:vc-1")
+	}
+	if member.Name != "esxi-01.lab.local" || member.State != ConnectionStateActive {
+		t.Fatalf("unexpected member projection: %+v", member)
+	}
+	if member.LastSeen == nil || !member.LastSeen.Equal(lastSeen) {
+		t.Fatalf("expected member lastSeen %v, got %+v", lastSeen, member.LastSeen)
+	}
+	if member.Primary {
+		t.Fatalf("ESXi hosts must not claim the primary marker: %+v", member)
+	}
+
+	vmResource := hostResource
+	vmResource.VMware = &unified.VMwareData{ConnectionID: "vc-1", EntityType: "vm"}
+	if _, _, ok := connectionSystemMemberFromVMwareHost(vmResource, connections); ok {
+		t.Fatal("VM resources must not become system members")
+	}
+
+	orphanResource := hostResource
+	orphanResource.VMware = &unified.VMwareData{ConnectionID: "vc-unknown", EntityType: "host"}
+	if _, _, ok := connectionSystemMemberFromVMwareHost(orphanResource, connections); ok {
+		t.Fatal("hosts pointing at an unconfigured vCenter must not become members")
+	}
+}

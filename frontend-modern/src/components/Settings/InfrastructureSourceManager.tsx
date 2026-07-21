@@ -939,7 +939,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               type="button"
                                               class="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
                                               aria-expanded={membersExpanded(row)}
-                                              aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, 'node')} for ${row.name}`}
+                                              aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, row.ownerType === 'vmware' ? 'host' : 'node')} for ${row.name}`}
                                               onClick={() => toggleMembers(row)}
                                             >
                                               <Show
@@ -948,7 +948,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               >
                                                 <ChevronDown class="h-3.5 w-3.5" />
                                               </Show>
-                                              {formatCount(row.members.length, 'node')}
+                                              {formatCount(
+                                                row.members.length,
+                                                row.ownerType === 'vmware' ? 'host' : 'node',
+                                              )}
                                             </button>
                                           </Show>
                                         </div>
@@ -1400,7 +1403,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         type="button"
                                         class="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
                                         aria-expanded={membersExpanded(row)}
-                                        aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, 'node')} for ${row.name}`}
+                                        aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, row.ownerType === 'vmware' ? 'host' : 'node')} for ${row.name}`}
                                         onClick={() => toggleMembers(row)}
                                       >
                                         <Show
@@ -1409,7 +1412,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         >
                                           <ChevronDown class="h-3.5 w-3.5" />
                                         </Show>
-                                        {formatCount(row.members.length, 'node')}
+                                        {formatCount(
+                                          row.members.length,
+                                          row.ownerType === 'vmware' ? 'host' : 'node',
+                                        )}
                                       </button>
                                     </Show>
                                   </div>

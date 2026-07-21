@@ -1955,6 +1955,16 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### vSphere system members carry no agent semantics
+
+ESXi host rows that now compose under their owning vCenter connection in the
+grouped systems payload are API-side composition only: they carry no
+`agentConnectionId`, never claim the primary marker, and present the
+"vSphere host" member subtitle rather than cluster-node wording. Agent
+lifecycle surfaces must not treat these members as enrollable, updatable, or
+doctorable agents — the Pulse Agent fleet remains exactly the set of
+SourceAgent-backed connections and structured fleet diagnostics.
+
 ### Agent Doctor covers exactly the Pulse Agent fleet
 
 The connections ledger no longer fabricates agent-type rows for

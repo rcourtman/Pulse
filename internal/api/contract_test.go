@@ -15459,6 +15459,40 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+// vSphere host members compose under their owning vmware system with
+// API-side fields only: no primary marker and no agentConnectionId, so agent
+// workflows cannot mistake them for enrollable agents. The payload shape
+// stays stable for clients that already render Proxmox cluster members.
+func TestContract_VMwareSystemMemberPayloadShape(t *testing.T) {
+	lastSeen := time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC)
+	system := ConnectionSystem{
+		ID:   "vmware:vc-1",
+		Type: ConnectionTypeVMware,
+		Components: []ConnectionSystemComponent{
+			{ConnectionID: "vmware:vc-1", Type: ConnectionTypeVMware, Role: ConnectionSystemComponentRolePrimary},
+		},
+		Members: []ConnectionSystemMember{
+			{
+				ID:          "vc-1:host:host-101",
+				Name:        "esxi-01.lab.local",
+				HostAliases: []string{"esxi-01.lab.local"},
+				State:       ConnectionStateActive,
+				LastSeen:    &lastSeen,
+			},
+		},
+	}
+
+	body, err := json.Marshal(system)
+	if err != nil {
+		t.Fatalf("marshal vmware ConnectionSystem: %v", err)
+	}
+	want := `{"id":"vmware:vc-1","type":"vmware","components":[{"connectionId":"vmware:vc-1","type":"vmware","role":"primary"}],"members":[{"id":"vc-1:host:host-101","name":"esxi-01.lab.local","hostAliases":["esxi-01.lab.local"],"state":"active","lastSeen":"2026-07-21T12:00:00Z"}]}`
+	assertJSONSnapshot(t, body, want)
+	if strings.Contains(string(body), "agentConnectionId") || strings.Contains(string(body), `"primary"`+`:true`) {
+		t.Fatalf("vmware members must not carry agent or primary markers: %s", body)
+	}
+}
+
 // Integration-monitored machines (models.Host.IntegrationSource != "") must
 // not fabricate ledger agent rows: their owning platform connection is the
 // source representation. Real Pulse-Agent hosts keep their rows, whose

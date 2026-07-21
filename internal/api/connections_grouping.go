@@ -246,6 +246,9 @@ func connectionSystemMemberFromResource(
 	connectionByID map[string]Connection,
 	agentAttachments map[string]string,
 ) (ConnectionSystemMember, string, bool) {
+	if member, primaryID, ok := connectionSystemMemberFromVMwareHost(resource, connectionByID); ok {
+		return member, primaryID, true
+	}
 	if resource.Proxmox == nil || !resource.Proxmox.IsClusterMember {
 		return ConnectionSystemMember{}, "", false
 	}
@@ -279,6 +282,43 @@ func connectionSystemMemberFromResource(
 		LastSeen:          lastSeen,
 		Primary:           isPrimaryProxmoxSystemMember(primary, nodeName, resource.Proxmox.HostURL),
 		AgentConnectionID: attachedAgentConnectionID(linkedAgentID, primaryID, connectionByID, agentAttachments),
+	}, primaryID, true
+}
+
+// connectionSystemMemberFromVMwareHost projects an ESXi host resource as a
+// member of its owning vCenter connection, mirroring how Proxmox cluster
+// nodes compose under their cluster source. One vCenter connection spans many
+// hosts; single-machine sources (TrueNAS) have no member composition because
+// the connection row already is the machine.
+func connectionSystemMemberFromVMwareHost(
+	resource unified.Resource,
+	connectionByID map[string]Connection,
+) (ConnectionSystemMember, string, bool) {
+	if resource.VMware == nil || !strings.EqualFold(strings.TrimSpace(resource.VMware.EntityType), "host") {
+		return ConnectionSystemMember{}, "", false
+	}
+	connectionID := strings.TrimSpace(resource.VMware.ConnectionID)
+	if connectionID == "" {
+		return ConnectionSystemMember{}, "", false
+	}
+	primaryID := "vmware:" + connectionID
+	primary, ok := connectionByID[primaryID]
+	if !ok || primary.Type != ConnectionTypeVMware {
+		return ConnectionSystemMember{}, "", false
+	}
+
+	var lastSeen *time.Time
+	if !resource.LastSeen.IsZero() {
+		t := resource.LastSeen
+		lastSeen = &t
+	}
+
+	return ConnectionSystemMember{
+		ID:          strings.TrimSpace(resource.ID),
+		Name:        firstNonEmptyTrimmed(resource.Name, resource.VMware.ManagedObjectID),
+		HostAliases: connectionSystemMemberHostAliasesFromResource(resource),
+		State:       connectionSystemMemberStateFromResource(resource),
+		LastSeen:    lastSeen,
 	}, primaryID, true
 }
 

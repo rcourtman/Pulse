@@ -708,6 +708,79 @@ describe('useConnectionsLedger', () => {
     ]);
   });
 
+  it('renders vSphere host members under their owning vCenter row', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'vmware:vc-1',
+        type: 'vmware',
+        name: 'Lab vCenter',
+        address: 'https://vcenter.lab:443',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['vms', 'hosts', 'datastores'],
+        scope: { vms: true, hosts: true, datastores: true },
+        lastSeen: '2026-07-21T12:00:00Z',
+        lastError: null,
+        source: 'manual',
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+      },
+    ];
+    const systems: ConnectionSystem[] = [
+      {
+        id: 'vmware:vc-1',
+        type: 'vmware',
+        components: [{ connectionId: 'vmware:vc-1', type: 'vmware', role: 'primary' }],
+        members: [
+          {
+            id: 'vc-1:host:host-101',
+            name: 'esxi-01.lab.local',
+            hostAliases: ['esxi-01.lab.local'],
+            state: 'active',
+            lastSeen: '2026-07-21T12:00:00Z',
+          },
+          {
+            id: 'vc-1:host:host-102',
+            name: 'esxi-02.lab.local',
+            hostAliases: ['esxi-02.lab.local'],
+            state: 'stale',
+            lastSeen: '2026-07-21T11:00:00Z',
+          },
+        ],
+      },
+    ];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    // vSphere rows are not clusters: no cluster naming, no cluster rollup.
+    expect(result.rows()[0]).toMatchObject({
+      id: 'vmware:vc-1',
+      ownerType: 'vmware',
+      name: 'Lab vCenter',
+      isCluster: false,
+    });
+    expect(result.rows()[0].members).toMatchObject([
+      {
+        id: 'vc-1:host:host-101',
+        name: 'esxi-01.lab.local',
+        subtitle: 'vSphere host',
+        source: 'api',
+        statusLabel: 'Active',
+        primary: false,
+      },
+      {
+        id: 'vc-1:host:host-102',
+        name: 'esxi-02.lab.local',
+        subtitle: 'vSphere host',
+        source: 'api',
+        statusLabel: 'Stale',
+        primary: false,
+      },
+    ]);
+  });
+
   it('rolls Proxmox cluster status down when a member is unreachable', async () => {
     const connections: Connection[] = [
       {

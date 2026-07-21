@@ -78,6 +78,40 @@ func mockVMwareConnectionResponses() []vmwareConnectionResponse {
 	}}
 }
 
+// mockVMwareLedgerInputs adapts the mock vCenter fixture into the unified
+// connections aggregator's instance+summary inputs so mock mode presents the
+// same vSphere source row (with member hosts) a real deployment would.
+func mockVMwareLedgerInputs() ([]config.VMwareVCenterInstance, map[string]monitoring.VMwareConnectionSummary) {
+	responses := mockVMwareConnectionResponses()
+	instances := make([]config.VMwareVCenterInstance, 0, len(responses))
+	summaries := make(map[string]monitoring.VMwareConnectionSummary, len(responses))
+	for _, response := range responses {
+		instances = append(instances, response.VMwareVCenterInstance)
+		summaries[response.VMwareVCenterInstance.ID] = monitoring.VMwareConnectionSummary{
+			Poll:     response.Poll,
+			Observed: response.Observed,
+		}
+	}
+	return instances, summaries
+}
+
+// mockTrueNASLedgerInputs is the TrueNAS counterpart of
+// mockVMwareLedgerInputs: one source row per mock NAS, no member composition
+// because a TrueNAS connection monitors exactly one machine.
+func mockTrueNASLedgerInputs() ([]config.TrueNASInstance, map[string]monitoring.TrueNASConnectionSummary) {
+	responses := mockTrueNASConnectionResponses()
+	instances := make([]config.TrueNASInstance, 0, len(responses))
+	summaries := make(map[string]monitoring.TrueNASConnectionSummary, len(responses))
+	for _, response := range responses {
+		instances = append(instances, response.TrueNASInstance)
+		summaries[response.TrueNASInstance.ID] = monitoring.TrueNASConnectionSummary{
+			Poll:     response.Poll,
+			Observed: response.Observed,
+		}
+	}
+	return instances, summaries
+}
+
 func mockAvailabilityConnectionInputs() ([]config.AvailabilityTarget, map[string]monitoring.AvailabilityProbeStatus) {
 	fixtures := mock.AvailabilityFixtures()
 	targets := make([]config.AvailabilityTarget, 0, len(fixtures))

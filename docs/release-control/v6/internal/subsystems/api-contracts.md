@@ -3500,6 +3500,22 @@ returning prompts, tool transcripts, credentials, or infrastructure data.
 
 ## Current State
 
+### vSphere host composition on the vCenter system row
+
+Grouped systems in `GET /api/connections` now project ESXi host resources as
+`members` of their owning `vmware:<connectionID>` system, mirroring how
+Proxmox cluster nodes compose under their cluster source: one vCenter
+connection spans many hosts, so composition belongs on the source row.
+Members carry the host resource's name, aliases, derived connection state,
+and last-seen; they never claim the `primary` marker and never reference an
+agent connection. VM/datastore/network resources and hosts pointing at an
+unconfigured vCenter produce no member. Single-machine sources (TrueNAS)
+still have no member composition because the connection row already is the
+machine. Mock mode feeds its vCenter and TrueNAS fixtures into the
+aggregator's instance+summary inputs (only when no real instances are
+configured) so the mock ledger presents the same platform source rows a real
+deployment would.
+
 ### Connections ledger excludes integration-monitored machines
 
 The ledger does not fabricate agent-type rows for unified host resources

@@ -1838,6 +1838,15 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
 
+### vSphere member composition is inventory, not protection evidence
+
+ESXi host members projected under a vCenter connection in the grouped
+systems payload describe telemetry composition only. Storage and recovery
+surfaces must not read member presence, member state, or member counts as
+evidence about datastore protection, backup coverage, or restore
+recoverability; Recovery Assurance evidence continues to come exclusively
+from its own deterministic verification paths.
+
 ### Connection integration provenance is telemetry-only evidence
 
 The connections ledger's `integrationSource` discriminator (host telemetry

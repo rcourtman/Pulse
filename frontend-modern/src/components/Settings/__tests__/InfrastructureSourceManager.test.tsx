@@ -400,4 +400,60 @@ describe('InfrastructureSourceManager setup summary', () => {
       'Desired and applied fingerprints differ.',
     );
   });
+
+  it('labels vSphere member composition as hosts, not cluster nodes', () => {
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'vmware:vc-1',
+            ownerType: 'vmware',
+            name: 'Lab vCenter',
+            source: 'api',
+            subtitle: 'via VMware vCenter API',
+            coverageLabels: ['VMs', 'Hosts', 'Datastores'],
+            connection: connectionFixture({
+              id: 'vmware:vc-1',
+              type: 'vmware',
+              name: 'Lab vCenter',
+              address: 'https://vcenter.lab:443',
+              source: 'manual',
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            members: [
+              member({
+                id: 'vc-1:host:host-101',
+                name: 'esxi-01.lab.local',
+                subtitle: 'vSphere host',
+                source: 'api',
+                host: undefined,
+                coverageLabels: [],
+              }),
+              member({
+                id: 'vc-1:host:host-102',
+                name: 'esxi-02.lab.local',
+                subtitle: 'vSphere host',
+                source: 'api',
+                host: undefined,
+                coverageLabels: [],
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+      />
+    ));
+
+    const toggle = screen.getByRole('button', { name: 'Show 2 hosts for Lab vCenter' });
+    fireEvent.click(toggle);
+    expect(screen.getByText('esxi-01.lab.local')).toBeInTheDocument();
+    expect(screen.getByText('esxi-02.lab.local')).toBeInTheDocument();
+    // Table mode carries the member subtitle in the row tooltip, same as
+    // Proxmox cluster members.
+    expect(screen.getByTitle('esxi-01.lab.local · vSphere host')).toBeInTheDocument();
+    expect(screen.getByTitle('esxi-02.lab.local · vSphere host')).toBeInTheDocument();
+  });
 });

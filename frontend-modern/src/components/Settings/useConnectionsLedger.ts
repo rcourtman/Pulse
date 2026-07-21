@@ -271,12 +271,15 @@ const systemRowSignature = (
     primaryConnectionSignature: connectionRowSignatureForID(connectionsByID, system.id),
   });
 
-const memberSubtitleFor = (member: ConnectionSystemMember): string =>
-  member.primary ? 'Primary node' : 'Cluster member';
+const memberSubtitleFor = (member: ConnectionSystemMember, systemType?: ConnectionType): string => {
+  if (systemType === 'vmware') return 'vSphere host';
+  return member.primary ? 'Primary node' : 'Cluster member';
+};
 
 const buildMemberRow = (
   member: ConnectionSystemMember,
   connectionsByID: Map<string, Connection>,
+  systemType?: ConnectionType,
 ): InfrastructureSystemMemberRow | null => {
   const name = member.name?.trim();
   if (!name) return null;
@@ -306,7 +309,7 @@ const buildMemberRow = (
   return {
     id: member.id,
     name,
-    subtitle: memberSubtitleFor(member),
+    subtitle: memberSubtitleFor(member, systemType),
     source,
     host: member.endpoint?.trim() || undefined,
     hostAliases: member.hostAliases?.filter((alias) => alias.trim().length > 0) ?? [],
@@ -449,7 +452,7 @@ const systemToRow = (
 
   const rawMembers = system.members ?? [];
   const members = rawMembers
-    .map((member) => buildMemberRow(member, connectionsByID))
+    .map((member) => buildMemberRow(member, connectionsByID, system.type))
     .filter((member): member is InfrastructureSystemMemberRow => Boolean(member));
 
   const isCluster =

@@ -70,6 +70,15 @@ func buildAggregatorInputsWithRuntimeSources(
 		mockTargets, mockStatuses := mockAvailabilityConnectionInputs()
 		inputs.availabilityTargets = mergeAvailabilityTargets(inputs.availabilityTargets, mockTargets)
 		inputs.availabilityStatuses = mergeAvailabilityStatuses(inputs.availabilityStatuses, mockStatuses)
+		// Mock vSphere/TrueNAS pollers feed the fabric but never persistence,
+		// so without these the mock ledger has no platform source rows for
+		// the machines those integrations monitor.
+		if len(inputs.vmwareInstances) == 0 {
+			inputs.vmwareInstances, inputs.vmwareSummaries = mockVMwareLedgerInputs()
+		}
+		if len(inputs.truenasInstances) == 0 {
+			inputs.truenasInstances, inputs.truenasSummaries = mockTrueNASLedgerInputs()
+		}
 	}
 	inputs.expectedAgentVersion = currentAgentTargetVersion()
 	_ = ctx
