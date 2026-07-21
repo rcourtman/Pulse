@@ -167,6 +167,7 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 			FindingID:       proposal.FindingID,
 			InvestigationID: proposal.InvestigationID,
 			ProposalID:      proposal.ProposalID,
+			EvidenceIDs:     append([]string(nil), proposal.EvidenceIDs...),
 		},
 		PolicyFactors: policyFactors,
 	})

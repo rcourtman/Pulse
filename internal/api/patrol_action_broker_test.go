@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -231,7 +232,9 @@ func TestPatrolActionBrokerSubmitPlansThroughCanonicalLifecycle(t *testing.T) {
 	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
 	broker := NewPatrolActionBroker("default", h)
 
-	disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+	proposal := patrolTestProposal()
+	proposal.EvidenceIDs = []string{" evidence-2 ", "evidence-1", "evidence-1", ""}
+	disposition, err := broker.Submit(context.Background(), proposal)
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
@@ -263,7 +266,8 @@ func TestPatrolActionBrokerSubmitPlansThroughCanonicalLifecycle(t *testing.T) {
 		record.Origin.Surface != patrolActionOriginSurface ||
 		record.Origin.FindingID != "finding-1" ||
 		record.Origin.InvestigationID != "inv-1" ||
-		record.Origin.ProposalID != "prop-1" {
+		record.Origin.ProposalID != "prop-1" ||
+		fmt.Sprint(record.Origin.EvidenceIDs) != "[evidence-1 evidence-2]" {
 		t.Fatalf("audit origin = %#v", record.Origin)
 	}
 }

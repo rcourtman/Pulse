@@ -147,6 +147,13 @@ governed tool and verification boundaries. CLI authentication state must not be
 included in recovery exports, snapshots, or support bundles, and must not be
 interpreted as recovery readiness.
 
+Patrol investigation evidence copied by
+`internal/api/patrol_action_broker.go` into broker-owned action origin is
+correlation provenance, not storage or recovery proof. A tool-use evidence ID
+must not be reinterpreted as backup freshness, protection coverage, restore
+readiness, or verification truth; those claims continue to require their
+domain-owned typed evidence and deterministic verification paths.
+
 Unified Agent durable-operation-receipt metadata is likewise an internal
 monitoring and agent-lifecycle boundary. The exact current protocol may be a
 fail-closed prerequisite when unified resources derive the bounded

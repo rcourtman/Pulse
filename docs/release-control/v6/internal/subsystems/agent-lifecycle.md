@@ -938,6 +938,13 @@ must not be projected into the provider child process. Any future design that
 distributes subscription CLI state or authentication through an agent requires
 a separate agent-lifecycle contract change and verification.
 
+Patrol investigation evidence copied by
+`internal/api/patrol_action_broker.go` into an action's broker-owned origin is
+API/AI audit provenance only. Tool-use evidence IDs do not identify an agent,
+grant an agent scope, authorize a command channel, or replace live agent
+readiness and dispatch admission. Any agent-mediated action still crosses the
+existing lifecycle identity, authorization, and receipt boundaries.
+
 First-run security discovery under shared `internal/api/` is likewise an
 adjacent API/security boundary, not an agent-lifecycle discovery surface.
 Unauthenticated `/api/security/status` responses must stay on the public tier

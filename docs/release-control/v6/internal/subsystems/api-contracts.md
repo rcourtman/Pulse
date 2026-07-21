@@ -1955,7 +1955,8 @@ a new API state machine, queue contract, or verification-accounting field.
    `aicontracts.OrchestratorActionBroker` contract as a tenant-bound proposal
    adapter. It stamps the fixed `pulse_patrol` requestedBy actor
    and a broker-owned `ActionOrigin` (surface/finding/investigation/proposal
-   IDs) through the service's internal `PlanWithOptions`; the public plan
+   IDs plus the orchestrator-observed investigation evidence IDs) through the
+   service's internal `PlanWithOptions`; the public plan
    endpoint keeps calling plain `Plan`, so an HTTP request body can never
    claim a first-party origin. Enterprise still has no decision or execution
    method. After planning, core may auto-authorize only when the capability's
@@ -1990,7 +1991,12 @@ a new API state machine, queue contract, or verification-accounting field.
    can reconcile decisions and outcomes onto the correct tenant. A
    Patrol proposal must carry both its finding and investigation IDs
    before anything persists; identity-less proposals are refused so a
-   governed action can never lose deterministic correlation.
+   governed action can never lose deterministic correlation. Enterprise binds
+   proposal evidence from the bounded, non-terminal tool-use events it
+   observed for that run; the broker copies those IDs into `ActionOrigin`, and
+   the lifecycle normalizes and de-duplicates them before persistence. Model
+   output cannot mint this audit provenance, and the IDs grant no planning,
+   approval, or execution authority.
    Authority proof: `TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned` in
    `internal/api/contract_test.go`.
    The proposal enters that broker from the investigation-only
