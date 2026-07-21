@@ -69,7 +69,7 @@ jobs:
     with:
       version: ${{ inputs.version }}
       require_macos_signing: true
-      require_windows_signing: true
+      require_windows_signing: ${{ !contains(inputs.version, '-') }}
 
   dry-run:
     name: Preflight Release Checks (No Publish)

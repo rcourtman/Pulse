@@ -487,7 +487,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("build_release_candidate:", workflow)
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
-        self.assertIn("require_windows_signing: true", workflow)
+        self.assertIn("require_windows_signing: ${{ !contains(inputs.version, '-') }}", workflow)
         self.assertNotIn("if: ${{ github.event_name == 'workflow_dispatch' }}", workflow)
         self.assertIn("record_rc_to_ga_rehearsal.py --run-id ${{ github.run_id }}", workflow)
         self.assertIn("rc-to-ga-promotion-readiness-rehearsal-<record-date>.md", workflow)

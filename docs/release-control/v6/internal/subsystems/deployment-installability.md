@@ -376,9 +376,15 @@ TLS floor in the dynamic config.
    to per-entry archive streaming.
    A manually dispatched release rehearsal must activate the same signed
    candidate build whenever its required `version` input is non-empty and must
-   require the same macOS notarization and Windows Authenticode lanes as a
-   publish run. A cheap signing-configuration job must report every missing
-   repository secret before either platform runner is allocated.
+   apply the same channel-specific native-signing policy as a publish run.
+   macOS notarization remains mandatory for both prerelease and stable
+   candidates. Windows Authenticode remains mandatory for stable candidates;
+   prerelease candidates may retain checksum and detached-signature
+   verification without Authenticode while the release packet explicitly
+   discloses the unknown-publisher warning and stable promotion remains
+   blocked. A cheap signing-configuration job must report every missing secret
+   for the platforms required by that candidate before either platform runner
+   is allocated.
    macOS command-line agent notarization must fail closed unless
    `notarytool --wait --output-format json` reports `Accepted`, then verify the
    exact candidate bytes with strict `codesign`. Bare Mach-O command-line
