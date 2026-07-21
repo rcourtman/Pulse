@@ -147,14 +147,15 @@ func renderBrandedClientReport(t *testing.T, resourceID string, start, end time.
 
 func assertPDFContainsOnlyClient(t *testing.T, text, brand, resource string, forbidden []string) {
 	t.Helper()
-	if !strings.Contains(text, brand) {
+	normalizedText := strings.ToLower(text)
+	if !strings.Contains(normalizedText, strings.ToLower(brand)) {
 		t.Fatalf("report missing brand %q:\n%s", brand, text)
 	}
 	if !strings.Contains(text, resource) {
 		t.Fatalf("report missing resource %q:\n%s", resource, text)
 	}
 	for _, value := range forbidden {
-		if strings.Contains(text, value) {
+		if strings.Contains(normalizedText, strings.ToLower(value)) {
 			t.Fatalf("report included forbidden value %q:\n%s", value, text)
 		}
 	}
