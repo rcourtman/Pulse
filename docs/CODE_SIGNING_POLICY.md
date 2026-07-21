@@ -18,6 +18,16 @@ Until approval and production integration are complete, release notes must say
 when a Windows artifact is not Authenticode-signed. Detached checksums and Pulse
 release signatures remain mandatory and are not a substitute for Authenticode.
 
+The canonical CI integration uses SignPath's GitHub trusted-build-system
+action. GitHub Actions uploads the three unsigned Windows agent executables as
+one immutable workflow artifact, submits it to SignPath, waits for approval and
+completion, downloads the signed result, and verifies every file before
+candidate assembly. A non-secret evidence artifact records the SignPath request
+URL, source SHA, signer identity, and signed-file SHA-256 values.
+
+The repository-secret PFX path is an explicitly selected break-glass fallback.
+Normal stable publication and stable dry runs select `signpath` directly.
+
 ## Build and release controls
 
 - Release artifacts are built by GitHub Actions from an exact commit on the

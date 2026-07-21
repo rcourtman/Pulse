@@ -384,7 +384,11 @@ TLS floor in the dynamic config.
    discloses the unknown-publisher warning and stable promotion remains
    blocked. A cheap signing-configuration job must report every missing secret
    for the platforms required by that candidate before either platform runner
-   is allocated.
+   is allocated. Stable Windows signing must use SignPath's GitHub
+   trusted-build-system action by default, submit an immutable GitHub artifact
+   by id, verify every returned executable, and retain evidence binding the
+   request, source SHA, signer identity, and file digests. A repository-secret
+   PFX backend is an explicitly selected break-glass fallback only.
    macOS command-line agent notarization must fail closed unless
    `notarytool --wait --output-format json` reports `Accepted`, then verify the
    exact candidate bytes with strict `codesign`. Bare Mach-O command-line
@@ -1008,6 +1012,15 @@ TLS floor in the dynamic config.
    the actual trust-migration path is already shipped and exercised.
 
 ## Current State
+
+Stable and stable-dry-run callers now select SignPath as the canonical Windows
+Authenticode backend. The reusable builder fails fast on missing configuration,
+submits the GitHub-hosted unsigned artifact through the pinned official action,
+verifies all returned executables, and stores request/source/signer/digest
+evidence beside the candidate manifest. Release Dry Run now has a terminal
+verdict covering the signed candidate and no-mutation demo lane. The gate stays
+blocked until the external SignPath project is configured and one stable dry
+run passes for an exact `main` SHA.
 
 The provider MSP proof command validates its handoff target with the same
 host-local redirect contract as runtime token minting and exchange. Proof input

@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      windows_signing_backend:
+        description: 'Windows signing backend: signpath (canonical) or legacy-pfx (break-glass fallback)'
+        required: false
+        default: signpath
+        type: string
     outputs:
       artifact_name:
         description: 'Immutable release candidate artifact name'
@@ -24,6 +29,9 @@ on:
       manifest_artifact_name:
         description: 'Release candidate manifest artifact name'
         value: ${{ jobs.build.outputs.manifest_artifact_name }}
+      windows_signing_backend:
+        description: 'Windows signing backend used for the candidate'
+        value: ${{ jobs.sign-windows-agent.outputs.signing_backend }}
 
 permissions:
   contents: read
@@ -45,8 +53,15 @@ jobs:
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
           WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 }}
           WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT: ${{ vars.SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT }}
           REQUIRE_MACOS_SIGNING: ${{ inputs.require_macos_signing }}
           REQUIRE_WINDOWS_SIGNING: ${{ inputs.require_windows_signing }}
+          WINDOWS_SIGNING_BACKEND: ${{ inputs.windows_signing_backend }}
         run: |
           set -euo pipefail
           missing=0
@@ -62,10 +77,29 @@ jobs:
             )
           fi
           if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]; then
-            required+=(
-              WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64
-              WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD
-            )
+            case "$WINDOWS_SIGNING_BACKEND" in
+              signpath)
+                required+=(
+                  SIGNPATH_API_TOKEN
+                  SIGNPATH_ORGANIZATION_ID
+                  SIGNPATH_PROJECT_SLUG
+                  SIGNPATH_SIGNING_POLICY_SLUG
+                  SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+                  SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT
+                )
+                ;;
+              legacy-pfx)
+                required+=(
+                  WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64
+                  WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD
+                )
+                echo "::warning::Using the break-glass legacy PFX Windows signing backend."
+                ;;
+              *)
+                echo "::error::Unsupported Windows signing backend '${WINDOWS_SIGNING_BACKEND}'. Expected signpath or legacy-pfx."
+                missing=1
+                ;;
+            esac
           else
             echo "::notice::Windows Authenticode is not required for this candidate."
           fi
@@ -180,7 +214,12 @@ jobs:
     needs: signing-configuration
     if: ${{ inputs.require_windows_signing && needs.signing-configuration.result == 'success' }}
     runs-on: windows-2025
-    timeout-minutes: 25
+    timeout-minutes: 50
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      signing_backend: ${{ steps.evidence.outputs.signing_backend }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -191,45 +230,122 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build and sign agent binaries
+      - name: Build unsigned agent binaries
         shell: pwsh
         env:
-          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($name in @('WINDOWS_CERTIFICATE_PFX_BASE64', 'WINDOWS_CERTIFICATE_PASSWORD', 'PULSE_UPDATE_SIGNING_PUBLIC_KEY')) {
+          foreach ($name in @('PULSE_UPDATE_SIGNING_PUBLIC_KEY')) {
             if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
               throw "Missing required $name."
             }
           }
 
-          New-Item -ItemType Directory -Path native-agent-binaries -Force | Out-Null
-          $pfxPath = Join-Path $env:RUNNER_TEMP 'pulse-code-signing.pfx'
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
-          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false
-          if ($null -eq $certificate) { throw 'Failed to import Windows code-signing certificate.' }
-
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1 -ExpandProperty FullName
-          if ([string]::IsNullOrWhiteSpace($signtool)) { throw 'signtool.exe was not found.' }
-
+          New-Item -ItemType Directory -Path unsigned-native-agent-binaries -Force | Out-Null
           $ldflags = & bash ./scripts/release_ldflags.sh agent --version "v${{ inputs.version }}" --update-public-keys $env:PULSE_UPDATE_SIGNING_PUBLIC_KEY
           foreach ($arch in @('amd64', 'arm64', '386')) {
             $env:GOOS = 'windows'
             $env:GOARCH = $arch
             $env:CGO_ENABLED = '0'
-            $output = "native-agent-binaries/pulse-agent-windows-$arch.exe"
+            $output = "unsigned-native-agent-binaries/pulse-agent-windows-$arch.exe"
             go build -buildvcs=false -trimpath -ldflags="$ldflags" -o $output ./cmd/pulse-agent
             if ($LASTEXITCODE -ne 0) { throw "Go build failed for Windows $arch." }
-            & $signtool sign /sha1 $certificate.Thumbprint /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $output
-            if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for Windows $arch." }
-            & $signtool verify /pa /v $output
-            if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed for Windows $arch." }
           }
+
+      - name: Sign with legacy PFX fallback
+        if: ${{ inputs.windows_signing_backend == 'legacy-pfx' }}
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'pulse-code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false
+          if ($null -eq $certificate) { throw 'Failed to import Windows code-signing certificate.' }
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          foreach ($output in (Get-ChildItem unsigned-native-agent-binaries\*.exe)) {
+            & $signtool sign /sha1 $certificate.Thumbprint /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $output.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for $($output.Name)." }
+          }
+
+      - name: Upload unsigned SignPath input
+        if: ${{ inputs.windows_signing_backend == 'signpath' }}
+        id: upload-unsigned-windows
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-windows-agent-${{ github.sha }}-${{ inputs.version }}
+          path: unsigned-native-agent-binaries/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Submit SignPath Authenticode request
+        if: ${{ inputs.windows_signing_backend == 'signpath' }}
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 2400
+          output-artifact-directory: signed-native-agent-binaries
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+
+      - name: Verify Authenticode signatures and write evidence
+        id: evidence
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_BACKEND: ${{ inputs.windows_signing_backend }}
+          SIGNPATH_SIGNING_REQUEST_ID: ${{ steps.signpath.outputs.signing-request-id }}
+          SIGNPATH_SIGNING_REQUEST_URL: ${{ steps.signpath.outputs.signing-request-web-url }}
+          SIGNPATH_INPUT_ARTIFACT_ID: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT: ${{ vars.SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceDir = if ($env:WINDOWS_SIGNING_BACKEND -eq 'signpath') { 'signed-native-agent-binaries' } else { 'unsigned-native-agent-binaries' }
+          New-Item -ItemType Directory -Path native-agent-binaries -Force | Out-Null
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          $files = @()
+          foreach ($arch in @('amd64', 'arm64', '386')) {
+            $name = "pulse-agent-windows-$arch.exe"
+            $source = Join-Path $sourceDir $name
+            if (-not (Test-Path $source -PathType Leaf)) { throw "Signed output is missing $name." }
+            & $signtool verify /pa /v $source
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed for $name." }
+            $signature = Get-AuthenticodeSignature $source
+            if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) { throw "Invalid Authenticode status for $name: $($signature.Status)." }
+            if ($env:WINDOWS_SIGNING_BACKEND -eq 'signpath' -and $signature.SignerCertificate.Subject -ne $env:SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT) { throw "Unexpected Authenticode signer subject for ${name}: $($signature.SignerCertificate.Subject)." }
+            Copy-Item $source (Join-Path native-agent-binaries $name)
+            $files += [ordered]@{
+              name = $name
+              sha256 = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+              signerSubject = $signature.SignerCertificate.Subject
+              signerThumbprint = $signature.SignerCertificate.Thumbprint
+            }
+          }
+          $evidence = [ordered]@{
+            schemaVersion = 1
+            backend = $env:WINDOWS_SIGNING_BACKEND
+            version = '${{ inputs.version }}'
+            sourceSha = $env:GITHUB_SHA
+            workflowRunUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            signPathSigningRequestId = $env:SIGNPATH_SIGNING_REQUEST_ID
+            signPathSigningRequestUrl = $env:SIGNPATH_SIGNING_REQUEST_URL
+            githubInputArtifactId = $env:SIGNPATH_INPUT_ARTIFACT_ID
+            files = $files
+          }
+          $evidence | ConvertTo-Json -Depth 6 | Set-Content windows-signing-evidence.json -Encoding utf8NoBOM
+          "signing_backend=$env:WINDOWS_SIGNING_BACKEND" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload signed Windows binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -239,6 +355,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+
+      - name: Upload Windows signing evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-signing-evidence-${{ github.sha }}-${{ inputs.version }}
+          path: windows-signing-evidence.json
+          if-no-files-found: error
+          retention-days: 30
 
   build:
     name: Build and Validate Signed Candidate
@@ -319,6 +443,13 @@ jobs:
           name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries
 
+      - name: Download Windows signing evidence
+        if: ${{ inputs.require_windows_signing }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-signing-evidence-${{ github.sha }}-${{ inputs.version }}
+          path: release-candidate-manifest
+
       - name: Build signed release candidate
         run: ./scripts/build-release.sh "${{ inputs.version }}"
         env:
@@ -371,7 +502,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.identity.outputs.manifest_artifact_name }}
-          path: release-candidate-manifest/release-candidate.json
+          path: release-candidate-manifest/
           if-no-files-found: error
           retention-days: 1
           overwrite: true

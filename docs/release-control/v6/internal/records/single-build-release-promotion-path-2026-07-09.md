@@ -154,7 +154,32 @@ the following remain true:
 The reusable candidate workflow therefore separates the macOS platform-signing
 requirement from the Windows Authenticode requirement. `create-release.yml`
 requires Windows signing for stable versions and relaxes only that requirement
-for recognized prerelease versions. `release-dry-run.yml` continues to require
-both platforms so the full stable-promotion path remains rehearsed and the
-`single-build-release-promotion-path` release gate remains blocked for stable
-release readiness until the external signing path is proven.
+for recognized prerelease versions. `release-dry-run.yml` requires both
+platforms for stable-version rehearsals and applies the same bounded Windows
+exception to prerelease rehearsals. The `single-build-release-promotion-path`
+release gate remains blocked until the external stable signing path is proven.
+
+## Repository Advancement (2026-07-21)
+
+Stable publication and stable dry-run callers now select SignPath instead of
+assuming an exportable certificate PFX in GitHub. The reusable workflow uploads
+the exact-SHA unsigned Windows binaries, submits their artifact id through the
+pinned official SignPath v2 action, verifies all returned executables, and
+records the request, run, source SHA, signer identity, and file digests beside
+the immutable candidate manifest. `Release Dry Run` now has a terminal verdict
+covering candidate signing and no-mutation demo verification.
+
+The repository inventory still contains no `SIGNPATH_API_TOKEN` and no SignPath
+project-coordinate variables. The latest successful prerelease dry run remains
+valid only under the unsigned-Windows RC exception and does not clear stable
+readiness.
+
+## Exact Remaining External Action (2026-07-21)
+
+Complete the SignPath setup in
+`signpath-windows-authenticode-integration-packet-2026-07-21.md`, authorize its
+GitHub App for `rcourtman/Pulse`, add the named secret and variables, and
+approve one stable-version `Release Dry Run` request for the exact current
+`main` SHA. The signed candidate, release checks, no-mutation stable-demo lane,
+and Definitive Dry-Run Verdict must pass. Do not publish a stable release as
+part of this proof run.

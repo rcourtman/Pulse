@@ -742,8 +742,19 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 		`result.get('status') != 'Accepted'`,
 		`codesign --verify --deep --strict --verbose=2`,
 		`sign-windows-agent:`,
+		`windows_signing_backend:`,
+		`signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2`,
+		`github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}`,
+		`SIGNPATH_API_TOKEN`,
+		`SIGNPATH_ORGANIZATION_ID`,
+		`SIGNPATH_PROJECT_SLUG`,
+		`SIGNPATH_SIGNING_POLICY_SLUG`,
+		`SIGNPATH_ARTIFACT_CONFIGURATION_SLUG`,
+		`SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT`,
 		`signtool sign`,
 		`signtool verify /pa /v`,
+		`windows-signing-evidence.json`,
+		`signerThumbprint`,
 		`PULSE_AGENT_NATIVE_BINARIES_DIR:`,
 	)
 	candidateWorkflow, err := os.ReadFile(candidateWorkflowPath)
@@ -756,6 +767,12 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_macos_signing: true`,
 		`require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}`,
+		`windows_signing_backend: signpath`,
+	)
+	assertFileContainsAll(t, repoFile(".github", "workflows", "release-dry-run.yml"),
+		`Definitive Dry-Run Verdict`,
+		`require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success`,
+		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "build-release.sh"),
 		`PULSE_AGENT_NATIVE_BINARIES_DIR`,

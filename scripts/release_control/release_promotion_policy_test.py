@@ -488,6 +488,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn("require_windows_signing: ${{ !contains(inputs.version, '-') }}", workflow)
+        self.assertIn("windows_signing_backend: signpath", workflow)
+        self.assertIn("Definitive Dry-Run Verdict", workflow)
+        self.assertIn('require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success', workflow)
+        self.assertIn('require_result "stable demo no-mutation verification" "$DEMO_RESULT" success', workflow)
         self.assertNotIn("if: ${{ github.event_name == 'workflow_dispatch' }}", workflow)
         self.assertIn("record_rc_to_ga_rehearsal.py --run-id ${{ github.run_id }}", workflow)
         self.assertIn("rc-to-ga-promotion-readiness-rehearsal-<record-date>.md", workflow)
@@ -648,8 +652,21 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Verify Native Signing Configuration", candidate_workflow)
         self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}", content)
+        self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
         self.assertIn("inputs.require_windows_signing", candidate_workflow)
+        self.assertIn("signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2", candidate_workflow)
+        self.assertIn("github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}", candidate_workflow)
+        self.assertIn("windows-signing-evidence.json", candidate_workflow)
+        for signpath_setting in (
+            "SIGNPATH_API_TOKEN",
+            "SIGNPATH_ORGANIZATION_ID",
+            "SIGNPATH_PROJECT_SLUG",
+            "SIGNPATH_SIGNING_POLICY_SLUG",
+            "SIGNPATH_ARTIFACT_CONFIGURATION_SLUG",
+            "SIGNPATH_EXPECTED_CERTIFICATE_SUBJECT",
+        ):
+            self.assertIn(signpath_setting, candidate_workflow)
         for signing_secret in (
             "APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64",
             "APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD",

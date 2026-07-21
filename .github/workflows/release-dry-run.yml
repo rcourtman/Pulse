@@ -70,6 +70,7 @@ jobs:
       version: ${{ inputs.version }}
       require_macos_signing: true
       require_windows_signing: ${{ !contains(inputs.version, '-') }}
+      windows_signing_backend: signpath
 
   dry-run:
     name: Preflight Release Checks (No Publish)
@@ -409,3 +410,57 @@ jobs:
       tag: latest
       target: stable
       verify_only: true
+
+  release_dry_run_verdict:
+    name: Definitive Dry-Run Verdict
+    needs:
+      - build_release_candidate
+      - dry-run
+      - demo_path_preflight
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce exact-SHA rehearsal outcomes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          VERSION_INPUT: ${{ inputs.version }}
+          CANDIDATE_RESULT: ${{ needs.build_release_candidate.result }}
+          PREFLIGHT_RESULT: ${{ needs.dry-run.result }}
+          DEMO_RESULT: ${{ needs.demo_path_preflight.result }}
+          WINDOWS_SIGNING_BACKEND: ${{ needs.build_release_candidate.outputs.windows_signing_backend }}
+        run: |
+          set -euo pipefail
+          failed=0
+          require_result() {
+            local label="$1"
+            local actual="$2"
+            local expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${label} ended as ${actual}; expected ${expected}."
+              failed=1
+            fi
+          }
+
+          require_result "release preflight" "$PREFLIGHT_RESULT" success
+          require_result "stable demo no-mutation verification" "$DEMO_RESULT" success
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "${VERSION_INPUT:-}" ]; then
+            require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success
+          elif [ "$CANDIDATE_RESULT" != "skipped" ]; then
+            echo "::error::Scheduled watchdog candidate result was ${CANDIDATE_RESULT}; expected skipped."
+            failed=1
+          fi
+
+          {
+            echo "## Definitive dry-run verdict"
+            echo
+            echo "- Source SHA: \`${GITHUB_SHA}\`"
+            echo "- Version: \`${VERSION_INPUT:-scheduled}\`"
+            echo "- Release preflight: \`${PREFLIGHT_RESULT}\`"
+            echo "- Stable demo verification: \`${DEMO_RESULT}\`"
+            echo "- Signed candidate: \`${CANDIDATE_RESULT}\`"
+            if [ -n "${WINDOWS_SIGNING_BACKEND:-}" ]; then
+              echo "- Windows signing backend: \`${WINDOWS_SIGNING_BACKEND}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$failed"

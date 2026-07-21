@@ -223,6 +223,7 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       require_macos_signing: true
       require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}
+      windows_signing_backend: signpath
 
   # Frontend checks run in parallel with backend tests
   frontend_checks:
