@@ -5,7 +5,7 @@
 - Result: `local reconciliation hardened; external transition gate remains blocked`
 - Evidence posture: `test-proof` plus `production-observed` read-only checks
 - Reconciliation implementation commit: `pulse-pro:4fc4820`
-- Current operator-packet commit: `pulse-pro:bea4295`
+- Current operator-packet commit: `pulse-pro:d18ebb3`
 
 ## Safety Boundary
 
@@ -83,7 +83,7 @@ tests. `bash -n scripts/license_ssh.sh` and `git diff --check` also passed.
 > evidence directory and assumes a Checkout-created customer can use an
 > existing Stripe test clock. The reviewed executable packet is
 > `pulse-pro:docs/self-hosted-commercial-transition-gate-operator-packet.md` at
-> commit `bea4295`; use only that version or a later reviewed replacement.
+> commit `d18ebb3`; use only that version or a later reviewed replacement.
 
 Run this only against a new isolated rehearsal license server, Relay server,
 Pulse installation, and Stripe **test-mode** account. It intentionally refuses
@@ -298,7 +298,25 @@ Commit `pulse-pro:bea4295` adds `set -euo pipefail` to the operator session and
 an exit/signal cleanup trap for the private Event-envelope directory, so a
 failed pipeline cannot be mistaken for passing evidence and an interrupted
 replay does not strand the raw envelopes. The nine focused packet/replay tests
-pass at the current packet commit.
+pass at that commit.
+
+Commit `pulse-pro:d18ebb3` makes the separately approved production floor
+phase operator-executable without broadening its authority. It requires the
+approval-record digest, exact proof license/subscription/Relay instance and
+target transition, and an `rk_live_` restricted read-only Stripe key; validates
+all identifiers before interpolating remote read-only queries; retains the
+manage code, quote token, email and any payment-pending secrets only in shell
+memory; and records only filtered Stripe, license, feed-sequence, Relay
+registry, online-state and journal evidence. The post-transition loop is
+bounded to 75 seconds and passes only after the stale instance is offline and
+its persisted reconnect credential is empty. Assertions require exactly one
+license-version advance, Stripe/license price agreement, exactly one matching
+`bump_license_version` event after the pre-proof feed sequence, the old Relay
+grant version before and after disconnect, and the expected online-to-offline
+change. All seven license-database evidence queries and the Relay registry
+query execute against freshly initialized real schemas; both complete Go
+suites, all 387 script tests, and the ten focused packet tests pass. No
+production request or mutation was made while preparing this packet.
 
 ## Residual And Approval Boundary
 
