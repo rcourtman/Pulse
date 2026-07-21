@@ -1041,7 +1041,7 @@ describe('Workloads performance contract', () => {
       expect(workloadsGuestMetadataStateSource).toContain('GuestMetadataAPI.getAllMetadata()');
       expect(workloadsGuestMetadataStateSource).toContain("eventBus.on('org_switched'");
       expect(workloadsGuestMetadataStateSource).toContain(
-        "window.addEventListener('pulse:metadata-changed'",
+        'window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT',
       );
       expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadUrlSync');
       expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');

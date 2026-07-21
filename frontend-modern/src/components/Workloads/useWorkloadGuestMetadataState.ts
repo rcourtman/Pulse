@@ -5,6 +5,10 @@ import { getOrgID } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { normalizeOrgScope } from '@/utils/orgScope';
+import {
+  RESOURCE_METADATA_CHANGED_EVENT,
+  type ResourceMetadataChangedDetail,
+} from '@/utils/resourceMetadataEvents';
 import { eventBus } from '@/stores/events';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
@@ -296,43 +300,29 @@ export function useWorkloadGuestMetadataState() {
     void refreshGuestMetadata();
 
     const handleMetadataChanged = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      logger.debug('[Workloads] Metadata changed event received', customEvent.detail);
+      const detail = (event as CustomEvent<ResourceMetadataChangedDetail>).detail;
+      logger.debug('[Workloads] Metadata changed event received', detail);
 
-      if (customEvent.detail?.payload) {
-        let { guestId, url } = customEvent.detail.payload;
-        if (guestId) {
-          if (guestId.includes(':')) {
-            const parts = guestId.split(':');
-            if (parts.length === 3) {
-              const [instance, _node, vmid] = parts;
-              guestId = `${instance}-${vmid}`;
-              logger.debug('[Workloads] Normalized optimistic guestId', {
-                original: customEvent.detail.payload.guestId,
-                normalized: guestId,
-              });
-            }
-          }
+      // Agent (host machine) metadata never keys workload rows; only guest and
+      // docker app-container URLs surface in the workloads table.
+      if (detail?.metadataKind === 'agent') return;
 
-          logger.debug('[Workloads] Applying optimistic metadata update', { guestId, url });
-          handleCustomUrlUpdate(guestId, url || '');
-          return;
-        }
+      if (detail?.metadataId) {
+        handleCustomUrlUpdate(detail.metadataId, detail.customUrl ?? '');
+        return;
       }
 
-      logger.debug('Metadata changed event received, refreshing...');
       void refreshGuestMetadata();
     };
 
-    logger.debug('[Workloads] Adding pulse:metadata-changed listener');
-    window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
+    window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleMetadataChanged);
     const unsubscribeOrgSwitched = eventBus.on('org_switched', (nextOrgID) => {
       setOrgScope(normalizeOrgScope(nextOrgID));
       void refreshGuestMetadata();
     });
 
     onCleanup(() => {
-      window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
+      window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleMetadataChanged);
       unsubscribeOrgSwitched();
     });
   });
