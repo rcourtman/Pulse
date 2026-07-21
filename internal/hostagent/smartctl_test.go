@@ -67,7 +67,26 @@ func TestDetectDiskType(t *testing.T) {
 			expected: "nvme",
 		},
 		{
-			name: "Empty defaults to sata",
+			name: "SCSI protocol with SAS transport descriptor",
+			data: func() smartctlJSON {
+				var data smartctlJSON
+				data.Device.Protocol = "SCSI"
+				data.SCSITransportProtocol.Name = "SAS (SPL-4)"
+				return data
+			}(),
+			expected: "sas",
+		},
+		{
+			name: "SCSI protocol without transport descriptor stays scsi",
+			data: func() smartctlJSON {
+				var data smartctlJSON
+				data.Device.Protocol = "SCSI"
+				return data
+			}(),
+			expected: "scsi",
+		},
+		{
+			name: "Empty leaves type undecided for refinement",
 			data: smartctlJSON{
 				Device: struct {
 					Name     string `json:"name"`
@@ -75,7 +94,7 @@ func TestDetectDiskType(t *testing.T) {
 					Protocol string `json:"protocol"`
 				}{},
 			},
-			expected: "sata",
+			expected: "",
 		},
 	}
 
@@ -477,6 +496,71 @@ func TestParseSMARTOutputFallsBackToOriginalTextTemperature(t *testing.T) {
 	}
 	if result.Model != "WDC WD40EFRX" || result.Serial != "WD-789" || result.Health != "PASSED" {
 		t.Fatalf("expected model/serial/health to be preserved, got %#v", result)
+	}
+}
+
+func TestParseSMARTOutputHandlesSASDrive(t *testing.T) {
+	payload := []byte(`{
+		"device": {"name": "/dev/sda", "type": "scsi", "protocol": "SCSI"},
+		"scsi_transport_protocol": {"name": "SAS (SPL-4)"},
+		"model_name": "SEAGATE ST18000NM019J",
+		"serial_number": "ZR5DQ4N30000W317UKPL",
+		"user_capacity": {"bytes": 18000207937536},
+		"smart_status": {"passed": true},
+		"temperature": {"current": 34},
+		"power_on_time": {"hours": 16951},
+		"scsi_grown_defect_list": 0
+	}`)
+
+	result, err := parseSMARTOutput(payload, smartctlTarget{Path: "/dev/sda"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Type != "sas" {
+		t.Fatalf("expected type sas, got %#v", result)
+	}
+	if result.Health != "PASSED" {
+		t.Fatalf("expected health PASSED, got %#v", result)
+	}
+	if result.Serial != "ZR5DQ4N30000W317UKPL" {
+		t.Fatalf("expected smartctl serial, got %#v", result)
+	}
+	if result.Temperature != 34 {
+		t.Fatalf("expected temperature 34, got %#v", result)
+	}
+	if result.Attributes == nil {
+		t.Fatalf("expected SCSI attributes, got %#v", result)
+	}
+	if result.Attributes.PowerOnHours == nil || *result.Attributes.PowerOnHours != 16951 {
+		t.Fatalf("expected power-on hours 16951, got %#v", result.Attributes)
+	}
+	if result.Attributes.ReallocatedSectors == nil || *result.Attributes.ReallocatedSectors != 0 {
+		t.Fatalf("expected grown defect count 0, got %#v", result.Attributes)
+	}
+}
+
+func TestParseSMARTOutputUsesTextTransportForSCSIProtocol(t *testing.T) {
+	payload := []byte(`{
+		"device": {"name": "/dev/sda", "type": "scsi", "protocol": "SCSI"},
+		"model_name": "SEAGATE ST18000NM019J",
+		"serial_number": "ZR5DQ4N30000W317UKPL",
+		"smart_status": {"passed": true},
+		"temperature": {"current": 34},
+		"smartctl": {"output": ["Transport protocol:   SAS (SPL-4)", "SMART Health Status: OK"]}
+	}`)
+
+	result, err := parseSMARTOutput(payload, smartctlTarget{Path: "/dev/sda"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Type != "sas" {
+		t.Fatalf("expected text transport to refine scsi to sas, got %#v", result)
 	}
 }
 

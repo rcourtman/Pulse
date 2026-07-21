@@ -174,7 +174,15 @@ type smartctlJSON struct {
 	SmartStatus       *struct {
 		Passed bool `json:"passed"`
 	} `json:"smart_status,omitempty"`
-	Temperature struct {
+	SCSITransportProtocol struct {
+		Name string `json:"name"`
+	} `json:"scsi_transport_protocol"`
+	PowerOnTime *struct {
+		Hours int64 `json:"hours"`
+	} `json:"power_on_time"`
+	SCSIGrownDefectList                  *int64 `json:"scsi_grown_defect_list"`
+	SCSIPercentageUsedEnduranceIndicator *int   `json:"scsi_percentage_used_endurance_indicator"`
+	Temperature                          struct {
 		Current int `json:"current"`
 	} `json:"temperature"`
 	ATASmartAttributes struct {
@@ -313,6 +321,9 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 			continue
 		}
 		refineLinuxBlockDeviceIdentity(smart, target)
+		if smart.Type == "" {
+			smart.Type = "sata"
+		}
 		// The refine step can rename the device (nvme0 -> nvme0n1), so re-apply
 		// exclusions against the canonical name the user actually sees.
 		if matchesDeviceExclude(smart.Device, "/dev/"+smart.Device, diskExclude) {
@@ -862,6 +873,13 @@ func refineLinuxBlockDeviceIdentity(smart *DiskSMART, target smartctlTarget) {
 	smart.Device = block
 	smart.Controller, smart.Target = linuxBlockDeviceTopology(block)
 	ensureControllerCollectionStatus(smart, "sysfs")
+	// smartctl labels SAS members with the generic SCSI protocol when the
+	// transport descriptor is absent; sysfs knows the real link type.
+	if smart.Type == "" || smart.Type == "scsi" {
+		if evidence := linuxBlockDeviceTransportEvidence(block); evidence != "" {
+			smart.Type = evidence
+		}
+	}
 	if size := blockDeviceSizeBytes(block); size > 0 {
 		smart.SizeBytes = size
 	}
@@ -921,7 +939,9 @@ func isSCSITargetAddress(value string) bool {
 	return true
 }
 
-func linuxBlockDeviceTransport(block string, target smartctlTarget) string {
+// linuxBlockDeviceTransportEvidence returns the transport type only when
+// sysfs states it explicitly, and empty when the kernel supplies no evidence.
+func linuxBlockDeviceTransportEvidence(block string) string {
 	for _, candidate := range []string{
 		readTrimmedFile(filepath.Join("/sys/block", block, "device", "protocol")),
 		readTrimmedFile(filepath.Join("/sys/block", block, "device", "transport")),
@@ -936,6 +956,13 @@ func linuxBlockDeviceTransport(block string, target smartctlTarget) string {
 		case strings.Contains(normalized, "usb"):
 			return "usb"
 		}
+	}
+	return ""
+}
+
+func linuxBlockDeviceTransport(block string, target smartctlTarget) string {
+	if evidence := linuxBlockDeviceTransportEvidence(block); evidence != "" {
+		return evidence
 	}
 	if strings.HasPrefix(block, "nvme") {
 		return "nvme"
@@ -1616,7 +1643,7 @@ func applySMARTTextFallback(result *DiskSMART, fallback smartTextFallback) {
 	if result.Serial == "" && fallback.Serial != "" {
 		result.Serial = fallback.Serial
 	}
-	if result.Type == "" && fallback.Type != "" {
+	if (result.Type == "" || result.Type == "scsi") && fallback.Type != "" {
 		result.Type = fallback.Type
 	}
 	if result.Health == "" && fallback.Health != "" {
@@ -1731,6 +1758,24 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 			us := nvmeLog.UnsafeShutdowns
 			attrs.UnsafeShutdowns = &us
 		}
+	} else if diskType == "sas" || diskType == "scsi" {
+		// SCSI drives report no ATA attribute table; their counters live in
+		// dedicated log pages smartctl surfaces as top-level JSON fields.
+		if data.PowerOnTime != nil {
+			hasData = true
+			poh := data.PowerOnTime.Hours
+			attrs.PowerOnHours = &poh
+		}
+		if data.SCSIGrownDefectList != nil {
+			hasData = true
+			defects := *data.SCSIGrownDefectList
+			attrs.ReallocatedSectors = &defects
+		}
+		if data.SCSIPercentageUsedEnduranceIndicator != nil {
+			hasData = true
+			used := *data.SCSIPercentageUsedEnduranceIndicator
+			attrs.PercentageUsed = &used
+		}
 	} else {
 		for _, attr := range data.ATASmartAttributes.Table {
 			hasData = true
@@ -1789,21 +1834,40 @@ func parseRawValue(rawString string, rawValue int64) int64 {
 }
 
 // detectDiskType determines the disk transport type from smartctl output.
+// SAS drives report device protocol "SCSI"; their SAS transport is only
+// visible in the SCSI transport descriptor. An empty return means smartctl
+// gave no transport evidence, so the text-output and sysfs refinements decide
+// before the legacy sata default applies.
 func detectDiskType(data smartctlJSON) string {
 	protocol := strings.ToLower(data.Device.Protocol)
+	transport := strings.ToLower(data.SCSITransportProtocol.Name)
 	switch {
 	case strings.Contains(protocol, "nvme"):
 		return "nvme"
 	case strings.Contains(protocol, "sas"):
 		return "sas"
-	case strings.Contains(protocol, "ata"), strings.Contains(protocol, "sata"):
+	case strings.Contains(protocol, "scsi"):
+		if strings.Contains(transport, "sas") {
+			return "sas"
+		}
+		return "scsi"
+	case strings.Contains(protocol, "ata"):
 		return "sata"
 	default:
 		devType := strings.ToLower(data.Device.Type)
-		if strings.Contains(devType, "nvme") {
+		switch {
+		case strings.Contains(devType, "nvme"):
 			return "nvme"
+		case strings.Contains(devType, "scsi"):
+			if strings.Contains(transport, "sas") {
+				return "sas"
+			}
+			return "scsi"
+		case strings.HasPrefix(devType, "sat"):
+			return "sata"
+		default:
+			return ""
 		}
-		return "sata"
 	}
 }
 

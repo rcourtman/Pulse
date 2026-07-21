@@ -685,6 +685,12 @@ func shouldPromoteHostAgentDiskType(existing, incoming string) bool {
 	if existing == "" || existing == "unknown" || existing == "scsi" {
 		return true
 	}
+	// Proxmox reports coarse form-factor types (hdd/ssd) or misreads SAS
+	// members as sata; the agent's smartctl transport evidence is
+	// authoritative for the link type.
+	if incoming == "sas" && (existing == "sata" || existing == "hdd" || existing == "ssd") {
+		return true
+	}
 	return false
 }
 
