@@ -9140,19 +9140,6 @@
         "kind": "release-gate",
         "id": "single-build-release-promotion-path"
       }
-    },
-    {
-      "id": "pulse-mobile-compat-lane-followup-mobile-post-rc-hardening",
-      "agent_id": "pulse-mobile-compat",
-      "summary": "Enforce exact-revision Pulse and Pulse Mobile API, scope, push, and deep-link compatibility before release",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-22T12:08:06Z",
-      "heartbeat_at": "2026-07-22T12:08:06Z",
-      "expires_at": "2026-07-22T20:08:06Z",
-      "work_item": {
-        "kind": "lane-followup",
-        "id": "mobile-post-rc-hardening"
-      }
     }
   ],
   "open_decisions": [],
