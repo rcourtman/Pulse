@@ -263,6 +263,26 @@ func shouldSkipInitialFullPatrol(runHistory []PatrolRunRecord, now time.Time) bo
 	return false
 }
 
+// LastSuccessfulFullPatrolAt returns the completion time of the most recent
+// full patrol run that finished without errors, or the zero time when none
+// exists. The manual-run cadence gate uses this rather than lastFullPatrol so
+// a failed run does not consume the Community hourly slot.
+func (p *PatrolService) LastSuccessfulFullPatrolAt() time.Time {
+	if p == nil || p.runHistoryStore == nil {
+		return time.Time{}
+	}
+	var last time.Time
+	for _, run := range p.runHistoryStore.GetAll() {
+		if run.CompletedAt.IsZero() || !isSuccessfulFullPatrolRun(run) {
+			continue
+		}
+		if run.CompletedAt.After(last) {
+			last = run.CompletedAt
+		}
+	}
+	return last
+}
+
 func patrolRecencyFromHistory(runHistory []PatrolRunRecord) (time.Time, time.Time) {
 	var lastActivity time.Time
 	var lastFullPatrol time.Time

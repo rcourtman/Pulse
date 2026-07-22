@@ -5925,10 +5925,13 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 	}
 
 	// Cadence cap: Community tier is limited to 1 patrol run per hour.
-	// Patrol itself is free (ai_patrol), but higher cadence is gated behind Pro/Cloud.
+	// Patrol itself is free (ai_patrol), but higher cadence is gated behind
+	// Pro/Cloud. Only successful runs consume the hourly slot: a failed run
+	// delivered no coverage, and counting it turns every configuration or
+	// provider problem into an hour-long retest loop.
 	if !aiService.HasLicenseFeature(featureAIAutoFixValue) {
-		if last := patrol.GetStatus().LastPatrolAt; last != nil {
-			if since := time.Since(*last); since < 1*time.Hour {
+		if last := patrol.LastSuccessfulFullPatrolAt(); !last.IsZero() {
+			if since := time.Since(last); since < 1*time.Hour {
 				remaining := (1*time.Hour - since).Round(time.Minute)
 				writeErrorResponse(w, http.StatusTooManyRequests, "patrol_rate_limited",
 					fmt.Sprintf("Community tier is limited to 1 patrol run per hour. Try again in %s.", remaining), nil)

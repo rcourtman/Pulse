@@ -1062,6 +1062,37 @@ func TestHandleForcePatrol_CommunityTierIgnoresRecentScopedActivityForFullPatrol
 	}
 }
 
+func TestHandleForcePatrol_CommunityTierFailedRunDoesNotConsumeHourlySlot(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	seedReadyAnthropicPatrolRuntime(t, handler)
+	handler.defaultAIService.SetLicenseChecker(communityLicenseChecker{})
+
+	// A recent full run that FAILED must not consume the Community hourly
+	// slot: retesting a broken provider or configuration would otherwise cost
+	// an hour per attempt (discussion #1571).
+	failedHistory := ai.NewPatrolRunHistoryStore(ai.MaxPatrolRunHistory)
+	failedHistory.Add(ai.PatrolRunRecord{
+		ID:          "run-recent-failure",
+		Type:        "patrol",
+		CompletedAt: time.Now().Add(-10 * time.Minute),
+		Status:      "error",
+		ErrorCount:  1,
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", failedHistory)
+	setUnexportedField(t, patrol, "lastFullPatrol", time.Now().Add(-10*time.Minute))
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleForcePatrol(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "patrol_rate_limited") {
+		t.Fatalf("expected failed run to leave the hourly slot free, got %s", rec.Body.String())
+	}
+}
+
 func TestBuildManualScopedPatrolScope(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1136,8 +1167,16 @@ func TestHandleForcePatrol_ScopedRequestBypassesFullRunCadenceGate(t *testing.T)
 	}})
 	handler.defaultAIService.SetLicenseChecker(communityLicenseChecker{})
 
-	// A recent full patrol puts Community tier inside the 1/hour full-run gate,
-	// so a fleet-wide request would be rate-limited.
+	// A recent successful full patrol puts Community tier inside the 1/hour
+	// full-run gate, so a fleet-wide request would be rate-limited.
+	recentHistory := ai.NewPatrolRunHistoryStore(ai.MaxPatrolRunHistory)
+	recentHistory.Add(ai.PatrolRunRecord{
+		ID:          "run-recent-success",
+		Type:        "patrol",
+		CompletedAt: time.Now().Add(-10 * time.Minute),
+		Status:      "healthy",
+	})
+	setUnexportedField(t, patrol, "runHistoryStore", recentHistory)
 	setUnexportedField(t, patrol, "lastFullPatrol", time.Now().Add(-10*time.Minute))
 
 	// Scoped request: must succeed despite the full-run cadence window.
