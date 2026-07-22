@@ -338,7 +338,34 @@ export const useAppRuntimeState = () => {
     aiChatStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true);
   };
 
-  const beginAuthenticatedRuntime = async () => {
+  const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {
+    const stateResponse = await apiFetch('/api/state', {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        Accept: 'application/json',
+      },
+    });
+
+    if (stateResponse.status === 401) {
+      setBootstrapState(null);
+      setNeedsAuth(true);
+      return false;
+    }
+
+    const protectedState = await stateResponse
+      .clone()
+      .json()
+      .then(normalizeBootstrapState)
+      .catch(() => null);
+    setBootstrapState(protectedState);
+    return true;
+  };
+
+  const beginAuthenticatedRuntime = async (): Promise<boolean> => {
+    if (!(await loadAuthenticatedBootstrapState())) {
+      return false;
+    }
+
     setNeedsAuth(false);
     await loadOrganizations();
     setWsStore(acquireWsStore());
@@ -348,6 +375,7 @@ export const useAppRuntimeState = () => {
     if (!presentationPolicyHidesUpgradePrompts()) {
       void loadCommercialPosture();
     }
+    return true;
   };
 
   const checkBackendHealth = async () => {
@@ -685,7 +713,10 @@ export const useAppRuntimeState = () => {
           username: securityData.proxyAuthUsername,
           logoutURL: securityData.proxyAuthLogoutURL,
         });
-        await beginAuthenticatedRuntime();
+        if (!(await beginAuthenticatedRuntime())) {
+          setIsLoading(false);
+          return;
+        }
         void syncVersionInfoFromUpdateStore();
         setIsLoading(false);
         return;
@@ -700,7 +731,10 @@ export const useAppRuntimeState = () => {
           username: ssoDisplayName,
           logoutURL: securityData.ssoLogoutURL,
         });
-        await beginAuthenticatedRuntime();
+        if (!(await beginAuthenticatedRuntime())) {
+          setIsLoading(false);
+          return;
+        }
         void syncVersionInfoFromUpdateStore();
         setIsLoading(false);
         return;
@@ -725,25 +759,7 @@ export const useAppRuntimeState = () => {
         return;
       }
 
-      const stateResponse = await apiFetch('/api/state', {
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          Accept: 'application/json',
-        },
-      });
-
-      if (stateResponse.status === 401) {
-        setBootstrapState(null);
-        setNeedsAuth(true);
-      } else {
-        const protectedState = await stateResponse
-          .clone()
-          .json()
-          .then(normalizeBootstrapState)
-          .catch(() => null);
-        setBootstrapState(protectedState);
-        await beginAuthenticatedRuntime();
-      }
+      await beginAuthenticatedRuntime();
     } catch (error) {
       logger.error('Auth check error', error);
       try {

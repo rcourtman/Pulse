@@ -251,6 +251,13 @@ avoids a cloud-control-plane report data path across clients.
    describing relay transport mechanics alone.
 2. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 3. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
+   Every recognized authenticated browser session -- local, proxy-auth, or
+   SSO -- must enter the runtime through the same protected `/api/state`
+   bootstrap before organization hydration and WebSocket startup. Proxy-auth
+   and SSO security-status shortcuts may supply visible identity and logout
+   context, but they must not bypass that canonical server-owned resource
+   snapshot or leave platform navigation dependent on the first WebSocket
+   delivery.
    The app runtime may use `ssoSessionDisplayName` from security status for
    visible signed-in chrome, but hosted/commercial organization context must
    remain bound to the stable authenticated principal carried separately in

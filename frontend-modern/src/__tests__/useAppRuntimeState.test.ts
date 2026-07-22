@@ -41,6 +41,19 @@ const makeWebSocketState = (overrides: Partial<State> = {}): State => ({
   ...overrides,
 });
 
+const makeTrueNASResource = (id = 'truenas-1'): Resource => ({
+  id,
+  name: id,
+  displayName: id,
+  type: 'agent',
+  platformId: id,
+  platformType: 'truenas',
+  sourceType: 'api',
+  sources: ['truenas'],
+  status: 'online',
+  lastSeen: 1_700_000_000_000,
+});
+
 describe('useAppRuntimeState', () => {
   let useAppRuntimeState: UseAppRuntimeStateModule['useAppRuntimeState'];
   let apiFetchMock: ReturnType<typeof vi.fn>;
@@ -333,8 +346,9 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
-  it('uses the SSO display name for app chrome without replacing the stable principal', async () => {
+  it('uses the SSO display name while bootstrapping TrueNAS state before websocket data', async () => {
     const principal = 'sso:oidc:test-oidc:stable-principal';
+    const bootstrapResource = makeTrueNASResource('truenas-sso');
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/security/status') {
         return new Response(
@@ -349,7 +363,13 @@ describe('useAppRuntimeState', () => {
         );
       }
       if (url === '/api/state') {
-        return new Response('{}', { status: 200 });
+        return new Response(
+          JSON.stringify({
+            resources: [bootstrapResource],
+            lastUpdate: 1_700_000_000_000,
+          }),
+          { status: 200 },
+        );
       }
       if (url === '/api/health') {
         return new Response('{}', { status: 200 });
@@ -364,11 +384,94 @@ describe('useAppRuntimeState', () => {
         username: 'alice@example.com',
         logoutURL: '/api/oidc/test-oidc/logout',
       });
+      expect(hookState.state().resources).toEqual([bootstrapResource]);
     });
 
     expect(hookState.securityStatus()?.ssoSessionUsername).toBe(principal);
     expect(hookState.hasAuth()).toBe(true);
     expect(hookState.needsAuth()).toBe(false);
+    expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
+    expect(hookState.runtimeStateResolved()).toBe(true);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+
+    dispose();
+  });
+
+  it('bootstraps proxy-auth TrueNAS state before websocket data', async () => {
+    const bootstrapResource = makeTrueNASResource('truenas-proxy');
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            hasProxyAuth: true,
+            proxyAuthUsername: 'proxy-operator',
+            proxyAuthLogoutURL: '/proxy/logout',
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/state') {
+        return new Response(
+          JSON.stringify({
+            resources: [bootstrapResource],
+            lastUpdate: 1_700_000_000_000,
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.state().resources).toEqual([bootstrapResource]);
+    });
+
+    expect(hookState.proxyAuthInfo()).toEqual({
+      username: 'proxy-operator',
+      logoutURL: '/proxy/logout',
+    });
+    expect(hookState.needsAuth()).toBe(false);
+    expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
+    expect(hookState.runtimeStateResolved()).toBe(true);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
+
+    dispose();
+  });
+
+  it('does not start the proxy-auth runtime when protected state rejects the session', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            hasProxyAuth: true,
+            proxyAuthUsername: 'proxy-operator',
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/state') {
+        return new Response('{}', { status: 401 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.isLoading()).toBe(false);
+    });
+
+    expect(hookState.needsAuth()).toBe(true);
+    expect(hookState.enhancedStore()).toBeNull();
+    expect(orgsListMock).not.toHaveBeenCalled();
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
 
     dispose();
   });
@@ -412,6 +515,7 @@ describe('useAppRuntimeState', () => {
     });
     expect(hookState.runtimeStateResolved()).toBe(true);
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
 
     dispose();
   });
@@ -447,6 +551,9 @@ describe('useAppRuntimeState', () => {
           { status: 200 },
         );
       }
+      if (url === '/api/state') {
+        return new Response('{}', { status: 200 });
+      }
       if (url === '/api/health') {
         return new Response('{}', { status: 200 });
       }
@@ -463,7 +570,7 @@ describe('useAppRuntimeState', () => {
     expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
     expect(hookState.runtimeStateResolved()).toBe(true);
     expect(hookState.state().resources).toEqual([retainedResource]);
-    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(false);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(1);
 
     dispose();
   });

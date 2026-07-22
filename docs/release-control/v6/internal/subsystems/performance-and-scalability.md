@@ -158,6 +158,12 @@ admission records a stable refusal without invoking executor or network code.
     or retained server-owned runtime state. Platform navigation may consume
     that signal without adding a second state fetch, websocket subscription,
     route preload, or browser-local cache read on the authenticated hot path.
+    Local, proxy-auth, and SSO sessions must share exactly one protected
+    `/api/state` hydration after authentication is established. That single
+    request must resolve the cold app shell before organization hydration and
+    WebSocket startup, so a delayed or blocked first stream snapshot cannot
+    hide server-owned platform scopes; auth-mode branches must not fork
+    additional state probes or perform the same hydration twice.
 17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 Governed action decisions preserve SQLite and MemoryStore parity through one

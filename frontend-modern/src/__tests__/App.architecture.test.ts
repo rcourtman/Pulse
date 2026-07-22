@@ -466,7 +466,14 @@ describe('App architecture', () => {
       'const connectionStatus = createMemo<AppConnectionStatus>(() => {',
     );
     expect(appRuntimeStateSource).toContain('const showOrgSwitcher = createMemo(() => {');
-    expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
+    expect(appRuntimeStateSource).toContain(
+      'const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {',
+    );
+    expect(appRuntimeStateSource).toContain(
+      'const beginAuthenticatedRuntime = async (): Promise<boolean> => {',
+    );
+    expect(appRuntimeStateSource).toContain('if (!(await loadAuthenticatedBootstrapState())) {');
+    expect(appRuntimeStateSource.match(/apiFetch\('\/api\/state'/g)).toHaveLength(1);
     expect(appRuntimeStateSource).toContain(
       'const [backendHealthy, setBackendHealthy] = createSignal(false);',
     );
