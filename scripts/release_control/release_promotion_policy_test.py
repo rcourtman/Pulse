@@ -489,6 +489,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn("require_windows_signing: ${{ !contains(inputs.version, '-') }}", workflow)
         self.assertIn("windows_signing_backend: signpath", workflow)
+        self.assertRegex(
+            workflow,
+            r"(?ms)^  build_release_candidate:\n.*?^    permissions:\n"
+            r"      actions: read\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
+        )
+        self.assertRegex(
+            release_workflow,
+            r"(?ms)^  build_release_candidate:\n.*?^    permissions:\n"
+            r"      actions: read\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
+        )
         self.assertIn("Definitive Dry-Run Verdict", workflow)
         self.assertIn('require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success', workflow)
         self.assertIn('require_result "stable demo no-mutation verification" "$DEMO_RESULT" success', workflow)

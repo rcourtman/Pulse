@@ -1031,6 +1031,10 @@ evidence beside the candidate manifest. Release Dry Run now has a terminal
 verdict covering the signed candidate and no-mutation demo lane. The gate stays
 blocked until the external SignPath project is configured and one stable dry
 run passes for an exact `main` SHA.
+Every caller of the reusable release-candidate builder must delegate
+`actions: read` alongside `contents: read`; the Windows signing job reads the
+exact uploaded artifact through the GitHub Actions API, and GitHub validates
+that nested permission even when a prerelease skips Authenticode signing.
 
 The provider MSP proof command validates its handoff target with the same
 host-local redirect contract as runtime token minting and exchange. Proof input

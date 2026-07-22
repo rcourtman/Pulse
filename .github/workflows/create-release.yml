@@ -216,6 +216,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     permissions:
+      actions: read
       contents: read
     uses: ./.github/workflows/build-release-candidate.yml
     secrets: inherit
