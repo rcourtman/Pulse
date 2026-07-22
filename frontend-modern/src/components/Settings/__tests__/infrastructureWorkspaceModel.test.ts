@@ -29,11 +29,18 @@ describe('infrastructureWorkspaceModel', () => {
   });
 
   it('builds the canonical Agent Doctor route and accepts legacy update deep links', () => {
-    expect(buildInfrastructureAgentDoctorPath()).toBe('/settings/infrastructure?agentDoctor=1');
-    expect(buildInfrastructureAgentUpdatesPath()).toBe('/settings/infrastructure?agentDoctor=1');
+    expect(buildInfrastructureAgentDoctorPath()).toBe('/settings/infrastructure/agent-doctor');
+    expect(buildInfrastructureAgentUpdatesPath()).toBe('/settings/infrastructure/agent-doctor');
     expect(buildInfrastructureAgentUpdatesPath(['agent:agent-delly', 'agent-pi'])).toBe(
-      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-delly&agents=agent%3Aagent-pi',
+      '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly&agents=agent%3Aagent-pi',
     );
+    expect(deriveAgentUpdatesFromLocation('/settings/infrastructure/agent-doctor', '')).toBe(true);
+    expect(
+      deriveAgentUpdateScopeFromLocation(
+        '/settings/infrastructure/agent-doctor',
+        '?agents=agent%3Aagent-pi&agents=agent-delly',
+      ),
+    ).toEqual(['agent:agent-delly', 'agent:agent-pi']);
     expect(deriveAgentUpdatesFromLocation('/settings/infrastructure', '?agentDoctor=1')).toBe(true);
     expect(deriveAgentUpdatesFromLocation('/settings/infrastructure', '?agentUpdates=1')).toBe(
       true,

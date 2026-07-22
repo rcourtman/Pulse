@@ -142,7 +142,7 @@ import availabilityTargetSlotSource from '@/components/Settings/ConnectionEditor
 import trueNASCredentialSlotSource from '@/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
 import vmwareCredentialSlotSource from '@/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
 import copyCommandBlockSource from '@/components/Settings/CopyCommandBlock.tsx?raw';
-import infrastructureAgentUpdatesDialogSource from '@/components/Settings/InfrastructureAgentUpdatesDialog.tsx?raw';
+import infrastructureAgentDoctorPageSource from '@/components/Settings/InfrastructureAgentDoctorPage.tsx?raw';
 import infrastructureDiscoverySettingsDialogSource from '@/components/Settings/InfrastructureDiscoverySettingsDialog.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import suggestProfileModalSource from '@/components/Settings/SuggestProfileModal.tsx?raw';
@@ -3124,7 +3124,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/CopyCommandBlock.tsx',
       'src/components/Settings/DataHandlingPanel.tsx',
       'src/components/Settings/GeneralSettingsPanel.tsx',
-      'src/components/Settings/InfrastructureAgentUpdatesDialog.tsx',
+      'src/components/Settings/InfrastructureAgentDoctorPage.tsx',
       'src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx',
       'src/components/Settings/InfrastructureInstallerSection.tsx',
       'src/components/Settings/InfrastructureSourceManager.tsx',
@@ -4293,11 +4293,11 @@ describe('shared primitive guardrails', () => {
     );
     expect(infrastructureInstallerSectionSource).not.toContain('absolute right-2 top-2');
     expect(infrastructureInstallerSectionSource).not.toContain('bg-surface-hover p-2');
-    expect(infrastructureAgentUpdatesDialogSource).toContain('@/components/shared/Button');
-    expect(infrastructureAgentUpdatesDialogSource).toContain('CommandCopyButton');
-    expect(infrastructureAgentUpdatesDialogSource).not.toContain('absolute right-2 top-2');
-    expect(infrastructureAgentUpdatesDialogSource).not.toContain('bg-surface-hover p-2');
-    expect(infrastructureAgentUpdatesDialogSource).not.toContain(
+    expect(infrastructureAgentDoctorPageSource).toContain('@/components/shared/Button');
+    expect(infrastructureAgentDoctorPageSource).toContain('CommandCopyButton');
+    expect(infrastructureAgentDoctorPageSource).not.toContain('absolute right-2 top-2');
+    expect(infrastructureAgentDoctorPageSource).not.toContain('bg-surface-hover p-2');
+    expect(infrastructureAgentDoctorPageSource).not.toContain(
       'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
     );
     expect(infrastructureDiscoverySettingsDialogSource).toContain('@/components/shared/Button');

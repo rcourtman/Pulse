@@ -4,7 +4,13 @@ import {
   sessionPresentationPolicyResolved,
 } from '@/stores/sessionPresentationPolicy';
 import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
-import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
+import {
+  buildInfrastructureAgentDoctorPath,
+  buildInfrastructureWorkspacePath,
+  deriveAddStepFromLocation,
+  deriveAgentDoctorScopeFromLocation,
+  isLegacyAgentDoctorLocation,
+} from './infrastructureWorkspaceModel';
 import {
   EXTERNAL_AGENT_SETUP_PATH,
   SETTINGS_API_ACCESS_PATH,
@@ -114,6 +120,24 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
             replace: true,
             scroll: false,
           });
+          return;
+        }
+
+        // Pre-route Agent Doctor links (?agentDoctor=1 / ?agentUpdates=1 on the
+        // workspace path) canonicalize onto the routed page, preserving scope.
+        // An add-flow query wins if both are somehow present, matching the
+        // workspace's own precedence.
+        if (
+          isLegacyAgentDoctorLocation(path, search) &&
+          deriveAddStepFromLocation(path, search) === null
+        ) {
+          navigate(
+            buildInfrastructureAgentDoctorPath(deriveAgentDoctorScopeFromLocation(path, search)),
+            {
+              replace: true,
+              scroll: false,
+            },
+          );
           return;
         }
 

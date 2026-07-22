@@ -16,6 +16,7 @@ import Shield from 'lucide-solid/icons/shield';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import XCircle from 'lucide-solid/icons/x-circle';
 import { Button, ButtonLink } from '@/components/shared/Button';
+import { buildInfrastructureAgentDoctorPath } from './infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
@@ -386,11 +387,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 </div>
               </Show>
               <div class="mt-3 border-t border-border-subtle pt-3">
-                <ButtonLink
-                  href="/settings/infrastructure?agentDoctor=1"
-                  variant="outline"
-                  size="sm"
-                >
+                <ButtonLink href={buildInfrastructureAgentDoctorPath()} variant="outline" size="sm">
                   Open Agent Doctor
                 </ButtonLink>
               </div>

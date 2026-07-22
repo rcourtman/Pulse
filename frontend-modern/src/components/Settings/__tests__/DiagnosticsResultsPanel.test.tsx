@@ -240,7 +240,7 @@ describe('DiagnosticsResultsPanel', () => {
     expect(screen.getByText('Agent-backed Docker / Podman monitoring')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Agent Doctor' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentDoctor=1',
+      '/settings/infrastructure/agent-doctor',
     );
     expect(screen.queryByText('Container Runtime Agents')).not.toBeInTheDocument();
   });

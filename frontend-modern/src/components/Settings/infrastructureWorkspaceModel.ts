@@ -13,9 +13,13 @@ export type InfrastructureAddStep =
 export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
 
 const INFRASTRUCTURE_BASE_PATH = '/settings/infrastructure';
+// Agent Doctor is a routed page, not a dialog: platform pages deep-link into
+// it and its content (per-agent triage cards, update commands) is
+// destination-shaped, so it owns a subroute of the infrastructure workspace.
+export const INFRASTRUCTURE_AGENT_DOCTOR_PATH = `${INFRASTRUCTURE_BASE_PATH}/agent-doctor`;
 export const INFRASTRUCTURE_ADD_QUERY_PARAM = 'add';
+// Legacy deep links from before Agent Doctor had its own route remain valid.
 export const INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM = 'agentDoctor';
-// Legacy deep links from platform update notices and bookmarks remain valid.
 export const INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM = 'agentUpdates';
 export const INFRASTRUCTURE_AGENT_UPDATE_IDS_QUERY_PARAM = 'agents';
 
@@ -55,14 +59,14 @@ export function buildInfrastructureAgentDoctorPath(
   agentIds: readonly (string | null | undefined)[] = [],
 ): string {
   const params = new URLSearchParams();
-  params.set(INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM, '1');
   const normalizedAgentIds = Array.from(
     new Set(agentIds.map(normalizeAgentUpdateConnectionID).filter(Boolean) as string[]),
   ).sort((left, right) => left.localeCompare(right));
   for (const agentId of normalizedAgentIds) {
     params.append(INFRASTRUCTURE_AGENT_UPDATE_IDS_QUERY_PARAM, agentId);
   }
-  return `${INFRASTRUCTURE_BASE_PATH}?${params.toString()}`;
+  const query = params.toString();
+  return query ? `${INFRASTRUCTURE_AGENT_DOCTOR_PATH}?${query}` : INFRASTRUCTURE_AGENT_DOCTOR_PATH;
 }
 
 /** @deprecated Use buildInfrastructureAgentDoctorPath. */
@@ -90,7 +94,7 @@ export function deriveAddStepFromLocation(
   return deriveAddStepFromSearch(search);
 }
 
-export function deriveAgentDoctorFromLocation(pathname: string, search: string): boolean {
+export function isLegacyAgentDoctorLocation(pathname: string, search: string): boolean {
   if (pathname !== INFRASTRUCTURE_BASE_PATH && pathname !== `${INFRASTRUCTURE_BASE_PATH}/`) {
     return false;
   }
@@ -100,6 +104,16 @@ export function deriveAgentDoctorFromLocation(pathname: string, search: string):
     params.get(INFRASTRUCTURE_AGENT_DOCTOR_QUERY_PARAM) === '1' ||
     params.get(INFRASTRUCTURE_AGENT_UPDATES_QUERY_PARAM) === '1'
   );
+}
+
+export function deriveAgentDoctorFromLocation(pathname: string, search: string): boolean {
+  if (
+    pathname === INFRASTRUCTURE_AGENT_DOCTOR_PATH ||
+    pathname === `${INFRASTRUCTURE_AGENT_DOCTOR_PATH}/`
+  ) {
+    return true;
+  }
+  return isLegacyAgentDoctorLocation(pathname, search);
 }
 
 export function deriveAgentDoctorScopeFromLocation(pathname: string, search: string): string[] {

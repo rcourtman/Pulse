@@ -54,7 +54,7 @@ that binary, not separate customer-facing agent products.
 22. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`
     22a. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
 23. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
-    23a. `frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx`
+    23a. `frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx`
     23b. `frontend-modern/src/components/Settings/useAgentFleetDiagnostics.ts`
 24. `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 25. `frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx`

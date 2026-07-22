@@ -956,7 +956,7 @@
         { "path": "src/components/Settings/CopyCommandBlock.tsx" },
         { "path": "src/components/Settings/DataHandlingPanel.tsx" },
         { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
-        { "path": "src/components/Settings/InfrastructureAgentUpdatesDialog.tsx" },
+        { "path": "src/components/Settings/InfrastructureAgentDoctorPage.tsx" },
         { "path": "src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx" },
         { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
         { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },

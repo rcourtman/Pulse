@@ -159,7 +159,7 @@ describe('ProxmoxPageSurface contract', () => {
     );
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-delly',
+      '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-delly',
     );
   });
 

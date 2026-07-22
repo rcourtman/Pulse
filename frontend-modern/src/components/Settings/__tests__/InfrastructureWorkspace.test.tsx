@@ -423,8 +423,7 @@ describe('InfrastructureWorkspace', () => {
 
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.getByText('Agent Doctor')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Agent Doctor')).toBeInTheDocument());
     expect(screen.getByText('zeus')).toBeInTheDocument();
     expect(screen.queryByText('other')).not.toBeInTheDocument();
     expect(screen.getByText('5.1.34')).toBeInTheDocument();
@@ -433,11 +432,26 @@ describe('InfrastructureWorkspace', () => {
       screen.getByText(/upgrade agent:agent-zeus --enable-proxmox --proxmox-type pve/),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close Agent Doctor' }));
-    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure', {
-      replace: true,
-      scroll: false,
-    });
+    // The page replaces the workspace content and links back to Infrastructure.
+    expect(screen.queryByText('Connected systems')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Infrastructure' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
+  });
+
+  it('renders the Agent Doctor page on its routed path', async () => {
+    routeState.pathname = '/settings/infrastructure/agent-doctor';
+    routeState.search = '';
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('Agent Doctor')).toBeInTheDocument());
+    expect(screen.queryByText('Connected systems')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Infrastructure' })).toHaveAttribute(
+      'href',
+      '/settings/infrastructure',
+    );
   });
 
   it('does not invent scoped update commands when the backend publishes no agent target', async () => {
@@ -488,12 +502,11 @@ describe('InfrastructureWorkspace', () => {
 
     renderWorkspace();
 
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('zeus')).toBeInTheDocument();
-    expect(within(dialog).getByText('Reported agent')).toBeInTheDocument();
-    // With no published target there is no "Supported target" cell to guess at.
-    expect(within(dialog).queryByText('Supported target')).not.toBeInTheDocument();
-    expect(within(dialog).queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Agent Doctor')).toBeInTheDocument());
+    expect(screen.getByText('zeus')).toBeInTheDocument();
+    expect(screen.getByText('5.1.34')).toBeInTheDocument();
+    // With no published target there is no target version or command to guess at.
+    expect(screen.queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
   });
 
   it('keeps source groups in the catalog order instead of count order', async () => {

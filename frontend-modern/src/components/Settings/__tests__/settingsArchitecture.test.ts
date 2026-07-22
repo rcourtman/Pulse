@@ -307,6 +307,20 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps Agent Doctor route-backed under the infrastructure workspace', () => {
+    expect(settingsNavigationModelSource).toContain(
+      'normalizedPath !== INFRASTRUCTURE_AGENT_DOCTOR_PATH',
+    );
+    expect(settingsNavigationModelSource).toContain(
+      'canonicalPath === INFRASTRUCTURE_AGENT_DOCTOR_PATH',
+    );
+    expect(settingsNavigationModelSource).toContain('INFRASTRUCTURE_AGENT_DOCTOR_PATH,');
+    expect(settingsNavigationHookSource).toContain('isLegacyAgentDoctorLocation(path, search)');
+    expect(settingsNavigationHookSource).toContain(
+      'buildInfrastructureAgentDoctorPath(deriveAgentDoctorScopeFromLocation(path, search))',
+    );
+  });
+
   it('keeps Pulse server updates separate from Agent Doctor lifecycle triage', () => {
     const updatesNavBlock = settingsNavCatalogSource.match(
       /id: 'system-updates',[\s\S]*?id: 'system-recovery',/,

@@ -5,6 +5,7 @@ import type { PlatformType } from '@/types/resource';
 import {
   deriveAddStepFromSearch,
   INFRASTRUCTURE_ADD_QUERY_PARAM,
+  INFRASTRUCTURE_AGENT_DOCTOR_PATH,
 } from './infrastructureWorkspaceModel';
 import {
   AVAILABILITY_ADD_QUERY_PARAM,
@@ -176,7 +177,10 @@ export function isRetiredSettingsCompatibilityPath(path: string): boolean {
     normalizedPath.startsWith(`${RETIRED_SETTINGS_INTEGRATIONS_API_PREFIX}/`) ||
     normalizedPath === RETIRED_SETTINGS_SYSTEM_PRO_PREFIX ||
     normalizedPath.startsWith(`${RETIRED_SETTINGS_SYSTEM_PRO_PREFIX}/`) ||
-    normalizedPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`)
+    // Infrastructure subpaths are retired v5-era deep links, except Agent
+    // Doctor, which is a live routed page under the infrastructure workspace.
+    (normalizedPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`) &&
+      normalizedPath !== INFRASTRUCTURE_AGENT_DOCTOR_PATH)
   );
 }
 
@@ -223,7 +227,10 @@ export function deriveTabFromPath(path: string): SettingsTab {
   const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
 
   if (canonicalPath === '/settings') return DEFAULT_SETTINGS_TAB;
-  if (canonicalPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
+  if (
+    canonicalPath === INFRASTRUCTURE_SYSTEMS_PREFIX ||
+    canonicalPath === INFRASTRUCTURE_AGENT_DOCTOR_PATH
+  ) {
     return 'infrastructure-systems';
   }
   if (canonicalPath.startsWith(MONITORING_AVAILABILITY_PREFIX)) {
@@ -433,6 +440,7 @@ export function settingsTabPath(tab: SettingsTab): string {
 
 const ROUTEABLE_SETTINGS_PATHS = new Set<string>([
   settingsTabPath('infrastructure-systems'),
+  INFRASTRUCTURE_AGENT_DOCTOR_PATH,
   settingsTabPath('monitoring-availability'),
   settingsTabPath('system-general'),
   settingsTabPath('system-network'),

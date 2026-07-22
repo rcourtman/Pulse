@@ -18,7 +18,7 @@ import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';
-import { InfrastructureAgentUpdatesDialog } from './InfrastructureAgentUpdatesDialog';
+import { InfrastructureAgentDoctorPage } from './InfrastructureAgentDoctorPage';
 import {
   InfrastructureInstallerSection,
   type InfrastructureInstallerFocus,
@@ -270,10 +270,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setSelectedDiscoveredSource(null);
     setSelectedProbeCandidate(null);
     navigateToWorkspace(Boolean(routeStep()));
-  };
-
-  const closeAgentDoctor = () => {
-    navigateToWorkspace(Boolean(showAgentDoctor()));
   };
 
   const closeEditFlow = () => {
@@ -901,198 +897,201 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const isAgentDialog = () => activeAddType() === 'agent' || editingConnection()?.type === 'agent';
 
   return (
-    <div class="space-y-6">
-      <InfrastructureSourceManager
-        rows={rows}
-        discoveredNodes={visibleDiscoveredNodes}
-        discoveryEnabled={props.discoveryEnabled()}
-        discoveryScanStatus={props.discoveryScanStatus}
-        readOnly={readOnly()}
-        onAddSource={
-          readOnly()
-            ? undefined
-            : (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))
-        }
-        onAddSourceStep={readOnly() ? undefined : (step) => openAddFlow(step as ManagedAddTypeStep)}
-        onAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}
-        onRunDiscovery={
-          readOnly()
-            ? undefined
-            : () => {
-                void props.triggerDiscoveryScan();
-              }
-        }
-        onOpenDiscoverySettings={readOnly() ? undefined : () => setShowDiscoverySettings(true)}
-        onOpenConnection={readOnly() ? undefined : (row) => setEditingRowSource(row)}
-        onOpenAgentDoctor={
-          readOnly()
-            ? undefined
-            : (agentIds = []) =>
-                navigate(buildInfrastructureAgentDoctorPath(agentIds), { scroll: false })
-        }
-        onReviewDiscoveredSource={
-          readOnly() ? undefined : (server) => reviewDiscoveredSource(server)
-        }
-      />
-
-      <InfrastructureDiscoverySettingsDialog
-        isOpen={showDiscoverySettings()}
-        onClose={() => setShowDiscoverySettings(false)}
-        discoveryEnabled={props.discoveryEnabled}
-        discoveryMode={props.discoveryMode}
-        discoverySubnetDraft={props.discoverySubnetDraft}
-        discoverySubnetError={props.discoverySubnetError}
-        savingDiscoverySettings={props.savingDiscoverySettings}
-        envOverrides={props.envOverrides}
-        handleDiscoveryEnabledChange={props.handleDiscoveryEnabledChange}
-        handleDiscoveryModeChange={props.handleDiscoveryModeChange}
-        setDiscoveryMode={props.setDiscoveryMode}
-        setDiscoverySubnetDraft={props.setDiscoverySubnetDraft}
-        setDiscoverySubnetError={props.setDiscoverySubnetError}
-        setLastCustomSubnet={props.setLastCustomSubnet}
-        commitDiscoverySubnet={props.commitDiscoverySubnet}
-        parseSubnetList={props.parseSubnetList}
-        normalizeSubnetList={props.normalizeSubnetList}
-        isValidCIDR={props.isValidCIDR}
-        currentDraftSubnetValue={props.currentDraftSubnetValue}
-        discoverySubnetInputRef={props.discoverySubnetInputRef}
-      />
-
-      <Show when={showAgentDoctor()}>
-        <InfrastructureAgentUpdatesDialog
-          isOpen={true}
+    <Show
+      when={!showAgentDoctor()}
+      fallback={
+        <InfrastructureAgentDoctorPage
           targets={agentDoctorTargets()}
           diagnosticsLoading={agentDiagnostics.loading()}
           diagnosticsError={agentDiagnostics.error()}
           onRetryDiagnostics={() => void agentDiagnostics.reload()}
-          onClose={closeAgentDoctor}
         />
-      </Show>
+      }
+    >
+      <div class="space-y-6">
+        <InfrastructureSourceManager
+          rows={rows}
+          discoveredNodes={visibleDiscoveredNodes}
+          discoveryEnabled={props.discoveryEnabled()}
+          discoveryScanStatus={props.discoveryScanStatus}
+          readOnly={readOnly()}
+          onAddSource={
+            readOnly()
+              ? undefined
+              : (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))
+          }
+          onAddSourceStep={
+            readOnly() ? undefined : (step) => openAddFlow(step as ManagedAddTypeStep)
+          }
+          onAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}
+          onRunDiscovery={
+            readOnly()
+              ? undefined
+              : () => {
+                  void props.triggerDiscoveryScan();
+                }
+          }
+          onOpenDiscoverySettings={readOnly() ? undefined : () => setShowDiscoverySettings(true)}
+          onOpenConnection={readOnly() ? undefined : (row) => setEditingRowSource(row)}
+          onOpenAgentDoctor={
+            readOnly()
+              ? undefined
+              : (agentIds = []) =>
+                  navigate(buildInfrastructureAgentDoctorPath(agentIds), { scroll: false })
+          }
+          onReviewDiscoveredSource={
+            readOnly() ? undefined : (server) => reviewDiscoveredSource(server)
+          }
+        />
 
-      <Show when={routeStep() !== null}>
-        <Dialog
-          isOpen={true}
-          onClose={closeAddFlow}
-          ariaLabel={addDialogTitle()}
-          panelClass={isAgentDialog() ? 'max-w-6xl' : 'max-w-5xl'}
-        >
-          <div class="flex h-full min-h-0 flex-col">
-            <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
-              <div class="space-y-1">
-                <h2 class="text-base font-semibold text-base-content">{addDialogTitle()}</h2>
-                <p class="text-sm text-muted">{addDialogDescription()}</p>
+        <InfrastructureDiscoverySettingsDialog
+          isOpen={showDiscoverySettings()}
+          onClose={() => setShowDiscoverySettings(false)}
+          discoveryEnabled={props.discoveryEnabled}
+          discoveryMode={props.discoveryMode}
+          discoverySubnetDraft={props.discoverySubnetDraft}
+          discoverySubnetError={props.discoverySubnetError}
+          savingDiscoverySettings={props.savingDiscoverySettings}
+          envOverrides={props.envOverrides}
+          handleDiscoveryEnabledChange={props.handleDiscoveryEnabledChange}
+          handleDiscoveryModeChange={props.handleDiscoveryModeChange}
+          setDiscoveryMode={props.setDiscoveryMode}
+          setDiscoverySubnetDraft={props.setDiscoverySubnetDraft}
+          setDiscoverySubnetError={props.setDiscoverySubnetError}
+          setLastCustomSubnet={props.setLastCustomSubnet}
+          commitDiscoverySubnet={props.commitDiscoverySubnet}
+          parseSubnetList={props.parseSubnetList}
+          normalizeSubnetList={props.normalizeSubnetList}
+          isValidCIDR={props.isValidCIDR}
+          currentDraftSubnetValue={props.currentDraftSubnetValue}
+          discoverySubnetInputRef={props.discoverySubnetInputRef}
+        />
+
+        <Show when={routeStep() !== null}>
+          <Dialog
+            isOpen={true}
+            onClose={closeAddFlow}
+            ariaLabel={addDialogTitle()}
+            panelClass={isAgentDialog() ? 'max-w-6xl' : 'max-w-5xl'}
+          >
+            <div class="flex h-full min-h-0 flex-col">
+              <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+                <div class="space-y-1">
+                  <h2 class="text-base font-semibold text-base-content">{addDialogTitle()}</h2>
+                  <p class="text-sm text-muted">{addDialogDescription()}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="iconMd"
+                  onClick={closeAddFlow}
+                  aria-label="Close add infrastructure dialog"
+                >
+                  <X class="h-4 w-4" />
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="iconMd"
-                onClick={closeAddFlow}
-                aria-label="Close add infrastructure dialog"
+
+              <div class="min-h-0 flex-1 overflow-y-auto">
+                <Switch>
+                  <Match when={routeStep() === 'pick'}>
+                    <InfrastructureSourcePicker
+                      onSelectStep={(step) => openAddFlow(step as ManagedAddTypeStep)}
+                      onDetectApiPlatform={() => openAddFlow('detect')}
+                    />
+                  </Match>
+
+                  <Match when={routeStep() === 'detect'}>
+                    <ConnectionEditor
+                      mode="add"
+                      onBackToCatalog={() => openAddFlow('pick')}
+                      onSelectAgentRoute={() => openAddFlow('linux-host')}
+                      onSelectCandidate={openAddFlowFromProbe}
+                      onClose={closeAddFlow}
+                      onSaved={handleAddSaved}
+                      renderCredentialSlot={({ type, candidate, onCancel, onSaved }) =>
+                        renderConnectionSlot({ mode: 'add', type, candidate, onCancel, onSaved })
+                      }
+                    />
+                  </Match>
+
+                  <Match when={Boolean(activeAddType())}>
+                    <ConnectionEditor
+                      mode="add"
+                      initialType={activeAddType() ?? undefined}
+                      initialCandidate={selectedProbeCandidate()}
+                      showSlotHeader={false}
+                      onBackToCatalog={() => openAddFlow('pick')}
+                      onClose={closeAddFlow}
+                      onSaved={handleAddSaved}
+                      renderCredentialSlot={({ type, candidate, onCancel, onSaved }) =>
+                        renderConnectionSlot({ mode: 'add', type, candidate, onCancel, onSaved })
+                      }
+                    />
+                  </Match>
+                </Switch>
+              </div>
+            </div>
+          </Dialog>
+        </Show>
+
+        <Show when={editingConnection()}>
+          {(connectionAccessor) => {
+            const connection = connectionAccessor();
+            return (
+              <Dialog
+                isOpen={true}
+                onClose={closeEditFlow}
+                ariaLabel={editDialogTitle()}
+                panelClass={connection.type === 'agent' ? 'max-w-5xl' : 'max-w-5xl'}
               >
-                <X class="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div class="min-h-0 flex-1 overflow-y-auto">
-              <Switch>
-                <Match when={routeStep() === 'pick'}>
-                  <InfrastructureSourcePicker
-                    onSelectStep={(step) => openAddFlow(step as ManagedAddTypeStep)}
-                    onDetectApiPlatform={() => openAddFlow('detect')}
-                  />
-                </Match>
-
-                <Match when={routeStep() === 'detect'}>
-                  <ConnectionEditor
-                    mode="add"
-                    onBackToCatalog={() => openAddFlow('pick')}
-                    onSelectAgentRoute={() => openAddFlow('linux-host')}
-                    onSelectCandidate={openAddFlowFromProbe}
-                    onClose={closeAddFlow}
-                    onSaved={handleAddSaved}
-                    renderCredentialSlot={({ type, candidate, onCancel, onSaved }) =>
-                      renderConnectionSlot({ mode: 'add', type, candidate, onCancel, onSaved })
-                    }
-                  />
-                </Match>
-
-                <Match when={Boolean(activeAddType())}>
-                  <ConnectionEditor
-                    mode="add"
-                    initialType={activeAddType() ?? undefined}
-                    initialCandidate={selectedProbeCandidate()}
-                    showSlotHeader={false}
-                    onBackToCatalog={() => openAddFlow('pick')}
-                    onClose={closeAddFlow}
-                    onSaved={handleAddSaved}
-                    renderCredentialSlot={({ type, candidate, onCancel, onSaved }) =>
-                      renderConnectionSlot({ mode: 'add', type, candidate, onCancel, onSaved })
-                    }
-                  />
-                </Match>
-              </Switch>
-            </div>
-          </div>
-        </Dialog>
-      </Show>
-
-      <Show when={editingConnection()}>
-        {(connectionAccessor) => {
-          const connection = connectionAccessor();
-          return (
-            <Dialog
-              isOpen={true}
-              onClose={closeEditFlow}
-              ariaLabel={editDialogTitle()}
-              panelClass={connection.type === 'agent' ? 'max-w-5xl' : 'max-w-5xl'}
-            >
-              <div class="flex h-full min-h-0 flex-col">
-                <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
-                  <div class="space-y-1">
-                    <h2 class="text-base font-semibold text-base-content">{editDialogTitle()}</h2>
-                    <p class="text-sm text-muted">{editDialogDescription()}</p>
+                <div class="flex h-full min-h-0 flex-col">
+                  <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+                    <div class="space-y-1">
+                      <h2 class="text-base font-semibold text-base-content">{editDialogTitle()}</h2>
+                      <p class="text-sm text-muted">{editDialogDescription()}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="iconMd"
+                      onClick={closeEditFlow}
+                      aria-label="Close edit infrastructure dialog"
+                    >
+                      <X class="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="iconMd"
-                    onClick={closeEditFlow}
-                    aria-label="Close edit infrastructure dialog"
-                  >
-                    <X class="h-4 w-4" />
-                  </Button>
-                </div>
 
-                <div class="min-h-0 flex-1 overflow-y-auto">
-                  <Show
-                    when={connection.type === 'agent'}
-                    fallback={
-                      <div class="space-y-4">
-                        <ConnectionEditor
-                          mode="edit"
-                          initialType={connection.type}
-                          showSlotHeader={false}
-                          onClose={closeEditFlow}
-                          onSaved={handleEditSaved}
-                          renderCredentialSlot={({ type, onCancel, onSaved }) =>
-                            renderConnectionSlot({ mode: 'edit', type, onCancel, onSaved })
-                          }
-                        />
-                        <Show when={attachedAgentConnections().length > 0}>
-                          {renderAttachedAgentAugmentations(attachedAgentConnections())}
-                        </Show>
-                      </div>
-                    }
-                  >
-                    {renderAgentConnectionDetails(connection)}
-                  </Show>
+                  <div class="min-h-0 flex-1 overflow-y-auto">
+                    <Show
+                      when={connection.type === 'agent'}
+                      fallback={
+                        <div class="space-y-4">
+                          <ConnectionEditor
+                            mode="edit"
+                            initialType={connection.type}
+                            showSlotHeader={false}
+                            onClose={closeEditFlow}
+                            onSaved={handleEditSaved}
+                            renderCredentialSlot={({ type, onCancel, onSaved }) =>
+                              renderConnectionSlot({ mode: 'edit', type, onCancel, onSaved })
+                            }
+                          />
+                          <Show when={attachedAgentConnections().length > 0}>
+                            {renderAttachedAgentAugmentations(attachedAgentConnections())}
+                          </Show>
+                        </div>
+                      }
+                    >
+                      {renderAgentConnectionDetails(connection)}
+                    </Show>
+                  </div>
                 </div>
-              </div>
-            </Dialog>
-          );
-        }}
-      </Show>
-    </div>
+              </Dialog>
+            );
+          }}
+        </Show>
+      </div>
+    </Show>
   );
 };
 

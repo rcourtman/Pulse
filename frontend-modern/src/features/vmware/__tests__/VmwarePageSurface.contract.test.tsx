@@ -159,7 +159,7 @@ describe('VmwarePageSurface contract', () => {
     expect(notice).toHaveTextContent('latest in-guest telemetry and command support on this VM');
     expect(screen.getByRole('link', { name: 'Open agent upgrade commands' })).toHaveAttribute(
       'href',
-      '/settings/infrastructure?agentDoctor=1&agents=agent%3Aagent-app-01',
+      '/settings/infrastructure/agent-doctor?agents=agent%3Aagent-app-01',
     );
   });
 
