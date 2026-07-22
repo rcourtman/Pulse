@@ -2,6 +2,7 @@ import { createRoot } from 'solid-js';
 import { waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useAppRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
+import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
 type UseAppRuntimeStateModule = typeof import('@/useAppRuntimeState');
@@ -11,6 +12,34 @@ const flushAsync = async () => {
     await Promise.resolve();
   }
 };
+
+const makeWebSocketState = (overrides: Partial<State> = {}): State => ({
+  connectedInfrastructure: [],
+  metrics: [],
+  performance: {
+    apiCallDuration: {},
+    lastPollDuration: 0,
+    pollingStartTime: '',
+    totalApiCalls: 0,
+    failedApiCalls: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+  },
+  connectionHealth: {},
+  stats: {
+    startTime: new Date().toISOString(),
+    uptime: 0,
+    pollingCycles: 0,
+    webSocketClients: 0,
+    version: '0.0.0',
+  },
+  activeAlerts: [],
+  recentlyResolved: [],
+  lastUpdate: 0,
+  pveTagColors: {},
+  resources: [],
+  ...overrides,
+});
 
 describe('useAppRuntimeState', () => {
   let useAppRuntimeState: UseAppRuntimeStateModule['useAppRuntimeState'];
@@ -25,6 +54,10 @@ describe('useAppRuntimeState', () => {
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiChatSetEnabledMock: ReturnType<typeof vi.fn>;
+  let websocketState: State;
+  let websocketConnected: boolean;
+  let websocketReconnecting: boolean;
+  let websocketInitialDataReceived: boolean;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -64,37 +97,17 @@ describe('useAppRuntimeState', () => {
     setOrgIDMock = vi.fn();
     showToastMock = vi.fn();
     aiChatSetEnabledMock = vi.fn();
+    websocketState = makeWebSocketState();
+    websocketConnected = false;
+    websocketReconnecting = false;
+    websocketInitialDataReceived = false;
 
     vi.doMock('@/stores/websocket-global', () => ({
       getGlobalWebSocketStore: () => ({
-        state: {
-          connectedInfrastructure: [],
-          metrics: [],
-          performance: {
-            apiCallDuration: {},
-            lastPollDuration: 0,
-            pollingStartTime: '',
-            totalApiCalls: 0,
-            failedApiCalls: 0,
-            cacheHits: 0,
-            cacheMisses: 0,
-          },
-          connectionHealth: {},
-          stats: {
-            startTime: new Date().toISOString(),
-            uptime: 0,
-            pollingCycles: 0,
-            webSocketClients: 0,
-            version: '0.0.0',
-          },
-          activeAlerts: [],
-          recentlyResolved: [],
-          lastUpdate: 0,
-          resources: [],
-        },
-        connected: () => false,
-        reconnecting: () => false,
-        initialDataReceived: () => false,
+        state: websocketState,
+        connected: () => websocketConnected,
+        reconnecting: () => websocketReconnecting,
+        initialDataReceived: () => websocketInitialDataReceived,
         reconnect: vi.fn(),
         switchUrl: vi.fn(),
       }),
@@ -397,6 +410,96 @@ describe('useAppRuntimeState', () => {
     await waitFor(() => {
       expect(hookState.state().resources).toEqual([bootstrapResource]);
     });
+    expect(hookState.runtimeStateResolved()).toBe(true);
+    expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
+
+    dispose();
+  });
+
+  it('keeps retained server resource state available during a transient WebSocket reconnect', async () => {
+    const retainedResource: Resource = {
+      id: 'truenas-1',
+      name: 'truenas-1',
+      displayName: 'truenas-1',
+      type: 'agent',
+      platformId: 'truenas-1',
+      platformType: 'truenas',
+      sourceType: 'api',
+      sources: ['truenas'],
+      status: 'online',
+      lastSeen: 1_700_000_000_000,
+    };
+    websocketState = makeWebSocketState({
+      resources: [retainedResource],
+      lastUpdate: 1_700_000_000_000,
+    });
+    websocketConnected = false;
+    websocketReconnecting = true;
+    websocketInitialDataReceived = false;
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            ssoEnabled: true,
+            ssoSessionUsername: 'sso:oidc:test:operator',
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.needsAuth()).toBe(false);
+      expect(hookState.reconnecting()).toBe(true);
+    });
+
+    expect(hookState.enhancedStore()?.initialDataReceived()).toBe(false);
+    expect(hookState.runtimeStateResolved()).toBe(true);
+    expect(hookState.state().resources).toEqual([retainedResource]);
+    expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(false);
+
+    dispose();
+  });
+
+  it('distinguishes an evidence-free first load from an authenticated empty bootstrap', async () => {
+    let resolveStateResponse: ((response: Response) => void) | undefined;
+    const stateResponse = new Promise<Response>((resolve) => {
+      resolveStateResponse = resolve;
+    });
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(JSON.stringify({ hasAuthentication: true }), { status: 200 });
+      }
+      if (url === '/api/state') {
+        return stateResponse;
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(apiFetchMock.mock.calls.some(([url]) => url === '/api/state')).toBe(true);
+    });
+    expect(hookState.runtimeStateResolved()).toBe(false);
+
+    resolveStateResponse?.(new Response('{}', { status: 200 }));
+
+    await waitFor(() => {
+      expect(hookState.runtimeStateResolved()).toBe(true);
+      expect(hookState.isLoading()).toBe(false);
+    });
+    expect(hookState.state().resources).toEqual([]);
 
     dispose();
   });

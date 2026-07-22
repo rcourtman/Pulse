@@ -3103,6 +3103,12 @@ query...`, and `Reading storage...` before streamed tool arguments are
    source-owned (`Patrol run attached`, `Patrol mode ... attached`)
    and the drawer must still exclude raw provider payloads, commands, and
    Patrol-authored remediation steps.
+   Platform tabs in that same `frontend-modern/src/App.tsx` shell may remain
+   admitted after a current authenticated REST bootstrap or from retained
+   server-owned WebSocket state during stream recovery. That navigation
+   evidence must remain independent from Assistant session, handoff, and drawer
+   state, and browser-local Assistant or resource metadata must not resolve
+   platform navigation on an otherwise evidence-free first load.
    Reloaded Assistant sessions may consume the backend-owned
    `handoff_summary` only as safe presentation state and a Patrol finding
    pointer; hidden model context, command payloads, preflight data, and action

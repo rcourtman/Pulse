@@ -1376,6 +1376,12 @@ recovery scope, or a storage/recovery-owned secret source.
     may hide top-bar org chrome for public demo posture, but it must not leak
     into storage/recovery preview route ownership, first-session recovery copy,
     or route-level framing decisions.
+    That landing decision may treat a completed current authenticated REST
+    bootstrap or retained server-owned WebSocket state as sufficient
+    platform-navigation evidence during stream recovery. It must continue
+    waiting when neither server-owned condition exists, so stale browser-local
+    metadata cannot send an evidence-free first load to a platform, storage, or
+    recovery route.
     Retired `/operations/*` browser entry points are unregistered. They must
     not grow a second authenticated shell boundary that competes with
     storage/recovery route ownership.

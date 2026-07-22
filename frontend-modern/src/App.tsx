@@ -71,6 +71,7 @@ import {
   type PlatformNavigationVisibility,
   type PrimaryPlatformNavId,
 } from '@/features/platformNavigation/platformNavigationModel';
+import type { Resource } from '@/types/resource';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -117,7 +118,22 @@ const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> =
   standalone: buildStandalonePath(),
 };
 
-function getDefaultWorkspaceRoute(
+export function resolvePlatformNavigationAdmission(
+  resources: readonly Resource[],
+  runtimeStateResolved: boolean,
+): {
+  resolved: boolean;
+  visibility: PlatformNavigationVisibility;
+} {
+  return {
+    resolved: runtimeStateResolved,
+    visibility: runtimeStateResolved
+      ? buildPrimaryPlatformNavigationVisibility(resources)
+      : createEmptyPlatformNavigationVisibility(),
+  };
+}
+
+export function getDefaultWorkspaceRoute(
   visibility: PlatformNavigationVisibility,
   hasSettingsAccess: boolean,
 ): string {
@@ -269,15 +285,14 @@ function App() {
     const navigate = useNavigate();
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
-    const platformNavigationResolved = createMemo(() => {
-      const store = runtime.enhancedStore();
-      return Boolean(store?.initialDataReceived?.());
-    });
-    const platformNavigationVisibility = createMemo(() =>
-      platformNavigationResolved()
-        ? buildPrimaryPlatformNavigationVisibility(runtime.state().resources || [])
-        : createEmptyPlatformNavigationVisibility(),
+    const platformNavigationAdmission = createMemo(() =>
+      resolvePlatformNavigationAdmission(
+        runtime.state().resources || [],
+        runtime.runtimeStateResolved(),
+      ),
     );
+    const platformNavigationResolved = () => platformNavigationAdmission().resolved;
+    const platformNavigationVisibility = () => platformNavigationAdmission().visibility;
     const hasSettingsAccess = createMemo(() => {
       const scopes = runtime.securityStatus()?.tokenScopes;
       return (

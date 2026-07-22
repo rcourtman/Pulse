@@ -153,6 +153,11 @@ admission records a stable refusal without invoking executor or network code.
     visible signed-in chrome, but it must not introduce an additional
     pre-protected-state fetch, route preload, organization probe, or commercial
     posture request just to resolve display identity.
+    The same bootstrap may expose a local resolution signal derived only from
+    the current authenticated REST response, a completed WebSocket snapshot,
+    or retained server-owned runtime state. Platform navigation may consume
+    that signal without adding a second state fetch, websocket subscription,
+    route preload, or browser-local cache read on the authenticated hot path.
 17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 Governed action decisions preserve SQLite and MemoryStore parity through one

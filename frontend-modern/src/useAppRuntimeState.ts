@@ -222,6 +222,14 @@ export const useAppRuntimeState = () => {
   const [wsStore, setWsStore] = createSignal<EnhancedStore | null>(null);
   const [bootstrapState, setBootstrapState] = createSignal<State | null>(null);
   const [backendHealthy, setBackendHealthy] = createSignal(false);
+  const runtimeStateResolved = (): boolean => {
+    const store = wsStore();
+    return (
+      bootstrapState() !== null ||
+      Boolean(store?.initialDataReceived()) ||
+      hasRuntimeStatePayload(store?.state)
+    );
+  };
   const state = (): State => {
     const store = wsStore();
     const liveState = store?.state;
@@ -809,6 +817,7 @@ export const useAppRuntimeState = () => {
     securityStatus,
     proxyAuthInfo,
     state,
+    runtimeStateResolved,
     connected,
     backendHealthy,
     connectionStatus,

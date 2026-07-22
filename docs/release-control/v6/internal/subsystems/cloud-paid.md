@@ -943,6 +943,13 @@ the App/AppLayout, routing, and desktop Actions journey tests.
     still belongs to the selected platform before reuse and must not become
     hosted org bootstrap, entitlement, billing, acquisition, or cross-platform
     query state.
+    Platform-navigation admission at that root shell must accept a completed
+    current authenticated REST bootstrap or retained server-owned WebSocket
+    state even while the stream has not delivered a new initial snapshot. An
+    authenticated empty REST response or completed empty WebSocket snapshot may
+    resolve the settings/alerts fallback, but browser-local metadata must never
+    resolve platform tabs or trigger the root redirect on an evidence-free
+    first load.
     The same AppLayout shell may contextualize the closed Pulse Assistant
     launcher around the current monitoring, Patrol, Alerts, or Settings route,
     but that launcher must remain a local product affordance. It must not read

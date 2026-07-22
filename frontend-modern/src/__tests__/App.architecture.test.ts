@@ -1,12 +1,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { getDefaultWorkspaceRoute, resolvePlatformNavigationAdmission } from '@/App';
 import appSource from '@/App.tsx?raw';
 import appLayoutSource from '@/AppLayout.tsx?raw';
 import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
 import runtimeHomeSource from '@/pages/RuntimeHome.tsx?raw';
 import routePreloadSource from '@/routing/routePreload.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
+import type { Resource } from '@/types/resource';
 
 const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
 const headerAuditSource = readFileSync(join(process.cwd(), 'scripts/header-audit.mjs'), 'utf8');
@@ -24,6 +26,79 @@ function readIntegrationTestSources(dir: string): Array<{ path: string; source: 
     return [{ path, source: readFileSync(path, 'utf8') }];
   });
 }
+
+const makeResource = (overrides: Partial<Resource>): Resource =>
+  ({
+    id: overrides.id ?? 'resource-1',
+    name: overrides.name ?? overrides.id ?? 'resource-1',
+    displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'resource-1',
+    type: overrides.type ?? 'agent',
+    platformId: overrides.platformId ?? 'platform-1',
+    platformType: overrides.platformType ?? 'agent',
+    sourceType: overrides.sourceType ?? 'api',
+    status: overrides.status ?? 'online',
+    lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
+    ...overrides,
+  }) as Resource;
+
+describe('App platform navigation admission', () => {
+  const authenticatedResources = [
+    makeResource({ id: 'machine-1', platformType: 'agent' }),
+    makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
+    makeResource({ id: 'truenas-1', platformType: 'truenas', sources: ['truenas'] }),
+  ];
+
+  it('admits current authenticated REST resources before a WebSocket initial payload', () => {
+    const admission = resolvePlatformNavigationAdmission(authenticatedResources, true);
+
+    expect(admission.resolved).toBe(true);
+    expect(admission.visibility).toMatchObject({
+      docker: true,
+      truenas: true,
+      standalone: true,
+    });
+    expect(getDefaultWorkspaceRoute(admission.visibility, true)).toBe('/docker/overview');
+  });
+
+  it('retains platform visibility through a transient WebSocket disconnect', () => {
+    const beforeDisconnect = resolvePlatformNavigationAdmission(authenticatedResources, true);
+    const duringReconnect = resolvePlatformNavigationAdmission(authenticatedResources, true);
+
+    expect(duringReconnect).toEqual(beforeDisconnect);
+    expect(getDefaultWorkspaceRoute(duringReconnect.visibility, true)).toBe('/docker/overview');
+  });
+
+  it('keeps an evidence-free first load unresolved despite stale browser-local metadata', () => {
+    window.localStorage.setItem('guest_metadata', JSON.stringify({ id: 'stale-machine' }));
+    window.localStorage.setItem('docker_metadata', JSON.stringify({ id: 'stale-docker' }));
+
+    try {
+      const admission = resolvePlatformNavigationAdmission([], false);
+
+      expect(admission.resolved).toBe(false);
+      expect(Object.values(admission.visibility)).toEqual([
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      ]);
+    } finally {
+      window.localStorage.removeItem('guest_metadata');
+      window.localStorage.removeItem('docker_metadata');
+    }
+  });
+
+  it('resolves an authenticated empty estate without inventing platform visibility', () => {
+    const admission = resolvePlatformNavigationAdmission([], true);
+
+    expect(admission.resolved).toBe(true);
+    expect(Object.values(admission.visibility)).toEqual([false, false, false, false, false, false]);
+    expect(getDefaultWorkspaceRoute(admission.visibility, true)).toBe('/settings/infrastructure');
+    expect(getDefaultWorkspaceRoute(admission.visibility, false)).toBe('/alerts');
+  });
+});
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
@@ -126,6 +201,10 @@ describe('App architecture', () => {
     // not standalone shell tabs; platform/runtime pages own those workflows.
     expect(appSource).toContain('getDefaultWorkspaceRoute');
     expect(appSource).toContain('platformNavigationResolved');
+    expect(appSource).toContain('resolvePlatformNavigationAdmission');
+    expect(appSource).toContain('runtime.runtimeStateResolved()');
+    expect(appSource).not.toContain('store?.initialDataReceived?.()');
+    expect(appSource).toContain('if (!platformNavigationResolved()) return;');
     expect(appSource).toContain('buildPrimaryPlatformNavigationVisibility');
     expect(appLayoutSource).toContain('buildPrimaryPlatformNavigationVisibility');
     expect(appLayoutSource).toContain('primaryPlatformNavigationIsVisible');
