@@ -154,6 +154,16 @@ must not be reinterpreted as backup freshness, protection coverage, restore
 readiness, or verification truth; those claims continue to require their
 domain-owned typed evidence and deterministic verification paths.
 
+The Patrol attention routes' mobile relay scope acceptance in
+`internal/api/relay_mobile_capability.go` and the attention route gates in
+`internal/api/router_routes_ai_relay.go` / `internal/api/attention_mutations.go`
+are an API auth-surface mapping, not a storage or recovery grant. A
+`relay:mobile:access` credential reading attention items — including their
+protection-posture presentation fields — gains no backup, restore, snapshot,
+or recovery-export authority, and attention lifecycle mutations stay inside
+the alert acknowledge/suppress surface; storage and recovery mutations keep
+their own governed routes and verification paths.
+
 Unified Agent durable-operation-receipt metadata is likewise an internal
 monitoring and agent-lifecycle boundary. The exact current protocol may be a
 fail-closed prerequisite when unified resources derive the bounded

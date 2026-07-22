@@ -70,6 +70,9 @@ func TestRelayMobileRuntimeRouteInventory(t *testing.T) {
 		"POST /api/ai/sessions/{session_id}/abort => ai:chat",
 		"PATCH /api/ai/sessions/{session_id} => ai:chat",
 		"DELETE /api/ai/sessions/{session_id} => ai:chat",
+		"GET /api/ai/patrol/attention => monitoring:read",
+		"GET /api/ai/patrol/attention/{item_id} => monitoring:read",
+		"POST /api/ai/patrol/attention/{item_id}/{mutation} => monitoring:write",
 	}
 
 	if !reflect.DeepEqual(got, want) {

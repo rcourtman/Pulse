@@ -3482,7 +3482,17 @@ successful targeted check from a queued response alone.
 `frontend-modern/src/api/patrolAttention.ts` own the typed read transport for
 `GET /api/ai/patrol/attention`,
 `GET /api/ai/patrol/attention/summary`, and
-`GET /api/ai/patrol/attention/{id}`. All routes require `monitoring:read`.
+`GET /api/ai/patrol/attention/{id}`. Read routes require `monitoring:read`,
+and — because the attention workbench supersedes the legacy patrol findings
+routes that mobile devices already used — they equally accept the
+backend-owned `relay:mobile:access` capability and the legacy `ai:execute`
+scope through the governed relay mobile runtime route inventory in
+`internal/api/relay_mobile_capability.go`. Attention lifecycle mutations
+(`POST /api/ai/patrol/attention/{id}/{mutation}`) require `monitoring:write`
+under the same inventory-mapped acceptance. Token scope acceptance must not
+drift back to a single-scope gate: a registered phone carries only
+`relay:mobile:access`, so a `monitoring:read`-only gate silently severs
+mobile alert sync on upgrade (v6.1.0-rc.4 regression).
 Lists use bounded pagination with a maximum of 200 records and one bounded
 protection-posture batch. The summary path does not read recovery history.
 

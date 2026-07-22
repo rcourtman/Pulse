@@ -112,8 +112,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/status", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolStatus)))
 	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolStream)))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.routeAIPatrolFindings))
-	r.mux.HandleFunc("/api/ai/patrol/attention", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.attentionHandlers.HandleAttention)))
-	r.mux.HandleFunc("/api/ai/patrol/attention/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.attentionHandlers.HandleAttention)))
+	r.mux.HandleFunc("/api/ai/patrol/attention", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteAttentionList, r.attentionHandlers.HandleAttention)))
+	r.mux.HandleFunc("/api/ai/patrol/attention/", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteAttentionDetail, r.attentionHandlers.HandleAttention)))
 	// SECURITY: AI Patrol read endpoints - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/patrol/history", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetFindingsHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/run", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleForcePatrol)))

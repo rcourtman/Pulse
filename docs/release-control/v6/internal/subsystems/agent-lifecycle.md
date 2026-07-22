@@ -2890,6 +2890,13 @@ adjacent setup and install flows may depend on that helper layer, but they may
 only consume the server-owned minting route and the governed compatibility
 gates for the mobile runtime endpoints. They must not recreate broader
 AI-scoped mobile credentials or invent route-local scope exceptions.
+The governed backward-compatible route inventory behind that capability now
+includes the Patrol attention read and lifecycle-mutation routes, which
+supersede the legacy patrol findings routes the paired device already
+consumed. That inventory growth keeps an already-paired phone's credential
+working across server upgrades; it does not widen the mobile credential into
+general AI chat/execute scope ownership, and lifecycle-adjacent flows must
+not read it as license to mint broader-scoped device tokens.
 That same lifecycle-adjacent setup path now also depends on the hosted relay
 runtime helper inside `internal/api/`. Hosted Pulse Cloud tenants must not
 require an operator to visit Settings and manually `PUT /api/settings/relay`

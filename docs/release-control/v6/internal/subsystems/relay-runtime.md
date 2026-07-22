@@ -136,6 +136,19 @@ inventory: `PATCH /api/ai/sessions/{session_id}` may pass through
 browser-safe session title projection. The relay inventory must not widen that
 route into transcript, provider-context, approval, action-execution, or raw
 tool-evidence mutation authority.
+The Patrol attention workbench routes are part of that same explicit
+inventory: `GET /api/ai/patrol/attention`, `GET
+/api/ai/patrol/attention/{item_id}`, and `POST
+/api/ai/patrol/attention/{item_id}/{mutation}` supersede the legacy patrol
+findings/acknowledge routes that mobile devices already consumed, so they map
+`relay:mobile:access` alongside `monitoring:read` (reads) and
+`monitoring:write` (lifecycle mutations), with `ai:execute` as the enumerated
+legacy compatibility scope. Gating any attention route on a single
+non-mobile scope severs registered phones' alert sync on server upgrade
+(v6.1.0-rc.4 regression) and is a forbidden regression, not a hardening
+opportunity. This grants no new mutation authority: attention mutations stay
+inside the alert lifecycle acknowledge/suppress surface the legacy routes
+already exposed to the mobile credential.
 The route that mints that dedicated credential is also part of the paid Relay
 boundary. `POST /api/security/tokens/relay-mobile` lives in the shared
 auth/security router, but it must require the paid `relay` entitlement before

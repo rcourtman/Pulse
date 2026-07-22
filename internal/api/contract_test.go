@@ -277,6 +277,50 @@ func TestContract_UnifiedSeedSourcesIncludesPluralAvailabilityFacets(t *testing.
 	}
 }
 
+func TestContract_PatrolAttentionRoutesAcceptMobileRelayCapability(t *testing.T) {
+	// The attention workbench supersedes the legacy patrol findings routes
+	// that registered phones already consumed, so its routes must stay in
+	// the governed relay mobile runtime inventory. Gating them on a single
+	// non-mobile scope severs mobile alert sync on server upgrade
+	// (v6.1.0-rc.4 regression).
+	want := map[relayMobileRuntimeRouteID][]string{
+		relayMobileRouteAttentionList: {
+			config.ScopeRelayMobileAccess,
+			config.ScopeMonitoringRead,
+			config.ScopeAIExecute,
+		},
+		relayMobileRouteAttentionDetail: {
+			config.ScopeRelayMobileAccess,
+			config.ScopeMonitoringRead,
+			config.ScopeAIExecute,
+		},
+		relayMobileRouteAttentionMutation: {
+			config.ScopeRelayMobileAccess,
+			config.ScopeMonitoringWrite,
+			config.ScopeAIExecute,
+		},
+	}
+	for routeID, wantScopes := range want {
+		got := relayMobileRuntimeRouteSpecFor(routeID).compatibleScopes()
+		if !reflect.DeepEqual(got, wantScopes) {
+			t.Errorf("attention route %q compatible scopes = %v, want %v", routeID, got, wantScopes)
+		}
+	}
+
+	rawToken := "contract-attention-mobile.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/attention?filter=all&page=1&limit=20", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
+		t.Fatalf("mobile relay token rejected on attention list with %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestContract_AlertDeliveryDiagnosisRouteIsReadOnlyMonitoringRead(t *testing.T) {
 	source, err := os.ReadFile("alerts.go")
 	if err != nil {

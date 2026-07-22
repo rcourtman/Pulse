@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -62,7 +61,7 @@ func (h *AttentionHandlers) handleAttentionMutation(
 	r *http.Request,
 	path string,
 ) {
-	if !ensureScope(w, r, config.ScopeMonitoringWrite) {
+	if !ensureRelayMobileRuntimeRoute(w, r, relayMobileRouteAttentionMutation) {
 		return
 	}
 	itemID, kind, ok := parseAttentionMutationPath(path)

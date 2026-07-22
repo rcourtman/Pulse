@@ -42,6 +42,9 @@ const (
 	relayMobileRouteSessionAbort                 relayMobileRuntimeRouteID = "session-abort"
 	relayMobileRouteSessionRename                relayMobileRuntimeRouteID = "session-rename"
 	relayMobileRouteSessionDelete                relayMobileRuntimeRouteID = "session-delete"
+	relayMobileRouteAttentionList                relayMobileRuntimeRouteID = "attention-list"
+	relayMobileRouteAttentionDetail              relayMobileRuntimeRouteID = "attention-detail"
+	relayMobileRouteAttentionMutation            relayMobileRuntimeRouteID = "attention-mutation"
 )
 
 var relayMobileRuntimeRouteOrder = []relayMobileRuntimeRouteID{
@@ -69,6 +72,9 @@ var relayMobileRuntimeRouteOrder = []relayMobileRuntimeRouteID{
 	relayMobileRouteSessionAbort,
 	relayMobileRouteSessionRename,
 	relayMobileRouteSessionDelete,
+	relayMobileRouteAttentionList,
+	relayMobileRouteAttentionDetail,
+	relayMobileRouteAttentionMutation,
 }
 
 var relayMobileRuntimeRouteSpecs = map[relayMobileRuntimeRouteID]relayMobileRuntimeRouteSpec{
@@ -220,6 +226,30 @@ var relayMobileRuntimeRouteSpecs = map[relayMobileRuntimeRouteID]relayMobileRunt
 		method:        http.MethodDelete,
 		path:          "/api/ai/sessions/{session_id}",
 		requiredScope: config.ScopeAIChat,
+	},
+	// The attention workbench supersedes the legacy patrol findings routes,
+	// which accepted mobile relay tokens; its routes must keep doing so or
+	// every registered phone loses alert sync the moment a server upgrades.
+	relayMobileRouteAttentionList: {
+		id:            relayMobileRouteAttentionList,
+		method:        http.MethodGet,
+		path:          "/api/ai/patrol/attention",
+		requiredScope: config.ScopeMonitoringRead,
+		legacyScope:   config.ScopeAIExecute,
+	},
+	relayMobileRouteAttentionDetail: {
+		id:            relayMobileRouteAttentionDetail,
+		method:        http.MethodGet,
+		path:          "/api/ai/patrol/attention/{item_id}",
+		requiredScope: config.ScopeMonitoringRead,
+		legacyScope:   config.ScopeAIExecute,
+	},
+	relayMobileRouteAttentionMutation: {
+		id:            relayMobileRouteAttentionMutation,
+		method:        http.MethodPost,
+		path:          "/api/ai/patrol/attention/{item_id}/{mutation}",
+		requiredScope: config.ScopeMonitoringWrite,
+		legacyScope:   config.ScopeAIExecute,
 	},
 }
 
