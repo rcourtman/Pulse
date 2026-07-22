@@ -295,6 +295,33 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 	)
 }
 
+func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
+	version := currentReleaseVersion(t)
+	if isPrereleaseVersion(version) {
+		t.Skip("current release is a prerelease")
+	}
+	parts, valid := parseStableVersion(version)
+	if !valid || parts[1] == 0 || parts[2] != 0 {
+		t.Skip("current release is not a stable minor release")
+	}
+	previous, ok := previousStableForPrereleaseVersion(version + "-rc.1")
+	if !ok {
+		t.Fatal("stable minor release has no earlier stable rollback packet")
+	}
+
+	assertFileContainsAll(t, repoFile("docker-compose.yml"),
+		"image: ${PULSE_IMAGE:-rcourtman/pulse:"+version+"}",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
+		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
+	)
+	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"`rollback_version=v"+previous+"`",
+		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
+	)
+}
+
 func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	version := currentReleaseVersion(t)
 	if !isPrereleaseVersion(version) {
