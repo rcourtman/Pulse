@@ -6059,6 +6059,21 @@ func (h *AISettingsHandler) HandlePatrolPreflight(w http.ResponseWriter, r *http
 	}
 }
 
+// patrolModelReadinessBudget bounds a full advisor run: four streaming turns
+// at the operator-configured provider request timeout plus slack for the two
+// light management calls, floored at two minutes. A fixed envelope shorter
+// than the operator's own timeout would cut slow local runtimes off mid-run
+// during legitimate prompt processing.
+func patrolModelReadinessBudget(cfg *config.AIConfig) time.Duration {
+	budget := 2 * time.Minute
+	if cfg != nil {
+		if scaled := 4*cfg.GetRequestTimeout() + time.Minute; scaled > budget {
+			budget = scaled
+		}
+	}
+	return budget
+}
+
 // HandlePatrolModelReadiness runs the explicit, multi-scenario Patrol model
 // advisor. Unlike the startup preflight, this uses Patrol's streaming
 // transport, exact typed arguments, two context fixtures, and a multi-turn tool
@@ -6095,10 +6110,7 @@ func (h *AISettingsHandler) HandlePatrolModelReadiness(w http.ResponseWriter, r 
 		return
 	}
 
-	// An advisor run contains four streaming turns. Keep a firm total budget so
-	// slow local hardware cannot pin an HTTP handler indefinitely; provider-level
-	// request timeouts still apply inside this envelope.
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), patrolModelReadinessBudget(aiService.GetConfig()))
 	defer cancel()
 	result := aiService.RunPatrolModelReadiness(ctx, body.Provider, body.Model)
 	response := patrolModelReadinessSnapshot(&result, time.Now())

@@ -3586,6 +3586,18 @@ func TestAISettingsHandler_PatrolModelReadiness_RejectsInvalidProviderName(t *te
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestPatrolModelReadinessBudgetScalesWithRequestTimeout(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 2*time.Minute, patrolModelReadinessBudget(nil))
+	// A short configured timeout keeps the two-minute floor.
+	assert.Equal(t, 2*time.Minute, patrolModelReadinessBudget(&config.AIConfig{RequestTimeoutSeconds: 10}))
+	// Four streaming turns at the configured timeout plus slack: slow local
+	// runtimes get the per-request patience the operator already granted
+	// instead of being cut off by a fixed envelope (#1571).
+	assert.Equal(t, 4*600*time.Second+time.Minute, patrolModelReadinessBudget(&config.AIConfig{RequestTimeoutSeconds: 600}))
+}
+
 // TestOrchestratorAndChatAdaptersMapTheSameMessageFields keeps the deliberate
 // GetMessages mirror between orchestratorChatAdapter (ai_handlers.go) and
 // chatServiceAdapter (chat_service_adapter.go) honest: both convert the same
