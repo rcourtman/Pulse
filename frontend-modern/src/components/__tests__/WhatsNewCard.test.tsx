@@ -44,7 +44,7 @@ describe('WhatsNewCard', () => {
 
     await renderCard();
 
-    expect(screen.queryByTestId('whats-new-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
     expect(getReleaseNotesMock).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
   });
@@ -66,11 +66,10 @@ describe('WhatsNewCard', () => {
     await renderCard();
 
     await waitFor(() => {
-      expect(screen.getByTestId('whats-new-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('whats-new-modal')).toBeInTheDocument();
     });
-    expect(
-      screen.getByText("Pulse updated to v6.1.0-rc.1 — here's what's new"),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText("What's new in v6.1.0-rc.1")).toBeInTheDocument();
     expect(screen.getByText('Reviewed Actions inbox')).toBeInTheDocument();
     expect(screen.queryByText('Internal work')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Full release notes →' })).toHaveAttribute(
@@ -99,7 +98,7 @@ describe('WhatsNewCard', () => {
     fireEvent.click(screen.getByText('Got it'));
 
     await waitFor(() => {
-      expect(screen.queryByTestId('whats-new-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
     });
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
   });
@@ -114,7 +113,7 @@ describe('WhatsNewCard', () => {
 
     await renderCard();
 
-    expect(screen.queryByTestId('whats-new-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
     expect(getReleaseNotesMock).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.0.5');
   });

@@ -1,7 +1,11 @@
 import { Show, createEffect, createSignal } from 'solid-js';
+import XIcon from 'lucide-solid/icons/x';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI } from '@/api/updates';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { ActionIconButton, Button } from '@/components/shared/Button';
+import { Dialog } from '@/components/shared/Dialog';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
 import { extractHighlights, isReleaseVersion } from '@/components/whatsNewModel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
@@ -19,15 +23,15 @@ const markVersionSeen = (version: string) => {
   try {
     localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, version);
   } catch {
-    // Private mode / storage disabled: the banner simply won't persist state.
+    // Private mode / storage disabled: the dialog simply won't persist state.
   }
 };
 
 /**
- * Post-update "What's New" banner. Shows once after the running version
+ * Post-update "What's New" dialog. Shows once after the running version
  * changes, and only when that release has a curated `## Highlights` section
  * in its GitHub release notes. Dismissing (or a highlights-free release)
- * records the version so the banner stays quiet until the next update.
+ * records the version so the dialog stays quiet until the next update.
  */
 export function WhatsNewCard() {
   const [visible, setVisible] = createSignal(false);
@@ -58,7 +62,7 @@ export function WhatsNewCard() {
         return;
       }
       // Transient failure: leave last-seen untouched so the next load retries.
-      logger.warn("Failed to load release notes for What's New banner", error);
+      logger.warn("Failed to load release notes for What's New dialog", error);
     }
   };
 
@@ -77,7 +81,7 @@ export function WhatsNewCard() {
     const lastSeen = readLastSeenVersion();
     if (!lastSeen) {
       // First run (fresh install or first load after this feature shipped):
-      // record the baseline silently instead of greeting users with a banner.
+      // record the baseline silently instead of greeting users with a dialog.
       markVersionSeen(currentVersion);
       return;
     }
@@ -88,6 +92,7 @@ export function WhatsNewCard() {
     void loadNotes(currentVersion);
   });
 
+  // Any close path (button, backdrop, Escape) counts as seen.
   const dismiss = () => {
     markVersionSeen(version());
     setVisible(false);
@@ -95,54 +100,72 @@ export function WhatsNewCard() {
 
   return (
     <Show when={visible()}>
-      <div
-        data-testid="whats-new-banner"
-        class="bg-emerald-50 dark:bg-emerald-900 border-b border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-100 relative animate-slideDown"
+      <Dialog
+        isOpen={visible()}
+        onClose={dismiss}
+        panelClass="max-w-xl"
+        ariaLabelledBy="whats-new-title"
       >
-        <div class="px-4 py-2">
-          <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3 min-w-0">
-              {/* Sparkle icon */}
-              <svg
-                class="w-4 h-4 flex-shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+        <div class="w-full" data-testid="whats-new-modal">
+          <div class="px-6 py-4 border-b border-border">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0">
+                {/* Sparkle icon */}
+                <svg
+                  class="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
+                </svg>
+                <div class="min-w-0">
+                  <h2 id="whats-new-title" class="text-lg font-semibold text-base-content truncate">
+                    What's new in v{version()}
+                  </h2>
+                  <p class="text-xs text-muted">Pulse updated successfully</p>
+                </div>
+              </div>
+              <ActionIconButton
+                onClick={dismiss}
+                label="Dismiss what's new"
+                title="Close"
+                tone="muted"
+                size="md"
+                type="button"
               >
-                <path
-                  d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-                <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
-              </svg>
-              <span class="text-sm font-medium truncate">
-                Pulse updated to v{version()} — here's what's new
-              </span>
-              <a
-                href={buildReleaseNotesUrl(version())}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-emerald-600 dark:text-emerald-300 underline text-sm hidden sm:inline hover:text-emerald-700 dark:hover:text-emerald-200 flex-shrink-0"
-              >
-                Full release notes →
-              </a>
+                <XIcon class="h-5 w-5" aria-hidden="true" />
+              </ActionIconButton>
             </div>
-            <button
-              onClick={dismiss}
-              class="px-3 py-1 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded transition-colors flex-shrink-0"
-            >
-              Got it
-            </button>
           </div>
+
           <div
-            class="text-sm mt-1 pl-7 pr-2 max-h-48 overflow-y-auto [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mt-0.5 [&_p]:mt-1 [&_a]:underline [&_code]:font-mono [&_code]:text-xs"
+            class="px-6 py-4 max-h-[60vh] overflow-y-auto text-sm text-base-content [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-2 [&_p]:mt-2 [&_a]:underline [&_code]:font-mono [&_code]:text-xs"
             // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown sanitizes via DOMPurify
             innerHTML={highlightsHtml()}
           />
+
+          <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-between gap-3">
+            <ExternalTextLink
+              href={buildReleaseNotesUrl(version())}
+              variant="inline"
+              class="text-sm"
+            >
+              Full release notes →
+            </ExternalTextLink>
+            <Button onClick={dismiss} variant="primary" size="md" type="button">
+              Got it
+            </Button>
+          </div>
         </div>
-      </div>
+      </Dialog>
     </Show>
   );
 }
