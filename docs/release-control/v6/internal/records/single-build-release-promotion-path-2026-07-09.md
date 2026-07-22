@@ -126,7 +126,7 @@ candidate, upload both candidate artifacts, pass release checks, complete
 no-mutation demo verification, and leave the published `v6.0.5` release and
 demo runtime unchanged.
 
-## Current Verdict
+## 2026-07-09 Verdict
 
 Blocked only on the absent native platform signing credentials. Repository-side
 orchestration, diagnostics, timeout hardening, archive validation performance,
@@ -183,3 +183,85 @@ approve one stable-version `Release Dry Run` request for the exact current
 `main` SHA. The signed candidate, release checks, no-mutation stable-demo lane,
 and Definitive Dry-Run Verdict must pass. Do not publish a stable release as
 part of this proof run.
+
+## v6.1.0 Owner-Bounded Stable Rehearsal (2026-07-22)
+
+The release owner ended the moving release-candidate loop, waived the remaining
+v6.1.0 prerelease soak, and approved one stable-release exception for unavailable
+Windows Authenticode signing. The exception is limited by the resolver and
+workflow contracts to stable `v6.1.0`, requires a non-empty owner reason, and
+requires the public release notes to state that Windows binaries are not
+Authenticode-signed and may show an unknown-publisher warning. macOS signing and
+notarization remain mandatory, as do exact-SHA identity, checksums, detached
+signatures, the immutable candidate manifest, and post-publication digest
+validation. Stable releases after `v6.1.0` automatically restore the Windows
+Authenticode requirement.
+
+Release Dry Run `29936239561` exercised the exception on exact source SHA
+`0b5763764cea3e1d93aacfe2b84ddfe278083409` without creating a tag or modifying
+the public release:
+
+- `Preflight Release Checks (No Publish)` passed in 40 minutes 50 seconds,
+  including the frontend, backend, integration, Docker, Helm, and mobile gates.
+- `Sign and Notarize macOS Agent` passed in 2 minutes 48 seconds.
+- The version-bound Windows Authenticode job was intentionally skipped, and
+  `Build and Validate Release Candidate` passed in 21 minutes 18 seconds using
+  the retained unsigned-Windows verification controls.
+- The no-mutation current-stable demo check passed, followed by the terminal
+  `Definitive Dry-Run Verdict`.
+
+The complete successful rehearsal is recorded at
+`https://github.com/rcourtman/Pulse/actions/runs/29936239561`. This clears the
+previous external-rehearsal prerequisite under the recorded v6.1.0-only owner
+exception; the matching public promotion must still finish its own definitive
+verdict before the release operation is considered complete.
+
+## Release Pipeline Defect Reopen (2026-07-22)
+
+The first public-promotion dispatch, run `29939510627`, preserved the mutation
+boundary and created no tag, draft, or release. Its integration job failed
+deterministically before publication because `create-release.yml` still named
+`tests/03-multi-tenant.spec.ts` after that whole file had moved into the
+Playwright quarantine on 2026-07-17. Playwright correctly returned `No tests
+found`; rerunning the same SHA could not change that result. The release owner
+cutoff explicitly permits a release-pipeline defect to reopen v6.1.0.
+
+The corrected release job targets the current stable organization-sharing UI
+spec instead, while retaining the real container build, bootstrap-token check,
+update-route smoke, backend suite, and all other self-contained publication
+gates. The installer workflow contract now rejects any attempt to point the
+release job back at the quarantined multi-tenant file. A fresh exact-SHA dry run
+is required before the corrected public promotion is dispatched.
+
+## v6.1.0 Stable Promotion Verdict (2026-07-22)
+
+Corrected Release Dry Run `29941836354` passed on exact source SHA
+`e1f33c1bad6831ea00a2824b39d259fb8a071508`. Its preflight, macOS signing and
+notarization, immutable candidate, no-mutation stable-demo verification, and
+terminal `Definitive Dry-Run Verdict` all succeeded. The Windows Authenticode
+job was skipped only under the recorded stable-v6.1.0 exception; the retained
+Windows exact-SHA, manifest, checksum, detached-signature, and digest controls
+passed.
+
+Canonical public release run `29945066337` then promoted that same candidate
+without rebuilding it. The corrected integration gate, candidate validation,
+release creation, 213-asset validation, Docker and Helm publication, install
+smoke, stable demo, floating-tag update, private Pro runtime publication, and
+terminal `Definitive Release Verdict` all succeeded. The downstream private
+workflows also completed successfully:
+
+- Pro build: `https://github.com/rcourtman/pulse-enterprise/actions/runs/29946936202`
+- paid-runtime promotion: `https://github.com/rcourtman/pulse-pro/actions/runs/29949536073`
+
+The public non-prerelease release is
+`https://github.com/rcourtman/Pulse/releases/tag/v6.1.0`. Its annotated
+`v6.1.0` tag peels exactly to
+`e1f33c1bad6831ea00a2824b39d259fb8a071508`, and the release target identifies
+the same commit. The complete asset set includes checksums and detached
+`.sig`/`.sshsig` signatures. The public notes disclose that the Windows
+binaries are not Authenticode-signed and may show `Unknown Publisher`, and
+retain the `v6.0.5` rollback command. macOS artifacts are signed and notarized.
+
+The owner-bounded v6.1.0 exception is therefore exercised and closed. Stable
+versions after v6.1.0 automatically restore the Windows Authenticode
+requirement. The `single-build-release-promotion-path` gate verdict is passed.

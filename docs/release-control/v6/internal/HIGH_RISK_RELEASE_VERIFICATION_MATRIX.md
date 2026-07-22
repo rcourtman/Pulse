@@ -977,7 +977,7 @@ Companion drill:
   `.github/scripts/check-demo-reachability.sh`
   `scripts/trigger-stable-patch.sh`
 - Automated proof:
-  `python3 -m unittest scripts.release_control.resolve_release_promotion_test scripts.release_control.release_promotion_policy_test`
+  `cd scripts/release_control && python3 -m unittest resolve_release_promotion_test release_promotion_policy_test`
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
 - Manual scenario:
   1. Push the exact candidate commit to the governed stable branch.

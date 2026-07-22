@@ -8400,7 +8400,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1"
@@ -9176,21 +9176,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "release-operator-610-release-gate-single-build-release-promotion-path",
-      "agent_id": "release-operator-610",
-      "summary": "Prepare, dry-run, and publish v6.1.0 stable from the owner-approved cutoff SHA",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-22T14:03:24Z",
-      "heartbeat_at": "2026-07-22T14:03:24Z",
-      "expires_at": "2026-07-22T22:03:24Z",
-      "work_item": {
-        "kind": "release-gate",
-        "id": "single-build-release-promotion-path"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
