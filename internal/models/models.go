@@ -912,6 +912,7 @@ type RemovedDockerHost struct {
 	ID          string    `json:"id"`
 	Hostname    string    `json:"hostname,omitempty"`
 	DisplayName string    `json:"displayName,omitempty"`
+	Platform    string    `json:"platform,omitempty"` // last-known reported platform, retained for host-side cleanup guidance
 	RemovedAt   time.Time `json:"removedAt"`
 }
 
@@ -920,6 +921,7 @@ type RemovedHostAgent struct {
 	ID                string    `json:"id"`
 	Hostname          string    `json:"hostname,omitempty"`
 	DisplayName       string    `json:"displayName,omitempty"`
+	Platform          string    `json:"platform,omitempty"` // last-known reported platform, retained for host-side cleanup guidance
 	MachineID         string    `json:"machineId,omitempty"`
 	TokenID           string    `json:"tokenId,omitempty"`
 	LinkedVMID        string    `json:"linkedVmId,omitempty"`

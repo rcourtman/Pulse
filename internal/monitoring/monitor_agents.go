@@ -84,6 +84,7 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		ID:          hostID,
 		Hostname:    host.Hostname,
 		DisplayName: host.DisplayName,
+		Platform:    host.OS,
 		RemovedAt:   removedAt,
 	})
 
@@ -222,6 +223,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		ID:                hostID,
 		Hostname:          host.Hostname,
 		DisplayName:       host.DisplayName,
+		Platform:          firstNonEmpty(host.Platform, host.OSName),
 		MachineID:         host.MachineID,
 		TokenID:           host.TokenID,
 		LinkedVMID:        host.LinkedVMID,

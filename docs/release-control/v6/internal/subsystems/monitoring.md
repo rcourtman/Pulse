@@ -1812,6 +1812,21 @@ platforms and unverified FreeBSD/pfSense installer state fail closed for
 upgrade-command support. `internal/fleethealth/agent_test.go` and
 `internal/monitoring/agent_fleet_doctor_test.go` are the focused runtime proofs.
 
+Removed-agent rows keep command-scoping identity instead of losing it with the
+live record: host and Docker removal capture the agent's last-known reported
+platform onto the removed record (`RemovedHostAgent.Platform`,
+`RemovedDockerHost.Platform`), and the fleet diagnostic resolves that retained
+value through the same strict platform normalization as live subjects, so
+`/api/agents/diagnostics` reports a platform for a removed agent only when its
+last live report identified one. A retained value that does not normalize to a
+known agent platform yields an empty diagnostic platform rather than a guess,
+and removed Kubernetes clusters retain no platform because the cluster report
+never carries one; downstream host-side cleanup handoffs must treat an empty
+platform as "offer explicitly labeled commands for every family, never one
+guessed executable". The retained field is additive and optional on the
+serialized removed lists, so snapshots recorded before the field existed load
+unchanged with an empty platform.
+
 ### Unified Agent destination delivery metrics
 
 The local agent health listener exports

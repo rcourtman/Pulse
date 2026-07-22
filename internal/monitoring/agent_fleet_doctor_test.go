@@ -272,6 +272,71 @@ func TestAgentFleetDiagnosticsDetectsProfileVersionDrift(t *testing.T) {
 	}
 }
 
+func TestAgentFleetDiagnosticsRetainPlatformForRemovedAgents(t *testing.T) {
+	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.removedDockerHosts = make(map[string]time.Time)
+	monitor.dockerTokenBindings = make(map[string]string)
+	monitor.dockerCommands = make(map[string]*dockerHostCommand)
+	monitor.dockerCommandIndex = make(map[string]string)
+
+	monitor.state.UpsertHost(models.Host{
+		ID:       "removed-windows",
+		Hostname: "win-node",
+		Platform: "Microsoft Windows Server 2022",
+		Status:   "online",
+		LastSeen: now.Add(-time.Minute),
+	})
+	monitor.state.UpsertHost(models.Host{
+		ID:       "removed-unknown",
+		Hostname: "mystery-node",
+		Platform: "BeOS",
+		Status:   "online",
+		LastSeen: now.Add(-time.Minute),
+	})
+	monitor.state.UpsertDockerHost(models.DockerHost{
+		ID:       "removed-docker",
+		Hostname: "docker-node",
+		OS:       "Ubuntu 22.04",
+		Status:   "online",
+		LastSeen: now.Add(-time.Minute),
+	})
+
+	for _, hostID := range []string{"removed-windows", "removed-unknown"} {
+		if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+			t.Fatalf("RemoveHostAgent(%s): %v", hostID, err)
+		}
+	}
+	if _, err := monitor.RemoveDockerHost("removed-docker"); err != nil {
+		t.Fatalf("RemoveDockerHost: %v", err)
+	}
+	monitor.state.AddRemovedKubernetesCluster(models.RemovedKubernetesCluster{
+		ID:        "removed-k8s",
+		Name:      "cluster",
+		RemovedAt: now,
+	})
+
+	diagnostics := monitor.GetAgentFleetDiagnostics("6.2.0", now)
+	tests := []struct {
+		rowKey       string
+		wantPlatform string
+	}{
+		{rowKey: "removed-host-removed-windows", wantPlatform: platformsupport.RuntimePlatformWindows},
+		{rowKey: "removed-host-removed-unknown", wantPlatform: ""},
+		{rowKey: "removed-docker-removed-docker", wantPlatform: platformsupport.RuntimePlatformLinux},
+		{rowKey: "removed-k8s-removed-k8s", wantPlatform: ""},
+	}
+	for _, test := range tests {
+		agent := requireAgentDiagnostic(t, diagnostics, test.rowKey)
+		if agent.Status != AgentFleetStatusRemoved {
+			t.Fatalf("%s status = %q, want %q", test.rowKey, agent.Status, AgentFleetStatusRemoved)
+		}
+		if agent.Platform != test.wantPlatform {
+			t.Fatalf("%s platform = %q, want %q", test.rowKey, agent.Platform, test.wantPlatform)
+		}
+	}
+}
+
 func newAgentFleetDoctorTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 	return &Monitor{

@@ -140,6 +140,7 @@ type agentFleetSubject struct {
 	kubernetes      *models.KubernetesCluster
 	removed         bool
 	removedAt       time.Time
+	removedPlatform string // last-known reported platform retained on the removed record
 }
 
 // GetAgentFleetDiagnostics preserves the original call contract for callers
@@ -297,13 +298,14 @@ func buildAgentFleetSubjects(state models.StateSnapshot) []agentFleetSubject {
 	for i := range state.RemovedDockerHosts {
 		removed := state.RemovedDockerHosts[i]
 		subjectsByID["removed-docker:"+removed.ID] = &agentFleetSubject{
-			rowKey:    "removed-docker-" + removed.ID,
-			id:        removed.ID,
-			name:      firstNonEmpty(removed.DisplayName, removed.Hostname, removed.ID),
-			hostname:  removed.Hostname,
-			types:     map[string]struct{}{"docker": {}},
-			removed:   true,
-			removedAt: removed.RemovedAt,
+			rowKey:          "removed-docker-" + removed.ID,
+			id:              removed.ID,
+			name:            firstNonEmpty(removed.DisplayName, removed.Hostname, removed.ID),
+			hostname:        removed.Hostname,
+			types:           map[string]struct{}{"docker": {}},
+			removed:         true,
+			removedAt:       removed.RemovedAt,
+			removedPlatform: removed.Platform,
 		}
 		order = append(order, "removed-docker:"+removed.ID)
 	}
@@ -311,13 +313,14 @@ func buildAgentFleetSubjects(state models.StateSnapshot) []agentFleetSubject {
 	for i := range state.RemovedHostAgents {
 		removed := state.RemovedHostAgents[i]
 		subjectsByID["removed-host:"+removed.ID] = &agentFleetSubject{
-			rowKey:    "removed-host-" + removed.ID,
-			id:        removed.ID,
-			name:      firstNonEmpty(removed.DisplayName, removed.Hostname, removed.ID),
-			hostname:  removed.Hostname,
-			types:     map[string]struct{}{"host": {}},
-			removed:   true,
-			removedAt: removed.RemovedAt,
+			rowKey:          "removed-host-" + removed.ID,
+			id:              removed.ID,
+			name:            firstNonEmpty(removed.DisplayName, removed.Hostname, removed.ID),
+			hostname:        removed.Hostname,
+			types:           map[string]struct{}{"host": {}},
+			removed:         true,
+			removedAt:       removed.RemovedAt,
+			removedPlatform: removed.Platform,
 		}
 		order = append(order, "removed-host:"+removed.ID)
 	}
@@ -674,6 +677,13 @@ func agentFleetIdentityForSubject(subject agentFleetSubject) agentFleetIdentityE
 		interfaces = append(interfaces, docker.NetworkInterfaces...)
 	}
 
+	if identity.platform == "" && strings.TrimSpace(subject.removedPlatform) != "" {
+		// Removed subjects have no live host/docker record; resolve the
+		// platform retained on the removed record through the same strict
+		// normalization so downstream commands never scope from a guess.
+		identity.platform, _ = safeAgentUpdatePlatform(subject)
+	}
+
 	identity.machineIDFingerprint = machineIDFingerprint(machineID)
 	identity.interfaceAddresses = safeDiagnosticInterfaceAddresses(interfaces)
 	return identity
@@ -724,6 +734,7 @@ func safeAgentUpdatePlatform(subject agentFleetSubject) (string, bool) {
 	if subject.docker != nil {
 		values = append(values, subject.docker.OS)
 	}
+	values = append(values, subject.removedPlatform)
 
 	for _, value := range values {
 		appliance := strings.ToLower(strings.TrimSpace(value))

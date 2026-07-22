@@ -3858,3 +3858,46 @@ func TestHostFromReadStateViewMapsIntegrationSource(t *testing.T) {
 		t.Fatalf("agent-sourced host must map empty IntegrationSource, got %q", got)
 	}
 }
+
+// Removal must retain the agent's last-known platform on the removed record so
+// the fleet doctor can still scope host-side cleanup commands after the live
+// host record is gone.
+func TestRemoveHostAgentRetainsLastKnownPlatform(t *testing.T) {
+	monitor := &Monitor{
+		state:  models.NewState(),
+		config: &config.Config{},
+	}
+
+	now := time.Now().UTC()
+	monitor.state.UpsertHost(models.Host{
+		ID:       "removed-platform-host",
+		Hostname: "win-node",
+		Platform: "Microsoft Windows Server 2022",
+		Status:   "online",
+		LastSeen: now.Add(-time.Minute),
+	})
+	monitor.state.UpsertHost(models.Host{
+		ID:       "removed-osname-host",
+		Hostname: "debian-node",
+		OSName:   "Debian GNU/Linux",
+		Status:   "online",
+		LastSeen: now.Add(-time.Minute),
+	})
+
+	for _, hostID := range []string{"removed-platform-host", "removed-osname-host"} {
+		if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+			t.Fatalf("RemoveHostAgent(%s): %v", hostID, err)
+		}
+	}
+
+	got := make(map[string]string)
+	for _, entry := range monitor.state.GetRemovedHostAgents() {
+		got[entry.ID] = entry.Platform
+	}
+	if got["removed-platform-host"] != "Microsoft Windows Server 2022" {
+		t.Fatalf("removed record platform = %q, want last-known reported platform", got["removed-platform-host"])
+	}
+	if got["removed-osname-host"] != "Debian GNU/Linux" {
+		t.Fatalf("removed record platform = %q, want OS-name fallback when Platform was never reported", got["removed-osname-host"])
+	}
+}
