@@ -1425,3 +1425,172 @@ func TestHostIntegrationSourceRoundTrip(t *testing.T) {
 		t.Fatalf("expected integrationSource omitted for agent hosts, got %s", unmarked)
 	}
 }
+
+// Two clusters reusing the same node names (pve01/pve02 on different subnets)
+// must stay apart: the second cluster's node must not steal the first
+// cluster's agent link by bare hostname, and the shared name must not merge
+// the two nodes into one slot.
+func TestUpdateNodesForInstanceKeepsClustersWithSharedNodeNamesApart(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-enacon-pve01",
+				Hostname: "pve01",
+				ReportIP: "192.168.16.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.16.11/24"}},
+				},
+			},
+			{
+				ID:       "host-enacon-pve02",
+				Hostname: "pve02",
+				ReportIP: "192.168.16.12",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.16.12/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.16.11:8006",
+				LinkedAgentID:   "host-enacon-pve01",
+				Status:          "online",
+			},
+			{
+				ID:              "enacon-pve02",
+				Name:            "pve02",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.16.12:8006",
+				LinkedAgentID:   "host-enacon-pve02",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("rewo", []Node{
+		{
+			ID:              "rewo-pve01",
+			Name:            "pve01",
+			Instance:        "rewo",
+			ClusterName:     "rewo",
+			IsClusterMember: true,
+			Host:            "https://192.168.1.11:8006",
+			Status:          "online",
+		},
+	})
+
+	if len(state.Nodes) != 3 {
+		t.Fatalf("nodes = %#v, want 3 (enacon pve01+pve02 and rewo pve01)", state.Nodes)
+	}
+
+	byID := make(map[string]Node)
+	for _, node := range state.Nodes {
+		byID[node.ID] = node
+	}
+
+	enacon, ok := byID["enacon-pve01"]
+	if !ok {
+		t.Fatalf("enacon-pve01 was clobbered, nodes = %#v", state.Nodes)
+	}
+	if enacon.ClusterName != "enacon" {
+		t.Fatalf("enacon-pve01 ClusterName = %q, want enacon", enacon.ClusterName)
+	}
+	if enacon.LinkedAgentID != "host-enacon-pve01" {
+		t.Fatalf("enacon-pve01 LinkedAgentID = %q, want host-enacon-pve01", enacon.LinkedAgentID)
+	}
+
+	rewo, ok := byID["rewo-pve01"]
+	if !ok {
+		t.Fatalf("rewo-pve01 missing, nodes = %#v", state.Nodes)
+	}
+	if rewo.ClusterName != "rewo" {
+		t.Fatalf("rewo-pve01 ClusterName = %q, want rewo", rewo.ClusterName)
+	}
+	if rewo.LinkedAgentID != "" {
+		t.Fatalf("rewo-pve01 LinkedAgentID = %q, want none (its host runs no agent)", rewo.LinkedAgentID)
+	}
+}
+
+// When TLS settings degrade node endpoints to the bare node name, the
+// endpoint-host merge alias is identical for both clusters. The alias must
+// not merge nodes whose named clusters contradict each other.
+func TestUpdateNodesForInstanceEndpointHostAliasDoesNotMergeAcrossClusters(t *testing.T) {
+	state := &State{
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://pve01:8006",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("rewo", []Node{
+		{
+			ID:              "rewo-pve01",
+			Name:            "pve01",
+			Instance:        "rewo",
+			ClusterName:     "rewo",
+			IsClusterMember: true,
+			Host:            "https://pve01:8006",
+			Status:          "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 (one per cluster)", state.Nodes)
+	}
+	clusters := map[string]bool{}
+	for _, node := range state.Nodes {
+		clusters[node.ClusterName] = true
+	}
+	if !clusters["enacon"] || !clusters["rewo"] {
+		t.Fatalf("clusters = %#v, want both enacon and rewo", clusters)
+	}
+}
+
+// A standalone node whose endpoint IP is absent from a same-named agent's
+// reported IPs must not link to that agent: the IP evidence contradicts the
+// hostname match.
+func TestUpdateNodesForInstanceHostnameMatchRejectedWhenIPContradicts(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-a",
+				Hostname: "pve01",
+				ReportIP: "192.168.16.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.16.11/24"}},
+				},
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("steinboeck", []Node{
+		{
+			ID:       "steinboeck-pve01",
+			Name:     "pve01",
+			Instance: "steinboeck",
+			Host:     "https://10.20.1.5:8006",
+			Status:   "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1", state.Nodes)
+	}
+	if state.Nodes[0].LinkedAgentID != "" {
+		t.Fatalf("LinkedAgentID = %q, want none (agent IPs contradict node endpoint)", state.Nodes[0].LinkedAgentID)
+	}
+}

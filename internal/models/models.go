@@ -3336,6 +3336,15 @@ func registerNodeAliases(
 	}
 }
 
+// nodeClusterIdentityConflicts reports whether two nodes belong to two
+// different named clusters. Empty cluster names never conflict: a standalone
+// or not-yet-classified view of a node may still merge into its cluster view.
+func nodeClusterIdentityConflicts(a, b string) bool {
+	clusterA := normalizeNodeIdentityPart(a)
+	clusterB := normalizeNodeIdentityPart(b)
+	return clusterA != "" && clusterB != "" && clusterA != clusterB
+}
+
 func resolveNodeMergeKey(
 	primaryKey string,
 	node Node,
@@ -3357,6 +3366,12 @@ func resolveNodeMergeKey(
 		}
 		key, ok := aliasToKey[alias]
 		if !ok || key == "" {
+			continue
+		}
+		// Two clusters can reuse node names (pve01 in cluster A and cluster B),
+		// so an endpoint alias is only trustworthy when the cluster identities
+		// don't contradict each other.
+		if existing, exists := nodeMap[key]; exists && nodeClusterIdentityConflicts(existing.ClusterName, node.ClusterName) {
 			continue
 		}
 		if resolved != "" && resolved != key {
@@ -3473,8 +3488,9 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	defer s.mu.Unlock()
 
 	// Preserve LinkedAgentID for nodes that are being updated, including when IDs churn.
-	existingNodeLinks := make(map[string]string)             // nodeID -> linkedAgentID
-	existingNodeLinksByLogicalKey := make(map[string]string) // logical node key -> linkedAgentID
+	existingNodeLinks := make(map[string]string)              // nodeID -> linkedAgentID
+	existingNodeLinksByLogicalKey := make(map[string]string)  // logical node key -> linkedAgentID
+	agentClusterHints := make(map[string]map[string]struct{}) // linkedAgentID -> normalized cluster names of its linked nodes
 	for _, node := range s.Nodes {
 		if node.LinkedAgentID == "" {
 			continue
@@ -3482,6 +3498,14 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		existingNodeLinks[node.ID] = node.LinkedAgentID
 		if key := nodeLogicalKey(node); key != "" {
 			existingNodeLinksByLogicalKey[key] = node.LinkedAgentID
+		}
+		if cluster := normalizeNodeIdentityPart(node.ClusterName); cluster != "" {
+			hints := agentClusterHints[node.LinkedAgentID]
+			if hints == nil {
+				hints = make(map[string]struct{})
+				agentClusterHints[node.LinkedAgentID] = hints
+			}
+			hints[cluster] = struct{}{}
 		}
 	}
 
@@ -3568,6 +3592,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 		bucket[hostID] = struct{}{}
 	}
+	hostIPsByID := make(map[string]map[string]struct{}) // hostAgentID -> normalized ips it reports
 	addHostIP := func(address, hostID string) {
 		ip := normalizeIPAddress(address)
 		if ip == "" || hostID == "" {
@@ -3579,6 +3604,12 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			hostAgentByIP[ip] = bucket
 		}
 		bucket[hostID] = struct{}{}
+		ips := hostIPsByID[hostID]
+		if ips == nil {
+			ips = make(map[string]struct{})
+			hostIPsByID[hostID] = ips
+		}
+		ips[ip] = struct{}{}
 	}
 	for _, host := range s.Hosts {
 		if host.ID != "" {
@@ -3595,6 +3626,29 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 				}
 			}
 		}
+	}
+
+	// Hostname matches are weak evidence: two clusters can reuse the same node
+	// names on different subnets. Reject a candidate agent when the evidence we
+	// do hold contradicts the node - the agent's linked nodes live in a different
+	// named cluster, or the node's endpoint IP is absent from the IPs the agent
+	// reports.
+	hostContradictsNode := func(hostID string, node Node) bool {
+		if hints := agentClusterHints[hostID]; len(hints) > 0 {
+			if cluster := normalizeNodeIdentityPart(node.ClusterName); cluster != "" {
+				if _, sameCluster := hints[cluster]; !sameCluster {
+					return true
+				}
+			}
+		}
+		if nodeIP := normalizeIPAddress(extractHostEndpoint(node.Host)); nodeIP != "" {
+			if ips := hostIPsByID[hostID]; len(ips) > 0 {
+				if _, known := ips[nodeIP]; !known {
+					return true
+				}
+			}
+		}
+		return false
 	}
 
 	// Add or update nodes from this instance
@@ -3627,13 +3681,17 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			} else if endpoint != "" {
 				if ids, ok := hostAgentByHostname[strings.ToLower(endpoint)]; ok {
 					for hostID := range ids {
-						endpointCandidates[hostID] = struct{}{}
+						if !hostContradictsNode(hostID, node) {
+							endpointCandidates[hostID] = struct{}{}
+						}
 					}
 				}
 				if short := shortHostname(endpoint); short != "" && short != strings.ToLower(endpoint) {
 					if ids, ok := hostAgentByHostname[short]; ok {
 						for hostID := range ids {
-							endpointCandidates[hostID] = struct{}{}
+							if !hostContradictsNode(hostID, node) {
+								endpointCandidates[hostID] = struct{}{}
+							}
 						}
 					}
 				}
@@ -3652,13 +3710,17 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			if nodeName != "" {
 				if ids, ok := hostAgentByHostname[nodeName]; ok {
 					for hostID := range ids {
-						candidates[hostID] = struct{}{}
+						if !hostContradictsNode(hostID, node) {
+							candidates[hostID] = struct{}{}
+						}
 					}
 				}
 				if idx := strings.Index(nodeName, "."); idx > 0 {
 					if ids, ok := hostAgentByHostname[nodeName[:idx]]; ok {
 						for hostID := range ids {
-							candidates[hostID] = struct{}{}
+							if !hostContradictsNode(hostID, node) {
+								candidates[hostID] = struct{}{}
+							}
 						}
 					}
 				}
@@ -3675,7 +3737,11 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		if node.LinkedAgentID != "" {
 			if _, ambiguous := ambiguousLinkedHosts[node.LinkedAgentID]; !ambiguous {
 				if linkedKey := linkedHostToKey[node.LinkedAgentID]; linkedKey != "" {
-					targetKey = linkedKey
+					// A shared agent identity must never collapse two different
+					// named clusters into one node slot.
+					if existing, ok := nodeMap[linkedKey]; !ok || !nodeClusterIdentityConflicts(existing.ClusterName, node.ClusterName) {
+						targetKey = linkedKey
+					}
 				}
 			}
 		}

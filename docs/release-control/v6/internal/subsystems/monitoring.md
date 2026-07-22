@@ -56,6 +56,14 @@ configured cluster labels must project into node display names as
 `cluster label (node name)` so duplicate node hostnames across clusters remain
 distinguishable, while `models.Node.Name` and `ProxmoxData.NodeName` keep the
 raw Proxmox node identity for linking, metrics, URLs, and actions.
+Node state aggregation is cluster-identity-scoped beyond presentation: a
+hostname match alone must never bind a node to a host agent, and neither a
+shared linked-agent identity nor an endpoint merge alias may fold two node
+slots into one, when the two sides carry contradicting non-empty cluster
+names. A hostname-based agent match is also rejected when the node's endpoint
+IP is absent from the candidate agent's reported IPs. Nodes with empty
+cluster names keep merging into their cluster view so standalone and
+not-yet-classified endpoint views of the same machine still fold together.
 Docker and Podman container CPU collection preserves the runtime-native raw
 per-core CPU percent, but monitoring-owned history and alert threshold
 evaluation use host-capacity-normalized CPU percent when host CPU capacity is
