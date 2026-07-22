@@ -1710,6 +1710,12 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if strings.Contains(integrationJob, "- backend_tests") {
 		t.Fatal("integration tests must run in parallel with backend tests")
 	}
+	if !strings.Contains(integrationJob, `tests/66-organization-sharing-approval-ui.spec.ts`) {
+		t.Fatal("integration release gate missing current organization-sharing coverage")
+	}
+	if strings.Contains(integrationJob, `tests/03-multi-tenant.spec.ts`) {
+		t.Fatal("integration release gate must not target the quarantined multi-tenant spec")
+	}
 	if strings.Contains(validationJob, "- publish_docker") {
 		t.Fatal("release asset digest validation must run in parallel with Docker publication")
 	}

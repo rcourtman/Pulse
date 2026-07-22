@@ -728,11 +728,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('gh release upload "$@"', content)
         self.assertIn('gh release upload failed on attempt ${attempt}/${max_attempts}; retrying in ${wait_seconds}s', content)
         self.assertIn('gh release upload failed after ${max_attempts} attempts', content)
-        self.assertIn("Running multi-tenant E2E suite...", content)
+        self.assertIn("Running current organization-sharing E2E suite...", content)
         self.assertIn(
-            "npx playwright test tests/03-multi-tenant.spec.ts --project=chromium --reporter=list",
+            "tests/66-organization-sharing-approval-ui.spec.ts",
             content,
         )
+        self.assertNotIn("npx playwright test tests/03-multi-tenant.spec.ts", content)
         self.assertIn('PULSE_E2E_ENTITLEMENT_PROFILE: "multi-tenant"', content)
         self.assertIn("Collect integration diagnostics", content)
         self.assertIn("release-integration-diagnostics/docker.log", content)

@@ -621,8 +621,11 @@ jobs:
               ;;
           esac
 
-          echo "Running multi-tenant E2E suite..."
-          npx playwright test tests/03-multi-tenant.spec.ts --project=chromium --reporter=list
+          echo "Running current organization-sharing E2E suite..."
+          npx playwright test \
+            tests/66-organization-sharing-approval-ui.spec.ts \
+            --project=chromium \
+            --reporter=list
 
           docker compose -f docker-compose.test.yml down -v
 

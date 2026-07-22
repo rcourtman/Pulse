@@ -832,6 +832,12 @@ TLS floor in the dynamic config.
    containing Playwright `test-results/` plus
    `release-integration-diagnostics/docker.log`; that Docker log must capture
    container state and the Pulse test server plus mock GitHub server logs.
+   The release integration job must also name at least one current,
+   non-quarantined browser spec. For the v6.1.0 release line that proof is
+   `tests/66-organization-sharing-approval-ui.spec.ts`; the job must not point
+   back at the wholly quarantined `tests/03-multi-tenant.spec.ts`, because
+   Playwright would correctly select zero tests and turn every publication
+   attempt into the same deterministic harness failure.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must
