@@ -193,6 +193,8 @@ func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	l.migrateAutoVacuum()
+
 	// Load webhook URLs from config table
 	urls := l.loadWebhookURLs()
 	if len(urls) > 0 {
@@ -670,6 +672,66 @@ func (l *SQLiteLogger) retentionWorker() {
 	}
 }
 
+// maxAuditReclaimPages caps how many freelist pages a single retention cycle
+// returns to the OS, so a large backlog drains over successive daily cycles
+// instead of holding the write lock in one long incremental_vacuum.
+const maxAuditReclaimPages = 50000
+
+// migrateAutoVacuum ensures the database uses incremental auto-vacuum so
+// retention deletes can return pages to the OS. Without it the deletes free
+// pages internally but audit.db never shrinks, the same bloat class fixed for
+// unified_resources.db under #1496. Set once at startup rather than in the
+// DSN: as a per-connection pragma it replays as a header write on every new
+// pool connection (#1601).
+func (l *SQLiteLogger) migrateAutoVacuum() {
+	var mode int
+	if err := l.db.QueryRow("PRAGMA auto_vacuum").Scan(&mode); err != nil {
+		log.Error().Err(err).Msg("Failed to check audit auto_vacuum mode")
+		return
+	}
+	if mode == 2 {
+		return
+	}
+
+	log.Info().Msg("Converting audit database to incremental auto-vacuum (one-time migration)")
+	start := time.Now()
+
+	if _, err := l.db.Exec("PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
+		log.Error().Err(err).Msg("Failed to set audit auto_vacuum mode")
+		return
+	}
+	if _, err := l.db.Exec("VACUUM"); err != nil {
+		log.Error().Err(err).Msg("Audit auto-vacuum migration VACUUM failed (will retry next restart)")
+		return
+	}
+
+	log.Info().Dur("took", time.Since(start)).Msg("Audit auto-vacuum migration complete")
+}
+
+// reclaimFreePages returns freed pages to the OS after retention deletes.
+// Callers must hold l.mu.
+func (l *SQLiteLogger) reclaimFreePages() {
+	var freelist int64
+	if err := l.db.QueryRow(`PRAGMA freelist_count`).Scan(&freelist); err != nil {
+		log.Error().Err(err).Msg("Failed to read audit freelist_count")
+		return
+	}
+	if freelist == 0 {
+		return
+	}
+	pages := freelist
+	if pages > maxAuditReclaimPages {
+		pages = maxAuditReclaimPages
+	}
+	if _, err := l.db.Exec(fmt.Sprintf(`PRAGMA incremental_vacuum(%d)`, pages)); err != nil {
+		log.Error().Err(err).Msg("Audit incremental vacuum failed")
+		return
+	}
+	if _, err := l.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		log.Error().Err(err).Msg("Audit WAL checkpoint failed")
+	}
+}
+
 // cleanupOldEvents deletes events older than the retention period.
 func (l *SQLiteLogger) cleanupOldEvents() {
 	if l.retentionDays <= 0 {
@@ -703,6 +765,8 @@ func (l *SQLiteLogger) cleanupOldEvents() {
 			fmt.Sprintf("Deleted %d events older than %d days", deleted, l.retentionDays),
 		)
 	}
+
+	l.reclaimFreePages()
 }
 
 // GetRetentionDays returns the current retention period.
