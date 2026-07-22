@@ -222,6 +222,9 @@ def render_record(
     published_eos = v5_eos_date or summary_metadata.get("planned_v5_eos_date", "")
     hotfix_exception = summary_metadata.get("hotfix_exception", "")
     hotfix_reason = summary_metadata.get("hotfix_reason", "")
+    require_windows_signing = summary_metadata.get("windows_authenticode_required", "")
+    unsigned_windows_exception = summary_metadata.get("unsigned_windows_exception", "")
+    unsigned_windows_reason = summary_metadata.get("unsigned_windows_reason", "")
     operator_note = summary_metadata.get("operator_note", "")
 
     lines = [
@@ -248,6 +251,12 @@ def render_record(
         lines.append(f"- Hotfix exception: {hotfix_exception}")
     if hotfix_reason:
         lines.append(f"- Hotfix reason: {hotfix_reason}")
+    if require_windows_signing:
+        lines.append(f"- Windows Authenticode required: {require_windows_signing}")
+    if unsigned_windows_exception:
+        lines.append(f"- Unsigned Windows exception: {unsigned_windows_exception}")
+    if unsigned_windows_reason:
+        lines.append(f"- Unsigned Windows reason: {unsigned_windows_reason}")
     if operator_note:
         lines.append(f"- Workflow operator note: {operator_note}")
     for note in notes:

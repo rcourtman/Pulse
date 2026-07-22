@@ -37,6 +37,15 @@ on:
         description: 'Stable only: reason for hotfix soak exception'
         required: false
         type: string
+      unsigned_windows_exception:
+        description: 'v6.1.0 only: publish Windows agents without Authenticode under the recorded owner exception'
+        required: false
+        type: boolean
+        default: false
+      unsigned_windows_reason:
+        description: 'v6.1.0 only: owner reason for the unsigned Windows exception'
+        required: false
+        type: string
       historical_asset_backfill_only:
         description: 'Repair an already-published release packet in place without rebuilding binaries'
         required: false
@@ -82,6 +91,9 @@ jobs:
       v5_eos_date: ${{ steps.promotion.outputs.v5_eos_date }}
       hotfix_exception: ${{ steps.promotion.outputs.hotfix_exception }}
       hotfix_reason: ${{ steps.promotion.outputs.hotfix_reason }}
+      require_windows_signing: ${{ steps.promotion.outputs.require_windows_signing }}
+      unsigned_windows_exception: ${{ steps.promotion.outputs.unsigned_windows_exception }}
+      unsigned_windows_reason: ${{ steps.promotion.outputs.unsigned_windows_reason }}
       promotion_mode: ${{ steps.promotion.outputs.promotion_mode }}
       is_stable_patch: ${{ steps.promotion.outputs.is_stable_patch }}
       historical_asset_backfill_only: ${{ steps.extract.outputs.historical_asset_backfill_only }}
@@ -177,6 +189,8 @@ jobs:
           V5_EOS_DATE_INPUT: ${{ github.event.inputs.v5_eos_date }}
           HOTFIX_EXCEPTION_INPUT: ${{ github.event.inputs.hotfix_exception }}
           HOTFIX_REASON_INPUT: ${{ github.event.inputs.hotfix_reason }}
+          UNSIGNED_WINDOWS_EXCEPTION_INPUT: ${{ github.event.inputs.unsigned_windows_exception }}
+          UNSIGNED_WINDOWS_REASON_INPUT: ${{ github.event.inputs.unsigned_windows_reason }}
         run: |
           set -euo pipefail
 
@@ -201,6 +215,14 @@ jobs:
           if [ "${HOTFIX_EXCEPTION_INPUT:-false}" = "true" ]; then
             HELPER_ARGS+=(--hotfix-exception)
           fi
+          if [ "${UNSIGNED_WINDOWS_EXCEPTION_INPUT:-false}" = "true" ]; then
+            HELPER_ARGS+=(
+              --unsigned-windows-exception
+              --unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT:-}"
+            )
+          elif [ -n "${UNSIGNED_WINDOWS_REASON_INPUT:-}" ]; then
+            HELPER_ARGS+=(--unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT}")
+          fi
 
           python3 scripts/release_control/resolve_release_promotion.py "${HELPER_ARGS[@]}" > "$RUNNER_TEMP/promotion-metadata.out"
           rm -f "$NOTES_FILE"
@@ -223,7 +245,7 @@ jobs:
     with:
       version: ${{ needs.prepare.outputs.version }}
       require_macos_signing: true
-      require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}
+      require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}
       windows_signing_backend: signpath
 
   # Frontend checks run in parallel with backend tests
@@ -724,7 +746,10 @@ jobs:
             --planned-ga-date "${{ needs.prepare.outputs.ga_date }}" \
             --planned-v5-eos-date "${{ needs.prepare.outputs.v5_eos_date }}" \
             --hotfix-exception "${{ needs.prepare.outputs.hotfix_exception }}" \
-            --hotfix-reason "${{ needs.prepare.outputs.hotfix_reason }}"
+            --hotfix-reason "${{ needs.prepare.outputs.hotfix_reason }}" \
+            --require-windows-signing "${{ needs.prepare.outputs.require_windows_signing }}" \
+            --unsigned-windows-exception "${{ needs.prepare.outputs.unsigned_windows_exception }}" \
+            --unsigned-windows-reason "${{ needs.prepare.outputs.unsigned_windows_reason }}"
 
           # The in-app "What's New" banner only fires when the release body has
           # a Highlights section (see frontend-modern/src/components/whatsNewModel.ts).

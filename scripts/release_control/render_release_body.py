@@ -219,6 +219,10 @@ def build_promotion_metadata_section(args: argparse.Namespace) -> str:
     lines.append(f"- Hotfix exception: {args.hotfix_exception}")
     if args.hotfix_reason:
         lines.append(f"- Hotfix reason: {args.hotfix_reason}")
+    lines.append(f"- Windows Authenticode required: {args.require_windows_signing}")
+    lines.append(f"- Unsigned Windows exception: {args.unsigned_windows_exception}")
+    if args.unsigned_windows_reason:
+        lines.append(f"- Unsigned Windows reason: {args.unsigned_windows_reason}")
     return "\n".join(lines)
 
 
@@ -239,6 +243,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--planned-v5-eos-date", default="")
     parser.add_argument("--hotfix-exception")
     parser.add_argument("--hotfix-reason", default="")
+    parser.add_argument("--require-windows-signing")
+    parser.add_argument("--unsigned-windows-exception")
+    parser.add_argument("--unsigned-windows-reason", default="")
     args = parser.parse_args()
 
     if args.validate_notes_file or args.validate_body_file:
@@ -264,6 +271,8 @@ def parse_args() -> argparse.Namespace:
         "--rollback-target": args.rollback_target,
         "--rollback-command": args.rollback_command,
         "--hotfix-exception": args.hotfix_exception,
+        "--require-windows-signing": args.require_windows_signing,
+        "--unsigned-windows-exception": args.unsigned_windows_exception,
     }
     missing = [name for name, value in required_render_args.items() if value is None]
     if missing:

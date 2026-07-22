@@ -91,6 +91,9 @@ Old metadata section.
                     "planned_v5_eos_date": "",
                     "hotfix_exception": "false",
                     "hotfix_reason": "",
+                    "require_windows_signing": "false",
+                    "unsigned_windows_exception": "false",
+                    "unsigned_windows_reason": "",
                 },
             )()
 
@@ -113,6 +116,8 @@ Old metadata section.
             )
             self.assertIn("https://pulserelay.pro/download.html", body)
             self.assertIn("- Rollback target: v5.1.28", body)
+            self.assertIn("- Windows Authenticode required: false", body)
+            self.assertIn("- Unsigned Windows exception: false", body)
             render_release_body.validate_release_body_shape(body, "6.0.0-rc.2")
 
     def test_flattened_release_notes_fail_closed(self) -> None:

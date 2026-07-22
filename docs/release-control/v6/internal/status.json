@@ -8396,7 +8396,7 @@
     },
     {
       "id": "single-build-release-promotion-path",
-      "summary": "Confirm normal RC, stable, and patch releases build one exact-SHA signed candidate in parallel with checks, promote that candidate without rebuilding, validate GitHub asset digests without full packet downloads, and run independent post-publication lanes concurrently.",
+      "summary": "Confirm normal RC, stable, and patch releases build one exact-SHA candidate with policy-required native signing in parallel with checks, promote that candidate without rebuilding, validate GitHub asset digests without full packet downloads, and run independent post-publication lanes concurrently.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",

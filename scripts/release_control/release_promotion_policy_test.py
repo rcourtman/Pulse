@@ -487,7 +487,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("build_release_candidate:", workflow)
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
-        self.assertIn("require_windows_signing: ${{ !contains(inputs.version, '-') }}", workflow)
+        self.assertIn(
+            "require_windows_signing: ${{ !contains(inputs.version, '-') && !(inputs.version == '6.1.0' && inputs.unsigned_windows_exception) }}",
+            workflow,
+        )
+        self.assertIn("unsigned_windows_exception:", workflow)
+        self.assertIn("unsigned_windows_reason:", workflow)
         self.assertIn("windows_signing_backend: signpath", workflow)
         self.assertRegex(
             workflow,
@@ -500,7 +505,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             r"      actions: read\n      contents: read\n    uses: \.\/\.github\/workflows\/build-release-candidate\.yml$",
         )
         self.assertIn("Definitive Dry-Run Verdict", workflow)
-        self.assertIn('require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success', workflow)
+        self.assertIn('require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success', workflow)
         self.assertIn('require_result "stable demo no-mutation verification" "$DEMO_RESULT" success', workflow)
         self.assertNotIn("if: ${{ github.event_name == 'workflow_dispatch' }}", workflow)
         self.assertIn("record_rc_to_ga_rehearsal.py --run-id ${{ github.run_id }}", workflow)
@@ -661,7 +666,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("timeout-minutes: 60", candidate_workflow)
         self.assertIn("Verify Native Signing Configuration", candidate_workflow)
         self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
-        self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}", content)
+        self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)
+        self.assertIn("unsigned_windows_exception:", content)
+        self.assertIn("unsigned_windows_reason:", content)
+        self.assertIn('version != "6.1.0"', resolver)
+        self.assertIn("not Authenticode-signed", resolver)
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
         self.assertIn("inputs.require_windows_signing", candidate_workflow)

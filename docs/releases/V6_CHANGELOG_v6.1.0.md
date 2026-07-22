@@ -17,8 +17,8 @@ _This changelog describes stable `v6.1.0` compared with stable `v6.0.5`._
   bounded native-tool execution.
 - Routed Agent Doctor workflow, `--report-ip` host identity, SAS transport, and
   SCSI SMART attribute support.
-- Exact-SHA SignPath submission, Authenticode verification, signer validation,
-  and evidence recording for stable Windows Unified Agent artifacts.
+- Exact-SHA, checksum, detached-signature, manifest, and published-digest
+  verification for Windows Unified Agent artifacts.
 
 ## Changed
 
@@ -60,7 +60,11 @@ _This changelog describes stable `v6.1.0` compared with stable `v6.0.5`._
 - Rollback target: `v6.0.5`
 - Rollback command: `./scripts/install.sh --version v6.0.5`
 - Promotion path: owner-approved exact-SHA stable cutoff from `main`, using the
-  one-version soak exception and the single-build signed-candidate workflow
+  one-version soak exception and the single-build release-candidate workflow
+- Windows signing decision: one-release owner exception; the `v6.1.0` Windows
+  Unified Agent binaries are not Authenticode-signed and may show an Unknown
+  Publisher warning, while checksums and detached `.sig`/`.sshsig` signatures
+  remain required. Later stable releases restore the Authenticode requirement.
 - Mobile decision: `existing-mobile-build-compatible`; Pulse Mobile `1.0.0`
   iOS build `11` and Android versionCode `9` require no companion upload, and
   no public store rollout is part of this server release

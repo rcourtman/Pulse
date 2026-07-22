@@ -221,6 +221,8 @@ def resolve_metadata(
     hotfix_exception: bool,
     hotfix_reason_input: str,
     release_notes_input: str,
+    unsigned_windows_exception: bool = False,
+    unsigned_windows_reason_input: str = "",
     derive_rollback_when_missing: bool = False,
     list_stable_tags_fn: Callable[[], list[str]] = list_stable_tags,
     list_same_version_rc_tags_fn: Callable[[str], list[str]] = list_same_version_rc_tags,
@@ -236,10 +238,32 @@ def resolve_metadata(
     ga_date = (ga_date_input or "").strip()
     v5_eos_date = (v5_eos_date_input or "").strip()
     hotfix_reason = normalize_whitespace(hotfix_reason_input)
+    unsigned_windows_reason = normalize_whitespace(unsigned_windows_reason_input)
     release_notes = release_notes_input or ""
     is_prerelease = is_prerelease_version(version)
     stable_patch = is_stable_patch_version(version)
     promotion_mode = "prerelease" if is_prerelease else "stable-rc-promotion"
+
+    if unsigned_windows_exception:
+        if version != "6.1.0":
+            raise ValueError(
+                "unsigned_windows_exception is approved only for stable v6.1.0. "
+                "Later stable releases must restore Windows Authenticode signing."
+            )
+        if not unsigned_windows_reason:
+            raise ValueError(
+                "unsigned_windows_reason is required when unsigned_windows_exception is true."
+            )
+        if release_notes and "not authenticode-signed" not in release_notes.lower():
+            raise ValueError(
+                "Stable v6.1.0 release_notes must disclose that Windows binaries are not Authenticode-signed."
+            )
+    elif unsigned_windows_reason:
+        raise ValueError(
+            "unsigned_windows_reason is allowed only when unsigned_windows_exception is true."
+        )
+
+    require_windows_signing = not is_prerelease and not unsigned_windows_exception
 
     if not rollback_tag and derive_rollback_when_missing:
         rollback_tag = derive_latest_stable_rollback_tag(version, list_stable_tags_fn())
@@ -374,6 +398,9 @@ def resolve_metadata(
         "v5_eos_date": v5_eos_date,
         "hotfix_exception": "true" if hotfix_exception else "false",
         "hotfix_reason": hotfix_reason,
+        "unsigned_windows_exception": "true" if unsigned_windows_exception else "false",
+        "unsigned_windows_reason": unsigned_windows_reason,
+        "require_windows_signing": "true" if require_windows_signing else "false",
         "soak_hours": soak_hours,
     }
 
@@ -395,6 +422,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--v5-eos-date", default="")
     parser.add_argument("--hotfix-exception", action="store_true")
     parser.add_argument("--hotfix-reason", default="")
+    parser.add_argument("--unsigned-windows-exception", action="store_true")
+    parser.add_argument("--unsigned-windows-reason", default="")
     parser.add_argument("--release-notes-file", default="")
     return parser.parse_args()
 
@@ -415,6 +444,8 @@ def main() -> int:
         hotfix_exception=args.hotfix_exception,
         hotfix_reason_input=args.hotfix_reason,
         release_notes_input=release_notes,
+        unsigned_windows_exception=args.unsigned_windows_exception,
+        unsigned_windows_reason_input=args.unsigned_windows_reason,
     )
 
     for key, value in metadata.items():

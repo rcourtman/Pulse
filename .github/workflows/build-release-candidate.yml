@@ -365,7 +365,7 @@ jobs:
           retention-days: 30
 
   build:
-    name: Build and Validate Signed Candidate
+    name: Build and Validate Release Candidate
     needs: [sign-macos-agent, sign-windows-agent]
     if: ${{ always() && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.sign-windows-agent.result == 'success') }}
     runs-on: ubuntu-24.04
@@ -450,7 +450,7 @@ jobs:
           name: windows-signing-evidence-${{ github.sha }}-${{ inputs.version }}
           path: release-candidate-manifest
 
-      - name: Build signed release candidate
+      - name: Build release candidate
         run: ./scripts/build-release.sh "${{ inputs.version }}"
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}

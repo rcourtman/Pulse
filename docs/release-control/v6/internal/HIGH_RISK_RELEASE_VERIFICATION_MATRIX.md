@@ -1021,18 +1021,23 @@ Companion drill:
   6. Confirm `v6.0.5` release timestamps and asset count remain unchanged and
      the public demo remains healthy on stable `6.0.5`.
 - Pass when:
-  The external rehearsal proves the canonical candidate builder, local tests
-  pin candidate-only publication and GitHub digest validation, and the static
-  release DAG contains no duplicate release build, backend-to-integration
-  serialization, full-download standard validator, or avoidable post-release
-  serialization.
+  The external rehearsal proves the canonical exact-SHA candidate builder and
+  its version-specific native-signing policy. If the `v6.1.0` Windows exception
+  is used, the rehearsal must preserve checksum, detached-signature, manifest,
+  and digest controls and record the owner reason and public disclosure. Local
+  tests pin candidate-only publication and GitHub digest validation, and the
+  static release DAG contains no duplicate release build,
+  backend-to-integration serialization, full-download standard validator, or
+  avoidable post-release serialization.
 - Latest exercised record:
   `docs/release-control/v6/internal/records/single-build-release-promotion-path-2026-07-09.md`
 - Block release if:
   Publication rebuilds release assets, the candidate manifest does not pin the
   exact SHA and complete asset set, standard validation downloads the full
   release packet, independent post-release jobs are serialized, or the
-  definitive verdict can pass without all applicable downstream results.
+  definitive verdict can pass without all applicable downstream results. Also
+  block if an unsigned stable Windows exception can apply to any version other
+  than `v6.1.0` or can omit its owner reason and release-note disclosure.
 
 ## Gate: `operational-trust-canonical-lifecycle`
 

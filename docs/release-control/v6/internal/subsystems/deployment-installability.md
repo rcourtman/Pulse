@@ -357,10 +357,10 @@ TLS floor in the dynamic config.
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
 2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against the published release, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
    Normal releases are single-build promotions. The exact pushed SHA must
-   produce one signed candidate through
-   `.github/workflows/build-release-candidate.yml` while independent release
-   checks run in parallel. `create-release.yml` may publish only that candidate
-   after `scripts/release_candidate_manifest.py` verifies its version, source
+   produce one release candidate with the policy-required native signing lanes
+   through `.github/workflows/build-release-candidate.yml` while independent
+   release checks run in parallel. `create-release.yml` may publish only that
+   candidate after `scripts/release_candidate_manifest.py` verifies its version, source
    SHA, filenames, sizes, and SHA-256 values. Standard post-upload validation
    must compare that manifest with GitHub's server-side asset digests instead
    of downloading the complete release packet again. Historical repair and
@@ -374,17 +374,19 @@ TLS floor in the dynamic config.
    it must not decompress a multi-gigabyte release archive again for every
    required entry, and the release-promotion contract test must reject a return
    to per-entry archive streaming.
-   A manually dispatched release rehearsal must activate the same signed
+   A manually dispatched release rehearsal must activate the same
    candidate build whenever its required `version` input is non-empty and must
    apply the same channel-specific native-signing policy as a publish run.
    macOS notarization remains mandatory for both prerelease and stable
-   candidates. Windows Authenticode remains mandatory for stable candidates;
-   prerelease candidates may retain checksum and detached-signature
-   verification without Authenticode while the release packet explicitly
-   discloses the unknown-publisher warning and stable promotion remains
-   blocked. A cheap signing-configuration job must report every missing secret
-   for the platforms required by that candidate before either platform runner
-   is allocated. Stable Windows signing must use SignPath's GitHub
+   candidates. Windows Authenticode remains mandatory for stable candidates
+   except for the explicitly version-bound `v6.1.0` owner exception;
+   prerelease candidates and that one stable exception may retain checksum and
+   detached-signature verification without Authenticode while the release
+   packet explicitly discloses the unknown-publisher warning. Prerelease promotion remains
+   blocked on the normal stable signing requirement, and every stable version
+   after `v6.1.0` restores it automatically. A cheap signing-configuration job
+   must report every missing secret for the platforms required by that
+   candidate before either platform runner is allocated. Stable Windows signing must use SignPath's GitHub
    trusted-build-system action by default, submit an immutable GitHub artifact
    by id, verify every returned executable, and retain evidence binding the
    request, source SHA, signer identity, and file digests. A repository-secret
@@ -1028,9 +1030,12 @@ Authenticode backend. The reusable builder fails fast on missing configuration,
 submits the GitHub-hosted unsigned artifact through the pinned official action,
 verifies all returned executables, and stores request/source/signer/digest
 evidence beside the candidate manifest. Release Dry Run now has a terminal
-verdict covering the signed candidate and no-mutation demo lane. The gate stays
-blocked until the external SignPath project is configured and one stable dry
-run passes for an exact `main` SHA.
+verdict covering the exact-SHA candidate and no-mutation demo lane. Stable
+rehearsal `29927692302` confirmed that the external SignPath project was not
+configured and stopped without creating a public release. The release owner
+subsequently approved a `v6.1.0`-only unsigned-Windows exception; the gate stays
+blocked until a new exact-`main` rehearsal proves that exception and the
+remaining candidate controls.
 Every caller of the reusable release-candidate builder must delegate
 `actions: read` alongside `contents: read`; the Windows signing job reads the
 exact uploaded artifact through the GitHub Actions API, and GitHub validates
@@ -1049,7 +1054,7 @@ This stable minor release uses `promoted_from_tag=v6.1.0-rc.4`,
 recorded on 2026-07-22. The workflow input `hotfix_exception=true` carries that
 approved soak bypass through the existing promotion resolver; it does not
 reclassify the release as a patch hotfix. The exact stable `main` SHA must pass
-the signed no-publication dry run before the same SHA is dispatched through the
+the no-publication dry run before the same SHA is dispatched through the
 single-build publish workflow. The release publishes versioned GitHub, Docker,
 and Helm artifacts and advances the stable/latest install pointers and stable
 semver aliases. It promotes
@@ -1080,9 +1085,12 @@ Agent Doctor into a routed, filterable diagnostic workflow with copyable
 reports and platform-correct host-local cleanup handoff, adds SAS and SCSI SMART
 coverage, restores actionable agent-update controls, fixes Patrol finding and
 proposal provenance, improves metrics and audit-store concurrency, and prepares
-the stable Windows SignPath signing path. Stable publication requires the
-SignPath-returned Windows binaries to pass Authenticode and signer verification;
-the unsigned-Windows prerelease exception does not apply to `v6.1.0`.
+the stable Windows SignPath signing path. For `v6.1.0`, the release owner
+explicitly waived Authenticode after the first stable rehearsal exposed
+unavailable external SignPath configuration. The unsigned Windows binaries
+remain exact-SHA and manifest-bound with checksum, detached `.sig`/`.sshsig`,
+and published-digest verification, and the release notes disclose the Unknown
+Publisher state. This exception cannot apply to a later stable version.
 The stable server cut is classified `existing-mobile-build-compatible`. Pulse
 Mobile `1.0.0` iOS build `11` and Android versionCode `9` remain the existing
 candidate builds; the canonical core/mobile contract proves that `v6.1.0`
@@ -2465,7 +2473,9 @@ externally owned bounded residual, but only when the RC packet explicitly
 discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
 digest controls. Stable publication and the stable-path dry-run must continue
-to require both native signing lanes. `scripts/build-release.sh` must replace
+to require both native signing lanes except for the recorded, version-bound
+`v6.1.0` Windows exception; every subsequent stable release restores both
+requirements. `scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
 closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through

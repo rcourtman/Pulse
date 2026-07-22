@@ -95,6 +95,8 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --require v5_eos_date \
   --require hotfix_exception \
   --require hotfix_reason \
+  --require unsigned_windows_exception \
+  --require unsigned_windows_reason \
   --require draft_only \
   --require mobile_release_decision \
   --require mobile_release_evidence
@@ -195,6 +197,8 @@ GA_DATE=""
 V5_EOS_DATE=""
 HOTFIX_EXCEPTION="false"
 HOTFIX_REASON=""
+UNSIGNED_WINDOWS_EXCEPTION="false"
+UNSIGNED_WINDOWS_REASON=""
 
 echo ""
 read -r -p "Rollback stable version (for example 5.1.14 or v5.1.14): " ROLLBACK_VERSION
@@ -256,6 +260,19 @@ if [ "$IS_PRERELEASE" != "true" ]; then
         exit 1
       fi
     fi
+
+    if [ "$VERSION" = "6.1.0" ]; then
+      echo ""
+      read -r -p "Use the recorded v6.1.0 unsigned Windows exception? [y/N] " UNSIGNED_WINDOWS_REPLY
+      if [[ "$UNSIGNED_WINDOWS_REPLY" =~ ^[Yy]$ ]]; then
+        UNSIGNED_WINDOWS_EXCEPTION="true"
+        read -r -p "Unsigned Windows exception reason: " UNSIGNED_WINDOWS_REASON
+        if [ -z "$UNSIGNED_WINDOWS_REASON" ]; then
+          echo "❌ Error: an owner reason is required for the unsigned Windows exception"
+          exit 1
+        fi
+      fi
+    fi
 fi
 
 # Trigger the workflow
@@ -279,6 +296,12 @@ fi
 if [ "$HOTFIX_EXCEPTION" = "true" ]; then
   RESOLVER_ARGS+=(--hotfix-exception)
 fi
+if [ "$UNSIGNED_WINDOWS_EXCEPTION" = "true" ]; then
+  RESOLVER_ARGS+=(
+    --unsigned-windows-exception
+    --unsigned-windows-reason "$UNSIGNED_WINDOWS_REASON"
+  )
+fi
 python3 scripts/release_control/resolve_release_promotion.py "${RESOLVER_ARGS[@]}" >/tmp/pulse-release-metadata.out
 cat /tmp/pulse-release-metadata.out
 
@@ -294,6 +317,8 @@ if [ -n "$NOTES_FILE" ]; then
     --arg v5_eos_date "$V5_EOS_DATE" \
     --argjson hotfix_exception "$HOTFIX_EXCEPTION" \
     --arg hotfix_reason "$HOTFIX_REASON" \
+    --argjson unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION" \
+    --arg unsigned_windows_reason "$UNSIGNED_WINDOWS_REASON" \
     --argjson draft_only false \
     --arg mobile_release_decision "$MOBILE_RELEASE_DECISION" \
     --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
@@ -306,6 +331,8 @@ if [ -n "$NOTES_FILE" ]; then
       v5_eos_date: $v5_eos_date,
       hotfix_exception: $hotfix_exception,
       hotfix_reason: $hotfix_reason,
+      unsigned_windows_exception: $unsigned_windows_exception,
+      unsigned_windows_reason: $unsigned_windows_reason,
       draft_only: $draft_only,
       mobile_release_decision: $mobile_release_decision,
       mobile_release_evidence: $mobile_release_evidence

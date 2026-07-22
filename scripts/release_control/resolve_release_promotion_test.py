@@ -138,6 +138,83 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         )
         self.assertEqual(metadata["promoted_from_tag"], "v6.0.0-rc.2")
         self.assertEqual(metadata["soak_hours"], "73")
+        self.assertEqual(metadata["require_windows_signing"], "true")
+        self.assertEqual(metadata["unsigned_windows_exception"], "false")
+
+    def test_v610_owner_exception_allows_disclosed_unsigned_windows_candidate(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.1.0",
+            promoted_from_tag_input="v6.1.0-rc.4",
+            rollback_version_input="v6.0.5",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input="Owner waived the remaining prerelease soak.",
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.1.0."
+            ),
+            unsigned_windows_exception=True,
+            unsigned_windows_reason_input=(
+                "Release owner accepted the Windows unknown-publisher warning for v6.1.0."
+            ),
+            tag_exists_fn=lambda tag: tag in {"v6.1.0-rc.4", "v6.0.5"},
+            tag_commit_fn=lambda tag: "rc4-commit",
+            head_descends_from_fn=lambda commit: commit == "rc4-commit",
+            tag_created_unix_fn=lambda tag: 100,
+            now_unix_fn=lambda: 100 + (27 * 3600),
+        )
+
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+        self.assertEqual(
+            metadata["unsigned_windows_reason"],
+            "Release owner accepted the Windows unknown-publisher warning for v6.1.0.",
+        )
+
+    def test_unsigned_windows_exception_is_rejected_for_other_stable_versions(self) -> None:
+        with self.assertRaisesRegex(ValueError, "approved only for stable v6.1.0"):
+            resolver.resolve_metadata(
+                version="6.1.1",
+                promoted_from_tag_input="",
+                rollback_version_input="v6.1.0",
+                ga_date_input="",
+                v5_eos_date_input="",
+                hotfix_exception=True,
+                hotfix_reason_input="Emergency patch.",
+                release_notes_input="Windows binaries are not Authenticode-signed.",
+                unsigned_windows_exception=True,
+                unsigned_windows_reason_input="Not approved for this version.",
+                tag_exists_fn=lambda tag: True,
+            )
+
+    def test_unsigned_windows_exception_requires_reason_and_release_note_disclosure(self) -> None:
+        common = {
+            "version": "6.1.0",
+            "promoted_from_tag_input": "v6.1.0-rc.4",
+            "rollback_version_input": "v6.0.5",
+            "ga_date_input": "",
+            "v5_eos_date_input": "",
+            "hotfix_exception": True,
+            "hotfix_reason_input": "Owner waived the remaining prerelease soak.",
+            "unsigned_windows_exception": True,
+            "tag_exists_fn": lambda tag: True,
+            "tag_commit_fn": lambda tag: "rc4-commit",
+            "head_descends_from_fn": lambda commit: True,
+            "tag_created_unix_fn": lambda tag: 100,
+            "now_unix_fn": lambda: 100 + (27 * 3600),
+        }
+        with self.assertRaisesRegex(ValueError, "unsigned_windows_reason is required"):
+            resolver.resolve_metadata(
+                **common,
+                release_notes_input="Windows binaries are not Authenticode-signed.",
+                unsigned_windows_reason_input="",
+            )
+        with self.assertRaisesRegex(ValueError, "must disclose"):
+            resolver.resolve_metadata(
+                **common,
+                release_notes_input="Windows agent details omitted.",
+                unsigned_windows_reason_input="Owner accepted the warning.",
+            )
 
     def test_stable_requires_release_notes_notice_when_supplied(self) -> None:
         with self.assertRaisesRegex(

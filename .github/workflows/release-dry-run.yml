@@ -42,6 +42,15 @@ on:
         description: 'Stable rehearsal only: reason for hotfix soak exception'
         required: false
         type: string
+      unsigned_windows_exception:
+        description: 'v6.1.0 only: rehearse Windows agents without Authenticode under the recorded owner exception'
+        required: false
+        type: boolean
+        default: false
+      unsigned_windows_reason:
+        description: 'v6.1.0 only: owner reason for the unsigned Windows exception'
+        required: false
+        type: string
       note:
         description: 'Optional note/reason for the dry run'
         required: false
@@ -70,7 +79,7 @@ jobs:
     with:
       version: ${{ inputs.version }}
       require_macos_signing: true
-      require_windows_signing: ${{ !contains(inputs.version, '-') }}
+      require_windows_signing: ${{ !contains(inputs.version, '-') && !(inputs.version == '6.1.0' && inputs.unsigned_windows_exception) }}
       windows_signing_backend: signpath
 
   dry-run:
@@ -92,6 +101,9 @@ jobs:
       soak_hours: ${{ steps.rehearsal.outputs.soak_hours }}
       hotfix_exception: ${{ steps.rehearsal.outputs.hotfix_exception }}
       hotfix_reason: ${{ steps.rehearsal.outputs.hotfix_reason }}
+      require_windows_signing: ${{ steps.rehearsal.outputs.require_windows_signing }}
+      unsigned_windows_exception: ${{ steps.rehearsal.outputs.unsigned_windows_exception }}
+      unsigned_windows_reason: ${{ steps.rehearsal.outputs.unsigned_windows_reason }}
 
     steps:
       - name: Validate release ref
@@ -131,6 +143,8 @@ jobs:
           V5_EOS_DATE_INPUT: ${{ inputs.v5_eos_date }}
           HOTFIX_EXCEPTION_INPUT: ${{ inputs.hotfix_exception }}
           HOTFIX_REASON_INPUT: ${{ inputs.hotfix_reason }}
+          UNSIGNED_WINDOWS_EXCEPTION_INPUT: ${{ inputs.unsigned_windows_exception }}
+          UNSIGNED_WINDOWS_REASON_INPUT: ${{ inputs.unsigned_windows_reason }}
         run: |
           set -euo pipefail
 
@@ -170,6 +184,14 @@ jobs:
           )
           if [ "${HOTFIX_EXCEPTION_INPUT:-false}" = "true" ]; then
             HELPER_ARGS+=(--hotfix-exception)
+          fi
+          if [ "${UNSIGNED_WINDOWS_EXCEPTION_INPUT:-false}" = "true" ]; then
+            HELPER_ARGS+=(
+              --unsigned-windows-exception
+              --unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT:-}"
+            )
+          elif [ -n "${UNSIGNED_WINDOWS_REASON_INPUT:-}" ]; then
+            HELPER_ARGS+=(--unsigned-windows-reason "${UNSIGNED_WINDOWS_REASON_INPUT}")
           fi
           if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then
             # Scheduled watchdog runs carry no dispatch inputs; derive the
@@ -373,6 +395,11 @@ jobs:
               if [ -n "${{ steps.rehearsal.outputs.hotfix_reason }}" ]; then
                 echo "- Hotfix reason: ${{ steps.rehearsal.outputs.hotfix_reason }}"
               fi
+              echo "- Windows Authenticode required: ${{ steps.rehearsal.outputs.require_windows_signing }}"
+              echo "- Unsigned Windows exception: ${{ steps.rehearsal.outputs.unsigned_windows_exception }}"
+              if [ -n "${{ steps.rehearsal.outputs.unsigned_windows_reason }}" ]; then
+                echo "- Unsigned Windows reason: ${{ steps.rehearsal.outputs.unsigned_windows_reason }}"
+              fi
               if [ -n "${NOTE}" ]; then
                 echo "- Operator note: ${NOTE}"
               fi
@@ -429,6 +456,9 @@ jobs:
           PREFLIGHT_RESULT: ${{ needs.dry-run.result }}
           DEMO_RESULT: ${{ needs.demo_path_preflight.result }}
           WINDOWS_SIGNING_BACKEND: ${{ needs.build_release_candidate.outputs.windows_signing_backend }}
+          REQUIRE_WINDOWS_SIGNING: ${{ needs.dry-run.outputs.require_windows_signing }}
+          UNSIGNED_WINDOWS_EXCEPTION: ${{ needs.dry-run.outputs.unsigned_windows_exception }}
+          UNSIGNED_WINDOWS_REASON: ${{ needs.dry-run.outputs.unsigned_windows_reason }}
         run: |
           set -euo pipefail
           failed=0
@@ -445,7 +475,7 @@ jobs:
           require_result "release preflight" "$PREFLIGHT_RESULT" success
           require_result "stable demo no-mutation verification" "$DEMO_RESULT" success
           if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "${VERSION_INPUT:-}" ]; then
-            require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success
+            require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success
           elif [ "$CANDIDATE_RESULT" != "skipped" ]; then
             echo "::error::Scheduled watchdog candidate result was ${CANDIDATE_RESULT}; expected skipped."
             failed=1
@@ -458,7 +488,12 @@ jobs:
             echo "- Version: \`${VERSION_INPUT:-scheduled}\`"
             echo "- Release preflight: \`${PREFLIGHT_RESULT}\`"
             echo "- Stable demo verification: \`${DEMO_RESULT}\`"
-            echo "- Signed candidate: \`${CANDIDATE_RESULT}\`"
+            echo "- Release candidate: \`${CANDIDATE_RESULT}\`"
+            echo "- Windows Authenticode required: \`${REQUIRE_WINDOWS_SIGNING}\`"
+            echo "- Unsigned Windows exception: \`${UNSIGNED_WINDOWS_EXCEPTION}\`"
+            if [ -n "${UNSIGNED_WINDOWS_REASON:-}" ]; then
+              echo "- Unsigned Windows reason: ${UNSIGNED_WINDOWS_REASON}"
+            fi
             if [ -n "${WINDOWS_SIGNING_BACKEND:-}" ]; then
               echo "- Windows signing backend: \`${WINDOWS_SIGNING_BACKEND}\`"
             fi

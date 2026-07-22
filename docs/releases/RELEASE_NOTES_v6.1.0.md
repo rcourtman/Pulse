@@ -41,8 +41,9 @@ plus the final compatibility and reliability fixes in the stable cutoff.
 - `--report-ip` can set the Unified Agent's reported host address and becomes
   the leading host-identity signal.
 - Disk monitoring understands SAS transport and SCSI SMART attributes.
-- Windows Unified Agent artifacts use the governed exact-SHA SignPath path;
-  stable publication requires Authenticode, signer, and digest verification.
+- Windows Unified Agent artifacts remain bound to the exact release SHA and
+  retain checksum, detached-signature, manifest, and published-digest
+  verification.
 
 ## Improved
 
@@ -92,6 +93,11 @@ plus the final compatibility and reliability fixes in the stable cutoff.
 Use the normal v6 install or update flow for `v6.1.0`. Existing Unified Agent
 configurations keep one authoritative Pulse server; observer reporting remains
 opt-in and no observer is created during upgrade.
+
+Windows Unified Agent binaries in `v6.1.0` are not Authenticode-signed and may
+show an Unknown Publisher warning. Verify the published checksums and detached
+`.sig` or `.sshsig` signatures before installation. This is a one-release owner
+exception; later stable releases restore the Windows Authenticode requirement.
 
 The rollback target is `v6.0.5`. The exact rollback reinstall command is:
 

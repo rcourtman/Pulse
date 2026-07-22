@@ -29,6 +29,9 @@ SUMMARY = """# Prerelease-to-GA Rehearsal Summary
 - Planned GA date: 2026-03-15
 - Planned v5 end-of-support date: 2026-06-11
 - Hotfix exception: false
+- Windows Authenticode required: false
+- Unsigned Windows exception: true
+- Unsigned Windows reason: v6.1.0 owner exception
 - Operator note: dry-run from test
 """
 
@@ -43,6 +46,8 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
         self.assertEqual(parsed["rollback_command"], "`./scripts/install.sh --version v5.1.23`")
         self.assertEqual(parsed["planned_ga_date"], "2026-03-15")
         self.assertEqual(parsed["planned_v5_eos_date"], "2026-06-11")
+        self.assertEqual(parsed["windows_authenticode_required"], "false")
+        self.assertEqual(parsed["unsigned_windows_exception"], "true")
 
     def test_render_record_contains_required_fields(self) -> None:
         rendered = mod.render_record(
@@ -65,6 +70,9 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
         self.assertIn("Exact rollback or reinstall command: `./scripts/install.sh --version v5.1.23`", rendered)
         self.assertIn("Exact GA date to publish: 2026-03-15", rendered)
         self.assertIn("Exact v5 end-of-support date to publish: 2026-06-13", rendered)
+        self.assertIn("Windows Authenticode required: false", rendered)
+        self.assertIn("Unsigned Windows exception: true", rendered)
+        self.assertIn("Unsigned Windows reason: v6.1.0 owner exception", rendered)
         self.assertIn("Publish GA release notes with the EOS date.", rendered)
         self.assertIn("```md", rendered)
 

@@ -174,6 +174,13 @@ Cloud, and self-hosted production users.
      Run` and the normal single-build publication workflow. Only a security,
      data-loss, upgrade-breaking, startup-blocking, or release-pipeline defect
      may reopen the cutoff; ordinary findings move to v6.1.1.
+   - After exact-SHA rehearsal `29927692302` exposed unavailable external
+     SignPath configuration, the release owner approved a `v6.1.0`-only
+     Windows Authenticode exception. The Windows artifacts must remain bound
+     by the exact-SHA candidate manifest, checksums, detached `.sig`/`.sshsig`
+     signatures, and published digests, and the public notes must disclose the
+     Unknown Publisher state. Later stable releases restore the Authenticode
+     requirement; this flag cannot be reused for another version.
    - Unproved self-service commercial transitions remain unavailable and
      unadvertised under the exposure-safety gate. This exception does not
      authorize enabling that feature or running a production billing proof.
@@ -181,11 +188,12 @@ Cloud, and self-hosted production users.
 ## Single-Build Release Path
 
 1. Every normal RC, stable, and patch release is initiated once through
-   `create-release.yml`. The workflow builds one signed candidate for the exact
-   pushed SHA while frontend, backend, Docker, Helm, and integration checks run
-   in parallel. No tag, draft, or public release mutation occurs until those
-   checks and the candidate build pass.
-2. The signed candidate is uploaded as a one-day Actions artifact with a
+   `create-release.yml`. The workflow builds one exact-SHA candidate with the
+   native signing lanes required by that version's governed policy while
+   frontend, backend, Docker, Helm, and integration checks run in parallel. No
+   tag, draft, or public release mutation occurs until those checks and the
+   candidate build pass.
+2. The release candidate is uploaded as a one-day Actions artifact with a
    machine-readable manifest that pins source SHA, version, filename, size, and
    SHA-256 for every release asset. Publication downloads and verifies that
    exact candidate; it must not rebuild release binaries or installers.

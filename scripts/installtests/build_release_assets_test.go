@@ -345,7 +345,7 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Operational Trust",
 		"Actions provides a dedicated inbox",
 		"existing Pulse Mobile candidate",
-		"SignPath",
+		"not Authenticode-signed",
 		"The rollback target is `v"+previous+"`",
 	)
 	assertFileContainsAllNormalized(t, changelogPath,
@@ -383,9 +383,9 @@ func TestCurrentStableMinorReleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"`rollback_version=v"+previous+"`",
-		"The exact stable `main` SHA must pass the signed no-publication dry run before the same SHA is dispatched through the single-build publish workflow.",
+		"The exact stable `main` SHA must pass the no-publication dry run before the same SHA is dispatched through the single-build publish workflow.",
 		"The stable server cut is classified `existing-mobile-build-compatible`.",
-		"Stable publication requires the SignPath-returned Windows binaries to pass Authenticode and signer verification",
+		"This exception cannot apply to a later stable version",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
 }
@@ -842,13 +842,22 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	}
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_macos_signing: true`,
-		`require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}`,
+		`require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}`,
+		`unsigned_windows_exception:`,
+		`unsigned_windows_reason:`,
 		`windows_signing_backend: signpath`,
 	)
 	assertFileContainsAll(t, repoFile(".github", "workflows", "release-dry-run.yml"),
 		`Definitive Dry-Run Verdict`,
-		`require_result "exact-SHA signed candidate" "$CANDIDATE_RESULT" success`,
+		`require_windows_signing: ${{ !contains(inputs.version, '-') && !(inputs.version == '6.1.0' && inputs.unsigned_windows_exception) }}`,
+		`require_result "exact-SHA release candidate" "$CANDIDATE_RESULT" success`,
 		`require_result "stable demo no-mutation verification" "$DEMO_RESULT" success`,
+	)
+	assertFileContainsAll(t, repoFile("scripts", "release_control", "resolve_release_promotion.py"),
+		`version != "6.1.0"`,
+		`unsigned_windows_reason is required`,
+		`not Authenticode-signed`,
+		`require_windows_signing = not is_prerelease and not unsigned_windows_exception`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "build-release.sh"),
 		`PULSE_AGENT_NATIVE_BINARIES_DIR`,

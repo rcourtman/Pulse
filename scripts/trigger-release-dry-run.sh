@@ -82,6 +82,8 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --require v5_eos_date \
   --require hotfix_exception \
   --require hotfix_reason \
+  --require unsigned_windows_exception \
+  --require unsigned_windows_reason \
   --require note \
   --require mobile_release_decision \
   --require mobile_release_evidence
@@ -114,6 +116,8 @@ GA_DATE=""
 V5_EOS_DATE=""
 HOTFIX_EXCEPTION="false"
 HOTFIX_REASON=""
+UNSIGNED_WINDOWS_EXCEPTION="false"
+UNSIGNED_WINDOWS_REASON=""
 
 echo ""
 read -r -p "Rollback stable version (for example 5.1.14 or v5.1.14): " ROLLBACK_VERSION
@@ -166,6 +170,19 @@ if [ "$IS_PRERELEASE" != "true" ]; then
       exit 1
     fi
   fi
+
+  if [ "$VERSION" = "6.1.0" ]; then
+    echo ""
+    read -r -p "Use the recorded v6.1.0 unsigned Windows exception? [y/N] " UNSIGNED_WINDOWS_REPLY
+    if [[ "$UNSIGNED_WINDOWS_REPLY" =~ ^[Yy]$ ]]; then
+      UNSIGNED_WINDOWS_EXCEPTION="true"
+      read -r -p "Unsigned Windows exception reason: " UNSIGNED_WINDOWS_REASON
+      if [ -z "$UNSIGNED_WINDOWS_REASON" ]; then
+        echo "❌ Error: an owner reason is required for the unsigned Windows exception"
+        exit 1
+      fi
+    fi
+  fi
 fi
 
 echo ""
@@ -186,6 +203,12 @@ fi
 if [ "$HOTFIX_EXCEPTION" = "true" ]; then
   RESOLVER_ARGS+=(--hotfix-exception --hotfix-reason "$HOTFIX_REASON")
 fi
+if [ "$UNSIGNED_WINDOWS_EXCEPTION" = "true" ]; then
+  RESOLVER_ARGS+=(
+    --unsigned-windows-exception
+    --unsigned-windows-reason "$UNSIGNED_WINDOWS_REASON"
+  )
+fi
 python3 scripts/release_control/resolve_release_promotion.py "${RESOLVER_ARGS[@]}" >/tmp/pulse-release-dry-run-metadata.out
 cat /tmp/pulse-release-dry-run-metadata.out
 
@@ -200,6 +223,8 @@ gh workflow run release-dry-run.yml \
   -f v5_eos_date="$V5_EOS_DATE" \
   -f hotfix_exception="$HOTFIX_EXCEPTION" \
   -f hotfix_reason="$HOTFIX_REASON" \
+  -f unsigned_windows_exception="$UNSIGNED_WINDOWS_EXCEPTION" \
+  -f unsigned_windows_reason="$UNSIGNED_WINDOWS_REASON" \
   -f note="Governed release rehearsal for ${VERSION}" \
   -f mobile_release_decision="$MOBILE_RELEASE_DECISION" \
   -f mobile_release_evidence="$MOBILE_RELEASE_EVIDENCE"
