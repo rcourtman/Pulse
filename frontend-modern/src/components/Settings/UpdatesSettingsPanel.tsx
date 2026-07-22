@@ -1,6 +1,5 @@
 import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { FormSelect } from '@/components/shared/FormSelect';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
@@ -37,10 +36,6 @@ export interface UpdatesSettingsPanelProps {
   setUpdateChannel: Setter<'stable' | 'rc'>;
   autoUpdateEnabled: Accessor<boolean>;
   setAutoUpdateEnabled: Setter<boolean>;
-  autoUpdateCheckInterval: Accessor<number>;
-  setAutoUpdateCheckInterval: Setter<number>;
-  autoUpdateTime: Accessor<string>;
-  setAutoUpdateTime: Setter<string>;
   checkForUpdates: () => Promise<void>;
   setHasUnsavedChanges: Setter<boolean>;
   // Update installation props
@@ -329,44 +324,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               </p>
             </Show>
 
-            {/* Auto update options (shown when enabled) */}
+            {/* Schedule note (shown when enabled). The host systemd timer owns
+                the schedule; it is not configurable from here. */}
             <Show when={props.autoUpdateEnabled() && !isPreviewChannel()}>
-              <div class="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Check Interval */}
-                <FormSelect
-                  id="updates-auto-check-interval"
-                  label={UPDATES_PANEL_COPY.checkIntervalLabel}
-                  value={props.autoUpdateCheckInterval()}
-                  onChange={(e) => {
-                    props.setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  fieldClass="space-y-2"
-                  labelClass="text-xs font-medium text-base-content"
-                  selectBaseClass="w-full px-3 py-2 text-sm border border-border rounded-md bg-surface"
-                >
-                  <option value="6">Every 6 hours</option>
-                  <option value="12">Every 12 hours</option>
-                  <option value="24">Daily</option>
-                  <option value="168">Weekly</option>
-                </FormSelect>
-
-                {/* Check Time */}
-                <div class="space-y-2">
-                  <label class="text-xs font-medium text-base-content">
-                    {UPDATES_PANEL_COPY.preferredTimeLabel}
-                  </label>
-                  <input
-                    type="time"
-                    value={props.autoUpdateTime()}
-                    onChange={(e) => {
-                      props.setAutoUpdateTime(e.currentTarget.value);
-                      props.setHasUnsavedChanges(true);
-                    }}
-                    class="w-full px-3 py-2 text-sm border border-border rounded-md bg-surface"
-                  />
-                </div>
-              </div>
+              <p class="mt-3 text-xs text-muted">{UPDATES_PANEL_COPY.autoUpdateScheduleNote}</p>
             </Show>
           </div>
         </div>

@@ -21,8 +21,10 @@ export const UPDATES_PANEL_COPY = {
     'Use this on staging or internal validation environments. Automatic stable updates stay disabled on pre-release builds so preview installs do not drift between channels unattended.',
   previewChannelAutoUpdateNotice:
     'Automatic stable updates are unavailable while the pre-release preview channel is selected.',
-  checkIntervalLabel: 'Check Interval',
-  preferredTimeLabel: 'Preferred Time',
+  // The host systemd timer owns the schedule (daily overnight window with a
+  // randomized delay, see install.sh); it is not configurable from the UI.
+  autoUpdateScheduleNote:
+    'The host checks for stable releases once a day overnight and applies them automatically.',
 } as const;
 
 export function getUpdateBuildBadges(

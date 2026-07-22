@@ -12,8 +12,6 @@ describe('settings switch labels', () => {
   it('associates the auto-update switch with its visible label', () => {
     const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
     const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
-    const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
-    const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
 
     render(() => (
       <UpdatesSettingsPanel
@@ -24,10 +22,6 @@ describe('settings switch labels', () => {
         setUpdateChannel={setUpdateChannel}
         autoUpdateEnabled={autoUpdateEnabled}
         setAutoUpdateEnabled={setAutoUpdateEnabled}
-        autoUpdateCheckInterval={autoUpdateCheckInterval}
-        setAutoUpdateCheckInterval={setAutoUpdateCheckInterval}
-        autoUpdateTime={autoUpdateTime}
-        setAutoUpdateTime={setAutoUpdateTime}
         checkForUpdates={vi.fn().mockResolvedValue(undefined)}
         setHasUnsavedChanges={vi.fn()}
         updatePlan={() => null}

@@ -336,28 +336,10 @@ describe('useSystemSettingsState', () => {
     }
   });
 
-  it('preserves explicit zero auto-update interval values from system settings', async () => {
-    getSystemSettingsMock.mockResolvedValue({
-      autoUpdateEnabled: true,
-      autoUpdateCheckInterval: 0,
-      autoUpdateTime: '04:00',
-    });
-
-    const { hookState, dispose } = mountHook();
-
-    await hookState.initializeSystemSettingsState();
-    await flushAsync();
-
-    expect(hookState.autoUpdateCheckInterval()).toBe(0);
-    dispose();
-  });
-
   it('normalizes persisted RC auto-updates off during initialization', async () => {
     getSystemSettingsMock.mockResolvedValue({
       updateChannel: 'rc',
       autoUpdateEnabled: true,
-      autoUpdateCheckInterval: 24,
-      autoUpdateTime: '04:00',
     });
 
     const { hookState, dispose } = mountHook();

@@ -69,8 +69,6 @@ export function useSystemSettingsState({
   const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
   const [updateChannel, setUpdateChannel] = createSignal<'stable' | 'rc'>('stable');
   const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(false);
-  const [autoUpdateCheckInterval, setAutoUpdateCheckInterval] = createSignal(24);
-  const [autoUpdateTime, setAutoUpdateTime] = createSignal('03:00');
   const [updatePlan, setUpdatePlan] = createSignal<UpdatePlan | null>(null);
   const [isInstallingUpdate, setIsInstallingUpdate] = createSignal(false);
   const [showUpdateConfirmation, setShowUpdateConfirmation] = createSignal(false);
@@ -167,8 +165,6 @@ export function useSystemSettingsState({
       setAutoUpdateEnabled(
         normalizeAutoUpdateEnabled(savedUpdateChannel, systemSettings.autoUpdateEnabled || false),
       );
-      setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval ?? 24);
-      setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
 
       if (systemSettings.envOverrides) {
         setEnvOverrides(systemSettings.envOverrides);
@@ -219,8 +215,6 @@ export function useSystemSettingsState({
           allowedOrigins: allowedOrigins(),
           updateChannel: updateChannel(),
           autoUpdateEnabled: normalizeAutoUpdateEnabled(updateChannel(), autoUpdateEnabled()),
-          autoUpdateCheckInterval: autoUpdateCheckInterval(),
-          autoUpdateTime: autoUpdateTime(),
           backupPollingEnabled: backupPollingEnabled(),
           backupPollingInterval: backupPollingInterval(),
           allowEmbedding: allowEmbedding(),
@@ -526,10 +520,6 @@ export function useSystemSettingsState({
     setUpdateChannel,
     autoUpdateEnabled,
     setAutoUpdateEnabled,
-    autoUpdateCheckInterval,
-    setAutoUpdateCheckInterval,
-    autoUpdateTime,
-    setAutoUpdateTime,
     updatePlan,
     isInstallingUpdate,
     showUpdateConfirmation,

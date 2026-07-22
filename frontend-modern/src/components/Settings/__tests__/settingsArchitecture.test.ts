@@ -1049,7 +1049,6 @@ describe('settings architecture guardrails', () => {
       auditLogPanelSource,
       recoverySettingsPanelSource,
       systemLogsPanelSource,
-      updatesSettingsPanelSource,
       agentProfilesPanelSource,
       infrastructureInstallerSectionSource,
       nodeModalMonitoringSectionSource,
