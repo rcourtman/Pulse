@@ -44,6 +44,9 @@ coverage, and reliability fixes from continued release-candidate testing.
   legacy event path.
 - The infrastructure ledger keeps its manage flow synchronized and shows
   actionable TrueNAS TLS failures.
+- Post-update What's New highlights open in a readable dialog instead of a
+  full-width banner, leaving the dashboard unobstructed while preserving the
+  existing once-per-release dismissal behavior.
 - Removed-agent diagnostics retain the last-known platform so Agent Doctor can
   provide the correct host-local uninstall command without granting remote
   removal authority.

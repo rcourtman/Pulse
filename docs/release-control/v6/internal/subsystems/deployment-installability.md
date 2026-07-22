@@ -1083,7 +1083,9 @@ experience. Update checks can preview a curated `Highlights` section, and an
 authenticated running-version endpoint lets the update surface show those
 same published highlights once after a later upgrade. Missing highlights stay
 quiet by design, and source or development builds never masquerade as
-published releases.
+published releases. Post-update highlights use the shared dialog so multi-item
+release content has a readable measure without pushing the dashboard down;
+every close path still records the running release as seen.
 The initial GA promotion
 metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,

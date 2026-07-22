@@ -23,6 +23,8 @@ _This changelog describes the changes since `v6.1.0-rc.4`.
 - ESXi hosts group under their owning vCenter connection.
 - Workload guest metadata subscribes to the canonical metadata event.
 - Pro updates request an explicit channel from the dual-channel broker.
+- Post-update What's New highlights use the shared dialog instead of a
+  full-width banner; release gating and dismissal persistence are unchanged.
 - Metrics reads can proceed concurrently with writes.
 - Audit retention uses incremental vacuum and bounded page reclamation.
 
