@@ -10,6 +10,8 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
+import { updateStore } from '@/stores/updates';
+import { resolvePostUpdateReload } from '@/components/updateReadinessModel';
 import XIcon from 'lucide-solid/icons/x';
 
 interface UpdateProgressModalProps {
@@ -30,6 +32,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   let pollInterval: number | undefined;
   let healthCheckTimer: number | undefined;
   let eventSource: EventSource | undefined;
+  // The version that started this update. The backend keeps serving (and
+  // answering health checks) for a grace period after reporting 'completed',
+  // so "different version than this" is the only trustworthy restart signal.
+  let preUpdateVersion: string | null = null;
+  let sameVersionHealthyAttempts = 0;
 
   const resetModalState = () => {
     setStatus(null);
@@ -38,6 +45,44 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     setIsRestarting(false);
     setWsDisconnected(false);
     setHealthCheckAttempts(0);
+    preUpdateVersion = updateStore.versionInfo()?.version ?? null;
+    sameVersionHealthyAttempts = 0;
+  };
+
+  // Probe the backend and reload only once it reports a different version
+  // than the one that started the update (or the bounded fallback in the
+  // model fires). Returns true when a reload was triggered.
+  const attemptReadyReload = async (): Promise<boolean> => {
+    try {
+      const response = await apiFetch('/api/version', { cache: 'no-store' });
+      if (!response.ok) {
+        sameVersionHealthyAttempts = 0;
+        return false;
+      }
+      const info = (await response.json()) as { version?: unknown };
+      const reportedVersion = typeof info.version === 'string' ? info.version : '';
+      const decision = resolvePostUpdateReload({
+        preUpdateVersion,
+        reportedVersion,
+        sameVersionHealthyAttempts,
+      });
+      if (decision === 'reload') {
+        logger.info('Backend ready after update, reloading...', {
+          preUpdateVersion,
+          reportedVersion,
+        });
+        window.location.reload();
+        return true;
+      }
+      sameVersionHealthyAttempts += 1;
+      return false;
+    } catch (error) {
+      // Connection refused here usually means the restart is actually
+      // happening now; the pre-restart healthy answers no longer count.
+      sameVersionHealthyAttempts = 0;
+      logger.warn('Version probe failed while waiting for restart, will retry', error);
+      return false;
+    }
   };
 
   const clearHealthCheckTimer = () => {
@@ -96,26 +141,13 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
           ) {
             if (updateStatus.status === 'completed' && !updateStatus.error) {
               closeSSE();
-              // Verify backend health and reload
-              apiFetch('/api/health', { cache: 'no-store' })
-                .then((healthCheck) => {
-                  if (healthCheck.ok) {
-                    logger.info('Update completed, backend healthy, reloading...');
-                    window.location.reload();
-                  } else {
-                    // Health check failed, assume restart in progress
-                    setIsRestarting(true);
-                    startHealthCheckPolling();
-                  }
-                })
-                .catch((error) => {
-                  logger.warn(
-                    'Update completed but health check failed, assuming restart...',
-                    error,
-                  );
+              void attemptReadyReload().then((reloaded) => {
+                if (!reloaded) {
+                  // Backend not on the new version yet — restart in progress.
                   setIsRestarting(true);
                   startHealthCheckPolling();
-                });
+                }
+              });
               return;
             }
 
@@ -175,21 +207,13 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         currentStatus.status === 'idle' ||
         currentStatus.status === 'error'
       ) {
-        // If completed successfully, verify backend health and reload to get new version
+        // If completed successfully, reload once the new version is serving
         if (currentStatus.status === 'completed' && !currentStatus.error) {
           clearPollInterval();
-          // Verify backend is healthy and reload
-          try {
-            const healthCheck = await apiFetch('/api/health', { cache: 'no-store' });
-            if (healthCheck.ok) {
-              logger.info('Update completed, backend healthy, reloading...');
-              window.location.reload();
-              return;
-            }
-          } catch (error) {
-            logger.warn('Update completed but health check failed, assuming restart...', error);
+          if (await attemptReadyReload()) {
+            return;
           }
-          // If health check failed, assume restart in progress
+          // Backend not on the new version yet — restart in progress.
           setIsRestarting(true);
           startHealthCheckPolling();
           return;
@@ -230,21 +254,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     setHealthCheckAttempts(0);
 
     const checkHealth = async () => {
-      let isHealthy = false;
-
-      try {
-        const response = await apiFetch('/api/health', { cache: 'no-store' });
-        if (response.ok) {
-          isHealthy = true;
-        }
-      } catch (error) {
-        logger.warn('Health check request failed, will retry', error);
-      }
-
-      if (isHealthy) {
-        // Backend is back! Reload the page to get the new version
-        logger.info('Backend is healthy again, reloading...');
-        window.location.reload();
+      if (await attemptReadyReload()) {
         return;
       }
 
@@ -277,15 +287,9 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       // Give it a moment for the backend to fully initialize
       const reconnectTimer = window.setTimeout(async () => {
         if (!props.isOpen) return;
-        try {
-          const response = await apiFetch('/api/health', { cache: 'no-store' });
-          if (response.ok) {
-            logger.info('Backend healthy after websocket reconnect, reloading...');
-            window.location.reload();
-          }
-        } catch (_error) {
-          logger.warn('Health check failed after websocket reconnect, will keep trying');
-        }
+        // A reconnected websocket almost certainly means the new process is
+        // up; attemptReadyReload still verifies the version before reloading.
+        await attemptReadyReload();
       }, 1000);
       onCleanup(() => window.clearTimeout(reconnectTimer));
     }
