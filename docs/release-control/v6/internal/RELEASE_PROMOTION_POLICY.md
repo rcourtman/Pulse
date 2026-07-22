@@ -162,6 +162,21 @@ Cloud, and self-hosted production users.
      branch after the RC line, keep rollback and v5 maintenance dates explicit,
      and retain the prior governed release-pipeline rehearsal evidence as
      automation lineage rather than claiming the post-RC7 changes were RC-tested.
+10. v6.1.0 release-cutoff exception:
+   - On 2026-07-22, the release owner ended the moving RC feedback loop and
+     declared current `main` the v6.1.0 feature cutoff.
+     The dated decision record is
+     `docs/release-control/v6/internal/records/v6.1.0-stable-cutoff-owner-approval-2026-07-22.md`.
+   - v6.1.0 may publish stable without another RC publication or the normal
+     72-hour soak. This is an explicit owner-risk acceptance for this version,
+     not reusable evidence and not a standing exception for later releases.
+   - The exact stable SHA must still pass the no-public-release `Release Dry
+     Run` and the normal single-build publication workflow. Only a security,
+     data-loss, upgrade-breaking, startup-blocking, or release-pipeline defect
+     may reopen the cutoff; ordinary findings move to v6.1.1.
+   - Unproved self-service commercial transitions remain unavailable and
+     unadvertised under the exposure-safety gate. This exception does not
+     authorize enabling that feature or running a production billing proof.
 
 ## Single-Build Release Path
 

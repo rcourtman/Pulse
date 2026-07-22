@@ -157,15 +157,16 @@ Companion drill:
   legacy recurring price, or cancellation/reactivation leaves pricing and
   entitlement state inconsistent across Stripe, Pulse runtime, and customer UI.
 
-## Gate: `self-hosted-commercial-transition-coherence`
+## Gate: `self-hosted-commercial-transition-exposure-safety`
 
 - Why this is risky:
   Relay/Pro and cadence changes cross Stripe proration and schedules, durable
   webhook processing, grandfathering, local entitlement projection, license
   versioning, Relay grant enforcement, downgrade preservation, and customer-
-  visible account state. A failure in replay, feed delivery, or scoped runtime
-  invalidation can still charge for one plan while granting another even when
-  the local projection itself is atomic.
+  visible account state. Until the full external lifecycle proof passes, the
+  safe release posture is to keep self-service transitions unavailable and
+  unadvertised rather than making an unrelated Pulse runtime release depend on
+  a production billing mutation.
 - Primary runtime surfaces:
   `pulse-pro/license-server/v6_checkout.go`
   `pulse-pro/license-server/v6_stripe.go`
@@ -188,10 +189,13 @@ Companion drill:
   synchronous startup drain, readiness staleness, active stale-session
   teardown, and reconnect-token invalidation. Local test proof now covers the
   customer-safe installation-scoped Pulse status/refresh/clear path without the
-  operator feed credential. The remaining duplicate/reversed/missing external-
-  event matrix and exact Stripe-to-Relay-and-Pulse exercise require the governed
-  rehearsal; until that evidence is registered, the gate remains blocked.
-- Manual scenario:
+  operator feed credential. The production-observed catalog and portal audit
+  proves that the released surface remains limited to the approved offer,
+  checkout, activation, cancellation/reactivation, invoice access, and
+  payment-method management contract. The remaining duplicate/reversed/missing
+  external-event matrix and exact Stripe-to-Relay-and-Pulse exercise remain a
+  governed activation follow-up.
+- Activation follow-up scenario:
   1. In Stripe test mode, create fresh Community-to-Relay and Community-to-Pro
      acquisitions for monthly and annual plans.
   2. Exercise immediate quoted/prorated Relay-to-Pro and monthly-to-annual
@@ -215,20 +219,30 @@ Companion drill:
      the quoted amount, effective date, plan, cadence, cancellation state, and
      recovery behavior match runtime truth.
 - Pass when:
-  Each scenario leaves exactly one billing contract and one entitlement
-  projection for the commercial subject; Stripe price, local plan, cadence,
-  runtime capabilities, license version, and customer-visible state agree;
-  replay/order variation does not change the result; and no downgrade or
-  cancellation deletes protected customer configuration or records.
+  Production-observed evidence confirms the unproved transition surface is not
+  released or advertised and the exposed commercial contract remains limited
+  to the already-proved offer, checkout, activation, cancellation/reactivation,
+  invoice access, and payment-method management jobs. The activation follow-up
+  passes only when each transition scenario leaves exactly one billing contract
+  and one matching entitlement projection under replay and reconciliation.
 - Latest exercised record:
   Local implementation and browser evidence is recorded in
   `docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`.
-  No qualifying real-external-e2e record exists yet.
+  The production catalog/portal and read-only exposure posture are recorded in
+  `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-remediation-2026-07-15.md`
+  and
+  `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-read-only-reconciliation-2026-07-21.md`.
+  No qualifying real-external-e2e transition-activation record exists yet, so
+  self-service transitions remain disabled and tracked as lane follow-ups
+  `self-hosted-commercial-transition-coherence`,
+  `cloud-commercial-transition-external-proof`, and
+  `account-commercial-transition-external-proof`.
 - Block release if:
-  Any supported transition can charge and grant different plans, mutate
-  entitlement without a version bump, restore ended grandfathering, rely on
-  mutable Customer Portal plan-switch configuration, or produce different
-  state under duplicate, missing, or reordered Stripe delivery.
+  An unproved transition is exposed or advertised, the Customer Portal permits
+  plan switching, or the released surface claims transition behavior beyond
+  the production-observed contract. While the surface stays unavailable, a
+  failed or incomplete activation rehearsal blocks that feature's activation,
+  not an otherwise qualified Pulse runtime release.
 
 ## Gate: `known-rc-issue-closure-for-ga`
 

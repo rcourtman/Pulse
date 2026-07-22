@@ -4694,7 +4694,7 @@
     },
     {
       "id": "RA41",
-      "summary": "Self-hosted commercial state remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, support policy, and customer-visible lifecycle: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay; every tier or cadence transition applies the approved timing and proration matrix through one idempotent transition authority; restrictive changes invalidate old grants; downgrade preserves governed customer data; and replay, cancellation, refund, grace, or re-entry cannot make billing and entitlement drift.",
+      "summary": "The released self-hosted commercial surface remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, and support policy: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay, while unproved self-service plan and cadence transitions remain unavailable and unadvertised until their external lifecycle and Relay version-floor proof passes.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "manual",
@@ -4710,7 +4710,7 @@
         "relay-runtime"
       ],
       "release_gate_ids": [
-        "self-hosted-commercial-transition-coherence"
+        "self-hosted-commercial-transition-exposure-safety"
       ],
       "evidence": [
         {
@@ -5091,14 +5091,14 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The approved Community / Relay / Pro contract is now projected into local public/account copy, support and legal policy, atomic license-server entitlement state, quoted Relay/Pro and cadence transition sagas, runtime downgrade preservation, and the live Stripe catalog/portal contract. Local Go, copy-model, and desktop/phone browser proof is green; the 2026-07-15 production GET-only re-audit passed all 25 governed prices and the invoice/payment-method-only portal after bounded remediation. Self-service remains unreleased until the governed Stripe transition/event-reconciliation matrix and Relay license-version-floor proof satisfy the commercial transition gate.",
+        "summary": "The approved Community / Relay / Pro contract is now projected into local public/account copy, support and legal policy, atomic license-server entitlement state, quoted Relay/Pro and cadence transition sagas, runtime downgrade preservation, and the live Stripe catalog/portal contract. Local Go, copy-model, and desktop/phone browser proof is green; the 2026-07-15 production GET-only re-audit passed all 25 governed prices and the invoice/payment-method-only portal after bounded remediation. Self-service remains unreleased until the governed Stripe transition/event-reconciliation matrix and Relay license-version-floor activation follow-up passes.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "pulse-intelligence-pro-activation-loop"
           },
           {
-            "kind": "release-gate",
+            "kind": "lane-followup",
             "id": "self-hosted-commercial-transition-coherence"
           }
         ]
@@ -5166,8 +5166,8 @@
         "summary": "The local commercial projection now changes Stripe catalog identity, tier, cadence, features, continuity epoch, license version, transition history, and revocation outbox atomically, with a quote-bound transition authority for self-hosted plan and cadence changes. Cloud remains unavailable and MSP remains an assisted preview. The bounded production Stripe remediation and GET-only catalog/portal re-audit passed; the remaining governed residuals are the external Stripe transition/event-reconciliation matrix and Relay license-version-floor proof.",
         "tracking": [
           {
-            "kind": "release-gate",
-            "id": "self-hosted-commercial-transition-coherence"
+            "kind": "lane-followup",
+            "id": "cloud-commercial-transition-external-proof"
           }
         ]
       },
@@ -6258,11 +6258,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The self-hosted manage entry point is now Pulse-named and job-first, with verified invoice/payment access, quoted Relay/Pro and cadence changes, cancellation, reactivation, and scheduled-change cancellation. Retrieve, refund, and data-request utilities remain separate specialist jobs. The lane stays residual until real Stripe transition/reconciliation and Relay entitlement proofs satisfy the governed transition gate.",
+        "summary": "The self-hosted manage entry point is now Pulse-named and job-first, with verified invoice/payment access, quoted Relay/Pro and cadence changes, cancellation, reactivation, and scheduled-change cancellation. Retrieve, refund, and data-request utilities remain separate specialist jobs. The lane stays residual until real Stripe transition/reconciliation and Relay entitlement proofs satisfy the governed activation follow-up.",
         "tracking": [
           {
-            "kind": "release-gate",
-            "id": "self-hosted-commercial-transition-coherence"
+            "kind": "lane-followup",
+            "id": "account-commercial-transition-external-proof"
           }
         ]
       },
@@ -8257,12 +8257,12 @@
       ]
     },
     {
-      "id": "self-hosted-commercial-transition-coherence",
-      "summary": "Confirm the approved self-hosted offer and lifecycle remain coherent across public pricing, Stripe billing, Pulse Account, license-server state, runtime and Relay entitlements, support policy, and customer-visible transitions: quoted/prorated immediate upgrades, renewal-bound reductions, paid-through cancellation, distinct recovery and payment-failure grace, downgrade preservation, grant version invalidation, and current-price re-entry all converge under replay and reconciliation.",
+      "id": "self-hosted-commercial-transition-exposure-safety",
+      "summary": "Confirm unproved self-service Relay/Pro plan and cadence transitions remain unavailable and unadvertised while the released commercial surface stays limited to the production-observed canonical offer, checkout, activation, cancellation/reactivation, invoice access, and payment-method management contract.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
-      "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "minimum_evidence_tier": "production-observed",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
@@ -8677,6 +8677,55 @@
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-06-20",
+      "lane_ids": [
+        "L2"
+      ],
+      "repo_ids": [
+        "pulse",
+        "pulse-pro"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "account-commercial-transition-external-proof",
+      "summary": "Prove the desktop and phone buyer/account journey for self-service Relay/Pro plan and cadence transitions before activation, including quote amount, effective date, cancellation/recovery state, and agreement with Stripe and runtime truth.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-07-22",
+      "lane_ids": [
+        "L17"
+      ],
+      "repo_ids": [
+        "pulse",
+        "pulse-mobile",
+        "pulse-pro"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "cloud-commercial-transition-external-proof",
+      "summary": "Prove the Stripe event-order, reconciliation, atomic projection, and production Relay/Pulse license-version-floor boundary before self-service plan and cadence transitions are activated.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-07-22",
+      "lane_ids": [
+        "L3"
+      ],
+      "repo_ids": [
+        "pulse",
+        "pulse-mobile",
+        "pulse-pro"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ]
+    },
+    {
+      "id": "self-hosted-commercial-transition-coherence",
+      "summary": "Prove the complete self-service Relay/Pro plan and cadence transition offer before activation, including the approved timing/proration matrix and released-surface boundaries; the L3 and L17 follow-ups own external authority and buyer-journey proof.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-07-22",
       "lane_ids": [
         "L2"
       ],

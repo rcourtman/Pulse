@@ -3991,7 +3991,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "msp-provider-tenant-management",
                 "paid-feature-entitlement-gating",
                 "paid-runtime-build-attribution-alerting",
-                "self-hosted-commercial-transition-coherence",
+                "self-hosted-commercial-transition-exposure-safety",
                 "upgrade-state-and-entitlement-preservation",
             },
         )

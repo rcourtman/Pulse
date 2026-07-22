@@ -479,7 +479,7 @@ Assertion design rules:
     document bound to the audited SHA selected at runtime. The checker must
     never execute real-lab, device, relay, or other mutation-gated commands
     itself.
-24. Do not ship or expose self-service plan or cadence transitions unless the
+24. Do not enable or expose self-service plan or cadence transitions unless the
     authoritative Stripe subscription snapshot, local billing contract,
     entitlement projection, continuity epoch, license version, and grant
     revocation/outbox state converge through one idempotent transition
@@ -594,6 +594,16 @@ Assertion design rules:
     workspace limits; public copy may state the recorded monthly and annual
     prices but must not promise immediate self-service checkout or Pulse-hosted
     fulfillment.
+20. Unproved self-service Relay/Pro plan and cadence transitions are a feature-
+    activation boundary, not a global Pulse runtime release blocker. Release
+    gate `self-hosted-commercial-transition-exposure-safety` must prove that
+    the incomplete surface remains unavailable and unadvertised. The full
+    Stripe lifecycle, Relay/Pulse version-floor, and buyer/account journey
+    exercises remain governed by lane follow-ups
+    `self-hosted-commercial-transition-coherence`,
+    `cloud-commercial-transition-external-proof`, and
+    `account-commercial-transition-external-proof`; they must pass before the
+    feature is enabled.
 
 ## TrueNAS Support Floor
 

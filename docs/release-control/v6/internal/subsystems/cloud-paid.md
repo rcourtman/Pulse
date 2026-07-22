@@ -1316,10 +1316,15 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     distinct jobs rather than sequential ladder steps, and a Pro buyer must
     never be told to buy Relay separately for the same environment.
 23. Do not expose Relay/Pro or cadence self-service transitions until the
-    `self-hosted-commercial-transition-coherence` gate proves proration,
+    `self-hosted-commercial-transition-coherence` and
+    `cloud-commercial-transition-external-proof` follow-ups prove proration,
     scheduled reductions, cancellation/recovery grace, payment-failure grace,
     refund/dispute handling, replay/order convergence, downgrade preservation,
-    and grant-version invalidation.
+    and grant-version invalidation. Release gate
+    `self-hosted-commercial-transition-exposure-safety` instead proves that the
+    incomplete transition surface remains unavailable and unadvertised, so an
+    unrelated stable runtime cut does not require a production billing
+    mutation.
 24. Keep Cloud unavailable and MSP request-assisted until their respective
     availability contracts are explicitly reopened. Historical Cloud prices,
     caps, trial, and support labels are dormant planning data, while provider-
@@ -1372,8 +1377,12 @@ duplicate replay without state or license-version regression. The
 implementation is not yet a released self-service capability: the governed
 external Stripe transition matrix, event-order/reconciliation exercise and
 Relay version-floor proof remain required by
-`self-hosted-commercial-transition-coherence`. Cloud remains unavailable and
-MSP remains an assisted preview.
+lane follow-ups `self-hosted-commercial-transition-coherence`,
+`cloud-commercial-transition-external-proof`, and
+`account-commercial-transition-external-proof`. Release gate
+`self-hosted-commercial-transition-exposure-safety` keeps that incomplete
+surface unavailable and unadvertised while allowing otherwise qualified Pulse
+runtime releases. Cloud remains unavailable and MSP remains an assisted preview.
 
 The 2026-07-14 GET-only production catalog/portal audit was exercised and
 failed expected state: all 25 governed prices resolved, but the runtime did not
@@ -1401,9 +1410,13 @@ all 25 governed prices resolved, the portal contract passed, and the only
 warnings were the already-governed inactive v1 legacy recurring prices. A
 second remediation plan returned no product updates and reused the dedicated
 portal, proving idempotent convergence. The production catalog/portal residual
-is closed, but `self-hosted-commercial-transition-coherence` remains blocked
-until the external Stripe lifecycle transition/event-reconciliation matrix and
-real Relay license-version-floor exercise pass. The evidence record is
+is closed. The production-observed result satisfies
+`self-hosted-commercial-transition-exposure-safety`; full transition activation
+remains unavailable until lane follow-up
+`cloud-commercial-transition-external-proof` completes the external Stripe
+lifecycle transition/event-reconciliation matrix and real Relay
+license-version-floor exercise, while the L2 and L17 follow-ups retain offer
+and buyer/account journey proof. The evidence record is
 `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-remediation-2026-07-15.md`.
 
 The 2026-07-21 safe re-audit kept that production catalog/portal result green
@@ -1421,7 +1434,8 @@ key and uses a fail-closed exact-envelope replay helper after removing the
 disposable automatic webhook endpoint, so duplicate, reordered, and missing
 delivery can be exercised rather than inferred from already-delivered events.
 This is test/read-only evidence, not the missing real-external exercise, so the
-gate remains blocked.
+transition activation follow-up remains open while the release exposure-safety
+gate stays passed only for the disabled surface.
 
 The Relay side now fails closed on missing feed authority, drains the feed
 before serving, exposes feed staleness through readiness, and tears down stale
