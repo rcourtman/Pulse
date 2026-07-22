@@ -12,7 +12,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 )
 
-const onboardingSchemaVersion = "pulse-mobile-onboarding-v1"
 const onboardingNotReadyCode = "onboarding_not_ready"
 const onboardingNotReadyMessage = "Pulse Mobile pairing is not ready yet."
 

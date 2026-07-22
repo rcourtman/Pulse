@@ -145,6 +145,14 @@ product API routes free of maintainer commercial analytics.
     83a. `internal/api/agent_fleet_doctor.go`
     83b. `frontend-modern/src/api/agentDiagnostics.ts`
 84. `internal/api/notification_queue.go`
+85. `docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json`
+86. `docs/release-control/v6/internal/mobile_compatibility_manifest.schema.json`
+87. `scripts/release_control/generate_mobile_compatibility.py`
+88. `scripts/release_control/mobile_compatibility.py`
+89. `internal/api/relay_mobile_capability_generated.go`
+90. `pulse-mobile:config/mobile-api-surface.json`
+91. `pulse-mobile:src/generated/coreCompatibility.ts`
+92. `pulse-mobile:src/api/coreMobileContract.ts`
 
 The alert and notification transports expose the operational-trust contract
 additively. Alert payloads may carry a typed operational record, latest
@@ -203,6 +211,18 @@ The `instance_url` Pulse web handoff field is optional and may only be emitted
 when the resolved Pulse URL is an absolute `https://` URL; non-HTTPS admin
 URLs must be omitted from QR/deep-link payloads with a warning diagnostic so
 mobile pairing does not fail on a web-handoff-only field.
+
+The complete Pulse-to-mobile boundary is governed by
+`MOBILE_COMPATIBILITY_MANIFEST.json`, not by parallel route strings in each
+repository. It classifies every declared capability as `mobile-required`,
+`mobile-handoff-only`, or `desktop-only`; owns route methods, compatible token
+scopes, required request/response fields, pairing data, and push navigation;
+and generates both the Go runtime inventory and Pulse Mobile TypeScript
+projection. `pulse-mobile:config/mobile-api-surface.json` is the consumer
+minimum and released-line probe declaration. Canonical Governance must compare
+that consumer against the exact Pulse manifest and retain revision-bound
+evidence. Pulse Mobile's OTA gate separately proves the app against server
+lines already in customers' hands.
 
 Proxy-auth administrator evaluation is a shared auth/API contract. Once
 `PROXY_AUTH_ROLE_HEADER` and `PROXY_AUTH_ADMIN_ROLE` are configured,
@@ -1628,6 +1648,7 @@ payload shape change when the portal presents compact client rows.
     ran or were suppressed by the owner-email limiter, while invalid bodies and
     true server failures remain explicit.
 77. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
+78. `internal/api/relay_mobile_capability_generated.go` shared with `relay-runtime`: the generated Pulse Mobile route inventory is both a relay runtime allowlist and the backend projection of the canonical mobile API contract.
 78. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 79. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     That same shared security/API boundary owns CSRF replacement-token
@@ -1712,6 +1733,8 @@ payload shape change when the portal presents compact client rows.
 88. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 89. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
 90. `pkg/extensions/ai_autofix.go` shared with `ai-runtime`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
+91. `pulse-mobile:config/mobile-api-surface.json` shared with `relay-runtime`: the Pulse Mobile consumer minimum and released-line probe inventory are both API compatibility and relay runtime boundaries.
+92. `pulse-mobile:src/generated/coreCompatibility.ts` shared with `relay-runtime`: the generated mobile route, pairing, and push projection is both an API consumer contract and relay runtime boundary.
 91. `scripts/generate-pulse-intelligence-docs.go` shared with `ai-runtime`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
     Update-plan responses own the structured readiness verdict for server
     updater capability, rollback support, agent continuity, v5 agent migration
@@ -3513,6 +3536,15 @@ context-quality, and latency dimensions plus per-autonomy-mode suitability;
 `patrol_model_readiness`. Advisor execution must remain cancellable, use the
 same settings-write permission boundary as other AI diagnostics, and avoid
 returning prompts, tool transcripts, credentials, or infrastructure data.
+
+Every mobile-facing contract change must update the canonical manifest,
+regenerate both repositories, keep the mobile consumer minimum compatible, and
+pass `generate_mobile_compatibility.py --check` plus
+`mobile_compatibility.py`. A desktop feature is not implicitly mobile work:
+its manifest classification records whether the phone consumes it, hands it
+off with context, or intentionally has no mobile surface. A `mobile-required`
+change is incomplete while either generated projection or the mobile consumer
+contract is stale.
 
 ## Current State
 

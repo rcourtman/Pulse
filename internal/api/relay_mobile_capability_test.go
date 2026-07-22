@@ -1,12 +1,31 @@
 package api
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestRelayMobileRuntimeProjectionMatchesManifestDigest(t *testing.T) {
+	manifest, err := os.ReadFile("../../docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json")
+	if err != nil {
+		t.Fatalf("read mobile compatibility manifest: %v", err)
+	}
+	generated, err := os.ReadFile("relay_mobile_capability_generated.go")
+	if err != nil {
+		t.Fatalf("read generated mobile route projection: %v", err)
+	}
+
+	digest := fmt.Sprintf("%x", sha256.Sum256(manifest))
+	if !strings.Contains(string(generated), "Source SHA256: "+digest) {
+		t.Fatalf("generated mobile route projection does not match manifest digest %s", digest)
+	}
+}
 
 func TestRelayMobileRuntimeRouteInventory(t *testing.T) {
 	got := make([]string, 0, len(relayMobileRuntimeRouteOrder))

@@ -9421,6 +9421,9 @@ func TestContract_OwnerTransferRequiresFreshSession(t *testing.T) {
 }
 
 func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {
+	if onboardingSchemaVersion != "pulse-mobile-onboarding-v1" {
+		t.Fatalf("generated mobile onboarding schema = %q", onboardingSchemaVersion)
+	}
 	payload := onboardingQRResponse{
 		Schema:      onboardingSchemaVersion,
 		InstanceURL: "https://pulse.example.test",

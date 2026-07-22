@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pulse Mobile compatibility manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "mobile_role",
+    "surface_classes",
+    "pairing",
+    "push",
+    "routes"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "integer", "const": 1 },
+    "contract_version": { "type": "integer", "minimum": 1 },
+    "mobile_role": { "type": "string", "minLength": 1 },
+    "surface_classes": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": ["mobile-required", "mobile-handoff-only", "desktop-only"]
+          },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "pairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "scheme",
+        "host",
+        "required_fields",
+        "optional_fields"
+      ],
+      "properties": {
+        "schema": { "type": "string", "minLength": 1 },
+        "scheme": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 },
+        "required_fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "optional_fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "push": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_fields", "types", "priorities", "actions"],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "types": { "$ref": "#/$defs/symbolValues" },
+        "priorities": { "$ref": "#/$defs/symbolValues" },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "go_symbol", "destination", "lifecycle"],
+            "properties": {
+              "value": { "type": "string", "minLength": 1 },
+              "go_symbol": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+              "destination": {
+                "type": "string",
+                "enum": ["finding-detail", "approval-detail"]
+              },
+              "lifecycle": {
+                "type": "string",
+                "enum": ["current", "compatibility"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/route" }
+    }
+  },
+  "$defs": {
+    "symbolValues": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "go_symbol"],
+        "properties": {
+          "value": { "type": "string", "minLength": 1 },
+          "go_symbol": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": ["array", "boolean", "integer", "number", "object", "string"]
+        },
+        "required": { "type": "boolean", "default": true }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "go_symbol",
+        "method",
+        "path",
+        "required_scope",
+        "lifecycle",
+        "mobile_impact",
+        "implementation_paths",
+        "request_fields",
+        "response_fields"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "go_symbol": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+        "method": {
+          "type": "string",
+          "enum": ["DELETE", "GET", "PATCH", "POST", "PUT"]
+        },
+        "path": { "type": "string", "pattern": "^/api/" },
+        "required_scope": { "type": "string", "minLength": 1 },
+        "legacy_scope": { "type": "string", "minLength": 1 },
+        "lifecycle": {
+          "type": "string",
+          "enum": ["current", "compatibility"]
+        },
+        "mobile_impact": {
+          "type": "string",
+          "enum": ["mobile-required", "mobile-handoff-only", "desktop-only"]
+        },
+        "implementation_paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "request_fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "response_fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        }
+      }
+    }
+  }
+}

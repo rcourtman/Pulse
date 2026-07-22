@@ -42,6 +42,26 @@ func TestCanonicalActionOutcomeNotificationMatrix(t *testing.T) {
 	}
 }
 
+func TestMobileCompatibilityPushActionVocabulary(t *testing.T) {
+	want := []string{
+		"view_finding",
+		"view_alert",
+		"approve_fix",
+		"decide_action",
+		"view_fix_result",
+	}
+	got := []string{
+		PushActionViewFinding,
+		PushActionViewAlert,
+		PushActionApproveFix,
+		PushActionDecideAction,
+		PushActionViewFixResult,
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("mobile push action vocabulary = %v, want %v", got, want)
+	}
+}
+
 func TestNewPatrolFindingNotification(t *testing.T) {
 	t.Run("warning finding", func(t *testing.T) {
 		n := NewPatrolFindingNotification("finding-123", "warning", "performance", "High CPU usage detected")

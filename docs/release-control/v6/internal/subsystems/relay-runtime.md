@@ -9,7 +9,9 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": [
+    "api-contracts"
+  ]
 }
 ```
 
@@ -26,16 +28,26 @@ for Pulse instance bridging.
 2. `internal/relay/protocol.go`
 3. `internal/config/persistence_relay.go`
 4. `internal/api/relay_mobile_capability.go`
-5. `pulse-pro:relay-server/main.go`
-6. `pulse-pro:relay-server/registry.go`
-7. `pulse-pro:relay-server/revocation_feed.go`
+5. `internal/api/relay_mobile_capability_generated.go`
+6. `internal/relay/mobile_compatibility_generated.go`
+7. `docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json`
+8. `scripts/release_control/generate_mobile_compatibility.py`
+9. `scripts/release_control/mobile_compatibility.py`
+10. `pulse-mobile:config/mobile-api-surface.json`
+11. `pulse-mobile:src/generated/coreCompatibility.ts`
+12. `pulse-pro:relay-server/main.go`
+13. `pulse-pro:relay-server/registry.go`
+14. `pulse-pro:relay-server/revocation_feed.go`
 
 ## Shared Boundaries
 
 1. `internal/api/relay_mobile_capability.go` shared with `api-contracts`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
-2. `pulse-pro:relay-server/main.go` shared with `cloud-paid`: the Relay server startup and readiness path is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
-3. `pulse-pro:relay-server/registry.go` shared with `cloud-paid`: the Relay server active-session registry is both a relay-runtime connection boundary and a cloud-paid entitlement invalidation boundary.
-4. `pulse-pro:relay-server/revocation_feed.go` shared with `cloud-paid`: the Relay server revocation feed is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
+2. `internal/api/relay_mobile_capability_generated.go` shared with `api-contracts`: the generated Pulse Mobile route inventory is both a relay runtime allowlist and the backend projection of the canonical mobile API contract.
+3. `pulse-mobile:config/mobile-api-surface.json` shared with `api-contracts`: the Pulse Mobile consumer minimum and released-line probe inventory are both API compatibility and relay runtime boundaries.
+4. `pulse-mobile:src/generated/coreCompatibility.ts` shared with `api-contracts`: the generated mobile route, pairing, and push projection is both an API consumer contract and relay runtime boundary.
+5. `pulse-pro:relay-server/main.go` shared with `cloud-paid`: the Relay server startup and readiness path is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
+6. `pulse-pro:relay-server/registry.go` shared with `cloud-paid`: the Relay server active-session registry is both a relay-runtime connection boundary and a cloud-paid entitlement invalidation boundary.
+7. `pulse-pro:relay-server/revocation_feed.go` shared with `cloud-paid`: the Relay server revocation feed is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
 
 ## Extension Points
 
@@ -52,7 +64,7 @@ for Pulse instance bridging.
    accepting a malformed override. Saving the resulting `relay.Config`
    from the UI is allowed to persist the env-effective state to disk;
    the override is not stripped before save.
-4. Add or change the backend-owned mobile relay capability inventory and compatibility scope mapping through `internal/api/relay_mobile_capability.go`
+4. Add or change the backend-owned mobile relay capability inventory, compatibility scope mapping, pairing contract, or push routing through `docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json`, then regenerate both repositories. Generated files are not extension points.
 5. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
 6. Add or change server-side grant revocation ingestion, readiness, active-session teardown, or reconnect-token invalidation through `pulse-pro:relay-server/main.go`, `pulse-pro:relay-server/revocation_feed.go`, and `pulse-pro:relay-server/registry.go`.
 
@@ -61,6 +73,7 @@ for Pulse instance bridging.
 1. Reintroducing relay client trust or TLS handling through ad hoc dialer configuration outside the canonical relay client
 2. Letting encrypted DATA frames race ahead of nonce-order guarantees by deferring inbound decrypt work to background goroutines
 3. Treating a missing persisted relay config file as a hard failure instead of falling back to the canonical disabled default
+4. Editing generated mobile compatibility projections directly or landing a mobile-required route/push/pairing change with a stale Pulse Mobile consumer contract
 
 ## Completion Obligations
 
@@ -72,6 +85,7 @@ for Pulse instance bridging.
 5. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
 6. Keep the operator Relay incapable of serving v6 grants until it has synchronously drained the authenticated revocation feed, and expose stale feed state through readiness.
 7. Keep feed-applied restrictive events tied to proof that already-connected stale grants are disconnected and their persisted reconnect credentials are invalidated.
+8. Keep exact-revision Pulse/Pulse Mobile compatibility evidence green in Canonical Governance and keep released-line compatibility green in the Pulse Mobile OTA gate.
 
 ## Current State
 
@@ -127,9 +141,15 @@ overrides, so a successful failover reconnect must return future reconnects to
 the instance's canonical relay URL unless the server sends a fresh drain hint.
 The server-owned mobile relay capability boundary is part of that same owned
 surface too. The dedicated `relay:mobile:access` credential may only reach the
-explicit runtime route inventory in `internal/api/relay_mobile_capability.go`,
-and expanding that inventory is governed L7 work rather than a router-local
-compatibility tweak.
+explicit runtime route inventory generated from
+`MOBILE_COMPATIBILITY_MANIFEST.json`, and expanding that inventory is governed
+L7 work rather than a router-local compatibility tweak. The same manifest now
+generates mobile-visible push constants and the pairing schema projection, and
+Pulse Mobile consumes its TypeScript route/push/pairing projection. Canonical
+Governance compares the provider manifest with the mobile consumer declaration
+at exact repository revisions and publishes that evidence; the mobile OTA gate
+continues to probe stable and RC server lines with a real
+`relay:mobile:access` token.
 Assistant session rename is part of that explicit mobile relay runtime
 inventory: `PATCH /api/ai/sessions/{session_id}` may pass through
 `relay:mobile:access` with `ai:chat` scope because it mutates only the

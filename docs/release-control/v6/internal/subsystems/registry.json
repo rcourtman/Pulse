@@ -852,6 +852,14 @@
       ]
     },
     {
+      "path": "internal/api/relay_mobile_capability_generated.go",
+      "rationale": "the generated Pulse Mobile route inventory is both a relay runtime allowlist and the backend projection of the canonical mobile API contract",
+      "subsystems": [
+        "api-contracts",
+        "relay-runtime"
+      ]
+    },
+    {
       "path": "internal/api/resources.go",
       "rationale": "the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary",
       "subsystems": [
@@ -1043,6 +1051,22 @@
       "subsystems": [
         "ai-runtime",
         "api-contracts"
+      ]
+    },
+    {
+      "path": "pulse-mobile:config/mobile-api-surface.json",
+      "rationale": "the Pulse Mobile consumer minimum and released-line probe inventory are both API compatibility and relay runtime boundaries",
+      "subsystems": [
+        "api-contracts",
+        "relay-runtime"
+      ]
+    },
+    {
+      "path": "pulse-mobile:src/generated/coreCompatibility.ts",
+      "rationale": "the generated mobile route, pairing, and push projection is both an API consumer contract and relay runtime boundary",
+      "subsystems": [
+        "api-contracts",
+        "relay-runtime"
       ]
     },
     {
@@ -2316,6 +2340,8 @@
         "cmd/agent-probe/main.go",
         "cmd/pulse-mcp/main.go",
         "cmd/pulse-mcp/README.md",
+        "docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json",
+        "docs/release-control/v6/internal/mobile_compatibility_manifest.schema.json",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
@@ -2353,8 +2379,13 @@
         "pkg/pulsecli/api_client.go",
         "pkg/pulsecli/fleet.go",
         "pkg/pulsecli/root.go",
+        "pulse-mobile:config/mobile-api-surface.json",
+        "pulse-mobile:src/api/coreMobileContract.ts",
+        "pulse-mobile:src/generated/coreCompatibility.ts",
         "scripts/generate-pulse-intelligence-docs.go",
-        "scripts/generate-types.go"
+        "scripts/generate-types.go",
+        "scripts/release_control/generate_mobile_compatibility.py",
+        "scripts/release_control/mobile_compatibility.py"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2366,6 +2397,31 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "pulse-mobile-compatibility-contract",
+            "label": "Pulse and Pulse Mobile exact-revision compatibility proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json",
+              "docs/release-control/v6/internal/mobile_compatibility_manifest.schema.json",
+              "internal/api/relay_mobile_capability.go",
+              "internal/api/relay_mobile_capability_generated.go",
+              "pulse-mobile:config/mobile-api-surface.json",
+              "pulse-mobile:src/api/coreMobileContract.ts",
+              "pulse-mobile:src/generated/coreCompatibility.ts",
+              "scripts/release_control/generate_mobile_compatibility.py",
+              "scripts/release_control/mobile_compatibility.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "internal/api/relay_mobile_capability_test.go",
+              "pulse-mobile:src/api/__tests__/coreMobileContract.test.ts",
+              "scripts/release_control/generate_mobile_compatibility_test.py",
+              "scripts/release_control/mobile_compatibility_test.py"
+            ]
+          },
           {
             "id": "agent-resource-context-sections",
             "label": "agent resource context section proof",
@@ -6097,7 +6153,10 @@
       ],
       "owned_files": [
         "internal/api/relay_mobile_capability.go",
+        "internal/api/relay_mobile_capability_generated.go",
         "internal/config/persistence_relay.go",
+        "pulse-mobile:config/mobile-api-surface.json",
+        "pulse-mobile:src/generated/coreCompatibility.ts",
         "pulse-pro:relay-server/main.go",
         "pulse-pro:relay-server/registry.go",
         "pulse-pro:relay-server/revocation_feed.go"
@@ -6112,6 +6171,7 @@
           "internal/relay/encryption_test.go",
           "internal/relay/protocol_test.go",
           "internal/relay/push_test.go",
+          "pulse-mobile:src/api/__tests__/coreMobileContract.test.ts",
           "pulse-mobile:src/relay/__tests__/channel.test.ts",
           "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
           "pulse-mobile:src/relay/__tests__/client.test.ts",
@@ -6119,7 +6179,9 @@
           "pulse-mobile:src/relay/__tests__/identity.test.ts",
           "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
           "pulse-mobile:src/relay/__tests__/protocol.test.ts",
-          "pulse-mobile:src/relay/__tests__/proxy.test.ts"
+          "pulse-mobile:src/relay/__tests__/proxy.test.ts",
+          "scripts/release_control/generate_mobile_compatibility_test.py",
+          "scripts/release_control/mobile_compatibility_test.py"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
@@ -6176,12 +6238,20 @@
             "label": "relay mobile capability boundary proof",
             "match_prefixes": [],
             "match_files": [
-              "internal/api/relay_mobile_capability.go"
+              "internal/api/relay_mobile_capability.go",
+              "internal/api/relay_mobile_capability_generated.go",
+              "internal/relay/mobile_compatibility_generated.go",
+              "pulse-mobile:config/mobile-api-surface.json",
+              "pulse-mobile:src/generated/coreCompatibility.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/api/relay_mobile_capability_test.go"
+              "internal/api/relay_mobile_capability_test.go",
+              "internal/relay/push_test.go",
+              "pulse-mobile:src/api/__tests__/coreMobileContract.test.ts",
+              "scripts/release_control/generate_mobile_compatibility_test.py",
+              "scripts/release_control/mobile_compatibility_test.py"
             ]
           },
           {

@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-07-19
+Last updated: 2026-07-22
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -181,6 +181,14 @@ without desktop fallback.
 Until that validation and the remaining hardware proof gates pass, widen mobile
 through clearer ops cues and trust repair only, not through extra tabs, graphs,
 or desktop-parity surface expansion.
+Pulse and Pulse Mobile must nevertheless share one compatibility boundary.
+Every server capability declared on that companion boundary is explicitly
+`mobile-required`, `mobile-handoff-only`, or `desktop-only`; routes, token
+scopes, pairing links, push navigation, and mobile-required payload fields live
+in the canonical mobile compatibility manifest and generated projections. A
+Pulse change that breaks the checked-in Pulse Mobile consumer, or a mobile
+change that exceeds released-server compatibility, fails before release with
+evidence tied to the exact repository revisions.
 
 ## Release Definition
 

@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-07-19",
+  "updated_at": "2026-07-22",
   "scope": {
     "active_repos": [
       "pulse",
@@ -4926,6 +4926,69 @@
           "evidence_tier": "managed-runtime-exercise"
         }
       ]
+    },
+    {
+      "id": "RA43",
+      "summary": "Pulse and Pulse Mobile remain compatible at exact repository revisions: one canonical provider manifest generates the server route/scope inventory, pairing schema, push constants, and mobile TypeScript projection; the checked-in mobile consumer minimum preserves every route, method, field, pairing, and push behavior it uses; and the released-line OTA probe remains an independent skew check against stable and RC servers.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L5",
+        "L6",
+        "L7"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "relay-runtime"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra43-pulse-mobile-exact-revision-compatibility",
+          "run": [
+            "python3",
+            "scripts/release_control/mobile_compatibility.py",
+            "--mobile-repo",
+            "../pulse-mobile"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/mobile_compatibility.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/mobile_compatibility_test.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "config/mobile-api-surface.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "scripts/ota-compat-gate.mjs",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/generated/coreCompatibility.ts",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -8459,7 +8522,7 @@
     },
     {
       "id": "mobile-post-rc-hardening",
-      "summary": "Track explicit Pulse Mobile store-publication execution and remaining post-GA mobile hardening beyond the current proof floor. Governed action parity now keeps approval and execution separately authenticated, binds both gestures to the reviewed plan identity, preserves approved work in the durable inbox, removes command-shaped presentation, renders approval posture truthfully, and persists revoked-access recovery. Build 4 retains physical Android and iOS companion-role proof; public rollout still requires a separate human-triggered release operation, and future hardening must not reopen the GA readiness gate unless new evidence regresses.",
+      "summary": "Track explicit Pulse Mobile store-publication execution and remaining post-GA mobile hardening beyond the current proof floor. Exact-revision Pulse/Pulse Mobile API, route-scope, pairing, push, and payload compatibility is now enforced by RA43 and the Canonical Governance workflow, while the mobile OTA gate independently protects released-server skew. Governed action parity keeps approval and execution separately authenticated and bound to the reviewed plan identity. Public rollout still requires a separate human-triggered release operation, and future hardening must not reopen the GA readiness gate unless new evidence regresses.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -9076,6 +9139,19 @@
       "work_item": {
         "kind": "release-gate",
         "id": "single-build-release-promotion-path"
+      }
+    },
+    {
+      "id": "pulse-mobile-compat-lane-followup-mobile-post-rc-hardening",
+      "agent_id": "pulse-mobile-compat",
+      "summary": "Enforce exact-revision Pulse and Pulse Mobile API, scope, push, and deep-link compatibility before release",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-22T12:08:06Z",
+      "heartbeat_at": "2026-07-22T12:08:06Z",
+      "expires_at": "2026-07-22T20:08:06Z",
+      "work_item": {
+        "kind": "lane-followup",
+        "id": "mobile-post-rc-hardening"
       }
     }
   ],

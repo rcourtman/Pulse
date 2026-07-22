@@ -8,28 +8,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// Notification type constants
-const (
-	PushTypePatrolFinding   = "patrol_finding"
-	PushTypePatrolCritical  = "patrol_critical"
-	PushTypeApprovalRequest = "approval_request"
-	PushTypeFixCompleted    = "fix_completed"
-)
-
-// Priority constants
-const (
-	PushPriorityNormal = "normal"
-	PushPriorityHigh   = "high"
-)
-
-// Action type constants
-const (
-	PushActionViewFinding   = "view_finding"
-	PushActionApproveFix    = "approve_fix"
-	PushActionDecideAction  = "decide_action"
-	PushActionViewFixResult = "view_fix_result"
-)
-
 // Title and body length limits for push payloads visible to Apple/Google.
 const (
 	maxPushTitleLen = 100

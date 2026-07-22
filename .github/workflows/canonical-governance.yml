@@ -63,6 +63,29 @@ jobs:
           cache: true
           cache-dependency-path: repos/pulse/go.sum
 
+      - name: Check Pulse Mobile compatibility contract
+        run: |
+          python3 scripts/release_control/generate_mobile_compatibility_test.py
+          python3 scripts/release_control/mobile_compatibility_test.py
+          python3 scripts/release_control/generate_mobile_compatibility.py --check --mobile-repo ../pulse-mobile
+          python3 scripts/release_control/mobile_compatibility.py \
+            --mobile-repo ../pulse-mobile \
+            --evidence-out "${RUNNER_TEMP}/pulse-mobile-compatibility.json" \
+            --pretty
+          go test ./internal/api \
+            -run 'Test(RelayMobileRuntimeRouteInventory|RelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints|RelayMobileAccessScopeDeniesAdjacentAIRoutes|Contract_PatrolAttentionRoutesAcceptMobileRelayCapability)$' \
+            -count=1
+          go test ./internal/relay \
+            -run 'Test(CanonicalActionOutcomeNotificationMatrix|NewPatrolFindingNotification|NewApprovalRequestNotification|NewActionDecisionNotificationUsesCanonicalActionIdentity|NewFixCompletedNotification|NewActionOutcomeNotificationIsHonestAboutVerification)$' \
+            -count=1
+
+      - name: Upload Pulse Mobile compatibility evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pulse-mobile-compatibility
+          path: ${{ runner.temp }}/pulse-mobile-compatibility.json
+          if-no-files-found: error
+
       - name: Determine governance diff range
         id: diff
         shell: bash

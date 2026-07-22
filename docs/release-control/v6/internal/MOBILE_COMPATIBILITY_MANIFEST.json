@@ -1,0 +1,536 @@
+{
+  "$schema": "./mobile_compatibility_manifest.schema.json",
+  "schema_version": 1,
+  "contract_version": 1,
+  "mobile_role": "Away-from-desk decision surface for the same Pulse runtime: attention, approvals, reconnect, instance switching, contextual Assistant handoff, and safe recovery.",
+  "surface_classes": [
+    {
+      "id": "mobile-required",
+      "description": "The mobile client must consume the capability directly and compatibility is part of feature completion."
+    },
+    {
+      "id": "mobile-handoff-only",
+      "description": "Mobile must preserve context and provide a safe handoff to the owning desktop surface."
+    },
+    {
+      "id": "desktop-only",
+      "description": "The capability is intentionally desktop-only and must not change a mobile-owned transport or outcome."
+    }
+  ],
+  "pairing": {
+    "schema": "pulse-mobile-onboarding-v1",
+    "scheme": "pulse",
+    "host": "connect",
+    "required_fields": [
+      "auth_token",
+      "instance_id",
+      "relay_url"
+    ],
+    "optional_fields": [
+      "identity_fingerprint",
+      "identity_public_key",
+      "instance_url",
+      "name"
+    ]
+  },
+  "push": {
+    "required_fields": [
+      "action_id",
+      "action_type",
+      "body",
+      "instance_id",
+      "priority",
+      "title",
+      "type"
+    ],
+    "types": [
+      { "value": "patrol_finding", "go_symbol": "PushTypePatrolFinding" },
+      { "value": "patrol_critical", "go_symbol": "PushTypePatrolCritical" },
+      { "value": "approval_request", "go_symbol": "PushTypeApprovalRequest" },
+      { "value": "fix_completed", "go_symbol": "PushTypeFixCompleted" }
+    ],
+    "priorities": [
+      { "value": "normal", "go_symbol": "PushPriorityNormal" },
+      { "value": "high", "go_symbol": "PushPriorityHigh" }
+    ],
+    "actions": [
+      {
+        "value": "view_finding",
+        "go_symbol": "PushActionViewFinding",
+        "destination": "finding-detail",
+        "lifecycle": "current"
+      },
+      {
+        "value": "view_alert",
+        "go_symbol": "PushActionViewAlert",
+        "destination": "finding-detail",
+        "lifecycle": "compatibility"
+      },
+      {
+        "value": "approve_fix",
+        "go_symbol": "PushActionApproveFix",
+        "destination": "approval-detail",
+        "lifecycle": "compatibility"
+      },
+      {
+        "value": "decide_action",
+        "go_symbol": "PushActionDecideAction",
+        "destination": "approval-detail",
+        "lifecycle": "current"
+      },
+      {
+        "value": "view_fix_result",
+        "go_symbol": "PushActionViewFixResult",
+        "destination": "finding-detail",
+        "lifecycle": "current"
+      }
+    ]
+  },
+  "routes": [
+    {
+      "id": "onboarding-qr",
+      "go_symbol": "relayMobileRouteOnboardingQR",
+      "method": "GET",
+      "path": "/api/onboarding/qr",
+      "required_scope": "settings:read",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/onboarding_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "schema", "type": "string" },
+        { "path": "instance_id", "type": "string", "required": false },
+        { "path": "relay.url", "type": "string" },
+        { "path": "auth_token", "type": "string" },
+        { "path": "deep_link", "type": "string" },
+        { "path": "diagnostics", "type": "array" }
+      ]
+    },
+    {
+      "id": "onboarding-validate",
+      "go_symbol": "relayMobileRouteOnboardingValidate",
+      "method": "POST",
+      "path": "/api/onboarding/validate",
+      "required_scope": "settings:read",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/onboarding_handlers.go"],
+      "request_fields": [
+        { "path": "instance_id", "type": "string" },
+        { "path": "relay_url", "type": "string" },
+        { "path": "auth_token", "type": "string" }
+      ],
+      "response_fields": [
+        { "path": "success", "type": "boolean" },
+        { "path": "diagnostics", "type": "array" }
+      ]
+    },
+    {
+      "id": "onboarding-deep-link",
+      "go_symbol": "relayMobileRouteOnboardingDeepLink",
+      "method": "GET",
+      "path": "/api/onboarding/deep-link",
+      "required_scope": "settings:read",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/onboarding_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "url", "type": "string" },
+        { "path": "diagnostics", "type": "array" }
+      ]
+    },
+    {
+      "id": "patrol-findings-list",
+      "go_symbol": "relayMobileRoutePatrolFindingsList",
+      "method": "GET",
+      "path": "/api/ai/patrol/findings",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "$", "type": "array" },
+        { "path": "$[].id", "type": "string" },
+        { "path": "$[].title", "type": "string" },
+        { "path": "$[].severity", "type": "string" }
+      ]
+    },
+    {
+      "id": "finding-investigation",
+      "go_symbol": "relayMobileRouteFindingInvestigation",
+      "method": "GET",
+      "path": "/api/ai/findings/{finding_id}/investigation",
+      "required_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "id", "type": "string" },
+        { "path": "status", "type": "string" },
+        { "path": "startedAt", "type": "string" }
+      ]
+    },
+    {
+      "id": "finding-investigation-messages",
+      "go_symbol": "relayMobileRouteFindingInvestigationMessages",
+      "method": "GET",
+      "path": "/api/ai/findings/{finding_id}/investigation/messages",
+      "required_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "messages", "type": "array" },
+        { "path": "messages[].role", "type": "string" },
+        { "path": "messages[].content", "type": "string" },
+        { "path": "messages[].timestamp", "type": "string" }
+      ]
+    },
+    {
+      "id": "patrol-acknowledge",
+      "go_symbol": "relayMobileRoutePatrolAcknowledge",
+      "method": "POST",
+      "path": "/api/ai/patrol/acknowledge",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [{ "path": "finding_id", "type": "string" }],
+      "response_fields": []
+    },
+    {
+      "id": "patrol-dismiss",
+      "go_symbol": "relayMobileRoutePatrolDismiss",
+      "method": "POST",
+      "path": "/api/ai/patrol/dismiss",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [{ "path": "finding_id", "type": "string" }],
+      "response_fields": []
+    },
+    {
+      "id": "patrol-snooze",
+      "go_symbol": "relayMobileRoutePatrolSnooze",
+      "method": "POST",
+      "path": "/api/ai/patrol/snooze",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [
+        { "path": "finding_id", "type": "string" },
+        { "path": "duration_minutes", "type": "integer" }
+      ],
+      "response_fields": []
+    },
+    {
+      "id": "approvals-list",
+      "go_symbol": "relayMobileRouteApprovalsList",
+      "method": "GET",
+      "path": "/api/ai/approvals",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "approvals", "type": "array" },
+        { "path": "stats", "type": "object" }
+      ]
+    },
+    {
+      "id": "approval-approve",
+      "go_symbol": "relayMobileRouteApprovalApprove",
+      "method": "POST",
+      "path": "/api/ai/approvals/{approval_id}/approve",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [],
+      "response_fields": []
+    },
+    {
+      "id": "approval-deny",
+      "go_symbol": "relayMobileRouteApprovalDeny",
+      "method": "POST",
+      "path": "/api/ai/approvals/{approval_id}/deny",
+      "required_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handlers.go"],
+      "request_fields": [],
+      "response_fields": []
+    },
+    {
+      "id": "pending-actions",
+      "go_symbol": "relayMobileRoutePendingActions",
+      "method": "GET",
+      "path": "/api/actions/pending",
+      "required_scope": "actions:approve",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "compatibility",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/actions.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "actions", "type": "array" },
+        { "path": "count", "type": "integer" },
+        { "path": "readOnly", "type": "boolean" }
+      ]
+    },
+    {
+      "id": "actions-list",
+      "go_symbol": "relayMobileRouteActionsList",
+      "method": "GET",
+      "path": "/api/actions",
+      "required_scope": "actions:approve",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/actions.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "view", "type": "string" },
+        { "path": "actions", "type": "array" },
+        { "path": "actions[].id", "type": "string" },
+        { "path": "actions[].state", "type": "string" },
+        { "path": "actions[].plan.planHash", "type": "string" },
+        { "path": "count", "type": "integer" },
+        { "path": "readOnly", "type": "boolean" }
+      ]
+    },
+    {
+      "id": "action-detail",
+      "go_symbol": "relayMobileRouteActionDetail",
+      "method": "GET",
+      "path": "/api/actions/{action_id}",
+      "required_scope": "actions:approve",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/actions.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "audit", "type": "object" },
+        { "path": "events", "type": "array" },
+        { "path": "readOnly", "type": "boolean" }
+      ]
+    },
+    {
+      "id": "action-decision",
+      "go_symbol": "relayMobileRouteActionDecision",
+      "method": "POST",
+      "path": "/api/actions/{action_id}/decision",
+      "required_scope": "actions:approve",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/actions.go"],
+      "request_fields": [
+        { "path": "outcome", "type": "string" },
+        { "path": "reason", "type": "string", "required": false },
+        { "path": "planHash", "type": "string" }
+      ],
+      "response_fields": [
+        { "path": "actionId", "type": "string" },
+        { "path": "state", "type": "string" },
+        { "path": "audit", "type": "object" }
+      ]
+    },
+    {
+      "id": "action-execute",
+      "go_symbol": "relayMobileRouteActionExecute",
+      "method": "POST",
+      "path": "/api/actions/{action_id}/execute",
+      "required_scope": "actions:execute",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/actions.go"],
+      "request_fields": [
+        { "path": "reason", "type": "string", "required": false },
+        { "path": "planHash", "type": "string" }
+      ],
+      "response_fields": [
+        { "path": "actionId", "type": "string" },
+        { "path": "state", "type": "string" },
+        { "path": "audit", "type": "object" }
+      ]
+    },
+    {
+      "id": "chat-send",
+      "go_symbol": "relayMobileRouteChatSend",
+      "method": "POST",
+      "path": "/api/ai/chat",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/ai_handler.go", "internal/api/router_routes_ai_relay.go"],
+      "request_fields": [
+        { "path": "prompt", "type": "string" },
+        { "path": "session_id", "type": "string" }
+      ],
+      "response_fields": []
+    },
+    {
+      "id": "sessions-list",
+      "go_symbol": "relayMobileRouteSessionsList",
+      "method": "GET",
+      "path": "/api/ai/sessions",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/router.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "$", "type": "array" },
+        { "path": "$[].id", "type": "string" },
+        { "path": "$[].title", "type": "string" },
+        { "path": "$[].created_at", "type": "string" },
+        { "path": "$[].updated_at", "type": "string" },
+        { "path": "$[].message_count", "type": "integer" }
+      ]
+    },
+    {
+      "id": "session-create",
+      "go_symbol": "relayMobileRouteSessionCreate",
+      "method": "POST",
+      "path": "/api/ai/sessions",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/router.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "id", "type": "string" },
+        { "path": "title", "type": "string" }
+      ]
+    },
+    {
+      "id": "session-messages",
+      "go_symbol": "relayMobileRouteSessionMessages",
+      "method": "GET",
+      "path": "/api/ai/sessions/{session_id}/messages",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/router.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "$", "type": "array" },
+        { "path": "$[].id", "type": "string" },
+        { "path": "$[].role", "type": "string" },
+        { "path": "$[].content", "type": "string" },
+        { "path": "$[].timestamp", "type": "string" }
+      ]
+    },
+    {
+      "id": "session-abort",
+      "go_symbol": "relayMobileRouteSessionAbort",
+      "method": "POST",
+      "path": "/api/ai/sessions/{session_id}/abort",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/router.go"],
+      "request_fields": [],
+      "response_fields": []
+    },
+    {
+      "id": "session-rename",
+      "go_symbol": "relayMobileRouteSessionRename",
+      "method": "PATCH",
+      "path": "/api/ai/sessions/{session_id}",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/router.go"],
+      "request_fields": [{ "path": "title", "type": "string" }],
+      "response_fields": []
+    },
+    {
+      "id": "session-delete",
+      "go_symbol": "relayMobileRouteSessionDelete",
+      "method": "DELETE",
+      "path": "/api/ai/sessions/{session_id}",
+      "required_scope": "ai:chat",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/router.go"],
+      "request_fields": [],
+      "response_fields": []
+    },
+    {
+      "id": "attention-list",
+      "go_symbol": "relayMobileRouteAttentionList",
+      "method": "GET",
+      "path": "/api/ai/patrol/attention",
+      "required_scope": "monitoring:read",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/attention_handlers.go", "internal/api/attention_mutations.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "data", "type": "array" },
+        { "path": "data[].id", "type": "string" },
+        { "path": "data[].operationalRecordId", "type": "string" },
+        { "path": "data[].subjectResourceId", "type": "string" },
+        { "path": "data[].subjectResourceName", "type": "string" },
+        { "path": "data[].kind", "type": "string" },
+        { "path": "data[].title", "type": "string" },
+        { "path": "data[].plainLanguageSummary", "type": "string" },
+        { "path": "data[].severity", "type": "string" },
+        { "path": "data[].state", "type": "string" },
+        { "path": "data[].firstObservedAt", "type": "string" },
+        { "path": "data[].lastObservedAt", "type": "string" },
+        { "path": "data[].evidenceFreshness", "type": "string" },
+        { "path": "data[].evidenceCompleteness", "type": "string" },
+        { "path": "data[].relatedResources", "type": "array" },
+        { "path": "data[].availableActions", "type": "array" },
+        { "path": "data[].verificationState", "type": "string" },
+        { "path": "summary", "type": "object" },
+        { "path": "meta", "type": "object" }
+      ]
+    },
+    {
+      "id": "attention-detail",
+      "go_symbol": "relayMobileRouteAttentionDetail",
+      "method": "GET",
+      "path": "/api/ai/patrol/attention/{item_id}",
+      "required_scope": "monitoring:read",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/attention_handlers.go"],
+      "request_fields": [],
+      "response_fields": [
+        { "path": "item", "type": "object" },
+        { "path": "item.id", "type": "string" },
+        { "path": "operationalRecord", "type": "object" },
+        { "path": "timeline", "type": "array" },
+        { "path": "evidence", "type": "array" }
+      ]
+    },
+    {
+      "id": "attention-mutation",
+      "go_symbol": "relayMobileRouteAttentionMutation",
+      "method": "POST",
+      "path": "/api/ai/patrol/attention/{item_id}/{mutation}",
+      "required_scope": "monitoring:write",
+      "legacy_scope": "ai:execute",
+      "lifecycle": "current",
+      "mobile_impact": "mobile-required",
+      "implementation_paths": ["internal/api/attention_mutations.go"],
+      "request_fields": [],
+      "response_fields": [{ "path": "success", "type": "boolean" }]
+    }
+  ]
+}
