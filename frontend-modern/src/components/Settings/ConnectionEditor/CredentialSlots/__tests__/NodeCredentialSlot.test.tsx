@@ -15,7 +15,7 @@ const createSettings = (): InfrastructurePlatformSettingsProps =>
     savingTemperatureSetting: () => false,
     handleNodeTemperatureMonitoringChange: vi.fn().mockResolvedValue(undefined),
     handleTemperatureMonitoringChange: vi.fn().mockResolvedValue(undefined),
-    saveNode: vi.fn().mockResolvedValue(undefined),
+    saveNode: vi.fn().mockResolvedValue(true),
   }) as unknown as InfrastructurePlatformSettingsProps;
 
 describe('NodeCredentialSlot', () => {
@@ -184,5 +184,75 @@ describe('NodeCredentialSlot', () => {
     });
     const payload = vi.mocked(settings.saveNode).mock.calls[0][0];
     expect(payload).not.toHaveProperty('clusterEndpointOverrides');
+  });
+
+  it('passes the edited node to saveNode so edits hit the update path', async () => {
+    const settings = createSettings();
+    const onSaved = vi.fn();
+    const editingNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode}
+        onCancel={vi.fn()}
+        onSaved={onSaved}
+      />
+    ));
+
+    fireEvent.submit(screen.getByRole('button', { name: 'Save changes' }).closest('form')!);
+
+    await vi.waitFor(() => {
+      expect(settings.saveNode).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(settings.saveNode).mock.calls[0][1]).toBe(editingNode);
+    await vi.waitFor(() => {
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('keeps the editor open when the save fails', async () => {
+    const settings = createSettings();
+    vi.mocked(settings.saveNode).mockResolvedValue(false);
+    const onSaved = vi.fn();
+    const editingNode = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'homelab',
+      host: 'https://pve1.local:8006',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={editingNode}
+        onCancel={vi.fn()}
+        onSaved={onSaved}
+      />
+    ));
+
+    fireEvent.submit(screen.getByRole('button', { name: 'Save changes' }).closest('form')!);
+
+    await vi.waitFor(() => {
+      expect(settings.saveNode).toHaveBeenCalledTimes(1);
+    });
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

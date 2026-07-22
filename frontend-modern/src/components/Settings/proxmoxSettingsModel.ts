@@ -67,7 +67,10 @@ export interface InfrastructurePlatformSettingsProps {
   savingDockerUpdateActions: Accessor<boolean>;
   handleDisableDockerUpdateActionsChange: (enabled: boolean) => Promise<void>;
   handleNodeTemperatureMonitoringChange: (nodeId: string, enabled: boolean | null) => Promise<void>;
-  saveNode: (nodeData: Partial<NodeConfig>) => Promise<void>;
+  saveNode: (
+    nodeData: Partial<NodeConfig>,
+    existingNode?: NodeConfigWithStatus | null,
+  ) => Promise<boolean>;
   showDeleteNodeModal: Accessor<boolean>;
   cancelDeleteNode: () => void;
   deleteNode: () => Promise<void>;

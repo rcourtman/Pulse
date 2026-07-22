@@ -281,9 +281,12 @@ export const useInfrastructureConfiguredNodesState = ({
     }
   };
 
-  const saveNode = async (nodeData: Partial<NodeConfig>) => {
+  const saveNode = async (
+    nodeData: Partial<NodeConfig>,
+    existingNodeOverride?: NodeConfigWithStatus | null,
+  ): Promise<boolean> => {
     try {
-      const existingNode = editingNode();
+      const existingNode = existingNodeOverride ?? editingNode();
       if (existingNode?.id) {
         await NodesAPI.updateNode(existingNode.id, nodeData as NodeConfig);
         // clusterEndpointOverrides is a write-only payload field: mirror it
@@ -322,8 +325,10 @@ export const useInfrastructureConfiguredNodesState = ({
 
       setShowNodeModal(false);
       setEditingNode(null);
+      return true;
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Operation failed');
+      return false;
     }
   };
 

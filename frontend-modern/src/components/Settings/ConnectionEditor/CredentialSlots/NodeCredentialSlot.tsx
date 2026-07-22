@@ -52,8 +52,13 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
   const [importImpactPreviewError, setImportImpactPreviewError] = createSignal<string | null>(null);
 
   const handleSave = async (nodeData: Partial<NodeConfig>) => {
-    await props.settings.saveNode(nodeData);
-    props.onSaved();
+    // The configured-nodes state no longer tracks which node the workspace is
+    // editing, so the edit target must travel with the save call; otherwise
+    // edits are misrouted to the add endpoint (#1605).
+    const saved = await props.settings.saveNode(nodeData, props.editingNode ?? null);
+    if (saved) {
+      props.onSaved();
+    }
   };
 
   const modalProps: NodeModalProps = {
