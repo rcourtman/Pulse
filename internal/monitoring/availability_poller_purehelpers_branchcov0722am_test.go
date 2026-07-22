@@ -176,7 +176,7 @@ func TestBranchcov0722PingArgsDefaultArmCeilingArithmetic(t *testing.T) {
 		// Fractional seconds round up to the next whole second.
 		{"one thousand one millis rounds up to two seconds", 1001, 2},
 		{"fifteen hundred millis rounds up to two seconds", 1500, 2},
-		{"five thousand nine hundred ninety nine rounds up to five seconds", 5999, 5},
+		{"five thousand nine hundred ninety nine rounds up to six seconds", 5999, 6},
 		// NOTE: the `if timeoutSeconds <= 0 { timeoutSeconds = 1 }` clamp is
 		// unreachable here. The non-positive fallback guarantees timeoutMillis
 		// is at least DefaultAvailabilityTimeoutMillis (2000) before this arm,
