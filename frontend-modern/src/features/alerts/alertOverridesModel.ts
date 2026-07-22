@@ -575,6 +575,10 @@ export const buildProjectedOverrides = ({
       return;
     }
 
+    // PBS datastore override keys are also "pbs-" prefixed (the canonical
+    // "<instance-id>/<name>" and legacy "<instance-id>-<name>" forms), so an
+    // instance miss must fall through to the storage lookup below instead of
+    // swallowing the key (#1591).
     if (key.startsWith('pbs-')) {
       const pbs = pbsInstanceById.get(key);
       if (pbs) {
@@ -586,8 +590,8 @@ export const buildProjectedOverrides = ({
           disableConnectivity: thresholds.disableConnectivity || false,
           thresholds: extractTriggerValues(thresholds),
         });
+        return;
       }
-      return;
     }
 
     const node = nodeResources.find((resource) => resource.id === key);

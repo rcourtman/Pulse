@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import type { PBSInstance } from '@/types/api';
+import type { RawOverrideConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 
-import { storageOverrideIdCandidates } from '../alertOverridesModel';
+import { buildProjectedOverrides, storageOverrideIdCandidates } from '../alertOverridesModel';
 
 const pbsDatastore = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -35,5 +37,50 @@ describe('storageOverrideIdCandidates for PBS datastores (#1591)', () => {
     expect(storageOverrideIdCandidates(pbsDatastore({ metricsTarget: undefined }))).toEqual([
       'storage-hash',
     ]);
+  });
+});
+
+describe('buildProjectedOverrides for PBS datastores (#1591)', () => {
+  const project = (rawConfig: Record<string, RawOverrideConfig>) =>
+    buildProjectedOverrides({
+      rawConfig,
+      nodeResources: [],
+      vmResources: [],
+      containerResources: [],
+      storageResources: [pbsDatastore()],
+      agentResourceList: [],
+      containerRuntimeResources: [],
+      getChildren: () => [],
+      pbsInstanceById: new Map<string, PBSInstance>(),
+    });
+
+  it('projects a datastore override saved under the canonical pbs-prefixed key', () => {
+    const overrides = project({
+      'pbs-pbs-docker/main': { disabled: true } as RawOverrideConfig,
+    });
+    expect(overrides).toHaveLength(1);
+    expect(overrides[0]).toMatchObject({
+      id: 'pbs-pbs-docker/main',
+      type: 'storage',
+      disabled: true,
+    });
+  });
+
+  it('projects a datastore override saved under the legacy dash key', () => {
+    const overrides = project({
+      'pbs-pbs-docker-main': { disabled: true } as RawOverrideConfig,
+    });
+    expect(overrides).toHaveLength(1);
+    expect(overrides[0]).toMatchObject({
+      id: 'pbs-pbs-docker/main',
+      type: 'storage',
+      disabled: true,
+    });
+  });
+
+  it('still drops pbs-prefixed keys that match neither an instance nor storage', () => {
+    expect(project({ 'pbs-gone-instance': { disabled: true } as RawOverrideConfig })).toHaveLength(
+      0,
+    );
   });
 });
