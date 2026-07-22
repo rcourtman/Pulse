@@ -206,11 +206,11 @@ pulse_pve_token_expire_label() {
         awk -F'│' -v token="$TOKEN_NAME" '
             NR>3 {
                 name=$2
-                exp=$3
+                expire_field=$3
                 gsub(/^[ \t]+|[ \t]+$/, "", name)
-                gsub(/^[ \t]+|[ \t]+$/, "", exp)
+                gsub(/^[ \t]+|[ \t]+$/, "", expire_field)
                 if (name == token) {
-                    print exp
+                    print expire_field
                     exit
                 }
             }')
