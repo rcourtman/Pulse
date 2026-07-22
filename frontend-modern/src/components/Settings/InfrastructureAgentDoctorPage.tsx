@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-solid';
 import { Button, CommandCopyButton } from '@/components/shared/Button';
 import {
@@ -17,6 +17,7 @@ import {
   getUnifiedAgentClipboardCopySuccessMessage,
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
+  formatInfrastructureAgentDoctorReport,
   summarizeInfrastructureAgentDoctorTargets,
   type InfrastructureAgentDoctorStatus,
   type InfrastructureAgentDoctorTarget,
@@ -123,6 +124,33 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
     notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
   };
 
+  const copyReport = async (reportTargets: readonly InfrastructureAgentDoctorTarget[]) => {
+    const success = await copyToClipboard(formatInfrastructureAgentDoctorReport(reportTargets));
+    if (success) {
+      notificationStore.success('Diagnostic report copied');
+      return;
+    }
+    notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
+  };
+
+  const [statusFilter, setStatusFilter] = createSignal<InfrastructureAgentDoctorStatus | null>(
+    null,
+  );
+  // A filtered status can empty out as agents recover, taking its chip with
+  // it; clear the filter then so the table never dead-ends under a filter the
+  // user can no longer see or unset.
+  createEffect(() => {
+    const filter = statusFilter();
+    if (filter && !props.targets.some((target) => target.status === filter)) {
+      setStatusFilter(null);
+    }
+  });
+  const visibleTargets = createMemo(() => {
+    const filter = statusFilter();
+    if (!filter) return props.targets;
+    return props.targets.filter((target) => target.status === filter);
+  });
+
   // A lone target (the common case when a platform page deep-links one stale
   // agent) starts expanded so its diagnosis and update command are immediately
   // visible; larger fleets start collapsed and expand per row.
@@ -195,17 +223,39 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
           </Show>
         }
       >
-        <section aria-label="Agent Doctor summary" class="flex flex-wrap items-center gap-2">
-          <For each={summaryChips()}>
-            {(chip) => (
-              <span
-                class={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_PRESENTATION[chip.status].badgeClass}`}
-              >
-                <span class="font-semibold">{chip.count}</span>
-                {STATUS_PRESENTATION[chip.status].label}
-              </span>
-            )}
-          </For>
+        <section
+          aria-label="Agent Doctor summary"
+          class="flex flex-wrap items-center justify-between gap-2"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <For each={summaryChips()}>
+              {(chip) => (
+                <button
+                  type="button"
+                  aria-pressed={statusFilter() === chip.status}
+                  onClick={() =>
+                    setStatusFilter((current) => (current === chip.status ? null : chip.status))
+                  }
+                  class={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-shadow ${STATUS_PRESENTATION[chip.status].badgeClass} ${
+                    statusFilter() === chip.status
+                      ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-surface'
+                      : ''
+                  }`}
+                >
+                  <span class="font-semibold">{chip.count}</span>
+                  {STATUS_PRESENTATION[chip.status].label}
+                </button>
+              )}
+            </For>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copyReport(visibleTargets())}
+          >
+            Copy diagnostic report
+          </Button>
         </section>
 
         <Show when={anyTargetNeedsUpdate()}>
@@ -307,7 +357,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               </TableRow>
             </TableHeader>
             <TableBody>
-              <For each={props.targets}>
+              <For each={visibleTargets()}>
                 {(target) => {
                   const status = () => STATUS_PRESENTATION[target.status];
                   const lastSeen = () => formatLastSeen(target.lastSeen);
@@ -475,6 +525,15 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 </Show>
                               </Show>
                             </Show>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void copyReport([target])}
+                            >
+                              Copy diagnostic report for {target.displayName}
+                            </Button>
                           </div>
                         </InlineDetailTableRow>
                       </Show>

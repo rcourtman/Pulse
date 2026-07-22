@@ -1991,11 +1991,18 @@ appended as diagnostics-only targets, honoring the scoped-agent filter, so a
 critical workload-only agent can no longer vanish from the fleet view.
 Diagnostics-only rows render the diagnostic's status, reasons, and evidence
 but offer no host-local command (there is no ledger connection to derive one
-from). Dialog presentation follows the same honesty rule: the
-"Supported target" cell renders only when a target version is actually
-published, the host-local command explainer renders only when at least one
-row offers a command, and the summary strip lists only non-zero status
-counts.
+from). Page presentation follows the same honesty rule: the
+"Target" column renders a version only when one is actually published, the
+host-local command explainer renders only when at least one row offers a
+command, and the summary chips list only non-zero status counts. The summary
+chips double as status filters over the fleet table, and a filter whose
+status empties out clears itself rather than dead-ending the table. The page
+also offers plain-text diagnostic reports (fleet-level over the currently
+visible rows and per-agent from a row expansion) via
+`formatInfrastructureAgentDoctorReport`; reports carry status, versions,
+last-seen, reasons, identity evidence, and non-command repair actions, and
+must never embed host-local update commands because those can carry install
+tokens.
 
 ### Governed action readiness remains outside agent lifecycle authority
 

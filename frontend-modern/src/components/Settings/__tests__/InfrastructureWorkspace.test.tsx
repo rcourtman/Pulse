@@ -454,6 +454,78 @@ describe('InfrastructureWorkspace', () => {
     );
   });
 
+  it('filters the Agent Doctor table by clicking a status chip', async () => {
+    routeState.pathname = '/settings/infrastructure/agent-doctor';
+    routeState.search = '';
+    const staleAgent = connectionFixture({
+      id: 'agent:agent-zeus',
+      type: 'agent',
+      name: 'zeus-agent',
+      address: 'zeus.lab',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      agentVersion: '5.1.34',
+      expectedAgentVersion: '6.0.0-rc.6',
+      agentUpdateAvailable: true,
+      agentIdentity: { hostname: 'zeus', platform: 'linux' },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    const unreachableAgent = connectionFixture({
+      id: 'agent:agent-apollo',
+      type: 'agent',
+      name: 'apollo-agent',
+      address: 'apollo.lab',
+      state: 'unreachable',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      agentVersion: '6.0.0-rc.6',
+      agentIdentity: { hostname: 'apollo', platform: 'linux' },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    connectionState.connections = [staleAgent, unreachableAgent];
+    connectionState.rows = [staleAgent, unreachableAgent].map((connection) => ({
+      id: connection.id,
+      ownerType: 'agent' as const,
+      name: connection.name,
+      subtitle: 'via Pulse Agent',
+      source: 'agent' as const,
+      host: connection.address,
+      coverageLabels: ['Host telemetry'],
+      statusLabel: 'Active',
+      statusClassName: 'bg-green-100 text-green-800',
+      agentUpdateCount: 0,
+      lastActivityText: '1m ago',
+      ...emptyFleetRow,
+      enabled: true,
+      canEdit: true,
+      canPause: false,
+      canRemove: true,
+      isAgent: true,
+      isCluster: false,
+      attachedConnections: [],
+      members: [],
+      connection,
+    }));
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
+    expect(screen.getByText('apollo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy diagnostic report' })).toBeInTheDocument();
+
+    const attentionChip = screen.getByRole('button', { name: '1 Needs attention' });
+    fireEvent.click(attentionChip);
+    expect(attentionChip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('zeus')).toBeInTheDocument();
+    expect(screen.queryByText('apollo')).not.toBeInTheDocument();
+
+    fireEvent.click(attentionChip);
+    expect(attentionChip).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('apollo')).toBeInTheDocument();
+  });
+
   it('does not invent scoped update commands when the backend publishes no agent target', async () => {
     routeState.search = '?agentUpdates=1&agents=agent%3Aagent-zeus';
     const primaryConnection = connectionFixture();

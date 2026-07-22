@@ -683,3 +683,81 @@ export const summarizeInfrastructureAgentDoctorTargets = (
   unknown: targets.filter((target) => target.status === 'unknown').length,
   removed: targets.filter((target) => target.status === 'removed').length,
 });
+
+const DOCTOR_REPORT_STATUS_LABEL: Record<InfrastructureAgentDoctorStatus, string> = {
+  healthy: 'Healthy',
+  waiting: 'Waiting for updater',
+  warning: 'Needs attention',
+  critical: 'Critical',
+  removed: 'Removed',
+  unknown: 'Unknown',
+};
+
+const doctorReportLastSeen = (value?: number | string | null): string | undefined => {
+  if (value === null || value === undefined || value === '') return undefined;
+  const timestamp = typeof value === 'number' ? value : Date.parse(value);
+  if (!Number.isFinite(timestamp)) return typeof value === 'string' ? value : undefined;
+  return new Date(timestamp).toISOString();
+};
+
+// Plain-text diagnosis for pasting into a support thread or GitHub issue.
+// Deliberately excludes update commands: they can embed install tokens.
+export const formatInfrastructureAgentDoctorReport = (
+  targets: readonly InfrastructureAgentDoctorTarget[],
+): string => {
+  const counts = summarizeInfrastructureAgentDoctorTargets(targets);
+  const countParts = (['critical', 'warning', 'waiting', 'unknown', 'removed', 'healthy'] as const)
+    .filter((status) => counts[status] > 0)
+    .map((status) => `${counts[status]} ${DOCTOR_REPORT_STATUS_LABEL[status].toLowerCase()}`);
+  const lines: string[] = [
+    `Pulse Agent Doctor report (${counts.total} agent${counts.total === 1 ? '' : 's'}${
+      countParts.length > 0 ? `; ${countParts.join(', ')}` : ''
+    })`,
+  ];
+  for (const target of targets) {
+    lines.push('');
+    lines.push(`${target.displayName} (${target.contextLabel})`);
+    lines.push(`  Connection ${target.connectionId}`);
+    lines.push(`  Status ${DOCTOR_REPORT_STATUS_LABEL[target.status]}`);
+    if (target.currentVersion) lines.push(`  Reported agent ${target.currentVersion}`);
+    if (target.expectedVersion) lines.push(`  Supported target ${target.expectedVersion}`);
+    const lastSeen = doctorReportLastSeen(target.lastSeen);
+    if (lastSeen) lines.push(`  Last seen ${lastSeen}`);
+    if (target.updaterLabel) lines.push(`  Updater ${target.updaterLabel}`);
+    if (target.profileLabel) {
+      lines.push(
+        `  Profile ${target.profileLabel}${
+          target.profileVersionLabel ? ` (${target.profileVersionLabel})` : ''
+        }`,
+      );
+    }
+    if (target.reasons.length > 0) {
+      lines.push('  Issues');
+      for (const reason of target.reasons) {
+        lines.push(`  - ${reason.message}`);
+        for (const item of reason.evidence ?? []) {
+          lines.push(`    ${item}`);
+        }
+      }
+    }
+    if (target.evidence.length > 0) {
+      lines.push('  Identity evidence');
+      for (const item of target.evidence) {
+        lines.push(`  - ${item}`);
+      }
+    }
+    const repairs = (target.diagnostic?.repairActions ?? []).filter(
+      (action) => action.code !== 'copy_upgrade_command',
+    );
+    if (repairs.length > 0) {
+      lines.push('  Repair actions');
+      for (const repair of repairs) {
+        lines.push(`  - ${repair.label}. ${repair.description}`);
+      }
+    }
+    if (target.commandBlockedReason) {
+      lines.push(`  Update command blocked. ${target.commandBlockedReason}`);
+    }
+  }
+  return lines.join('\n');
+};

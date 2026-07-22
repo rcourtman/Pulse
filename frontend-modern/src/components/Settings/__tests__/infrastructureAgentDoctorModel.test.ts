@@ -5,7 +5,9 @@ import type { InfrastructureSystemRow } from '../connectionsTableModel';
 import {
   collectInfrastructureAgentDoctorTargets,
   diagnosticConnectionID,
+  formatInfrastructureAgentDoctorReport,
   resolveKnownAgentCommandPlatform,
+  type InfrastructureAgentDoctorTarget,
 } from '../infrastructureAgentUpdateCommandsModel';
 
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
@@ -369,5 +371,106 @@ describe('Agent Doctor model', () => {
   it('fails closed for missing and unsupported platform captions', () => {
     expect(resolveKnownAgentCommandPlatform('')).toBeNull();
     expect(resolveKnownAgentCommandPlatform('Haiku')).toBeNull();
+  });
+
+  describe('formatInfrastructureAgentDoctorReport', () => {
+    const doctorTargetFixture = (
+      overrides: Partial<InfrastructureAgentDoctorTarget> = {},
+    ): InfrastructureAgentDoctorTarget => ({
+      key: 'agent:host-1',
+      connectionId: 'agent:host-1',
+      displayName: 'host-1',
+      contextLabel: 'Machine',
+      installFlags: [],
+      status: 'critical',
+      reasons: [],
+      evidence: [],
+      needsUpdate: false,
+      commandPlatform: null,
+      source: 'diagnostics',
+      ...overrides,
+    });
+
+    it('reports fleet counts, per-agent state, and diagnosis detail', () => {
+      const report = formatInfrastructureAgentDoctorReport([
+        doctorTargetFixture({
+          currentVersion: '5.1.34',
+          expectedVersion: '6.1.0',
+          lastSeen: '2026-07-22T09:00:00Z',
+          updaterLabel: 'systemd unit',
+          profileLabel: 'default',
+          profileVersionLabel: 'v3',
+          reasons: [
+            {
+              code: 'agent_stale',
+              severity: 'critical',
+              message: 'No report has arrived for 10m.',
+              evidence: ['Expected report interval: 30s'],
+            },
+          ],
+          evidence: ['hostname host-1'],
+        }),
+        doctorTargetFixture({
+          key: 'agent:host-2',
+          connectionId: 'agent:host-2',
+          displayName: 'host-2',
+          status: 'healthy',
+        }),
+      ]);
+
+      expect(report).toContain('Pulse Agent Doctor report (2 agents; 1 critical, 1 healthy)');
+      expect(report).toContain('host-1 (Machine)');
+      expect(report).toContain('  Connection agent:host-1');
+      expect(report).toContain('  Status Critical');
+      expect(report).toContain('  Reported agent 5.1.34');
+      expect(report).toContain('  Supported target 6.1.0');
+      expect(report).toContain('  Last seen 2026-07-22T09:00:00.000Z');
+      expect(report).toContain('  Updater systemd unit');
+      expect(report).toContain('  Profile default (v3)');
+      expect(report).toContain('  - No report has arrived for 10m.');
+      expect(report).toContain('    Expected report interval: 30s');
+      expect(report).toContain('  Identity evidence');
+      expect(report).toContain('  - hostname host-1');
+      expect(report).toContain('host-2 (Machine)');
+      expect(report).toContain('  Status Healthy');
+    });
+
+    it('omits absent fields and never embeds update commands', () => {
+      const report = formatInfrastructureAgentDoctorReport([
+        doctorTargetFixture({
+          needsUpdate: true,
+          commandBlockedReason: 'The reported platform is unsupported.',
+          diagnostic: {
+            connectionId: 'agent:host-1',
+            repairActions: [
+              {
+                code: 'copy_upgrade_command',
+                label: 'Copy update command',
+                description: 'Copy the host-local update command.',
+                supported: true,
+              },
+              {
+                code: 'reissue_token',
+                label: 'Reissue token',
+                description: 'Generate a fresh install token.',
+                supported: true,
+              },
+            ],
+          } as unknown as InfrastructureAgentDoctorTarget['diagnostic'],
+        }),
+      ]);
+
+      expect(report).toContain('Pulse Agent Doctor report (1 agent; 1 critical)');
+      expect(report).not.toContain('Reported agent');
+      expect(report).not.toContain('Supported target');
+      expect(report).not.toContain('Last seen');
+      expect(report).not.toContain('Updater');
+      expect(report).not.toContain('Profile');
+      // The update-command handoff stays on the page; reports carry the
+      // blocked reason and non-command repairs only.
+      expect(report).not.toContain('Copy update command');
+      expect(report).toContain('  - Reissue token. Generate a fresh install token.');
+      expect(report).toContain('  Update command blocked. The reported platform is unsupported.');
+    });
   });
 });
