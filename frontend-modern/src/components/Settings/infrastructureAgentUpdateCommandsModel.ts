@@ -599,7 +599,7 @@ const diagnosticOnlyDoctorTarget = (
     reasons: diagnostic.reasons ?? [],
     evidence: evidenceFor(undefined, diagnostic),
     needsUpdate: false,
-    commandPlatform: null,
+    commandPlatform: resolveKnownAgentCommandPlatform(diagnostic.platform),
     profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
     profileVersionLabel: diagnostic.profileVersion
       ? `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion || 0}`
@@ -670,6 +670,46 @@ export const collectInfrastructureAgentDoctorTargets = ({
       DOCTOR_STATUS_RANK[right.status] - DOCTOR_STATUS_RANK[left.status] ||
       left.displayName.localeCompare(right.displayName),
   );
+};
+
+export type InfrastructureAgentDoctorUninstallHandoff = {
+  identity: { agentId?: string; hostname?: string };
+  commands: { label: string; platform: AgentCommandPlatform }[];
+};
+
+const UNINSTALL_SHELL_LABEL = 'Linux / macOS / FreeBSD';
+const UNINSTALL_WINDOWS_LABEL = 'Windows PowerShell';
+
+/**
+ * Removed targets keep one legitimate next step: uninstalling the agent on
+ * the host itself. When the retained diagnostic identity resolves to a known
+ * platform the handoff carries that single command; when it does not, both
+ * host families are offered explicitly labeled rather than guessing one.
+ */
+export const getInfrastructureAgentDoctorUninstallHandoff = (
+  target: InfrastructureAgentDoctorTarget,
+): InfrastructureAgentDoctorUninstallHandoff | null => {
+  if (target.status !== 'removed') return null;
+  const identity = {
+    agentId: target.diagnostic?.agentId?.trim() || target.diagnostic?.id?.trim() || undefined,
+    hostname: target.diagnostic?.hostname?.trim() || undefined,
+  };
+  if (target.commandPlatform === 'windows') {
+    return { identity, commands: [{ label: UNINSTALL_WINDOWS_LABEL, platform: 'windows' }] };
+  }
+  if (target.commandPlatform) {
+    return {
+      identity,
+      commands: [{ label: UNINSTALL_SHELL_LABEL, platform: target.commandPlatform }],
+    };
+  }
+  return {
+    identity,
+    commands: [
+      { label: UNINSTALL_SHELL_LABEL, platform: 'linux' },
+      { label: UNINSTALL_WINDOWS_LABEL, platform: 'windows' },
+    ],
+  };
 };
 
 export const summarizeInfrastructureAgentDoctorTargets = (

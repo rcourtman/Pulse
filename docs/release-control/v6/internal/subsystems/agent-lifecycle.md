@@ -1990,8 +1990,19 @@ only workload telemetry, e.g. Docker-only or Kubernetes-only agents) are now
 appended as diagnostics-only targets, honoring the scoped-agent filter, so a
 critical workload-only agent can no longer vanish from the fleet view.
 Diagnostics-only rows render the diagnostic's status, reasons, and evidence
-but offer no host-local command (there is no ledger connection to derive one
-from). Page presentation follows the same honesty rule: the
+but offer no host-local update command (there is no ledger connection to
+derive an update from). Removed rows are the deliberate exception in the
+uninstall direction: a removed agent's one remaining next step is host-side
+cleanup, so a removed target resolves its command platform from the retained
+diagnostic identity through the strict platform resolver and its row
+expansion hands off the host-local uninstall command
+(`getInfrastructureAgentDoctorUninstallHandoff`) — the single matching
+platform command when the identity resolves, or both explicitly labeled
+Linux-family and Windows commands when it does not, never one guessed
+executable. The handoff carries the diagnostic's agent id and hostname as
+uninstall identity flags, and its copy states the command runs on the
+affected host itself, not from Pulse. Page presentation follows the same
+honesty rule: the
 "Target" column renders a version only when one is actually published, the
 host-local command explainer renders only when at least one row offers a
 command, and the summary chips list only non-zero status counts. The summary
@@ -2001,8 +2012,8 @@ also offers plain-text diagnostic reports (fleet-level over the currently
 visible rows and per-agent from a row expansion) via
 `formatInfrastructureAgentDoctorReport`; reports carry status, versions,
 last-seen, reasons, identity evidence, and non-command repair actions, and
-must never embed host-local update commands because those can carry install
-tokens.
+must never embed host-local update or uninstall commands because those can
+carry install tokens.
 
 ### Governed action readiness remains outside agent lifecycle authority
 

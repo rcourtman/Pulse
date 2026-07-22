@@ -5972,6 +5972,15 @@ canonical identity when inventory already has it: shell uninstall payloads must
 carry `--agent-id`, and PowerShell uninstall payloads must carry
 `PULSE_AGENT_ID`, so deregistration targets the intended governed agent record
 instead of depending on local fallback files or hostname lookup.
+That uninstall identity seam is deliberately narrower than the unified
+inventory row: the governed uninstall builders in
+`frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+accept a caller-supplied identity view carrying only
+`agentActionId`/`agentId`/`hostname` (the exported `AgentUninstallIdentity`
+pick), so lifecycle surfaces without a ledger-backed inventory row — Agent
+Doctor's removed-agent diagnostics handoff — bind copied uninstall payloads to
+the retained diagnostic identity through the same governed builders instead of
+inventing a second uninstall transport.
 The same identity-preservation contract applies to copied upgrade transport:
 shell upgrade payloads must carry `--agent-id` and `--hostname`, and
 PowerShell upgrade payloads must carry `PULSE_AGENT_ID` and `PULSE_HOSTNAME`,

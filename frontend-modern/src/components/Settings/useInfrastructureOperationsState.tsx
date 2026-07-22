@@ -20,6 +20,13 @@ import {
 
 export type InfrastructureOperationsStateOptions = InfrastructureInstallStateOptions;
 
+// Uninstall commands only need the host identity flags, so callers without a
+// full inventory row (e.g. Agent Doctor's removed diagnostics) can hand one in.
+export type AgentUninstallIdentity = Pick<
+  UnifiedAgentRow,
+  'agentActionId' | 'agentId' | 'hostname'
+>;
+
 export const useInfrastructureOperationsState = (
   options: InfrastructureOperationsStateOptions = {},
 ) => {
@@ -69,9 +76,10 @@ export const useInfrastructureOperationsState = (
     return installState.currentToken();
   };
 
-  const getCanonicalUninstallAgentId = (row?: UnifiedAgentRow) =>
+  const getCanonicalUninstallAgentId = (row?: AgentUninstallIdentity) =>
     row?.agentActionId?.trim() || row?.agentId?.trim() || '';
-  const getCanonicalUninstallHostname = (row?: UnifiedAgentRow) => row?.hostname?.trim() || '';
+  const getCanonicalUninstallHostname = (row?: AgentUninstallIdentity) =>
+    row?.hostname?.trim() || '';
   const getCanonicalConnectionAgentId = (connection: Connection) => {
     if (connection.type !== 'agent') return '';
     const id = connection.id.trim();
@@ -87,7 +95,7 @@ export const useInfrastructureOperationsState = (
   const getConnectionUpgradePlatform = (connection: Connection): AgentPlatform =>
     resolveAgentCommandPlatform(connection.agentIdentity?.platform);
 
-  const getUninstallCommand = (row?: UnifiedAgentRow) => {
+  const getUninstallCommand = (row?: AgentUninstallIdentity) => {
     const url = installState.selectedAgentUrl();
     const token = resolvedCommandToken();
     const insecure = getInsecureFlag(url);
@@ -102,7 +110,7 @@ export const useInfrastructureOperationsState = (
     );
   };
 
-  const getWindowsUninstallCommand = (row?: UnifiedAgentRow) => {
+  const getWindowsUninstallCommand = (row?: AgentUninstallIdentity) => {
     const url = installState.selectedAgentUrl();
     const token = resolvedCommandToken();
     const transportEnv = getPowerShellTransportEnv();
@@ -123,7 +131,7 @@ export const useInfrastructureOperationsState = (
     return `${prefix}$env:PULSE_URL="${powerShellQuote(url)}"; $env:PULSE_UNINSTALL="true"; ${buildPowerShellInstallScriptBootstrap(url)}`;
   };
 
-  const getPlatformUninstallCommand = (platform: AgentPlatform, row?: UnifiedAgentRow) => {
+  const getPlatformUninstallCommand = (platform: AgentPlatform, row?: AgentUninstallIdentity) => {
     if (platform === 'windows') {
       return getWindowsUninstallCommand(row);
     }

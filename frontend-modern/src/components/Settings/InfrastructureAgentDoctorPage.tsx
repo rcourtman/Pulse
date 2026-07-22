@@ -18,6 +18,7 @@ import {
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
   formatInfrastructureAgentDoctorReport,
+  getInfrastructureAgentDoctorUninstallHandoff,
   summarizeInfrastructureAgentDoctorTargets,
   type InfrastructureAgentDoctorStatus,
   type InfrastructureAgentDoctorTarget,
@@ -373,6 +374,8 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                     (target.diagnostic?.repairActions ?? []).filter(
                       (action) => action.code !== 'copy_upgrade_command',
                     );
+                  const uninstallHandoff = () =>
+                    getInfrastructureAgentDoctorUninstallHandoff(target);
                   const expanded = () => isExpanded(target);
 
                   return (
@@ -524,6 +527,50 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                   </div>
                                 </Show>
                               </Show>
+                            </Show>
+
+                            <Show when={uninstallHandoff()}>
+                              {(handoff) => (
+                                <div class="space-y-2">
+                                  <p class="text-xs text-muted">
+                                    This agent was removed from Pulse, but the agent software may
+                                    still be installed on its host. Finish detaching it by running
+                                    the uninstall command on the affected host itself. Pulse does
+                                    not run commands remotely.
+                                  </p>
+                                  <For each={handoff().commands}>
+                                    {(entry) => (
+                                      <div>
+                                        <div class="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+                                          {entry.label}
+                                        </div>
+                                        <div class="relative">
+                                          <CommandCopyButton
+                                            onClick={() =>
+                                              void copyCommand(
+                                                operations.getPlatformUninstallCommand(
+                                                  entry.platform,
+                                                  handoff().identity,
+                                                ),
+                                              )
+                                            }
+                                            title="Copy host-local agent uninstall command"
+                                            label={`Copy ${entry.label} uninstall command for ${target.displayName}`}
+                                          />
+                                          <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                            <code>
+                                              {operations.getPlatformUninstallCommand(
+                                                entry.platform,
+                                                handoff().identity,
+                                              )}
+                                            </code>
+                                          </pre>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </For>
+                                </div>
+                              )}
                             </Show>
 
                             <Button

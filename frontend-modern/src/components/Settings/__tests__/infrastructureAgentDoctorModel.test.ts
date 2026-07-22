@@ -6,6 +6,7 @@ import {
   collectInfrastructureAgentDoctorTargets,
   diagnosticConnectionID,
   formatInfrastructureAgentDoctorReport,
+  getInfrastructureAgentDoctorUninstallHandoff,
   resolveKnownAgentCommandPlatform,
   type InfrastructureAgentDoctorTarget,
 } from '../infrastructureAgentUpdateCommandsModel';
@@ -276,6 +277,90 @@ describe('Agent Doctor model', () => {
         scopedAgentIds: ['agent:host-1'],
       }).map((target) => target.status),
     ).not.toContain('removed');
+  });
+
+  it('hands removed targets an uninstall command scoped to their reported platform', () => {
+    const removedWindows = diagnosticFixture({
+      connectionId: 'agent:removed-win',
+      rowKey: 'removed-win',
+      id: 'removed-win',
+      agentId: 'removed-win-agent',
+      name: 'removed-win',
+      hostname: 'win-host',
+      platform: 'Windows Server 2022',
+      status: 'removed',
+    });
+    const removedLinux = diagnosticFixture({
+      connectionId: 'agent:removed-deb',
+      rowKey: 'removed-deb',
+      id: 'removed-deb',
+      agentId: 'removed-deb-agent',
+      name: 'removed-deb',
+      hostname: 'deb-host',
+      platform: 'debian',
+      status: 'removed',
+    });
+
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [],
+      diagnostics: [removedWindows, removedLinux],
+      diagnosticsAvailable: true,
+    });
+    const windowsTarget = targets.find((target) => target.displayName === 'removed-win');
+    const linuxTarget = targets.find((target) => target.displayName === 'removed-deb');
+
+    expect(windowsTarget?.commandPlatform).toBe('windows');
+    expect(getInfrastructureAgentDoctorUninstallHandoff(windowsTarget!)).toEqual({
+      identity: { agentId: 'removed-win-agent', hostname: 'win-host' },
+      commands: [{ label: 'Windows PowerShell', platform: 'windows' }],
+    });
+
+    expect(linuxTarget?.commandPlatform).toBe('linux');
+    expect(getInfrastructureAgentDoctorUninstallHandoff(linuxTarget!)).toEqual({
+      identity: { agentId: 'removed-deb-agent', hostname: 'deb-host' },
+      commands: [{ label: 'Linux / macOS / FreeBSD', platform: 'linux' }],
+    });
+  });
+
+  it('offers both labeled uninstall families when a removed agent has no recognized platform', () => {
+    const removed = diagnosticFixture({
+      connectionId: 'agent:removed-host',
+      rowKey: 'removed-host',
+      id: 'removed-host',
+      agentId: undefined,
+      name: 'removed-host',
+      hostname: undefined,
+      status: 'removed',
+    });
+
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [],
+      diagnostics: [removed],
+      diagnosticsAvailable: true,
+    });
+
+    expect(target.commandPlatform).toBeNull();
+    expect(getInfrastructureAgentDoctorUninstallHandoff(target)).toEqual({
+      identity: { agentId: 'removed-host', hostname: undefined },
+      commands: [
+        { label: 'Linux / macOS / FreeBSD', platform: 'linux' },
+        { label: 'Windows PowerShell', platform: 'windows' },
+      ],
+    });
+  });
+
+  it('keeps the uninstall handoff off non-removed targets', () => {
+    const connection = connectionFixture();
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture()],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target.status).not.toBe('removed');
+    expect(getInfrastructureAgentDoctorUninstallHandoff(target)).toBeNull();
   });
 
   it('keeps integration-monitored machines out of the doctor', () => {
