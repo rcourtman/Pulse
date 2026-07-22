@@ -103,6 +103,17 @@ calls remain authoritative and must not be repeated; the repair projection
 contains only finding lifecycle tools and may correct only the rejected calls
 from the returned validation evidence. A repair attempt never erases the
 original failed call from run history or qualification scoring.
+When the main analysis pass completes without a provider error but leaves
+seeded or queried active findings with no accepted verdict, the run performs
+one bounded assessment sweep before the incomplete-assessment error is
+recorded: a follow-up pass on the `patrol-assess` session that presents
+exactly the missing findings (id, title, severity, resource, truncated stored
+evidence), runs through the same tool executor so `patrol_assess_finding`
+verdicts land via the shared adapter and tolerant ID resolution, forbids
+further investigation and new findings, accepts `uncertain` as a complete
+honest verdict, and is capped at the missing-finding count plus two turns,
+never more than twelve. Verdicts still missing after the sweep keep the
+existing run-level incomplete-assessment error.
 Investigation and interactive profiles retain a tool-free final summary; a
 Watch finding write at the deadline is followed only by the existing bounded
 summary path. A capability-unavailable

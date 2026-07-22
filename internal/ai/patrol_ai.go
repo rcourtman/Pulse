@@ -933,8 +933,117 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		}
 	}
 
+	// --- Assessment completion sweep ---
+	// Smaller models sometimes end the main pass without filing a
+	// patrol_assess_finding verdict for every active finding, which turns an
+	// otherwise healthy run into "Patrol needs attention" on every cycle.
+	// Give the model one bounded follow-up pass scoped to exactly the missing
+	// verdicts before the run is declared incomplete.
+	if missing := patrolMissingAssessmentIDs(buildAnalysisResult(finalContent, collectedToolCalls, inputTokens, outputTokens)); len(missing) > 0 {
+		log.Warn().
+			Int("missing_assessments", len(missing)).
+			Msg("AI Patrol: Verdicts missing after main pass, running assessment sweep")
+
+		sweepResp, sweepErr := p.runAssessmentSweep(ctx, missing, executionID)
+		if sweepErr != nil {
+			log.Warn().Err(sweepErr).Msg("AI Patrol: Assessment sweep failed")
+		} else if sweepResp != nil {
+			inputTokens += sweepResp.InputTokens
+			outputTokens += sweepResp.OutputTokens
+			remaining := patrolMissingAssessmentIDs(buildAnalysisResult(finalContent, collectedToolCalls, inputTokens, outputTokens))
+			log.Info().
+				Int("swept", len(missing)-len(remaining)).
+				Int("remaining", len(remaining)).
+				Msg("AI Patrol: Assessment sweep completed")
+		}
+	}
+
 	// Findings were already created via tool calls — collect them
 	return buildAnalysisResult(finalContent, collectedToolCalls, inputTokens, outputTokens), nil
+}
+
+// runAssessmentSweep runs a bounded follow-up model pass that files the
+// patrol_assess_finding verdicts the main pass left missing. Uncertain is an
+// accepted verdict, so the pass asks for an honest call on the presented
+// evidence instead of a re-investigation.
+func (p *PatrolService) runAssessmentSweep(ctx context.Context, missingIDs []string, executionID string) (*PatrolStreamResponse, error) {
+	cs := p.aiService.GetChatService()
+	if cs == nil {
+		return nil, fmt.Errorf("chat service not available for assessment sweep")
+	}
+	if err := p.aiService.CheckBudget("patrol"); err != nil {
+		log.Warn().Err(err).Msg("AI Patrol: Budget exceeded, skipping assessment sweep")
+		return nil, fmt.Errorf("patrol assessment sweep skipped: %w", err)
+	}
+
+	pending := make([]*Finding, 0, len(missingIDs))
+	for _, findingID := range missingIDs {
+		if finding := p.findings.Get(findingID); finding != nil {
+			pending = append(pending, finding)
+		}
+	}
+	if len(pending) == 0 {
+		return nil, nil
+	}
+
+	maxTurns := len(pending) + 2
+	if maxTurns > 12 {
+		maxTurns = 12
+	}
+
+	resp, err := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
+		Prompt:       buildAssessmentSweepUserPrompt(pending),
+		SystemPrompt: buildAssessmentSweepSystemPrompt(),
+		SessionID:    "patrol-assess",
+		ExecutionID:  executionID,
+		UseCase:      "patrol",
+		MaxTurns:     maxTurns,
+	}, func(event ChatStreamEvent) {
+		// Not streamed to the frontend — verdicts land via the adapter.
+	})
+
+	if resp != nil {
+		p.recordPatrolUsage(resp.InputTokens, resp.OutputTokens)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func buildAssessmentSweepSystemPrompt() string {
+	return `You are completing a patrol run. The main pass ended without filing a verdict for every active finding.
+
+Tools: patrol_assess_finding
+
+Instructions:
+1. For EACH finding listed below, call patrol_assess_finding exactly once, copying the finding id exactly as shown.
+2. Use verdict "present" when the evidence shows the issue continues, "resolved" when it shows the issue cleared, and "uncertain" when the evidence below cannot tell you.
+3. "uncertain" with a short reason is a valid, honest verdict. Never skip a finding.
+4. Do NOT investigate further and do NOT report new findings.`
+}
+
+func buildAssessmentSweepUserPrompt(pending []*Finding) string {
+	var sb strings.Builder
+	sb.WriteString("These active findings still need a verdict from this patrol run.\n")
+	sb.WriteString("Call patrol_assess_finding once per finding.\n\n")
+
+	for i, finding := range pending {
+		sb.WriteString(fmt.Sprintf("## Finding %d\n", i+1))
+		sb.WriteString(fmt.Sprintf("- **ID**: %s\n", finding.ID))
+		sb.WriteString(fmt.Sprintf("- **Title**: %s\n", finding.Title))
+		sb.WriteString(fmt.Sprintf("- **Severity**: %s\n", finding.Severity))
+		sb.WriteString(fmt.Sprintf("- **Resource**: %s (ID: %s, Type: %s)\n", finding.ResourceName, finding.ResourceID, finding.ResourceType))
+		if evidence := strings.TrimSpace(finding.Evidence); evidence != "" {
+			if len(evidence) > 500 {
+				evidence = evidence[:500] + "…"
+			}
+			sb.WriteString(fmt.Sprintf("- **Last evidence**: ```\n%s\n```\n", evidence))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
 }
 
 func computePatrolMaxTurns(resourceCount int, scope *PatrolScope) int {
