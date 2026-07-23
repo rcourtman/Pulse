@@ -47,12 +47,16 @@ type Pool struct {
 	TotalBytes int64
 	UsedBytes  int64
 	FreeBytes  int64
+	// IsBoot distinguishes the boot pool collected from boot.get_state from
+	// data pools. Identity remains connection-scoped at projection time.
+	IsBoot bool
 	// DiskMembers are the leaf disks of the pool's vdev topology with their
-	// per-member ZFS state. pool.query attaches topology unconditionally on
-	// both CORE and SCALE, which makes it the only API source for disk→pool
-	// membership and per-disk health: disk.query carries neither a status
-	// nor a SMART field, and only reports pool membership behind an extra
-	// option the REST bridge cannot pass (#1573).
+	// per-member ZFS state. pool.query attaches topology for data pools and
+	// boot.get_state supplies the separate boot-pool topology. Together they
+	// are the API sources for disk→pool membership and per-disk health:
+	// disk.query carries neither a status nor a SMART field, and only reports
+	// pool membership behind an extra option the REST bridge cannot pass
+	// (#1573, #1609).
 	DiskMembers []PoolDiskMember
 }
 
@@ -67,15 +71,26 @@ type PoolDiskMember struct {
 	Status string
 }
 
+// DatasetReadOnlyReason describes why a dataset is read-only when the API
+// reports readonly=on. An unspecified reason remains operator-actionable.
+type DatasetReadOnlyReason string
+
+const (
+	DatasetReadOnlyUnspecified       DatasetReadOnlyReason = ""
+	DatasetReadOnlyReplicationTarget DatasetReadOnlyReason = "replication-target"
+)
+
 // Dataset mirrors the subset of TrueNAS dataset fields needed for unified mapping.
 type Dataset struct {
-	ID         string
-	Name       string
-	Pool       string
-	UsedBytes  int64
-	AvailBytes int64
-	Mounted    bool
-	ReadOnly   bool
+	ID             string
+	Name           string
+	Pool           string
+	UsedBytes      int64
+	AvailBytes     int64
+	Mounted        bool
+	Locked         bool
+	ReadOnly       bool
+	ReadOnlyReason DatasetReadOnlyReason
 }
 
 // Disk mirrors a TrueNAS disk listing entry.
@@ -329,6 +344,11 @@ type ReplicationTask struct {
 	SourceDatasets []string
 	TargetDataset  string
 	Direction      string
+	Transport      string
+	ReadOnlyMode   string
+	// TargetHost is the configured SSH credential host for remote PUSH
+	// replication. It is intentionally absent for unexpanded credentials.
+	TargetHost string
 
 	LastRun   *time.Time
 	LastState string // SUCCESS / FAILED / RUNNING / etc, best-effort

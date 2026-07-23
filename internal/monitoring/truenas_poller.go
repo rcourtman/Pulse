@@ -99,6 +99,12 @@ type trueNASPollerProviderEntry struct {
 	provider     *truenas.Provider
 }
 
+type trueNASReplicationConnection struct {
+	connectionID   string
+	configuredHost string
+	snapshot       *truenas.FixtureSnapshot
+}
+
 // NewTrueNASPoller builds a new TrueNAS poller with the provided poll interval.
 func NewTrueNASPoller(multiTenant *config.MultiTenantPersistence, interval time.Duration, recoveryManager *recoverymanager.Manager) *TrueNASPoller {
 	explicitInterval := interval > 0
@@ -461,6 +467,7 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 	p.mu.Unlock()
 
 	pm := getPollMetrics()
+	refreshedOrgs := make(map[string]struct{})
 
 	for _, entry := range entries {
 		if entry.provider == nil {
@@ -503,26 +510,206 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		p.mu.Lock()
 		p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, end, snapshot)
 		p.mu.Unlock()
-
-		records := entry.provider.Records()
-		if len(records) == 0 {
-			p.mu.Lock()
-			if p.cachedRecordsByOrg[entry.orgID] == nil {
-				p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
-			}
-			p.cachedRecordsByOrg[entry.orgID][entry.id] = nil
-			p.mu.Unlock()
-			continue
-		}
-		p.mu.Lock()
-		if p.cachedRecordsByOrg[entry.orgID] == nil {
-			p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
-		}
-		p.cachedRecordsByOrg[entry.orgID][entry.id] = cloneIngestRecords(records)
-		p.mu.Unlock()
-
+		refreshedOrgs[entry.orgID] = struct{}{}
 		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
 	}
+
+	for orgID := range refreshedOrgs {
+		p.rebuildCachedRecordsForOrg(orgID)
+	}
+}
+
+func (p *TrueNASPoller) rebuildCachedRecordsForOrg(orgID string) {
+	if p == nil {
+		return
+	}
+
+	p.mu.Lock()
+	providers := p.providersByOrg[orgID]
+	type providerSelection struct {
+		connectionID   string
+		configuredHost string
+		provider       *truenas.Provider
+	}
+	selections := make([]providerSelection, 0, len(providers))
+	providersByConnection := make(map[string]*truenas.Provider, len(providers))
+	for connectionID, provider := range providers {
+		if provider == nil {
+			continue
+		}
+		instance := p.configsByOrg[orgID][connectionID]
+		selections = append(selections, providerSelection{
+			connectionID:   connectionID,
+			configuredHost: instance.Host,
+			provider:       provider,
+		})
+		providersByConnection[connectionID] = provider
+	}
+	p.mu.Unlock()
+
+	connections := make([]trueNASReplicationConnection, 0, len(selections))
+	for _, selection := range selections {
+		connections = append(connections, trueNASReplicationConnection{
+			connectionID:   selection.connectionID,
+			configuredHost: selection.configuredHost,
+			snapshot:       selection.provider.Snapshot(),
+		})
+	}
+
+	targetsByConnection := expectedTrueNASReplicationReadOnlyTargets(connections)
+	recordsByConnection := make(map[string][]unifiedresources.IngestRecord, len(connections))
+	for _, connection := range connections {
+		provider := providersByConnection[connection.connectionID]
+		classified := applyTrueNASReplicationReadOnlyTargets(
+			connection.snapshot,
+			targetsByConnection[connection.connectionID],
+		)
+		recordsByConnection[connection.connectionID] = provider.RecordsFromSnapshot(classified)
+	}
+
+	p.mu.Lock()
+	if p.cachedRecordsByOrg[orgID] == nil {
+		p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
+	}
+	for connectionID, records := range recordsByConnection {
+		// A concurrent settings update may have replaced or removed a
+		// provider while snapshots were classified outside the lock.
+		if p.providersByOrg[orgID][connectionID] != providersByConnection[connectionID] {
+			continue
+		}
+		p.cachedRecordsByOrg[orgID][connectionID] = cloneIngestRecords(records)
+	}
+	p.mu.Unlock()
+}
+
+func expectedTrueNASReplicationReadOnlyTargets(connections []trueNASReplicationConnection) map[string][]string {
+	aliases := make(map[string][]string)
+	for _, connection := range connections {
+		for _, alias := range dedupeTrueNASStrings([]string{
+			normalizeTrueNASHost(connection.configuredHost),
+			normalizeTrueNASHost(snapshotTrueNASHostname(connection.snapshot)),
+		}) {
+			aliases[alias] = append(aliases[alias], connection.connectionID)
+		}
+	}
+
+	targetSets := make(map[string]map[string]struct{})
+	addTarget := func(connectionID, dataset string) {
+		connectionID = strings.TrimSpace(connectionID)
+		dataset = strings.Trim(strings.TrimSpace(dataset), "/")
+		if connectionID == "" || dataset == "" {
+			return
+		}
+		if targetSets[connectionID] == nil {
+			targetSets[connectionID] = make(map[string]struct{})
+		}
+		targetSets[connectionID][dataset] = struct{}{}
+	}
+
+	for _, connection := range connections {
+		if connection.snapshot == nil {
+			continue
+		}
+		for _, task := range connection.snapshot.ReplicationTasks {
+			switch strings.ToUpper(strings.TrimSpace(task.ReadOnlyMode)) {
+			case "SET", "REQUIRE":
+			default:
+				continue
+			}
+
+			direction := strings.ToUpper(strings.TrimSpace(task.Direction))
+			transport := strings.ToUpper(strings.TrimSpace(task.Transport))
+			switch {
+			case direction == "PULL" || transport == "LOCAL":
+				addTarget(connection.connectionID, task.TargetDataset)
+			case direction == "PUSH":
+				targetHost := normalizeTrueNASHost(task.TargetHost)
+				candidates := dedupeTrueNASStrings(aliases[targetHost])
+				if targetHost == "" || len(candidates) != 1 {
+					continue
+				}
+				addTarget(candidates[0], task.TargetDataset)
+			}
+		}
+	}
+
+	targets := make(map[string][]string, len(targetSets))
+	for connectionID, set := range targetSets {
+		for dataset := range set {
+			targets[connectionID] = append(targets[connectionID], dataset)
+		}
+		sort.Strings(targets[connectionID])
+	}
+	return targets
+}
+
+func applyTrueNASReplicationReadOnlyTargets(snapshot *truenas.FixtureSnapshot, targets []string) *truenas.FixtureSnapshot {
+	if snapshot == nil {
+		return nil
+	}
+	classified := *snapshot
+	classified.Datasets = append([]truenas.Dataset(nil), snapshot.Datasets...)
+	for i := range classified.Datasets {
+		if !classified.Datasets[i].ReadOnly {
+			continue
+		}
+		dataset := strings.Trim(strings.TrimSpace(classified.Datasets[i].Name), "/")
+		for _, target := range targets {
+			target = strings.Trim(strings.TrimSpace(target), "/")
+			if target != "" && (dataset == target || strings.HasPrefix(dataset, target+"/")) {
+				classified.Datasets[i].ReadOnlyReason = truenas.DatasetReadOnlyReplicationTarget
+				break
+			}
+		}
+	}
+	return &classified
+}
+
+func snapshotTrueNASHostname(snapshot *truenas.FixtureSnapshot) string {
+	if snapshot == nil {
+		return ""
+	}
+	return snapshot.System.Hostname
+}
+
+func normalizeTrueNASHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	candidate := raw
+	if !strings.Contains(candidate, "://") {
+		candidate = "//" + candidate
+	}
+	if parsed, err := url.Parse(candidate); err == nil {
+		if hostname := parsed.Hostname(); hostname != "" {
+			return strings.TrimSuffix(strings.ToLower(hostname), ".")
+		}
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	}
+	return strings.TrimSuffix(strings.ToLower(strings.Trim(raw, "[]")), ".")
+}
+
+func dedupeTrueNASStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 type trueNASConnectionRuntimeSnapshot struct {
@@ -1113,13 +1300,7 @@ func (p *TrueNASPoller) ControlApp(ctx context.Context, orgID, host, appID, acti
 		return nil, err
 	}
 
-	records := entry.provider.Records()
-	p.mu.Lock()
-	if p.cachedRecordsByOrg[orgID] == nil {
-		p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
-	}
-	p.cachedRecordsByOrg[orgID][entry.connectionID] = cloneIngestRecords(records)
-	p.mu.Unlock()
+	p.rebuildCachedRecordsForOrg(orgID)
 	p.ingestRecoveryPoints(ctx, orgID, entry.connectionID, entry.provider)
 
 	if updatedApp, ok := findTrueNASAppSnapshot(nextSnapshot, host, appID); ok {

@@ -450,6 +450,15 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	return truenasRecordsFromSnapshot(p.Snapshot(), p.connectionID, p.now)
 }
 
+// RecordsFromSnapshot projects an already-classified defensive snapshot using
+// the provider's connection-scoped identity.
+func (p *Provider) RecordsFromSnapshot(snapshot *FixtureSnapshot) []unifiedresources.IngestRecord {
+	if p == nil || !IsFeatureEnabled() {
+		return nil
+	}
+	return truenasRecordsFromSnapshot(snapshot, p.connectionID, p.now)
+}
+
 func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, now func() time.Time) []unifiedresources.IngestRecord {
 	if snapshot == nil {
 		return nil
@@ -575,12 +584,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 					Risk:         risk,
 					ZFSPoolState: strings.ToUpper(strings.TrimSpace(pool.Status)),
 				},
-				Tags: []string{
-					"truenas",
-					"pool",
-					"zfs",
-					"health:" + strings.ToLower(strings.TrimSpace(pool.Status)),
-				},
+				Tags:      poolTags(pool),
 				Incidents: incidents,
 			},
 			Identity: unifiedresources.ResourceIdentity{
@@ -1359,19 +1363,41 @@ func statusFromPool(pool Pool) unifiedresources.ResourceStatus {
 	}
 }
 
+func poolTags(pool Pool) []string {
+	tags := []string{
+		"truenas",
+		"pool",
+		"zfs",
+		"health:" + strings.ToLower(strings.TrimSpace(pool.Status)),
+	}
+	if pool.IsBoot {
+		tags = append(tags, "boot-pool")
+	}
+	return tags
+}
+
 func statusFromDataset(dataset Dataset) unifiedresources.ResourceStatus {
+	if dataset.Locked {
+		return unifiedresources.StatusOffline
+	}
 	if !dataset.Mounted {
 		return unifiedresources.StatusOffline
 	}
-	if dataset.ReadOnly {
+	if dataset.ReadOnly && dataset.ReadOnlyReason != DatasetReadOnlyReplicationTarget {
 		return unifiedresources.StatusWarning
 	}
 	return unifiedresources.StatusOnline
 }
 
 func datasetStateTag(dataset Dataset) string {
+	if dataset.Locked {
+		return "state:locked"
+	}
 	if !dataset.Mounted {
 		return "state:unmounted"
+	}
+	if dataset.ReadOnly && dataset.ReadOnlyReason == DatasetReadOnlyReplicationTarget {
+		return "state:replication-readonly"
 	}
 	if dataset.ReadOnly {
 		return "state:readonly"

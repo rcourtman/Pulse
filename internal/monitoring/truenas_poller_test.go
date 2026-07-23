@@ -700,6 +700,193 @@ func TestTrueNASPollerControlAppRefreshesCachedRecords(t *testing.T) {
 	}
 }
 
+func TestExpectedTrueNASReplicationReadOnlyTargetsAreConnectionScoped(t *testing.T) {
+	connections := []trueNASReplicationConnection{
+		{
+			connectionID:   "sender",
+			configuredHost: "https://sender.example.test",
+			snapshot: &truenas.FixtureSnapshot{
+				System: truenas.SystemInfo{Hostname: "sender"},
+				ReplicationTasks: []truenas.ReplicationTask{{
+					ID:             "7",
+					Direction:      "PUSH",
+					Transport:      "SSH",
+					ReadOnlyMode:   "SET",
+					TargetHost:     "backup.example.test",
+					SourceDatasets: []string{"tank/apps", "tank/vms"},
+					TargetDataset:  "backup/replicas",
+				}},
+			},
+		},
+		{
+			connectionID:   "receiver",
+			configuredHost: "https://backup.example.test:443",
+			snapshot: &truenas.FixtureSnapshot{
+				System: truenas.SystemInfo{Hostname: "backup"},
+				Datasets: []truenas.Dataset{
+					{Name: "backup/replicas", Mounted: true, ReadOnly: true},
+					{Name: "backup/replicas/apps", Mounted: true, ReadOnly: true},
+				},
+			},
+		},
+		{
+			connectionID:   "same-dataset-name-on-another-system",
+			configuredHost: "https://unrelated.example.test",
+			snapshot: &truenas.FixtureSnapshot{
+				System: truenas.SystemInfo{Hostname: "unrelated"},
+				Datasets: []truenas.Dataset{
+					{Name: "backup/replicas", Mounted: true, ReadOnly: true},
+				},
+			},
+		},
+	}
+
+	targets := expectedTrueNASReplicationReadOnlyTargets(connections)
+	if got := targets["receiver"]; len(got) != 1 || got[0] != "backup/replicas" {
+		t.Fatalf("expected receiver target root, got %#v", targets)
+	}
+	if got := targets["same-dataset-name-on-another-system"]; len(got) != 0 {
+		t.Fatalf("dataset names must not correlate across unmatched connections, got %#v", targets)
+	}
+}
+
+func TestExpectedTrueNASReplicationReadOnlyTargetsFailClosed(t *testing.T) {
+	connections := []trueNASReplicationConnection{
+		{
+			connectionID:   "sender",
+			configuredHost: "https://sender.example.test",
+			snapshot: &truenas.FixtureSnapshot{
+				ReplicationTasks: []truenas.ReplicationTask{
+					{ID: "set-without-host", Direction: "PUSH", Transport: "SSH", ReadOnlyMode: "SET", TargetDataset: "backup/a"},
+					{ID: "set-ambiguous-host", Direction: "PUSH", Transport: "SSH", ReadOnlyMode: "SET", TargetHost: "backup.example.test", TargetDataset: "backup/a"},
+					{ID: "ignored", Direction: "PUSH", Transport: "SSH", ReadOnlyMode: "IGNORE", TargetHost: "backup.example.test", TargetDataset: "backup/b"},
+				},
+			},
+		},
+		{connectionID: "receiver-a", configuredHost: "https://backup.example.test", snapshot: &truenas.FixtureSnapshot{}},
+		{connectionID: "receiver-b", configuredHost: "https://backup.example.test:443", snapshot: &truenas.FixtureSnapshot{}},
+	}
+
+	if targets := expectedTrueNASReplicationReadOnlyTargets(connections); len(targets) != 0 {
+		t.Fatalf("ambiguous, hostless, and IGNORE tasks must fail closed, got %#v", targets)
+	}
+}
+
+func TestExpectedTrueNASReplicationReadOnlyTargetsSupportLocalAndPullTasks(t *testing.T) {
+	connections := []trueNASReplicationConnection{{
+		connectionID:   "nas",
+		configuredHost: "https://nas.example.test",
+		snapshot: &truenas.FixtureSnapshot{
+			ReplicationTasks: []truenas.ReplicationTask{
+				{ID: "pull", Direction: "PULL", Transport: "SSH", ReadOnlyMode: "REQUIRE", TargetDataset: "tank/pull-replica"},
+				{ID: "local", Direction: "PUSH", Transport: "LOCAL", ReadOnlyMode: "SET", TargetDataset: "tank/local-replica"},
+			},
+		},
+	}}
+
+	targets := expectedTrueNASReplicationReadOnlyTargets(connections)
+	got := targets["nas"]
+	if len(got) != 2 || got[0] != "tank/local-replica" || got[1] != "tank/pull-replica" {
+		t.Fatalf("expected sorted local targets, got %#v", targets)
+	}
+}
+
+func TestApplyTrueNASReplicationReadOnlyTargetsPreservesFaultStates(t *testing.T) {
+	snapshot := &truenas.FixtureSnapshot{
+		Datasets: []truenas.Dataset{
+			{Name: "backup/replicas", Mounted: true, ReadOnly: true},
+			{Name: "backup/replicas/apps", Mounted: true, ReadOnly: true},
+			{Name: "backup/replicas/locked", Mounted: false, Locked: true, ReadOnly: true},
+			{Name: "backup/unrelated", Mounted: true, ReadOnly: true},
+		},
+	}
+
+	classified := applyTrueNASReplicationReadOnlyTargets(snapshot, []string{"backup/replicas"})
+	if classified.Datasets[0].ReadOnlyReason != truenas.DatasetReadOnlyReplicationTarget ||
+		classified.Datasets[1].ReadOnlyReason != truenas.DatasetReadOnlyReplicationTarget {
+		t.Fatalf("expected root and descendants to carry replication posture: %+v", classified.Datasets)
+	}
+	if classified.Datasets[2].ReadOnlyReason != truenas.DatasetReadOnlyReplicationTarget || !classified.Datasets[2].Locked {
+		t.Fatalf("expected lock state to survive classification: %+v", classified.Datasets[2])
+	}
+	if classified.Datasets[3].ReadOnlyReason != truenas.DatasetReadOnlyUnspecified {
+		t.Fatalf("unexpected unrelated dataset classification: %+v", classified.Datasets[3])
+	}
+}
+
+func TestTrueNASPollerRebuildProjectsReplicationReadonlyOnlyOnMatchedReceiver(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	newProvider := func(connectionID string, snapshot truenas.FixtureSnapshot) *truenas.Provider {
+		t.Helper()
+		provider := truenas.NewLiveProviderForConnection(&truenas.FixtureFetcher{Snapshot: snapshot}, connectionID)
+		if err := provider.Refresh(context.Background()); err != nil {
+			t.Fatalf("Refresh(%s) error = %v", connectionID, err)
+		}
+		return provider
+	}
+
+	sender := newProvider("sender", truenas.FixtureSnapshot{
+		System: truenas.SystemInfo{Hostname: "sender", Healthy: true},
+		ReplicationTasks: []truenas.ReplicationTask{{
+			ID:            "7",
+			Direction:     "PUSH",
+			Transport:     "SSH",
+			ReadOnlyMode:  "SET",
+			TargetHost:    "backup.example.test",
+			TargetDataset: "backup/replicas",
+		}},
+	})
+	receiver := newProvider("receiver", truenas.FixtureSnapshot{
+		System:   truenas.SystemInfo{Hostname: "backup", Healthy: true},
+		Pools:    []truenas.Pool{{Name: "backup", Status: "ONLINE"}},
+		Datasets: []truenas.Dataset{{Name: "backup/replicas", Pool: "backup", Mounted: true, ReadOnly: true}},
+	})
+	unrelated := newProvider("unrelated", truenas.FixtureSnapshot{
+		System:   truenas.SystemInfo{Hostname: "unrelated", Healthy: true},
+		Pools:    []truenas.Pool{{Name: "backup", Status: "ONLINE"}},
+		Datasets: []truenas.Dataset{{Name: "backup/replicas", Pool: "backup", Mounted: true, ReadOnly: true}},
+	})
+
+	poller := NewTrueNASPoller(nil, time.Minute, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{
+		"sender":    sender,
+		"receiver":  receiver,
+		"unrelated": unrelated,
+	}
+	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{
+		"sender":    {ID: "sender", Host: "sender.example.test"},
+		"receiver":  {ID: "receiver", Host: "backup.example.test"},
+		"unrelated": {ID: "unrelated", Host: "unrelated.example.test"},
+	}
+
+	poller.rebuildCachedRecordsForOrg("default")
+
+	assertDataset := func(connectionID string, wantStatus unifiedresources.ResourceStatus, wantTag string) {
+		t.Helper()
+		for _, record := range poller.cachedRecordsByOrg["default"][connectionID] {
+			if record.Resource.Name != "backup/replicas" {
+				continue
+			}
+			if record.Resource.Status != wantStatus {
+				t.Fatalf("%s dataset status = %q, want %q", connectionID, record.Resource.Status, wantStatus)
+			}
+			for _, tag := range record.Resource.Tags {
+				if tag == wantTag {
+					return
+				}
+			}
+			t.Fatalf("%s dataset tags = %v, want %q", connectionID, record.Resource.Tags, wantTag)
+		}
+		t.Fatalf("%s dataset record not found", connectionID)
+	}
+
+	assertDataset("receiver", unifiedresources.StatusOnline, "state:replication-readonly")
+	assertDataset("unrelated", unifiedresources.StatusWarning, "state:readonly")
+}
+
 func TestTrueNASPollerReadAppLogsUsesTenantScopedProvider(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

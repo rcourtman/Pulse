@@ -279,6 +279,110 @@ func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
 	return pools, nil
 }
 
+// GetBootPool returns the boot pool from boot.get_state. The endpoint is
+// separate from pool.query on supported CORE and SCALE releases.
+func (c *Client) GetBootPool(ctx context.Context) (*Pool, error) {
+	var response map[string]any
+	rpcErr := c.callRPC(ctx, "boot.get_state", []any{}, &response)
+	if rpcErr == nil {
+		if pool, ok := parseBootPoolState(response); ok {
+			return &pool, nil
+		}
+		rpcErr = fmt.Errorf("boot.get_state returned no boot pool identity")
+	}
+
+	response = nil
+	if restErr := c.getJSON(ctx, http.MethodGet, "/boot/get_state", &response); restErr != nil {
+		return nil, fmt.Errorf("fetch truenas boot pool via rpc and rest: rpc=%w rest=%v", rpcErr, restErr)
+	}
+	if pool, ok := parseBootPoolState(response); ok {
+		return &pool, nil
+	}
+	return nil, fmt.Errorf("boot/get_state returned no boot pool identity")
+}
+
+func parseBootPoolState(item map[string]any) (Pool, bool) {
+	if len(item) == 0 {
+		return Pool{}, false
+	}
+	name := strings.TrimSpace(readStringAny(item, "name", "id"))
+	id := strings.TrimSpace(readStringAny(item, "id", "name"))
+	if name == "" {
+		name = id
+	}
+	if id == "" || id == "0" {
+		id = name
+	}
+	if name == "" {
+		return Pool{}, false
+	}
+
+	status := strings.TrimSpace(readStringAny(item, "status", "state"))
+	if status == "" && readBoolAny(item, "healthy") {
+		status = "ONLINE"
+	}
+	properties := readMapAny(item, "properties")
+	topology := item["topology"]
+	if topology == nil {
+		topology = item["groups"]
+	}
+
+	pool := Pool{
+		ID:          id,
+		Name:        name,
+		Status:      status,
+		TotalBytes:  readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
+		UsedBytes:   readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
+		FreeBytes:   readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+		IsBoot:      true,
+		DiskMembers: poolDiskMembersFromTopology(topology),
+	}
+	if pool.TotalBytes == 0 {
+		pool.TotalBytes = readInt64Any(properties, "size", "total", "total_bytes", "totalBytes")
+	}
+	if pool.UsedBytes == 0 {
+		pool.UsedBytes = readInt64Any(properties, "allocated", "used", "used_bytes", "usedBytes")
+	}
+	if pool.FreeBytes == 0 {
+		pool.FreeBytes = readInt64Any(properties, "free", "free_bytes", "freeBytes", "available")
+	}
+	return pool, true
+}
+
+func mergeBootPool(pools []Pool, boot Pool) []Pool {
+	bootID := strings.TrimSpace(boot.ID)
+	bootName := strings.TrimSpace(boot.Name)
+	for i := range pools {
+		poolID := strings.TrimSpace(pools[i].ID)
+		poolName := strings.TrimSpace(pools[i].Name)
+		if (bootID == "" || poolID == "" || bootID != poolID) &&
+			(bootName == "" || poolName == "" || bootName != poolName) {
+			continue
+		}
+		pools[i].IsBoot = true
+		if boot.Status != "" {
+			pools[i].Status = boot.Status
+		}
+		if boot.TotalBytes > 0 {
+			pools[i].TotalBytes = boot.TotalBytes
+			pools[i].UsedBytes = boot.UsedBytes
+			pools[i].FreeBytes = boot.FreeBytes
+		} else {
+			if boot.UsedBytes > 0 {
+				pools[i].UsedBytes = boot.UsedBytes
+			}
+			if boot.FreeBytes > 0 {
+				pools[i].FreeBytes = boot.FreeBytes
+			}
+		}
+		if len(boot.DiskMembers) > 0 {
+			pools[i].DiskMembers = append([]PoolDiskMember(nil), boot.DiskMembers...)
+		}
+		return pools
+	}
+	return append(pools, boot)
+}
+
 // poolDiskMembersFromTopology collects the leaf disks of a pool.query
 // topology object across every vdev group, including detached/unavailable
 // members that only appear through their unavail_disk datastore row.
@@ -307,12 +411,18 @@ func poolDiskMembersFromTopology(topology any) []PoolDiskMember {
 			Device: strings.TrimSpace(readStringAny(vdev, "device")),
 			Status: strings.TrimSpace(readStringAny(vdev, "status")),
 		}
+		if member.Device == "" {
+			member.Device = strings.TrimPrefix(strings.TrimSpace(readStringAny(vdev, "path")), "/dev/")
+		}
 		if member.Disk == "" {
 			// A missing/faulted member's device path no longer resolves;
 			// middleware then attaches the disk's datastore row instead.
 			if unavail, ok := vdev["unavail_disk"].(map[string]any); ok {
 				member.Disk = strings.TrimSpace(readStringAny(unavail, "devname", "name"))
 			}
+		}
+		if member.Disk == "" {
+			member.Disk = wholeDiskFromDevice(member.Device)
 		}
 		if member.Disk == "" && member.Device == "" {
 			return
@@ -330,6 +440,49 @@ func poolDiskMembersFromTopology(topology any) []PoolDiskMember {
 		}
 	}
 	return members
+}
+
+func wholeDiskFromDevice(device string) string {
+	device = strings.TrimPrefix(strings.TrimSpace(device), "/dev/")
+	if device == "" || strings.Contains(device, "/") {
+		return ""
+	}
+
+	if partition := strings.LastIndex(device, "p"); partition > 0 && partition < len(device)-1 {
+		suffix := device[partition+1:]
+		if allASCIIBytes(suffix, func(value byte) bool { return value >= '0' && value <= '9' }) {
+			return device[:partition]
+		}
+	}
+
+	// Linux sd/vd/hd/xvd partitions conventionally append digits without a
+	// separator. Do not apply this to CORE names such as ada4/da9 or whole
+	// NVMe names such as nvme0n1, where the trailing digit is the disk.
+	end := len(device)
+	for end > 0 && device[end-1] >= '0' && device[end-1] <= '9' {
+		end--
+	}
+	prefix := device[:end]
+	if end > 0 && end < len(device) &&
+		(strings.HasPrefix(prefix, "sd") ||
+			strings.HasPrefix(prefix, "vd") ||
+			strings.HasPrefix(prefix, "hd") ||
+			strings.HasPrefix(prefix, "xvd")) {
+		return device[:end]
+	}
+	return device
+}
+
+func allASCIIBytes(value string, accept func(byte) bool) bool {
+	if value == "" {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if !accept(value[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
@@ -398,6 +551,7 @@ func (c *Client) getDatasetsRPC(ctx context.Context) ([]Dataset, error) {
 		used := readInt64Any(item, "used", "used_bytes", "usedBytes")
 		available := readInt64Any(item, "available", "avail", "avail_bytes", "available_bytes", "availableBytes")
 
+		locked := readBoolAny(item, "locked")
 		datasets = append(datasets, Dataset{
 			ID:         id,
 			Name:       name,
@@ -411,7 +565,8 @@ func (c *Client) getDatasetsRPC(ctx context.Context) ([]Dataset, error) {
 			// lists is treated as mounted unless it is locked (encrypted
 			// with the key unloaded), the one unmounted state the API does
 			// report. An explicit "mounted" value still wins when present.
-			Mounted:  readBoolAnyDefault(item, true, "mounted") && !readBoolAny(item, "locked"),
+			Mounted:  readBoolAnyDefault(item, true, "mounted") && !locked,
+			Locked:   locked,
 			ReadOnly: readBoolAny(item, "readonly", "read_only", "readOnly"),
 		})
 	}
@@ -465,6 +620,7 @@ func (c *Client) getDatasetsREST(ctx context.Context) ([]Dataset, error) {
 			UsedBytes:  used,
 			AvailBytes: available,
 			Mounted:    mounted,
+			Locked:     item.Locked,
 			ReadOnly:   readOnly,
 		})
 	}
@@ -1367,6 +1523,14 @@ func parseReplicationTasks(response []map[string]any) []ReplicationTask {
 		name := readStringAny(item, "name")
 		direction := readStringAny(item, "direction")
 		targetDataset := readStringAny(item, "target_dataset", "targetDataset", "target")
+		transport := readStringAny(item, "transport")
+		readOnlyMode := readStringAny(item, "readonly", "read_only", "readOnly")
+		targetHost := ""
+		if credentials := readMapAny(item, "ssh_credentials", "sshCredentials"); credentials != nil {
+			if attributes := readMapAny(credentials, "attributes"); attributes != nil {
+				targetHost = readStringAny(attributes, "host", "hostname")
+			}
+		}
 
 		sourceDatasets := readStringSliceAny(item, "source_datasets", "sourceDatasets", "sources", "source")
 
@@ -1400,6 +1564,9 @@ func parseReplicationTasks(response []map[string]any) []ReplicationTask {
 			SourceDatasets: dedupeStrings(sourceDatasets),
 			TargetDataset:  strings.TrimSpace(targetDataset),
 			Direction:      strings.TrimSpace(direction),
+			Transport:      strings.TrimSpace(transport),
+			ReadOnlyMode:   strings.TrimSpace(readOnlyMode),
+			TargetHost:     strings.TrimSpace(targetHost),
 			LastRun:        lastRun,
 			LastState:      strings.TrimSpace(lastState),
 			LastError:      strings.TrimSpace(lastError),
@@ -1423,6 +1590,12 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	pools, err := c.GetPools(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch truenas pools: %w", err)
+	}
+	// boot.get_state is best-effort because older/minimally privileged API
+	// keys may not expose it. When available it supplies the only boot-pool
+	// topology and per-member ZFS state.
+	if bootPool, bootErr := c.GetBootPool(ctx); bootErr == nil && bootPool != nil {
+		pools = mergeBootPool(pools, *bootPool)
 	}
 
 	datasets, err := c.GetDatasets(ctx)

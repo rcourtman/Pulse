@@ -582,6 +582,22 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASStorageStatus(healthyByState)).toBe('healthy');
   });
 
+  it('renders expected receive-side replication readonly posture as healthy', () => {
+    const replicatedDataset = makeResource({
+      id: 'dataset-replica',
+      type: 'storage',
+      name: 'backup/replicas',
+      status: 'online',
+      tags: ['truenas', 'dataset', 'zfs', 'state:replication-readonly'],
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+
+    expect(mapTrueNASStorageStatus(replicatedDataset)).toBe('healthy');
+    const row = buildTrueNASStorageTopologyRows([replicatedDataset])[0];
+    expect(row?.kind).toBe('dataset');
+    expect(row && mapTrueNASStorageStatus(row.resource)).toBe('healthy');
+  });
+
   it('filters apps using native TrueNAS app.query metadata', () => {
     const nextcloud = makeResource({
       id: 'app-nextcloud',

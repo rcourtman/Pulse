@@ -40,6 +40,12 @@ func TestStatusFromPoolExhaustiveZFSStates(t *testing.T) {
 	}
 }
 
+func TestBootPoolTagPreservesPoolRole(t *testing.T) {
+	if tags := poolTags(Pool{Status: "ONLINE", IsBoot: true}); !hasTag(tags, "boot-pool") {
+		t.Fatalf("expected boot-pool tag, got %v", tags)
+	}
+}
+
 func TestStatusFromDatasetStates(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -48,6 +54,8 @@ func TestStatusFromDatasetStates(t *testing.T) {
 	}{
 		{"mounted writable", Dataset{Mounted: true, ReadOnly: false}, unifiedresources.StatusOnline},
 		{"mounted readonly", Dataset{Mounted: true, ReadOnly: true}, unifiedresources.StatusWarning},
+		{"replication readonly", Dataset{Mounted: true, ReadOnly: true, ReadOnlyReason: DatasetReadOnlyReplicationTarget}, unifiedresources.StatusOnline},
+		{"locked replication readonly", Dataset{Mounted: false, Locked: true, ReadOnly: true, ReadOnlyReason: DatasetReadOnlyReplicationTarget}, unifiedresources.StatusOffline},
 		{"unmounted", Dataset{Mounted: false}, unifiedresources.StatusOffline},
 	}
 
@@ -185,6 +193,8 @@ func TestDatasetStateTag(t *testing.T) {
 	}{
 		{"mounted writable", Dataset{Mounted: true, ReadOnly: false}, "state:mounted"},
 		{"mounted readonly", Dataset{Mounted: true, ReadOnly: true}, "state:readonly"},
+		{"replication readonly", Dataset{Mounted: true, ReadOnly: true, ReadOnlyReason: DatasetReadOnlyReplicationTarget}, "state:replication-readonly"},
+		{"locked replication readonly", Dataset{Mounted: false, Locked: true, ReadOnly: true, ReadOnlyReason: DatasetReadOnlyReplicationTarget}, "state:locked"},
 		{"unmounted", Dataset{Mounted: false}, "state:unmounted"},
 	}
 

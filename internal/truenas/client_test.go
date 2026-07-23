@@ -765,8 +765,18 @@ func TestGetReplicationTasksUsesNativeReplicationQueryShape(t *testing.T) {
 			"id":              7,
 			"name":            "Offsite apps",
 			"direction":       "PUSH",
+			"transport":       "SSH",
+			"readonly":        "SET",
 			"source_datasets": []string{"tank/apps"},
 			"target_dataset":  "backup/apps",
+			"ssh_credentials": map[string]any{
+				"id":   3,
+				"name": "backup-nas",
+				"attributes": map[string]any{
+					"host": "backup.example.test",
+					"port": 22,
+				},
+			},
 			"state": map[string]any{
 				"state":         "SUCCESS",
 				"datetime":      "2026-03-31T06:30:00Z",
@@ -790,6 +800,9 @@ func TestGetReplicationTasksUsesNativeReplicationQueryShape(t *testing.T) {
 	}
 	if len(task.SourceDatasets) != 1 || task.SourceDatasets[0] != "tank/apps" || task.TargetDataset != "backup/apps" {
 		t.Fatalf("unexpected replication datasets: %+v", task)
+	}
+	if task.Transport != "SSH" || task.ReadOnlyMode != "SET" || task.TargetHost != "backup.example.test" {
+		t.Fatalf("unexpected replication target posture: %+v", task)
 	}
 	if task.LastState != "SUCCESS" || task.LastSnapshot != "tank/apps@auto-20260331-0600" {
 		t.Fatalf("unexpected replication state: %+v", task)

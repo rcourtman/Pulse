@@ -402,6 +402,19 @@ resource health.
     the canonical pool resource when `alert.list` does not already provide a
     warning or critical pool alert for that same pool, so pool degradation does
     not depend on the TrueNAS appliance's own email or alert-delivery setup.
+    Boot-pool inventory follows the separate `boot.get_state` contract because
+    `pool.query` is not a reliable boot-topology source across supported CORE
+    and SCALE releases. The client must merge that state into the
+    connection-local pool list, preserve the boot-pool role, and derive
+    path-only leaf devices without matching pool or disk identities across
+    configured appliances.
+    Read-only dataset health must retain replication intent from
+    `replication.query`: `SET` and `REQUIRE` target roots may normalize
+    receive-side read-only datasets and descendants only after the poller maps a
+    local/PULL task or uniquely matches a remote PUSH target host to one
+    configured connection. Missing or ambiguous remote identity fails closed,
+    `IGNORE` never normalizes read-only state, and locked, unmounted, pool
+    failure, disk failure, or unavailable state remains fault-bearing.
     TrueNAS VMs and network shares follow the same provider-owned inventory
     boundary: `vm.query` data publishes native `TrueNASData.VM` on canonical
     `vm` resources, while SMB/NFS share data from `sharing.smb.query` and
@@ -1556,6 +1569,18 @@ null, empty, missing, unknown, or unavailable SMART telemetry to canonical
 `UNKNOWN` health with no replacement-required risk. Explicit SMART failure and
 native failure states such as `FAULTED`, `FAILED`, `OFFLINE`, `REMOVED`, and
 `UNAVAIL` must continue to produce canonical disk-health risk.
+That same boundary owns boot-pool and replication-target storage posture.
+`internal/truenas/client.go` must collect `boot.get_state` with the legacy REST
+bridge as compatibility fallback, merge it only within the current configured
+connection, and use its vdev leaves to enrich boot-disk pool membership and
+native ZFS state. `internal/monitoring/truenas_poller.go` must correlate
+`replication.query` intent across providers within the same organization using
+local/PULL ownership or a unique configured/observed target-host match for
+remote PUSH tasks. The resulting `SET`/`REQUIRE` receive-side read-only posture
+is healthy, while ordinary read-only datasets remain warning and locked or
+unmounted datasets remain offline. Correlation must fail closed when target
+identity is absent or ambiguous, and common pool or dataset names on another
+connection are never sufficient identity.
 That same boundary now also owns recent aggregate TrueNAS disk temperature
 history. `internal/truenas/client.go` must ingest `disk.temperature_agg`, and
 `internal/truenas/provider.go` must project the returned min/avg/max readings
