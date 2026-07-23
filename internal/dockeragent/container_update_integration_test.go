@@ -44,7 +44,7 @@ func TestIntegrationContainerUpdateComposeNetworkLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rawClient.Close()
+	t.Cleanup(func() { _ = rawClient.Close() })
 	if _, err := rawClient.Info(ctx, client.InfoOptions{}); err != nil {
 		t.Skipf("Docker daemon is unavailable: %v", err)
 	}
