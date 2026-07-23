@@ -15,6 +15,24 @@ import (
 	"testing"
 )
 
+func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitoring(t *testing.T) {
+	wrapperBytes, err := os.ReadFile(repoFile("scripts", "install-container-agent.sh"))
+	if err != nil {
+		t.Fatalf("read container-agent compatibility wrapper: %v", err)
+	}
+	wrapper := string(wrapperBytes)
+
+	if !strings.Contains(wrapper, `forward_args+=(--enable-docker --enable-host)`) {
+		t.Fatal("container-agent compatibility wrapper must preserve host telemetry while enabling Docker")
+	}
+	if strings.Contains(wrapper, `forward_args+=(--enable-docker --disable-host)`) {
+		t.Fatal("container-agent compatibility wrapper must not silently force workload-only mode")
+	}
+	if !strings.Contains(wrapper, `--enable-host=false for an intentional`) {
+		t.Fatal("container-agent compatibility wrapper must document the explicit workload-only path")
+	}
+}
+
 func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {

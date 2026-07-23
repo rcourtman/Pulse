@@ -863,6 +863,10 @@ Default-org token scoping and notification-settings fan-out on shared
 `internal/api/router.go` are likewise adjacent only: the tenant-monitor
 settings inheritance hook runs once per tenant-monitor creation and changes
 no chart transport, downsampling, or polling behavior.
+Container-runtime migration mode selection on that shared router path is also
+request-local. Deriving the bounded host-plus-Docker or Docker-only token
+scope and matching install flag must remain constant work with no resource
+inventory scan, telemetry fan-out, or extra persistence pass.
 
 The bars / sparklines toggle and its sparkline-range picker on the
 WorkloadsSurface support page-level ownership through four optional

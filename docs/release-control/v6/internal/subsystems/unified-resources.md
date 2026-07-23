@@ -17,6 +17,11 @@
 
 Own canonical resource identity, type normalization, typed views, and
 cross-source deduplication.
+One machine may belong to more than one typed view without becoming more than
+one canonical resource. A matching Pulse host report and Docker report merge
+into one `agent` resource with Agent and Docker facets, and the Hosts and
+Docker-host views must return that same canonical ID. A Docker-only resource
+keeps its `docker-host` contract type and is not admitted to the Hosts view.
 For Docker and Podman container resources, the canonical CPU metric represents
 host-capacity-normalized utilization. Runtime-native per-core CPU percent is
 kept on Docker metadata as raw evidence and must not replace the canonical

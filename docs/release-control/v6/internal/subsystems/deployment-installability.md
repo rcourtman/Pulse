@@ -1328,6 +1328,17 @@ agent binaries, or installer signing material. The published self-hosted
 so official release images still carry signed installer and agent download
 assets, and any build that declares `PULSE_UPDATE_SIGNING_PUBLIC_KEY` must
 continue to fail closed unless the matching signing secret is mounted.
+The `agent_runtime` image is a Unified Agent deployment and defaults to both
+host and Docker modules (`PULSE_ENABLE_HOST=true`,
+`PULSE_ENABLE_DOCKER=true`). Operators may still set
+`PULSE_ENABLE_HOST=false` for an intentional workload-only deployment, but
+the image must not silently force that narrower mode and remove a previously
+reported machine from the Hosts surface.
+The legacy `scripts/install-container-agent.sh` compatibility wrapper must
+match that default by forwarding `--enable-docker --enable-host`; it may point
+operators who need workload-only behavior to the canonical installer's
+explicit `--enable-host=false` option, but must not choose that opt-out for
+them.
 That same update-runtime boundary now also owns bounded rollback retention and
 disk-space fail-closed behavior for self-hosted app updates. `internal/updates/`
 must prune stale retained rollback snapshots, clear history references when an

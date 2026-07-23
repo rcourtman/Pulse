@@ -773,6 +773,12 @@ the visible API-token manager: agent install command tokens, deploy bootstrap
 tokens, enrollment runtime tokens, container runtime migration tokens, and
 first-run/regenerated admin tokens must use the same shared server-side owner
 setter rather than carrying owner identity in caller-controlled metadata.
+Container-runtime migration tokens must also follow the requested module
+boundary. The default host-plus-Docker migration may grant only the bounded
+Agent report, configuration-read, Agent-manage, and Docker-report scopes; an
+explicit `enableHost:false` workload-only migration must retain only the
+Docker-report scope. Neither path may gain command-execution or Kubernetes
+report authority implicitly.
 That same command-token trust boundary also owns first-use binding for
 Proxmox install-command tokens. `internal/api/agent_exec_token_binding.go` may
 persist `bound_agent_id`, `bound_hostname`, and `bound_at` only for

@@ -777,7 +777,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	}
 }
 
-func TestAgentRuntimeImagePersistsAgentIdentityByDefault(t *testing.T) {
+func TestAgentRuntimeImageDefaultsToUnifiedHostAndDockerMonitoring(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {
 		t.Fatalf("read Dockerfile: %v", err)
@@ -787,7 +787,7 @@ func TestAgentRuntimeImagePersistsAgentIdentityByDefault(t *testing.T) {
 	required := []string{
 		`mkdir -p /var/lib/pulse-agent`,
 		`PULSE_DISABLE_AUTO_UPDATE=true`,
-		`PULSE_ENABLE_HOST=false`,
+		`PULSE_ENABLE_HOST=true`,
 		`PULSE_ENABLE_DOCKER=true`,
 		`PULSE_AGENT_ID_FILE=/var/lib/pulse-agent/agent-id`,
 		`PULSE_STATE_DIR=/var/lib/pulse-agent`,
@@ -796,8 +796,11 @@ func TestAgentRuntimeImagePersistsAgentIdentityByDefault(t *testing.T) {
 	}
 	for _, needle := range required {
 		if !strings.Contains(dockerfile, needle) {
-			t.Fatalf("Dockerfile agent_runtime missing persistent identity contract: %s", needle)
+			t.Fatalf("Dockerfile agent_runtime missing unified host and Docker contract: %s", needle)
 		}
+	}
+	if strings.Contains(dockerfile, `PULSE_ENABLE_HOST=false`) {
+		t.Fatal("agent_runtime must not silently force every deployment into workload-only mode")
 	}
 	if strings.Contains(dockerfile, `ENTRYPOINT ["/usr/local/bin/pulse-agent", "--enable-docker", "--enable-host=false"]`) {
 		t.Fatal("agent_runtime must not hard-code module flags in ENTRYPOINT; env defaults keep user args overridable")

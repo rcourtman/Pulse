@@ -10426,8 +10426,9 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 
 	var payload struct {
-		AgentID   string `json:"agentId"`
-		TokenName string `json:"tokenName"`
+		AgentID    string `json:"agentId"`
+		TokenName  string `json:"tokenName"`
+		EnableHost *bool  `json:"enableHost,omitempty"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
@@ -10492,6 +10493,10 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		displayName := preferredDockerHostName(host)
 		name = fmt.Sprintf("Container runtime: %s", displayName)
 	}
+	enableHost := true
+	if payload.EnableHost != nil {
+		enableHost = *payload.EnableHost
+	}
 
 	rawToken, err := auth.GenerateAPIToken()
 	if err != nil {
@@ -10500,7 +10505,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	record, err := config.NewAPITokenRecord(rawToken, name, []string{config.ScopeDockerReport})
+	record, err := config.NewAPITokenRecord(rawToken, name, containerRuntimeAgentScopes(enableHost))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to construct token record for container runtime migration")
 		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
@@ -10552,8 +10557,8 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	config.Mu.Unlock()
 
 	baseURL := normalizeAgentInstallBaseURL(r.resolvePublicURL(req))
-	installCommand := buildContainerRuntimeAgentInstallCommand(baseURL, rawToken)
-	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-agent --url %s --token %s --enable-docker --enable-host=false --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL, rawToken)
+	installCommand := buildContainerRuntimeAgentInstallCommand(baseURL, rawToken, enableHost)
+	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-agent --url %s --token %s --enable-docker %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL, rawToken, containerRuntimeAgentHostFlag(enableHost))
 
 	response := map[string]any{
 		"success": true,
@@ -10566,6 +10571,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		"installCommand":        installCommand,
 		"systemdServiceSnippet": systemdSnippet,
 		"pulseURL":              baseURL,
+		"enableHost":            enableHost,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

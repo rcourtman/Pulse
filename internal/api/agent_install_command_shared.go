@@ -260,15 +260,34 @@ func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	return withPrivilegeEscalation(command) + tokenCleanup
 }
 
-func buildContainerRuntimeAgentInstallCommand(baseURL string, token string) string {
+func containerRuntimeAgentScopes(enableHost bool) []string {
+	scopes := []string{config.ScopeDockerReport}
+	if enableHost {
+		scopes = append(scopes,
+			config.ScopeAgentReport,
+			config.ScopeAgentConfigRead,
+			config.ScopeAgentManage,
+		)
+	}
+	return scopes
+}
+
+func containerRuntimeAgentHostFlag(enableHost bool) string {
+	if enableHost {
+		return "--enable-host"
+	}
+	return "--enable-host=false"
+}
+
+func buildContainerRuntimeAgentInstallCommand(baseURL string, token string, enableHost bool) string {
 	normalizedBaseURL := normalizeAgentInstallBaseURL(baseURL)
 	installScriptURL := normalizedBaseURL + "/install.sh"
 	command := fmt.Sprintf(`curl -fsSL %s | bash -s -- \
   --url %s \
   --enable-docker \
-  --enable-host=false \
+  %s \
   --interval 30s`,
-		posixShellQuote(installScriptURL), posixShellQuote(normalizedBaseURL))
+		posixShellQuote(installScriptURL), posixShellQuote(normalizedBaseURL), containerRuntimeAgentHostFlag(enableHost))
 
 	if trimmedToken := strings.TrimSpace(token); trimmedToken != "" {
 		command += fmt.Sprintf(` \

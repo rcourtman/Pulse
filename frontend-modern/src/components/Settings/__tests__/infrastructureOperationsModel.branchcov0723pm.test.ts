@@ -324,12 +324,12 @@ describe('isPlatformConnectionsCapability', () => {
 describe('installFlagsForCapabilities (via rowFromConnectedInfrastructureItem)', () => {
   const scope = { label: 'Default', category: 'default' as const };
 
-  it('emits the docker host-disable flag pair for a docker-only item', () => {
+  it('enables Docker without silently disabling the host for a docker-only item', () => {
     const row = rowFromConnectedInfrastructureItem(
       makeItem({ surfaces: [connectedSurface('docker')] }),
       scope,
     );
-    expect(row.installFlags).toEqual(['--enable-docker', '--disable-host']);
+    expect(row.installFlags).toEqual(['--enable-docker']);
   });
 
   it('emits only --enable-kubernetes for a kubernetes-only item', () => {

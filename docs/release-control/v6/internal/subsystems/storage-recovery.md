@@ -3636,6 +3636,12 @@ That same shared dependency now also assumes those diagnostics install payloads
 route through the canonical backend install-command helper, so recovery-adjacent
 transport surfaces do not inherit handler-local drift in token omission,
 plain-HTTP `--insecure`, or trailing-slash normalization.
+The persisted migration token and returned install payload must describe the
+same module boundary: omitted `enableHost` atomically persists the bounded
+host-plus-Docker scopes before returning an enabled-host command, while an
+explicit false value persists only Docker-report authority before returning
+the workload-only command. A persistence failure must continue to fail the
+request rather than returning credentials whose scope contract was not saved.
 That same shared `internal/api/` dependency also assumes diagnostics memory
 source breakdowns backfill canonical fallback reasons even when a raw legacy
 snapshot reaches `internal/api/diagnostics.go` without one, so

@@ -242,7 +242,7 @@ COPY --from=release-assets-builder /app/VERSION /VERSION
 
 ENV PULSE_NO_AUTO_UPDATE=true \
     PULSE_DISABLE_AUTO_UPDATE=true \
-    PULSE_ENABLE_HOST=false \
+    PULSE_ENABLE_HOST=true \
     PULSE_ENABLE_DOCKER=true \
     PULSE_AGENT_ID_FILE=/var/lib/pulse-agent/agent-id \
     PULSE_STATE_DIR=/var/lib/pulse-agent

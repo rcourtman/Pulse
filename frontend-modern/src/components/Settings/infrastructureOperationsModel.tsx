@@ -304,8 +304,8 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
   {
     value: 'docker',
     label: `${DOCKER_PODMAN_SOURCE_LABEL} runtime`,
-    description: `Force ${DOCKER_PODMAN_SOURCE_LABEL} monitoring when automatic detection is restricted.`,
-    flags: ['--enable-docker', '--disable-host'],
+    description: `Force ${DOCKER_PODMAN_SOURCE_LABEL} monitoring when automatic detection is restricted, while keeping host telemetry enabled.`,
+    flags: ['--enable-docker'],
   },
   {
     value: 'kubernetes',
@@ -440,7 +440,6 @@ const installFlagsForCapabilities = (capabilities: AgentCapability[]) => {
   const flags = new Set<string>();
   if (capabilities.includes('docker')) {
     flags.add('--enable-docker');
-    flags.add('--disable-host');
   }
   if (capabilities.includes('kubernetes')) {
     flags.add('--enable-kubernetes');

@@ -6414,13 +6414,13 @@ func TestContract_HostsShareResolvedIdentityTreatsLoopbackAliasAsSameNode(t *tes
 
 func TestContract_DiagnosticsDockerPrepareTokenInstallCommandUsesLifecycleTransport(t *testing.T) {
 	baseURL := "https://pulse.example.com/base"
-	got := buildContainerRuntimeAgentInstallCommand(baseURL, "token-123")
+	got := buildContainerRuntimeAgentInstallCommand(baseURL, "token-123", true)
 
 	if !strings.Contains(got, posixShellQuote(baseURL+"/install.sh")) {
 		t.Fatalf("install command missing normalized install script URL: %s", got)
 	}
-	if !strings.Contains(got, "--enable-host=false") {
-		t.Fatalf("install command missing canonical host-disable flag: %s", got)
+	if !strings.Contains(got, "--enable-host") || strings.Contains(got, "--enable-host=false") {
+		t.Fatalf("install command must default the native migration to host and Docker monitoring: %s", got)
 	}
 	if strings.Contains(got, "--disable-host") {
 		t.Fatalf("install command preserved stale disable-host flag: %s", got)
@@ -6434,13 +6434,24 @@ func TestContract_DiagnosticsDockerPrepareTokenInstallCommandUsesLifecycleTransp
 }
 
 func TestContract_DiagnosticsDockerPrepareTokenOptionalAuthInstallCommandOmitsToken(t *testing.T) {
-	got := buildContainerRuntimeAgentInstallCommand("http://pulse.example.com:7655/", "")
+	got := buildContainerRuntimeAgentInstallCommand("http://pulse.example.com:7655/", "", true)
 
 	if strings.Contains(got, "--token") {
 		t.Fatalf("optional-auth install command preserved token flag: %s", got)
 	}
 	if !strings.Contains(got, "--insecure") {
 		t.Fatalf("optional-auth install command missing insecure flag for plain HTTP Pulse URL: %s", got)
+	}
+}
+
+func TestContract_DiagnosticsDockerPrepareTokenPreservesExplicitWorkloadOnlyMode(t *testing.T) {
+	got := buildContainerRuntimeAgentInstallCommand("https://pulse.example.com", "token-123", false)
+
+	if !strings.Contains(got, "--enable-host=false") {
+		t.Fatalf("explicit workload-only install command missing canonical host-disable flag: %s", got)
+	}
+	if strings.Contains(got, "--disable-host") {
+		t.Fatalf("explicit workload-only install command preserved stale disable-host alias: %s", got)
 	}
 }
 

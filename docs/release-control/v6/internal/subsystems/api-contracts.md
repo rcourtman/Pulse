@@ -5776,7 +5776,14 @@ That same governed container-runtime migration response must also preserve the
 canonical lifecycle shell payload shape: `installCommand` in the diagnostics
 docker prepare-token response may not emit the stale `--disable-host` alias or
 an ad hoc `curl | sudo bash` pipeline, and must instead match the canonical
-root-or-sudo wrapped install transport with `--enable-host=false`.
+root-or-sudo wrapped install transport. Omitted `enableHost` defaults the
+native Unified Agent migration to host plus Docker monitoring and emits
+`--enable-host`; explicit `enableHost:false` preserves the workload-only
+variant and emits `--enable-host=false`.
+The Settings infrastructure operations model must expose the same default in
+generated install flags: its Docker / Podman profile enables Docker without
+adding a host-disable flag, while the generic flag translator continues to
+preserve an operator-supplied explicit host opt-out.
 That diagnostics install-command payload must also be assembled through the
 shared backend install-command helper in `internal/api/agent_install_command_shared.go`
 instead of a handler-local shell formatter, so token omission, plain-HTTP

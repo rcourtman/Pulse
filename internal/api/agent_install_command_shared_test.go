@@ -124,13 +124,14 @@ func TestBuildProxmoxAgentInstallCommand_IncludesCommandsWhenRequested(t *testin
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *testing.T) {
-	command := buildContainerRuntimeAgentInstallCommand("https://pulse.example.com/base", "token-123")
+	command := buildContainerRuntimeAgentInstallCommand("https://pulse.example.com/base", "token-123", true)
 
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/base/install.sh"))
 	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base"))
 	require.Contains(t, command, "--token "+posixShellQuote("token-123"))
 	require.Contains(t, command, "--enable-docker")
-	require.Contains(t, command, "--enable-host=false")
+	require.Contains(t, command, "--enable-host")
+	require.NotContains(t, command, "--enable-host=false")
 	require.Contains(t, command, "--interval 30s")
 	require.Contains(t, command, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`)
 	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo bash -s --`)
@@ -138,12 +139,31 @@ func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *test
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_OmitsTokenAndAddsInsecureForHTTP(t *testing.T) {
-	command := buildContainerRuntimeAgentInstallCommand("http://pulse.example.com:7655/", "")
+	command := buildContainerRuntimeAgentInstallCommand("http://pulse.example.com:7655/", "", true)
 
 	require.Contains(t, command, posixShellQuote("http://pulse.example.com:7655/install.sh"))
 	require.Contains(t, command, "--url "+posixShellQuote("http://pulse.example.com:7655"))
 	require.NotContains(t, command, "--token")
 	require.Contains(t, command, "--insecure")
+}
+
+func TestBuildContainerRuntimeAgentInstallCommand_PreservesWorkloadOnlyMode(t *testing.T) {
+	command := buildContainerRuntimeAgentInstallCommand("https://pulse.example.com", "token-123", false)
+
+	require.Contains(t, command, "--enable-docker")
+	require.Contains(t, command, "--enable-host=false")
+}
+
+func TestContainerRuntimeAgentScopesFollowHostMode(t *testing.T) {
+	dualMode := containerRuntimeAgentScopes(true)
+	require.ElementsMatch(t, []string{
+		config.ScopeDockerReport,
+		config.ScopeAgentReport,
+		config.ScopeAgentConfigRead,
+		config.ScopeAgentManage,
+	}, dualMode)
+
+	require.Equal(t, []string{config.ScopeDockerReport}, containerRuntimeAgentScopes(false))
 }
 
 func TestBuildSetupScriptCommand_UsesFailFastQuotedTransport(t *testing.T) {

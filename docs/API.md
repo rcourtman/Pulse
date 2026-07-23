@@ -795,6 +795,12 @@ Returns scheduler health, DLQ, and breaker status. Requires `monitoring:read`.
 - `GET /api/diagnostics` (auth)
 - `POST /api/diagnostics/docker/prepare-token` (admin, `settings:write`)
 
+The Docker migration token request accepts `agentId`, optional `tokenName`, and
+optional `enableHost`. When `enableHost` is omitted, the generated token and
+install command enable both host and Docker monitoring so the machine appears
+in both Hosts and Docker. Set `enableHost` to `false` only for an intentional
+workload-only agent; that mode receives Docker-report scope only.
+
 ### Logs (Admin)
 - `GET /api/logs/stream` (server-sent stream)
 - `GET /api/logs/download` (bundled logs)

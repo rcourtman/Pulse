@@ -24,7 +24,10 @@ Supported options:
 
 Notes:
   This wrapper forwards to install.sh with:
-    --enable-docker --disable-host
+    --enable-docker --enable-host
+
+  Use install.sh directly with --enable-host=false for an intentional
+  workload-only deployment.
 USAGE
 }
 
@@ -91,7 +94,7 @@ fi
 if [[ "$UNINSTALL" == "true" ]]; then
   forward_args+=(--uninstall)
 else
-  forward_args+=(--enable-docker --disable-host)
+  forward_args+=(--enable-docker --enable-host)
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

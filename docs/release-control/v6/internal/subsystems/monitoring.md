@@ -91,6 +91,12 @@ downstream surfaces can warn, and it must clear on its own once only one
 machine keeps reporting for the window. Monitoring must not auto-split the
 collapsed identity: the machine ID is the identity key, and the remedy
 (regenerating the clone's machine-id) belongs to the operator.
+Unified Agent module projection is report-authored and additive. When one
+agent sends host and Docker reports for the same machine identity, monitoring
+must refresh one canonical machine carrying both facets so the Hosts and
+Docker typed views expose the same canonical ID. A deliberately Docker-only
+agent sends no host report and must remain absent from the Hosts view rather
+than gaining a synthetic host facet from Docker telemetry.
 Proxmox read-state rehydration is the inverse boundary: canonical
 unified-resource CPU metrics are 0..100 percentages, while legacy
 `models.Node.CPU`, `models.VM.CPU`, and `models.Container.CPU` remain Proxmox

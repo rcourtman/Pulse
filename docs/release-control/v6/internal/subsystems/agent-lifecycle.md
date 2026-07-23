@@ -3932,10 +3932,19 @@ the shared frontend Unix builder, instead of returning a raw `| bash -s --`
 pipeline that drifts from the lane's governed install shape.
 The same lifecycle shell-transport contract also applies to the diagnostics
 container-runtime migration install command in `internal/api/router.go`: that
-response must emit the canonical `--enable-host=false` flag and the governed
-root-or-sudo wrapper, rather than falling back to the stale `--disable-host`
-alias or a raw `curl | sudo bash` pipe that drifts from the managed install
-surface.
+response defaults to the native Unified Agent's host plus Docker modules,
+emits the canonical `--enable-host` flag, and uses a token scoped for host
+report/configuration continuity as well as Docker reports. An explicit
+`enableHost:false` request keeps the intentional workload-only path, the
+canonical `--enable-host=false` flag, and Docker-report-only token scope. Both
+modes must retain the governed root-or-sudo wrapper rather than falling back
+to the stale `--disable-host` alias or a raw `curl | sudo bash` pipe that
+drifts from the managed install surface.
+The Settings Docker / Podman install profile and the legacy
+`scripts/install-container-agent.sh` compatibility wrapper follow that same
+default: selecting Docker monitoring enables the Docker module without
+silently disabling the host module. Workload-only operation remains an
+explicit `--enable-host=false` choice through the canonical installer.
 That same diagnostics migration command must stay on the shared backend
 install-command helper path in `internal/api/agent_install_command_shared.go`,
 rather than rebuilding a local shell formatter in `router.go`, so optional

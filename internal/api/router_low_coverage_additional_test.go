@@ -170,8 +170,9 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	if !strings.Contains(payload["installCommand"].(string), "https://pulse.example.com") {
 		t.Fatalf("expected install command to include base URL")
 	}
-	if !strings.Contains(payload["installCommand"].(string), "--enable-host=false") {
-		t.Fatalf("expected install command to disable host metrics with the canonical lifecycle flag: %q", payload["installCommand"])
+	if !strings.Contains(payload["installCommand"].(string), "--enable-host") ||
+		strings.Contains(payload["installCommand"].(string), "--enable-host=false") {
+		t.Fatalf("expected install command to enable host metrics by default: %q", payload["installCommand"])
 	}
 	if !strings.Contains(payload["installCommand"].(string), "--enable-docker") {
 		t.Fatalf("expected install command to enable docker metrics: %q", payload["installCommand"])
@@ -182,11 +183,50 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	if strings.Contains(payload["installCommand"].(string), "| sudo bash -s -- --url") {
 		t.Fatalf("expected install command to preserve the governed root-or-sudo wrapper instead of a raw sudo pipe: %q", payload["installCommand"])
 	}
-	if !strings.Contains(payload["systemdServiceSnippet"].(string), "--enable-host=false") {
-		t.Fatalf("expected systemd snippet to disable host metrics: %q", payload["systemdServiceSnippet"])
+	if !strings.Contains(payload["systemdServiceSnippet"].(string), "--enable-host") ||
+		strings.Contains(payload["systemdServiceSnippet"].(string), "--enable-host=false") {
+		t.Fatalf("expected systemd snippet to enable host metrics by default: %q", payload["systemdServiceSnippet"])
 	}
 	if len(router.config.APITokens) == 0 {
 		t.Fatalf("expected API token to be recorded")
+	}
+	token := router.config.APITokens[0]
+	for _, scope := range []string{config.ScopeDockerReport, config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentManage} {
+		if !token.HasScope(scope) {
+			t.Fatalf("expected default migration token to include %q, got %#v", scope, token.Scopes)
+		}
+	}
+}
+
+func TestHandleDiagnosticsDockerPrepareToken_PreservesExplicitWorkloadOnlyMode(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
+
+	router := &Router{monitor: monitor, config: &config.Config{PublicURL: "https://pulse.example.com"}}
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", strings.NewReader(`{"agentId":"host-1","enableHost":false}`))
+	rec := httptest.NewRecorder()
+
+	router.handleDiagnosticsDockerPrepareToken(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if enabled, ok := payload["enableHost"].(bool); !ok || enabled {
+		t.Fatalf("expected enableHost=false, got %#v", payload["enableHost"])
+	}
+	if !strings.Contains(payload["installCommand"].(string), "--enable-host=false") {
+		t.Fatalf("expected workload-only install command, got %q", payload["installCommand"])
+	}
+	if len(router.config.APITokens) != 1 {
+		t.Fatalf("expected one migration token, got %d", len(router.config.APITokens))
+	}
+	token := router.config.APITokens[0]
+	if !token.HasScope(config.ScopeDockerReport) || token.HasScope(config.ScopeAgentReport) {
+		t.Fatalf("expected Docker-only token scopes, got %#v", token.Scopes)
 	}
 }
 

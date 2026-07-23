@@ -458,6 +458,149 @@ func TestApplyHostReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) 
 	t.Fatal("accepted host report did not refresh the canonical headless read state")
 }
 
+func TestUnifiedAgentHostAndDockerReportsShareOneCanonicalMachine(t *testing.T) {
+	now := time.Now().UTC()
+	hostReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "dual-mode-agent",
+			Version:         "6.1.1",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "dual-mode-machine",
+			MachineID: "dual-mode-machine",
+			Hostname:  "docker-lxc.local",
+			Platform:  "linux",
+			OSName:    "debian",
+		},
+		Timestamp: now,
+	}
+	dockerReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "dual-mode-agent",
+			Version:         "6.1.1",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "docker-lxc.local",
+			MachineID:        "dual-mode-machine",
+			DockerVersion:    "27.0.0",
+			TotalCPU:         4,
+			TotalMemoryBytes: 8 << 30,
+		},
+		Containers: []agentsdocker.Container{{
+			ID:    "workload-1",
+			Name:  "app",
+			State: "running",
+		}},
+		Timestamp: now.Add(time.Second),
+	}
+
+	for _, tc := range []struct {
+		name        string
+		dockerFirst bool
+	}{
+		{name: "host report first"},
+		{name: "Docker report first", dockerFirst: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			monitor := newTestMonitor(t)
+			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			monitor.SetResourceStore(adapter)
+			token := &config.APITokenRecord{ID: "dual-mode-token", Name: "Dual-mode Agent"}
+
+			applyHost := func() {
+				t.Helper()
+				if _, err := monitor.ApplyHostReport(hostReport, token); err != nil {
+					t.Fatalf("ApplyHostReport: %v", err)
+				}
+			}
+			applyDocker := func() {
+				t.Helper()
+				if _, err := monitor.ApplyDockerReport(dockerReport, token); err != nil {
+					t.Fatalf("ApplyDockerReport: %v", err)
+				}
+			}
+			if tc.dockerFirst {
+				applyDocker()
+				applyHost()
+			} else {
+				applyHost()
+				applyDocker()
+			}
+
+			resources := adapter.GetAll()
+			if len(resources) != 2 {
+				t.Fatalf("canonical resource count = %d, want one machine and one workload: %#v", len(resources), resources)
+			}
+			var machine *unifiedresources.Resource
+			for i := range resources {
+				if resources[i].Type == unifiedresources.ResourceTypeAgent {
+					machine = &resources[i]
+					break
+				}
+			}
+			if machine == nil {
+				t.Fatalf("canonical resources did not retain the machine: %#v", resources)
+			}
+			if machine.Agent == nil || machine.Docker == nil {
+				t.Fatalf("machine facets = agent:%v docker:%v, want both", machine.Agent != nil, machine.Docker != nil)
+			}
+			if got := unifiedresources.ContractResourceType(*machine); got != unifiedresources.ResourceTypeAgent {
+				t.Fatalf("machine contract type = %q, want agent", got)
+			}
+
+			hostViews := adapter.Hosts()
+			dockerViews := adapter.DockerHosts()
+			if len(hostViews) != 1 || len(dockerViews) != 1 {
+				t.Fatalf("typed views = hosts:%d docker:%d, want one in each", len(hostViews), len(dockerViews))
+			}
+			if hostViews[0].ID() != dockerViews[0].ID() || hostViews[0].ID() != machine.ID {
+				t.Fatalf("typed view identities diverged: host=%q docker=%q machine=%q", hostViews[0].ID(), dockerViews[0].ID(), machine.ID)
+			}
+		})
+	}
+}
+
+func TestDockerOnlyAgentRemainsWorkloadOnly(t *testing.T) {
+	monitor := newTestMonitor(t)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+
+	_, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "workload-only-agent",
+			Version:         "6.1.1",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "runtime-only.local",
+			MachineID:        "runtime-only-machine",
+			DockerVersion:    "27.0.0",
+			TotalCPU:         2,
+			TotalMemoryBytes: 4 << 30,
+		},
+		Timestamp: time.Now().UTC(),
+	}, &config.APITokenRecord{ID: "workload-only-token"})
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+
+	resources := adapter.GetAll()
+	if len(resources) != 1 {
+		t.Fatalf("canonical resource count = %d, want one Docker runtime: %#v", len(resources), resources)
+	}
+	if resources[0].Agent != nil || resources[0].Docker == nil {
+		t.Fatalf("workload-only facets = agent:%v docker:%v, want Docker only", resources[0].Agent != nil, resources[0].Docker != nil)
+	}
+	if got := unifiedresources.ContractResourceType(resources[0]); got != unifiedresources.ResourceType("docker-host") {
+		t.Fatalf("workload-only contract type = %q, want docker-host", got)
+	}
+	if len(adapter.Hosts()) != 0 || len(adapter.DockerHosts()) != 1 {
+		t.Fatalf("typed views = hosts:%d docker:%d, want workload-only runtime excluded from Hosts", len(adapter.Hosts()), len(adapter.DockerHosts()))
+	}
+}
+
 func TestApplyDockerReportMigratesAppContainerURLToStableNameAcceptedIngestProof(t *testing.T) {
 	monitor := newTestMonitor(t)
 	report := agentsdocker.Report{

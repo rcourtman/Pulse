@@ -77,7 +77,7 @@ describe('infrastructure operations model', () => {
         detail: 'Auto-detect',
         category: 'default',
       },
-      installFlags: ['--enable-docker', '--disable-host', '--enable-proxmox', '--proxmox-type pbs'],
+      installFlags: ['--enable-docker', '--enable-proxmox', '--proxmox-type pbs'],
       searchText: 'node-a node-a.internal agent-1',
       surfaces: [
         {
@@ -212,8 +212,9 @@ describe('infrastructure operations model', () => {
     expect(dockerProfile).toBeDefined();
     expect(dockerProfile?.label).toBe('Docker / Podman runtime');
     expect(dockerProfile?.description).toBe(
-      'Force Docker / Podman monitoring when automatic detection is restricted.',
+      'Force Docker / Podman monitoring when automatic detection is restricted, while keeping host telemetry enabled.',
     );
+    expect(dockerProfile?.flags).toEqual(['--enable-docker']);
     expect(dockerProfile?.description).not.toContain('container runtime');
   });
 
