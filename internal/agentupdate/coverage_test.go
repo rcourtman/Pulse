@@ -535,7 +535,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 	t.Run("Disabled", func(t *testing.T) {
 		u := newUpdaterForTest("https://example")
 		u.cfg.Disabled = true
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update when disabled")
 			return nil
 		}
@@ -545,7 +545,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 	t.Run("DevCurrent", func(t *testing.T) {
 		u := newUpdaterForTest("https://example")
 		u.cfg.CurrentVersion = "dev"
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update in dev mode")
 			return nil
 		}
@@ -554,7 +554,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 
 	t.Run("NoPulseURL", func(t *testing.T) {
 		u := newUpdaterForTest("")
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update without URL")
 			return nil
 		}
@@ -563,7 +563,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 
 	t.Run("InsecureHTTPURL", func(t *testing.T) {
 		u := newUpdaterForTest("http://pulse.example.com")
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update with insecure Pulse URL")
 			return nil
 		}
@@ -578,7 +578,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 
 		u := newUpdaterForTest(server.URL)
 		u.client = server.Client()
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update on server error")
 			return nil
 		}
@@ -593,7 +593,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 
 		u := newUpdaterForTest(server.URL)
 		u.client = server.Client()
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update when server dev")
 			return nil
 		}
@@ -608,7 +608,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 
 		u := newUpdaterForTest(server.URL)
 		u.client = server.Client()
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not update when up to date")
 			return nil
 		}
@@ -623,7 +623,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 
 		u := newUpdaterForTest(server.URL)
 		u.client = server.Client()
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			t.Fatalf("should not downgrade")
 			return nil
 		}
@@ -639,7 +639,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 		u := newUpdaterForTest(server.URL)
 		u.client = server.Client()
 		var called int32
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			atomic.AddInt32(&called, 1)
 			return nil
 		}
@@ -658,7 +658,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 		u := newUpdaterForTest(server.URL)
 		u.client = server.Client()
 		var called int32
-		u.performUpdateFn = func(context.Context) error {
+		u.performUpdateFn = func(context.Context, string) error {
 			atomic.AddInt32(&called, 1)
 			return errors.New("fail")
 		}
@@ -686,7 +686,7 @@ func TestRunLoop(t *testing.T) {
 	defer cancel()
 
 	var called int32
-	u.performUpdateFn = func(context.Context) error {
+	u.performUpdateFn = func(context.Context, string) error {
 		if atomic.AddInt32(&called, 1) >= 2 {
 			cancel()
 		}

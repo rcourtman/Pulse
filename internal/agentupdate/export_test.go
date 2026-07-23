@@ -43,8 +43,8 @@ func UseExecPathForUpdateChecksForTest(u *Updater, execPath string) func() {
 	evalSymlinksFn = func(string) (string, error) { return execPath, nil }
 	restartProcessFn = func(string) error { return nil }
 	u.selfTestFn = func(context.Context, string) error { return nil }
-	u.performUpdateFn = func(ctx context.Context) error {
-		return u.performUpdateWithExecPath(ctx, execPath)
+	u.performUpdateFn = func(ctx context.Context, targetVersion string) error {
+		return u.performUpdateWithExecPathForVersion(ctx, execPath, targetVersion)
 	}
 
 	return func() {

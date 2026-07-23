@@ -2293,6 +2293,11 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+
+Unified Agent target cache prevention on the shared router is adjacent
+lifecycle/API transport. `/api/agent/version` no-store headers and non-secret
+request cache keys must not be interpreted as recovery freshness, retained
+backup evidence, rollback coverage, or a storage-local artifact version.
 Config export/import remains adjacent persistence infrastructure rather than a
 storage/recovery authority. Guest metadata import must reload the active
 tenant monitor's live store so recovery and resource projections observe one

@@ -114,9 +114,14 @@ Note: this installs the Pulse **server**. Agent installs and v5-to-v6 agent upgr
 
 Server and agent updates are separate lifecycle paths. Updating the server sets
 the version eligible v6 agents should reach, but it does not prove the fleet has
-converged: those agents update asynchronously, while v5 agents, PVE host agents,
-and agents with auto-update disabled or failed update prerequisites need the
-manual per-host command from **Settings → Infrastructure**.
+converged. Current Unified Agents on Linux, Windows, and Docker-enabled hosts
+check shortly after startup and then hourly, install only a newer semantic
+version (including RC-to-stable), and retry after offline or failed checks.
+They bind the binary download to the exact server target so intermediary caches
+cannot silently return an older agent. v5 agents, PVE host agents, and agents
+with auto-update disabled or failed authentication, transport, trust, download,
+or self-test prerequisites need the manual per-host command from
+**Settings → Infrastructure**.
 
 ### Option 2: Docker
 ```bash

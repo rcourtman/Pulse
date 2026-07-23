@@ -50,6 +50,12 @@ func TestUpdater_getServerVersion_SetsAuthHeaders(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer token" {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
 		}
+		if got := r.URL.Query().Get("agentVersion"); got != "1.0.0" {
+			t.Fatalf("agentVersion query = %q, want %q", got, "1.0.0")
+		}
+		if got := r.URL.Query().Get("check"); got == "" {
+			t.Fatal("expected a cache-unique version check query")
+		}
 		sawAuth = true
 		_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "1.2.3"})
 	}))
@@ -224,6 +230,9 @@ func TestUpdater_performUpdateWithExecPath_RequiresSignatureWhenTrustedKeysConfi
 	data := testBinary()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("serverVersion"); got != "6.0.0" {
+			t.Fatalf("serverVersion query = %q, want %q", got, "6.0.0")
+		}
 		w.Header().Set(checksumSHA256Header, checksum(data))
 		w.Header().Set(signatureHeader, signedUpdateHeader(t, data, privateKey))
 		_, _ = w.Write(data)
@@ -238,8 +247,8 @@ func TestUpdater_performUpdateWithExecPath_RequiresSignatureWhenTrustedKeysConfi
 	t.Cleanup(func() { restartProcessFn = origRestart })
 	restartProcessFn = func(string) error { return nil }
 
-	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
-		t.Fatalf("performUpdateWithExecPath: %v", err)
+	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
+		t.Fatalf("performUpdateWithExecPathForVersion: %v", err)
 	}
 }
 
@@ -264,21 +273,21 @@ func TestUpdater_performUpdateWithExecPath_RejectsMissingSignatureWhenTrustedKey
 
 func TestUpdater_CheckAndUpdate_EarlyReturns(t *testing.T) {
 	u := New(Config{Disabled: true})
-	u.performUpdateFn = func(ctx context.Context) error {
+	u.performUpdateFn = func(ctx context.Context, _ string) error {
 		t.Fatalf("performUpdate should not be called")
 		return nil
 	}
 	u.CheckAndUpdate(context.Background())
 
 	u = New(Config{CurrentVersion: "dev"})
-	u.performUpdateFn = func(ctx context.Context) error {
+	u.performUpdateFn = func(ctx context.Context, _ string) error {
 		t.Fatalf("performUpdate should not be called")
 		return nil
 	}
 	u.CheckAndUpdate(context.Background())
 
 	u = New(Config{CurrentVersion: "1.0.0", PulseURL: ""})
-	u.performUpdateFn = func(ctx context.Context) error {
+	u.performUpdateFn = func(ctx context.Context, _ string) error {
 		t.Fatalf("performUpdate should not be called")
 		return nil
 	}
@@ -297,6 +306,10 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 		{"server-older", "1.0.1", "1.0.0", false, true},
 		{"server-dev", "1.0.0", "dev", false, true},
 		{"server-newer", "1.0.0", "1.0.1", true, true},
+		{"release-candidate-to-release-candidate", "6.0.0-rc.1", "6.0.0-rc.6", true, true},
+		{"release-candidate-to-stable", "6.0.0-rc.6", "6.0.0", true, true},
+		{"stable-to-stable", "6.0.0", "6.1.1", true, true},
+		{"stable-does-not-downgrade-to-release-candidate", "6.0.0", "6.0.0-rc.7", false, true},
 	}
 
 	for _, tc := range tests {
@@ -314,8 +327,11 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 				CurrentVersion: tc.current,
 				CheckInterval:  time.Minute,
 			})
-			u.performUpdateFn = func(ctx context.Context) error {
+			u.performUpdateFn = func(ctx context.Context, targetVersion string) error {
 				called = true
+				if targetVersion != tc.server {
+					t.Fatalf("target version = %q, want %q", targetVersion, tc.server)
+				}
 				return nil
 			}
 
@@ -325,6 +341,114 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 				t.Fatalf("performUpdate called=%v, want %v", called, tc.expectUpdate)
 			}
 		})
+	}
+}
+
+func TestUpdater_CheckAndUpdate_ReconcilesVersionAndBinaryAcrossCachingProxy(t *testing.T) {
+	originalKeys := updatesignature.EmbeddedTrustedPublicKeys
+	updatesignature.EmbeddedTrustedPublicKeys = ""
+	t.Cleanup(func() { updatesignature.EmbeddedTrustedPublicKeys = originalKeys })
+
+	targetVersion := "6.0.0"
+	staleBinary := append(testBinary(), []byte("-stale-rc.1")...)
+	targetBinary := append(testBinary(), []byte("-stable-6.0.0")...)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/agent/version":
+			if r.URL.Query().Get("check") == "" {
+				_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "6.0.0-rc.1"})
+				return
+			}
+			if got := r.URL.Query().Get("agentVersion"); got != "6.0.0-rc.1" {
+				t.Fatalf("agentVersion query = %q, want %q", got, "6.0.0-rc.1")
+			}
+			_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: targetVersion})
+		case "/download/pulse-agent":
+			payload := staleBinary
+			if r.URL.Query().Get("serverVersion") == targetVersion {
+				payload = targetBinary
+			}
+			w.Header().Set(checksumSHA256Header, checksum(payload))
+			_, _ = w.Write(payload)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, execPath := writeTempExec(t)
+	u := New(Config{
+		PulseURL:       server.URL,
+		AgentName:      "pulse-agent",
+		CurrentVersion: "6.0.0-rc.1",
+	})
+	u.client = server.Client()
+	u.selfTestFn = func(context.Context, string) error { return nil }
+	u.performUpdateFn = func(ctx context.Context, version string) error {
+		return u.performUpdateWithExecPathForVersion(ctx, execPath, version)
+	}
+
+	originalRestart := restartProcessFn
+	restartProcessFn = func(string) error { return nil }
+	t.Cleanup(func() { restartProcessFn = originalRestart })
+
+	u.CheckAndUpdate(context.Background())
+
+	got, err := os.ReadFile(execPath)
+	if err != nil {
+		t.Fatalf("read updated binary: %v", err)
+	}
+	if string(got) != string(targetBinary) {
+		t.Fatalf("updated binary came from stale cache: got %q want %q", got, targetBinary)
+	}
+	status := u.Snapshot()
+	if status.State != UpdateStateIdle || status.LastSuccessAt == nil || status.LastError != "" {
+		t.Fatalf("reconciled update status = %+v", status)
+	}
+}
+
+func TestUpdater_CheckAndUpdate_RecoversAfterOfflineAndPartialFailure(t *testing.T) {
+	var versionChecks int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&versionChecks, 1) <= updateRequestMaxAttempts {
+			http.Error(w, "offline", http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "6.1.1"})
+	}))
+	defer server.Close()
+
+	originalSleep := retrySleepFn
+	retrySleepFn = func(context.Context, time.Duration) error { return nil }
+	t.Cleanup(func() { retrySleepFn = originalSleep })
+
+	u := New(Config{PulseURL: server.URL, CurrentVersion: "6.1.0"})
+	var updateAttempts int32
+	u.performUpdateFn = func(context.Context, string) error {
+		if atomic.AddInt32(&updateAttempts, 1) == 1 {
+			return errors.New("partial replacement rejected")
+		}
+		return nil
+	}
+
+	u.CheckAndUpdate(context.Background())
+	if status := u.Snapshot(); status.State != UpdateStateError || status.LastCheckedAt == nil {
+		t.Fatalf("offline status = %+v", status)
+	}
+
+	u.CheckAndUpdate(context.Background())
+	if status := u.Snapshot(); status.State != UpdateStateError || status.LastError != "partial replacement rejected" {
+		t.Fatalf("partial-failure status = %+v", status)
+	}
+
+	u.CheckAndUpdate(context.Background())
+	status := u.Snapshot()
+	if status.State != UpdateStateIdle || status.LastSuccessAt == nil || status.LastError != "" {
+		t.Fatalf("recovered status = %+v", status)
+	}
+	if got := atomic.LoadInt32(&updateAttempts); got != 2 {
+		t.Fatalf("update attempts = %d, want 2", got)
 	}
 }
 
@@ -354,7 +478,7 @@ func TestUpdater_CheckAndUpdate_RecordsLifecycleStatus(t *testing.T) {
 		defer srv.Close()
 
 		u := New(Config{PulseURL: srv.URL, CurrentVersion: "1.0.0"})
-		u.performUpdateFn = func(context.Context) error { return errors.New("replacement rejected") }
+		u.performUpdateFn = func(context.Context, string) error { return errors.New("replacement rejected") }
 		u.CheckAndUpdate(context.Background())
 
 		status := u.Snapshot()

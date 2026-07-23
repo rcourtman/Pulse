@@ -3598,6 +3598,16 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Agent update target responses are reconciliation-safe
+
+`GET` and `HEAD /api/agent/version` project
+`currentAgentTargetVersion()` as the one server-owned agent target and return
+explicit `no-store` / `no-cache` response metadata. Current agents add their
+running version and a non-secret request-unique cache key, while the subsequent
+binary request names the exact returned target version. Query values affect
+intermediary cache identity only; they do not select an arbitrary server
+release, bypass artifact validation, or replace the canonical response body.
+
 ### vSphere host composition on the vCenter system row
 
 Grouped systems in `GET /api/connections` now project ESXi host resources as

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -112,6 +113,7 @@ var (
 	readFileFn                   = os.ReadFile
 	writeFileFn                  = os.WriteFile
 	retrySleepFn                 = sleepWithContext
+	updateRequestNowFn           = time.Now
 )
 
 // Config holds the configuration for the updater.
@@ -162,7 +164,7 @@ type Updater struct {
 	statusMu        sync.RWMutex
 	status          Status
 
-	performUpdateFn func(context.Context) error
+	performUpdateFn func(context.Context, string) error
 	selfTestFn      func(context.Context, string) error
 	initialDelay    time.Duration
 	newTicker       func(time.Duration) *time.Ticker
@@ -228,7 +230,7 @@ func New(cfg Config) *Updater {
 		u.status.State = UpdateStateError
 		u.status.LastError = configErr.Error()
 	}
-	u.performUpdateFn = u.performUpdate
+	u.performUpdateFn = u.performUpdateForVersion
 	u.selfTestFn = u.runDownloadedBinarySelfTest
 	u.initialDelay = 5 * time.Second
 	u.newTicker = time.NewTicker
@@ -428,7 +430,7 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		status.LastError = ""
 	})
 
-	if err := u.performUpdateFn(ctx); err != nil {
+	if err := u.performUpdateFn(ctx, serverVersion); err != nil {
 		u.updateStatus(func(status *Status) {
 			status.State = UpdateStateError
 			status.LastError = err.Error()
@@ -486,9 +488,18 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("invalid Pulse URL: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
+	versionURL, err := withUpdateQuery(
+		fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/")),
+		map[string]string{
+			"agentVersion": strings.TrimSpace(u.cfg.CurrentVersion),
+			"check":        fmt.Sprintf("%d", updateRequestNowFn().UTC().UnixNano()),
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to build version check URL: %w", err)
+	}
 
-	resp, err := u.getWithRetry(ctx, url, "version check")
+	resp, err := u.getWithRetry(ctx, versionURL, "version check")
 	if err != nil {
 		return "", err
 	}
@@ -500,6 +511,22 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 	}
 
 	return versionResp.Version, nil
+}
+
+func withUpdateQuery(rawURL string, values map[string]string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	query := parsed.Query()
+	for key, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			query.Set(key, value)
+		}
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {
@@ -753,11 +780,15 @@ func (u *Updater) validatePulseURL() error {
 
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
+	return u.performUpdateForVersion(ctx, "")
+}
+
+func (u *Updater) performUpdateForVersion(ctx context.Context, targetVersion string) error {
 	execPath, err := resolveExecutablePath()
 	if err != nil {
 		return err
 	}
-	return u.performUpdateWithExecPath(ctx, execPath)
+	return u.performUpdateWithExecPathForVersion(ctx, execPath, targetVersion)
 }
 
 // resolveExecutablePath returns the running binary's path, falling back to an
@@ -787,6 +818,10 @@ func resolveExecutablePath() (string, error) {
 }
 
 func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string) error {
+	return u.performUpdateWithExecPathForVersion(ctx, execPath, "")
+}
+
+func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execPath, targetVersion string) error {
 	agentName, err := normalizeAgentName(u.cfg.AgentName)
 	if err != nil {
 		return fmt.Errorf("invalid agent name: %w", err)
@@ -802,9 +837,22 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	// Try architecture-specific binary first, then fall back to default
 	candidates := []string{}
 	if archParam != "" {
-		candidates = append(candidates, fmt.Sprintf("%s?arch=%s", downloadBase, archParam))
+		candidateURL, err := withUpdateQuery(downloadBase, map[string]string{
+			"arch":          archParam,
+			"serverVersion": targetVersion,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to build architecture-specific download URL: %w", err)
+		}
+		candidates = append(candidates, candidateURL)
 	}
-	candidates = append(candidates, downloadBase)
+	fallbackURL, err := withUpdateQuery(downloadBase, map[string]string{
+		"serverVersion": targetVersion,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build fallback download URL: %w", err)
+	}
+	candidates = append(candidates, fallbackURL)
 
 	var resp *http.Response
 	lastErr := fmt.Errorf("failed to download binary from all candidate URLs")

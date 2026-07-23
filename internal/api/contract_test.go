@@ -65,6 +65,35 @@ type basicActionContractAuthorizer struct {
 	wantUser string
 }
 
+func TestContract_AgentVersionResponsePreventsStaleReconciliation(t *testing.T) {
+	router := &Router{}
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/version?agentVersion=6.0.0-rc.1&check=123", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleAgentVersion(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store, no-cache, must-revalidate, max-age=0" {
+		t.Fatalf("Cache-Control = %q", got)
+	}
+	if got := rec.Header().Get("Pragma"); got != "no-cache" {
+		t.Fatalf("Pragma = %q", got)
+	}
+	if got := rec.Header().Get("Expires"); got != "0" {
+		t.Fatalf("Expires = %q", got)
+	}
+
+	var payload AgentVersionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode agent version response: %v", err)
+	}
+	if payload.Version == "" {
+		t.Fatal("agent target version is empty")
+	}
+}
+
 func TestContract_OperationalTrustAttentionActionOfferJSONIsAdditiveAndTyped(t *testing.T) {
 	payload, err := json.Marshal(ai.AttentionActionOffer{
 		ActionID:              "action-1",

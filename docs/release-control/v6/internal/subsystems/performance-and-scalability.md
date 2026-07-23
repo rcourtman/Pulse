@@ -2006,3 +2006,8 @@ cluster scope needed for that calculation, but must not add per-row requests,
 runtime-UID scans, or a second metadata cache. Kubernetes persistence uses the
 fully scoped cluster, kind, namespace, and name identity; runtime pod UIDs are
 legacy fallback coordinates only.
+
+The public agent-version reconciliation path on `internal/api/router.go`
+remains an O(1) target projection. Cache-prevention headers and the
+agent-supplied non-secret cache key add no inventory scan, persistence read,
+metrics fan-out, or background work to `GET /api/agent/version`.

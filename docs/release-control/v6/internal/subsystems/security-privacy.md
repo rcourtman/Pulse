@@ -1581,3 +1581,11 @@ be reused to satisfy another organization, including Assistant-authored URL
 updates, and stable workload identities must retain their full host or cluster,
 namespace, kind, and name scope so a saved URL cannot cross a tenant or
 resource boundary.
+
+Agent update cache reconciliation on the shared router preserves the existing
+credential boundary. `/api/agent/version` is non-cacheable, and current agents
+put only the running version plus a non-secret request nonce in its query;
+runtime tokens remain in protected request headers and redirects remain
+rejected. The target-version query on `/download/pulse-agent` is cache identity,
+not trust evidence: checksum, embedded-key signature, self-test, and atomic
+replacement validation remain mandatory and fail closed.

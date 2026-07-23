@@ -88,8 +88,16 @@ No. Use the unified installer to upgrade existing agent deployments in place. Ge
 
 No. The server and Unified Agent have separate update lifecycles. After the
 server changes the target version, eligible v6 agents normally discover and
-apply that update asynchronously during their update checks. The server being
-current is not proof that every installed agent has checked in or converged.
+apply that update asynchronously: once about five seconds after process start,
+then hourly while the process remains running. Linux, Windows, and
+Docker-enabled installations all use this same Unified Agent updater. It moves
+only to a higher semantic version, so RC-to-later-RC, RC-to-stable, and
+stable-to-later-stable updates are eligible; a server advertising an older
+target never causes an automatic downgrade. Version checks are cache-unique,
+and the binary request is bound to the exact target version. Offline checks,
+download failures, and pre-replacement failures leave the current process and
+binary in place and are retried on a later check. The server being current is
+not proof that every installed agent has checked in or converged.
 
 Use the manual path for v5 agents, PVE host agents, agents with auto-update
 disabled, and agents blocked by authentication, missing connection state,
@@ -103,6 +111,15 @@ Doctor** at `/settings/infrastructure?agentDoctor=1`. It shows per-host commands
 for the operator to copy and run; it does not remotely execute fleet updates. Agent
 self-update and manual update both still depend on valid authentication, a
 reachable trusted update channel, and accepted release signing keys.
+
+Early v6 prerelease agents could report successfully to a private plain-HTTP
+Pulse URL while their separate updater rejected that same URL before making a
+version request. Such an agent cannot download the release that fixes its own
+transport policy. Re-run the current per-host installer command once to
+preserve the URL/token/trust settings in the current lifecycle format; normal
+automatic checks resume after that migration. The same manual recovery rule
+applies to an agent whose installed signing trust cannot accept the current
+release.
 
 ### Will an upgraded v5 agent keep the same identity in v6?
 

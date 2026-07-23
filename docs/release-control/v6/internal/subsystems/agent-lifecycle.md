@@ -458,6 +458,19 @@ spellings as the same recovered state while preserving the same fail-closed
 URL-plus-token threshold. Windows stale-agent update commands remain on the
 existing token-gated install transport until the Windows installer owns an
 equivalent saved-state update mode.
+The current Unified Agent updater is the sole automatic binary-update
+authority for Linux, Windows, and Docker-enabled `pulse-agent` installations.
+It checks once after the five-second startup delay and then hourly, compares
+normalized semantic versions across RC and stable boundaries, and refuses
+downgrades. Each version check carries the running agent version plus a
+request-unique non-secret cache key; each binary download carries the exact
+server target version. The server version response and binary response are
+non-cacheable, so a reverse proxy may not reconcile a fresh target with an
+older cached artifact. Offline, authentication, checksum, signature,
+self-test, or pre-replacement failures retain the running binary and retry on
+a later check. The legacy updater in `internal/dockeragent/self_update.go` is
+not a second v6 authority: Docker and Podman are modules inside the unified
+agent and set `AgentType=unified`, which bypasses that compatibility path.
 The report contract separates runtime family from OS identity. Newly built
 agents derive `Host.Platform` from their compiled GOOS and keep the
 distribution or appliance caption in `Host.OSName`; a Mageia agent therefore
@@ -3874,6 +3887,12 @@ the matching base64-encoded `X-Signature-SSHSIG`, and
 `internal/api/unified_agent.go` must only serve published release installers
 and agent binaries from local or proxied assets that carry the matching
 detached signature sidecars.
+Target-version cache keys do not relax that trust boundary. A cache-keyed
+download must still pass the exact checksum, embedded-key Ed25519 signature,
+platform magic, downloaded-binary self-test, same-filesystem atomic
+replacement, and backup restoration rules before restart. The cache key is
+version selection metadata only and must never be treated as artifact
+integrity or downgrade authorization.
 That same self-update pre-flight must keep the live agent token out of process
 argv. `internal/agentupdate/update.go` and legacy
 `internal/dockeragent/self_update.go` may pass a short-lived `0600` token file
