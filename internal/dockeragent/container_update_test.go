@@ -37,7 +37,6 @@ func baseInspect() containertypes.InspectResponse {
 		NetworkSettings: &containertypes.NetworkSettings{
 			Networks: map[string]*network.EndpointSettings{
 				"net1": {Aliases: []string{"app"}},
-				"net2": {Aliases: []string{"app2"}},
 			},
 		},
 	}
@@ -259,9 +258,6 @@ func TestUpdateContainer_Success(t *testing.T) {
 			},
 			containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
 				return containertypes.CreateResponse{ID: "new123"}, nil
-			},
-			networkConnectFn: func(context.Context, string, string, *network.EndpointSettings) error {
-				return errors.New("network connect failed")
 			},
 			containerStartFn: func(context.Context, string, dockerContainerStartOptions) error {
 				return nil

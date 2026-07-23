@@ -1192,6 +1192,8 @@
         "internal/api/setup_script_render.go",
         "internal/api/unified_agent.go",
         "internal/dockeragent/agent.go",
+        "internal/dockeragent/container_update.go",
+        "internal/dockeragent/container_update_typed.go",
         "internal/kubernetesagent/agent.go",
         "internal/remoteconfig/client.go",
         "internal/securityutil/httpurl.go",
@@ -1318,6 +1320,24 @@
               "internal/remoteconfig/client_additional_test.go",
               "internal/remoteconfig/client_test.go",
               "internal/securityutil/httpurl_test.go"
+            ]
+          },
+          {
+            "id": "docker-container-update-runtime",
+            "label": "Docker container recreate, rollback, durable result, and live network-mode proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/dockeragent/container_update.go",
+              "internal/dockeragent/container_update_typed.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/dockeragent/container_update_contract_test.go",
+              "internal/dockeragent/container_update_integration_test.go",
+              "internal/dockeragent/container_update_test.go",
+              "internal/dockeragent/container_update_typed_test.go",
+              "internal/hostagent/docker_lifecycle_test.go"
             ]
           },
           {

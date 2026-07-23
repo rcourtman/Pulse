@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -82,6 +83,108 @@ func sanitizeSharedNamespaceConfig(config *containertypes.Config, hostConfig *co
 		hostConfig.DNSSearch = nil
 		hostConfig.ExtraHosts = nil
 	}
+}
+
+type recreateNetworkAttachment struct {
+	name     string
+	endpoint *network.EndpointSettings
+}
+
+type containerRecreatePlan struct {
+	config             *containertypes.Config
+	hostConfig         *containertypes.HostConfig
+	networkingConfig   *network.NetworkingConfig
+	additionalNetworks []recreateNetworkAttachment
+}
+
+// buildContainerRecreatePlan turns inspect output into create input. Inspect
+// mixes desired configuration with daemon-generated runtime observations, so
+// it must not be passed back to ContainerCreate unchanged.
+func buildContainerRecreatePlan(inspect containertypes.InspectResponse) (containerRecreatePlan, error) {
+	if inspect.Config == nil {
+		return containerRecreatePlan{}, errors.New("inspect response is missing container configuration")
+	}
+	if inspect.HostConfig == nil {
+		return containerRecreatePlan{}, errors.New("inspect response is missing host configuration")
+	}
+
+	config := *inspect.Config
+	hostConfig := *inspect.HostConfig
+	if daemonGeneratedHostname(config.Hostname, inspect.ID) {
+		config.Hostname = ""
+	}
+	sanitizeSharedNamespaceConfig(&config, &hostConfig)
+
+	plan := containerRecreatePlan{
+		config:     &config,
+		hostConfig: &hostConfig,
+	}
+	if hostConfig.NetworkMode.IsContainer() || hostConfig.NetworkMode.IsHost() ||
+		inspect.NetworkSettings == nil || len(inspect.NetworkSettings.Networks) == 0 {
+		return plan, nil
+	}
+
+	networkNames := make([]string, 0, len(inspect.NetworkSettings.Networks))
+	for name, endpoint := range inspect.NetworkSettings.Networks {
+		if strings.TrimSpace(name) == "" || endpoint == nil {
+			continue
+		}
+		networkNames = append(networkNames, name)
+	}
+	if len(networkNames) == 0 {
+		return plan, nil
+	}
+	sort.Strings(networkNames)
+
+	primaryNetwork := string(hostConfig.NetworkMode)
+	if primaryNetwork == "" || primaryNetwork == "default" {
+		primaryNetwork = "bridge"
+	}
+	if _, ok := inspect.NetworkSettings.Networks[primaryNetwork]; !ok {
+		primaryNetwork = networkNames[0]
+	}
+
+	plan.networkingConfig = &network.NetworkingConfig{
+		EndpointsConfig: map[string]*network.EndpointSettings{
+			primaryNetwork: desiredEndpointSettings(inspect.NetworkSettings.Networks[primaryNetwork]),
+		},
+	}
+	for _, name := range networkNames {
+		if name == primaryNetwork {
+			continue
+		}
+		plan.additionalNetworks = append(plan.additionalNetworks, recreateNetworkAttachment{
+			name:     name,
+			endpoint: desiredEndpointSettings(inspect.NetworkSettings.Networks[name]),
+		})
+	}
+	return plan, nil
+}
+
+// desiredEndpointSettings preserves operator-configurable endpoint settings
+// and deliberately drops observed runtime fields such as endpoint IDs,
+// gateways, assigned addresses, prefix lengths, and generated DNS names.
+func desiredEndpointSettings(endpoint *network.EndpointSettings) *network.EndpointSettings {
+	if endpoint == nil {
+		return &network.EndpointSettings{}
+	}
+	return &network.EndpointSettings{
+		IPAMConfig: endpoint.IPAMConfig.Copy(),
+		Links:      append([]string(nil), endpoint.Links...),
+		Aliases:    append([]string(nil), endpoint.Aliases...),
+		DriverOpts: cloneStringMap(endpoint.DriverOpts),
+		GwPriority: endpoint.GwPriority,
+		MacAddress: append(network.HardwareAddr(nil), endpoint.MacAddress...),
+	}
+}
+
+func daemonGeneratedHostname(hostname, containerID string) bool {
+	hostname = strings.ToLower(strings.TrimSpace(hostname))
+	containerID = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(containerID)), "sha256:")
+	if hostname == "" || containerID == "" {
+		return false
+	}
+	return hostname == containerID || (len(hostname) == 12 && strings.HasPrefix(containerID, hostname))
 }
 
 // handleUpdateContainerCommand handles the update_container command from Pulse.
@@ -217,14 +320,21 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		return result
 	}
 
+	recreatePlan, err := buildContainerRecreatePlan(inspect)
+	if err != nil {
+		result.Error = fmt.Sprintf("Failed to prepare container recreation: %v", err)
+		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Invalid inspect response for container update")
+		return result
+	}
+
 	a.logger.Info().
 		Str("container", result.ContainerName).
-		Str("image", inspect.Config.Image).
+		Str("image", recreatePlan.config.Image).
 		Bool("wasRunning", wasRunning).
 		Msg("Starting container update")
 
 	// 2. Pull the latest image
-	imageName := inspect.Config.Image
+	imageName := recreatePlan.config.Image
 	reportProgress(fmt.Sprintf("Pulling image %s...", imageName))
 	a.logger.Info().Str("image", imageName).Msg("Pulling latest image")
 
@@ -287,35 +397,13 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 	reportProgress(fmt.Sprintf("Creating new container %s...", result.ContainerName))
 
-	// 5. Prepare network configuration
-	// We need to handle network settings carefully
-	sanitizeSharedNamespaceConfig(inspect.Config, inspect.HostConfig)
-	var networkingConfig *network.NetworkingConfig
-	if len(inspect.NetworkSettings.Networks) > 0 {
-		networkingConfig = &network.NetworkingConfig{
-			EndpointsConfig: make(map[string]*network.EndpointSettings),
-		}
-		// Only set the first network here; we'll connect to others after creation
-		for netName, netConfig := range inspect.NetworkSettings.Networks {
-			networkingConfig.EndpointsConfig[netName] = &network.EndpointSettings{
-				Aliases:    netConfig.Aliases,
-				IPAMConfig: netConfig.IPAMConfig,
-				Links:      netConfig.Links,
-				NetworkID:  netConfig.NetworkID,
-				MacAddress: netConfig.MacAddress,
-				DriverOpts: netConfig.DriverOpts,
-			}
-			break // Only set one network during creation
-		}
-	}
-
-	// 6. Create a new container with the same configuration
+	// 5. Create a new container with the normalized desired configuration.
 	createResp, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.CreateResponse, error) {
 		return a.docker.ContainerCreate(
 			callCtx,
-			inspect.Config,
-			inspect.HostConfig,
-			networkingConfig,
+			recreatePlan.config,
+			recreatePlan.hostConfig,
+			recreatePlan.networkingConfig,
 			nil, // Platform
 			result.ContainerName,
 		)
@@ -334,26 +422,23 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	result.ContainerID = newContainerID
 	a.logger.Info().Str("newContainerId", newContainerID).Msg("New container created")
 
-	// 7. Connect to additional networks (if more than one)
-	networkCount := 0
-	for netName, netConfig := range inspect.NetworkSettings.Networks {
-		networkCount++
-		if networkCount == 1 {
-			continue // Skip the first one, already connected during creation
-		}
-		endpointConfig := &network.EndpointSettings{
-			Aliases:    netConfig.Aliases,
-			IPAMConfig: netConfig.IPAMConfig,
-			Links:      netConfig.Links,
-			MacAddress: netConfig.MacAddress,
-			DriverOpts: netConfig.DriverOpts,
-		}
-		if err := a.docker.NetworkConnect(ctx, netName, newContainerID, endpointConfig); err != nil {
-			a.logger.Warn().Err(err).Str("network", netName).Msg("Failed to connect to network, continuing anyway")
+	// 6. Restore every additional network before starting the replacement.
+	for _, attachment := range recreatePlan.additionalNetworks {
+		reportProgress(fmt.Sprintf("Connecting container %s to network %s...", result.ContainerName, attachment.name))
+		_, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
+			err := a.docker.NetworkConnect(callCtx, attachment.name, newContainerID, attachment.endpoint)
+			return struct{}{}, err
+		})
+		if err != nil {
+			result.Error = fmt.Sprintf("Failed to connect new container to network %s: %v", attachment.name, annotateDockerConnectionError(err))
+			a.logger.Error().Err(err).Str("network", attachment.name).Str("container", result.ContainerName).Msg("Failed to restore container network attachment")
+			result.RollbackAttempted = true
+			result.RolledBack = a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
+			return result
 		}
 	}
 
-	// 8. Start and verify the new container only if the original was running.
+	// 7. Start and verify the new container only if the original was running.
 	if wasRunning {
 		reportProgress(fmt.Sprintf("Starting container %s...", result.ContainerName))
 		_, err = dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
@@ -371,7 +456,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 		a.logger.Info().Str("container", result.ContainerName).Msg("New container started, verifying stability...")
 
-		// 9. Verify container stability
+		// 8. Verify container stability
 		reportProgress("Verifying container stability...")
 		// Wait a few seconds to ensure it doesn't crash immediately
 		sleepFn(5 * time.Second)
@@ -418,7 +503,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 	result.NewImageDigest = verifyInspect.Image
 
-	// 10. Schedule cleanup of backup container after a delay.
+	// 9. Schedule cleanup of backup container after a delay.
 	// This gives time to verify the new container is working.
 	a.runAsync(func(asyncCtx context.Context) {
 		if !a.waitForAsyncDelay(5 * time.Minute) {

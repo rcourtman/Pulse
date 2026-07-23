@@ -4,11 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
+	"github.com/rs/zerolog"
 )
 
 const dockerLifecycleTestContainerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -93,9 +99,13 @@ func dockerLifecycleTestRequest(t *testing.T, startedAt time.Time) agentexec.Doc
 type stubDockerUpdater struct {
 	outcome agentexec.DockerContainerUpdateOutcome
 	err     error
+	calls   *int
 }
 
 func (s stubDockerUpdater) TypedContainerUpdate(_ context.Context, _, _, _ string, _ func(string)) (agentexec.DockerContainerUpdateOutcome, error) {
+	if s.calls != nil {
+		*s.calls++
+	}
 	return s.outcome, s.err
 }
 
@@ -203,5 +213,72 @@ func TestHostOperationReceiptConfigAcceptsDockerUpdateReceipts(t *testing.T) {
 	}
 	if err := validator(agentexec.DockerContainerUpdateOperationIdentity("agent-1", payload), encoded); err != nil {
 		t.Fatalf("terminal receipt for a successful update was rejected: %v", err)
+	}
+}
+
+func TestDockerContainerUpdateTerminalReceiptReplaysAfterAgentReconnect(t *testing.T) {
+	payload := boundUpdatePayload(t)
+	newID := strings.Repeat("b", 12)
+	updateCalls := 0
+	client := newUpdateTestClient(stubDockerUpdater{
+		outcome: agentexec.DockerContainerUpdateOutcome{
+			Success: true, ContainerName: "app", OldContainerID: payload.ContainerID, NewContainerID: newID,
+			OldImageDigest: "sha256:" + strings.Repeat("1", 64), NewImageDigest: "sha256:" + strings.Repeat("2", 64),
+			BackupCreated: true, BackupContainer: "app_pulse_backup_20260714_120000",
+		},
+		calls: &updateCalls,
+	})
+	client.logger = zerolog.Nop()
+	receipts, err := operationreceipt.Open(filepath.Join(t.TempDir(), "receipts.db"), hostOperationReceiptConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer receipts.Close()
+	client.operationReceipts = receipts
+
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	serverConnections := make(chan *websocket.Conn)
+	releaseConnections := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, upgradeErr := upgrader.Upgrade(w, r, nil)
+		if upgradeErr != nil {
+			t.Errorf("upgrade: %v", upgradeErr)
+			return
+		}
+		serverConnections <- conn
+		<-releaseConnections
+		_ = conn.Close()
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	for attempt := 0; attempt < 2; attempt++ {
+		remote, _, dialErr := websocket.DefaultDialer.Dial(wsURL, nil)
+		if dialErr != nil {
+			t.Fatal(dialErr)
+		}
+		serverConn := <-serverConnections
+
+		client.handleDockerContainerUpdate(context.Background(), serverConn, payload)
+		var message wsMessage
+		if readErr := remote.ReadJSON(&message); readErr != nil {
+			t.Fatalf("attempt %d read result: %v", attempt+1, readErr)
+		}
+		if message.Type != msgTypeDockerContainerUpdateResult {
+			t.Fatalf("attempt %d message type = %q", attempt+1, message.Type)
+		}
+		var result agentexec.DockerContainerUpdateResultPayload
+		if decodeErr := json.Unmarshal(message.Payload, &result); decodeErr != nil {
+			t.Fatal(decodeErr)
+		}
+		if result.NewContainerID != newID || result.RequestID != payload.RequestID || !result.MutationCompleted {
+			t.Fatalf("attempt %d result = %+v", attempt+1, result)
+		}
+
+		_ = remote.Close()
+		releaseConnections <- struct{}{}
+	}
+	if updateCalls != 1 {
+		t.Fatalf("docker update executed %d times across reconnect, want 1", updateCalls)
 	}
 }

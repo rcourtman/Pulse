@@ -403,7 +403,9 @@ const updaterApplyingNow = (
   const update = connection.agentUpdate ?? diagnostic?.agentUpdate;
   if (update?.state?.trim().toLowerCase() !== 'updating') return false;
   const startedAt = Date.parse(update.lastAttemptAt || update.lastCheckedAt || '');
-  if (Number.isNaN(startedAt)) return true;
+  // A bare/stale "updating" state is not enough evidence to hide the manual
+  // recovery path forever. Only a timestamped, recent attempt is in flight.
+  if (Number.isNaN(startedAt)) return false;
   return nowMs - startedAt < UPDATER_IN_FLIGHT_STALL_MS;
 };
 

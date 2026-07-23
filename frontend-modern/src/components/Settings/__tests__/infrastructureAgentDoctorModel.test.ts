@@ -238,6 +238,24 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toBeUndefined();
   });
 
+  it('keeps the manual command available when updating has no attempt timestamp', () => {
+    const agentUpdate = {
+      state: 'updating' as const,
+      autoUpdate: true,
+    };
+    const connection = connectionFixture({ agentUpdate });
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture({ agentUpdate })],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+      nowMs: Date.parse('2026-07-13T09:05:00Z'),
+    });
+
+    expect(targets[0].commandBlockedReason).toBeUndefined();
+  });
+
   it('withholds FreeBSD and pfSense update commands until installer state is proven', () => {
     const connection = connectionFixture({
       agentIdentity: { hostname: 'firewall', platform: 'pfSense', architecture: 'amd64' },

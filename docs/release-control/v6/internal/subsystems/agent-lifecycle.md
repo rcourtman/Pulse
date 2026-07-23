@@ -30,8 +30,10 @@ that binary, not separate customer-facing agent products.
 4. `internal/agentupdate/update.go`
 5. `internal/hostagent/agent.go`
    5a. `internal/dockeragent/agent.go`
-   5b. `internal/kubernetesagent/agent.go`
-   5c. `internal/agentexec/verifier_postconditions.go`
+   5b. `internal/dockeragent/container_update.go`
+   5c. `internal/dockeragent/container_update_typed.go`
+   5d. `internal/kubernetesagent/agent.go`
+   5e. `internal/agentexec/verifier_postconditions.go`
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
@@ -101,6 +103,22 @@ that binary, not separate customer-facing agent products.
 64. `pkg/securityutil/httpurl.go`
 
 ## Shared Boundaries
+
+Docker container update recreation under `internal/dockeragent/` is lifecycle
+mutation authority, not monitoring collection. The module must translate
+daemon inspect output into a desired create plan before the original container
+is renamed: preserve operator configuration such as labels, mounts, binds,
+restart policy, explicit hostname, network aliases, IPAM, driver options,
+gateway priority, and network mode; remove daemon-generated observations and
+fields that conflict with `host` or shared `container:<id>` namespaces.
+`network_mode: service:<name>` reaches this boundary as the daemon-resolved
+`container:<id>` mode and follows the same rule. The create-time network must
+be deterministic, every additional attachment must be restored before start,
+and any create, connect, start, or verification failure after backup creation
+must report compensation truth and attempt rollback rather than declaring a
+partially connected replacement successful. The typed host-agent command path
+owns durable terminal receipts for that mutation: reconnect or server recovery
+may replay a persisted result, but may not execute the Docker mutation twice.
 
 Automatic Patrol action admission wired through `internal/api/` is API/action-
 lifecycle authority, not agent enrollment or command authority. Agent command
@@ -1974,8 +1992,32 @@ Agent` secondary handoff against the live setup wizard instead of relying
     provider tools and in-memory tool results under settings-write authority;
     it must not request `agent:exec`, dispatch an agent command, inspect agent
     inventory, or turn a successful model probe into command authority.
+20. Keep Docker container-update proof on the production recreate path. Unit
+    coverage must include standalone and Compose-shaped host, shared-service,
+    shared-container, bridge, and custom-network plans, generated and explicit
+    hostnames, labels, dependencies, mounts, volumes, secondary-network
+    rollback, progress errors, and durable reconnect replay. The opt-in live
+    Docker Compose proof must exercise those network modes against a real
+    daemon; a fake-only sanitizer test is not sufficient lifecycle evidence.
 
 ## Current State
+
+### Docker updates recreate desired configuration and replay terminal truth
+
+The Docker module now builds an immutable recreate plan from inspect output
+before pulling or mutating. Generated container-ID hostnames and operational
+endpoint fields are not injected as explicit create configuration; explicit
+hostnames and configurable endpoint fields remain intact. Host and
+container/service namespace modes receive no conflicting endpoint or hostname
+configuration. Multi-network replacements connect the primary network
+deterministically and restore every remaining network before start; a failed
+attachment removes the replacement, restores the backup name, restarts the
+original when required, and returns rollback facts through the typed action
+result. The host agent persists that terminal result before delivery and
+replays it after reconnect without rerunning Docker. Agent Doctor hides the
+manual host-local update command only for a timestamped update attempt inside
+the bounded in-flight window; a missing timestamp or a stale attempt restores
+the manual recovery handoff.
 
 ### vSphere system members carry no agent semantics
 
