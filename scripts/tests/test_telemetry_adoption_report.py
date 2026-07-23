@@ -1391,6 +1391,48 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             "total": 3,
         })
 
+    def test_summarize_user_base_signals_keeps_notification_failure_semantics_separate(self) -> None:
+        now = datetime(2026, 7, 23, 12, tzinfo=timezone.utc)
+        summary = report.summarize_user_base_signals(
+            {
+                "legacy-attempt-failures": {
+                    "received_at": "2026-07-23 10:00:00",
+                    "schema_version": 2,
+                    "notification_attempts_7d": 5,
+                    "notification_deliveries_7d": 1,
+                    "notification_failures_7d": 4,
+                },
+                "terminal-failures": {
+                    "received_at": "2026-07-23 11:00:00",
+                    "schema_version": 3,
+                    "notification_attempts_7d": 4,
+                    "notification_deliveries_7d": 2,
+                    "notification_failures_7d": 1,
+                },
+            },
+            now=now,
+        )
+
+        signals = {item["field"]: item for item in summary["count_signals"]}
+        self.assertEqual(
+            signals["notification_attempt_failures_7d_schema_v2"],
+            {
+                "field": "notification_attempt_failures_7d_schema_v2",
+                "label": "Notification failed attempts (7d, legacy schema v2)",
+                "installs": 1,
+                "total": 4,
+            },
+        )
+        self.assertEqual(
+            signals["notification_terminal_failures_7d_schema_v3"],
+            {
+                "field": "notification_terminal_failures_7d_schema_v3",
+                "label": "Notification terminal failures (7d, schema v3+)",
+                "installs": 1,
+                "total": 1,
+            },
+        )
+
     def test_format_text_includes_user_base_privacy_bounded_signals(self) -> None:
         rendered = report.format_text(
             {

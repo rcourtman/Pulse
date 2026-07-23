@@ -1,6 +1,6 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, createSignal, onMount, type Accessor } from 'solid-js';
 
-import { NotificationsAPI, type AppriseConfig } from '@/api/notifications';
+import { NotificationsAPI, type AppriseConfig, type NotificationHealth } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { showErrorWithDetail } from '@/utils/toast';
@@ -29,6 +29,9 @@ export interface AlertDestinationsTabStateProps {
 export function useAlertDestinationsTabState(props: AlertDestinationsTabStateProps) {
   const [testingEmail, setTestingEmail] = createSignal(false);
   const [testingApprise, setTestingApprise] = createSignal(false);
+  const [deliveryHealth, setDeliveryHealth] = createSignal<NotificationHealth | null>(null);
+  const [deliveryHealthUnavailable, setDeliveryHealthUnavailable] = createSignal(false);
+  const [refreshingDeliveryHealth, setRefreshingDeliveryHealth] = createSignal(false);
   const webhookState = useAlertWebhookDestinationsState();
 
   const isLoading = createMemo(
@@ -39,6 +42,21 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
 
   const updateApprise = (partial: Partial<UIAppriseConfig>) => {
     props.setAppriseConfig({ ...props.appriseConfig(), ...partial });
+  };
+
+  const loadDeliveryHealth = async () => {
+    setRefreshingDeliveryHealth(true);
+    try {
+      const health = await NotificationsAPI.getHealth();
+      setDeliveryHealth(health);
+      setDeliveryHealthUnavailable(health.queue.status === 'unavailable');
+    } catch (error) {
+      logger.error('Failed to load notification delivery health', error);
+      setDeliveryHealth(null);
+      setDeliveryHealthUnavailable(true);
+    } finally {
+      setRefreshingDeliveryHealth(false);
+    }
   };
 
   const buildAppriseRequestConfig = (): AppriseConfig => {
@@ -114,13 +132,22 @@ export function useAlertDestinationsTabState(props: AlertDestinationsTabStatePro
   const handleRetry = () => {
     props.onRetryLoad();
     void webhookState.loadWebhooks();
+    void loadDeliveryHealth();
   };
+
+  onMount(() => {
+    void loadDeliveryHealth();
+  });
 
   return {
     appriseState,
+    deliveryHealth,
+    deliveryHealthUnavailable,
     handleRetry,
     hasLoadError,
     isLoading,
+    loadDeliveryHealth,
+    refreshingDeliveryHealth,
     testApprise,
     testEmailConfig,
     testingApprise,

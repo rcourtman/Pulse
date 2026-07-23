@@ -4607,10 +4607,16 @@ rendering remains in
 metric normalization remains in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`.
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
-destination test actions plus retry orchestration while
+destination test actions, retry orchestration, and delivery-health loading while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
 render shell and should compose the dedicated email, Apprise, webhook, and
-load/error section owners instead of carrying those panels inline. Future
+load/error section owners plus
+`frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx` instead of
+carrying those panels inline. That card is a route-owned danger surface, not a
+global success badge: degraded retained terminal delivery state and unavailable
+health reads remain visible, while healthy and retry-pending state add no
+banner. Its operator copy stays centralized in
+`frontend-modern/src/utils/alertDestinationsPresentation.ts`. Future
 cleanup should extend the transport hook, config model, override hook, or
 destinations runtime hook based on the true owner, not move config control
 flow back into the top-level page shell.

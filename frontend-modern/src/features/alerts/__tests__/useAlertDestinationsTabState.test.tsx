@@ -13,6 +13,7 @@ vi.mock('@/api/notifications', () => ({
   NotificationsAPI: {
     createWebhook: vi.fn(),
     deleteWebhook: vi.fn(),
+    getHealth: vi.fn(),
     getWebhooks: vi.fn(),
     testNotification: vi.fn(),
     testWebhook: vi.fn(),
@@ -71,6 +72,7 @@ describe('useAlertDestinationsTabState', () => {
   beforeEach(() => {
     vi.mocked(NotificationsAPI.createWebhook).mockReset();
     vi.mocked(NotificationsAPI.deleteWebhook).mockReset();
+    vi.mocked(NotificationsAPI.getHealth).mockReset();
     vi.mocked(NotificationsAPI.getWebhooks).mockReset();
     vi.mocked(NotificationsAPI.testNotification).mockReset();
     vi.mocked(NotificationsAPI.testWebhook).mockReset();
@@ -98,6 +100,25 @@ describe('useAlertDestinationsTabState', () => {
         url: 'https://hooks.example.test/ops',
       },
     ] as never);
+    vi.mocked(NotificationsAPI.getHealth).mockResolvedValue({
+      overallHealthy: true,
+      queue: {
+        pending: 0,
+        sending: 0,
+        sent: 0,
+        failed: 0,
+        deadLetter: 0,
+        healthy: true,
+        status: 'healthy',
+        attentionRequired: 0,
+        reasonCodes: [],
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+        countsAreRetentionBounded: true,
+        retryAttemptsAffectHealth: false,
+        terminalFailuresAffectHealth: true,
+      },
+    });
     vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({ success: true } as never);
     vi.mocked(NotificationsAPI.testWebhook).mockResolvedValue({ success: true } as never);
 
@@ -114,6 +135,8 @@ describe('useAlertDestinationsTabState', () => {
     );
 
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(1));
+    expect(result.deliveryHealth()?.queue.status).toBe('healthy');
     expect(result.webhooks()).toEqual([
       expect.objectContaining({ id: 'hook-1', service: 'generic' }),
     ]);
@@ -146,6 +169,7 @@ describe('useAlertDestinationsTabState', () => {
     result.handleRetry();
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(NotificationsAPI.getHealth).toHaveBeenCalledTimes(2));
     expect(notificationStore.success).toHaveBeenCalledTimes(2);
     expect(showErrorWithDetail).not.toHaveBeenCalled();
   });

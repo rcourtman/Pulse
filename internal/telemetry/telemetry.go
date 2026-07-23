@@ -132,8 +132,9 @@ const (
 	PulseIntelligenceTelemetryWindow = installIDRotationWindow
 
 	// TelemetrySchemaVersion identifies the exact outbound payload contract.
-	// Increment this when fields or their semantics change.
-	TelemetrySchemaVersion = 2
+	// Schema v3 makes notification_failures_7d a terminal-delivery count;
+	// schema v2 counted every unsuccessful retry attempt.
+	TelemetrySchemaVersion = 3
 )
 
 type installIDRecord struct {
@@ -228,7 +229,9 @@ type Ping struct {
 	AlertsResolved30d        int `json:"alerts_resolved_30d"`
 	NotificationAttempts7d   int `json:"notification_attempts_7d"`
 	NotificationDeliveries7d int `json:"notification_deliveries_7d"`
-	NotificationFailures7d   int `json:"notification_failures_7d"`
+	// NotificationFailures7d counts only terminal failed/dead-letter outcomes.
+	// Retry-attempt failures remain represented in NotificationAttempts7d.
+	NotificationFailures7d int `json:"notification_failures_7d"`
 
 	// Pulse Intelligence usage (30-day counts/booleans — no prompts, commands, outputs, resource IDs, or token values)
 	PulseIntelligenceLoopConfigured                                bool `json:"pulse_intelligence_loop_configured"`

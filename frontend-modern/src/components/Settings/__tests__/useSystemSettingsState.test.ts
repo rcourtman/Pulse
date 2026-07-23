@@ -13,7 +13,7 @@ const flushAsync = async () => {
 const buildTelemetryPreviewPayload = (
   overrides: Partial<TelemetryPingPreview> = {},
 ): TelemetryPingPreview => ({
-  schema_version: 2,
+  schema_version: 3,
   sent_at: '2026-07-23T08:30:00Z',
   install_id: 'preview-install-id',
   version: '6.0.0',

@@ -21,6 +21,8 @@ import (
 const (
 	notificationTestRequestBodyLimit = 64 * 1024
 	webhookTestRequestBodyLimit      = 64 * 1024
+	completedQueueRetentionDays      = 7
+	deadLetterQueueRetentionDays     = 30
 )
 
 // NotificationManager defines the interface for notification management operations.
@@ -845,28 +847,51 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 
 // GetNotificationHealth returns health status of notification system
 func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *http.Request) {
-	// Get queue stats
+	monitor := h.getMonitor(r.Context())
+	manager := monitor.GetNotificationManager()
+
 	queueStats := make(map[string]interface{})
-	stats, err := h.getMonitor(r.Context()).GetNotificationManager().GetQueueStats()
+	stats, err := manager.GetQueueStats()
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get queue stats for health check")
-		queueStats["error"] = err.Error()
-		queueStats["healthy"] = false
-	} else {
 		queueStats = map[string]interface{}{
-			"pending": stats["pending"],
-			"sending": stats["sending"],
-			"sent":    stats["sent"],
-			"failed":  stats["failed"],
-			"dlq":     stats["dlq"],
-			"healthy": true,
+			"healthy":                         false,
+			"status":                          "unavailable",
+			"attention_required":              0,
+			"reason_codes":                    []string{"queue_stats_unavailable"},
+			"completed_retention_days":        completedQueueRetentionDays,
+			"dead_letter_retention_days":      deadLetterQueueRetentionDays,
+			"counts_are_retention_bounded":    true,
+			"retry_attempts_affect_health":    false,
+			"terminal_failures_affect_health": true,
+		}
+	} else {
+		healthy, attentionRequired, reasonCodes := classifyNotificationQueueHealth(stats)
+		status := "healthy"
+		if !healthy {
+			status = "degraded"
+		}
+		queueStats = map[string]interface{}{
+			"pending":                         stats["pending"],
+			"sending":                         stats["sending"],
+			"sent":                            stats["sent"],
+			"failed":                          stats["failed"],
+			"dlq":                             stats["dlq"],
+			"healthy":                         healthy,
+			"status":                          status,
+			"attention_required":              attentionRequired,
+			"reason_codes":                    reasonCodes,
+			"completed_retention_days":        completedQueueRetentionDays,
+			"dead_letter_retention_days":      deadLetterQueueRetentionDays,
+			"counts_are_retention_bounded":    true,
+			"retry_attempts_affect_health":    false,
+			"terminal_failures_affect_health": true,
 		}
 	}
 
 	// Get config status
-	nm := h.getMonitor(r.Context()).GetNotificationManager()
-	emailCfg := nm.GetEmailConfig()
-	webhooks := nm.GetWebhooks()
+	emailCfg := manager.GetEmailConfig()
+	webhooks := manager.GetWebhooks()
 
 	health := map[string]interface{}{
 		"queue": queueStats,
@@ -879,13 +904,27 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 			"enabled": countEnabledWebhooks(webhooks),
 		},
 		"encryption": map[string]interface{}{
-			"enabled": h.getMonitor(r.Context()).GetConfigPersistence().IsEncryptionEnabled(),
+			"enabled": monitor.GetConfigPersistence().IsEncryptionEnabled(),
 		},
 		"overall_healthy": queueStats["healthy"] == true,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(health)
+}
+
+func classifyNotificationQueueHealth(stats map[string]int) (bool, int, []string) {
+	failed := stats[string(notifications.QueueStatusFailed)]
+	deadLetter := stats[string(notifications.QueueStatusDLQ)]
+	reasonCodes := make([]string, 0, 2)
+	if failed > 0 {
+		reasonCodes = append(reasonCodes, "retained_failed_deliveries")
+	}
+	if deadLetter > 0 {
+		reasonCodes = append(reasonCodes, "retained_dead_letter_deliveries")
+	}
+	attentionRequired := failed + deadLetter
+	return attentionRequired == 0, attentionRequired, reasonCodes
 }
 
 func countEnabledWebhooks(webhooks []notifications.WebhookConfig) int {

@@ -258,9 +258,10 @@ remains notification truth only and cannot resolve or reopen the alert
 lifecycle.
 
 The queue owner may expose a read-only, content-free telemetry aggregate over
-its retained per-attempt audit rows: total delivery attempts plus successful
-and failed attempt counts since a caller-supplied cutoff. The aggregate must
-be computed in storage,
+its retained per-attempt audit rows: total delivery attempts, including
+retries, plus successful deliveries and terminal failed/dead-letter outcomes
+since a caller-supplied cutoff. A failed attempt that is returned to `pending`
+for retry is not a terminal delivery failure. The aggregate must be computed in storage,
 must not return or copy notification IDs, alert links, destinations,
 recipients, endpoint URLs, titles, bodies, error text, or timestamps, and must
 not mutate queue or alert state. The install-wide monitoring owner may sum that
@@ -268,6 +269,15 @@ aggregate across provisioned tenants for the outbound seven-day notification
 outcome counters. Because completed queue rows are retention-bounded, this is a
 seven-day delivery signal only and must not be presented as lifetime delivery
 history or as proof that an alert was resolved.
+
+Queue health is retention-bounded delivery truth. `GetQueueStats` counts every
+row still retained by the queue: `sent`, `failed`, and `cancelled` rows for
+seven days, dead-letter rows for 30 days, and nonterminal rows until they
+complete. The notification health API must report `degraded` when any retained
+`failed` or `dlq` row exists and `unavailable`, never healthy, when those
+counts cannot be read. Pending retries do not degrade health. The response
+must expose fixed reason codes and retention metadata rather than raw queue
+errors or notification content.
 
 ### Occurrence-bound delivery receipts
 

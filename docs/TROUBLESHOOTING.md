@@ -119,11 +119,17 @@ first step before platform-local cleanup.
 ### Notifications
 
 #### Emails not sending
+- Open **Alerts → Notifications** first. Pulse shows a delivery warning when
+  failed or dead-lettered notifications remain in the persistent queue; a
+  missing queue-health read is shown as unavailable rather than healthy.
 - Check SMTP settings in **Alerts → Notifications**.
 - Check logs: `docker logs pulse | grep email`.
 - Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
 
 #### Webhooks failing
+- Check the delivery warning in **Alerts → Notifications** and use **Send test**
+  after correcting the destination. Recoverable retries do not trigger the
+  warning; retained terminal failures do.
 - Verify the URL is reachable from the Pulse server.
 - If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
 - Check Pulse logs for HTTP status codes and response bodies.

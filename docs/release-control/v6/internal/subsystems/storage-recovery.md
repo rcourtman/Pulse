@@ -1993,6 +1993,11 @@ Notification webhook management changes on shared `internal/api/` handlers are
 likewise adjacent only: the webhook `signingSecret` payload field and its
 masking semantics are notifications/API-contract owned and create no storage,
 recovery-point, or backup-surface semantics.
+Persistent notification queue-health changes on that same shared boundary
+remain notifications/API-contract owned. Retained failed/dead-letter counts,
+their seven-day/30-day retention metadata, and fail-closed unavailable state
+must not be reinterpreted as storage health, backup status, recovery-point
+validity, or restore readiness.
 
 SSO provider-detail payload changes on shared `internal/api/identity_sso_handlers.go`
 are API-contract/security-settings owned. Nested OIDC/SAML edit fields,

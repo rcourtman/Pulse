@@ -84,9 +84,18 @@ USER_BASE_COUNT_FIELDS = (
     ("alerts_fired_30d", "Alerts fired (30d)"),
     ("alerts_acknowledged_30d", "Alerts acknowledged (30d)"),
     ("alerts_resolved_30d", "Alerts resolved (30d)"),
-    ("notification_attempts_7d", "Notification attempts (7d)"),
+    ("notification_attempts_7d", "Notification attempts, including retries (7d)"),
     ("notification_deliveries_7d", "Notification deliveries (7d)"),
-    ("notification_failures_7d", "Notification failures (7d)"),
+)
+NOTIFICATION_FAILURE_COUNT_SIGNALS = (
+    (
+        "notification_attempt_failures_7d_schema_v2",
+        "Notification failed attempts (7d, legacy schema v2)",
+    ),
+    (
+        "notification_terminal_failures_7d_schema_v3",
+        "Notification terminal failures (7d, schema v3+)",
+    ),
 )
 PULSE_INTELLIGENCE_ASSISTANT_LOOP_BOOL_FIELDS = (
     "pulse_intelligence_assistant_operations_loop_30d",
@@ -1816,7 +1825,7 @@ def summarize_user_base_signals(
     }
     count_signals = {
         field: {"field": field, "label": label, "installs": 0, "total": 0}
-        for field, label in USER_BASE_COUNT_FIELDS
+        for field, label in USER_BASE_COUNT_FIELDS + NOTIFICATION_FAILURE_COUNT_SIGNALS
     }
 
     for row in active_rows:
@@ -1833,6 +1842,15 @@ def summarize_user_base_signals(
             if value > 0:
                 count_signals[field]["installs"] += 1
                 count_signals[field]["total"] += value
+        failure_value = parse_optional_nonnegative_int(row.get("notification_failures_7d"))
+        if failure_value > 0:
+            failure_field = (
+                "notification_terminal_failures_7d_schema_v3"
+                if schema_version >= 3
+                else "notification_attempt_failures_7d_schema_v2"
+            )
+            count_signals[failure_field]["installs"] += 1
+            count_signals[failure_field]["total"] += failure_value
 
     return {
         "window": "7d",
@@ -2120,6 +2138,10 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         lines.append(
             "- interpretation: known install age begins when schema v2 lifecycle tracking is first initialized; "
             "older upgraded installs are therefore lower bounds"
+        )
+        lines.append(
+            "- notification failure semantics: schema v2 counted unsuccessful retry attempts; "
+            "schema v3+ counts only terminal failed or dead-letter outcomes"
         )
 
     pulse_loop = summary.get("pulse_intelligence_value_loop_7d")

@@ -88,11 +88,119 @@ export interface NotificationTestRequest {
   webhookId?: string;
 }
 
+export type NotificationQueueHealthStatus = 'healthy' | 'degraded' | 'unavailable';
+
+export interface NotificationQueueHealth {
+  pending: number;
+  sending: number;
+  sent: number;
+  failed: number;
+  deadLetter: number;
+  healthy: boolean;
+  status: NotificationQueueHealthStatus;
+  attentionRequired: number;
+  reasonCodes: string[];
+  completedRetentionDays: number;
+  deadLetterRetentionDays: number;
+  countsAreRetentionBounded: boolean;
+  retryAttemptsAffectHealth: boolean;
+  terminalFailuresAffectHealth: boolean;
+}
+
+export interface NotificationHealth {
+  overallHealthy: boolean;
+  queue: NotificationQueueHealth;
+}
+
+function apiRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeQueueHealthStatus(value: unknown): NotificationQueueHealthStatus {
+  return value === 'healthy' || value === 'degraded' ? value : 'unavailable';
+}
+
+function nonNegativeCount(value: unknown): number | undefined {
+  const normalized = finiteNumberOrUndefined(value);
+  return normalized !== undefined && Number.isInteger(normalized) && normalized >= 0
+    ? normalized
+    : undefined;
+}
+
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
 
   static async getAppriseConfig(): Promise<AppriseConfig> {
     return apiFetchJSON(`${this.baseUrl}/apprise`);
+  }
+
+  static async getHealth(): Promise<NotificationHealth> {
+    const payload = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/health`);
+    const queue = apiRecord(payload.queue);
+    const pending = nonNegativeCount(queue.pending);
+    const sending = nonNegativeCount(queue.sending);
+    const sent = nonNegativeCount(queue.sent);
+    const failed = nonNegativeCount(queue.failed);
+    const deadLetter = nonNegativeCount(queue.dlq);
+    const attentionRequired = nonNegativeCount(queue.attention_required);
+    const completedRetentionDays = nonNegativeCount(queue.completed_retention_days);
+    const deadLetterRetentionDays = nonNegativeCount(queue.dead_letter_retention_days);
+    const reasonCodesAreValid =
+      Array.isArray(queue.reason_codes) &&
+      queue.reason_codes.every((reasonCode) => typeof reasonCode === 'string');
+    const semanticsAreValid =
+      queue.counts_are_retention_bounded === true &&
+      queue.retry_attempts_affect_health === false &&
+      queue.terminal_failures_affect_health === true;
+    const availableFieldsAreValid =
+      pending !== undefined &&
+      sending !== undefined &&
+      sent !== undefined &&
+      attentionRequired !== undefined &&
+      completedRetentionDays !== undefined &&
+      completedRetentionDays > 0 &&
+      deadLetterRetentionDays !== undefined &&
+      deadLetterRetentionDays > 0 &&
+      reasonCodesAreValid &&
+      semanticsAreValid;
+    const rawStatus = normalizeQueueHealthStatus(queue.status);
+    const rawHealthy = typeof queue.healthy === 'boolean' ? queue.healthy : undefined;
+    const terminalFailureCount =
+      failed !== undefined && deadLetter !== undefined ? failed + deadLetter : undefined;
+    const statusIsConsistent =
+      rawStatus === 'unavailable' ||
+      (rawStatus === 'healthy' &&
+        availableFieldsAreValid &&
+        rawHealthy === true &&
+        terminalFailureCount === 0 &&
+        attentionRequired === 0) ||
+      (rawStatus === 'degraded' &&
+        availableFieldsAreValid &&
+        rawHealthy === false &&
+        terminalFailureCount !== undefined &&
+        terminalFailureCount > 0 &&
+        attentionRequired === terminalFailureCount);
+    const status = statusIsConsistent ? rawStatus : 'unavailable';
+
+    return {
+      overallHealthy: status === 'healthy' && strictBoolean(payload.overall_healthy),
+      queue: {
+        pending: pending ?? 0,
+        sending: sending ?? 0,
+        sent: sent ?? 0,
+        failed: failed ?? 0,
+        deadLetter: deadLetter ?? 0,
+        healthy: status === 'healthy',
+        status,
+        attentionRequired: attentionRequired ?? 0,
+        reasonCodes: stringArray(queue.reason_codes),
+        completedRetentionDays: completedRetentionDays ?? 7,
+        deadLetterRetentionDays: deadLetterRetentionDays ?? 30,
+        countsAreRetentionBounded: strictBoolean(queue.counts_are_retention_bounded),
+        retryAttemptsAffectHealth: strictBoolean(queue.retry_attempts_affect_health),
+        terminalFailuresAffectHealth: strictBoolean(queue.terminal_failures_affect_health, true),
+      },
+    };
   }
 
   static async updateAppriseConfig(config: AppriseConfig): Promise<AppriseConfig> {

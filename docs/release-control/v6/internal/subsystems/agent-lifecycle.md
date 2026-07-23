@@ -2197,6 +2197,11 @@ likewise adjacent only: the webhook `signingSecret` payload field, its masked
 list representation, and masked-echo preservation on update are
 notifications/API-contract owned and grant no agent install, enrollment,
 setup-token, or fleet command authority.
+Notification queue-health changes on that same shared boundary are also
+adjacent only. Retained failed/dead-letter counts, fail-closed unavailable
+state, and retention metadata are notifications/API-contract delivery evidence;
+they do not describe agent liveness, enrollment, install readiness, command
+transport, or fleet health.
 
 SSO provider-detail payload changes on shared `internal/api/identity_sso_handlers.go`
 are API-contract/security-settings owned. Nested OIDC/SAML edit fields,

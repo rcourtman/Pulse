@@ -1118,14 +1118,23 @@ notification destination reload and persistence orchestration.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
 owns webhook load/mutate/test flow,
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
-destination test actions plus retry orchestration around that webhook runtime,
+destination test actions, retry orchestration, and notification delivery-health
+loading around that webhook runtime,
 while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the
 destinations render shell and composes
+`frontend-modern/src/features/alerts/AlertDeliveryHealthCard.tsx`,
 `frontend-modern/src/features/alerts/AlertEmailDestinationsSection.tsx`,
 `frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx`,
 `frontend-modern/src/features/alerts/AlertWebhookDestinationsSection.tsx`, and
-the dedicated load/error wrappers. Future config cleanup should extend the
+the dedicated load/error wrappers. The delivery card must warn for retained
+terminal failures, present an unavailable queue-health read as unverified
+rather than healthy, and give the operator a refresh action plus configuration
+and test guidance. Recoverable retry attempts must not produce this warning.
+`frontend-modern/src/features/alerts/AlertDeliveryHealthCard.test.tsx` and
+`frontend-modern/src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx`
+are the focused render and runtime proofs for that operator surface.
+Future config cleanup should extend the
 config transport hook, the config model, the override-projection hook, or the
 shared `frontend-modern/src/utils/alertDestinationsPresentation.ts` helper for
 customer-facing destinations copy instead of reviving inline retry, test, and

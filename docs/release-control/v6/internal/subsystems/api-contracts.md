@@ -4497,6 +4497,12 @@ resource identifiers, alert/notification content, or clickstream events.
 An install that already has monitoring data when schema v2 is first observed
 must use `present_at_first_observation` instead of an invented elapsed-time
 bucket.
+Telemetry schema v3 changes only the semantics of
+`notification_failures_7d`: v2 values are unsuccessful delivery attempts,
+including retries, while v3 values are terminal failed/dead-letter outcomes.
+`notification_attempts_7d` continues to include retries. Reports must cohort
+the v2 and v3 failure meanings separately rather than compare or sum them as
+one signal; the payload remains content-free and field/type compatible.
 `scripts/check_telemetry_schema_parity.py` must prove that this TypeScript
 preview interface, `internal/telemetry.Ping`, and the Pulse Pro receiver have
 matching public fields and primitive types.
@@ -5961,6 +5967,16 @@ input aliases at ingress instead of leaving them as a live runtime contract:
 Pushover `app_token` / `user_token` may be accepted only at config/API/UI input
 boundaries, and API responses plus live notification runtime state must carry
 only canonical `token` / `user` fields.
+`GET /api/notifications/health` must fail closed around the persistent queue.
+Its queue object reports `healthy`, `degraded`, or `unavailable`; includes
+retained status counts, `attention_required`, fixed `reason_codes`, and the
+seven-day completed/30-day dead-letter retention contract; and explicitly
+states that retry attempts do not affect health while terminal failures do.
+Any retained `failed` or `dlq` row makes both queue and overall health false.
+A queue-stats read error also makes health false and must not expose the raw
+storage error. `frontend-modern/src/api/notifications.ts` owns normalization
+of this payload and must turn malformed or missing health fields into
+`unavailable`, not a healthy fallback.
 That same shared owner now also governs writable auth env target order:
 setup, password-change, and auth-status flows must route `.env` writes through
 the shared helper instead of open-coding config-path writes plus ad hoc

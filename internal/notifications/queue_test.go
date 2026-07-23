@@ -1339,6 +1339,47 @@ func TestGetQueueStats(t *testing.T) {
 		}
 	})
 
+	t.Run("includes terminal rows for their full retention window", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer func() { _ = nq.Stop() }()
+
+		for _, notif := range []*QueuedNotification{
+			{ID: "failed-retained", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
+			{ID: "dlq-retained", Type: "webhook", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`)},
+		} {
+			if err := nq.Enqueue(notif); err != nil {
+				t.Fatalf("Failed to enqueue %s: %v", notif.ID, err)
+			}
+		}
+		if err := nq.UpdateStatus("failed-retained", QueueStatusFailed, "terminal"); err != nil {
+			t.Fatalf("mark failed: %v", err)
+		}
+		if err := nq.UpdateStatus("dlq-retained", QueueStatusDLQ, "terminal"); err != nil {
+			t.Fatalf("mark dlq: %v", err)
+		}
+		retainedAt := time.Now().Add(-48 * time.Hour).Unix()
+		if _, err := nq.db.Exec(
+			`UPDATE notification_queue SET completed_at = ? WHERE id IN (?, ?)`,
+			retainedAt,
+			"failed-retained",
+			"dlq-retained",
+		); err != nil {
+			t.Fatalf("age retained terminal rows: %v", err)
+		}
+
+		stats, err := nq.GetQueueStats()
+		if err != nil {
+			t.Fatalf("GetQueueStats failed: %v", err)
+		}
+		if stats["failed"] != 1 || stats["dlq"] != 1 {
+			t.Fatalf("retained terminal stats = %#v, want failed=1 dlq=1", stats)
+		}
+	})
+
 	t.Run("UpdateStatus returns error for non-existent notification", func(t *testing.T) {
 		tempDir := t.TempDir()
 		nq, err := NewNotificationQueue(tempDir)
@@ -1383,7 +1424,7 @@ func TestGetTelemetryStatsReturnsOnlyWindowedOutcomeCounts(t *testing.T) {
 		t.Fatalf("record sent delivery: %v", err)
 	}
 	entries[1].Attempts = 1
-	entries[1].Status = QueueStatusFailed
+	entries[1].Status = QueueStatusDLQ
 	if err := nq.RecordAudit(entries[1], false, "final attempt failed"); err != nil {
 		t.Fatalf("record failed delivery: %v", err)
 	}
@@ -1404,7 +1445,7 @@ func TestGetTelemetryStatsReturnsOnlyWindowedOutcomeCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTelemetryStats: %v", err)
 	}
-	if stats != (TelemetryStats{Attempts: 3, Deliveries: 1, Failures: 2}) {
+	if stats != (TelemetryStats{Attempts: 3, Deliveries: 1, Failures: 1}) {
 		t.Fatalf("telemetry stats = %#v", stats)
 	}
 }

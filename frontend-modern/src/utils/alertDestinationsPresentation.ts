@@ -74,6 +74,10 @@ export const ALERT_DESTINATIONS_PUSH_GATE_MESSAGE =
   'Pair the Pulse Mobile app to receive alert push notifications and check on your systems from anywhere — no port forwarding or VPN required. Available with Relay and Pro plans.';
 export const ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS = 'Test Apprise notification sent.';
 export const ALERT_DESTINATIONS_APPRISE_TEST_FAILURE = 'Unable to send the test notification.';
+export const ALERT_DESTINATIONS_DELIVERY_DEGRADED_TITLE = 'Notification delivery needs attention';
+export const ALERT_DESTINATIONS_DELIVERY_UNAVAILABLE_TITLE =
+  'Notification delivery status is unavailable';
+export const ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL = 'Refresh delivery status';
 
 export function getAlertDestinationsConfigLoadError() {
   return ALERT_DESTINATIONS_CONFIG_LOAD_ERROR;
@@ -136,4 +140,40 @@ export function getAlertDestinationsAppriseTestSuccess() {
 
 export function getAlertDestinationsAppriseTestFailure() {
   return ALERT_DESTINATIONS_APPRISE_TEST_FAILURE;
+}
+
+export function getAlertDestinationsDeliveryHealthTitle(status: 'degraded' | 'unavailable') {
+  return status === 'degraded'
+    ? ALERT_DESTINATIONS_DELIVERY_DEGRADED_TITLE
+    : ALERT_DESTINATIONS_DELIVERY_UNAVAILABLE_TITLE;
+}
+
+export function getAlertDestinationsDeliveryHealthDescription(input: {
+  status: 'degraded' | 'unavailable';
+  failed: number;
+  deadLetter: number;
+  completedRetentionDays: number;
+  deadLetterRetentionDays: number;
+}) {
+  if (input.status === 'unavailable') {
+    return 'Pulse could not verify the notification queue. Review the destination settings below and send a test before relying on delivery.';
+  }
+
+  const outcomes: string[] = [];
+  if (input.failed > 0) {
+    outcomes.push(
+      `${input.failed} failed ${input.failed === 1 ? 'delivery' : 'deliveries'} retained for ${input.completedRetentionDays} days`,
+    );
+  }
+  if (input.deadLetter > 0) {
+    outcomes.push(
+      `${input.deadLetter} dead-lettered ${input.deadLetter === 1 ? 'delivery' : 'deliveries'} retained for ${input.deadLetterRetentionDays} days`,
+    );
+  }
+  const summary = outcomes.join(' and ') || 'A retained terminal delivery failure';
+  return `${summary}. These notifications were not delivered. Check each enabled destination and send a test; recoverable retry attempts do not trigger this warning.`;
+}
+
+export function getAlertDestinationsDeliveryRefreshLabel() {
+  return ALERT_DESTINATIONS_DELIVERY_REFRESH_LABEL;
 }

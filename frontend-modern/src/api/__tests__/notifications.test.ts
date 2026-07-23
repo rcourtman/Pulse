@@ -88,6 +88,112 @@ describe('NotificationsAPI', () => {
     expect(result).toEqual([]);
   });
 
+  it('normalizes retained terminal delivery health from the API', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      overall_healthy: false,
+      queue: {
+        pending: 2,
+        sending: 1,
+        sent: 8,
+        failed: 1,
+        dlq: 3,
+        healthy: false,
+        status: 'degraded',
+        attention_required: 4,
+        reason_codes: ['retained_failed_deliveries', 'retained_dead_letter_deliveries'],
+        completed_retention_days: 7,
+        dead_letter_retention_days: 30,
+        counts_are_retention_bounded: true,
+        retry_attempts_affect_health: false,
+        terminal_failures_affect_health: true,
+      },
+    } as any);
+
+    const health = await NotificationsAPI.getHealth();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health');
+    expect(health).toEqual({
+      overallHealthy: false,
+      queue: {
+        pending: 2,
+        sending: 1,
+        sent: 8,
+        failed: 1,
+        deadLetter: 3,
+        healthy: false,
+        status: 'degraded',
+        attentionRequired: 4,
+        reasonCodes: ['retained_failed_deliveries', 'retained_dead_letter_deliveries'],
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+        countsAreRetentionBounded: true,
+        retryAttemptsAffectHealth: false,
+        terminalFailuresAffectHealth: true,
+      },
+    });
+  });
+
+  it('fails closed when notification health fields are malformed', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      overall_healthy: 'yes',
+      queue: {
+        failed: '4',
+        dlq: null,
+        healthy: 'yes',
+        status: 'unknown',
+        reason_codes: ['queue_stats_unavailable', 42],
+        terminal_failures_affect_health: 'yes',
+      },
+    } as any);
+
+    const health = await NotificationsAPI.getHealth();
+
+    expect(health.overallHealthy).toBe(false);
+    expect(health.queue).toEqual(
+      expect.objectContaining({
+        failed: 0,
+        deadLetter: 0,
+        healthy: false,
+        status: 'unavailable',
+        reasonCodes: ['queue_stats_unavailable'],
+        terminalFailuresAffectHealth: true,
+      }),
+    );
+  });
+
+  it('fails closed when nominal health contradicts retained terminal counts', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      overall_healthy: true,
+      queue: {
+        pending: 0,
+        sending: 0,
+        sent: 8,
+        failed: 1,
+        dlq: 0,
+        healthy: true,
+        status: 'healthy',
+        attention_required: 0,
+        reason_codes: [],
+        completed_retention_days: 7,
+        dead_letter_retention_days: 30,
+        counts_are_retention_bounded: true,
+        retry_attempts_affect_health: false,
+        terminal_failures_affect_health: true,
+      },
+    } as any);
+
+    const health = await NotificationsAPI.getHealth();
+
+    expect(health.queue).toEqual(
+      expect.objectContaining({
+        healthy: false,
+        status: 'unavailable',
+        failed: 1,
+      }),
+    );
+    expect(health.overallHealthy).toBe(false);
+  });
+
   it('surfaces webhook template labels from the API', async () => {
     apiFetchJSONMock.mockResolvedValueOnce([
       {

@@ -537,6 +537,14 @@ Triggers a test alert to all configured channels.
 - `GET /api/notifications/webhook-history` (admin)
 - `GET /api/notifications/email-providers` (admin)
 - `GET /api/notifications/health` (admin)
+  - Queue health is `degraded` whenever any retained `failed` or `dlq`
+    delivery exists, and `unavailable` when queue state cannot be read.
+    Recoverable failed attempts that returned to `pending` for retry do not
+    degrade health.
+  - `queue.attention_required` is the retained terminal-failure count.
+    `reason_codes` identifies failed and/or dead-letter state without exposing
+    notification content. Counts are retention-bounded: sent, failed, and
+    cancelled rows are retained for 7 days; dead-letter rows for 30 days.
 
 ### Audit Webhooks (Pro)
 - `GET /api/admin/webhooks/audit` (admin, `settings:read`)
@@ -577,6 +585,8 @@ Common reporting error codes:
 
 ### Queue and Dead-Letter Tools
 - `GET /api/notifications/queue/stats` (admin)
+  - Returns counts for all rows still retained by the queue. Status counts have
+    different retention windows and are not a delivery rate or lifetime total.
 - `GET /api/notifications/dlq` (admin)
 - `POST /api/notifications/dlq/retry` (admin)
 - `POST /api/notifications/dlq/delete` (admin)

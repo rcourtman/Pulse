@@ -37,7 +37,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `2` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `3` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -91,9 +91,9 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Alerts fired 30d | `18` | Count locally retained alert-history entries in the current 30-day window without sending alert text, resource IDs, or timestamps |
 | Alerts acknowledged 30d | `7` | Count acknowledgements in the current 30-day window without sending actors, reasons, alert IDs, or timestamps |
 | Alerts resolved 30d | `12` | Count resolved alert records in the current 30-day window without sending resolution details, alert IDs, or resource IDs |
-| Notification attempts 7d | `14` | Count delivery attempts in the locally retained seven-day queue window without sending recipients, endpoints, titles, or message content |
+| Notification attempts 7d | `14` | Count delivery attempts, including retry attempts, in the locally retained seven-day queue window without sending recipients, endpoints, titles, or message content |
 | Notification deliveries 7d | `11` | Count successfully delivered queue records in the local seven-day window without sending channel, recipient, endpoint, or content |
-| Notification failures 7d | `3` | Count failed delivery attempts in the local seven-day window without sending error text, endpoint, recipient, or message content |
+| Notification failures 7d (terminal in schema v3) | `3` | Count terminal failed or dead-lettered delivery outcomes in the local seven-day window without sending retry-attempt failures, error text, endpoint, recipient, or message content |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
@@ -164,6 +164,13 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence approved action failures (unverified) 30d | `1` | Count approved governed actions that executed but whose outcome verification was not confirmed in the current 30-day telemetry window without sending verification evidence, action output, command text, resource IDs, or actors |
 | Pulse Intelligence approved action stuck executing 30d | `1` | Count approved governed actions abandoned in the executing state in the current 30-day telemetry window without sending action output, command text, resource IDs, or actors |
 | Pulse Intelligence approved action last failure reason 30d | `plan_drift` | See one fixed machine reason code for the most recent approved-action failure in the current 30-day telemetry window without sending error text, action output, command text, resource IDs, or actors |
+
+Telemetry schema v3 corrects the meaning of `notification_failures_7d`: v2
+counted every unsuccessful queue attempt, including attempts that later
+succeeded on retry; v3 counts only terminal `failed` or dead-letter outcomes.
+The adoption report keeps those schema cohorts separate, so legacy retry noise
+is not compared with current terminal-delivery failures. This correction adds
+no notification content or identity fields.
 
 #### Server-side handling and retention
 

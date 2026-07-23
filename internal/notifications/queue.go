@@ -1204,7 +1204,11 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 	return err
 }
 
-// GetQueueStats returns statistics about the notification queue
+// GetQueueStats returns counts for the rows currently retained by the queue.
+// Sent, failed, and cancelled rows are retained for seven days; dead-letter
+// rows are retained for 30 days; pending and sending rows remain until they
+// reach a terminal state. Callers must not present these mixed retention
+// windows as a rate or as lifetime delivery history.
 func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 	nq.mu.RLock()
 	defer nq.mu.RUnlock()
@@ -1212,14 +1216,10 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 	query := `
 		SELECT status, COUNT(*) as count
 		FROM notification_queue
-		WHERE completed_at IS NULL OR completed_at > ?
 		GROUP BY status
 	`
 
-	// Include last 24 hours of completed
-	since := time.Now().Add(-24 * time.Hour).Unix()
-
-	rows, err := nq.db.Query(query, since)
+	rows, err := nq.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -1230,11 +1230,14 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 		var status string
 		var count int
 		if err := rows.Scan(&status, &count); err != nil {
-			continue
+			return nil, fmt.Errorf("scan notification queue statistics: %w", err)
 		}
 		stats[status] = count
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate notification queue statistics: %w", err)
+	}
 	return stats, nil
 }
 
@@ -1243,12 +1246,17 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 type TelemetryStats struct {
 	Attempts   int
 	Deliveries int
-	Failures   int
+	// Failures counts terminal delivery failures only. Recoverable failed
+	// attempts that returned to pending for retry are included in Attempts but
+	// not in Failures.
+	Failures int
 }
 
-// GetTelemetryStats returns aggregate delivery outcomes from locally retained
-// per-attempt audit rows recorded on or after since. Callers must not interpret
-// a window longer than the queue's completed-row retention as complete.
+// GetTelemetryStats returns aggregate delivery activity from locally retained
+// per-attempt audit rows recorded on or after since. Attempts includes retries;
+// Deliveries counts successful terminal sends; Failures counts only failed or
+// dead-letter terminal outcomes. Callers must not interpret a window longer
+// than the queue's completed-row retention as complete.
 func (nq *NotificationQueue) GetTelemetryStats(since time.Time) (TelemetryStats, error) {
 	if nq == nil {
 		return TelemetryStats{}, nil
@@ -1265,7 +1273,10 @@ func (nq *NotificationQueue) GetTelemetryStats(since time.Time) (TelemetryStats,
 		SELECT
 			COUNT(*),
 			COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0)
+			COALESCE(SUM(CASE
+				WHEN success = 0 AND status IN ('failed', 'dlq') THEN 1
+				ELSE 0
+			END), 0)
 		FROM notification_audit
 		WHERE timestamp >= ?
 	`, since.UTC().Unix()).Scan(&stats.Attempts, &stats.Deliveries, &stats.Failures)

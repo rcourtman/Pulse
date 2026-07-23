@@ -977,6 +977,13 @@ recipients, endpoints, alert content, notification content, prompts, commands,
 or an event-level journey/clickstream. Known install age for an upgraded
 installation is therefore a lower bound beginning with its first schema-v2
 observation, not a reconstructed installation date.
+Schema v3 preserves that field/type allowlist but corrects
+`notification_failures_7d` from all unsuccessful attempts to terminal
+failed/dead-letter outcomes; `notification_attempts_7d` still includes retry
+attempts. Adoption reporting must keep legacy schema-v2 failed-attempt values
+separate from schema-v3 terminal-failure values. This semantic correction
+must not add destination, recipient, endpoint, error, notification, alert, or
+identity content to either the outbound payload or central aggregate.
 If monitoring is already populated at that first observation, time-to-first
 resource must report a dedicated present-at-first-observation bucket rather
 than inventing an under-15-minute activation duration.

@@ -3,6 +3,7 @@ import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
+import { AlertDeliveryHealthCard } from '../AlertDeliveryHealthCard';
 import { AlertDestinationsLoadErrorCard } from '../AlertDestinationsLoadErrorCard';
 import { AlertDestinationsLoadingState } from '../AlertDestinationsLoadingState';
 import { AlertEmailDestinationsSection } from '../AlertEmailDestinationsSection';
@@ -25,6 +26,19 @@ export function DestinationsTab(props: DestinationsTabProps) {
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
       <Show when={!state.isLoading()} fallback={<AlertDestinationsLoadingState />}>
+        <Show
+          when={
+            state.deliveryHealthUnavailable() || state.deliveryHealth()?.queue.status === 'degraded'
+          }
+        >
+          <AlertDeliveryHealthCard
+            health={state.deliveryHealth()?.queue ?? null}
+            unavailable={state.deliveryHealthUnavailable()}
+            refreshing={state.refreshingDeliveryHealth()}
+            onRefresh={() => void state.loadDeliveryHealth()}
+          />
+        </Show>
+
         <Show when={state.hasLoadError()}>
           <AlertDestinationsLoadErrorCard
             error={props.configLoadError() || state.webhookLoadError() || ''}

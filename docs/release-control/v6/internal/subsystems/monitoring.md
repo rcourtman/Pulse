@@ -1323,11 +1323,13 @@ targets, and active alerts. Telemetry callers may consume those coarse totals,
 but they must not bypass monitoring to read provider-local identifiers or
 tenant-local resource names.
 That install-wide boundary also owns privacy-bounded outcome aggregation for
-telemetry schema v2. It may count alert history entries fired, acknowledged,
+telemetry schema v3. It may count alert history entries fired, acknowledged,
 or resolved within the existing 30-day local history window and notification
-attempt/delivery/failure totals within the notification queue's existing
-seven-day retention window, across the provisioned tenant set. It must consume
-only content-free totals from tenant-owned managers and must not export alert
+attempt, successful-delivery, and terminal failed/dead-letter totals within the
+notification queue's existing seven-day telemetry window, across the
+provisioned tenant set. Attempts include retries; a recoverable failed attempt
+must not also become a terminal failure. It must consume only content-free
+totals from tenant-owned managers and must not export alert
 IDs, resource IDs, actors, reasons, destinations, recipients, endpoints,
 timestamps, error text, or message content. Notification queue state remains
 delivery evidence rather than alert-lifecycle truth, and monitoring must not

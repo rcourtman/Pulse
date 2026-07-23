@@ -25,6 +25,7 @@ func TestNotificationQueueQueryPlansUseIndexes(t *testing.T) {
 		query               string
 		args                []any
 		wantTableIndexes    map[string]string
+		wantTableIndexScans map[string]string
 		allowOrderTempBTree bool
 	}{
 		{
@@ -44,6 +45,13 @@ func TestNotificationQueueQueryPlansUseIndexes(t *testing.T) {
 				"notification_queue": "idx_status",
 			},
 			allowOrderTempBTree: true,
+		},
+		{
+			name:  "get retained queue stats uses covering status index",
+			query: `SELECT status, COUNT(*) FROM notification_queue GROUP BY status`,
+			wantTableIndexScans: map[string]string{
+				"notification_queue": "idx_status",
+			},
 		},
 		{
 			name: "get dlq uses status completed index",
@@ -102,6 +110,11 @@ func TestNotificationQueueQueryPlansUseIndexes(t *testing.T) {
 			for tableName, indexName := range tt.wantTableIndexes {
 				if !containsNotificationSearchWithIndex(plan, tableName, indexName) {
 					t.Fatalf("expected SEARCH on %s using index %q\nPlan:\n%s", tableName, indexName, plan)
+				}
+			}
+			for tableName, indexName := range tt.wantTableIndexScans {
+				if !containsNotificationScanWithIndex(plan, tableName, indexName) {
+					t.Fatalf("expected SCAN on %s using index %q\nPlan:\n%s", tableName, indexName, plan)
 				}
 			}
 			if strings.Contains(plan, "USE TEMP B-TREE FOR ORDER BY") && !tt.allowOrderTempBTree {
@@ -263,6 +276,17 @@ func explainNotificationQueryPlan(t *testing.T, db *sql.DB, query string, args .
 func containsNotificationSearchWithIndex(plan, tableName, indexName string) bool {
 	for _, line := range strings.Split(plan, "\n") {
 		if strings.Contains(line, "SEARCH") &&
+			notificationLineRefersToTable(line, tableName) &&
+			strings.Contains(line, indexName) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsNotificationScanWithIndex(plan, tableName, indexName string) bool {
+	for _, line := range strings.Split(plan, "\n") {
+		if strings.Contains(line, "SCAN") &&
 			notificationLineRefersToTable(line, tableName) &&
 			strings.Contains(line, indexName) {
 			return true

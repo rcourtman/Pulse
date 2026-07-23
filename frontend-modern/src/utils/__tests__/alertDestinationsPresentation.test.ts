@@ -30,6 +30,9 @@ import {
   getAlertDestinationsAppriseTestSuccess,
   getAlertDestinationsAppriseValidationError,
   getAlertDestinationsConfigLoadError,
+  getAlertDestinationsDeliveryHealthDescription,
+  getAlertDestinationsDeliveryHealthTitle,
+  getAlertDestinationsDeliveryRefreshLabel,
   getAlertDestinationsEmailTestFailure,
   getAlertDestinationsEmailTestSuccess,
   getAlertDestinationsLoadErrorBanner,
@@ -114,5 +117,35 @@ describe('alertDestinationsPresentation', () => {
     expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Pulse Mobile app');
     expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('no port forwarding or VPN');
     expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Available with Relay and Pro plans');
+  });
+
+  it('distinguishes retained terminal failures from recoverable retry attempts', () => {
+    expect(getAlertDestinationsDeliveryHealthTitle('degraded')).toBe(
+      'Notification delivery needs attention',
+    );
+    expect(getAlertDestinationsDeliveryHealthTitle('unavailable')).toBe(
+      'Notification delivery status is unavailable',
+    );
+    expect(
+      getAlertDestinationsDeliveryHealthDescription({
+        status: 'degraded',
+        failed: 1,
+        deadLetter: 2,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+      }),
+    ).toBe(
+      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Check each enabled destination and send a test; recoverable retry attempts do not trigger this warning.',
+    );
+    expect(
+      getAlertDestinationsDeliveryHealthDescription({
+        status: 'unavailable',
+        failed: 0,
+        deadLetter: 0,
+        completedRetentionDays: 7,
+        deadLetterRetentionDays: 30,
+      }),
+    ).toContain('could not verify the notification queue');
+    expect(getAlertDestinationsDeliveryRefreshLabel()).toBe('Refresh delivery status');
   });
 });
