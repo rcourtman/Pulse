@@ -19,6 +19,7 @@ import type {
   ResourceAvailabilityMeta,
   ResourcePBSMeta,
   ResourcePolicyPostureSummary,
+  ResourcePhysicalDiskMeta,
   ResourceStatus,
   ResourceStorageMeta,
   ResourceStorageRisk,
@@ -46,7 +47,6 @@ const DEFAULT_UNIFIED_RESOURCES_QUERY =
 const STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY =
   'type=storage,pbs,pmg,vm,system-container,pod,agent,k8s-cluster,k8s-node,physical_disk,ceph';
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
-const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
@@ -404,31 +404,7 @@ type APIResource = {
   availabilityChecks?: ResourceAvailabilityMeta[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
-  physicalDisk?: {
-    devPath?: string;
-    model?: string;
-    serial?: string;
-    wwn?: string;
-    diskType?: string;
-    sizeBytes?: number;
-    health?: string;
-    wearout?: number;
-    temperature?: number;
-    rpm?: number;
-    used?: string;
-    smart?: {
-      powerOnHours?: number;
-      powerCycles?: number;
-      reallocatedSectors?: number;
-      pendingSectors?: number;
-      offlineUncorrectable?: number;
-      udmaCrcErrors?: number;
-      percentageUsed?: number;
-      availableSpare?: number;
-      mediaErrors?: number;
-      unsafeShutdowns?: number;
-    };
-  };
+  physicalDisk?: ResourcePhysicalDiskMeta;
   ceph?: {
     fsid?: string;
     healthStatus?: string;
@@ -1098,7 +1074,7 @@ async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSna
   let policyPosture: ResourcePolicyPostureSummary | null = null;
   let totalPages = 1;
 
-  for (let page = 1; page <= totalPages && page <= UNIFIED_RESOURCES_MAX_PAGES; page += 1) {
+  for (let page = 1; page <= totalPages; page += 1) {
     const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), {
       cache: 'no-store',
     });

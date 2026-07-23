@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,10 +107,7 @@ func TestClusterClient_GetDisks_NoHealthyNodes(t *testing.T) {
 	}
 
 	disks, err := cc.GetDisks(context.Background(), "node1")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(disks) != 0 {
-		t.Fatalf("expected empty disks on no healthy nodes, got %+v", disks)
+	if err == nil || !strings.Contains(err.Error(), "no healthy nodes available") {
+		t.Fatalf("expected no-healthy-nodes error, got disks=%+v err=%v", disks, err)
 	}
 }

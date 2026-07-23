@@ -43,6 +43,7 @@ export interface PhysicalDiskPresentationData {
   instance: string;
   devPath: string;
   model: string;
+  vendor?: string;
   serial: string;
   wwn: string;
   size: number;
@@ -304,6 +305,7 @@ export function extractPhysicalDiskPresentationData(
     instance: diskNode.instance,
     devPath: pd.devPath || '',
     model: pd.model || resource.name || '',
+    vendor: pd.vendor || '',
     serial: pd.serial || '',
     wwn: pd.wwn || '',
     type: pd.diskType || '',
@@ -404,9 +406,15 @@ export function matchesPhysicalDiskSearch(
   if (parsed.freeTerms.length === 0) return true;
   const haystack = [
     disk.model,
+    disk.vendor,
     disk.devPath,
     disk.serial,
+    disk.wwn,
     disk.node,
+    disk.instance,
+    disk.type,
+    disk.controller,
+    disk.target,
     getPhysicalDiskRoleLabel(disk),
     getPhysicalDiskParentLabel(disk),
     getPhysicalDiskPlatformLabel(
@@ -534,7 +542,7 @@ export function getPhysicalDiskHealthStatus(
   const criticalRisk = (disk.riskLevel || '').trim().toLowerCase() === 'critical';
   const warningRisk = (disk.riskLevel || '').trim().toLowerCase() === 'warning';
   const smartWarning = hasPhysicalDiskSmartWarning(disk);
-  const lowLife = disk.wearout > 0 && disk.wearout < 10;
+  const lowLife = disk.wearout >= 0 && disk.wearout < 10;
 
   if (normalizedHealth === 'FAILED' || criticalRisk) {
     return {
@@ -625,13 +633,13 @@ export function getPhysicalDiskParentLabel(disk: PhysicalDiskPresentationData): 
 }
 
 export function getPhysicalDiskLifeLabel(disk: PhysicalDiskPresentationData): string {
-  // Wearout is "% life remaining" (100 = new); 0 and -1 both mean unreported.
-  if (typeof disk.wearout !== 'number' || disk.wearout <= 0) return '';
+  // Wearout is "% life remaining" (100 = new); only negative values are unreported.
+  if (typeof disk.wearout !== 'number' || disk.wearout < 0) return '';
   return `${Math.min(disk.wearout, 100)}%`;
 }
 
 export function getPhysicalDiskLifeTextClass(disk: PhysicalDiskPresentationData): string {
-  if (typeof disk.wearout !== 'number' || disk.wearout <= 0) {
+  if (typeof disk.wearout !== 'number' || disk.wearout < 0) {
     return PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS;
   }
   if (disk.wearout < 20) return 'text-red-600 dark:text-red-400';

@@ -510,6 +510,7 @@ export interface ResourceCephMeta {
 export interface ResourcePhysicalDiskMeta {
   devPath?: string;
   model?: string;
+  vendor?: string;
   serial?: string;
   wwn?: string;
   diskType?: string;

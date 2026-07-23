@@ -48,11 +48,11 @@ export const matchesPhysicalDiskNode = (
 
   const diskInstance = normalize(diskIdentity.instance);
   const targetInstance = normalize(target.instance);
-  if (!diskInstance || !targetInstance) {
+  if (!diskInstance && !targetInstance) {
     return true;
   }
 
-  return diskInstance === targetInstance;
+  return Boolean(diskInstance && targetInstance && diskInstance === targetInstance);
 };
 
 export const resolvePhysicalDiskMetricResourceId = (

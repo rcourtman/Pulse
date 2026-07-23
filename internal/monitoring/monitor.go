@@ -386,55 +386,49 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 			continue
 		}
 
-		// Try to match by WWN (most reliable)
-		if updated[i].WWN != "" {
-			for _, temp := range smartTemps {
-				if temp.WWN != "" && strings.EqualFold(temp.WWN, updated[i].WWN) {
-					if temp.Temperature > 0 && !temp.StandbySkipped {
-						setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
-						log.Debug().
-							Str("disk", updated[i].DevPath).
-							Str("wwn", updated[i].WWN).
-							Int("temp", temp.Temperature).
-							Msg("Matched SMART temperature by WWN")
-					}
-					continue
-				}
+		// Try to match by WWN (most reliable), but never guess when an
+		// identity appears more than once in the node snapshot.
+		if diskinventory.IsUsableHardwareID(updated[i].WWN) {
+			if temp := uniqueDiskTemperatureMatch(smartTemps, func(candidate models.DiskTemp) bool {
+				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
+					strings.EqualFold(candidate.WWN, updated[i].WWN)
+			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				log.Debug().
+					Str("disk", updated[i].DevPath).
+					Str("wwn", updated[i].WWN).
+					Int("temp", temp.Temperature).
+					Msg("Matched SMART temperature by WWN")
 			}
 		}
 
 		// Fall back to serial number match (case-insensitive)
-		if updated[i].Serial != "" && updated[i].Temperature == 0 {
-			for _, temp := range smartTemps {
-				if temp.Serial != "" && strings.EqualFold(temp.Serial, updated[i].Serial) {
-					if temp.Temperature > 0 && !temp.StandbySkipped {
-						setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
-						log.Debug().
-							Str("disk", updated[i].DevPath).
-							Str("serial", updated[i].Serial).
-							Int("temp", temp.Temperature).
-							Msg("Matched SMART temperature by serial")
-					}
-					continue
-				}
+		if diskinventory.IsUsableHardwareID(updated[i].Serial) && updated[i].Temperature == 0 {
+			if temp := uniqueDiskTemperatureMatch(smartTemps, func(candidate models.DiskTemp) bool {
+				return diskinventory.IsUsableHardwareID(candidate.Serial) &&
+					strings.EqualFold(candidate.Serial, updated[i].Serial)
+			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				log.Debug().
+					Str("disk", updated[i].DevPath).
+					Str("serial", updated[i].Serial).
+					Int("temp", temp.Temperature).
+					Msg("Matched SMART temperature by serial")
 			}
 		}
 
 		// Last resort: match by device path (normalized)
 		if updated[i].Temperature == 0 {
 			normalizedDevPath := normalizeSMARTDeviceIdentifier(updated[i].DevPath)
-			for _, temp := range smartTemps {
-				normalizedTempDev := normalizeSMARTDeviceIdentifier(temp.Device)
-				if normalizedTempDev != "" && normalizedTempDev == normalizedDevPath {
-					if temp.Temperature > 0 && !temp.StandbySkipped {
-						setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
-						log.Debug().
-							Str("disk", updated[i].DevPath).
-							Int("temp", temp.Temperature).
-							Msg("Matched SMART temperature by device path")
-					}
-					break
-				}
+			if temp := uniqueDiskTemperatureMatch(smartTemps, func(candidate models.DiskTemp) bool {
+				normalizedTempDev := normalizeSMARTDeviceIdentifier(candidate.Device)
+				return normalizedTempDev != "" && normalizedTempDev == normalizedDevPath
+			}); temp != nil && temp.Temperature > 0 && !temp.StandbySkipped {
+				setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
+				log.Debug().
+					Str("disk", updated[i].DevPath).
+					Int("temp", temp.Temperature).
+					Msg("Matched SMART temperature by device path")
 			}
 		}
 	}
@@ -476,6 +470,23 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	}
 
 	return updated
+}
+
+func uniqueDiskTemperatureMatch(temperatures []models.DiskTemp, predicate func(models.DiskTemp) bool) *models.DiskTemp {
+	matchIndex := -1
+	for index := range temperatures {
+		if !predicate(temperatures[index]) {
+			continue
+		}
+		if matchIndex >= 0 {
+			return nil
+		}
+		matchIndex = index
+	}
+	if matchIndex < 0 {
+		return nil
+	}
+	return &temperatures[matchIndex]
 }
 
 func setPhysicalDiskTemperature(disk *models.PhysicalDisk, temperature int, source string) {
@@ -536,39 +547,50 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 		// Find matching SMART entry by WWN, serial, or topology-scoped device path.
 		var matched *models.HostDiskSMART
+		uniqueMatch := func(predicate func(models.HostDiskSMART) bool) *models.HostDiskSMART {
+			matchIndex := -1
+			for index := range smartData {
+				if !predicate(smartData[index]) {
+					continue
+				}
+				if matchIndex >= 0 {
+					return nil
+				}
+				matchIndex = index
+			}
+			if matchIndex < 0 {
+				return nil
+			}
+			return &smartData[matchIndex]
+		}
 
 		// Try to match by WWN (most reliable)
-		if updated[i].WWN != "" {
-			for j := range smartData {
-				if smartData[j].WWN != "" && strings.EqualFold(smartData[j].WWN, updated[i].WWN) {
-					matched = &smartData[j]
-					break
-				}
-			}
+		if diskinventory.IsUsableHardwareID(updated[i].WWN) {
+			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
+				return diskinventory.IsUsableHardwareID(candidate.WWN) &&
+					strings.EqualFold(candidate.WWN, updated[i].WWN) &&
+					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
+			})
 		}
 
 		// Fall back to serial number match
-		if matched == nil && updated[i].Serial != "" {
-			for j := range smartData {
-				if smartData[j].Serial != "" && strings.EqualFold(smartData[j].Serial, updated[i].Serial) {
-					matched = &smartData[j]
-					break
-				}
-			}
+		if matched == nil && diskinventory.IsUsableHardwareID(updated[i].Serial) {
+			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
+				return diskinventory.IsUsableHardwareID(candidate.Serial) &&
+					strings.EqualFold(candidate.Serial, updated[i].Serial) &&
+					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
+			})
 		}
 
 		// Last resort: match by device path
 		if matched == nil {
 			normalizedDevPath := normalizeSMARTDeviceIdentifier(updated[i].DevPath)
-			for j := range smartData {
-				normalizedDiskDev := normalizeSMARTDeviceIdentifier(smartData[j].Device)
-				if normalizedDiskDev != "" &&
+			matched = uniqueMatch(func(candidate models.HostDiskSMART) bool {
+				normalizedDiskDev := normalizeSMARTDeviceIdentifier(candidate.Device)
+				return normalizedDiskDev != "" &&
 					normalizedDiskDev == normalizedDevPath &&
-					diskTopologyCompatible(updated[i].Controller, updated[i].Target, smartData[j].Controller, smartData[j].Target) {
-					matched = &smartData[j]
-					break
-				}
-			}
+					diskTopologyCompatible(updated[i].Controller, updated[i].Target, candidate.Controller, candidate.Target)
+			})
 		}
 
 		if matched == nil {
@@ -613,10 +635,8 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		// Always merge SMART attributes from host agent
 		if matched.Attributes != nil {
 			updated[i].SmartAttributes = smartAttributesCopy(matched.Attributes)
-			if updated[i].Wearout < 0 {
-				if derivedWearout := deriveWearoutFromSMARTAttributes(matched.Attributes); derivedWearout >= 0 {
-					updated[i].Wearout = derivedWearout
-				}
+			if derivedWearout := deriveWearoutFromSMARTAttributes(matched.Attributes); derivedWearout >= 0 {
+				updated[i].Wearout = derivedWearout
 			}
 		}
 		if matched.IO != nil {
@@ -625,12 +645,24 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		}
 		updated[i].Collection = diskinventory.MergeStatus(updated[i].Collection, matched.Collection)
 
-		if (strings.TrimSpace(updated[i].Health) == "" || strings.EqualFold(updated[i].Health, "unknown")) && strings.TrimSpace(matched.Health) != "" {
+		if shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health) {
 			updated[i].Health = matched.Health
 		}
 	}
 
 	return updated
+}
+
+func shouldUseHostAgentPhysicalDiskHealth(existing, incoming string) bool {
+	incoming = strings.ToUpper(strings.TrimSpace(incoming))
+	if incoming == "" || incoming == "UNKNOWN" {
+		return false
+	}
+	existing = strings.ToUpper(strings.TrimSpace(existing))
+	if incoming == "FAILED" {
+		return true
+	}
+	return existing == "" || existing == "UNKNOWN"
 }
 
 func diskTopologyCompatible(leftController, leftTarget, rightController, rightTarget string) bool {
@@ -760,46 +792,17 @@ func smartAttributesFromUnifiedMeta(in *unifiedresources.SMARTMeta) *models.SMAR
 		return nil
 	}
 
-	out := &models.SMARTAttributes{}
-	if in.PowerOnHours != 0 {
-		value := in.PowerOnHours
-		out.PowerOnHours = &value
-	}
-	if in.PowerCycles != 0 {
-		value := in.PowerCycles
-		out.PowerCycles = &value
-	}
-	if in.ReallocatedSectors != 0 {
-		value := in.ReallocatedSectors
-		out.ReallocatedSectors = &value
-	}
-	if in.PendingSectors != 0 {
-		value := in.PendingSectors
-		out.PendingSectors = &value
-	}
-	if in.OfflineUncorrectable != 0 {
-		value := in.OfflineUncorrectable
-		out.OfflineUncorrectable = &value
-	}
-	if in.UDMACRCErrors != 0 {
-		value := in.UDMACRCErrors
-		out.UDMACRCErrors = &value
-	}
-	if in.PercentageUsed != 0 {
-		value := in.PercentageUsed
-		out.PercentageUsed = &value
-	}
-	if in.AvailableSpare != 0 {
-		value := in.AvailableSpare
-		out.AvailableSpare = &value
-	}
-	if in.MediaErrors != 0 {
-		value := in.MediaErrors
-		out.MediaErrors = &value
-	}
-	if in.UnsafeShutdowns != 0 {
-		value := in.UnsafeShutdowns
-		out.UnsafeShutdowns = &value
+	out := &models.SMARTAttributes{
+		PowerOnHours:         cloneInt64Pointer(in.PowerOnHours),
+		PowerCycles:          cloneInt64Pointer(in.PowerCycles),
+		ReallocatedSectors:   cloneInt64Pointer(in.ReallocatedSectors),
+		PendingSectors:       cloneInt64Pointer(in.PendingSectors),
+		OfflineUncorrectable: cloneInt64Pointer(in.OfflineUncorrectable),
+		UDMACRCErrors:        cloneInt64Pointer(in.UDMACRCErrors),
+		PercentageUsed:       cloneIntPointer(in.PercentageUsed),
+		AvailableSpare:       cloneIntPointer(in.AvailableSpare),
+		MediaErrors:          cloneInt64Pointer(in.MediaErrors),
+		UnsafeShutdowns:      cloneInt64Pointer(in.UnsafeShutdowns),
 	}
 	if out.PowerOnHours == nil &&
 		out.PowerCycles == nil &&
@@ -814,6 +817,22 @@ func smartAttributesFromUnifiedMeta(in *unifiedresources.SMARTMeta) *models.SMAR
 		return nil
 	}
 	return out
+}
+
+func cloneIntPointer(in *int) *int {
+	if in == nil {
+		return nil
+	}
+	value := *in
+	return &value
+}
+
+func cloneInt64Pointer(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	value := *in
+	return &value
 }
 
 func physicalDisksForInstanceFromReadState(readState unifiedresources.ReadState, instance string) []models.PhysicalDisk {

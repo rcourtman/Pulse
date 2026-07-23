@@ -2,6 +2,8 @@ package storagehealth
 
 import (
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // --- AssessSample: comprehensive branch coverage ---
@@ -118,6 +120,39 @@ func TestAssessSample_WearoutCritical(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected wearout_low reason at critical severity")
+	}
+}
+
+func TestAssessSample_ReportedZeroWearoutIsCritical(t *testing.T) {
+	assessment := AssessSample(Sample{
+		Health:       "PASSED",
+		Wearout:      0,
+		WearoutKnown: true,
+	})
+	if assessment.Level != RiskCritical {
+		t.Fatalf("expected reported wearout=0 to be critical, got %s", assessment.Level)
+	}
+}
+
+func TestAssessSample_UnreportedZeroWearoutIsNeutral(t *testing.T) {
+	assessment := AssessSample(Sample{Health: "PASSED"})
+	if assessment.Level != RiskHealthy {
+		t.Fatalf("expected zero-value unreported wearout to remain neutral, got %s", assessment.Level)
+	}
+}
+
+func TestAssessPhysicalDisk_PercentageUsedProvesZeroLifeOnSATASSD(t *testing.T) {
+	percentageUsed := 100
+	assessment := AssessPhysicalDisk(models.PhysicalDisk{
+		Type:    "sata",
+		Health:  "PASSED",
+		Wearout: 0,
+		SmartAttributes: &models.SMARTAttributes{
+			PercentageUsed: &percentageUsed,
+		},
+	})
+	if assessment.Level != RiskCritical {
+		t.Fatalf("reported percentage-used=100 should prove zero remaining life, got %s", assessment.Level)
 	}
 }
 

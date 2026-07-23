@@ -759,7 +759,7 @@ func resourceFromHostUnraidPhysicalDisk(host models.Host, disk models.HostUnraid
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{host.Hostname}),
 	}
-	if serial := strings.TrimSpace(disk.Serial); serial != "" {
+	if serial := strings.TrimSpace(disk.Serial); diskinventory.IsUsableHardwareID(serial) {
 		identity.MachineID = serial
 	}
 	return resource, identity
@@ -829,6 +829,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	if unraidDisk != nil {
 		assessment = storagehealth.SummarizeAssessments(assessment, assessUnraidPhysicalDisk(*unraidDisk))
 	}
+	wearout := physicalDiskWearoutFromSMARTAttributes(disk.Attributes)
 
 	storageGroup := unraidDiskGroup(unraidDisk)
 	if storageGroup == "" {
@@ -851,7 +852,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 			Target:       strings.TrimSpace(disk.Target),
 			SizeBytes:    sizeBytes,
 			Health:       health,
-			Wearout:      -1,
+			Wearout:      wearout,
 			Temperature:  temperature,
 			Used:         used,
 			StorageRole:  unraidDiskRole(unraidDisk),
@@ -871,13 +872,27 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{host.Hostname}),
 	}
-	if serial != "" {
+	if diskinventory.IsUsableHardwareID(serial) {
 		identity.MachineID = serial
-	} else if disk.WWN != "" {
+	} else if diskinventory.IsUsableHardwareID(disk.WWN) {
 		identity.MachineID = strings.TrimSpace(disk.WWN)
 	}
 
 	return resource, identity
+}
+
+func physicalDiskWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
+	if attrs == nil || attrs.PercentageUsed == nil {
+		return -1
+	}
+	used := *attrs.PercentageUsed
+	if used < 0 {
+		used = 0
+	}
+	if used > 100 {
+		used = 100
+	}
+	return 100 - used
 }
 
 func hostUnraidStorageIdentity(host models.Host) string {
@@ -2014,6 +2029,7 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	pdMeta := &PhysicalDiskMeta{
 		DevPath:      disk.DevPath,
 		Model:        disk.Model,
+		Vendor:       disk.Vendor,
 		Serial:       disk.Serial,
 		WWN:          disk.WWN,
 		DiskType:     disk.Type,
@@ -2054,9 +2070,9 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{disk.Node}),
 	}
-	if disk.Serial != "" {
+	if diskinventory.IsUsableHardwareID(disk.Serial) {
 		identity.MachineID = disk.Serial
-	} else if disk.WWN != "" {
+	} else if diskinventory.IsUsableHardwareID(disk.WWN) {
 		identity.MachineID = disk.WWN
 	}
 
@@ -2083,38 +2099,18 @@ func convertSMARTAttributes(attrs *models.SMARTAttributes) *SMARTMeta {
 	if attrs == nil {
 		return nil
 	}
-	m := &SMARTMeta{}
-	if attrs.PowerOnHours != nil {
-		m.PowerOnHours = *attrs.PowerOnHours
+	return &SMARTMeta{
+		PowerOnHours:         cloneInt64Ptr(attrs.PowerOnHours),
+		PowerCycles:          cloneInt64Ptr(attrs.PowerCycles),
+		ReallocatedSectors:   cloneInt64Ptr(attrs.ReallocatedSectors),
+		PendingSectors:       cloneInt64Ptr(attrs.PendingSectors),
+		OfflineUncorrectable: cloneInt64Ptr(attrs.OfflineUncorrectable),
+		UDMACRCErrors:        cloneInt64Ptr(attrs.UDMACRCErrors),
+		PercentageUsed:       cloneIntPtr(attrs.PercentageUsed),
+		AvailableSpare:       cloneIntPtr(attrs.AvailableSpare),
+		MediaErrors:          cloneInt64Ptr(attrs.MediaErrors),
+		UnsafeShutdowns:      cloneInt64Ptr(attrs.UnsafeShutdowns),
 	}
-	if attrs.PowerCycles != nil {
-		m.PowerCycles = *attrs.PowerCycles
-	}
-	if attrs.ReallocatedSectors != nil {
-		m.ReallocatedSectors = *attrs.ReallocatedSectors
-	}
-	if attrs.PendingSectors != nil {
-		m.PendingSectors = *attrs.PendingSectors
-	}
-	if attrs.OfflineUncorrectable != nil {
-		m.OfflineUncorrectable = *attrs.OfflineUncorrectable
-	}
-	if attrs.UDMACRCErrors != nil {
-		m.UDMACRCErrors = *attrs.UDMACRCErrors
-	}
-	if attrs.PercentageUsed != nil {
-		m.PercentageUsed = *attrs.PercentageUsed
-	}
-	if attrs.AvailableSpare != nil {
-		m.AvailableSpare = *attrs.AvailableSpare
-	}
-	if attrs.MediaErrors != nil {
-		m.MediaErrors = *attrs.MediaErrors
-	}
-	if attrs.UnsafeShutdowns != nil {
-		m.UnsafeShutdowns = *attrs.UnsafeShutdowns
-	}
-	return m
 }
 
 func physicalDiskTags(disk models.PhysicalDisk) []string {

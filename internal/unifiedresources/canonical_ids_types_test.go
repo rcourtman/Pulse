@@ -48,6 +48,43 @@ func TestHostSMARTMetaCarriesSizeBytesJSONContract(t *testing.T) {
 	}
 }
 
+func TestSMARTMetaJSONPreservesReportedZeroAndOmitsAbsentFields(t *testing.T) {
+	zeroInt := 0
+	zeroInt64 := int64(0)
+	payload := SMARTMeta{
+		PercentageUsed:     &zeroInt,
+		AvailableSpare:     &zeroInt,
+		ReallocatedSectors: &zeroInt64,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal SMARTMeta: %v", err)
+	}
+	for _, expected := range []string{
+		`"percentageUsed":0`,
+		`"availableSpare":0`,
+		`"reallocatedSectors":0`,
+	} {
+		if !strings.Contains(string(data), expected) {
+			t.Fatalf("reported zero field %s was omitted: %s", expected, data)
+		}
+	}
+	if strings.Contains(string(data), `"powerOnHours"`) {
+		t.Fatalf("absent SMART field was serialized: %s", data)
+	}
+
+	var decoded SMARTMeta
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal SMARTMeta: %v", err)
+	}
+	if decoded.PercentageUsed == nil || *decoded.PercentageUsed != 0 ||
+		decoded.AvailableSpare == nil || *decoded.AvailableSpare != 0 ||
+		decoded.ReallocatedSectors == nil || *decoded.ReallocatedSectors != 0 {
+		t.Fatalf("reported zero fields did not survive round trip: %+v", decoded)
+	}
+}
+
 func TestContractResourceType(t *testing.T) {
 	tests := []struct {
 		name     string

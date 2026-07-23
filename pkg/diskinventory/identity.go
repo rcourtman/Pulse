@@ -19,10 +19,10 @@ func DeviceToken(device string) string {
 // fallbacks to the reporting host. Controller and target are included only
 // when present, preserving legacy direct-device IDs for SATA/NVMe disks.
 func PreferredID(serial, wwn, scope, device, controller, target string) string {
-	if serial = strings.TrimSpace(serial); serial != "" {
+	if serial = strings.TrimSpace(serial); IsUsableHardwareID(serial) {
 		return serial
 	}
-	if wwn = strings.TrimSpace(wwn); wwn != "" {
+	if wwn = strings.TrimSpace(wwn); IsUsableHardwareID(wwn) {
 		return wwn
 	}
 
@@ -39,18 +39,42 @@ func PreferredID(serial, wwn, scope, device, controller, target string) string {
 	return fmt.Sprintf("%s:%s@%s/%s", scope, device, controller, target)
 }
 
+// IsUsableHardwareID rejects controller placeholders that are not unique disk
+// identities. Treating these as real serials collapses different disks and
+// sends their SMART history to the same metric key.
+func IsUsableHardwareID(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	upper := strings.ToUpper(value)
+	switch upper {
+	case "UNKNOWN", "N/A", "NA", "NONE", "NULL", "DEFAULT", "DEFAULT-SERIAL",
+		"TO BE FILLED BY O.E.M.", "0123456789":
+		return false
+	}
+	compact := strings.NewReplacer("-", "", ":", "", ".", "", " ", "").Replace(upper)
+	if compact == "" {
+		return false
+	}
+	allZero := true
+	allF := true
+	for _, char := range compact {
+		allZero = allZero && char == '0'
+		allF = allF && char == 'F'
+	}
+	return !allZero && !allF
+}
+
 // IsControllerMemberTarget reports whether target addresses one member behind
-// a shared controller block path (for example megaraid,7 or cciss,1).
+// a shared controller block path. Controller grammars vary after the numeric
+// member prefix (for example megaraid,7, areca,1/1, and sssraid,0,1).
 func IsControllerMemberTarget(target string) bool {
 	target = strings.TrimSpace(target)
 	index := strings.IndexByte(target, ',')
 	if index < 0 || index+1 >= len(target) {
 		return false
 	}
-	for _, char := range target[index+1:] {
-		if char < '0' || char > '9' {
-			return false
-		}
-	}
-	return true
+	next := target[index+1]
+	return next >= '0' && next <= '9'
 }

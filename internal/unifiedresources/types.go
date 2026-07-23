@@ -448,6 +448,7 @@ type ResourceIncident struct {
 type PhysicalDiskMeta struct {
 	DevPath              string                          `json:"devPath"`
 	Model                string                          `json:"model,omitempty"`
+	Vendor               string                          `json:"vendor,omitempty"`
 	Serial               string                          `json:"serial,omitempty"`
 	WWN                  string                          `json:"wwn,omitempty"`
 	DiskType             string                          `json:"diskType"` // nvme, sata, sas
@@ -550,16 +551,16 @@ type CephServiceMeta struct {
 
 // SMARTMeta contains SMART attribute data for a physical disk.
 type SMARTMeta struct {
-	PowerOnHours         int64 `json:"powerOnHours,omitempty"`
-	PowerCycles          int64 `json:"powerCycles,omitempty"`
-	ReallocatedSectors   int64 `json:"reallocatedSectors,omitempty"`
-	PendingSectors       int64 `json:"pendingSectors,omitempty"`
-	OfflineUncorrectable int64 `json:"offlineUncorrectable,omitempty"`
-	UDMACRCErrors        int64 `json:"udmaCrcErrors,omitempty"`
-	PercentageUsed       int   `json:"percentageUsed,omitempty"`
-	AvailableSpare       int   `json:"availableSpare,omitempty"`
-	MediaErrors          int64 `json:"mediaErrors,omitempty"`
-	UnsafeShutdowns      int64 `json:"unsafeShutdowns,omitempty"`
+	PowerOnHours         *int64 `json:"powerOnHours,omitempty"`
+	PowerCycles          *int64 `json:"powerCycles,omitempty"`
+	ReallocatedSectors   *int64 `json:"reallocatedSectors,omitempty"`
+	PendingSectors       *int64 `json:"pendingSectors,omitempty"`
+	OfflineUncorrectable *int64 `json:"offlineUncorrectable,omitempty"`
+	UDMACRCErrors        *int64 `json:"udmaCrcErrors,omitempty"`
+	PercentageUsed       *int   `json:"percentageUsed,omitempty"`
+	AvailableSpare       *int   `json:"availableSpare,omitempty"`
+	MediaErrors          *int64 `json:"mediaErrors,omitempty"`
+	UnsafeShutdowns      *int64 `json:"unsafeShutdowns,omitempty"`
 }
 
 // HostSensorMeta contains host sensor readings.

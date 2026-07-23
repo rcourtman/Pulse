@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -899,8 +900,9 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		readState := m.GetUnifiedReadStateOrSnapshot()
 		nodesFromState := nodesForInstanceFromReadState(readState, inst)
 		hosts := hostsFromReadState(readState)
-		existingDisksMap := make(map[string]models.PhysicalDisk)
-		for _, disk := range physicalDisksForInstanceFromReadState(readState, inst) {
+		existingDisks := physicalDisksForInstanceFromReadState(readState, inst)
+		existingDisksMap := make(map[string]models.PhysicalDisk, len(existingDisks))
+		for _, disk := range existingDisks {
 			if disk.Instance == inst {
 				existingDisksMap[disk.ID] = disk
 			}
@@ -1022,13 +1024,20 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			// Record each disk; alert evaluation happens after host-agent SMART merges
 			// so the canonical disk view includes post-merge health/wearout data.
 			for _, disk := range disks {
-				diskID := fmt.Sprintf("%s-%s-%s", inst, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+				diskID := unifiedresources.ProxmoxPhysicalDiskSourceID(
+					inst,
+					node.Node,
+					disk.DevPath,
+					"",
+					"",
+				)
 				physicalDisk := models.PhysicalDisk{
 					ID:       diskID,
 					Node:     node.Node,
 					Instance: inst,
 					DevPath:  disk.DevPath,
 					Model:    disk.Model,
+					Vendor:   disk.Vendor,
 					Serial:   disk.Serial,
 					WWN:      disk.WWN,
 					Type:     disk.Type,
@@ -1074,7 +1083,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		allDisks = mergeNVMeTempsIntoDisks(allDisks, nodesFromState)
 		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)
 		for index := range allDisks {
-			if previous, ok := existingDisksMap[allDisks[index].ID]; ok {
+			if previous, ok := previousPhysicalDiskEvidence(allDisks[index], existingDisks); ok {
 				allDisks[index] = preserveUnavailablePhysicalDiskEvidence(allDisks[index], previous)
 			}
 		}
@@ -1165,7 +1174,13 @@ func physicalDisksFromHostAgentSMART(inst, nodeName string, smartEntries []model
 			health = "UNKNOWN"
 		}
 		disks = append(disks, models.PhysicalDisk{
-			ID:              fmt.Sprintf("%s-%s-%s", inst, nodeName, strings.ReplaceAll(devPath, "/", "-")),
+			ID: unifiedresources.ProxmoxPhysicalDiskSourceID(
+				inst,
+				nodeName,
+				devPath,
+				smart.Controller,
+				smart.Target,
+			),
 			Node:            nodeName,
 			Instance:        inst,
 			DevPath:         devPath,
@@ -1195,6 +1210,64 @@ func cloneDiskIO(in *models.DiskIO) *models.DiskIO {
 	}
 	out := *in
 	return &out
+}
+
+func previousPhysicalDiskEvidence(current models.PhysicalDisk, previous []models.PhysicalDisk) (models.PhysicalDisk, bool) {
+	sameScope := func(candidate models.PhysicalDisk) bool {
+		return strings.EqualFold(strings.TrimSpace(candidate.Instance), strings.TrimSpace(current.Instance)) &&
+			strings.EqualFold(strings.TrimSpace(candidate.Node), strings.TrimSpace(current.Node))
+	}
+	uniqueMatch := func(matches func(models.PhysicalDisk) bool) (models.PhysicalDisk, bool) {
+		var matched models.PhysicalDisk
+		found := false
+		for _, candidate := range previous {
+			if !sameScope(candidate) || !matches(candidate) {
+				continue
+			}
+			if found {
+				return models.PhysicalDisk{}, false
+			}
+			matched = candidate
+			found = true
+		}
+		return matched, found
+	}
+
+	if serial := strings.TrimSpace(current.Serial); diskinventory.IsUsableHardwareID(serial) {
+		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
+			return candidate.Serial != "" && strings.EqualFold(strings.TrimSpace(candidate.Serial), serial)
+		}); ok {
+			return matched, true
+		}
+	}
+	if wwn := strings.TrimSpace(current.WWN); diskinventory.IsUsableHardwareID(wwn) {
+		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
+			return candidate.WWN != "" && strings.EqualFold(strings.TrimSpace(candidate.WWN), wwn)
+		}); ok {
+			return matched, true
+		}
+	}
+	if id := strings.TrimSpace(current.ID); id != "" {
+		if matched, ok := uniqueMatch(func(candidate models.PhysicalDisk) bool {
+			return strings.TrimSpace(candidate.ID) == id
+		}); ok {
+			return matched, true
+		}
+	}
+
+	device := normalizeSMARTDeviceIdentifier(current.DevPath)
+	if device == "" {
+		return models.PhysicalDisk{}, false
+	}
+	return uniqueMatch(func(candidate models.PhysicalDisk) bool {
+		return normalizeSMARTDeviceIdentifier(candidate.DevPath) == device &&
+			diskTopologyCompatible(
+				current.Controller,
+				current.Target,
+				candidate.Controller,
+				candidate.Target,
+			)
+	})
 }
 
 func preserveUnavailablePhysicalDiskEvidence(current, previous models.PhysicalDisk) models.PhysicalDisk {
@@ -1231,6 +1304,7 @@ func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {
 	return proxmox.Disk{
 		DevPath: disk.DevPath,
 		Model:   disk.Model,
+		Vendor:  disk.Vendor,
 		Serial:  disk.Serial,
 		Type:    disk.Type,
 		Health:  disk.Health,

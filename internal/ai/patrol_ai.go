@@ -2781,7 +2781,10 @@ func patrolPhysicalDiskHealthIssue(row patrolPhysicalDiskRow) bool {
 		!strings.EqualFold(health, "UNKNOWN") &&
 		!strings.EqualFold(health, "OK")
 	return healthIssue ||
-		(row.wearout > 0 && row.wearout < 20) ||
+		((row.wearout > 0 ||
+			(row.wearout == 0 &&
+				(strings.EqualFold(row.diskType, "ssd") || strings.EqualFold(row.diskType, "nvme")))) &&
+			row.wearout < 20) ||
 		row.temperature > 55 ||
 		len(row.smartEvidence) > 0
 }
@@ -2810,11 +2813,11 @@ func unifiedPhysicalDiskSMARTIssueParts(attrs *unifiedresources.SMARTMeta) []str
 	}
 
 	var parts []string
-	appendSMARTInt64ValueIssue(&parts, "reallocated sectors", attrs.ReallocatedSectors)
-	appendSMARTInt64ValueIssue(&parts, "pending sectors", attrs.PendingSectors)
-	appendSMARTInt64ValueIssue(&parts, "offline uncorrectable", attrs.OfflineUncorrectable)
-	appendSMARTInt64ValueIssue(&parts, "UDMA CRC errors", attrs.UDMACRCErrors)
-	appendSMARTInt64ValueIssue(&parts, "media errors", attrs.MediaErrors)
+	appendSMARTInt64Issue(&parts, "reallocated sectors", attrs.ReallocatedSectors)
+	appendSMARTInt64Issue(&parts, "pending sectors", attrs.PendingSectors)
+	appendSMARTInt64Issue(&parts, "offline uncorrectable", attrs.OfflineUncorrectable)
+	appendSMARTInt64Issue(&parts, "UDMA CRC errors", attrs.UDMACRCErrors)
+	appendSMARTInt64Issue(&parts, "media errors", attrs.MediaErrors)
 	return parts
 }
 

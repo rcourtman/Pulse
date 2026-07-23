@@ -5078,6 +5078,7 @@
         "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
         "pkg/proxmox/ceph.go",
+        "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/zfs.go"
       ],
       "verification": {
@@ -5305,6 +5306,21 @@
             "exact_files": [
               "pkg/proxmox/zfs_details_test.go",
               "pkg/proxmox/zfs_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-cluster-client-runtime",
+            "label": "Proxmox cluster client continuity and fallback proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/cluster_client.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/monitor_pve_disk_fallback_test.go",
+              "pkg/proxmox/cluster_client_additional_api4_test.go",
+              "pkg/proxmox/cluster_client_api_test.go"
             ]
           },
           {

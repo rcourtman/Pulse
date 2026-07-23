@@ -33,6 +33,7 @@ type Sample struct {
 	Health               string
 	Temperature          int
 	Wearout              int
+	WearoutKnown         bool
 	PowerOnHours         int64
 	PowerCycles          int64
 	ReallocatedSectors   int64
@@ -41,6 +42,7 @@ type Sample struct {
 	UDMACRCErrors        int64
 	PercentageUsed       int
 	AvailableSpare       int
+	AvailableSpareKnown  bool
 	MediaErrors          int64
 	UnsafeShutdowns      int64
 }
@@ -51,6 +53,8 @@ func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 		Health:      disk.Health,
 		Temperature: disk.Temperature,
 		Wearout:     disk.Wearout,
+		WearoutKnown: disk.Wearout > 0 ||
+			(disk.Wearout == 0 && isNonRotationalDiskType(disk.Type)),
 	}
 	if attrs := disk.SmartAttributes; attrs != nil {
 		if attrs.PowerOnHours != nil {
@@ -73,9 +77,12 @@ func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 		}
 		if attrs.PercentageUsed != nil {
 			sample.PercentageUsed = *attrs.PercentageUsed
+			sample.Wearout = 100 - *attrs.PercentageUsed
+			sample.WearoutKnown = true
 		}
 		if attrs.AvailableSpare != nil {
 			sample.AvailableSpare = *attrs.AvailableSpare
+			sample.AvailableSpareKnown = true
 		}
 		if attrs.MediaErrors != nil {
 			sample.MediaErrors = *attrs.MediaErrors
@@ -116,9 +123,11 @@ func AssessHostSMARTDisk(disk models.HostDiskSMART) Assessment {
 		if attrs.PercentageUsed != nil {
 			sample.PercentageUsed = *attrs.PercentageUsed
 			sample.Wearout = 100 - *attrs.PercentageUsed
+			sample.WearoutKnown = true
 		}
 		if attrs.AvailableSpare != nil {
 			sample.AvailableSpare = *attrs.AvailableSpare
+			sample.AvailableSpareKnown = true
 		}
 		if attrs.MediaErrors != nil {
 			sample.MediaErrors = *attrs.MediaErrors
@@ -159,12 +168,12 @@ func AssessSample(sample Sample) Assessment {
 	if sample.MediaErrors > 0 {
 		addReason("media_errors", RiskCritical, fmt.Sprintf("Media errors detected (%d)", sample.MediaErrors))
 	}
-	if sample.Wearout > 0 && sample.Wearout <= 5 {
+	if (sample.WearoutKnown || sample.Wearout > 0) && sample.Wearout >= 0 && sample.Wearout <= 5 {
 		addReason("wearout_low", RiskCritical, fmt.Sprintf("SSD life remaining is %d%%", sample.Wearout))
-	} else if sample.Wearout > 0 && sample.Wearout < 10 {
+	} else if sample.Wearout > 5 && sample.Wearout < 10 {
 		addReason("wearout_low", RiskWarning, fmt.Sprintf("SSD life remaining is %d%%", sample.Wearout))
 	}
-	if sample.AvailableSpare > 0 && sample.AvailableSpare <= 10 {
+	if (sample.AvailableSpareKnown || sample.AvailableSpare > 0) && sample.AvailableSpare <= 10 {
 		addReason("nvme_available_spare_low", RiskCritical, fmt.Sprintf("NVMe available spare is %d%%", sample.AvailableSpare))
 	} else if sample.AvailableSpare > 0 && sample.AvailableSpare < 20 {
 		addReason("nvme_available_spare_low", RiskWarning, fmt.Sprintf("NVMe available spare is %d%%", sample.AvailableSpare))
@@ -196,6 +205,15 @@ func AssessSample(sample Sample) Assessment {
 	})
 
 	return assessment
+}
+
+func isNonRotationalDiskType(diskType string) bool {
+	switch strings.ToLower(strings.TrimSpace(diskType)) {
+	case "nvme", "ssd":
+		return true
+	default:
+		return false
+	}
 }
 
 func HasKnownFirmwareBug(model string) bool {

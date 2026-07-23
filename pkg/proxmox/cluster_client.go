@@ -1470,16 +1470,6 @@ func (cc *ClusterClient) GetDisks(ctx context.Context, node string) ([]Disk, err
 		return nil
 	})
 
-	// Don't return error for transient connectivity issues
-	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
-		log.Debug().
-			Str("cluster", cc.name).
-			Str("node", node).
-			Err(err).
-			Msg("No healthy nodes for GetDisks - returning empty list")
-		return []Disk{}, nil
-	}
-
 	return result, err
 }
 

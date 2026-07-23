@@ -2412,6 +2412,7 @@ type PhysicalDisk struct {
 	Instance        string                          `json:"instance"`
 	DevPath         string                          `json:"devPath"` // /dev/nvme0n1, /dev/sda
 	Model           string                          `json:"model"`
+	Vendor          string                          `json:"vendor,omitempty"`
 	Serial          string                          `json:"serial"`
 	WWN             string                          `json:"wwn"`                  // World Wide Name
 	Type            string                          `json:"type"`                 // nvme, sata, sas

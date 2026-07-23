@@ -61,6 +61,30 @@ describe('diskResourceUtils', () => {
         instance: 'cluster-main',
       }),
     ).toBe(true);
+    expect(
+      matchesPhysicalDiskNode(buildDisk(), {
+        id: 'other-node-id',
+        name: 'tower',
+        instance: 'cluster-secondary',
+      }),
+    ).toBe(false);
+    expect(
+      matchesPhysicalDiskNode(buildDisk(), {
+        id: 'other-node-id',
+        name: 'tower',
+      }),
+    ).toBe(false);
+    expect(
+      matchesPhysicalDiskNode(
+        buildDisk({
+          platformData: { proxmox: { nodeName: 'tower' } } as any,
+        }),
+        {
+          id: 'legacy-node-id',
+          name: 'tower',
+        },
+      ),
+    ).toBe(true);
   });
 
   it('resolves physical disk metric targets through linked agents when needed', () => {

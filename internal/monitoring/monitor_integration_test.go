@@ -183,6 +183,103 @@ func TestMergeHostAgentSMARTIntoDisks_DerivesWearoutFromSMARTAttributes(t *testi
 	}
 }
 
+func TestMergeHostAgentSMARTIntoDisks_SMARTFailureAndWearoutOverrideCoarsePVEValues(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:      "d1",
+		Node:    "pve1",
+		Serial:  "SER1",
+		Type:    "ssd",
+		Health:  "PASSED",
+		Wearout: 100,
+	}}
+	nodes := []models.Node{{Name: "pve1", LinkedAgentID: "host-1"}}
+	used := 95
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device: "/dev/sda",
+				Serial: "SER1",
+				Health: "FAILED",
+				Attributes: &models.SMARTAttributes{
+					PercentageUsed: &used,
+				},
+			}},
+		},
+	}}
+
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Health != "FAILED" {
+		t.Fatalf("SMART failure was suppressed by PVE health: %+v", result[0])
+	}
+	if result[0].Wearout != 5 {
+		t.Fatalf("SMART wearout did not override contradictory PVE value: %+v", result[0])
+	}
+}
+
+func TestMergeHostAgentSMARTIntoDisks_DoesNotReplaceFailureWithPassed(t *testing.T) {
+	disks := []models.PhysicalDisk{{ID: "d1", Node: "pve1", Serial: "SER1", Health: "FAILED"}}
+	nodes := []models.Node{{Name: "pve1", LinkedAgentID: "host-1"}}
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{Serial: "SER1", Health: "PASSED"}},
+		},
+	}}
+
+	if got := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)[0].Health; got != "FAILED" {
+		t.Fatalf("PASSED replaced an existing failure: %q", got)
+	}
+}
+
+func TestMergeHostAgentSMARTIntoDisks_DuplicateIdentityRequiresUniqueTopology(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:         "d1",
+		Node:       "pve1",
+		DevPath:    "/dev/sg2",
+		Serial:     "DUPLICATE-SERIAL",
+		Controller: "sssraid0",
+		Target:     "sssraid,0,2",
+		Health:     "UNKNOWN",
+	}}
+	nodes := []models.Node{{Name: "pve1", LinkedAgentID: "host-1"}}
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{
+					Device:      "/dev/sg2",
+					Serial:      "DUPLICATE-SERIAL",
+					Controller:  "sssraid0",
+					Target:      "sssraid,0,1",
+					Temperature: 31,
+				},
+				{
+					Device:      "/dev/sg2",
+					Serial:      "DUPLICATE-SERIAL",
+					Controller:  "sssraid0",
+					Target:      "sssraid,0,2",
+					Temperature: 47,
+					Health:      "PASSED",
+				},
+			},
+		},
+	}}
+
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Temperature != 47 || result[0].Health != "PASSED" {
+		t.Fatalf("topology-specific SMART evidence was not selected: %+v", result[0])
+	}
+
+	disks[0].Controller = ""
+	disks[0].Target = ""
+	disks[0].DevPath = "/dev/unknown"
+	result = mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Temperature != 0 || result[0].Health != "UNKNOWN" {
+		t.Fatalf("ambiguous SMART identity was guessed: %+v", result[0])
+	}
+}
+
 func TestMergeHostAgentSMARTIntoDisks_FillsMissingHealthFromHostSMART(t *testing.T) {
 	disks := []models.PhysicalDisk{
 		{ID: "d1", Node: "pve1", Serial: "SER1", Health: "UNKNOWN"},
@@ -281,24 +378,24 @@ func TestSmartAttributesFromUnifiedMeta_Nil(t *testing.T) {
 }
 
 func TestSmartAttributesFromUnifiedMeta_AllZero(t *testing.T) {
-	// All-zero fields should return nil (no meaningful data)
+	// No reported fields should return nil.
 	if smartAttributesFromUnifiedMeta(&unifiedresources.SMARTMeta{}) != nil {
-		t.Error("all-zero SMARTMeta should return nil")
+		t.Error("SMARTMeta with no reported fields should return nil")
 	}
 }
 
 func TestSmartAttributesFromUnifiedMeta_PopulatesFields(t *testing.T) {
 	meta := &unifiedresources.SMARTMeta{
-		PowerOnHours:         12345,
-		PowerCycles:          500,
-		ReallocatedSectors:   0,
-		PendingSectors:       2,
-		OfflineUncorrectable: 1,
-		UDMACRCErrors:        3,
-		PercentageUsed:       15,
-		AvailableSpare:       85,
-		MediaErrors:          0,
-		UnsafeShutdowns:      10,
+		PowerOnHours:         smartInt64Pointer(12345),
+		PowerCycles:          smartInt64Pointer(500),
+		ReallocatedSectors:   smartInt64Pointer(0),
+		PendingSectors:       smartInt64Pointer(2),
+		OfflineUncorrectable: smartInt64Pointer(1),
+		UDMACRCErrors:        smartInt64Pointer(3),
+		PercentageUsed:       smartIntPointer(15),
+		AvailableSpare:       smartIntPointer(85),
+		MediaErrors:          smartInt64Pointer(0),
+		UnsafeShutdowns:      smartInt64Pointer(10),
 	}
 	result := smartAttributesFromUnifiedMeta(meta)
 	if result == nil {
@@ -310,8 +407,8 @@ func TestSmartAttributesFromUnifiedMeta_PopulatesFields(t *testing.T) {
 	if result.PowerCycles == nil || *result.PowerCycles != 500 {
 		t.Error("PowerCycles should be 500")
 	}
-	if result.ReallocatedSectors != nil {
-		t.Error("zero ReallocatedSectors should not create a pointer")
+	if result.ReallocatedSectors == nil || *result.ReallocatedSectors != 0 {
+		t.Error("reported zero ReallocatedSectors should survive projection")
 	}
 	if result.PendingSectors == nil || *result.PendingSectors != 2 {
 		t.Error("PendingSectors should be 2")
@@ -319,13 +416,16 @@ func TestSmartAttributesFromUnifiedMeta_PopulatesFields(t *testing.T) {
 	if result.PercentageUsed == nil || *result.PercentageUsed != 15 {
 		t.Error("PercentageUsed should be 15")
 	}
-	if result.MediaErrors != nil {
-		t.Error("zero MediaErrors should not create a pointer")
+	if result.MediaErrors == nil || *result.MediaErrors != 0 {
+		t.Error("reported zero MediaErrors should survive projection")
 	}
 	if result.UnsafeShutdowns == nil || *result.UnsafeShutdowns != 10 {
 		t.Error("UnsafeShutdowns should be 10")
 	}
 }
+
+func smartIntPointer(value int) *int       { return &value }
+func smartInt64Pointer(value int64) *int64 { return &value }
 
 // --- getNodeDisplayName ---
 

@@ -120,7 +120,7 @@ func TestCollectDeviceSMART_LogsStructuredContextWhenDeviceInStandby(t *testing.
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
+		return exec.CommandContext(ctx, "sh", "-c", "exit 3").Output()
 	}
 
 	logOutput := captureSmartctlLogs(t)

@@ -6,15 +6,18 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
@@ -147,6 +150,68 @@ func TestUnifiedAgentHandlers_HandleReportIncludesConfigOverride(t *testing.T) {
 	}
 	if val, ok := cfg["commandsEnabled"].(bool); !ok || !val {
 		t.Fatalf("expected commandsEnabled=true, got %#v", cfg["commandsEnabled"])
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleGzipReportPreservesWideSMARTInventory(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	smart := make([]agentshost.DiskSMART, 128)
+	for index := range smart {
+		powerOnHours := int64(1000 + index)
+		percentageUsed := index % 100
+		smart[index] = agentshost.DiskSMART{
+			Device:      fmt.Sprintf("sg%d", index),
+			Model:       "ST18000NM019J",
+			Serial:      fmt.Sprintf("ZR5D%04d", index),
+			WWN:         fmt.Sprintf("5-c500-da60-%04d", index),
+			Type:        "sas",
+			Controller:  fmt.Sprintf("/dev/sg%d", index/24),
+			Target:      fmt.Sprintf("sssraid,0,%d", index),
+			SizeBytes:   18000207937536,
+			Temperature: 30 + index%8,
+			Health:      "PASSED",
+			Attributes: &agentshost.SMARTAttributes{
+				PowerOnHours:   &powerOnHours,
+				PercentageUsed: &percentageUsed,
+			},
+		}
+	}
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-wide", Version: "6.1.1"},
+		Host: agentshost.HostInfo{
+			ID:       "machine-wide",
+			Hostname: "pve-wide.local",
+			Platform: "linux",
+		},
+		Sensors:   agentshost.Sensors{SMART: smart},
+		Timestamp: time.Now().UTC(),
+	}
+	raw, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal wide report: %v", err)
+	}
+	compressed, err := utils.CompressJSON(raw)
+	if err != nil {
+		t.Fatalf("compress wide report: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(compressed))
+	req.Header.Set("Content-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	handler.HandleReport(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("wide report status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	hosts := monitor.GetLiveHostsSnapshot()
+	if len(hosts) != 1 {
+		t.Fatalf("hosts = %d, want 1", len(hosts))
+	}
+	if got := len(hosts[0].Sensors.SMART); got != len(smart) {
+		t.Fatalf("SMART inventory was truncated: got %d disks, want %d", got, len(smart))
+	}
+	if last := hosts[0].Sensors.SMART[len(smart)-1]; last.Serial != "ZR5D0127" || last.Target != "sssraid,0,127" {
+		t.Fatalf("last SMART entry was corrupted or dropped: %+v", last)
 	}
 }
 

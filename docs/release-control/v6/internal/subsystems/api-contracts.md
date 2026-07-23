@@ -23,6 +23,13 @@
 Own canonical runtime payload shapes between backend and frontend, including
 the trust boundary that keeps customer-safe support diagnostics and normal
 product API routes free of maintainer commercial analytics.
+Physical-disk payloads preserve optional SMART counter presence, including
+explicit zero values, and expose provider vendor metadata without converting
+missing data into health. Unified-resource clients may request bounded server
+pages until the response's declared `totalPages` is exhausted; no client-side
+page ceiling may silently truncate a wide fleet. Disk history lookup resolves
+an exact canonical resource ID first and accepts a metrics target, serial, or
+WWN only when the match is unique and the hardware identifier is usable.
 
 ## Canonical Files
 

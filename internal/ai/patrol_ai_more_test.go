@@ -1096,7 +1096,7 @@ func TestSeedHealthAndAlerts_SMARTAttributeIssue(t *testing.T) {
 						Wearout:     100,
 						Temperature: 40,
 						SMART: &unifiedresources.SMARTMeta{
-							PendingSectors: 2,
+							PendingSectors: patrolSMARTInt64Pointer(2),
 						},
 					},
 				},
@@ -1110,6 +1110,25 @@ func TestSeedHealthAndAlerts_SMARTAttributeIssue(t *testing.T) {
 	}
 	if !strings.Contains(out, "SMART Evidence") || !strings.Contains(out, "pending sectors=2") {
 		t.Fatalf("expected SMART counter evidence in disk health table, got: %s", out)
+	}
+}
+
+func patrolSMARTInt64Pointer(value int64) *int64 { return &value }
+
+func TestPatrolPhysicalDiskHealthIssueDistinguishesKnownZeroWearout(t *testing.T) {
+	if !patrolPhysicalDiskHealthIssue(patrolPhysicalDiskRow{
+		diskType: "nvme",
+		health:   "PASSED",
+		wearout:  0,
+	}) {
+		t.Fatal("explicit zero NVMe life should be a health issue")
+	}
+	if patrolPhysicalDiskHealthIssue(patrolPhysicalDiskRow{
+		diskType: "sata",
+		health:   "UNKNOWN",
+		wearout:  0,
+	}) {
+		t.Fatal("unreported SATA wearout should remain neutral")
 	}
 }
 

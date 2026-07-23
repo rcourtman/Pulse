@@ -20,6 +20,14 @@ management, and fleet control surfaces. Pulse v6 has one host-installed
 infrastructure agent binary, `pulse-agent`; host, Docker / Podman,
 Kubernetes, Proxmox-local, and other node-local telemetry are modules inside
 that binary, not separate customer-facing agent products.
+The host telemetry module owns lossless physical-disk report assembly. Linux
+smartctl permission/open failures are not standby; only the explicit
+`-n standby,3` exit contract may mark a device sleeping. Identity-only rows
+must retain sysfs model, serial, WWID, size, and transport when available,
+smartctl retry modes merge rather than replace evidence, and partial NVMe JSON
+must preserve field presence so omitted health counters are not fabricated as
+zero. Direct SATA, SAS, NVMe, and controller-member inventory must all survive
+one compressed unified-agent report without a collector-side suffix cap.
 
 ## Canonical Files
 
@@ -1297,6 +1305,10 @@ the intentionally sparse public response.
    Direct Linux SATA/SAT-style block devices that return health but no
    temperature through smartctl auto-detection must retry explicit `-d sat` and
    `-d scsi` probes before settling on a no-temperature result.
+   Those retries must accumulate model, serial, WWN, health, temperature, and
+   SMART attributes across attempts. A later healthy result must not erase an
+   earlier explicit failure, and an omitted NVMe counter must stay absent while
+   a reported zero remains present through report serialization.
    Linux `/dev` and `/sys/block` identity parsing must use slash-based device
    semantics independent of the Go build host, so the Windows native CI lane
    proves the same SSD standby-guard decisions as Linux instead of interpreting

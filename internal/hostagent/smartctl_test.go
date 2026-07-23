@@ -7,6 +7,9 @@ import (
 	"testing"
 )
 
+func smartctlIntPtr(value int) *int       { return &value }
+func smartctlInt64Ptr(value int64) *int64 { return &value }
+
 func TestDetectDiskType(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -295,12 +298,12 @@ func TestParseSMARTAttributes_SATA(t *testing.T) {
 func TestParseSMARTAttributes_NVMe(t *testing.T) {
 	data := &smartctlJSON{}
 	data.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{
-		PowerOnHours:    5000,
-		PowerCycles:     100,
-		PercentageUsed:  5,
-		AvailableSpare:  100,
-		MediaErrors:     0,
-		UnsafeShutdowns: 12,
+		PowerOnHours:    smartctlInt64Ptr(5000),
+		PowerCycles:     smartctlInt64Ptr(100),
+		PercentageUsed:  smartctlIntPtr(5),
+		AvailableSpare:  smartctlIntPtr(100),
+		MediaErrors:     smartctlInt64Ptr(0),
+		UnsafeShutdowns: smartctlInt64Ptr(12),
 	}
 
 	attrs := parseSMARTAttributes(data, "nvme")
@@ -382,7 +385,14 @@ func TestParseSMARTAttributes_Standby(t *testing.T) {
 
 func TestParseSMARTAttributes_NVMeZeroValuesWhenLogPresent(t *testing.T) {
 	data := &smartctlJSON{
-		NVMeSmartHealthInformationLog: &nvmeSmartHealthInformationLogJSON{},
+		NVMeSmartHealthInformationLog: &nvmeSmartHealthInformationLogJSON{
+			PowerOnHours:    smartctlInt64Ptr(0),
+			PowerCycles:     smartctlInt64Ptr(0),
+			PercentageUsed:  smartctlIntPtr(0),
+			AvailableSpare:  smartctlIntPtr(0),
+			MediaErrors:     smartctlInt64Ptr(0),
+			UnsafeShutdowns: smartctlInt64Ptr(0),
+		},
 	}
 
 	attrs := parseSMARTAttributes(data, "nvme")

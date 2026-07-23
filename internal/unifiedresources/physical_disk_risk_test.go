@@ -117,7 +117,7 @@ func TestPhysicalDiskAssessmentFromMeta_PendingSectors(t *testing.T) {
 	meta := &PhysicalDiskMeta{
 		Health: "PASSED",
 		SMART: &SMARTMeta{
-			PendingSectors: 3,
+			PendingSectors: ptrInt64(3),
 		},
 	}
 	assessment := physicalDiskAssessmentFromMeta(meta)
@@ -156,6 +156,22 @@ func TestPhysicalDiskAssessmentFromMeta_LowWearout(t *testing.T) {
 	assessment := physicalDiskAssessmentFromMeta(meta)
 	if assessment.Level != storagehealth.RiskCritical {
 		t.Errorf("3%% wearout should produce critical assessment, got %s", assessment.Level)
+	}
+}
+
+func TestPhysicalDiskAssessmentFromMeta_PercentageUsedProvesZeroLifeOnSATASSD(t *testing.T) {
+	percentageUsed := 100
+	meta := &PhysicalDiskMeta{
+		DiskType: "sata",
+		Health:   "PASSED",
+		Wearout:  0,
+		SMART: &SMARTMeta{
+			PercentageUsed: &percentageUsed,
+		},
+	}
+	assessment := physicalDiskAssessmentFromMeta(meta)
+	if assessment.Level != storagehealth.RiskCritical {
+		t.Fatalf("reported percentage-used=100 should prove zero remaining life, got %s", assessment.Level)
 	}
 }
 

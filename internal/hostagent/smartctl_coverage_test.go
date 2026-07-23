@@ -271,8 +271,8 @@ func TestCollectSMARTLocalUsesSmartctlScanOpenTargetsOnLinux(t *testing.T) {
 			Passed bool `json:"passed"`
 		}{Passed: true}
 		payload.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{
-			PercentageUsed: 6,
-			AvailableSpare: 94,
+			PercentageUsed: smartctlIntPtr(6),
+			AvailableSpare: smartctlIntPtr(94),
 		}
 		out, _ := json.Marshal(payload)
 		return out, nil
@@ -588,7 +588,7 @@ func TestCollectDeviceSMARTStandby(t *testing.T) {
 	timeNow = func() time.Time { return fixed }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
+		return exec.CommandContext(ctx, "sh", "-c", "exit 3").Output()
 	}
 
 	result, err := collectDeviceSMART(context.Background(), "/dev/sda")

@@ -85,6 +85,16 @@ func (*disksErrorPVEClient) GetDisks(ctx context.Context, node string) ([]proxmo
 	return nil, fmt.Errorf("596 connection timed out")
 }
 
+type permissionDeniedDisksPVEClient struct {
+	fakeStorageClient
+	called chan struct{}
+}
+
+func (client *permissionDeniedDisksPVEClient) GetDisks(context.Context, string) ([]proxmox.Disk, error) {
+	close(client.called)
+	return nil, fmt.Errorf("403 permission check failed")
+}
+
 // A node whose Proxmox disks/list query fails (wide nodes can exceed the API
 // window) must still populate its Physical Disks view from the linked host
 // agent's SMART inventory instead of silently emptying (#1516).
@@ -142,6 +152,68 @@ func TestMaybePollPhysicalDisksAsync_AgentFallbackWhenDiskQueryFails(t *testing.
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("expected fallback physical disk from host agent SMART, got %+v", disks)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestMaybePollPhysicalDisksAsync_PermissionFailurePreservesPreviousInventory(t *testing.T) {
+	m := &Monitor{
+		state:                models.NewState(),
+		lastPhysicalDiskPoll: make(map[string]time.Time),
+		alertManager:         alerts.NewManager(),
+	}
+	existing := models.PhysicalDisk{
+		ID:          "pve1-node1--dev-sda",
+		Node:        "node1",
+		Instance:    "pve1",
+		DevPath:     "/dev/sda",
+		Model:       "CT240BX500SSD1",
+		Serial:      "SATA-BOOT-1",
+		Type:        "sata",
+		Size:        240057409536,
+		Health:      "PASSED",
+		Wearout:     -1,
+		Temperature: 54,
+		Used:        "LVM",
+		LastChecked: time.Now().Add(-time.Minute),
+	}
+	m.state.UpdatePhysicalDisks("pve1", []models.PhysicalDisk{existing})
+	m.state.UpdateNodesForInstance("pve1", []models.Node{{
+		ID:       "pve1-node1",
+		Name:     "node1",
+		Instance: "pve1",
+	}})
+	beforePoll := m.state.GetSnapshot().LastUpdate
+	client := &permissionDeniedDisksPVEClient{called: make(chan struct{})}
+
+	m.maybePollPhysicalDisksAsync(
+		context.Background(),
+		"pve1",
+		&config.PVEInstance{},
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+		[]models.Node{{Name: "node1", Instance: "pve1"}},
+	)
+
+	deadline := time.Now().Add(3 * time.Second)
+	select {
+	case <-client.called:
+	case <-time.After(3 * time.Second):
+		t.Fatal("permission-denied disk poll was not attempted")
+	}
+	for {
+		snapshot := m.state.GetSnapshot()
+		disks := snapshot.PhysicalDisks
+		if snapshot.LastUpdate.After(beforePoll) && len(disks) == 1 && disks[0].Serial == existing.Serial {
+			if disks[0].Temperature != 54 || disks[0].Used != "LVM" {
+				t.Fatalf("permission failure erased prior disk evidence: %+v", disks[0])
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("permission failure did not preserve prior inventory: %+v", disks)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 func ptrInt64(v int64) *int64 { return &v }
+func ptrInt(v int) *int       { return &v }
 
 func assertStringSlice(t *testing.T, got, want []string) {
 	t.Helper()
@@ -910,7 +911,7 @@ func TestView_PhysicalDiskViewAccessors(t *testing.T) {
 			Temperature: 41,
 			RPM:         0,
 			Used:        "zfs",
-			SMART:       &SMARTMeta{PowerOnHours: 10, MediaErrors: 2},
+			SMART:       &SMARTMeta{PowerOnHours: ptrInt64(10), MediaErrors: ptrInt64(2)},
 		},
 	}
 
@@ -928,7 +929,9 @@ func TestView_PhysicalDiskViewAccessors(t *testing.T) {
 	if v.Health() != "PASSED" || v.Wearout() != 3 || v.Temperature() != 41 || v.RPM() != 0 || v.Used() != "zfs" {
 		t.Fatalf("expected disk state to match, got health=%q wearout=%d temp=%d rpm=%d used=%q", v.Health(), v.Wearout(), v.Temperature(), v.RPM(), v.Used())
 	}
-	if smart := v.SMART(); smart == nil || smart.PowerOnHours != 10 || smart.MediaErrors != 2 {
+	if smart := v.SMART(); smart == nil ||
+		smart.PowerOnHours == nil || *smart.PowerOnHours != 10 ||
+		smart.MediaErrors == nil || *smart.MediaErrors != 2 {
 		t.Fatalf("expected SMART metadata to match, got %+v", smart)
 	}
 	if !v.LastSeen().Equal(now) || v.ParentID() != parentID || v.ParentName() != "" {

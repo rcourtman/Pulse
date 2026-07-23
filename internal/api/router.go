@@ -60,6 +60,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
@@ -9204,21 +9205,44 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		for i := range physicalDisks {
-			disk := &physicalDisks[i]
-			serial := strings.TrimSpace(disk.PhysicalDisk.Serial)
-			wwn := strings.TrimSpace(disk.PhysicalDisk.WWN)
-			metricsTargetID := ""
-			if disk.MetricsTarget != nil {
-				metricsTargetID = strings.TrimSpace(disk.MetricsTarget.ResourceID)
-			}
-			if strings.EqualFold(disk.ID, target) ||
-				(metricsTargetID != "" && strings.EqualFold(metricsTargetID, target)) ||
-				(serial != "" && strings.EqualFold(serial, target)) ||
-				(wwn != "" && strings.EqualFold(wwn, target)) {
-				return disk
+			if strings.EqualFold(physicalDisks[i].ID, target) {
+				return &physicalDisks[i]
 			}
 		}
-		return nil
+		uniqueMatch := func(predicate func(*unifiedresources.Resource) bool) *unifiedresources.Resource {
+			matchIndex := -1
+			for index := range physicalDisks {
+				if !predicate(&physicalDisks[index]) {
+					continue
+				}
+				if matchIndex >= 0 {
+					return nil
+				}
+				matchIndex = index
+			}
+			if matchIndex < 0 {
+				return nil
+			}
+			return &physicalDisks[matchIndex]
+		}
+		if disk := uniqueMatch(func(candidate *unifiedresources.Resource) bool {
+			return candidate.MetricsTarget != nil &&
+				strings.EqualFold(strings.TrimSpace(candidate.MetricsTarget.ResourceID), target)
+		}); disk != nil {
+			return disk
+		}
+		if !diskinventory.IsUsableHardwareID(target) {
+			return nil
+		}
+		return uniqueMatch(func(candidate *unifiedresources.Resource) bool {
+			if candidate.PhysicalDisk == nil {
+				return false
+			}
+			serial := strings.TrimSpace(candidate.PhysicalDisk.Serial)
+			wwn := strings.TrimSpace(candidate.PhysicalDisk.WWN)
+			return (diskinventory.IsUsableHardwareID(serial) && strings.EqualFold(serial, target)) ||
+				(diskinventory.IsUsableHardwareID(wwn) && strings.EqualFold(wwn, target))
+		})
 	}
 
 	liveMetricPoints := func(resourceType, resourceID string) map[string]monitoring.MetricPoint {
@@ -9345,35 +9369,35 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 			if pd.SMART != nil {
 				s := pd.SMART
-				if s.PowerOnHours > 0 {
-					points["smart_power_on_hours"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PowerOnHours)}
+				if s.PowerOnHours != nil {
+					points["smart_power_on_hours"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.PowerOnHours)}
 				}
-				if s.PowerCycles > 0 {
-					points["smart_power_cycles"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PowerCycles)}
+				if s.PowerCycles != nil {
+					points["smart_power_cycles"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.PowerCycles)}
 				}
-				if s.ReallocatedSectors > 0 {
-					points["smart_reallocated_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.ReallocatedSectors)}
+				if s.ReallocatedSectors != nil {
+					points["smart_reallocated_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.ReallocatedSectors)}
 				}
-				if s.PendingSectors > 0 {
-					points["smart_pending_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PendingSectors)}
+				if s.PendingSectors != nil {
+					points["smart_pending_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.PendingSectors)}
 				}
-				if s.OfflineUncorrectable > 0 {
-					points["smart_offline_uncorrectable"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.OfflineUncorrectable)}
+				if s.OfflineUncorrectable != nil {
+					points["smart_offline_uncorrectable"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.OfflineUncorrectable)}
 				}
-				if s.UDMACRCErrors > 0 {
-					points["smart_crc_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.UDMACRCErrors)}
+				if s.UDMACRCErrors != nil {
+					points["smart_crc_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.UDMACRCErrors)}
 				}
-				if s.PercentageUsed > 0 {
-					points["smart_percentage_used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PercentageUsed)}
+				if s.PercentageUsed != nil {
+					points["smart_percentage_used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.PercentageUsed)}
 				}
-				if s.AvailableSpare > 0 {
-					points["smart_available_spare"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.AvailableSpare)}
+				if s.AvailableSpare != nil {
+					points["smart_available_spare"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.AvailableSpare)}
 				}
-				if s.MediaErrors > 0 {
-					points["smart_media_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.MediaErrors)}
+				if s.MediaErrors != nil {
+					points["smart_media_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.MediaErrors)}
 				}
-				if s.UnsafeShutdowns > 0 {
-					points["smart_unsafe_shutdowns"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.UnsafeShutdowns)}
+				if s.UnsafeShutdowns != nil {
+					points["smart_unsafe_shutdowns"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*s.UnsafeShutdowns)}
 				}
 			}
 		}

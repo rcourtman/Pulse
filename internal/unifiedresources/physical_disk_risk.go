@@ -84,20 +84,54 @@ func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assess
 		Health:      meta.Health,
 		Temperature: meta.Temperature,
 		Wearout:     meta.Wearout,
+		WearoutKnown: meta.Wearout > 0 ||
+			(meta.Wearout == 0 && physicalDiskTypeIsNonRotational(meta.DiskType)),
 	}
 	if meta.SMART != nil {
-		sample.PowerOnHours = meta.SMART.PowerOnHours
-		sample.PowerCycles = meta.SMART.PowerCycles
-		sample.ReallocatedSectors = meta.SMART.ReallocatedSectors
-		sample.PendingSectors = meta.SMART.PendingSectors
-		sample.OfflineUncorrectable = meta.SMART.OfflineUncorrectable
-		sample.UDMACRCErrors = meta.SMART.UDMACRCErrors
-		sample.PercentageUsed = meta.SMART.PercentageUsed
-		sample.AvailableSpare = meta.SMART.AvailableSpare
-		sample.MediaErrors = meta.SMART.MediaErrors
-		sample.UnsafeShutdowns = meta.SMART.UnsafeShutdowns
+		if meta.SMART.PowerOnHours != nil {
+			sample.PowerOnHours = *meta.SMART.PowerOnHours
+		}
+		if meta.SMART.PowerCycles != nil {
+			sample.PowerCycles = *meta.SMART.PowerCycles
+		}
+		if meta.SMART.ReallocatedSectors != nil {
+			sample.ReallocatedSectors = *meta.SMART.ReallocatedSectors
+		}
+		if meta.SMART.PendingSectors != nil {
+			sample.PendingSectors = *meta.SMART.PendingSectors
+		}
+		if meta.SMART.OfflineUncorrectable != nil {
+			sample.OfflineUncorrectable = *meta.SMART.OfflineUncorrectable
+		}
+		if meta.SMART.UDMACRCErrors != nil {
+			sample.UDMACRCErrors = *meta.SMART.UDMACRCErrors
+		}
+		if meta.SMART.PercentageUsed != nil {
+			sample.PercentageUsed = *meta.SMART.PercentageUsed
+			sample.Wearout = 100 - *meta.SMART.PercentageUsed
+			sample.WearoutKnown = true
+		}
+		if meta.SMART.AvailableSpare != nil {
+			sample.AvailableSpare = *meta.SMART.AvailableSpare
+			sample.AvailableSpareKnown = true
+		}
+		if meta.SMART.MediaErrors != nil {
+			sample.MediaErrors = *meta.SMART.MediaErrors
+		}
+		if meta.SMART.UnsafeShutdowns != nil {
+			sample.UnsafeShutdowns = *meta.SMART.UnsafeShutdowns
+		}
 	}
 	return storagehealth.AssessSample(sample)
+}
+
+func physicalDiskTypeIsNonRotational(diskType string) bool {
+	switch strings.ToLower(strings.TrimSpace(diskType)) {
+	case "nvme", "ssd":
+		return true
+	default:
+		return false
+	}
 }
 
 func physicalDiskStatus(model, health string, assessment storagehealth.Assessment) ResourceStatus {

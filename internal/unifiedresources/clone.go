@@ -714,8 +714,18 @@ func cloneSMARTMeta(in *SMARTMeta) *SMARTMeta {
 	if in == nil {
 		return nil
 	}
-	out := *in
-	return &out
+	return &SMARTMeta{
+		PowerOnHours:         cloneInt64Ptr(in.PowerOnHours),
+		PowerCycles:          cloneInt64Ptr(in.PowerCycles),
+		ReallocatedSectors:   cloneInt64Ptr(in.ReallocatedSectors),
+		PendingSectors:       cloneInt64Ptr(in.PendingSectors),
+		OfflineUncorrectable: cloneInt64Ptr(in.OfflineUncorrectable),
+		UDMACRCErrors:        cloneInt64Ptr(in.UDMACRCErrors),
+		PercentageUsed:       cloneIntPtr(in.PercentageUsed),
+		AvailableSpare:       cloneIntPtr(in.AvailableSpare),
+		MediaErrors:          cloneInt64Ptr(in.MediaErrors),
+		UnsafeShutdowns:      cloneInt64Ptr(in.UnsafeShutdowns),
+	}
 }
 
 func clonePhysicalDiskRisk(in *PhysicalDiskRisk) *PhysicalDiskRisk {

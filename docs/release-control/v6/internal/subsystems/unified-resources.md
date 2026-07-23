@@ -32,6 +32,15 @@ Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART
 temperature, capacity, health, and identity enrichment.
+Physical-disk matching is parent-scoped and topology-aware: persisted source
+mappings survive registry rebuilds, controller members sharing a block path
+remain distinct, placeholder serials/WWNs never become canonical or metrics
+identity, and ambiguous matches fail closed. SMART counter metadata preserves
+presence through pointer-valued JSON fields, so reported zero is distinct from
+missing. The canonical disk payload also carries provider vendor metadata and
+uses explicit SMART health, temperature, and wearout ahead of coarser
+contradictory inventory values without manufacturing facts when telemetry is
+absent.
 
 ## Canonical Files
 
@@ -3460,6 +3469,12 @@ refreshes and Proxmox-scoped views can drop the disk even though inventory
 still exists. `HostSMARTMeta` must carry `sizeBytes` through adapter, clone,
 read-state, and API transport so disk capacity remains available after
 registry rebuilds.
+That round trip must also retain provider vendor, controller/target topology,
+and explicit zero-valued SMART counters. Registry matching may use usable
+serial or WWN only inside a compatible physical-disk parent scope; when those
+identifiers are absent or placeholders, host/device/topology fallback identity
+is authoritative. An exact seeded source mapping may be reused after restart
+only when its resource type and parent scope still agree.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of

@@ -174,7 +174,7 @@ describe('diskPresentation', () => {
       '',
     );
     expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: 96 }))).toBe('96%');
-    expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: 0 }))).toBe('');
+    expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: 0 }))).toBe('0%');
     expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: -1 }))).toBe('');
     expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 96 }))).toContain('text-green');
     expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 35 }))).toContain('text-amber');
@@ -381,6 +381,20 @@ describe('diskPresentation', () => {
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'tank')).toBe(true);
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'node:tower')).toBe(true);
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'node:pve1')).toBe(false);
+    expect(
+      matchesPhysicalDiskSearch(
+        warningDisk,
+        {
+          ...warningData,
+          wwn: '5-c500-da60ca43',
+          controller: '/dev/sg2',
+          target: 'sssraid,0,1',
+          type: 'sas',
+          instance: 'cluster-a',
+        },
+        '5-c500 sssraid cluster-a sas',
+      ),
+    ).toBe(true);
     expect(getPhysicalDiskSourceKey(warningDisk)).toBe('proxmox-pve');
     expect(getPhysicalDiskRoleFilterValue(warningData)).toBe('cache-pool');
     expect(normalizePhysicalDiskFacetFilter(' Cache Pool ')).toBe('cache-pool');

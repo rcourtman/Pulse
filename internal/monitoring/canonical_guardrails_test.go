@@ -2094,7 +2094,8 @@ func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
 			snippets: []string{
 				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {",
 				"deriveWearoutFromSMARTAttributes(matched.Attributes)",
-				`strings.EqualFold(updated[i].Health, "unknown")`,
+				"shouldUseHostAgentPhysicalDiskHealth(updated[i].Health, matched.Health)",
+				`if incoming == "FAILED"`,
 			},
 		},
 		{

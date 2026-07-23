@@ -85,13 +85,13 @@ type SMARTAttributes struct {
 }
 
 type nvmeSmartHealthInformationLogJSON struct {
-	Temperature     int   `json:"temperature"`
-	AvailableSpare  int   `json:"available_spare"`
-	PercentageUsed  int   `json:"percentage_used"`
-	PowerOnHours    int64 `json:"power_on_hours"`
-	UnsafeShutdowns int64 `json:"unsafe_shutdowns"`
-	MediaErrors     int64 `json:"media_errors"`
-	PowerCycles     int64 `json:"power_cycles"`
+	Temperature     int    `json:"temperature"`
+	AvailableSpare  *int   `json:"available_spare"`
+	PercentageUsed  *int   `json:"percentage_used"`
+	PowerOnHours    *int64 `json:"power_on_hours"`
+	UnsafeShutdowns *int64 `json:"unsafe_shutdowns"`
+	MediaErrors     *int64 `json:"media_errors"`
+	PowerCycles     *int64 `json:"power_cycles"`
 }
 
 type lsblkJSON struct {
@@ -321,9 +321,6 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 			continue
 		}
 		refineLinuxBlockDeviceIdentity(smart, target)
-		if smart.Type == "" {
-			smart.Type = "sata"
-		}
 		// The refine step can rename the device (nvme0 -> nvme0n1), so re-apply
 		// exclusions against the canonical name the user actually sees.
 		if matchesDeviceExclude(smart.Device, "/dev/"+smart.Device, diskExclude) {
@@ -880,6 +877,21 @@ func refineLinuxBlockDeviceIdentity(smart *DiskSMART, target smartctlTarget) {
 			smart.Type = evidence
 		}
 	}
+	if smart.Model == "" {
+		smart.Model = readTrimmedFile(filepath.Join("/sys/block", block, "device", "model"))
+	}
+	if smart.Serial == "" {
+		smart.Serial = readTrimmedFile(filepath.Join("/sys/block", block, "device", "serial"))
+		if smart.Serial != "" {
+			if smart.Collection == nil {
+				smart.Collection = &diskinventory.CollectionStatus{}
+			}
+			smart.Collection.Serial = diskinventory.Available("sysfs")
+		}
+	}
+	if smart.WWN == "" {
+		smart.WWN = linuxBlockDeviceWWID(block)
+	}
 	if size := blockDeviceSizeBytes(block); size > 0 {
 		smart.SizeBytes = size
 	}
@@ -974,11 +986,21 @@ func linuxBlockDeviceTransport(block string, target smartctlTarget) string {
 	case strings.HasPrefix(deviceType, "sat"):
 		return "sata"
 	default:
-		// Preserve the legacy direct sdX fallback when the kernel supplies no
-		// transport evidence. Successful smartctl probes still override this
-		// with their protocol field before this fallback is needed.
-		return "sata"
+		return ""
 	}
+}
+
+func linuxBlockDeviceWWID(block string) string {
+	for _, candidate := range []string{
+		filepath.Join("/sys/block", block, "device", "wwid"),
+		filepath.Join("/sys/block", block, "wwid"),
+		filepath.Join("/sys/block", block, "device", "wwn"),
+	} {
+		if value := readTrimmedFile(candidate); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // linuxIdentityOnlyDisks builds identity-only entries for physical disks whose
@@ -1045,6 +1067,7 @@ func linuxIdentityOnlyDisks(missed []smartctlTarget, collected, multiplexed map[
 			Device:      block,
 			Model:       readTrimmedFile(filepath.Join("/sys/block", block, "device", "model")),
 			Serial:      serial,
+			WWN:         linuxBlockDeviceWWID(block),
 			Type:        linuxBlockDeviceTransport(block, target),
 			Controller:  controller,
 			Target:      controllerTarget,
@@ -1064,8 +1087,8 @@ func linuxIdentityOnlyDisks(missed []smartctlTarget, collected, multiplexed map[
 }
 
 // isMultiplexedDeviceType reports whether a smartctl -d type addresses a member
-// disk behind a controller (e.g. "megaraid,7"), as opposed to a directly
-// attached device ("", "sat", "nvme", "scsi", "sat,auto").
+// disk behind a controller (for example "megaraid,7", "areca,1/1", or
+// "sssraid,0,1"), as opposed to a directly attached device.
 func isMultiplexedDeviceType(deviceType string) bool {
 	idx := strings.IndexByte(deviceType, ',')
 	if idx < 0 || idx+1 >= len(deviceType) {
@@ -1115,7 +1138,15 @@ func firstNVMeNamespace(controller string) string {
 		if suffix := name[len(prefix):]; suffix == "" || !isAllDigits(suffix) {
 			continue
 		}
-		if best == "" || name < best {
+		number, err := strconv.Atoi(name[len(prefix):])
+		if err != nil {
+			continue
+		}
+		bestNumber := 0
+		if best != "" {
+			bestNumber, _ = strconv.Atoi(best[len(prefix):])
+		}
+		if best == "" || number < bestNumber {
 			best = name
 		}
 	}
@@ -1231,7 +1262,9 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
 				exitCode := exitErr.ExitCode()
-				if (exitCode == smartctlStandbyExitStatus || exitCode&2 != 0) && len(output) == 0 {
+				if exitCode == smartctlStandbyExitStatus &&
+					len(output) == 0 &&
+					smartctlArgsUseStandbyExitStatus(args) {
 					standbyResult := &DiskSMART{
 						Device:  filepath.Base(target.Path),
 						Standby: true,
@@ -1242,16 +1275,6 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 						LastUpdated: timeNow(),
 					}
 					if runtimeGOOS == "freebsd" && i < len(attempts)-1 && target.DeviceType == "" {
-						if firstStandby == nil {
-							firstStandby = standbyResult
-						}
-						continue
-					}
-					// -n standby,3 makes a real standby exit 3; exit bit 2 with
-					// no output is an open/identify failure, not standby. When
-					// another attempt remains (Linux untyped retry), try it
-					// before reporting a phantom standby disk.
-					if runtimeGOOS == "linux" && i < len(attempts)-1 && exitCode != smartctlStandbyExitStatus {
 						if firstStandby == nil {
 							firstStandby = standbyResult
 						}
@@ -1288,6 +1311,8 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 		result = enrichFreeBSDSCTTemperature(cmdCtx, smartctlPath, args, target, result)
 		if firstParsed == nil {
 			firstParsed = result
+		} else {
+			firstParsed = mergeSMARTAttemptEvidence(firstParsed, result)
 		}
 		if !shouldRetrySMARTTarget(target.Path, result, i, len(attempts)) {
 			log.Debug().
@@ -1299,7 +1324,7 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 				Int("temperature", result.Temperature).
 				Str("health", result.Health).
 				Msg("collected SMART data")
-			return result, nil
+			return firstParsed, nil
 		}
 	}
 
@@ -1327,6 +1352,109 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 		return nil, lastErr
 	}
 	return nil, errSMARTDataUnavailable
+}
+
+func smartctlArgsUseStandbyExitStatus(args []string) bool {
+	want := "standby," + strconv.Itoa(smartctlStandbyExitStatus)
+	for index := 0; index+1 < len(args); index++ {
+		if args[index] == "-n" && args[index+1] == want {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeSMARTAttemptEvidence(base, incoming *DiskSMART) *DiskSMART {
+	if base == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return base
+	}
+	if base.Model == "" {
+		base.Model = incoming.Model
+	}
+	if base.Serial == "" {
+		base.Serial = incoming.Serial
+	}
+	if base.WWN == "" {
+		base.WWN = incoming.WWN
+	}
+	if base.SizeBytes <= 0 {
+		base.SizeBytes = incoming.SizeBytes
+	}
+	if base.Type == "" || base.Type == "scsi" {
+		if incoming.Type != "" {
+			base.Type = incoming.Type
+		}
+	}
+	if base.Controller == "" {
+		base.Controller = incoming.Controller
+	}
+	if base.Target == "" {
+		base.Target = incoming.Target
+	}
+	if base.Temperature <= 0 && incoming.Temperature > 0 {
+		base.Temperature = incoming.Temperature
+	}
+	if shouldReplaceSMARTAttemptHealth(base.Health, incoming.Health) {
+		base.Health = incoming.Health
+	}
+	base.Attributes = mergeSMARTAttributes(base.Attributes, incoming.Attributes)
+	base.Collection = diskinventory.MergeStatus(base.Collection, incoming.Collection)
+	return base
+}
+
+func shouldReplaceSMARTAttemptHealth(existing, incoming string) bool {
+	incoming = strings.ToUpper(strings.TrimSpace(incoming))
+	if incoming == "" || incoming == "UNKNOWN" {
+		return false
+	}
+	existing = strings.ToUpper(strings.TrimSpace(existing))
+	if incoming == "FAILED" {
+		return true
+	}
+	return existing == "" || existing == "UNKNOWN"
+}
+
+func mergeSMARTAttributes(base, incoming *SMARTAttributes) *SMARTAttributes {
+	if base == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return base
+	}
+	if base.PowerOnHours == nil {
+		base.PowerOnHours = incoming.PowerOnHours
+	}
+	if base.PowerCycles == nil {
+		base.PowerCycles = incoming.PowerCycles
+	}
+	if base.ReallocatedSectors == nil {
+		base.ReallocatedSectors = incoming.ReallocatedSectors
+	}
+	if base.PendingSectors == nil {
+		base.PendingSectors = incoming.PendingSectors
+	}
+	if base.OfflineUncorrectable == nil {
+		base.OfflineUncorrectable = incoming.OfflineUncorrectable
+	}
+	if base.UDMACRCErrors == nil {
+		base.UDMACRCErrors = incoming.UDMACRCErrors
+	}
+	if base.PercentageUsed == nil {
+		base.PercentageUsed = incoming.PercentageUsed
+	}
+	if base.AvailableSpare == nil {
+		base.AvailableSpare = incoming.AvailableSpare
+	}
+	if base.MediaErrors == nil {
+		base.MediaErrors = incoming.MediaErrors
+	}
+	if base.UnsafeShutdowns == nil {
+		base.UnsafeShutdowns = incoming.UnsafeShutdowns
+	}
+	return base
 }
 
 func smartctlProbeAttempts(target smartctlTarget) [][]string {
@@ -1535,20 +1663,26 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 		result.SizeBytes = smartData.UserCapacity.Bytes
 	}
 
-	if smartData.Temperature.Current > 0 {
+	if validSMARTTemperature(smartData.Temperature.Current) {
 		result.Temperature = smartData.Temperature.Current
-	} else if smartData.NVMeSmartHealthInformationLog != nil && smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
+	} else if smartData.NVMeSmartHealthInformationLog != nil && validSMARTTemperature(smartData.NVMeSmartHealthInformationLog.Temperature) {
 		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
-	} else if smartData.ATASCTStatus.Current.Value > 0 {
+	} else if validSMARTTemperature(smartData.ATASCTStatus.Current.Value) {
 		result.Temperature = smartData.ATASCTStatus.Current.Value
 	} else {
-		for _, attr := range smartData.ATASmartAttributes.Table {
-			if attr.ID == 194 || attr.ID == 190 {
+		for _, attributeID := range []int{194, 190} {
+			for _, attr := range smartData.ATASmartAttributes.Table {
+				if attr.ID != attributeID {
+					continue
+				}
 				temp := parseRawValue(attr.Raw.String, attr.Raw.Value)
-				if temp > 0 && temp < 150 {
+				if validSMARTTemperature(int(temp)) {
 					result.Temperature = int(temp)
 					break
 				}
+			}
+			if result.Temperature > 0 {
+				break
 			}
 		}
 	}
@@ -1585,6 +1719,10 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 	}
 
 	return result, nil
+}
+
+func validSMARTTemperature(value int) bool {
+	return value > 0 && value < 150
 }
 
 func parseSMARTTextOutput(text string, target smartctlTarget) (*DiskSMART, error) {
@@ -1743,20 +1881,37 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 
 	if diskType == "nvme" {
 		if data.NVMeSmartHealthInformationLog != nil {
-			hasData = true
 			nvmeLog := data.NVMeSmartHealthInformationLog
-			poh := nvmeLog.PowerOnHours
-			attrs.PowerOnHours = &poh
-			pc := nvmeLog.PowerCycles
-			attrs.PowerCycles = &pc
-			pu := nvmeLog.PercentageUsed
-			attrs.PercentageUsed = &pu
-			as := nvmeLog.AvailableSpare
-			attrs.AvailableSpare = &as
-			me := nvmeLog.MediaErrors
-			attrs.MediaErrors = &me
-			us := nvmeLog.UnsafeShutdowns
-			attrs.UnsafeShutdowns = &us
+			if nvmeLog.PowerOnHours != nil {
+				hasData = true
+				value := *nvmeLog.PowerOnHours
+				attrs.PowerOnHours = &value
+			}
+			if nvmeLog.PowerCycles != nil {
+				hasData = true
+				value := *nvmeLog.PowerCycles
+				attrs.PowerCycles = &value
+			}
+			if nvmeLog.PercentageUsed != nil {
+				hasData = true
+				value := *nvmeLog.PercentageUsed
+				attrs.PercentageUsed = &value
+			}
+			if nvmeLog.AvailableSpare != nil {
+				hasData = true
+				value := *nvmeLog.AvailableSpare
+				attrs.AvailableSpare = &value
+			}
+			if nvmeLog.MediaErrors != nil {
+				hasData = true
+				value := *nvmeLog.MediaErrors
+				attrs.MediaErrors = &value
+			}
+			if nvmeLog.UnsafeShutdowns != nil {
+				hasData = true
+				value := *nvmeLog.UnsafeShutdowns
+				attrs.UnsafeShutdowns = &value
+			}
 		}
 	} else if diskType == "sas" || diskType == "scsi" {
 		// SCSI drives report no ATA attribute table; their counters live in

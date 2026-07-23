@@ -766,14 +766,17 @@ func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, so
 			if resource.PhysicalDisk == nil {
 				return ""
 			}
-			fallback := ""
 			if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
-				device := normalizePhysicalDiskDeviceToken(resource.PhysicalDisk.DevPath)
-				if device != "" {
-					fallback = fmt.Sprintf("%s:%s", parentSourceID, device)
-				}
+				return diskinventory.PreferredID(
+					resource.PhysicalDisk.Serial,
+					resource.PhysicalDisk.WWN,
+					parentSourceID,
+					resource.PhysicalDisk.DevPath,
+					resource.PhysicalDisk.Controller,
+					resource.PhysicalDisk.Target,
+				)
 			}
-			return PreferredPhysicalDiskMetricID(resource.PhysicalDisk.Serial, resource.PhysicalDisk.WWN, fallback)
+			return PreferredPhysicalDiskMetricID(resource.PhysicalDisk.Serial, resource.PhysicalDisk.WWN, "")
 		}
 	case SourceDocker:
 		if resource.Docker == nil {
@@ -2417,6 +2420,20 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
 
+	// Rehydrated registries seed exact source mappings from the persisted
+	// unified snapshot. Honor that durable mapping before attempting weaker
+	// identity correlation, but fail closed if a colliding source key belongs
+	// to a different physical-disk parent.
+	if mappedID := rr.bySource[source][sourceID]; mappedID != "" {
+		if existing := rr.resources[mappedID]; existing != nil &&
+			existing.Type == resource.Type &&
+			(resource.Type != ResourceTypePhysicalDisk ||
+				physicalDiskMatchScopeCompatible(existing, &resource)) {
+			rr.mergeInto(existing, resource, source)
+			return existing.ID
+		}
+	}
+
 	// Linked resources must be mutually linked to avoid one-sided/ambiguous auto-merges.
 	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
 		existing := rr.resources[linked]
@@ -2457,7 +2474,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	}
 
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
-		if match, excluded := rr.findMatch(identity, resource.Type, candidateID); match != nil {
+		if match, excluded := rr.findMatch(resource, candidateID); match != nil {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
 				rr.mergeInto(existing, resource, source)
@@ -2525,9 +2542,9 @@ func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
 	return true
 }
 
-func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType ResourceType, candidateID string) (*MatchResult, bool) {
+func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string) (*MatchResult, bool) {
 	excludedMatch := false
-	candidates := rr.matcher.FindCandidates(identity)
+	candidates := rr.matcher.FindCandidates(incoming.Identity)
 	for _, candidate := range candidates {
 		if candidate.ID == "" {
 			continue
@@ -2536,7 +2553,11 @@ func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType Re
 			continue
 		}
 		existing := rr.resources[candidate.ID]
-		if existing == nil || existing.Type != resourceType {
+		if existing == nil || existing.Type != incoming.Type {
+			continue
+		}
+		if incoming.Type == ResourceTypePhysicalDisk &&
+			!physicalDiskMatchScopeCompatible(existing, &incoming) {
 			continue
 		}
 		if rr.isExcluded(candidate.ID, candidateID) {
@@ -2552,6 +2573,24 @@ func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType Re
 		}, false
 	}
 	return nil, excludedMatch
+}
+
+func physicalDiskMatchScopeCompatible(existing, incoming *Resource) bool {
+	if existing == nil || incoming == nil {
+		return false
+	}
+	existingParent := ""
+	if existing.ParentID != nil {
+		existingParent = CanonicalResourceID(strings.TrimSpace(*existing.ParentID))
+	}
+	incomingParent := ""
+	if incoming.ParentID != nil {
+		incomingParent = CanonicalResourceID(strings.TrimSpace(*incoming.ParentID))
+	}
+	if existingParent != "" || incomingParent != "" {
+		return existingParent != "" && existingParent == incomingParent
+	}
+	return identitiesShareHostname(existing.Identity, incoming.Identity)
 }
 
 func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID string, resource Resource) string {
@@ -3072,8 +3111,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 				existing.PhysicalDisk.Wearout = previous.Wearout
 			}
 			if previous.SMART != nil {
-				smart := *previous.SMART
-				existing.PhysicalDisk.SMART = &smart
+				existing.PhysicalDisk.SMART = cloneSMARTMeta(previous.SMART)
 			}
 			if previous.IO != nil {
 				existing.PhysicalDisk.IO = clonePhysicalDiskIOMeta(previous.IO)
@@ -3305,6 +3343,9 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.Model != "" {
 		merged.Model = incoming.Model
 	}
+	if incoming.Vendor != "" {
+		merged.Vendor = incoming.Vendor
+	}
 	if incoming.Serial != "" {
 		merged.Serial = incoming.Serial
 	}
@@ -3367,8 +3408,7 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	}
 	merged.Collection = diskinventory.MergeStatus(merged.Collection, incoming.Collection)
 	if incoming.SMART != nil {
-		smart := *incoming.SMART
-		merged.SMART = &smart
+		merged.SMART = cloneSMARTMeta(incoming.SMART)
 	}
 	merged.Risk = mergePhysicalDiskRisk(
 		physicalDiskRiskFromAssessment(physicalDiskAssessmentFromMeta(&merged)),

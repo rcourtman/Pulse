@@ -102,6 +102,16 @@ reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
 persisted organization IDs to API-owned background workers, but it must not
 initialize monitors, start pollers, or reinterpret tenant IDs as monitored
 resource health.
+Proxmox physical-disk polling is also a continuity boundary. A failed or
+permission-denied `disks/list` call must remain an error so the monitor can use
+linked host-agent inventory or retain same-instance, same-node prior evidence;
+it must never become a successful empty inventory that removes valid boot or
+data disks. SMART enrichment matches serial, WWN, device path, and controller
+member topology uniquely and fail-closed, rejects placeholder hardware
+identifiers, preserves explicit failure over a later coarse healthy value, and
+lets explicit SMART endurance replace contradictory Proxmox wearout. Missing
+permission, ambiguous identity, standby, and absent SMART fields remain
+neutral rather than borrowing telemetry from another disk.
 
 ## Canonical Files
 
@@ -126,6 +136,7 @@ resource health.
 19. `internal/dockeragent/swarm.go`
 20. `internal/dockeragent/collect.go`
 21. `pkg/proxmox/ceph.go`
+21a. `pkg/proxmox/cluster_client.go`
 22. `pkg/proxmox/zfs.go`
 23. `internal/monitoring/guest_memory_sources.go`
 24. `internal/monitoring/guest_memory_stability.go`
@@ -1330,6 +1341,14 @@ ambiguous. Direct SATA, SAS, and NVMe device fallback IDs retain their legacy
 shape, while multiple controller members behind one block path add their
 controller target to the fallback identity. Per-member I/O must never inherit
 an aggregate controller counter.
+The same rules apply to SATA and NVMe inventory: direct-disk source IDs keep
+their historical shape, controller-member IDs add their member target, and
+cross-source correlation is scoped to the canonical parent node. A successful
+retry may enrich an earlier smartctl attempt but must not erase earlier model,
+serial, failure, or counter evidence. SMART temperature selection accepts only
+plausible readings, prefers ATA attribute 194 over 190 when higher-level
+temperature fields are invalid, and preserves reported zero counters as known
+values while leaving omitted counters unknown.
 
 Disk identity, temperature, I/O, controller association, and pool membership
 also carry typed collection state from `pkg/diskinventory`: `available`,

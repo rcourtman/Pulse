@@ -28,6 +28,86 @@ type metricsHistoryResponse struct {
 	} `json:"points"`
 }
 
+type staticPhysicalDiskResourceStore struct {
+	resources []unifiedresources.Resource
+}
+
+func (store staticPhysicalDiskResourceStore) ShouldSkipAPIPolling(string) bool {
+	return false
+}
+
+func (store staticPhysicalDiskResourceStore) GetPollingRecommendations() map[string]float64 {
+	return nil
+}
+
+func (store staticPhysicalDiskResourceStore) GetAll() []unifiedresources.Resource {
+	return append([]unifiedresources.Resource(nil), store.resources...)
+}
+
+func (staticPhysicalDiskResourceStore) PopulateFromSnapshot(models.StateSnapshot) {}
+
+func TestMetricsHistoryPhysicalDiskIdentityAliasesFailClosedWhenAmbiguous(t *testing.T) {
+	resources := []unifiedresources.Resource{
+		{
+			ID:   "physical-disk:node-a:sda",
+			Type: unifiedresources.ResourceTypePhysicalDisk,
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				Serial:      "DUPLICATE-SERIAL",
+				Temperature: 31,
+			},
+			MetricsTarget: &unifiedresources.MetricsTarget{
+				ResourceType: "disk",
+				ResourceID:   "DUPLICATE-SERIAL",
+			},
+		},
+		{
+			ID:   "physical-disk:node-b:sda",
+			Type: unifiedresources.ResourceTypePhysicalDisk,
+			PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+				Serial:      "DUPLICATE-SERIAL",
+				Temperature: 52,
+			},
+			MetricsTarget: &unifiedresources.MetricsTarget{
+				ResourceType: "disk",
+				ResourceID:   "DUPLICATE-SERIAL",
+			},
+		},
+	}
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(staticPhysicalDiskResourceStore{resources: resources})
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=disk&resourceId=DUPLICATE-SERIAL&metric=smart_temp&range=5m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("ambiguous identity should not attach either live temperature: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=disk&resourceId=physical-disk:node-b:sda&metric=smart_temp&range=5m",
+		nil,
+	)
+	rec = httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("exact canonical identity should resolve: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var response metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode exact disk response: %v", err)
+	}
+	if len(response.Points) != 1 || response.Points[0].Value != 52 {
+		t.Fatalf("exact canonical identity resolved wrong disk: %+v", response.Points)
+	}
+}
+
 func TestMetricsHistoryFallbackUsesLivePoint(t *testing.T) {
 	state := models.NewState()
 	vm := models.VM{

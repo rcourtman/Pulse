@@ -24,6 +24,12 @@ Own the storage and recovery product surfaces, recovery-point persistence and
 querying, and the operator-facing storage health presentation layer while
 keeping adjacent commercial reporting APIs out of storage/recovery product
 state.
+The physical-disks surface consumes every page in the server-declared unified
+resource result, scopes same-named Proxmox nodes by instance, and never hides a
+disk behind a client-side page ceiling. Search includes vendor, WWN, transport,
+instance, controller, and member target. Explicit `0%` life remaining is a
+known critical value for SSD/NVMe media; absent or negative wearout remains the
+neutral unknown state.
 
 ## Canonical Files
 
@@ -2295,6 +2301,12 @@ precedence. These rules belong to deterministic Collection Trust and
 read-state presentation. They do not establish backup coverage, restore
 readiness, or any other Recovery Assurance conclusion, and they introduce no
 storage mutation path outside canonical Actions.
+Placeholder serials or WWNs never take identity precedence, and history target
+resolution must fail closed when a hardware or metrics identifier is shared by
+more than one disk. Node filtering may use a name-only match only when both the
+disk and selected node lack instance identity; a known instance must match
+exactly so equal node names in different Proxmox connections cannot leak rows
+across views.
 
 `internal/hostagent/issue1595_sas_collection_test.go` and
 `internal/monitoring/issue1595_collection_trust_test.go` prove wide-SAS

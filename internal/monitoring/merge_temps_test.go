@@ -469,8 +469,38 @@ func TestMergeHostAgentSMARTIntoDisks_PreservesExistingProxmoxIdentity(t *testin
 	if got.Model != "Proxmox Model" || got.Serial != "PVE-SERIAL" || got.WWN != "pve-wwn" || got.Type != "sas" {
 		t.Fatalf("existing Proxmox identity was overwritten: %+v", got)
 	}
-	if got.Size != 100 || got.Temperature != 41 || got.Health != "PASSED" || got.StorageGroup != "api-pool" {
+	if got.Size != 100 || got.Temperature != 41 || got.StorageGroup != "api-pool" {
 		t.Fatalf("existing Proxmox disk fields were overwritten: %+v", got)
+	}
+	if got.Health != "FAILED" {
+		t.Fatalf("host SMART failure should override coarse Proxmox health: %+v", got)
+	}
+}
+
+func TestMergeNVMeTempsIntoDisks_DuplicateSerialFailsClosed(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:      "disk-1",
+		Node:    "node1",
+		DevPath: "/dev/nvme9n1",
+		Serial:  "DUPLICATE-SERIAL",
+		Type:    "nvme",
+		Wearout: -1,
+		Health:  "UNKNOWN",
+	}}
+	nodes := []models.Node{{
+		Name: "node1",
+		Temperature: &models.Temperature{
+			Available: true,
+			SMART: []models.DiskTemp{
+				{Device: "/dev/nvme0n1", Serial: "DUPLICATE-SERIAL", Temperature: 31},
+				{Device: "/dev/nvme1n1", Serial: "DUPLICATE-SERIAL", Temperature: 52},
+			},
+		},
+	}}
+
+	got := mergeNVMeTempsIntoDisks(disks, nodes)
+	if got[0].Temperature != 0 {
+		t.Fatalf("ambiguous serial attached the wrong temperature: %+v", got[0])
 	}
 }
 

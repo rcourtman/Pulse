@@ -330,6 +330,63 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('loads physical disks beyond the first resource page without dropping wide-node inventory', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      ...v2Resource,
+      id: `disk-${index + 1}`,
+      type: 'physical_disk',
+      name: `disk-${index + 1}`,
+      physicalDisk: {
+        devPath: `/dev/sd${index + 1}`,
+        serial: `SERIAL-${index + 1}`,
+        diskType: index === 0 ? 'nvme' : 'sas',
+      },
+    }));
+    const secondPage = Array.from({ length: 25 }, (_, index) => ({
+      ...v2Resource,
+      id: `disk-${index + 101}`,
+      type: 'physical_disk',
+      name: `disk-${index + 101}`,
+      physicalDisk: {
+        devPath: `/dev/sg${index + 101}`,
+        serial: `SERIAL-${index + 101}`,
+        diskType: 'sas',
+      },
+    }));
+    apiFetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: firstPage, meta: { totalPages: 2 } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: secondPage, meta: { totalPages: 2 } }),
+      });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=physical_disk',
+        cacheKey: 'issue-1516-wide-node',
+      });
+    });
+
+    await waitForResourceCount(() => result!.resources().length, 125);
+    expect(result!.resources()).toHaveLength(125);
+    expect(result!.resources().some((resource) => resource.id === 'disk-125')).toBe(true);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/resources?type=physical_disk&page=2&limit=100',
+      { cache: 'no-store' },
+    );
+
+    dispose();
+  });
+
   it('prefers websocket initial hydration over an immediate REST fetch for dashboard snapshots', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);
@@ -2045,6 +2102,7 @@ describe('useUnifiedResources', () => {
     expect(useUnifiedResourcesSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('asTrimmedString');
+    expect(useUnifiedResourcesSource).not.toContain('UNIFIED_RESOURCES_MAX_PAGES');
     expect(useUnifiedResourcesSource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
     );
