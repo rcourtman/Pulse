@@ -9176,7 +9176,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-release-gate-stable-patch-unattended-release-path",
+      "agent_id": "codex",
+      "summary": "Prepare and publish v6.1.1 emergency stable patch with owner-approved unsigned Windows exception",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-23T12:19:02Z",
+      "heartbeat_at": "2026-07-23T12:19:02Z",
+      "expires_at": "2026-07-23T16:19:02Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "stable-patch-unattended-release-path"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

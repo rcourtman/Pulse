@@ -6,6 +6,7 @@ VERSION=""
 MOBILE_RELEASE_DECISION=""
 MOBILE_RELEASE_EVIDENCE=""
 HOTFIX_REASON=""
+UNSIGNED_WINDOWS_REASON=""
 
 usage() {
   cat <<'EOF'
@@ -20,6 +21,8 @@ Options:
   --mobile-release-decision VALUE   Override the inferred mobile decision.
   --mobile-release-evidence VALUE   Evidence for a mobile compatibility decision.
   --emergency-hotfix-reason VALUE   Bypass an RC-required risk with an explicit reason.
+  --unsigned-windows-exception-reason VALUE
+                                    Use an approved version-bound unsigned Windows exception.
   -h, --help                        Show this help.
 EOF
 }
@@ -40,6 +43,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --emergency-hotfix-reason)
       HOTFIX_REASON="${2:?--emergency-hotfix-reason requires a value}"
+      shift 2
+      ;;
+    --unsigned-windows-exception-reason)
+      UNSIGNED_WINDOWS_REASON="${2:?--unsigned-windows-exception-reason requires a value}"
       shift 2
       ;;
     -h|--help)
@@ -111,6 +118,14 @@ if [ -n "$HOTFIX_REASON" ]; then
   HOTFIX_EXCEPTION="true"
   RESOLVER_ARGS+=(--hotfix-exception --hotfix-reason "$HOTFIX_REASON")
 fi
+UNSIGNED_WINDOWS_EXCEPTION="false"
+if [ -n "$UNSIGNED_WINDOWS_REASON" ]; then
+  UNSIGNED_WINDOWS_EXCEPTION="true"
+  RESOLVER_ARGS+=(
+    --unsigned-windows-exception
+    --unsigned-windows-reason "$UNSIGNED_WINDOWS_REASON"
+  )
+fi
 
 PROMOTION_METADATA="$(python3 scripts/release_control/resolve_release_promotion.py "${RESOLVER_ARGS[@]}")"
 ROLLBACK_TAG="$(awk -F= '$1 == "rollback_tag" {print $2}' <<<"$PROMOTION_METADATA")"
@@ -150,6 +165,8 @@ if [ "$MODE" = "dry-run" ]; then
     --require v5_eos_date \
     --require hotfix_exception \
     --require hotfix_reason \
+    --require unsigned_windows_exception \
+    --require unsigned_windows_reason \
     --require note \
     --require mobile_release_decision \
     --require mobile_release_evidence
@@ -163,6 +180,8 @@ if [ "$MODE" = "dry-run" ]; then
     -f v5_eos_date="" \
     -f hotfix_exception="$HOTFIX_EXCEPTION" \
     -f hotfix_reason="$HOTFIX_REASON" \
+    -f unsigned_windows_exception="$UNSIGNED_WINDOWS_EXCEPTION" \
+    -f unsigned_windows_reason="$UNSIGNED_WINDOWS_REASON" \
     -f note="Stable patch preflight for ${VERSION} at ${LOCAL_SHA}" \
     -f mobile_release_decision="$MOBILE_RELEASE_DECISION" \
     -f mobile_release_evidence="$MOBILE_RELEASE_EVIDENCE"
@@ -182,6 +201,8 @@ else
     --require v5_eos_date \
     --require hotfix_exception \
     --require hotfix_reason \
+    --require unsigned_windows_exception \
+    --require unsigned_windows_reason \
     --require draft_only \
     --require mobile_release_decision \
     --require mobile_release_evidence
@@ -195,6 +216,8 @@ else
     --arg v5_eos_date "" \
     --argjson hotfix_exception "$HOTFIX_EXCEPTION" \
     --arg hotfix_reason "$HOTFIX_REASON" \
+    --argjson unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION" \
+    --arg unsigned_windows_reason "$UNSIGNED_WINDOWS_REASON" \
     --argjson draft_only false \
     --arg mobile_release_decision "$MOBILE_RELEASE_DECISION" \
     --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
@@ -207,6 +230,8 @@ else
       v5_eos_date: $v5_eos_date,
       hotfix_exception: $hotfix_exception,
       hotfix_reason: $hotfix_reason,
+      unsigned_windows_exception: $unsigned_windows_exception,
+      unsigned_windows_reason: $unsigned_windows_reason,
       draft_only: $draft_only,
       mobile_release_decision: $mobile_release_decision,
       mobile_release_evidence: $mobile_release_evidence

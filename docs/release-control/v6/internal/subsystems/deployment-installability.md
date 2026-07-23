@@ -379,12 +379,14 @@ TLS floor in the dynamic config.
    apply the same channel-specific native-signing policy as a publish run.
    macOS notarization remains mandatory for both prerelease and stable
    candidates. Windows Authenticode remains mandatory for stable candidates
-   except for the explicitly version-bound `v6.1.0` owner exception;
-   prerelease candidates and that one stable exception may retain checksum and
-   detached-signature verification without Authenticode while the release
-   packet explicitly discloses the unknown-publisher warning. Prerelease promotion remains
-   blocked on the normal stable signing requirement, and every stable version
-   after `v6.1.0` restores it automatically. A cheap signing-configuration job
+   except for the explicitly version-bound `v6.1.0` and `v6.1.1` owner
+   exceptions; prerelease candidates and those two stable exceptions may
+   retain checksum and detached-signature verification without Authenticode
+   while the release packet explicitly discloses the unknown-publisher warning.
+   Prerelease promotion remains blocked on the normal stable signing
+   requirement, and stable `v6.1.2` and later restore it automatically unless
+   policy records a new version-bound owner decision. A cheap
+   signing-configuration job
    must report every missing secret for the platforms required by that
    candidate before either platform runner is allocated. Stable Windows signing must use SignPath's GitHub
    trusted-build-system action by default, submit an immutable GitHub artifact
@@ -1055,9 +1057,12 @@ evidence beside the candidate manifest. Release Dry Run now has a terminal
 verdict covering the exact-SHA candidate and no-mutation demo lane. Stable
 rehearsal `29927692302` confirmed that the external SignPath project was not
 configured and stopped without creating a public release. The release owner
-subsequently approved a `v6.1.0`-only unsigned-Windows exception; the gate stays
-blocked until a new exact-`main` rehearsal proves that exception and the
-remaining candidate controls.
+subsequently approved and exercised a `v6.1.0`-only unsigned-Windows exception.
+On 2026-07-23 the owner separately approved a `v6.1.1`-only exception for the
+emergency patch addressing active customer update harm. The new decision must
+flow through the normal exact-SHA candidate, checksum, detached-signature,
+manifest, published-digest, and definitive-verdict controls with an explicit
+owner reason and public Unknown Publisher disclosure.
 Every caller of the reusable release-candidate builder must delegate
 `actions: read` alongside `contents: read`; the Windows signing job reads the
 exact uploaded artifact through the GitHub Actions API, and GitHub validates
@@ -1068,11 +1073,35 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active stable `v6.1.0` cut sets the repo-root `VERSION`,
-repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.1.0` release version.
-This stable minor release uses `promoted_from_tag=v6.1.0-rc.4`,
-`rollback_version=v6.0.5`, and the one-version release-owner cutoff exception
+The active stable `v6.1.1` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.1.1` release version. This patch
+release uses the stable hotfix path with `rollback_version=v6.1.0`,
+`hotfix_exception=true`, a release-owner reason, and no fabricated
+same-version RC tag. It fixes manual Unified Agent updates that received a
+distribution identifier instead of the canonical Linux platform family and
+durable Docker update actions that could remain stuck after a terminal
+digest-drift preflight refusal. The exact stable `main` SHA must pass the
+integrated release checks and immutable-candidate build before the single-build
+workflow crosses its public mutation boundary. The same workflow must finish
+Docker, Helm, stable demo, install-smoke, public-health, floating-tag,
+paid-runtime, and definitive-verdict lanes before the cut is complete.
+The `v6.1.1` release is `existing-mobile-build-compatible`: no production
+relay or mobile trust contract changed from `v6.1.0`, the matched mobile-facing
+path is test-only expiry branch coverage, and Pulse Mobile `1.0.0` iOS build
+`11` and Android versionCode `9` remain the compatible candidate builds without
+a companion upload or public store rollout.
+The release owner separately approved a `v6.1.1`-only unsigned-Windows
+exception because SignPath configuration remains unavailable. Windows assets
+must remain exact-SHA and manifest-bound with checksums, detached
+`.sig`/`.sshsig` signatures, and published-digest verification; the release
+notes must disclose the Unknown Publisher state. Stable `v6.1.2` and later
+restore Authenticode unless policy records another explicit version-bound
+decision.
+
+The preceding stable `v6.1.0` cut used
+`promoted_from_tag=v6.1.0-rc.4`, `rollback_version=v6.0.5`, and the
+one-version release-owner cutoff exception
 recorded on 2026-07-22. The workflow input `hotfix_exception=true` carries that
 approved soak bypass through the existing promotion resolver; it does not
 reclassify the release as a patch hotfix. The exact stable `main` SHA must pass
@@ -1112,8 +1141,10 @@ explicitly waived Authenticode after the first stable rehearsal exposed
 unavailable external SignPath configuration. The unsigned Windows binaries
 remain exact-SHA and manifest-bound with checksum, detached `.sig`/`.sshsig`,
 and published-digest verification, and the release notes disclose the Unknown
-Publisher state. This exception cannot apply to a later stable version.
-The stable server cut is classified `existing-mobile-build-compatible`. Pulse
+Publisher state. That `v6.1.0` decision does not itself authorize another
+version.
+The `v6.1.0` stable server cut was classified
+`existing-mobile-build-compatible`. Pulse
 Mobile `1.0.0` iOS build `11` and Android versionCode `9` remain the existing
 candidate builds; the canonical core/mobile contract proves that `v6.1.0`
 serves their route, scope, payload, pairing, and push requirements, including
@@ -1180,8 +1211,8 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active stable `v6.1.0` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.1.0` until the next
+For the active stable `v6.1.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.1.1` until the next
 governed stable cut moves them forward. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
@@ -2496,8 +2527,9 @@ discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
 digest controls. Stable publication and the stable-path dry-run must continue
 to require both native signing lanes except for the recorded, version-bound
-`v6.1.0` Windows exception; every subsequent stable release restores both
-requirements. `scripts/build-release.sh` must replace
+`v6.1.0` and `v6.1.1` Windows exceptions; stable `v6.1.2` and later restore
+both requirements unless policy records a new explicit version-bound owner
+decision. `scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
 closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through

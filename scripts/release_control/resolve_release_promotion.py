@@ -245,10 +245,10 @@ def resolve_metadata(
     promotion_mode = "prerelease" if is_prerelease else "stable-rc-promotion"
 
     if unsigned_windows_exception:
-        if version != "6.1.0":
+        if version not in {"6.1.0", "6.1.1"}:
             raise ValueError(
-                "unsigned_windows_exception is approved only for stable v6.1.0. "
-                "Later stable releases must restore Windows Authenticode signing."
+                "unsigned_windows_exception is approved only for stable v6.1.0 or v6.1.1. "
+                "Stable v6.1.2 and later must restore Windows Authenticode signing."
             )
         if not unsigned_windows_reason:
             raise ValueError(
@@ -256,7 +256,7 @@ def resolve_metadata(
             )
         if release_notes and "not authenticode-signed" not in release_notes.lower():
             raise ValueError(
-                "Stable v6.1.0 release_notes must disclose that Windows binaries are not Authenticode-signed."
+                f"Stable v{version} release_notes must disclose that Windows binaries are not Authenticode-signed."
             )
     elif unsigned_windows_reason:
         raise ValueError(

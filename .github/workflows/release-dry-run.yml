@@ -43,12 +43,12 @@ on:
         required: false
         type: string
       unsigned_windows_exception:
-        description: 'v6.1.0 only: rehearse Windows agents without Authenticode under the recorded owner exception'
+        description: 'v6.1.0 or v6.1.1 only: rehearse Windows agents without Authenticode under a recorded owner exception'
         required: false
         type: boolean
         default: false
       unsigned_windows_reason:
-        description: 'v6.1.0 only: owner reason for the unsigned Windows exception'
+        description: 'v6.1.0 or v6.1.1 only: owner reason for the unsigned Windows exception'
         required: false
         type: string
       note:
@@ -79,7 +79,7 @@ jobs:
     with:
       version: ${{ inputs.version }}
       require_macos_signing: true
-      require_windows_signing: ${{ !contains(inputs.version, '-') && !(inputs.version == '6.1.0' && inputs.unsigned_windows_exception) }}
+      require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1') && inputs.unsigned_windows_exception) }}
       windows_signing_backend: signpath
 
   dry-run:

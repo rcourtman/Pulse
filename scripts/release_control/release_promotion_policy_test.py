@@ -488,7 +488,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
-            "require_windows_signing: ${{ !contains(inputs.version, '-') && !(inputs.version == '6.1.0' && inputs.unsigned_windows_exception) }}",
+            "require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1') && inputs.unsigned_windows_exception) }}",
             workflow,
         )
         self.assertIn("unsigned_windows_exception:", workflow)
@@ -669,7 +669,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)
         self.assertIn("unsigned_windows_exception:", content)
         self.assertIn("unsigned_windows_reason:", content)
-        self.assertIn('version != "6.1.0"', resolver)
+        self.assertIn('version not in {"6.1.0", "6.1.1"}', resolver)
         self.assertIn("not Authenticode-signed", resolver)
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
@@ -1124,6 +1124,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn(".createdAt >= $cutoff", helper)
         self.assertIn("gh workflow run create-release.yml", helper)
         self.assertIn("gh workflow run \"$WORKFLOW\"", helper)
+        self.assertIn("--unsigned-windows-exception-reason", helper)
+        self.assertIn("--unsigned-windows-exception", helper)
+        self.assertIn("unsigned_windows_exception", helper)
+        self.assertIn("unsigned_windows_reason", helper)
         self.assertIn("Single-Build Release Path", policy)
         self.assertIn("Routine Stable Patch Path", policy)
         self.assertIn("single publish workflow performs the exact-SHA preflight", normalize_ws(policy))

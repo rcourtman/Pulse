@@ -3,13 +3,14 @@
 Pulse release notes live on GitHub:
 <https://github.com/rcourtman/Pulse/releases>
 
-For the next release disclosure draft (version assigned at release cut), see:
-- `docs/releases/RELEASE_NOTES_NEXT_DRAFT.md`
-
 For historical v4 notes that previously lived in this repo, see:
 `docs/releases/RELEASE_NOTES_v4.md`
 
 For the current stable v6 packet, see:
+- `docs/releases/RELEASE_NOTES_v6.1.1.md`
+- `docs/releases/V6_CHANGELOG_v6.1.1.md`
+
+For earlier stable v6.1 packets, see:
 - `docs/releases/RELEASE_NOTES_v6.1.0.md`
 - `docs/releases/V6_CHANGELOG_v6.1.0.md`
 

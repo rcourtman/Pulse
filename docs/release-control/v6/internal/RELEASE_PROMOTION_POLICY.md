@@ -179,8 +179,15 @@ Cloud, and self-hosted production users.
      Windows Authenticode exception. The Windows artifacts must remain bound
      by the exact-SHA candidate manifest, checksums, detached `.sig`/`.sshsig`
      signatures, and published digests, and the public notes must disclose the
-     Unknown Publisher state. Later stable releases restore the Authenticode
-     requirement; this flag cannot be reused for another version.
+     Unknown Publisher state.
+   - On 2026-07-23, the release owner separately approved a `v6.1.1`-only
+     Windows Authenticode exception for the emergency patch addressing active
+     customer update harm. This is a new, version-bound decision rather than a
+     reuse of the `v6.1.0` exception. The same exact-SHA candidate, checksum,
+     detached-signature, manifest, published-digest, owner-reason, and public
+     Unknown Publisher disclosure controls remain mandatory. Stable `v6.1.2`
+     and later restore the Authenticode requirement unless another explicit
+     version-bound owner decision is recorded in policy.
    - Unproved self-service commercial transitions remain unavailable and
      unadvertised under the exposure-safety gate. This exception does not
      authorize enabling that feature or running a production billing proof.
@@ -237,8 +244,11 @@ Cloud, and self-hosted production users.
    onto the RC promotion path. The resolver enforces that boundary. Do not use
    the routine helper to relabel a risky patch as routine.
 4. `--emergency-hotfix-reason` is the narrow escape hatch for active customer
-   harm. It does not remove the exact-SHA dry-run requirement, and the reason is
-   recorded in the release metadata.
+   harm. It does not remove the integrated exact-SHA candidate and release
+   checks, and the reason is recorded in the release metadata.
+   A version-bound unsigned Windows decision must additionally be supplied
+   through `--unsigned-windows-exception-reason`; it never follows implicitly
+   from emergency patch status.
 5. The release workflow must await Docker publication, stable demo deployment,
    public health/browser verification, install smoke, Helm publication,
    floating-tag promotion, and private Pro promotion where applicable. The

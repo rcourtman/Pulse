@@ -288,9 +288,10 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
-		"It advances the v"+previous+" stable line with customer-support fixes",
-		"paid-runtime activation fingerprint reuse",
-		"pinned installer execution hardening",
+		"manual Unified Agent updates",
+		"durable Docker update actions",
+		"`existing-mobile-build-compatible`",
+		"`v"+version+"`-only unsigned-Windows exception",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
 	)
 }

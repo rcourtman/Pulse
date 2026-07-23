@@ -1022,9 +1022,10 @@ Companion drill:
      the public demo remains healthy on stable `6.0.5`.
 - Pass when:
   The external rehearsal proves the canonical exact-SHA candidate builder and
-  its version-specific native-signing policy. If the `v6.1.0` Windows exception
-  is used, the rehearsal must preserve checksum, detached-signature, manifest,
-  and digest controls and record the owner reason and public disclosure. Local
+  its version-specific native-signing policy. If a recorded `v6.1.0` or
+  `v6.1.1` Windows exception is used, the rehearsal must preserve checksum,
+  detached-signature, manifest, and digest controls and record the
+  version-bound owner reason and public disclosure. Local
   tests pin candidate-only publication and GitHub digest validation, and the
   static release DAG contains no duplicate release build,
   backend-to-integration serialization, full-download standard validator, or
@@ -1037,7 +1038,8 @@ Companion drill:
   release packet, independent post-release jobs are serialized, or the
   definitive verdict can pass without all applicable downstream results. Also
   block if an unsigned stable Windows exception can apply to any version other
-  than `v6.1.0` or can omit its owner reason and release-note disclosure.
+  than the recorded `v6.1.0` and `v6.1.1` decisions or can omit its owner
+  reason and release-note disclosure.
 
 ## Gate: `operational-trust-canonical-lifecycle`
 

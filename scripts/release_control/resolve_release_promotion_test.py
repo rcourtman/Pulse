@@ -171,12 +171,41 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             "Release owner accepted the Windows unknown-publisher warning for v6.1.0.",
         )
 
+    def test_v611_owner_exception_allows_disclosed_emergency_patch(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.1.1",
+            promoted_from_tag_input="",
+            rollback_version_input="v6.1.0",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input="Active customer update harm.",
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.1.1."
+            ),
+            unsigned_windows_exception=True,
+            unsigned_windows_reason_input=(
+                "Release owner accepted the Windows unknown-publisher warning for v6.1.1."
+            ),
+            list_stable_tags_fn=lambda: ["v6.1.0", "v6.0.5"],
+            list_same_version_rc_tags_fn=lambda version: [],
+            changed_paths_fn=lambda tag: ["install.sh"],
+            tag_exists_fn=lambda tag: tag == "v6.1.0",
+            tag_commit_fn=lambda tag: "v610-commit",
+            head_descends_from_fn=lambda commit: commit == "v610-commit",
+        )
+
+        self.assertEqual(metadata["promotion_mode"], "emergency-stable-patch")
+        self.assertEqual(metadata["rollback_tag"], "v6.1.0")
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+
     def test_unsigned_windows_exception_is_rejected_for_other_stable_versions(self) -> None:
-        with self.assertRaisesRegex(ValueError, "approved only for stable v6.1.0"):
+        with self.assertRaisesRegex(ValueError, "approved only for stable v6.1.0 or v6.1.1"):
             resolver.resolve_metadata(
-                version="6.1.1",
+                version="6.1.2",
                 promoted_from_tag_input="",
-                rollback_version_input="v6.1.0",
+                rollback_version_input="v6.1.1",
                 ga_date_input="",
                 v5_eos_date_input="",
                 hotfix_exception=True,
