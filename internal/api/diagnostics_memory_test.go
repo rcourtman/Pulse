@@ -33,6 +33,7 @@ func TestClassifyMemorySourceTrust(t *testing.T) {
 		{source: "listing", want: "fallback"},
 		{source: "powered-off", want: "fallback"},
 		{source: "previous-snapshot", want: "fallback"},
+		{source: "unavailable", want: "unavailable"},
 		{source: "", want: "fallback"},
 	}
 
@@ -42,6 +43,54 @@ func TestClassifyMemorySourceTrust(t *testing.T) {
 				t.Fatalf("classifyMemorySourceTrust(%q) = %q, want %q", tt.source, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildMemorySourceDiagnosticsReportsUnavailableCacheAwareEvidence(t *testing.T) {
+	base := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
+	snapshots := monitoring.DiagnosticSnapshotSet{
+		Nodes: []monitoring.NodeMemorySnapshot{{
+			Instance:       "pve-a",
+			Node:           "node-1",
+			RetrievedAt:    base,
+			MemorySource:   "unavailable",
+			FallbackReason: "cache-aware-memory-unavailable",
+			Raw: monitoring.NodeMemoryRaw{
+				Total:               8 << 30,
+				Used:                15 << 29,
+				Free:                1 << 29,
+				ProxmoxMemorySource: "cache-aware-unavailable",
+			},
+		}},
+		Guests: []monitoring.GuestMemorySnapshot{{
+			Instance:       "pve-a",
+			GuestType:      "qemu",
+			Node:           "node-1",
+			VMID:           1501,
+			RetrievedAt:    base,
+			MemorySource:   "unavailable",
+			FallbackReason: "cache-aware-memory-unavailable",
+			Raw: monitoring.VMMemoryRaw{
+				MemInfoTotal: 8 << 30,
+				MemInfoFree:  1 << 29,
+			},
+		}},
+	}
+
+	nodeStats, breakdown := buildMemorySourceDiagnostics(snapshots)
+	if len(nodeStats) != 1 || nodeStats[0].Source != "unavailable" || nodeStats[0].Trust != "unavailable" {
+		t.Fatalf("node memory source stats = %#v, want explicit unavailable source", nodeStats)
+	}
+	if len(breakdown) != 2 {
+		t.Fatalf("memory source breakdown = %#v, want node and guest entries", breakdown)
+	}
+	for _, entry := range breakdown {
+		if entry.Source != "unavailable" || entry.Trust != "unavailable" || !entry.Fallback {
+			t.Fatalf("unavailable breakdown entry = %#v", entry)
+		}
+		if len(entry.FallbackReasons) != 1 || entry.FallbackReasons[0] != "cache-aware-memory-unavailable" {
+			t.Fatalf("fallback reasons = %#v, want cache-aware-memory-unavailable", entry.FallbackReasons)
+		}
 	}
 }
 

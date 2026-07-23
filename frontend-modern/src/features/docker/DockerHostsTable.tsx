@@ -53,20 +53,27 @@ const percentFromMetric = (metric: Resource['cpu'] | undefined): number | undefi
 const memoryTotalFor = (host: Resource): number =>
   getPlatformTableFiniteMetric(host.memory?.total) ??
   getPlatformTableFiniteMetric(host.agent?.memory?.total) ??
+  getPlatformTableFiniteMetric(host.docker?.memory?.total) ??
   0;
 
 const memoryUsedFor = (host: Resource): number =>
   getPlatformTableFiniteMetric(host.memory?.used) ??
   getPlatformTableFiniteMetric(host.agent?.memory?.used) ??
+  getPlatformTableFiniteMetric(host.docker?.memory?.used) ??
   0;
 
 const memoryPercentOnlyFor = (host: Resource): number | undefined => {
   if (memoryTotalFor(host) > 0) return undefined;
   return (
     getPlatformTableFiniteMetric(host.memory?.current) ??
-    getPlatformTableFiniteMetric(host.agent?.memory?.usage)
+    getPlatformTableFiniteMetric(host.agent?.memory?.usage) ??
+    getPlatformTableFiniteMetric(host.docker?.memory?.usage)
   );
 };
+
+const memoryUnavailableFor = (host: Resource): boolean =>
+  !host.memory &&
+  (host.agent?.memory?.usageUnavailable === true || host.docker?.memory?.usageUnavailable === true);
 
 // Host telemetry the Docker agent reports beyond the typed Resource docker
 // block. One cast site shared by the row renderer and the sort accessor.
@@ -124,6 +131,7 @@ const getDockerHostSortValue = (host: Resource, key: DockerHostSortKey): Platfor
     case 'cpu':
       return percentFromMetric(host.cpu) ?? null;
     case 'memory': {
+      if (memoryUnavailableFor(host)) return null;
       const total = memoryTotalFor(host);
       if (total > 0) return (memoryUsedFor(host) / total) * 100;
       return memoryPercentOnlyFor(host) ?? null;
@@ -452,6 +460,7 @@ export const DockerHostsTable: Component<{
                               <StackedMemoryBar
                                 used={memoryUsed()}
                                 total={memoryTotal()}
+                                unavailable={memoryUnavailableFor(host)}
                                 percentOnly={memoryPercentOnly()}
                               />
                             </Show>

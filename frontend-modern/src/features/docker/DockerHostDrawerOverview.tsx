@@ -65,6 +65,12 @@ const getNumericField = (value: unknown, field: string): number | undefined => {
   return typeof fieldValue === 'number' ? fieldValue : undefined;
 };
 
+const getBooleanField = (value: unknown, field: string): boolean | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const fieldValue = (value as Record<string, unknown>)[field];
+  return typeof fieldValue === 'boolean' ? fieldValue : undefined;
+};
+
 const formatLastSeenRow = (value: string | number | null | undefined): DockerOverviewRow | null => {
   if (value == null) return null;
   const parsed = typeof value === 'number' ? new Date(value) : new Date(String(value));
@@ -142,7 +148,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     return 0;
   };
 
-  const memorySource = () => props.host.memory ?? agent()?.memory;
+  const memorySource = () => props.host.memory ?? agent()?.memory ?? docker()?.memory;
   const diskSource = () => props.host.disk;
 
   const systemRows = (): DockerOverviewRow[] => [
@@ -261,7 +267,12 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     const memory = memorySource();
     if (!memory) return [];
     const rows: DockerOverviewRow[] = [];
-    if (typeof memory.total === 'number' && memory.total > 0) {
+    if (getBooleanField(memory, 'usageUnavailable') === true) {
+      rows.push({ label: 'Usage', value: 'Unavailable' });
+      if (typeof memory.total === 'number' && memory.total > 0) {
+        rows.push({ label: 'Total', value: formatBytes(memory.total) });
+      }
+    } else if (typeof memory.total === 'number' && memory.total > 0) {
       rows.push({
         label: 'Usage',
         value: `${getUsedPercent(memory.used, memory.total)} · ${formatBytes(memory.used || 0)}`,

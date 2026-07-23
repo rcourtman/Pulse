@@ -309,6 +309,9 @@ export const getAgentMachineCpuPercent = (machine: Resource): number | undefined
   getMetricPercent(machine.cpu);
 
 export const getAgentMachineMemoryPercent = (machine: Resource): number | undefined => {
+  if (!machine.memory && machine.agent?.memory?.usageUnavailable === true) {
+    return undefined;
+  }
   const total = getPlatformTableFiniteMetric(machine.memory?.total);
   const used = getPlatformTableFiniteMetric(machine.memory?.used);
   if (total && total > 0 && typeof used === 'number') {

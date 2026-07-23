@@ -124,7 +124,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			}
 			// IO/network series are not recorded on the traditional polling
 			// path (parity with the historical inline writes).
-			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, -1, -1, -1, -1, now)
 		}
 	}
 

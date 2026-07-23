@@ -1009,3 +1009,46 @@ describe('resourceStateAdapters nodeFromResource', () => {
     });
   });
 });
+
+describe('resourceStateAdapters unavailable memory contract', () => {
+  const unavailableProxmoxMemory = {
+    nodeName: 'n1',
+    memory: {
+      total: 8192,
+      used: 0,
+      free: 0,
+      usage: 0,
+      usageUnavailable: true,
+    },
+  } as unknown as Resource['proxmox'];
+
+  it('preserves explicit unavailable usage when no trusted metric exists', () => {
+    const node = nodeFromResource({
+      ...createNodeResource({}),
+      memory: undefined,
+      proxmox: unavailableProxmoxMemory,
+    });
+
+    expect(node?.memory).toMatchObject({
+      total: 8192,
+      used: 0,
+      usage: 0,
+      usageUnavailable: true,
+    });
+  });
+
+  it('lets a trusted merged metric override unavailable raw evidence', () => {
+    const node = nodeFromResource({
+      ...createNodeResource({}),
+      memory: { current: 50, total: 8192, used: 4096, free: 4096 },
+      proxmox: unavailableProxmoxMemory,
+    });
+
+    expect(node?.memory).toMatchObject({
+      total: 8192,
+      used: 4096,
+      usage: 50,
+      usageUnavailable: false,
+    });
+  });
+});

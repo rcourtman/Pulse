@@ -80,6 +80,22 @@ func TestResolveNodeMemoryCharacterization(t *testing.T) {
 			wantUsed:      4 * gib,
 			wantRawSource: "rrd-memavailable",
 		},
+		{
+			name: "explicit zero RRD memused is a valid idle sample",
+			memory: &proxmox.MemoryStatus{
+				Total: 8 * gib,
+				Used:  7 * gib,
+				Free:  1 * gib,
+			},
+			rrdPoints: []proxmox.NodeRRDPoint{{
+				MemTotal: floatPtr(float64(8 * gib)),
+				MemUsed:  floatPtr(0),
+			}},
+			wantSource:    "rrd-memused",
+			wantFallback:  "rrd-memused",
+			wantUsed:      0,
+			wantRawSource: "rrd-memused",
+		},
 	}
 
 	for _, tt := range tests {

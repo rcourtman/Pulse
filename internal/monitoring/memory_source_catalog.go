@@ -12,6 +12,7 @@ type MemorySourceDescriptor struct {
 var memorySourceCatalog = map[string]MemorySourceDescriptor{
 	"":                            {Canonical: "unknown", Trust: "fallback", Fallback: true},
 	"unknown":                     {Canonical: "unknown", Trust: "fallback", Fallback: true},
+	"unavailable":                 {Canonical: "unavailable", Trust: "unavailable", Fallback: true, DefaultFallbackReason: "cache-aware-memory-unavailable"},
 	"nodes-endpoint":              {Canonical: "nodes-endpoint", Trust: "fallback", Fallback: true},
 	"node-status-used":            {Canonical: "node-status-used", Trust: "fallback", Fallback: true},
 	"previous-snapshot":           {Canonical: "previous-snapshot", Trust: "fallback", Fallback: true, DefaultFallbackReason: "preserved-previous-snapshot"},
@@ -25,6 +26,7 @@ var memorySourceCatalog = map[string]MemorySourceDescriptor{
 	"derived-total-minus-used":    {Canonical: "derived-total-minus-used", Trust: "derived", Fallback: true, DefaultFallbackReason: "derived-total-minus-used"},
 	"meminfo-total-minus-used":    {Canonical: "derived-total-minus-used", Trust: "derived", Fallback: true, DefaultFallbackReason: "derived-total-minus-used"},
 	"guest-agent-meminfo":         {Canonical: "guest-agent-meminfo", Trust: "fallback", Fallback: true, DefaultFallbackReason: "guest-agent-meminfo"},
+	"guest-agent-meminfo-derived": {Canonical: "guest-agent-meminfo-derived", Trust: "derived", Fallback: true, DefaultFallbackReason: "guest-agent-meminfo-derived"},
 	"rrd-memavailable":            {Canonical: "rrd-memavailable", Trust: "fallback", Fallback: true, DefaultFallbackReason: "rrd-memavailable"},
 	"rrd-available":               {Canonical: "rrd-memavailable", Trust: "fallback", Fallback: true, DefaultFallbackReason: "rrd-memavailable"},
 	"rrd-memused":                 {Canonical: "rrd-memused", Trust: "fallback", Fallback: true, DefaultFallbackReason: "rrd-memused"},

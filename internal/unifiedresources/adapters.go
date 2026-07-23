@@ -66,6 +66,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		TemperatureMonitoringEnabled: cloneBoolPtr(node.TemperatureMonitoringEnabled),
 		PendingUpdatesCheckedAt:      zeroTimeToPtr(node.PendingUpdatesCheckedAt),
 		MemoryCache:                  node.Memory.Cache,
+		Memory:                       &node.Memory,
 		SwapUsed:                     node.Memory.SwapUsed,
 		SwapTotal:                    node.Memory.SwapTotal,
 		LinkedAgentID:                linkedAgentID,
@@ -129,35 +130,28 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	platform := agentRuntimePlatformForHost(host, hostProfile)
 
 	agent := &AgentData{
-		AgentID:           host.ID,
-		AgentVersion:      host.AgentVersion,
-		Hostname:          host.Hostname,
-		MachineID:         host.MachineID,
-		TokenID:           host.TokenID,
-		TokenName:         host.TokenName,
-		TokenHint:         host.TokenHint,
-		TokenLastUsedAt:   host.TokenLastUsedAt,
-		Platform:          platform,
-		HostProfile:       hostProfile,
-		OSName:            host.OSName,
-		OSVersion:         host.OSVersion,
-		KernelVersion:     host.KernelVersion,
-		Architecture:      host.Architecture,
-		CPUCount:          host.CPUCount,
-		LoadAverage:       append([]float64(nil), host.LoadAverage...),
-		UptimeSeconds:     host.UptimeSeconds,
-		IntervalSeconds:   host.IntervalSeconds,
-		Temperature:       maxCPUTemp(host.Sensors),
-		NetworkInterfaces: convertInterfaces(host.NetworkInterfaces),
-		Disks:             convertDisks(host.Disks),
-		Memory: &AgentMemoryMeta{
-			Total:     host.Memory.Total,
-			Used:      host.Memory.Used,
-			Free:      host.Memory.Free,
-			Cache:     host.Memory.Cache,
-			SwapUsed:  host.Memory.SwapUsed,
-			SwapTotal: host.Memory.SwapTotal,
-		},
+		AgentID:                 host.ID,
+		AgentVersion:            host.AgentVersion,
+		Hostname:                host.Hostname,
+		MachineID:               host.MachineID,
+		TokenID:                 host.TokenID,
+		TokenName:               host.TokenName,
+		TokenHint:               host.TokenHint,
+		TokenLastUsedAt:         host.TokenLastUsedAt,
+		Platform:                platform,
+		HostProfile:             hostProfile,
+		OSName:                  host.OSName,
+		OSVersion:               host.OSVersion,
+		KernelVersion:           host.KernelVersion,
+		Architecture:            host.Architecture,
+		CPUCount:                host.CPUCount,
+		LoadAverage:             append([]float64(nil), host.LoadAverage...),
+		UptimeSeconds:           host.UptimeSeconds,
+		IntervalSeconds:         host.IntervalSeconds,
+		Temperature:             maxCPUTemp(host.Sensors),
+		NetworkInterfaces:       convertInterfaces(host.NetworkInterfaces),
+		Disks:                   convertDisks(host.Disks),
+		Memory:                  agentMemoryMetaFromModel(host.Memory),
 		CommandsEnabled:         host.CommandsEnabled,
 		OperationReceiptVersion: host.OperationReceiptVersion,
 		ReportIP:                host.ReportIP,
@@ -1324,6 +1318,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		AgentVersion:          host.AgentVersion,
 		CPUs:                  host.CPUs,
 		TotalMemoryBytes:      host.TotalMemoryBytes,
+		Memory:                agentMemoryMetaFromModel(host.Memory),
 		UptimeSeconds:         host.UptimeSeconds,
 		LoadAverage:           append([]float64(nil), host.LoadAverage...),
 		IntervalSeconds:       host.IntervalSeconds,
@@ -1387,6 +1382,18 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 	}
 
 	return resource, identity
+}
+
+func agentMemoryMetaFromModel(memory models.Memory) *AgentMemoryMeta {
+	return &AgentMemoryMeta{
+		Total:            memory.Total,
+		Used:             memory.Used,
+		Free:             memory.Free,
+		Cache:            memory.Cache,
+		UsageUnavailable: memory.UsageUnavailable,
+		SwapUsed:         memory.SwapUsed,
+		SwapTotal:        memory.SwapTotal,
+	}
 }
 
 func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIdentity) {
@@ -1689,6 +1696,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		SwapTotal:          vm.Memory.SwapTotal,
 		Balloon:            vm.Memory.Balloon,
 		MemoryCache:        vm.Memory.Cache,
+		Memory:             &vm.Memory,
 		Lock:               vm.Lock,
 	}
 	resource := Resource{
@@ -1754,6 +1762,7 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		SwapTotal:         ct.Memory.SwapTotal,
 		Balloon:           ct.Memory.Balloon,
 		MemoryCache:       ct.Memory.Cache,
+		Memory:            &ct.Memory,
 		Lock:              ct.Lock,
 	}
 	resource := Resource{

@@ -237,7 +237,9 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           return renderGroupNodeSparkline(
             node,
             'memory',
-            formatMetricPercent(getUsedPercent(node.memory?.used, node.memory?.total)),
+            node.memory?.usageUnavailable
+              ? 'N/A'
+              : formatMetricPercent(getUsedPercent(node.memory?.used, node.memory?.total)),
             `${node.name} memory history`,
             '%',
             'inline',
@@ -249,6 +251,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
             <StackedMemoryBar
               used={node.memory?.used || 0}
               total={node.memory?.total || 0}
+              unavailable={node.memory?.usageUnavailable === true}
               balloon={node.memory?.balloon || 0}
               swapUsed={node.memory?.swapUsed || 0}
               swapTotal={node.memory?.swapTotal || 0}

@@ -36,6 +36,34 @@ func TestStabilizeGuestLowTrustMemoryCarriesForwardTrustedSnapshot(t *testing.T)
 	}
 }
 
+func TestStabilizeGuestLowTrustMemoryCarriesForwardAcrossUnavailableReconnect(t *testing.T) {
+	const gib = uint64(1024 * 1024 * 1024)
+
+	now := time.Now()
+	prev := &GuestMemorySnapshot{
+		Status:       "running",
+		RetrievedAt:  now.Add(-30 * time.Second),
+		MemorySource: "guest-agent-meminfo",
+		Memory: models.Memory{
+			Total: 8 * int64(gib),
+			Used:  3 * int64(gib),
+			Free:  5 * int64(gib),
+			Usage: 37.5,
+		},
+	}
+
+	used, source, notes := stabilizeGuestLowTrustMemory(prev, "running", "unavailable", 8*gib, 0, now, false)
+	if used != 3*gib {
+		t.Fatalf("used = %d, want %d", used, 3*gib)
+	}
+	if source != "previous-snapshot" {
+		t.Fatalf("source = %q, want previous-snapshot", source)
+	}
+	if len(notes) != 1 {
+		t.Fatalf("notes = %#v, want carry-forward diagnostic", notes)
+	}
+}
+
 func TestStabilizeGuestLowTrustMemoryUsesHealthyGuestAgentEvidence(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 

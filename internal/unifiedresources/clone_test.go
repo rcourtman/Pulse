@@ -377,6 +377,34 @@ func TestCloneProxmoxData_NetworkInterfaceIsolation(t *testing.T) {
 	}
 }
 
+func TestCloneProxmoxDataMemoryIsolation(t *testing.T) {
+	original := &ProxmoxData{
+		Memory: &models.Memory{Total: 8 << 30, Used: 4 << 30, Usage: 50},
+	}
+	cloned := cloneProxmoxData(original)
+
+	cloned.Memory.Used = 7 << 30
+	if original.Memory.Used != 4<<30 {
+		t.Error("mutating cloned memory should not affect original")
+	}
+}
+
+func TestCloneAgentAndDockerMemoryIsolation(t *testing.T) {
+	agent := &AgentData{Memory: &AgentMemoryMeta{Total: 8 << 30}}
+	clonedAgent := cloneAgentData(agent)
+	clonedAgent.Memory.Total = 4 << 30
+	if agent.Memory.Total != 8<<30 {
+		t.Error("mutating cloned agent memory should not affect original")
+	}
+
+	docker := &DockerData{Memory: &AgentMemoryMeta{Total: 8 << 30}}
+	clonedDocker := cloneDockerData(docker)
+	clonedDocker.Memory.Total = 4 << 30
+	if docker.Memory.Total != 8<<30 {
+		t.Error("mutating cloned Docker memory should not affect original")
+	}
+}
+
 // --- cloneStorageMeta ---
 
 func TestCloneStorageMeta_Nil(t *testing.T) {

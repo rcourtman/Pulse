@@ -368,6 +368,7 @@ export function GuestRow(props: GuestRowProps) {
                   <StackedMemoryBar
                     used={props.guest.memory?.used || 0}
                     total={props.guest.memory?.total || 0}
+                    unavailable={props.guest.memory?.usageUnavailable === true}
                     percentOnly={memoryPercentOnly()}
                     cache={props.guest.memory?.cache || 0}
                     cacheInclusiveLabel="Shown in Proxmox"
@@ -383,13 +384,15 @@ export function GuestRow(props: GuestRowProps) {
             >
               {renderMetricSparkline(
                 'memory',
-                formatMetricPercent(
-                  usagePercent(
-                    props.guest.memory?.used,
-                    props.guest.memory?.total,
-                    props.guest.memory?.usage,
-                  ),
-                ),
+                props.guest.memory?.usageUnavailable
+                  ? 'N/A'
+                  : formatMetricPercent(
+                      usagePercent(
+                        props.guest.memory?.used,
+                        props.guest.memory?.total,
+                        props.guest.memory?.usage,
+                      ),
+                    ),
                 `${props.guest.name} memory history`,
                 '%',
                 'inline',

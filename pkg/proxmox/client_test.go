@@ -435,9 +435,14 @@ func TestMemoryStatusEffectiveAvailable(t *testing.T) {
 			want: 24 * 1024,
 		},
 		{
-			name:   "caps derived value at total",
+			name:   "rejects conflicting components above total",
 			status: MemoryStatus{Total: 8 * 1024, Free: 4 * 1024, Buffers: 4 * 1024, Cached: 4 * 1024},
-			want:   8 * 1024,
+			want:   0,
+		},
+		{
+			name:   "rejects explicit available above total",
+			status: MemoryStatus{Total: 8 * 1024, Available: 9 * 1024},
+			want:   0,
 		},
 		{
 			name:   "returns zero when no data",
@@ -450,6 +455,118 @@ func TestMemoryStatusEffectiveAvailable(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.status.EffectiveAvailable(); got != tc.want {
 				t.Fatalf("EffectiveAvailable: got %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseLinuxMemoryAvailability(t *testing.T) {
+	tests := []struct {
+		name          string
+		content       string
+		truncated     bool
+		wantSource    string
+		wantAvailable uint64
+		wantErr       bool
+	}{
+		{
+			name: "issue 1501 uses explicit MemAvailable without swap",
+			content: `MemTotal:        7796964 kB
+MemFree:          444824 kB
+MemAvailable:    1872820 kB
+Buffers:           51360 kB
+Cached:          1580464 kB
+SReclaimable:     191812 kB
+Shmem:             31200 kB`,
+			wantSource:    "meminfo-available",
+			wantAvailable: 1872820 * 1024,
+		},
+		{
+			name: "explicit zero MemAvailable is valid full pressure",
+			content: `MemTotal:        8388608 kB
+MemFree:                 0 kB
+MemAvailable:            0 kB`,
+			wantSource:    "meminfo-available",
+			wantAvailable: 0,
+		},
+		{
+			name: "old kernel derives cache aware availability",
+			content: `MemTotal:        8388608 kB
+MemFree:           524288 kB
+Buffers:           262144 kB
+Cached:           1572864 kB
+SReclaimable:      262144 kB
+Shmem:             131072 kB`,
+			wantSource:    "meminfo-derived",
+			wantAvailable: (524288 + 262144 + 1572864 + 262144 - 131072) * 1024,
+		},
+		{
+			name: "partial total and free is unknown",
+			content: `MemTotal:        8388608 kB
+MemFree:           524288 kB`,
+			wantErr: true,
+		},
+		{
+			name: "partial old kernel components are unknown even when not marked truncated",
+			content: `MemTotal:        8388608 kB
+MemFree:           524288 kB
+Cached:           1572864 kB`,
+			wantErr: true,
+		},
+		{
+			name: "truncated old kernel evidence is unknown",
+			content: `MemTotal:        8388608 kB
+MemFree:           524288 kB
+Cached:           1572864 kB`,
+			truncated: true,
+			wantErr:   true,
+		},
+		{
+			name: "conflicting available above total is rejected",
+			content: `MemTotal:        1024 kB
+MemFree:            512 kB
+MemAvailable:      2048 kB`,
+			wantErr: true,
+		},
+		{
+			name: "malformed cache field is rejected",
+			content: `MemTotal:        1024 kB
+MemFree:            512 kB
+Cached:              nope kB`,
+			wantErr: true,
+		},
+		{
+			name: "duplicate source evidence is rejected",
+			content: `MemTotal:        1024 kB
+MemAvailable:       512 kB
+MemAvailable:       256 kB`,
+			wantErr: true,
+		},
+		{
+			name: "non kB units are rejected",
+			content: `MemTotal:        1024 bytes
+MemAvailable:       512 bytes`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseLinuxMemoryAvailability(tt.content, tt.truncated)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("ParseLinuxMemoryAvailability() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseLinuxMemoryAvailability() error = %v", err)
+			}
+			if got.Source != tt.wantSource {
+				t.Fatalf("Source = %q, want %q", got.Source, tt.wantSource)
+			}
+			if got.EffectiveAvailable != tt.wantAvailable {
+				t.Fatalf("EffectiveAvailable = %d, want %d", got.EffectiveAvailable, tt.wantAvailable)
 			}
 		})
 	}
@@ -1248,7 +1365,7 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 			description:   "When available/avail missing, derive from free+buffers+cached",
 		},
 		{
-			name: "proxmox 8.4 hides cache fields - derive from total-minus-used gap",
+			name: "proxmox 8.4 hides cache fields - availability remains unknown",
 			status: MemoryStatus{
 				Total:   134794743808, // ~125.6GB
 				Used:    107351023616, // ~100GB actual usage
@@ -1256,9 +1373,9 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 				Buffers: 0,
 				Cached:  0,
 			},
-			wantAvailable: 27443720192, // total - used => ~25.6GB reclaimable (free + cache)
-			wantUsedPct:   79.6,        // Matches Proxmox node dashboard
-			description:   "Proxmox 8.4 stops reporting buffers/cached; use total-used gap to recover cache-aware metric",
+			wantAvailable: 0,
+			wantUsedPct:   0,
+			description:   "MemoryStatus alone does not treat total-used or MemFree as MemAvailable",
 		},
 		{
 			name: "issue #435 specific case - 86% vs 42% real usage",
@@ -1292,9 +1409,9 @@ func TestMemoryStatusEffectiveAvailable_RegressionIssue435(t *testing.T) {
 				Used:  6871947674,
 				Free:  0, // All fields missing
 			},
-			wantAvailable: 1717986918, // Derived from total - used
-			wantUsedPct:   80.0,       // Still aligns with cache-inclusive calculation when nothing else reported
-			description:   "When all cache fields missing, fall back to total-used gap instead of zero",
+			wantAvailable: 0,
+			wantUsedPct:   0,
+			description:   "When all cache-aware fields are missing, preserve an honest unknown value",
 		},
 	}
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -564,5 +565,107 @@ func TestEnsureOperationalContractKeepsExplicitUncertainStateAheadOfLegacyAcknow
 	}
 	if got := alert.OperationalRecord.LastObservedAt; !got.Equal(observedAt) {
 		t.Fatalf("LastObservedAt = %s, want %s", got, observedAt)
+	}
+}
+
+func TestMemoryUnavailablePreservesActiveAlertsUntilTrustedRecovery(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*Manager)
+		check func(*Manager, models.Memory)
+	}{
+		{
+			name: "guest",
+			setup: func(manager *Manager) {
+				manager.UpdateConfig(AlertConfig{
+					Enabled: true,
+					GuestDefaults: ThresholdConfig{
+						Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+					},
+				})
+			},
+			check: func(manager *Manager, memory models.Memory) {
+				manager.CheckGuest(models.VM{
+					ID:       "qemu/1501",
+					Name:     "linux-guest",
+					Node:     "pve-1",
+					Instance: "test",
+					Status:   "running",
+					Memory:   memory,
+				}, "test")
+			},
+		},
+		{
+			name: "node",
+			setup: func(manager *Manager) {
+				manager.UpdateConfig(AlertConfig{
+					Enabled: true,
+					NodeDefaults: ThresholdConfig{
+						Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+					},
+				})
+			},
+			check: func(manager *Manager, memory models.Memory) {
+				manager.CheckNode(models.Node{
+					ID:       "pve-1",
+					Name:     "pve-1",
+					Instance: "test",
+					Status:   "online",
+					Memory:   memory,
+				})
+			},
+		},
+		{
+			name: "agent",
+			setup: func(manager *Manager) {
+				manager.UpdateConfig(AlertConfig{
+					Enabled: true,
+					AgentDefaults: ThresholdConfig{
+						Memory: &HysteresisThreshold{Trigger: 85, Clear: 80},
+					},
+				})
+			},
+			check: func(manager *Manager, memory models.Memory) {
+				manager.CheckHost(models.Host{
+					ID:       "agent-1501",
+					Hostname: "linux-host",
+					Status:   "online",
+					Memory:   memory,
+				})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager := newUnifiedEvalParityManager(t)
+			tt.setup(manager)
+			disableTestTimeThresholds(manager)
+
+			tt.check(manager, models.Memory{
+				Total: 8 << 30,
+				Used:  7 << 30,
+				Usage: 90,
+			})
+			active := manager.GetActiveAlerts()
+			if len(active) != 1 || active[0].Type != "memory" {
+				t.Fatalf("active alerts after trusted high sample = %#v, want one memory alert", active)
+			}
+
+			tt.check(manager, models.UnavailableMemory(8<<30))
+			active = manager.GetActiveAlerts()
+			if len(active) != 1 || active[0].Type != "memory" || active[0].Value != 90 {
+				t.Fatalf("active alerts after unavailable sample = %#v, want prior memory alert", active)
+			}
+
+			tt.check(manager, models.Memory{
+				Total: 8 << 30,
+				Used:  5 << 30,
+				Usage: 70,
+			})
+			if active = manager.GetActiveAlerts(); len(active) != 0 {
+				t.Fatalf("active alerts after trusted recovery = %#v, want cleared", active)
+			}
+		})
 	}
 }

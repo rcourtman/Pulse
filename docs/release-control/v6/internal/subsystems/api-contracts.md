@@ -5901,6 +5901,13 @@ That same diagnostics boundary must also backfill canonical fallback reasons
 when a raw snapshot reaches the API layer without one, so
 `buildMemorySourceDiagnostics` stays self-consistent even if a caller bypasses
 `GetDiagnosticSnapshots()` and hands diagnostics a legacy alias directly.
+The canonical `unavailable` memory source is serialized with trust
+`unavailable`, fallback reason `cache-aware-memory-unavailable`, and the raw
+source evidence that was actually observed. Node diagnostics keep status and
+RRD available/used/total fields distinct; guest diagnostics keep status
+meminfo, RRD, guest-agent free/cache/reclaimable/shmem, and linked-agent fields
+distinct. Diagnostics must not relabel RRD evidence as meminfo or turn an
+unknown usage into zero merely because total capacity is known.
 PVE and PBS node diagnostics must also classify connection failures into
 machine-readable `errorKind` values with operator guidance in
 `troubleshooting`. Missing stored credentials, Proxmox auth rejection, TLS

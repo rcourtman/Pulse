@@ -5,6 +5,32 @@ import { buildStackedMemoryBarPresentation } from '../stackedMemoryBarModel';
 const GiB = 1024 ** 3;
 
 describe('buildStackedMemoryBarPresentation', () => {
+  it('renders unavailable usage without inventing a zero-percent segment', () => {
+    const presentation = buildStackedMemoryBarPresentation(
+      { used: 0, total: 8 * GiB, unavailable: true },
+      400,
+    );
+
+    expect(presentation.unavailable).toBe(true);
+    expect(presentation.segments).toEqual([]);
+    expect(presentation.displaySublabel).toBe('');
+    expect(presentation.showSublabel).toBe(false);
+    expect(presentation.tooltipRows).toEqual([
+      {
+        borderTop: false,
+        label: 'Usage',
+        labelClass: 'text-slate-400',
+        value: 'Unavailable',
+      },
+      {
+        borderTop: true,
+        label: 'Total',
+        labelClass: 'text-slate-400',
+        value: '8.00 GB',
+      },
+    ]);
+  });
+
   it('renders the used | reclaimable cache split with a source-neutral reconciliation row', () => {
     const presentation = buildStackedMemoryBarPresentation(
       { used: 4 * GiB, total: 16 * GiB, cache: 6 * GiB },

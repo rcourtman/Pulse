@@ -28,6 +28,7 @@ export type ProxmoxPlatformData = {
   nodeName?: string;
   clusterName?: string;
   vmid?: number;
+  memory?: Partial<Memory>;
   pveVersion?: string;
   kernelVersion?: string;
   uptime?: number;
@@ -189,15 +190,17 @@ const getPreferredHostLabel = (resource: Resource): string =>
   resource.id;
 
 export const buildMemory = (metric?: ResourceMetric, fallback?: Partial<Memory>): Memory => {
+  const usageUnavailable = metric == null && fallback?.usageUnavailable === true;
   const total = metric?.total ?? fallback?.total ?? 0;
   const used = metric?.used ?? fallback?.used ?? 0;
-  const free = metric?.free ?? fallback?.free ?? Math.max(total - used, 0);
-  const usage = total > 0 ? used / total : (fallback?.usage ?? 0);
+  const free = metric?.free ?? fallback?.free ?? (usageUnavailable ? 0 : Math.max(total - used, 0));
+  const usage = usageUnavailable ? 0 : total > 0 ? used / total : (fallback?.usage ?? 0);
   return {
     total,
     used,
     free,
     usage,
+    ...(usageUnavailable ? { usageUnavailable: true } : {}),
   };
 };
 
@@ -241,7 +244,7 @@ export const toNodeFromProxmox = (resource: Resource): Node | null => {
   const proxmox = platformData?.proxmox;
   if (!proxmox) return null;
 
-  const memory = buildMemory(resource.memory);
+  const memory = buildMemory(resource.memory, proxmox.memory);
   const disk = buildDisk(resource.disk);
   const lastSeen = Number.isFinite(resource.lastSeen)
     ? new Date(resource.lastSeen).toISOString()

@@ -3716,6 +3716,13 @@ for lifecycle-adjacent diagnostics surfaces, legacy aliases and empty
 fallback-reason fields must still normalize onto the governed canonical reason
 contract instead of depending on monitor-owned snapshot accessors to have run
 first.
+Unified Linux agents carry memory evidence across this lifecycle boundary, but
+they do not own memory-source inference. A report with only total and free
+bytes must remain explicitly usage-unavailable because Linux `MemFree` excludes
+reclaimable page cache; a complete used/cache/free split or an explicit
+cache-aware usage remains trusted. Lifecycle transport, reconnect, and JSON
+reload must preserve `UsageUnavailable`, including known total capacity,
+without turning it into zero usage or an enrollment/freshness failure.
 That same shared diagnostics dependency now also assumes local commercial and
 onboarding analytics stay out of user diagnostics entirely: lifecycle-adjacent
 admin surfaces may consume operational diagnostics, but they must not restore

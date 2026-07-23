@@ -34,6 +34,38 @@ func TestClusterClient_GetCephStatus(t *testing.T) {
 	}
 }
 
+func TestClusterClient_GetVMMemoryAvailabilityFromAgent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
+		case "/api2/json/nodes/node1/qemu/1501/agent/file-read":
+			fmt.Fprint(w, `{"data":{"content":"MemTotal: 7796964 kB\nMemFree: 444824 kB\nMemAvailable: 1872820 kB\nCached: 1580464 kB\n","truncated":false}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cc := NewClusterClient(
+		"test",
+		ClientConfig{Host: server.URL, TokenName: "u@p!t", TokenValue: "v"},
+		[]string{server.URL},
+		nil,
+	)
+	availability, err := cc.GetVMMemoryAvailabilityFromAgent(context.Background(), "node1", 1501)
+	if err != nil {
+		t.Fatalf("GetVMMemoryAvailabilityFromAgent() error = %v", err)
+	}
+	if availability.Source != "meminfo-available" {
+		t.Fatalf("source = %q, want meminfo-available", availability.Source)
+	}
+	if availability.EffectiveAvailable != 1872820*1024 {
+		t.Fatalf("available = %d, want %d", availability.EffectiveAvailable, 1872820*1024)
+	}
+}
+
 func TestClusterClient_GetVMSnapshots(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

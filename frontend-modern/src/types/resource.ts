@@ -665,6 +665,8 @@ export interface ResourceProxmoxMeta {
   balloon?: number;
   /** Reclaimable buff/cache split out of the memory metric's free bytes. */
   memoryCache?: number;
+  /** Raw capacity and explicit availability state when no canonical metric is projected. */
+  memory?: Partial<Memory>;
   pendingUpdates?: number;
   isOci?: boolean;
   osTemplate?: string;
@@ -698,6 +700,7 @@ export interface ResourceDockerMeta {
   runtime?: string;
   runtimeVersion?: string;
   dockerVersion?: string;
+  memory?: Partial<Memory>;
   os?: string;
   kernelVersion?: string;
   architecture?: string;

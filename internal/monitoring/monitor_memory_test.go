@@ -250,6 +250,31 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 	}
 }
 
+func TestNodeRRDMemoryCacheIsScopedByInstance(t *testing.T) {
+	mon := &Monitor{nodeRRDMemCache: make(map[string]rrdMemCacheEntry)}
+	const gib = uint64(1024 * 1024 * 1024)
+
+	first, err := mon.getNodeRRDMetrics(context.Background(), &stubPVEClient{
+		rrdPoints: []proxmox.NodeRRDPoint{{MemUsed: floatPtr(float64(2 * gib))}},
+	}, "pve-a", "node1")
+	if err != nil {
+		t.Fatalf("first getNodeRRDMetrics() error = %v", err)
+	}
+	second, err := mon.getNodeRRDMetrics(context.Background(), &stubPVEClient{
+		rrdPoints: []proxmox.NodeRRDPoint{{MemUsed: floatPtr(float64(6 * gib))}},
+	}, "pve-b", "node1")
+	if err != nil {
+		t.Fatalf("second getNodeRRDMetrics() error = %v", err)
+	}
+
+	if first.used != 2*gib || second.used != 6*gib {
+		t.Fatalf("cross-instance node RRD values leaked: first=%d second=%d", first.used, second.used)
+	}
+	if len(mon.nodeRRDMemCache) != 2 {
+		t.Fatalf("node RRD cache entries = %d, want two instance-scoped entries", len(mon.nodeRRDMemCache))
+	}
+}
+
 func TestPollPVEInstancePreservesRecentNodesWhenGetNodesReturnsEmpty(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

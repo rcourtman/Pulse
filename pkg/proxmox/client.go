@@ -734,34 +734,45 @@ func (m *MemoryStatus) UnmarshalJSON(data []byte) error {
 
 // EffectiveAvailable returns the best-effort estimate of reclaimable memory.
 // Prefer the dedicated "available"/"avail" fields when present, otherwise derive
-// from free + buffers + cached which mirrors Linux's MemAvailable calculation.
+// from free + buffers + cached when reclaimable-cache evidence is present.
+// MemFree by itself is not an availability estimate.
 func (m *MemoryStatus) EffectiveAvailable() uint64 {
 	if m == nil {
 		return 0
 	}
 
 	if m.Available > 0 {
+		if m.Total > 0 && m.Available > m.Total {
+			return 0
+		}
 		return m.Available
 	}
 	if m.Avail > 0 {
+		if m.Total > 0 && m.Avail > m.Total {
+			return 0
+		}
 		return m.Avail
 	}
 
-	derived := m.Free + m.Buffers + m.Cached
-	if m.Total > 0 && m.Used > 0 && m.Total >= m.Used {
-		availableFromUsed := m.Total - m.Used
-		if availableFromUsed > derived {
-			derived = availableFromUsed
-		}
+	if m.Buffers == 0 && m.Cached == 0 {
+		return 0
 	}
 
+	derived := m.Free
+	for _, value := range []uint64{m.Buffers, m.Cached} {
+		if math.MaxUint64-derived < value {
+			derived = math.MaxUint64
+			break
+		}
+		derived += value
+	}
 	if derived == 0 {
 		return 0
 	}
 
-	// Cap at total to guard against over-reporting when buffers/cached exceed total.
+	// Conflicting components are not a usable availability estimate.
 	if m.Total > 0 && derived > m.Total {
-		return m.Total
+		return 0
 	}
 
 	return derived
@@ -2112,13 +2123,124 @@ func vmNetworkInterfaceHasUsefulData(iface VMNetworkInterface) bool {
 		iface.HasIp6Gateway
 }
 
-// GetVMMemAvailableFromAgent reads /proc/meminfo via the QEMU guest agent's
-// file-read endpoint and returns MemAvailable in bytes.
-func (c *Client) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+// LinuxMemoryAvailability records the cache-aware fields used to establish a
+// Linux guest's available memory. Source is either meminfo-available or
+// meminfo-derived.
+type LinuxMemoryAvailability struct {
+	Total              uint64
+	Free               uint64
+	Available          uint64
+	Buffers            uint64
+	Cached             uint64
+	SReclaimable       uint64
+	Shmem              uint64
+	SwapTotal          uint64
+	SwapFree           uint64
+	EffectiveAvailable uint64
+	Source             string
+}
+
+// ParseLinuxMemoryAvailability parses /proc/meminfo. New kernels provide
+// MemAvailable directly. Older kernels use the conservative cache-aware
+// estimate Free + Buffers + Cached + SReclaimable - Shmem. A partial payload
+// containing only MemTotal/MemFree is deliberately rejected.
+func ParseLinuxMemoryAvailability(content string, truncated bool) (LinuxMemoryAvailability, error) {
+	var result LinuxMemoryAvailability
+	seen := make(map[string]struct{})
+	fieldsByName := map[string]*uint64{
+		"MemTotal":     &result.Total,
+		"MemFree":      &result.Free,
+		"MemAvailable": &result.Available,
+		"Buffers":      &result.Buffers,
+		"Cached":       &result.Cached,
+		"SReclaimable": &result.SReclaimable,
+		"Shmem":        &result.Shmem,
+		"SwapTotal":    &result.SwapTotal,
+		"SwapFree":     &result.SwapFree,
+	}
+
+	for _, line := range strings.Split(content, "\n") {
+		nameValue := strings.SplitN(strings.TrimSpace(line), ":", 2)
+		if len(nameValue) != 2 {
+			continue
+		}
+		target, ok := fieldsByName[nameValue[0]]
+		if !ok {
+			continue
+		}
+		if _, duplicate := seen[nameValue[0]]; duplicate {
+			return LinuxMemoryAvailability{}, fmt.Errorf("duplicate %s field in /proc/meminfo", nameValue[0])
+		}
+		seen[nameValue[0]] = struct{}{}
+		fields := strings.Fields(nameValue[1])
+		if len(fields) < 2 || fields[1] != "kB" {
+			return LinuxMemoryAvailability{}, fmt.Errorf("invalid %s field in /proc/meminfo", nameValue[0])
+		}
+		kB, err := strconv.ParseUint(fields[0], 10, 64)
+		if err != nil {
+			return LinuxMemoryAvailability{}, fmt.Errorf("parse %s value %q: %w", nameValue[0], fields[0], err)
+		}
+		if kB > math.MaxUint64/1024 {
+			return LinuxMemoryAvailability{}, fmt.Errorf("%s value %d kB overflows uint64", nameValue[0], kB)
+		}
+		*target = kB * 1024
+	}
+
+	if _, present := seen["MemAvailable"]; present {
+		if _, ok := seen["MemTotal"]; !ok || result.Total == 0 {
+			return LinuxMemoryAvailability{}, fmt.Errorf("MemAvailable has no valid MemTotal")
+		}
+		if result.Available > result.Total {
+			return LinuxMemoryAvailability{}, fmt.Errorf("MemAvailable exceeds MemTotal")
+		}
+		result.EffectiveAvailable = result.Available
+		result.Source = "meminfo-available"
+		return result, nil
+	}
+
+	if truncated {
+		return LinuxMemoryAvailability{}, fmt.Errorf("truncated /proc/meminfo has no MemAvailable")
+	}
+	for _, required := range []string{"MemTotal", "MemFree", "Buffers", "Cached"} {
+		if _, ok := seen[required]; !ok {
+			return LinuxMemoryAvailability{}, fmt.Errorf("old-kernel /proc/meminfo missing %s", required)
+		}
+	}
+	if result.Total == 0 || result.Free == 0 && result.Buffers == 0 && result.Cached == 0 && result.SReclaimable == 0 {
+		return LinuxMemoryAvailability{}, fmt.Errorf("insufficient cache-aware fields in /proc/meminfo")
+	}
+	if result.Buffers == 0 && result.Cached == 0 && result.SReclaimable == 0 {
+		return LinuxMemoryAvailability{}, fmt.Errorf("MemAvailable and reclaimable cache fields not found in /proc/meminfo")
+	}
+
+	available := result.Free
+	for _, value := range []uint64{result.Buffers, result.Cached, result.SReclaimable} {
+		if math.MaxUint64-available < value {
+			available = math.MaxUint64
+			break
+		}
+		available += value
+	}
+	if result.Shmem >= available {
+		available = 0
+	} else {
+		available -= result.Shmem
+	}
+	if available > result.Total {
+		available = result.Total
+	}
+	result.EffectiveAvailable = available
+	result.Source = "meminfo-derived"
+	return result, nil
+}
+
+// GetVMMemoryAvailabilityFromAgent reads /proc/meminfo via the QEMU guest
+// agent and returns the raw evidence plus the selected cache-aware value.
+func (c *Client) GetVMMemoryAvailabilityFromAgent(ctx context.Context, node string, vmid int) (LinuxMemoryAvailability, error) {
 	fileParam := url.QueryEscape("/proc/meminfo")
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/file-read?file=%s", node, vmid, fileParam))
 	if err != nil {
-		return 0, fmt.Errorf("guest agent file-read /proc/meminfo: %w", err)
+		return LinuxMemoryAvailability{}, fmt.Errorf("guest agent file-read /proc/meminfo: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -2129,29 +2251,25 @@ func (c *Client) GetVMMemAvailableFromAgent(ctx context.Context, node string, vm
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("decode file-read response: %w", err)
+		return LinuxMemoryAvailability{}, fmt.Errorf("decode file-read response: %w", err)
 	}
 
-	for _, line := range strings.Split(result.Data.Content, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "MemAvailable:") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		kB, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			return 0, fmt.Errorf("parse MemAvailable value %q: %w", fields[1], err)
-		}
-		if kB > math.MaxUint64/1024 {
-			return 0, fmt.Errorf("MemAvailable value %d kB overflows uint64", kB)
-		}
-		return kB * 1024, nil
+	truncated := result.Data.Truncated != nil && *result.Data.Truncated
+	availability, err := ParseLinuxMemoryAvailability(result.Data.Content, truncated)
+	if err != nil {
+		return LinuxMemoryAvailability{}, err
 	}
+	return availability, nil
+}
 
-	return 0, fmt.Errorf("MemAvailable not found in /proc/meminfo")
+// GetVMMemAvailableFromAgent is retained for callers that only need the
+// selected availability value.
+func (c *Client) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	availability, err := c.GetVMMemoryAvailabilityFromAgent(ctx, node, vmid)
+	if err != nil {
+		return 0, err
+	}
+	return availability.EffectiveAvailable, nil
 }
 
 // GetVMStatus returns detailed VM status including balloon info

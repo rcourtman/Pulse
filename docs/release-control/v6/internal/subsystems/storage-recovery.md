@@ -1547,6 +1547,14 @@ recovery scope, or a storage/recovery-owned secret source.
     contract. `internal/unifiedresources/types.go` carries the reclaimable
     page-cache split (`AgentMemoryMeta.cache`, holding used + cache + free
     within the reported total) as host RAM description for machine surfaces.
+    It also carries `AgentMemoryMeta.usageUnavailable`, and the parallel
+    Proxmox and Docker raw memory facets, so a collector can preserve known
+    capacity while declining to invent Linux usage from `total - MemFree`.
+    A newer unavailable report clears a stale canonical memory metric only
+    when both observations come from the same source; a trusted linked source
+    remains eligible to supply the merged metric. Storage and recovery
+    consumers must preserve that distinction and must not reinterpret unknown
+    host RAM usage as zero, full pressure, or a storage-health signal.
     Storage and recovery must not reinterpret that reclaimable RAM figure as
     disk cache, ZFS ARC sizing, storage-tier health, or capacity-planning
     evidence; disk and pool truth stays on the canonical storage and

@@ -15,7 +15,7 @@ func metricsFromProxmoxNode(node models.Node) *ResourceMetrics {
 	cpuPercent := percentFromUsage(node.CPU)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceProxmox}
 
-	if node.Memory.Total > 0 {
+	if node.Memory.Total > 0 && node.Memory.HasKnownUsage() {
 		percent := percentFromUsage(node.Memory.Usage)
 		metrics.Memory = &MetricValue{Used: &node.Memory.Used, Total: &node.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
 	}
@@ -89,7 +89,7 @@ func buildHostMetricPayload(
 	metrics := &ResourceMetrics{}
 	cpuPercent := percentFromReportedPercent(cpuUsage)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
-	if memory.Total > 0 {
+	if memory.Total > 0 && memory.HasKnownUsage() {
 		percent := percentFromReportedPercent(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
@@ -186,7 +186,7 @@ func buildVMMetricPayload(
 	metrics := &ResourceMetrics{}
 	cpuPercent := ProxmoxGuestCPUPercent(cpu)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
-	if memory.Total > 0 {
+	if memory.Total > 0 && memory.HasKnownUsage() {
 		percent := percentFromUsage(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
 	}

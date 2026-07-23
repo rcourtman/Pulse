@@ -141,6 +141,15 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					MaxMem: container.MaxMem,
 					Mem:    container.Mem,
 				}, client)
+				memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
+					m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID)),
+					container.Status,
+					memorySource,
+					memTotal,
+					memUsed,
+					sampleTime,
+					false,
+				)
 
 				memTotalBytes := clampToInt64(memTotal)
 				memUsedBytes := clampToInt64(memUsed)
@@ -152,6 +161,15 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					memFreeBytes = 0
 				}
 				memUsagePercent := safePercentage(float64(memUsedBytes), float64(memTotalBytes))
+				memory := models.UnavailableMemory(memTotalBytes)
+				if CanonicalMemorySource(memorySource) != "unavailable" {
+					memory = models.Memory{
+						Total: memTotalBytes,
+						Used:  memUsedBytes,
+						Free:  memFreeBytes,
+						Usage: memUsagePercent,
+					}
+				}
 
 				diskTotalBytes := clampToInt64(container.MaxDisk)
 				diskUsedBytes := clampToInt64(container.Disk)
@@ -176,12 +194,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					Type:     "lxc",
 					CPU:      cpuUsage,
 					CPUs:     int(container.CPUs),
-					Memory: models.Memory{
-						Total: memTotalBytes,
-						Used:  memUsedBytes,
-						Free:  memFreeBytes,
-						Usage: memUsagePercent,
-					},
+					Memory:   memory,
 					Disk: models.Disk{
 						Total: diskTotalBytes,
 						Used:  diskUsedBytes,
@@ -337,7 +350,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			}
 			// IO/network series are not recorded on the traditional polling
 			// path (parity with the historical inline writes).
-			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), ct.Memory.Usage, ct.Disk.Usage, -1, -1, -1, -1, now)
+			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, -1, -1, -1, -1, now)
 		}
 	}
 

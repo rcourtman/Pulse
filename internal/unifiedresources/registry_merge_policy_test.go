@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestLinkedMergeAllowsOneSidedNodeHostLinkWhenHostnameCorroborates(t *testing.T) {
@@ -416,4 +418,73 @@ func containsDataSource(sources []DataSource, want DataSource) bool {
 		}
 	}
 	return false
+}
+
+func TestRegistryMemoryUnavailableClearsOnlySameSourceMetric(t *testing.T) {
+	total := int64(8 << 30)
+	used := total / 2
+	unavailable := &AgentMemoryMeta{
+		Total:            total,
+		UsageUnavailable: true,
+	}
+	lastSeen := time.Now().UTC()
+
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{{
+		SourceID: "agent-1501",
+		Resource: Resource{
+			Type:     ResourceTypeAgent,
+			Name:     "linux-host",
+			Status:   StatusOnline,
+			LastSeen: lastSeen,
+			Metrics: &ResourceMetrics{Memory: &MetricValue{
+				Used:    &used,
+				Total:   &total,
+				Percent: 50,
+				Source:  SourceAgent,
+			}},
+			Agent: &AgentData{Memory: &AgentMemoryMeta{Total: total, Used: used}},
+		},
+	}})
+	registry.IngestRecords(SourceAgent, []IngestRecord{{
+		SourceID: "agent-1501",
+		Resource: Resource{
+			Type:     ResourceTypeAgent,
+			Name:     "linux-host",
+			Status:   StatusOnline,
+			LastSeen: lastSeen.Add(time.Second),
+			Metrics:  &ResourceMetrics{},
+			Agent:    &AgentData{Memory: unavailable},
+		},
+	}})
+
+	resources := registry.ListByType(ResourceTypeAgent)
+	if len(resources) != 1 || resources[0].Metrics == nil || resources[0].Metrics.Memory != nil {
+		t.Fatalf("same-source resources = %+v, want stale memory metric cleared", resources)
+	}
+
+	proxmoxUnavailable := &Resource{
+		Type:     ResourceTypeVM,
+		Proxmox:  &ProxmoxData{Memory: &models.Memory{Total: total, UsageUnavailable: true}},
+		Metrics:  &ResourceMetrics{},
+		LastSeen: lastSeen.Add(2 * time.Second),
+	}
+	trusted := &ResourceMetrics{Memory: &MetricValue{
+		Used:    &used,
+		Total:   &total,
+		Percent: 50,
+		Source:  SourceAgent,
+	}}
+	merged := mergeMetrics(
+		proxmoxUnavailable,
+		trusted,
+		proxmoxUnavailable.Metrics,
+		SourceProxmox,
+		proxmoxUnavailable.LastSeen,
+		nil,
+		nil,
+	)
+	if merged.Memory == nil || merged.Memory.Percent != 50 || merged.Memory.Source != SourceAgent {
+		t.Fatalf("cross-source memory = %+v, want trusted agent metric preserved", merged.Memory)
+	}
 }

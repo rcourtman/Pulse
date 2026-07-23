@@ -75,6 +75,60 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 	}
 }
 
+func TestUnavailableMemoryFacetsDoNotChangeCanonicalIdentity(t *testing.T) {
+	total := int64(8 << 30)
+	resource := Resource{
+		ID:   "vm:proxmox-a:1501",
+		Type: ResourceTypeVM,
+		Name: "linux-guest",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"linux-guest.example"},
+		},
+		Proxmox: &ProxmoxData{
+			Instance: "proxmox-a",
+			VMID:     1501,
+		},
+		Agent: &AgentData{
+			AgentID: "agent-1501",
+		},
+		Docker: &DockerData{
+			HostSourceID: "docker-1501",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical == nil {
+		t.Fatal("canonical identity is nil")
+	}
+	wantPrimaryID := resource.Canonical.PrimaryID
+	wantHostname := resource.Canonical.Hostname
+
+	resource.Proxmox.Memory = &models.Memory{
+		Total:            total,
+		UsageUnavailable: true,
+	}
+	resource.Agent.Memory = &AgentMemoryMeta{
+		Total:            total,
+		UsageUnavailable: true,
+	}
+	resource.Docker.Memory = &AgentMemoryMeta{
+		Total:            total,
+		UsageUnavailable: true,
+	}
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil ||
+		resource.Canonical.PrimaryID != wantPrimaryID ||
+		resource.Canonical.Hostname != wantHostname {
+		t.Fatalf(
+			"canonical identity = %+v, want primary ID %q and hostname %q unchanged",
+			resource.Canonical,
+			wantPrimaryID,
+			wantHostname,
+		)
+	}
+}
+
 func TestVMGuestAgentIncidentUsesCanonicalSourceID(t *testing.T) {
 	vm := models.VM{
 		ID:                 "cluster-a:pve-a:101",

@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -29,6 +30,92 @@ func TestMetricsFromDockerHostIncludesIORates(t *testing.T) {
 	}
 	if metrics.DiskWrite == nil || metrics.DiskWrite.Value != host.DiskWriteRate {
 		t.Fatalf("expected diskWrite=%v, got %+v", host.DiskWriteRate, metrics.DiskWrite)
+	}
+}
+
+func TestUnavailableMemoryDoesNotProjectOrOverwriteTrustedCrossSourceMetric(t *testing.T) {
+	unavailable := models.UnavailableMemory(8 * 1024 * 1024 * 1024)
+
+	for name, metrics := range map[string]*ResourceMetrics{
+		"proxmox-node": metricsFromProxmoxNode(models.Node{Memory: unavailable}),
+		"proxmox-vm":   metricsFromVM(models.VM{Memory: unavailable}),
+		"proxmox-lxc":  metricsFromContainer(models.Container{Memory: unavailable}),
+		"agent-host":   metricsFromHost(models.Host{Memory: unavailable}),
+		"docker-host":  metricsFromDockerHost(models.DockerHost{Memory: unavailable}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if metrics.Memory != nil {
+				t.Fatalf("Memory = %+v, want nil for unavailable usage", metrics.Memory)
+			}
+		})
+	}
+
+	trustedTotal := int64(8 * 1024 * 1024 * 1024)
+	trustedUsed := int64(4 * 1024 * 1024 * 1024)
+	trusted := &ResourceMetrics{
+		Memory: &MetricValue{
+			Used:    &trustedUsed,
+			Total:   &trustedTotal,
+			Percent: 50,
+			Source:  SourceAgent,
+		},
+	}
+	merged := mergeMetrics(
+		&Resource{Type: ResourceTypeVM, Proxmox: &ProxmoxData{VMID: 1501}},
+		trusted,
+		metricsFromVM(models.VM{Memory: unavailable}),
+		SourceProxmox,
+		time.Now().UTC(),
+		nil,
+		nil,
+	)
+	if merged.Memory == nil || merged.Memory.Percent != 50 || merged.Memory.Source != SourceAgent {
+		t.Fatalf("merged memory = %+v, want trusted agent metric preserved", merged.Memory)
+	}
+
+	resource, _ := resourceFromVM(models.VM{VMID: 1501, Memory: unavailable})
+	if resource.Metrics == nil || resource.Metrics.Memory != nil {
+		t.Fatalf("canonical metrics = %+v, want absent unavailable memory metric", resource.Metrics)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.Memory == nil || !resource.Proxmox.Memory.UsageUnavailable {
+		t.Fatalf("Proxmox memory fallback = %+v, want explicit unavailable capacity", resource.Proxmox)
+	}
+
+	for name, tc := range map[string]struct {
+		source   DataSource
+		resource *Resource
+	}{
+		"proxmox": {
+			source:   SourceProxmox,
+			resource: &Resource{Proxmox: &ProxmoxData{Memory: &unavailable}},
+		},
+		"agent": {
+			source: SourceAgent,
+			resource: &Resource{Agent: &AgentData{Memory: &AgentMemoryMeta{
+				Total:            unavailable.Total,
+				UsageUnavailable: true,
+			}}},
+		},
+		"docker": {
+			source: SourceDocker,
+			resource: &Resource{Docker: &DockerData{Memory: &AgentMemoryMeta{
+				Total:            unavailable.Total,
+				UsageUnavailable: true,
+			}}},
+		},
+	} {
+		t.Run("same-source-"+name, func(t *testing.T) {
+			sameSource := &ResourceMetrics{Memory: &MetricValue{Percent: 50, Source: tc.source}}
+			cleared := clearUnavailableSourceMemoryMetric(sameSource, tc.resource, tc.source)
+			if cleared.Memory != nil {
+				t.Fatalf("Memory = %+v, want same-source stale value cleared", cleared.Memory)
+			}
+		})
+	}
+
+	dockerResource, _ := resourceFromDockerHost(models.DockerHost{Memory: unavailable})
+	if dockerResource.Docker == nil || dockerResource.Docker.Memory == nil || !dockerResource.Docker.Memory.UsageUnavailable {
+		t.Fatalf("Docker memory fallback = %+v, want explicit unavailable capacity", dockerResource.Docker)
 	}
 }
 

@@ -868,6 +868,9 @@ const memoryPercentOnlyFor = (machine: Resource): number | undefined => {
   );
 };
 
+const memoryUnavailableFor = (machine: Resource): boolean =>
+  !machine.memory && machine.agent?.memory?.usageUnavailable === true;
+
 const memoryBalloonFor = (machine: Resource): number | undefined =>
   getPlatformTableFiniteMetric(machine.agent?.memory?.balloon);
 
@@ -1656,6 +1659,7 @@ export const AgentsMachinesTable: Component<{
                               <StackedMemoryBar
                                 used={memoryUsed()}
                                 total={memoryTotal()}
+                                unavailable={memoryUnavailableFor(machine)}
                                 percentOnly={memoryPercentOnly()}
                                 cache={memoryCache()}
                                 balloon={memoryBalloon()}

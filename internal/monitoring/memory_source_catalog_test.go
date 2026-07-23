@@ -98,6 +98,14 @@ func TestDescribeMemorySourceCanonicalizesAliases(t *testing.T) {
 			wantTrust:     "fallback",
 		},
 		{
+			name:                "unavailable is explicit and diagnosable",
+			source:              "unavailable",
+			wantCanonical:       "unavailable",
+			wantTrust:           "unavailable",
+			wantFallback:        true,
+			wantDefaultFallback: "cache-aware-memory-unavailable",
+		},
+		{
 			name:          "unknown source falls back canonically",
 			source:        "custom-source",
 			wantCanonical: "custom-source",
@@ -138,7 +146,7 @@ func TestMockVMPollingDefersMemoryHistoryToCanonicalSampler(t *testing.T) {
 
 	requiredSnippets := []string{
 		"if !shouldSkipNativeMockStateMetricWrites() {",
-		`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)`,
+		`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, -1, -1, -1, -1, now)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

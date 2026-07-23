@@ -100,6 +100,10 @@ func (m *Manager) CheckNode(node models.Node) {
 					Str("node", node.Name).
 					Msg("Skipping node metric alerts - host agent is monitoring this machine")
 			} else {
+				var memoryMetric *UnifiedResourceMetric
+				if node.Memory.HasKnownUsage() {
+					memoryMetric = &UnifiedResourceMetric{Percent: node.Memory.Usage}
+				}
 				m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 					ID:       node.ID,
 					Type:     "node",
@@ -107,7 +111,7 @@ func (m *Manager) CheckNode(node models.Node) {
 					Node:     node.Name,
 					Instance: node.Instance,
 					CPU:      &UnifiedResourceMetric{Percent: node.CPU * 100},
-					Memory:   &UnifiedResourceMetric{Percent: node.Memory.Usage},
+					Memory:   memoryMetric,
 					Disk:     &UnifiedResourceMetric{Percent: node.Disk.Usage},
 				}, thresholds, nil)
 

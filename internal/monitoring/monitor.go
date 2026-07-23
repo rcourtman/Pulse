@@ -1217,6 +1217,9 @@ type rrdMemCacheEntry struct {
 	available uint64
 	used      uint64
 	total     uint64
+	hasAvail  bool
+	hasUsed   bool
+	hasTotal  bool
 	netIn     float64
 	netOut    float64
 	hasNetIn  bool
@@ -1301,15 +1304,20 @@ type taskOutcome struct {
 	recordedAt time.Time
 }
 
-func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterface, nodeName string) (rrdMemCacheEntry, error) {
+func nodeRRDCacheKey(instanceName, nodeName string) string {
+	return instanceName + "/" + nodeName
+}
+
+func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, nodeName string) (rrdMemCacheEntry, error) {
 	if client == nil || nodeName == "" {
 		return rrdMemCacheEntry{}, fmt.Errorf("invalid arguments for RRD lookup")
 	}
 
 	now := time.Now()
+	cacheKey := nodeRRDCacheKey(instanceName, nodeName)
 
 	m.rrdCacheMu.RLock()
-	if entry, ok := m.nodeRRDMemCache[nodeName]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
+	if entry, ok := m.nodeRRDMemCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
 		m.rrdCacheMu.RUnlock()
 		return entry, nil
 	}
@@ -1326,6 +1334,9 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	var memAvailable uint64
 	var memUsed uint64
 	var memTotal uint64
+	var hasAvail bool
+	var hasUsed bool
+	var hasTotal bool
 	var netIn float64
 	var netOut float64
 	var hasNetIn bool
@@ -1334,23 +1345,26 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	for i := len(points) - 1; i >= 0; i-- {
 		point := points[i]
 
-		if memTotal == 0 && point.MemTotal != nil && !math.IsNaN(*point.MemTotal) && *point.MemTotal > 0 {
+		if !hasTotal && point.MemTotal != nil && !math.IsNaN(*point.MemTotal) && !math.IsInf(*point.MemTotal, 0) && *point.MemTotal > 0 && *point.MemTotal <= math.MaxUint64 {
 			memTotal = uint64(math.Round(*point.MemTotal))
+			hasTotal = true
 		}
 
-		if memAvailable == 0 && point.MemAvailable != nil && !math.IsNaN(*point.MemAvailable) && *point.MemAvailable > 0 {
+		if !hasAvail && point.MemAvailable != nil && !math.IsNaN(*point.MemAvailable) && !math.IsInf(*point.MemAvailable, 0) && *point.MemAvailable >= 0 && *point.MemAvailable <= math.MaxUint64 {
 			memAvailable = uint64(math.Round(*point.MemAvailable))
+			hasAvail = true
 		}
 
-		if memUsed == 0 && point.MemUsed != nil && !math.IsNaN(*point.MemUsed) && *point.MemUsed > 0 {
+		if !hasUsed && point.MemUsed != nil && !math.IsNaN(*point.MemUsed) && !math.IsInf(*point.MemUsed, 0) && *point.MemUsed >= 0 && *point.MemUsed <= math.MaxUint64 {
 			memUsed = uint64(math.Round(*point.MemUsed))
+			hasUsed = true
 		}
 
-		if !hasNetIn && point.NetIn != nil && !math.IsNaN(*point.NetIn) {
+		if !hasNetIn && point.NetIn != nil && !math.IsNaN(*point.NetIn) && !math.IsInf(*point.NetIn, 0) {
 			netIn = *point.NetIn
 			hasNetIn = true
 		}
-		if !hasNetOut && point.NetOut != nil && !math.IsNaN(*point.NetOut) {
+		if !hasNetOut && point.NetOut != nil && !math.IsNaN(*point.NetOut) && !math.IsInf(*point.NetOut, 0) {
 			netOut = *point.NetOut
 			hasNetOut = true
 		}
@@ -1358,14 +1372,16 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 
 	if memTotal > 0 {
 		if memAvailable > memTotal {
-			memAvailable = memTotal
+			memAvailable = 0
+			hasAvail = false
 		}
 		if memUsed > memTotal {
-			memUsed = memTotal
+			memUsed = 0
+			hasUsed = false
 		}
 	}
 
-	if memAvailable == 0 && memUsed == 0 && !hasNetIn && !hasNetOut {
+	if !hasAvail && !hasUsed && !hasNetIn && !hasNetOut {
 		return rrdMemCacheEntry{}, fmt.Errorf("rrd node metrics not present")
 	}
 
@@ -1373,6 +1389,9 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 		available: memAvailable,
 		used:      memUsed,
 		total:     memTotal,
+		hasAvail:  hasAvail,
+		hasUsed:   hasUsed,
+		hasTotal:  hasTotal,
 		netIn:     netIn,
 		netOut:    netOut,
 		hasNetIn:  hasNetIn,
@@ -1381,7 +1400,10 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	}
 
 	m.rrdCacheMu.Lock()
-	m.nodeRRDMemCache[nodeName] = entry
+	if m.nodeRRDMemCache == nil {
+		m.nodeRRDMemCache = make(map[string]rrdMemCacheEntry)
+	}
+	m.nodeRRDMemCache[cacheKey] = entry
 	m.rrdCacheMu.Unlock()
 
 	return entry, nil
@@ -1391,8 +1413,19 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 // short-lived cache to avoid a live API call on every poll for VMs that
 // consistently lack guest-agent memory data (e.g. Windows VMs).
 func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {
+	entry, err := m.getVMRRDMemory(ctx, client, instanceName, node, vmid)
+	if err != nil {
+		return 0, err
+	}
+	if !entry.hasAvail {
+		return 0, fmt.Errorf("rrd memavailable not present for VM %s/%d", node, vmid)
+	}
+	return entry.available, nil
+}
+
+func (m *Monitor) getVMRRDMemory(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (rrdMemCacheEntry, error) {
 	if client == nil || node == "" || vmid <= 0 {
-		return 0, fmt.Errorf("invalid arguments for VM RRD lookup")
+		return rrdMemCacheEntry{}, fmt.Errorf("invalid arguments for VM RRD lookup")
 	}
 
 	cacheKey := guestMemoryCacheKey(instanceName, node, vmid)
@@ -1401,34 +1434,65 @@ func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface
 	m.rrdCacheMu.RLock()
 	if entry, ok := m.vmRRDMemCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
 		m.rrdCacheMu.RUnlock()
-		return entry.available, nil
+		return entry, nil
 	}
 	m.rrdCacheMu.RUnlock()
 
 	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
 	defer cancel()
 
-	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable"})
+	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
 	if err != nil {
-		return 0, err
+		return rrdMemCacheEntry{}, err
 	}
 	if len(points) == 0 {
-		return 0, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
+		return rrdMemCacheEntry{}, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
 	}
 
 	var memAvailable uint64
+	var memUsed uint64
+	var memTotal uint64
+	var hasAvail bool
+	var hasUsed bool
+	var hasTotal bool
 	for i := len(points) - 1; i >= 0; i-- {
 		p := points[i]
-		if p.MemAvailable != nil && !math.IsNaN(*p.MemAvailable) && *p.MemAvailable > 0 {
+		if !hasAvail && p.MemAvailable != nil && !math.IsNaN(*p.MemAvailable) && !math.IsInf(*p.MemAvailable, 0) && *p.MemAvailable >= 0 && *p.MemAvailable <= math.MaxUint64 {
 			memAvailable = uint64(math.Round(*p.MemAvailable))
-			break
+			hasAvail = true
+		}
+		if !hasUsed && p.MemUsed != nil && !math.IsNaN(*p.MemUsed) && !math.IsInf(*p.MemUsed, 0) && *p.MemUsed >= 0 && *p.MemUsed <= math.MaxUint64 {
+			memUsed = uint64(math.Round(*p.MemUsed))
+			hasUsed = true
+		}
+		if !hasTotal && p.MaxMem != nil && !math.IsNaN(*p.MaxMem) && !math.IsInf(*p.MaxMem, 0) && *p.MaxMem > 0 && *p.MaxMem <= math.MaxUint64 {
+			memTotal = uint64(math.Round(*p.MaxMem))
+			hasTotal = true
 		}
 	}
-	if memAvailable == 0 {
-		return 0, fmt.Errorf("rrd memavailable not present for VM %s/%d", node, vmid)
+	if hasTotal {
+		if hasAvail && memAvailable > memTotal {
+			hasAvail = false
+			memAvailable = 0
+		}
+		if hasUsed && memUsed > memTotal {
+			hasUsed = false
+			memUsed = 0
+		}
+	}
+	if !hasAvail && !hasUsed {
+		return rrdMemCacheEntry{}, fmt.Errorf("rrd memory fields not present for VM %s/%d", node, vmid)
 	}
 
-	entry := rrdMemCacheEntry{available: memAvailable, fetchedAt: now}
+	entry := rrdMemCacheEntry{
+		available: memAvailable,
+		used:      memUsed,
+		total:     memTotal,
+		hasAvail:  hasAvail,
+		hasUsed:   hasUsed,
+		hasTotal:  hasTotal,
+		fetchedAt: now,
+	}
 	m.rrdCacheMu.Lock()
 	if m.vmRRDMemCache == nil {
 		m.vmRRDMemCache = make(map[string]rrdMemCacheEntry)
@@ -1436,7 +1500,7 @@ func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface
 	m.vmRRDMemCache[cacheKey] = entry
 	m.rrdCacheMu.Unlock()
 
-	return memAvailable, nil
+	return entry, nil
 }
 
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 const (
@@ -17,6 +19,7 @@ const (
 
 type agentMemCacheEntry struct {
 	available uint64
+	info      proxmox.LinuxMemoryAvailability
 	negative  bool
 	fetchedAt time.Time
 }
@@ -25,17 +28,22 @@ type guestAgentMemAvailableClient interface {
 	GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error)
 }
 
+type guestAgentMemoryAvailabilityClient interface {
+	GetVMMemoryAvailabilityFromAgent(ctx context.Context, node string, vmid int) (proxmox.LinuxMemoryAvailability, error)
+}
+
 func guestMemoryCacheKey(instanceName, node string, vmid int) string {
 	return fmt.Sprintf("%s/%s/%d", instanceName, node, vmid)
 }
 
 func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {
-	memClient, ok := client.(guestAgentMemAvailableClient)
-	if !ok {
-		return 0, fmt.Errorf("guest agent meminfo fallback unsupported")
-	}
+	info, err := m.getVMAgentMemoryAvailability(ctx, client, instanceName, node, vmid)
+	return info.EffectiveAvailable, err
+}
+
+func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (proxmox.LinuxMemoryAvailability, error) {
 	if node == "" || vmid <= 0 {
-		return 0, fmt.Errorf("invalid arguments for guest agent meminfo lookup")
+		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("invalid arguments for guest agent meminfo lookup")
 	}
 
 	cacheKey := guestMemoryCacheKey(instanceName, node, vmid)
@@ -50,9 +58,16 @@ func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientIn
 		if now.Sub(entry.fetchedAt) < ttl {
 			m.rrdCacheMu.RUnlock()
 			if entry.negative {
-				return 0, fmt.Errorf("guest agent meminfo fallback unavailable")
+				return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent meminfo fallback unavailable")
 			}
-			return entry.available, nil
+			if entry.info.Source != "" {
+				return entry.info, nil
+			}
+			return proxmox.LinuxMemoryAvailability{
+				Available:          entry.available,
+				EffectiveAvailable: entry.available,
+				Source:             "meminfo-available",
+			}, nil
 		}
 	}
 	m.rrdCacheMu.RUnlock()
@@ -60,22 +75,43 @@ func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientIn
 	requestCtx, cancel := context.WithTimeout(ctx, vmAgentMemRequestTTL)
 	defer cancel()
 
-	available, err := memClient.GetVMMemAvailableFromAgent(requestCtx, node, vmid)
+	var info proxmox.LinuxMemoryAvailability
+	var err error
+	if memClient, ok := client.(guestAgentMemoryAvailabilityClient); ok {
+		info, err = memClient.GetVMMemoryAvailabilityFromAgent(requestCtx, node, vmid)
+	} else if memClient, ok := client.(guestAgentMemAvailableClient); ok {
+		var available uint64
+		available, err = memClient.GetVMMemAvailableFromAgent(requestCtx, node, vmid)
+		if available > 0 {
+			info = proxmox.LinuxMemoryAvailability{
+				Available:          available,
+				EffectiveAvailable: available,
+				Source:             "meminfo-available",
+			}
+		}
+	} else {
+		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent meminfo fallback unsupported")
+	}
+
 	m.rrdCacheMu.Lock()
 	defer m.rrdCacheMu.Unlock()
 	if m.vmAgentMemCache == nil {
 		m.vmAgentMemCache = make(map[string]agentMemCacheEntry)
 	}
-	if err != nil || available == 0 {
+	if err != nil || info.Source == "" {
 		m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{negative: true, fetchedAt: now}
 		if err == nil {
 			err = fmt.Errorf("guest agent meminfo fallback unavailable")
 		}
-		return 0, err
+		return proxmox.LinuxMemoryAvailability{}, err
 	}
 
-	m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{available: available, fetchedAt: now}
-	return available, nil
+	m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{
+		available: info.EffectiveAvailable,
+		info:      info,
+		fetchedAt: now,
+	}
+	return info, nil
 }
 
 func (m *Monitor) vmAgentMemNegativeCacheTTL(instanceName, node string, vmid int) time.Duration {

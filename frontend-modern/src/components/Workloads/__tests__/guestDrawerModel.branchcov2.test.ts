@@ -129,6 +129,21 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(result.disk).toBeUndefined();
     });
 
+    it('does not synthesize a history point from unavailable live memory', () => {
+      const result = getGuestDrawerHistoryFallbackMetrics(
+        makeGuest({
+          memory: {
+            total: 8192,
+            used: 0,
+            free: 0,
+            usage: 0,
+            usageUnavailable: true,
+          },
+        }),
+      );
+      expect(result.memory).toBeUndefined();
+    });
+
     it('drops a non-finite network value via the finite() guard', () => {
       const result = getGuestDrawerHistoryFallbackMetrics(
         makeGuest({ networkIn: Number.POSITIVE_INFINITY }),
@@ -450,6 +465,25 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(
         getGuestDrawerMemoryRows(makeGuest({ memory: { total: 0, used: 0, free: 0, usage: 0 } })),
       ).toEqual([]);
+    });
+
+    it('shows unavailable usage and known capacity without showing zero usage', () => {
+      expect(
+        getGuestDrawerMemoryRows(
+          makeGuest({
+            memory: {
+              total: 8192,
+              used: 0,
+              free: 0,
+              usage: 0,
+              usageUnavailable: true,
+            },
+          }),
+        ),
+      ).toEqual([
+        { label: 'Usage', value: 'Unavailable' },
+        { label: 'Total', value: '8.00 KB' },
+      ]);
     });
 
     it('emits only Usage and Total when total>0 and no cache/free/balloon/swap', () => {

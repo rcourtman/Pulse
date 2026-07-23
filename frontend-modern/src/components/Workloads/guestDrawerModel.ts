@@ -72,7 +72,7 @@ export const getGuestDrawerHistoryFallbackMetrics = (
   guest: Guest,
 ): Record<string, number | undefined> => {
   const cpuPercent = getWorkloadCPUPercent(guest.cpu);
-  const memUsage = guest.memory?.usage;
+  const memUsage = guest.memory?.usageUnavailable ? undefined : guest.memory?.usage;
   const diskUsage = guest.disk?.usage;
   const finite = (value: number | undefined): number | undefined =>
     typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -302,7 +302,12 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
   const used = memory.used ?? 0;
   const cache = memory.cache ?? 0;
 
-  if (total > 0) {
+  if (memory.usageUnavailable) {
+    rows.push({ label: 'Usage', value: 'Unavailable' });
+    if (total > 0) {
+      rows.push({ label: 'Total', value: formatBytes(total) });
+    }
+  } else if (total > 0) {
     rows.push({
       label: 'Usage',
       value: `${formatPercent((used / total) * 100)} · ${formatBytes(used)}`,

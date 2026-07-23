@@ -28,11 +28,14 @@ type guestSnapshot struct {
 
 	CPUPercent float64
 	MemUsage   float64
-	DiskUsage  float64
-	DiskRead   int64
-	DiskWrite  int64
-	NetworkIn  int64
-	NetworkOut int64
+	// MemoryUnavailable prevents a missing cache-aware sample from clearing a
+	// real alert or starting a false one.
+	MemoryUnavailable bool
+	DiskUsage         float64
+	DiskRead          int64
+	DiskWrite         int64
+	NetworkIn         int64
+	NetworkOut        int64
 
 	Disks  []models.Disk
 	Tags   []string
@@ -93,47 +96,49 @@ func (g guestSnapshot) metrics() guestMetrics {
 
 func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 	return guestSnapshot{
-		Kind:       guestKindVM,
-		ID:         vm.ID,
-		VMID:       vm.VMID,
-		Name:       vm.Name,
-		Node:       vm.Node,
-		Instance:   vm.Instance,
-		Status:     vm.Status,
-		Lock:       vm.Lock,
-		CPUPercent: unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
-		MemUsage:   vm.Memory.Usage,
-		DiskUsage:  vm.Disk.Usage,
-		DiskRead:   vm.DiskRead,
-		DiskWrite:  vm.DiskWrite,
-		NetworkIn:  vm.NetworkIn,
-		NetworkOut: vm.NetworkOut,
-		Disks:      append([]models.Disk(nil), vm.Disks...),
-		Tags:       append([]string(nil), vm.Tags...),
-		OnBoot:     vm.OnBoot,
+		Kind:              guestKindVM,
+		ID:                vm.ID,
+		VMID:              vm.VMID,
+		Name:              vm.Name,
+		Node:              vm.Node,
+		Instance:          vm.Instance,
+		Status:            vm.Status,
+		Lock:              vm.Lock,
+		CPUPercent:        unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
+		MemUsage:          vm.Memory.Usage,
+		MemoryUnavailable: vm.Memory.UsageUnavailable,
+		DiskUsage:         vm.Disk.Usage,
+		DiskRead:          vm.DiskRead,
+		DiskWrite:         vm.DiskWrite,
+		NetworkIn:         vm.NetworkIn,
+		NetworkOut:        vm.NetworkOut,
+		Disks:             append([]models.Disk(nil), vm.Disks...),
+		Tags:              append([]string(nil), vm.Tags...),
+		OnBoot:            vm.OnBoot,
 	}.normalizeCollections()
 }
 
 func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 	return guestSnapshot{
-		Kind:       guestKindContainer,
-		ID:         container.ID,
-		VMID:       container.VMID,
-		Name:       container.Name,
-		Node:       container.Node,
-		Instance:   container.Instance,
-		Status:     container.Status,
-		Lock:       container.Lock,
-		CPUPercent: unifiedresources.ProxmoxGuestCPUPercent(container.CPU),
-		MemUsage:   container.Memory.Usage,
-		DiskUsage:  container.Disk.Usage,
-		DiskRead:   container.DiskRead,
-		DiskWrite:  container.DiskWrite,
-		NetworkIn:  container.NetworkIn,
-		NetworkOut: container.NetworkOut,
-		Disks:      append([]models.Disk(nil), container.Disks...),
-		Tags:       append([]string(nil), container.Tags...),
-		OnBoot:     container.OnBoot,
+		Kind:              guestKindContainer,
+		ID:                container.ID,
+		VMID:              container.VMID,
+		Name:              container.Name,
+		Node:              container.Node,
+		Instance:          container.Instance,
+		Status:            container.Status,
+		Lock:              container.Lock,
+		CPUPercent:        unifiedresources.ProxmoxGuestCPUPercent(container.CPU),
+		MemUsage:          container.Memory.Usage,
+		MemoryUnavailable: container.Memory.UsageUnavailable,
+		DiskUsage:         container.Disk.Usage,
+		DiskRead:          container.DiskRead,
+		DiskWrite:         container.DiskWrite,
+		NetworkIn:         container.NetworkIn,
+		NetworkOut:        container.NetworkOut,
+		Disks:             append([]models.Disk(nil), container.Disks...),
+		Tags:              append([]string(nil), container.Tags...),
+		OnBoot:            container.OnBoot,
 	}.normalizeCollections()
 }
 

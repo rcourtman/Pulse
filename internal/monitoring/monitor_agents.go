@@ -28,6 +28,62 @@ const hostContinuityRetention = 72 * time.Hour
 
 const maxRetiredHostReportStreams = 8
 
+func normalizeAgentMemory(total, used, free, cache int64, usage float64, swapTotal, swapUsed int64) models.Memory {
+	if total <= 0 {
+		return models.Memory{}
+	}
+	hasReportedUsed := used > 0
+
+	unavailable := func() models.Memory {
+		memory := models.UnavailableMemory(total)
+		memory.SwapTotal = max(0, swapTotal)
+		memory.SwapUsed = max(0, swapUsed)
+		return memory
+	}
+
+	usage = safeFloat(usage)
+	if used < 0 || free < 0 || cache < 0 || used > total || usage < 0 || usage > 100 {
+		return unavailable()
+	}
+
+	if used == 0 {
+		switch {
+		case usage > 0:
+			used = int64(float64(total) * usage / 100)
+		case cache > 0 && cache <= total && free <= total-cache:
+			used = total - free - cache
+		case free == total:
+			// A completely idle host is a valid zero-usage measurement.
+		default:
+			return unavailable()
+		}
+	}
+
+	if cache > total-used {
+		cache = total - used
+	}
+	if free > total-used-cache {
+		free = total - used - cache
+	}
+	// Byte counters are canonical when the agent reported them. Recompute the
+	// percentage so a stale percentage cannot diverge display, history, and
+	// threshold evaluation. Preserve a percentage-only report to avoid losing
+	// precision when deriving its byte approximation.
+	if hasReportedUsed || usage == 0 {
+		usage = safePercentage(float64(used), float64(total))
+	}
+
+	return models.Memory{
+		Total:     total,
+		Used:      used,
+		Free:      free,
+		Cache:     cache,
+		Usage:     usage,
+		SwapTotal: max(0, swapTotal),
+		SwapUsed:  max(0, swapUsed),
+	}
+}
+
 type hostReportOrder struct {
 	ObservedAt       time.Time
 	LastReceivedAt   time.Time
@@ -1847,37 +1903,21 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		loadAverage = append(loadAverage, report.Host.LoadAverage...)
 	}
 
-	var memory models.Memory
-	if report.Host.Memory.TotalBytes > 0 || report.Host.Memory.UsedBytes > 0 {
-		memory = models.Memory{
-			Total:     report.Host.Memory.TotalBytes,
-			Used:      report.Host.Memory.UsedBytes,
-			Free:      report.Host.Memory.FreeBytes,
-			Usage:     safeFloat(report.Host.Memory.Usage),
-			SwapTotal: report.Host.Memory.SwapTotal,
-			SwapUsed:  report.Host.Memory.SwapUsed,
-		}
-	}
+	memory := normalizeAgentMemory(
+		report.Host.Memory.TotalBytes,
+		report.Host.Memory.UsedBytes,
+		report.Host.Memory.FreeBytes,
+		report.Host.Memory.CacheBytes,
+		report.Host.Memory.Usage,
+		report.Host.Memory.SwapTotal,
+		report.Host.Memory.SwapUsed,
+	)
 	// Fallback: if gopsutil's memory reading failed but Docker's TotalMemoryBytes
 	// is valid (possibly already a fallback from the agent), use that for Total.
 	// This handles Docker-in-LXC scenarios where both Docker and gopsutil may
 	// fail to read memory stats, but the agent fix provides a valid fallback.
 	if memory.Total <= 0 && report.Host.TotalMemoryBytes > 0 {
-		memory.Total = report.Host.TotalMemoryBytes
-	}
-
-	// Additional fallback for Docker-in-LXC: gopsutil may read Total and Free
-	// correctly from cgroup limits but return 0 for Used. Calculate Used from
-	// Total - Free when this happens. This fixes the "0B / 7GB" display issue.
-	if memory.Used <= 0 && memory.Total > 0 && memory.Free > 0 {
-		memory.Used = memory.Total - memory.Free
-		if memory.Used < 0 {
-			memory.Used = 0
-		}
-		// Recalculate usage percentage
-		if memory.Total > 0 {
-			memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
-		}
+		memory = models.UnavailableMemory(report.Host.TotalMemoryBytes)
 	}
 
 	disks := make([]models.Disk, 0, len(report.Host.Disks))
@@ -2041,13 +2081,17 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 
 		if m.metricsHistory != nil {
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+			if host.Memory.HasKnownUsage() {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+			}
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 		}
 
 		if m.metricsStore != nil {
 			m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)
-			m.metricsStore.Write("dockerHost", host.ID, "memory", host.Memory.Usage, now)
+			if host.Memory.HasKnownUsage() {
+				m.metricsStore.Write("dockerHost", host.ID, "memory", host.Memory.Usage, now)
+			}
 			m.metricsStore.Write("dockerHost", host.ID, "disk", hostDiskPercent, now)
 		}
 
@@ -2379,35 +2423,15 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		displayName = hostname
 	}
 
-	memory := models.Memory{
-		Total:     report.Metrics.Memory.TotalBytes,
-		Used:      report.Metrics.Memory.UsedBytes,
-		Free:      report.Metrics.Memory.FreeBytes,
-		Cache:     report.Metrics.Memory.CacheBytes,
-		Usage:     safeFloat(report.Metrics.Memory.Usage),
-		SwapTotal: report.Metrics.Memory.SwapTotal,
-		SwapUsed:  report.Metrics.Memory.SwapUsed,
-	}
-	// Older agents don't report cache; clamp so used + cache never exceeds total.
-	if memory.Cache < 0 {
-		memory.Cache = 0
-	}
-	if memory.Total > 0 && memory.Used+memory.Cache > memory.Total {
-		memory.Cache = max(0, memory.Total-memory.Used)
-	}
-
-	// Fallback for LXC environments: gopsutil may read Total and Free correctly
-	// from cgroup limits but return 0 for Used. Calculate Used from Total - Free.
-	if memory.Used <= 0 && memory.Total > 0 && memory.Free > 0 {
-		memory.Used = memory.Total - memory.Free
-		if memory.Used < 0 {
-			memory.Used = 0
-		}
-	}
-
-	if memory.Usage <= 0 && memory.Total > 0 {
-		memory.Usage = safePercentage(float64(memory.Used), float64(memory.Total))
-	}
+	memory := normalizeAgentMemory(
+		report.Metrics.Memory.TotalBytes,
+		report.Metrics.Memory.UsedBytes,
+		report.Metrics.Memory.FreeBytes,
+		report.Metrics.Memory.CacheBytes,
+		report.Metrics.Memory.Usage,
+		report.Metrics.Memory.SwapTotal,
+		report.Metrics.Memory.SwapUsed,
+	)
 
 	disks := make([]models.Disk, 0, len(report.Disks))
 	for _, disk := range report.Disks {
@@ -2766,7 +2790,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if !shouldSkipNativeMockStateMetricWrites() {
 		if m.metricsHistory != nil {
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+			if host.Memory.HasKnownUsage() {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+			}
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 			if hostTemperature != nil {
 				m.metricsHistory.AddGuestMetric(hostMetricKey, "temperature", *hostTemperature, now)
@@ -2790,7 +2816,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 		if m.metricsStore != nil {
 			m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
-			m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
+			if host.Memory.HasKnownUsage() {
+				m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
+			}
 			m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
 			if hostTemperature != nil {
 				m.metricsStore.Write("agent", host.ID, "temperature", *hostTemperature, now)

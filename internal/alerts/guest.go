@@ -261,6 +261,10 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	if monitorOnly {
 		evalOpts = &metricOptions{MonitorOnly: true}
 	}
+	var memoryMetric *UnifiedResourceMetric
+	if !snapshot.MemoryUnavailable {
+		memoryMetric = &UnifiedResourceMetric{Percent: memUsage}
+	}
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:         guestID,
 		Type:       snapshot.resourceType(),
@@ -268,7 +272,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		Node:       node,
 		Instance:   instanceName,
 		CPU:        &UnifiedResourceMetric{Percent: cpu},
-		Memory:     &UnifiedResourceMetric{Percent: memUsage},
+		Memory:     memoryMetric,
 		Disk:       &UnifiedResourceMetric{Percent: diskUsage},
 		DiskRead:   &UnifiedResourceMetric{Value: float64(diskRead) / 1024 / 1024},
 		DiskWrite:  &UnifiedResourceMetric{Value: float64(diskWrite) / 1024 / 1024},

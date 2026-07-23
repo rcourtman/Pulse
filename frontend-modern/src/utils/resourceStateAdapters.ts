@@ -836,18 +836,24 @@ const buildMemory = (
   proxmoxMeta?: Record<string, unknown>,
 ): Memory => {
   const total = metric?.total ?? asNumber(fallback?.total) ?? 0;
+  const usageUnavailable = metric == null && asBoolean(fallback?.usageUnavailable) === true;
   const used = metric?.used ?? asNumber(fallback?.used) ?? 0;
   const cache = asNumber(proxmoxMeta?.memoryCache) ?? asNumber(fallback?.cache) ?? 0;
   // The metric ships no free bytes for PVE payloads; total-used is the
   // reclaimable-inclusive available, so carve the cache back out when known.
-  const free = metric?.free ?? asNumber(fallback?.free) ?? Math.max(total - used - cache, 0);
+  const free =
+    metric?.free ??
+    asNumber(fallback?.free) ??
+    (usageUnavailable ? 0 : Math.max(total - used - cache, 0));
   const usage =
-    metric?.current ?? (total > 0 ? (used / total) * 100 : (asNumber(fallback?.usage) ?? 0));
+    metric?.current ??
+    (usageUnavailable ? 0 : total > 0 ? (used / total) * 100 : (asNumber(fallback?.usage) ?? 0));
   return {
     total,
     used,
     free,
     usage,
+    usageUnavailable,
     cache: cache > 0 ? cache : undefined,
     swapUsed: asNumber(proxmoxMeta?.swapUsed) ?? asNumber(fallback?.swapUsed),
     swapTotal: asNumber(proxmoxMeta?.swapTotal) ?? asNumber(fallback?.swapTotal),

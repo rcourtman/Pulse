@@ -61,6 +61,8 @@ func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
 		wantFallback  string
 		wantUsed      uint64
 		wantRawSource string
+		wantRRDUsed   uint64
+		wantUnknown   bool
 	}{
 		{
 			name: "missing MemAvailable derives from free+buffers+cached",
@@ -92,6 +94,67 @@ func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
 			wantUsed:      107351023616,
 			wantRawSource: "node-status-total-minus-used",
 		},
+		{
+			name: "RRD memused wins over MemFree and cache-inclusive status used",
+			nodeStatus: &proxmox.NodeStatus{
+				Memory: &proxmox.MemoryStatus{
+					Total: 8 * gib,
+					Used:  15 * gib / 2,
+					Free:  gib / 2,
+				},
+			},
+			rrdPoints:     []proxmox.NodeRRDPoint{{MemUsed: floatPtr(float64(6 * gib))}},
+			wantSource:    "rrd-memused",
+			wantFallback:  "rrd-memused",
+			wantUsed:      6 * gib,
+			wantRawSource: "rrd-memused",
+			wantRRDUsed:   6 * gib,
+		},
+		{
+			name: "explicit available wins over conflicting RRD",
+			nodeStatus: &proxmox.NodeStatus{
+				Memory: &proxmox.MemoryStatus{
+					Total:     8 * gib,
+					Used:      15 * gib / 2,
+					Free:      gib / 2,
+					Available: 2 * gib,
+				},
+			},
+			rrdPoints:     []proxmox.NodeRRDPoint{{MemUsed: floatPtr(float64(7 * gib))}},
+			wantSource:    "available-field",
+			wantUsed:      6 * gib,
+			wantRawSource: "node-status",
+		},
+		{
+			name: "MemFree without cache evidence stays unknown",
+			nodeStatus: &proxmox.NodeStatus{
+				Memory: &proxmox.MemoryStatus{
+					Total: 8 * gib,
+					Used:  15 * gib / 2,
+					Free:  gib / 2,
+				},
+			},
+			wantSource:    "unavailable",
+			wantFallback:  "cache-aware-memory-unavailable",
+			wantRawSource: "cache-aware-unavailable",
+			wantUnknown:   true,
+		},
+		{
+			name: "conflicting cache components above total stay unknown",
+			nodeStatus: &proxmox.NodeStatus{
+				Memory: &proxmox.MemoryStatus{
+					Total:   8 * gib,
+					Used:    4 * gib,
+					Free:    4 * gib,
+					Buffers: 3 * gib,
+					Cached:  3 * gib,
+				},
+			},
+			wantSource:    "unavailable",
+			wantFallback:  "cache-aware-memory-unavailable",
+			wantRawSource: "cache-aware-unavailable",
+			wantUnknown:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -116,6 +179,9 @@ func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
 			if got := uint64(modelNode.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("modelNode.Memory.Used = %d, want %d", got, tt.wantUsed)
 			}
+			if modelNode.Memory.UsageUnavailable != tt.wantUnknown {
+				t.Fatalf("modelNode.Memory.UsageUnavailable = %t, want %t", modelNode.Memory.UsageUnavailable, tt.wantUnknown)
+			}
 
 			snap := mon.nodeSnapshots[makeNodeSnapshotKey("test", "node1")]
 			if snap.MemorySource != tt.wantSource {
@@ -126,6 +192,9 @@ func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
 			}
 			if snap.Raw.ProxmoxMemorySource != tt.wantRawSource {
 				t.Fatalf("snapshot.Raw.ProxmoxMemorySource = %q, want %q", snap.Raw.ProxmoxMemorySource, tt.wantRawSource)
+			}
+			if snap.Raw.RRDUsed != tt.wantRRDUsed {
+				t.Fatalf("snapshot.Raw.RRDUsed = %d, want %d", snap.Raw.RRDUsed, tt.wantRRDUsed)
 			}
 		})
 	}
@@ -194,6 +263,23 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 	if snap.Memory.Used != first.Memory.Used {
 		t.Fatalf("snapshot.Memory.Used = %d, want preserved %d", snap.Memory.Used, first.Memory.Used)
 	}
+
+	third, _, _, err := mon.pollPVENode(
+		context.Background(),
+		"test",
+		&mon.config.PVEInstances[0],
+		client,
+		node,
+		"healthy",
+		map[string]models.Memory{second.ID: second.Memory},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("third pollPVENode() error = %v", err)
+	}
+	if !third.Memory.UsageUnavailable {
+		t.Fatalf("third.Memory = %+v, want honest unavailable state after bounded carry-forward", third.Memory)
+	}
 }
 
 func TestGuestDiskTrustCharacterizationCarriesForwardRecentSnapshot(t *testing.T) {
@@ -244,13 +330,16 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 
 	tests := []struct {
-		name          string
-		status        *proxmox.VMStatus
-		rrdAvailable  uint64
-		wantSource    string
-		wantUsed      uint64
-		wantAvailable uint64
-		wantGap       uint64
+		name           string
+		status         *proxmox.VMStatus
+		rrdAvailable   uint64
+		rrdUsed        uint64
+		agentAvailable uint64
+		wantSource     string
+		wantUsed       uint64
+		wantAvailable  uint64
+		wantGap        uint64
+		wantUnknown    bool
 	}{
 		{
 			name: "cache inflated Linux VM usage prefers RRD memavailable fallback",
@@ -303,6 +392,102 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			wantGap:    3 * gib,
 		},
 		{
+			name: "partial Linux meminfo uses RRD memused",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MemInfo: &proxmox.VMMemInfo{
+					Total: 8 * gib,
+					Free:  gib / 2,
+				},
+				Agent: proxmox.VMAgentField{Value: 1},
+			},
+			rrdUsed:    5 * gib,
+			wantSource: "rrd-memused",
+			wantUsed:   5 * gib,
+		},
+		{
+			name: "partial Linux meminfo without cache aware fallback stays unknown",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    15 * gib / 2,
+				MemInfo: &proxmox.VMMemInfo{
+					Total: 8 * gib,
+					Free:  gib / 2,
+				},
+				Agent: proxmox.VMAgentField{Value: 1},
+			},
+			wantSource:  "unavailable",
+			wantUnknown: true,
+		},
+		{
+			name: "MemAvailable conflicting with the selected capacity stays unknown",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MemInfo: &proxmox.VMMemInfo{
+					Total:     16 * gib,
+					Available: 12 * gib,
+				},
+			},
+			wantSource:  "unavailable",
+			wantUnknown: true,
+		},
+		{
+			name: "reclaimable components above the selected capacity stay unknown",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MemInfo: &proxmox.VMMemInfo{
+					Total:   8 * gib,
+					Free:    2 * gib,
+					Buffers: 2 * gib,
+					Cached:  5 * gib,
+				},
+			},
+			wantSource:  "unavailable",
+			wantUnknown: true,
+		},
+		{
+			name: "guest agent availability above the selected capacity stays unknown",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MemInfo: &proxmox.VMMemInfo{
+					Total: 8 * gib,
+					Free:  gib / 2,
+				},
+				Agent: proxmox.VMAgentField{Value: 1},
+			},
+			agentAvailable: 9 * gib,
+			wantSource:     "unavailable",
+			wantUnknown:    true,
+		},
+		{
+			name: "RRD available wins over delayed total minus used estimate",
+			status: &proxmox.VMStatus{
+				Status: "running",
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MemInfo: &proxmox.VMMemInfo{
+					Total: 8 * gib,
+					Used:  5 * gib,
+					Free:  gib / 2,
+				},
+				Agent: proxmox.VMAgentField{Value: 1},
+			},
+			rrdAvailable:  4 * gib,
+			wantSource:    "rrd-memavailable",
+			wantUsed:      4 * gib,
+			wantAvailable: 4 * gib,
+			wantGap:       3 * gib,
+		},
+		{
 			name: "materially inconsistent status memory prefers freemem fallback",
 			status: &proxmox.VMStatus{
 				Status:  "running",
@@ -348,11 +533,14 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			defer mon.notificationMgr.Stop()
 
 			client := &vmMemoryTrustStubClient{
-				stubPVEClient: &stubPVEClient{},
-				vmStatus:      tt.status,
+				stubPVEClient:       &stubPVEClient{},
+				vmStatus:            tt.status,
+				vmAgentMemAvailable: tt.agentAvailable,
 			}
 			if tt.rrdAvailable > 0 {
 				client.vmRRDPoints = []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(tt.rrdAvailable))}}
+			} else if tt.rrdUsed > 0 {
+				client.vmRRDPoints = []proxmox.GuestRRDPoint{{MemUsed: floatPtr(float64(tt.rrdUsed))}}
 			}
 
 			res := proxmox.ClusterResource{
@@ -374,6 +562,9 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			if got := uint64(vm.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("vm.Memory.Used = %d, want %d", got, tt.wantUsed)
 			}
+			if vm.Memory.UsageUnavailable != tt.wantUnknown {
+				t.Fatalf("vm.Memory.UsageUnavailable = %t, want %t", vm.Memory.UsageUnavailable, tt.wantUnknown)
+			}
 
 			snap := mon.guestSnapshots[makeGuestSnapshotKey("test", "qemu", "node1", 101)]
 			if snap.MemorySource != tt.wantSource {
@@ -382,8 +573,11 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			if tt.wantSource == "derived-total-minus-used" && snap.FallbackReason != "derived-total-minus-used" {
 				t.Fatalf("snapshot.FallbackReason = %q, want derived-total-minus-used", snap.FallbackReason)
 			}
-			if tt.wantAvailable > 0 && snap.Raw.MemInfoAvailable != tt.wantAvailable {
-				t.Fatalf("snapshot.Raw.MemInfoAvailable = %d, want %d", snap.Raw.MemInfoAvailable, tt.wantAvailable)
+			if tt.wantAvailable > 0 && snap.Raw.RRDMemAvailable != tt.wantAvailable {
+				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvailable)
+			}
+			if tt.rrdUsed > 0 && snap.Raw.RRDMemUsed != tt.rrdUsed {
+				t.Fatalf("snapshot.Raw.RRDMemUsed = %d, want %d", snap.Raw.RRDMemUsed, tt.rrdUsed)
 			}
 			if tt.wantGap > 0 && snap.Raw.MemInfoTotalMinusUsed != tt.wantGap {
 				t.Fatalf("snapshot.Raw.MemInfoTotalMinusUsed = %d, want %d", snap.Raw.MemInfoTotalMinusUsed, tt.wantGap)
@@ -645,8 +839,8 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 			if got := uint64(snap.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("snapshot.Memory.Used = %d, want %d", got, tt.wantUsed)
 			}
-			if tt.wantAvailable > 0 && snap.Raw.MemInfoAvailable != tt.wantAvailable {
-				t.Fatalf("snapshot.Raw.MemInfoAvailable = %d, want %d", snap.Raw.MemInfoAvailable, tt.wantAvailable)
+			if tt.wantAvailable > 0 && snap.Raw.RRDMemAvailable != tt.wantAvailable {
+				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvailable)
 			}
 			if tt.wantSource == "derived-total-minus-used" && snap.FallbackReason != "derived-total-minus-used" {
 				t.Fatalf("snapshot.FallbackReason = %q, want derived-total-minus-used", snap.FallbackReason)
@@ -736,6 +930,26 @@ func TestRecordGuestMetric_SkipsNativeWritesInMockMode(t *testing.T) {
 	}
 }
 
+func TestRecordGuestMetricPreservesHistoryWhenLiveMemoryIsUnavailable(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	now := time.Now().UTC()
+	mon.recordGuestMetric("vm", "test:node1:101", 20, 76, 40, -1, -1, -1, -1, now.Add(-time.Minute))
+	mon.recordGuestMetric("vm", "test:node1:101", 25, -1, 42, -1, -1, -1, -1, now)
+
+	points := mon.metricsHistory.GetGuestMetrics("test:node1:101", "memory", time.Hour)
+	if len(points) != 1 {
+		t.Fatalf("memory history points = %d, want 1 trusted point", len(points))
+	}
+	if points[0].Value != 76 {
+		t.Fatalf("memory history value = %.2f, want 76", points[0].Value)
+	}
+}
+
 func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
@@ -749,6 +963,7 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 		wantUsed     uint64
 		wantAvail    uint64
 		wantStatus   string
+		wantUnknown  bool
 	}{
 		{
 			name: "cache inflated LXC usage prefers RRD memavailable fallback",
@@ -788,7 +1003,42 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			wantStatus:   "running",
 		},
 		{
-			name: "stopped LXC keeps cluster resources source",
+			name: "explicit zero RRD memavailable is valid full usage",
+			res: proxmox.ClusterResource{
+				ID:     "lxc/205",
+				Type:   "lxc",
+				Node:   "node1",
+				Name:   "ct-205",
+				Status: "running",
+				VMID:   205,
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MaxCPU: 4,
+			},
+			lxcRRDPoints: []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(0)}},
+			wantSource:   "rrd-memavailable",
+			wantUsed:     8 * gib,
+			wantStatus:   "running",
+		},
+		{
+			name: "running LXC without RRD memory stays unknown",
+			res: proxmox.ClusterResource{
+				ID:     "lxc/204",
+				Type:   "lxc",
+				Node:   "node1",
+				Name:   "ct-204",
+				Status: "running",
+				VMID:   204,
+				MaxMem: 8 * gib,
+				Mem:    7 * gib,
+				MaxCPU: 4,
+			},
+			wantSource:  "unavailable",
+			wantStatus:  "running",
+			wantUnknown: true,
+		},
+		{
+			name: "stopped LXC reports powered off memory",
 			res: proxmox.ClusterResource{
 				ID:     "lxc/203",
 				Type:   "lxc",
@@ -800,8 +1050,8 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 				Mem:    2 * gib,
 				MaxCPU: 4,
 			},
-			wantSource: "cluster-resources",
-			wantUsed:   2 * gib,
+			wantSource: "powered-off",
+			wantUsed:   0,
 			wantStatus: "stopped",
 		},
 	}
@@ -834,6 +1084,9 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			if got := uint64(container.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("container.Memory.Used = %d, want %d", got, tt.wantUsed)
 			}
+			if container.Memory.UsageUnavailable != tt.wantUnknown {
+				t.Fatalf("container.Memory.UsageUnavailable = %t, want %t", container.Memory.UsageUnavailable, tt.wantUnknown)
+			}
 
 			key := makeGuestSnapshotKey("test", container.Type, "node1", tt.res.VMID)
 			snap, ok := mon.guestSnapshots[key]
@@ -846,8 +1099,8 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			if got := uint64(snap.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("snapshot.Memory.Used = %d, want %d", got, tt.wantUsed)
 			}
-			if tt.wantAvail > 0 && snap.Raw.MemInfoAvailable != tt.wantAvail {
-				t.Fatalf("snapshot.Raw.MemInfoAvailable = %d, want %d", snap.Raw.MemInfoAvailable, tt.wantAvail)
+			if tt.wantAvail > 0 && snap.Raw.RRDMemAvailable != tt.wantAvail {
+				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvail)
 			}
 		})
 	}
@@ -917,7 +1170,7 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 			wantAvail:    3 * gib,
 		},
 		{
-			name: "stopped LXC keeps cluster resources source in node polling",
+			name: "stopped LXC reports powered off memory in node polling",
 			container: proxmox.Container{
 				VMID:   302,
 				Name:   "ct-302",
@@ -927,8 +1180,8 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 				Mem:    2 * gib,
 				CPUs:   2,
 			},
-			wantSource: "cluster-resources",
-			wantUsed:   2 * gib,
+			wantSource: "powered-off",
+			wantUsed:   0,
 		},
 	}
 
@@ -959,8 +1212,8 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 			if got := uint64(snap.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("snapshot.Memory.Used = %d, want %d", got, tt.wantUsed)
 			}
-			if tt.wantAvail > 0 && snap.Raw.MemInfoAvailable != tt.wantAvail {
-				t.Fatalf("snapshot.Raw.MemInfoAvailable = %d, want %d", snap.Raw.MemInfoAvailable, tt.wantAvail)
+			if tt.wantAvail > 0 && snap.Raw.RRDMemAvailable != tt.wantAvail {
+				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvail)
 			}
 		})
 	}

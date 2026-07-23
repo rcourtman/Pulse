@@ -144,6 +144,10 @@ func cloneProxmoxData(in *ProxmoxData) *ProxmoxData {
 		return nil
 	}
 	out := *in
+	if in.Memory != nil {
+		memory := *in.Memory
+		out.Memory = &memory
+	}
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.TemperatureDetails = cloneTemperature(in.TemperatureDetails)
 	out.CPUInfo = cloneCPUInfo(in.CPUInfo)
@@ -191,6 +195,10 @@ func cloneAgentData(in *AgentData) *AgentData {
 		return nil
 	}
 	out := *in
+	if in.Memory != nil {
+		memory := *in.Memory
+		out.Memory = &memory
+	}
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
@@ -229,6 +237,10 @@ func cloneDockerData(in *DockerData) *DockerData {
 		return nil
 	}
 	out := *in
+	if in.Memory != nil {
+		memory := *in.Memory
+		out.Memory = &memory
+	}
 	out.OOMKilled = cloneBoolPtr(in.OOMKilled)
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)

@@ -437,6 +437,7 @@ export const ProxmoxNodesTable: Component<{
                               <StackedMemoryBar
                                 used={memoryUsed()}
                                 total={memoryTotal()}
+                                unavailable={drawerNode()?.memory?.usageUnavailable === true}
                                 percentOnly={memoryPercentOnly()}
                                 cache={drawerNode()?.memory?.cache || 0}
                                 cacheInclusiveLabel="Shown in Proxmox"
@@ -448,10 +449,14 @@ export const ProxmoxNodesTable: Component<{
                         >
                           <MetricMiniSparkline
                             series={memorySeries()}
-                            valueLabel={formatPlatformTablePercentValue(memoryPercent(), {
-                              normalizeRatio: true,
-                              clamp: true,
-                            })}
+                            valueLabel={
+                              drawerNode()?.memory?.usageUnavailable
+                                ? 'N/A'
+                                : formatPlatformTablePercentValue(memoryPercent(), {
+                                    normalizeRatio: true,
+                                    clamp: true,
+                                  })
+                            }
                             title={`${name()} memory history`}
                           />
                         </Show>

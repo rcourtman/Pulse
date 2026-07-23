@@ -26,11 +26,17 @@ vi.mock('@/stores/alertsActivation', () => ({
 }));
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
-  StackedMemoryBar: (props: { used: number; total: number; percentOnly?: number }) => (
+  StackedMemoryBar: (props: {
+    used: number;
+    total: number;
+    unavailable?: boolean;
+    percentOnly?: number;
+  }) => (
     <div
       data-testid="stacked-memory-bar"
       data-used={String(props.used)}
       data-total={String(props.total)}
+      data-unavailable={String(props.unavailable === true)}
       data-percent-only={String(props.percentOnly ?? '')}
     />
   ),
@@ -355,5 +361,36 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-percent-only', '55');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '0');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-aggregate-usage', '71');
+  });
+
+  it('renders unavailable Docker memory honestly while retaining known capacity', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            status: 'online',
+            memory: undefined,
+            agent: undefined,
+            docker: {
+              runtimeVersion: '27.5.1',
+              containerCount: 12,
+              memory: { total: 8_000, usageUnavailable: true },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '8000');
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-unavailable', 'true');
+
+    fireEvent.click(screen.getByText('docker-01').closest('tr')!);
+    const drawer = screen.getByTestId('docker-host-drawer');
+    expect(within(drawer).getByText('Unavailable')).toBeInTheDocument();
+    expect(within(drawer).getByText('7.81 KB')).toBeInTheDocument();
   });
 });

@@ -110,14 +110,21 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 	now := time.Now()
 	for _, vm := range allVMs {
 		if vm.Status == "running" {
-			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, now)
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, now)
 		}
 	}
 	for _, ct := range allContainers {
 		if ct.Status == "running" {
-			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), ct.Memory.Usage, ct.Disk.Usage, ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, now)
+			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, now)
 		}
 	}
+}
+
+func historyMemoryUsage(memory models.Memory) float64 {
+	if !memory.HasKnownUsage() {
+		return -1
+	}
+	return memory.Usage
 }
 
 // recordGuestMetric records metrics for a single guest (VM or container) to both
@@ -134,7 +141,9 @@ func (m *Monitor) recordGuestMetric(
 
 	if m.metricsHistory != nil {
 		m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
-		m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
+		if memory >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
+		}
 		if diskUsage >= 0 {
 			m.metricsHistory.AddGuestMetric(resourceID, "disk", diskUsage, now)
 		}
@@ -154,7 +163,9 @@ func (m *Monitor) recordGuestMetric(
 
 	if m.metricsStore != nil {
 		m.metricsStore.Write(resourceType, resourceID, "cpu", cpu, now)
-		m.metricsStore.Write(resourceType, resourceID, "memory", memory, now)
+		if memory >= 0 {
+			m.metricsStore.Write(resourceType, resourceID, "memory", memory, now)
+		}
 		if diskUsage >= 0 {
 			m.metricsStore.Write(resourceType, resourceID, "disk", diskUsage, now)
 		}

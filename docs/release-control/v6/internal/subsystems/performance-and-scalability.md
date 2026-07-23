@@ -1574,7 +1574,12 @@ resize-observer plus tooltip lifecycle live in
 `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts`.
 Future memory-bar runtime changes must extend through those owners instead of
 reintroducing mixed resize state, balloon branching, and tooltip shaping into
-the shell.
+the shell. The model must also short-circuit explicit usage-unavailable input:
+it may retain total capacity for explanatory copy, but it emits no numeric
+memory segments, percentage, or fit calculation that could make unknown usage
+look like zero. Platform tables and resource-detail mappers consume the same
+canonical unavailable state instead of recomputing `total - free` in render
+hot paths.
 The dashboard metric bar now follows that same pattern: the shell stays in
 `frontend-modern/src/components/Workloads/MetricBar.tsx`, while width,
 show-label, sublabel-fit, and threshold-color derivation live in

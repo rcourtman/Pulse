@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"math"
 	"strings"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
@@ -253,6 +254,12 @@ func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds Thresh
 	candidates := make([]unifiedMetricCandidate, 0, 8)
 	appendCandidate := func(metricType string, metric *UnifiedResourceMetric, value float64, threshold *HysteresisThreshold) {
 		if metric == nil {
+			return
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return
+		}
+		if isPercentageMetric(metricType) && (value < 0 || value > 100) {
 			return
 		}
 		spec, err := buildCanonicalMetricSpec(input.ID, input.Name, resourceType, metricType, threshold)

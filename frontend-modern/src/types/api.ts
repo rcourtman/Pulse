@@ -1087,6 +1087,8 @@ export interface Memory {
   free: number;
   /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
   cache?: number;
+  /** Total is known, but no cache-aware source can establish current usage. */
+  usageUnavailable?: boolean;
   usage: number;
   balloon?: number;
   swapUsed?: number;

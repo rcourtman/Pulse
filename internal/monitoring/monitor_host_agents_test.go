@@ -47,6 +47,96 @@ func TestMonitoringBroadcastCarriesEveryAvailabilityProjection(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentMemoryCacheAwareFallbacks(t *testing.T) {
+	const gib = int64(1024 * 1024 * 1024)
+
+	tests := []struct {
+		name            string
+		total           int64
+		used            int64
+		free            int64
+		cache           int64
+		usage           float64
+		swapTotal       int64
+		swapUsed        int64
+		wantUsed        int64
+		wantUsage       float64
+		wantUnavailable bool
+	}{
+		{
+			name:      "explicit agent usage remains authoritative",
+			total:     8 * gib,
+			used:      6 * gib,
+			free:      gib / 2,
+			cache:     2 * gib,
+			wantUsed:  6 * gib,
+			wantUsage: 75,
+		},
+		{
+			name:      "explicit bytes correct a conflicting reported percentage",
+			total:     8 * gib,
+			used:      4 * gib,
+			free:      gib,
+			usage:     94,
+			wantUsed:  4 * gib,
+			wantUsage: 50,
+		},
+		{
+			name:      "complete Linux cache evidence derives used without swap",
+			total:     8 * gib,
+			free:      gib,
+			cache:     2 * gib,
+			wantUsed:  5 * gib,
+			wantUsage: 62.5,
+		},
+		{
+			name:            "total and free alone stay unknown",
+			total:           8 * gib,
+			free:            gib,
+			wantUnavailable: true,
+		},
+		{
+			name:      "reported percentage can establish usage",
+			total:     8 * gib,
+			free:      gib,
+			usage:     76,
+			wantUsed:  8 * gib * 76 / 100,
+			wantUsage: 76,
+		},
+		{
+			name:      "zero swap does not invalidate cache aware memory",
+			total:     8 * gib,
+			free:      2 * gib,
+			cache:     gib,
+			swapTotal: 0,
+			swapUsed:  0,
+			wantUsed:  5 * gib,
+			wantUsage: 62.5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeAgentMemory(tt.total, tt.used, tt.free, tt.cache, tt.usage, tt.swapTotal, tt.swapUsed)
+			if got.UsageUnavailable != tt.wantUnavailable {
+				t.Fatalf("UsageUnavailable = %t, want %t", got.UsageUnavailable, tt.wantUnavailable)
+			}
+			if tt.wantUnavailable {
+				if got.HasKnownUsage() {
+					t.Fatalf("HasKnownUsage() = true for unavailable memory: %+v", got)
+				}
+				return
+			}
+			if got.Used != tt.wantUsed {
+				t.Fatalf("Used = %d, want %d", got.Used, tt.wantUsed)
+			}
+			if got.Usage != tt.wantUsage {
+				t.Fatalf("Usage = %.2f, want %.2f", got.Usage, tt.wantUsage)
+			}
+		})
+	}
+}
+
 func TestApplyHostReportOperationReceiptProtocolReplacesCapabilityAuthority(t *testing.T) {
 	now := time.Now().UTC()
 	baseReport := func(version int) agentshost.Report {

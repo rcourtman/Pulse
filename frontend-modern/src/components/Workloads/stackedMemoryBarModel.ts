@@ -12,6 +12,7 @@ import type { MetricDisplayThresholds, MetricSeverity } from '@/utils/metricThre
 export interface StackedMemoryBarProps {
   used: number;
   total: number;
+  unavailable?: boolean;
   percentOnly?: number;
   /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
   cache?: number;
@@ -51,6 +52,7 @@ export interface StackedMemoryBarPresentation {
   swapBarPercent: number;
   tooltipRows: StackedMemoryTooltipRow[];
   tooltipTitle: string;
+  unavailable: boolean;
 }
 
 // Tooltip legend for the used segment tracks the same severity that colors
@@ -79,6 +81,7 @@ function getEffectiveCache(props: StackedMemoryBarProps): number {
 }
 
 function getUtilizationPercent(props: StackedMemoryBarProps): number {
+  if (props.unavailable) return 0;
   if (props.total > 0) {
     return (props.used / props.total) * 100;
   }
@@ -92,6 +95,9 @@ function getSegments(
   props: StackedMemoryBarProps,
   utilizationPercent: number,
 ): StackedMemorySegment[] {
+  if (props.unavailable) {
+    return [];
+  }
   if (props.total <= 0) {
     if (utilizationPercent <= 0) {
       return [];
@@ -161,7 +167,22 @@ function getTooltipRows(
   const hasActiveBallooning = props.total > 0 && balloon > 0 && balloon < props.total;
   const hasSwap = (props.swapTotal || 0) > 0;
 
-  if (props.total > 0) {
+  if (props.unavailable) {
+    rows.push({
+      borderTop: false,
+      label: 'Usage',
+      labelClass: 'text-slate-400',
+      value: 'Unavailable',
+    });
+    if (props.total > 0) {
+      rows.push({
+        borderTop: true,
+        label: 'Total',
+        labelClass: 'text-slate-400',
+        value: formatBytes(props.total),
+      });
+    }
+  } else if (props.total > 0) {
     const usedPercent = (props.used / props.total) * 100;
     rows.push({
       borderTop: false,
@@ -236,7 +257,9 @@ export function buildStackedMemoryBarPresentation(
   const utilizationPercent = getUtilizationPercent(props);
   const displayLabel = formatPercent(utilizationPercent);
   const displaySublabel =
-    props.total > 0 ? `${formatBytes(props.used)}/${formatBytes(props.total)}` : '';
+    !props.unavailable && props.total > 0
+      ? `${formatBytes(props.used)}/${formatBytes(props.total)}`
+      : '';
   const showSublabel =
     displaySublabel.length > 0 &&
     containerWidth >= estimateTextWidth(`${displayLabel} (${displaySublabel})`);
@@ -259,5 +282,6 @@ export function buildStackedMemoryBarPresentation(
         : 0,
     tooltipRows: getTooltipRows(props, displayLabel),
     tooltipTitle: 'Memory Composition',
+    unavailable: props.unavailable === true,
   };
 }

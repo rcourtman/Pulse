@@ -77,6 +77,31 @@ describe('agentMachineTableModel coverage', () => {
     it('returns undefined when no memory source is available', () => {
       expect(getAgentMachineMemoryPercent(resource({}))).toBeUndefined();
     });
+
+    it('does not turn an unavailable raw agent capacity into zero percent', () => {
+      expect(
+        getAgentMachineMemoryPercent(
+          resource({
+            agent: {
+              memory: { total: 16_000, used: 0, usageUnavailable: true },
+            },
+          }),
+        ),
+      ).toBeUndefined();
+    });
+
+    it('keeps a trusted merged metric when the agent facet is unavailable', () => {
+      expect(
+        getAgentMachineMemoryPercent(
+          resource({
+            memory: { current: 25, total: 16_000, used: 4_000 },
+            agent: {
+              memory: { total: 16_000, used: 0, usageUnavailable: true },
+            },
+          }),
+        ),
+      ).toBe(25);
+    });
   });
 
   describe('timestampMillisFrom', () => {

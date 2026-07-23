@@ -866,14 +866,17 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 		"guest_memory_sources.go": {
 			"func shouldPreferGuestAgentMemAvailable(status *proxmox.VMStatus, memTotal uint64) bool {",
 			"func (m *Monitor) tryGuestAgentMemAvailable(",
-			"if memAvailable == 0 && shouldPreferGuestAgentMemAvailable(status, memTotal) {",
-			"if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, node, vmid); rrdErr == nil && rrdAvailable > 0 {",
-			"if agentAvailable, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
-			`memorySource = "guest-agent-meminfo"`,
+			"if !hasMemAvailable && shouldPreferGuestAgentMemAvailable(status, memTotal) {",
+			"if rrdMemory, rrdErr := m.getVMRRDMemory(ctx, client, instanceName, node, vmid); rrdErr == nil {",
+			"case rrdMemory.hasUsed && rrdMemory.used <= memTotal:",
+			"if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
+			"memorySource = agentSource",
 			"guestRaw.GuestAgentMemAvailable = agentAvailable",
+			`memorySource = "unavailable"`,
 		},
 		"monitor.go": {
 			"func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {",
+			"func (m *Monitor) getVMRRDMemory(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (rrdMemCacheEntry, error) {",
 			"cacheKey := guestMemoryCacheKey(instanceName, node, vmid)",
 			"vmAgentMemCache            map[string]agentMemCacheEntry",
 		},
@@ -1999,14 +2002,14 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			file: "monitor_polling_vm.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)`,
+				`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, -1, -1, -1, -1, now)`,
 			},
 		},
 		{
 			file: "monitor_polling_containers.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), ct.Memory.Usage, ct.Disk.Usage, -1, -1, -1, -1, now)`,
+				`m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, -1, -1, -1, -1, now)`,
 			},
 		},
 		{

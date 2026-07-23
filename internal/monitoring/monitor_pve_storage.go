@@ -196,13 +196,15 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 			now := time.Now()
 			var nodeNetMetrics *rrdMemCacheEntry
 			if client != nil {
-				if rrdMetrics, err := m.getNodeRRDMetrics(context.Background(), client, modelNodes[i].Name); err == nil {
+				if rrdMetrics, err := m.getNodeRRDMetrics(context.Background(), client, instanceName, modelNodes[i].Name); err == nil {
 					nodeNetMetrics = &rrdMetrics
 				}
 			}
 
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
-			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
+			if modelNodes[i].Memory.HasKnownUsage() {
+				m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
+			}
 			m.metricsHistory.AddNodeMetric(modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
 			if nodeNetMetrics != nil {
 				if nodeNetMetrics.hasNetIn {
@@ -216,7 +218,9 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 			// Also write to persistent store
 			if m.metricsStore != nil {
 				m.metricsStore.Write("node", modelNodes[i].ID, "cpu", modelNodes[i].CPU*100, now)
-				m.metricsStore.Write("node", modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
+				if modelNodes[i].Memory.HasKnownUsage() {
+					m.metricsStore.Write("node", modelNodes[i].ID, "memory", modelNodes[i].Memory.Usage, now)
+				}
 				m.metricsStore.Write("node", modelNodes[i].ID, "disk", modelNodes[i].Disk.Usage, now)
 				if nodeNetMetrics != nil {
 					if nodeNetMetrics.hasNetIn {

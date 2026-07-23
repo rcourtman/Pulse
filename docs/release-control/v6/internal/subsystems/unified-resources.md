@@ -2255,6 +2255,17 @@ parallel payload, mirroring the `proxmox.memoryCache` transport nodes and
 guests use. The field is additive and omitted when an agent does not report
 it; consumers must treat missing cache as zero rather than inferring it from
 free space.
+`AgentMemoryMeta.usageUnavailable`, `DockerData.memory.usageUnavailable`, and
+`ProxmoxData.memory.usageUnavailable` carry the separate case where capacity is
+known but cache-aware live usage is not. Adapters must omit
+`ResourceMetrics.memory` for that source rather than
+publishing a synthetic 0% value. Registry and presentation merges must retain
+a trusted memory metric from another source when the current source is
+unavailable, clear an older metric from the same unavailable source, and keep
+the raw source facet available for diagnostics and capacity display. Frontend
+adapters apply the unavailable marker only when no trusted merged metric
+exists, so cross-source recovery cannot be masked by an unknown Proxmox or
+agent facet.
 Frontend resource identity presenters may append a runtime version to a
 displayed system badge only when that version is sourced from the same canonical
 platform or host-profile identity, such as PVE `ResourceProxmoxMeta.pveVersion`

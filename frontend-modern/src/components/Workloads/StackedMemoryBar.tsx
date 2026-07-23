@@ -72,7 +72,12 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
           <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
             <span>
-              <AnimatedNumber value={presentation().displayPercentValue} format={formatPercent} />
+              <Show
+                when={!presentation().unavailable}
+                fallback={<span class="text-muted">N/A</span>}
+              >
+                <AnimatedNumber value={presentation().displayPercentValue} format={formatPercent} />
+              </Show>
             </span>
             <Show when={presentation().showSublabel}>
               <span class="metric-sublabel font-normal text-muted">

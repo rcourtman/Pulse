@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"math"
 	"strings"
 	"time"
 
@@ -20,8 +21,8 @@ func (m *Monitor) calculateLXCMemory(
 	// The cluster resources API returns mem from cgroup which includes cache/buffers (inflated).
 	// Try to get more accurate memory metrics from RRD data.
 	memTotal := res.MaxMem
-	memUsed := res.Mem
-	memorySource := "cluster-resources"
+	memUsed := uint64(0)
+	memorySource := "powered-off"
 	guestRaw := VMMemoryRaw{
 		ListingMem:    res.Mem,
 		ListingMaxMem: res.MaxMem,
@@ -29,6 +30,7 @@ func (m *Monitor) calculateLXCMemory(
 
 	// For running containers, try to get RRD data for cache-aware memory calculation
 	if res.Status == "running" {
+		memorySource = "unavailable"
 		rrdCtx, rrdCancel := context.WithTimeout(ctx, 5*time.Second)
 		rrdPoints, err := client.GetLXCRRDData(rrdCtx, res.Node, res.VMID, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
 		rrdCancel()
@@ -37,40 +39,39 @@ func (m *Monitor) calculateLXCMemory(
 			// Use the most recent RRD point
 			point := rrdPoints[len(rrdPoints)-1]
 
-			if point.MaxMem != nil && *point.MaxMem > 0 {
-				guestRaw.StatusMaxMem = uint64(*point.MaxMem)
+			if point.MaxMem != nil && !math.IsNaN(*point.MaxMem) && !math.IsInf(*point.MaxMem, 0) && *point.MaxMem > 0 && *point.MaxMem <= math.MaxUint64 {
+				guestRaw.RRDMaxMem = uint64(*point.MaxMem)
+				if memTotal == 0 {
+					memTotal = uint64(*point.MaxMem)
+				}
 			}
 
 			// Prefer memavailable-based calculation (excludes cache/buffers)
-			if point.MemAvailable != nil && *point.MemAvailable > 0 {
+			if point.MemAvailable != nil && !math.IsNaN(*point.MemAvailable) && !math.IsInf(*point.MemAvailable, 0) && *point.MemAvailable >= 0 && *point.MemAvailable <= math.MaxUint64 && memTotal > 0 && *point.MemAvailable <= float64(memTotal) {
 				memAvailable := uint64(*point.MemAvailable)
-				if memAvailable <= memTotal {
-					memUsed = memTotal - memAvailable
-					memorySource = "rrd-memavailable"
-					guestRaw.MemInfoAvailable = memAvailable
-					log.Debug().
-						Str("container", res.Name).
-						Str("node", res.Node).
-						Uint64("total", memTotal).
-						Uint64("available", memAvailable).
-						Uint64("used", memUsed).
-						Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
-						Msg("LXC memory: using RRD memavailable (excludes reclaimable cache)")
-				}
-			} else if point.MemUsed != nil && *point.MemUsed > 0 {
+				memUsed = memTotal - memAvailable
+				memorySource = "rrd-memavailable"
+				guestRaw.RRDMemAvailable = memAvailable
+				log.Debug().
+					Str("container", res.Name).
+					Str("node", res.Node).
+					Uint64("total", memTotal).
+					Uint64("available", memAvailable).
+					Uint64("used", memUsed).
+					Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
+					Msg("LXC memory: using RRD memavailable (excludes reclaimable cache)")
+			} else if point.MemUsed != nil && !math.IsNaN(*point.MemUsed) && !math.IsInf(*point.MemUsed, 0) && *point.MemUsed >= 0 && *point.MemUsed <= math.MaxUint64 && memTotal > 0 && *point.MemUsed <= float64(memTotal) {
 				// Fall back to memused from RRD if available
 				memUsed = uint64(*point.MemUsed)
-				if memUsed <= memTotal {
-					memorySource = "rrd-memused"
-					guestRaw.MemInfoUsed = memUsed
-					log.Debug().
-						Str("container", res.Name).
-						Str("node", res.Node).
-						Uint64("total", memTotal).
-						Uint64("used", memUsed).
-						Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
-						Msg("LXC memory: using RRD memused (excludes reclaimable cache)")
-				}
+				memorySource = "rrd-memused"
+				guestRaw.RRDMemUsed = memUsed
+				log.Debug().
+					Str("container", res.Name).
+					Str("node", res.Node).
+					Uint64("total", memTotal).
+					Uint64("used", memUsed).
+					Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
+					Msg("LXC memory: using RRD memused (excludes reclaimable cache)")
 			}
 		} else if err != nil {
 			log.Debug().
@@ -78,7 +79,7 @@ func (m *Monitor) calculateLXCMemory(
 				Str("instance", instanceName).
 				Str("container", res.Name).
 				Int("vmid", res.VMID).
-				Msg("RRD memory data unavailable for LXC, using cluster resources value")
+				Msg("RRD memory data unavailable for LXC; memory usage remains unavailable")
 		}
 	}
 
@@ -122,6 +123,15 @@ func (m *Monitor) buildContainerFromClusterResource(
 	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
 	memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(ctx, instanceName, res, client)
+	memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
+		m.previousGuestSnapshot(instanceName, "lxc", res.Node, res.VMID),
+		res.Status,
+		memorySource,
+		memTotal,
+		memUsed,
+		sampleTime,
+		false,
+	)
 
 	// Clamp memory and disk values to prevent >100% usage
 	// (Proxmox can report used > total for LXC due to cgroup accounting,
@@ -133,6 +143,15 @@ func (m *Monitor) buildContainerFromClusterResource(
 	memFree := int64(memTotal) - int64(clampedMemUsed)
 	if memFree < 0 {
 		memFree = 0
+	}
+	memory := models.UnavailableMemory(clampToInt64(memTotal))
+	if CanonicalMemorySource(memorySource) != "unavailable" {
+		memory = models.Memory{
+			Total: int64(memTotal),
+			Used:  int64(clampedMemUsed),
+			Free:  memFree,
+			Usage: safePercentage(float64(clampedMemUsed), float64(memTotal)),
+		}
 	}
 	diskUsed := res.Disk
 	if diskUsed > res.MaxDisk && res.MaxDisk > 0 {
@@ -155,12 +174,7 @@ func (m *Monitor) buildContainerFromClusterResource(
 		Type:     "lxc",
 		CPU:      safeFloat(res.CPU),
 		CPUs:     res.MaxCPU,
-		Memory: models.Memory{
-			Total: int64(memTotal),
-			Used:  int64(clampedMemUsed),
-			Free:  memFree,
-			Usage: safePercentage(float64(clampedMemUsed), float64(memTotal)),
-		},
+		Memory:   memory,
 		Disk: models.Disk{
 			Total: int64(res.MaxDisk),
 			Used:  int64(diskUsed),

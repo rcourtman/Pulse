@@ -60,6 +60,38 @@ describe('buildMemory', () => {
     });
   });
 
+  it('preserves explicit unavailable memory through agent detail mapping', () => {
+    const fallback: Partial<MemoryType> = {
+      total: 200,
+      used: 0,
+      free: 0,
+      usage: 0,
+      usageUnavailable: true,
+    };
+
+    expect(buildMemory(undefined, fallback)).toEqual({
+      total: 200,
+      used: 0,
+      free: 0,
+      usage: 0,
+      usageUnavailable: true,
+    });
+  });
+
+  it('lets a canonical cross-source metric override an unavailable fallback', () => {
+    const fallback: Partial<MemoryType> = {
+      total: 200,
+      usageUnavailable: true,
+    };
+
+    expect(buildMemory({ current: 0.25, total: 200, used: 50 }, fallback)).toEqual({
+      total: 200,
+      used: 50,
+      free: 150,
+      usage: 0.25,
+    });
+  });
+
   it('computes usage from total>0 and ignores fallback.usage', () => {
     const fallback: Partial<MemoryType> = { usage: 0.99 };
 
@@ -270,6 +302,28 @@ describe('toNodeFromProxmox', () => {
       mountpoint: undefined,
       type: undefined,
       device: undefined,
+    });
+  });
+
+  it('preserves unavailable Proxmox capacity when no canonical metric exists', () => {
+    const node = toNodeFromProxmox(
+      baseProxmoxResource({
+        memory: undefined,
+        platformData: {
+          proxmox: {
+            nodeName: 'pve-node-1',
+            memory: { total: 8192, usageUnavailable: true },
+          },
+        },
+      }),
+    );
+
+    expect(node?.memory).toEqual({
+      total: 8192,
+      used: 0,
+      free: 0,
+      usage: 0,
+      usageUnavailable: true,
     });
   });
 

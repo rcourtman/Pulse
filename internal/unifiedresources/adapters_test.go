@@ -1788,3 +1788,46 @@ func TestPhysicalDiskWearoutFromSMARTAttributesClampsExhaustedMedia(t *testing.T
 		t.Fatalf("wearout remaining = %d, want 0 for percentage-used above 100", got)
 	}
 }
+
+func TestResourceAdaptersPreserveUnavailableMemoryAsRawEvidence(t *testing.T) {
+	unavailable := models.UnavailableMemory(8 << 30)
+
+	hostResource, _ := resourceFromHost(models.Host{
+		ID:       "agent-1501",
+		Hostname: "linux-host",
+		Memory:   unavailable,
+	})
+	if hostResource.Metrics == nil || hostResource.Metrics.Memory != nil {
+		t.Fatalf("agent metrics = %+v, want unavailable memory omitted", hostResource.Metrics)
+	}
+	if hostResource.Agent == nil || hostResource.Agent.Memory == nil ||
+		!hostResource.Agent.Memory.UsageUnavailable {
+		t.Fatalf("agent raw memory = %+v, want explicit unavailable evidence", hostResource.Agent)
+	}
+
+	vmResource, _ := resourceFromVM(models.VM{
+		VMID:   1501,
+		Name:   "linux-guest",
+		Memory: unavailable,
+	})
+	if vmResource.Metrics == nil || vmResource.Metrics.Memory != nil {
+		t.Fatalf("Proxmox metrics = %+v, want unavailable memory omitted", vmResource.Metrics)
+	}
+	if vmResource.Proxmox == nil || vmResource.Proxmox.Memory == nil ||
+		!vmResource.Proxmox.Memory.UsageUnavailable {
+		t.Fatalf("Proxmox raw memory = %+v, want explicit unavailable evidence", vmResource.Proxmox)
+	}
+
+	dockerResource, _ := resourceFromDockerHost(models.DockerHost{
+		ID:       "docker-1501",
+		Hostname: "docker-host",
+		Memory:   unavailable,
+	})
+	if dockerResource.Metrics == nil || dockerResource.Metrics.Memory != nil {
+		t.Fatalf("Docker metrics = %+v, want unavailable memory omitted", dockerResource.Metrics)
+	}
+	if dockerResource.Docker == nil || dockerResource.Docker.Memory == nil ||
+		!dockerResource.Docker.Memory.UsageUnavailable {
+		t.Fatalf("Docker raw memory = %+v, want explicit unavailable evidence", dockerResource.Docker)
+	}
+}

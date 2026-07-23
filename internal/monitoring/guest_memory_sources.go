@@ -44,9 +44,7 @@ func deriveGuestMemInfoAvailable(memInfo *proxmox.VMMemInfo, guestRaw *VMMemoryR
 			componentAvailable += memInfo.Cached
 		}
 	}
-	if memInfo.Total > 0 && componentAvailable > memInfo.Total {
-		componentAvailable = memInfo.Total
-	}
+	componentsConflict := memInfo.Total > 0 && componentAvailable > memInfo.Total
 
 	availableFromUsed := uint64(0)
 	if memInfo.Total > 0 && memInfo.Used > 0 && memInfo.Total >= memInfo.Used {
@@ -61,7 +59,7 @@ func deriveGuestMemInfoAvailable(memInfo *proxmox.VMMemInfo, guestRaw *VMMemoryR
 		memInfo.Cached == 0
 
 	switch {
-	case memInfo.Available > 0:
+	case memInfo.Available > 0 && (memInfo.Total == 0 || memInfo.Available <= memInfo.Total):
 		return memInfo.Available, "available-field"
 	case memInfo.Free > 0 || memInfo.Buffers > 0 || memInfo.Cached > 0:
 		if availableFromUsed > 0 && missingCacheMetrics {
@@ -74,6 +72,9 @@ func deriveGuestMemInfoAvailable(memInfo *proxmox.VMMemInfo, guestRaw *VMMemoryR
 			}
 		}
 		if missingCacheMetrics {
+			return 0, ""
+		}
+		if componentsConflict {
 			return 0, ""
 		}
 		return componentAvailable, "derived-free-buffers-cached"
@@ -206,13 +207,27 @@ func (m *Monitor) tryGuestAgentMemAvailable(
 	vmid int,
 	memTotal uint64,
 	guestRaw *VMMemoryRaw,
-) (uint64, bool) {
-	agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid)
-	if agentErr != nil || agentAvailable == 0 {
-		return 0, false
+) (uint64, string, bool) {
+	availability, agentErr := m.getVMAgentMemoryAvailability(ctx, client, instanceName, node, vmid)
+	if agentErr != nil || availability.Source == "" {
+		return 0, "", false
 	}
+	agentAvailable := availability.EffectiveAvailable
 	if guestRaw != nil {
 		guestRaw.GuestAgentMemAvailable = agentAvailable
+		guestRaw.GuestAgentMemFree = availability.Free
+		guestRaw.GuestAgentMemBuffers = availability.Buffers
+		guestRaw.GuestAgentMemCached = availability.Cached
+		guestRaw.GuestAgentSReclaimable = availability.SReclaimable
+		guestRaw.GuestAgentShmem = availability.Shmem
+		guestRaw.GuestAgentDerived = availability.Source == "meminfo-derived"
+	}
+	if memTotal == 0 || agentAvailable > memTotal {
+		return 0, "", false
+	}
+	source := "guest-agent-meminfo"
+	if availability.Source == "meminfo-derived" {
+		source = "guest-agent-meminfo-derived"
 	}
 	log.Debug().
 		Str("vm", guestName).
@@ -220,8 +235,9 @@ func (m *Monitor) tryGuestAgentMemAvailable(
 		Int("vmid", vmid).
 		Uint64("total", memTotal).
 		Uint64("available", agentAvailable).
+		Str("source", source).
 		Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
-	return agentAvailable, true
+	return agentAvailable, source, true
 }
 
 func (m *Monitor) resolveGuestStatusMemory(
@@ -260,43 +276,67 @@ func (m *Monitor) resolveGuestStatusMemory(
 	}
 
 	memAvailable := uint64(0)
+	hasMemAvailable := false
+	derivedTotalMinusUsedAvailable := uint64(0)
+	selectedUsed := uint64(0)
+	hasSelectedUsed := false
 	if status.MemInfo != nil {
 		memAvailable, memorySource = deriveGuestMemInfoAvailable(status.MemInfo, guestRaw)
-		if memAvailable > 0 && memorySource == "derived-total-minus-used" {
-			log.Debug().
-				Str("vm", guestName).
-				Str("node", node).
-				Int("vmid", vmid).
-				Uint64("total", memTotal).
-				Uint64("available", memAvailable).
-				Uint64("availableFromUsed", guestRaw.MemInfoTotalMinusUsed).
-				Msg("QEMU memory: deriving guest available from total-used gap when cache fields are missing")
+		hasMemAvailable = memorySource != ""
+		if memAvailable > memTotal {
+			memAvailable = 0
+			hasMemAvailable = false
+			memorySource = ""
+		}
+		if memorySource == "derived-total-minus-used" {
+			derivedTotalMinusUsedAvailable = memAvailable
+			memAvailable = 0
+			hasMemAvailable = false
+			memorySource = ""
 		}
 	}
 
 	triedGuestAgentMemAvailable := false
-	if memAvailable == 0 && shouldPreferGuestAgentMemAvailable(status, memTotal) {
+	if !hasMemAvailable && shouldPreferGuestAgentMemAvailable(status, memTotal) {
 		triedGuestAgentMemAvailable = true
-		if agentAvailable, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
+		if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
 			memAvailable = agentAvailable
-			memorySource = "guest-agent-meminfo"
+			hasMemAvailable = true
+			memorySource = agentSource
 		}
 	}
 
-	if memAvailable == 0 {
-		if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, node, vmid); rrdErr == nil && rrdAvailable > 0 {
-			memAvailable = rrdAvailable
-			memorySource = "rrd-memavailable"
+	if !hasMemAvailable {
+		if rrdMemory, rrdErr := m.getVMRRDMemory(ctx, client, instanceName, node, vmid); rrdErr == nil {
 			if guestRaw != nil {
-				guestRaw.MemInfoAvailable = memAvailable
+				guestRaw.RRDMemAvailable = rrdMemory.available
+				guestRaw.RRDMemUsed = rrdMemory.used
+				guestRaw.RRDMaxMem = rrdMemory.total
 			}
-			log.Debug().
-				Str("vm", guestName).
-				Str("node", node).
-				Int("vmid", vmid).
-				Uint64("total", memTotal).
-				Uint64("available", memAvailable).
-				Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
+			switch {
+			case rrdMemory.hasAvail && rrdMemory.available <= memTotal:
+				memAvailable = rrdMemory.available
+				hasMemAvailable = true
+				memorySource = "rrd-memavailable"
+				log.Debug().
+					Str("vm", guestName).
+					Str("node", node).
+					Int("vmid", vmid).
+					Uint64("total", memTotal).
+					Uint64("available", memAvailable).
+					Msg("QEMU memory: using RRD memavailable fallback")
+			case rrdMemory.hasUsed && rrdMemory.used <= memTotal:
+				selectedUsed = rrdMemory.used
+				hasSelectedUsed = true
+				memorySource = "rrd-memused"
+				log.Debug().
+					Str("vm", guestName).
+					Str("node", node).
+					Int("vmid", vmid).
+					Uint64("total", memTotal).
+					Uint64("used", rrdMemory.used).
+					Msg("QEMU memory: using RRD memused fallback")
+			}
 		} else if rrdErr != nil {
 			log.Debug().
 				Err(rrdErr).
@@ -307,50 +347,69 @@ func (m *Monitor) resolveGuestStatusMemory(
 		}
 	}
 
-	if memAvailable == 0 && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
-		if agentAvailable, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
+	if !hasMemAvailable && !hasSelectedUsed && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
+		if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {
 			memAvailable = agentAvailable
-			memorySource = "guest-agent-meminfo"
+			hasMemAvailable = true
+			memorySource = agentSource
 		}
 	}
 
-	if memAvailable == 0 {
+	if !hasMemAvailable && !hasSelectedUsed && derivedTotalMinusUsedAvailable > 0 {
+		memAvailable = derivedTotalMinusUsedAvailable
+		hasMemAvailable = true
+		memorySource = "derived-total-minus-used"
+		log.Debug().
+			Str("vm", guestName).
+			Str("node", node).
+			Int("vmid", vmid).
+			Uint64("total", memTotal).
+			Uint64("available", memAvailable).
+			Uint64("availableFromUsed", derivedTotalMinusUsedAvailable).
+			Msg("QEMU memory: deriving guest available from total-used gap after preferred fallbacks")
+	}
+
+	if !hasMemAvailable && !hasSelectedUsed {
 		if agentHost, ok := vmIDToHostAgent[guestID]; ok &&
-			agentHost.Memory.Total > 0 &&
-			agentHost.Memory.Used >= 0 &&
+			agentHost.Memory.HasKnownUsage() &&
+			agentHost.Memory.Used <= int64(memTotal) &&
 			agentHost.Memory.Total >= agentHost.Memory.Used {
 			agentAvailable := uint64(agentHost.Memory.Total - agentHost.Memory.Used)
-			if agentAvailable > 0 {
-				memAvailable = agentAvailable
-				memorySource = "agent"
-				if guestRaw != nil {
-					guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
-					guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
-				}
-				log.Debug().
-					Str("vm", guestName).
-					Str("node", node).
-					Int("vmid", vmid).
-					Uint64("total", memTotal).
-					Uint64("available", memAvailable).
-					Int64("agentTotal", agentHost.Memory.Total).
-					Int64("agentUsed", agentHost.Memory.Used).
-					Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+			memAvailable = agentAvailable
+			hasMemAvailable = true
+			selectedUsed = uint64(agentHost.Memory.Used)
+			hasSelectedUsed = true
+			memorySource = "agent"
+			if guestRaw != nil {
+				guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+				guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
 			}
+			log.Debug().
+				Str("vm", guestName).
+				Str("node", node).
+				Int("vmid", vmid).
+				Uint64("total", memTotal).
+				Uint64("available", memAvailable).
+				Int64("agentTotal", agentHost.Memory.Total).
+				Int64("agentUsed", agentHost.Memory.Used).
+				Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
 		}
 	}
 
 	memUsed := uint64(0)
 	switch {
-	case memAvailable > 0:
-		if memAvailable > memTotal {
-			memAvailable = memTotal
-		}
+	case hasSelectedUsed:
+		memUsed = selectedUsed
+	case hasMemAvailable:
 		memUsed = memTotal - memAvailable
 	default:
-		memUsed, memorySource = selectGuestLowTrustUsedMemory(memTotal, status)
-		if memorySource == "" {
-			memorySource = "status-unavailable"
+		if status.MemInfo != nil {
+			memorySource = "unavailable"
+		} else {
+			memUsed, memorySource = selectGuestLowTrustUsedMemory(memTotal, status)
+			if memorySource == "" {
+				memorySource = "unavailable"
+			}
 		}
 	}
 	if memUsed > memTotal {

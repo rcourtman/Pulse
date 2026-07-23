@@ -44,6 +44,15 @@ describe('StackedMemoryBar', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
+  it('renders N/A with no utilization segment when usage is unavailable', () => {
+    const { container } = render(() => (
+      <StackedMemoryBar used={0} total={8 * 1024 ** 3} unavailable />
+    ));
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(getSegments(container)).toHaveLength(0);
+  });
+
   it('renders 0% when both used and total are 0', () => {
     render(() => <StackedMemoryBar used={0} total={0} />);
     expect(screen.getByText('0%')).toBeInTheDocument();

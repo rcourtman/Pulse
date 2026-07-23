@@ -3306,6 +3306,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
 	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
+	existing.Metrics = clearUnavailableSourceMemoryMetric(existing.Metrics, &incoming, source)
 
 	// Prefer agent naming when available
 	if incoming.Name != "" {
@@ -3313,6 +3314,35 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 			existing.Name = incoming.Name
 		}
 	}
+}
+
+func clearUnavailableSourceMemoryMetric(metrics *ResourceMetrics, incoming *Resource, source DataSource) *ResourceMetrics {
+	if metrics == nil || metrics.Memory == nil || metrics.Memory.Source != source || incoming == nil {
+		return metrics
+	}
+
+	unavailable := false
+	switch source {
+	case SourceProxmox:
+		unavailable = incoming.Proxmox != nil &&
+			incoming.Proxmox.Memory != nil &&
+			incoming.Proxmox.Memory.UsageUnavailable
+	case SourceAgent:
+		unavailable = incoming.Agent != nil &&
+			incoming.Agent.Memory != nil &&
+			incoming.Agent.Memory.UsageUnavailable
+	case SourceDocker:
+		unavailable = incoming.Docker != nil &&
+			incoming.Docker.Memory != nil &&
+			incoming.Docker.Memory.UsageUnavailable
+	}
+	if !unavailable {
+		return metrics
+	}
+
+	cleared := *metrics
+	cleared.Memory = nil
+	return &cleared
 }
 
 func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData {
@@ -3388,6 +3418,11 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	}
 	if incoming.Balloon != 0 {
 		merged.Balloon = incoming.Balloon
+	}
+	if incoming.Memory != nil {
+		memory := *incoming.Memory
+		merged.Memory = &memory
+		merged.MemoryCache = incoming.MemoryCache
 	}
 	if incoming.Lock != "" {
 		merged.Lock = incoming.Lock

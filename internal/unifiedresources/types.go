@@ -371,8 +371,9 @@ type ProxmoxData struct {
 	SwapTotal                    int64               `json:"swapTotal,omitempty"`
 	Balloon                      int64               `json:"balloon,omitempty"`
 	// Reclaimable buff/cache split out of the memory metric's free bytes.
-	MemoryCache int64  `json:"memoryCache,omitempty"`
-	Lock        string `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	MemoryCache int64          `json:"memoryCache,omitempty"`
+	Memory      *models.Memory `json:"memory,omitempty"`
+	Lock        string         `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// Internal link hint to a host agent resource.
 	LinkedAgentID string `json:"-"`
 }
@@ -802,9 +803,10 @@ type AgentMemoryMeta struct {
 	Used  int64 `json:"used,omitempty"`
 	Free  int64 `json:"free,omitempty"`
 	// Cache is the reclaimable page cache; used + cache + free ≈ total.
-	Cache     int64 `json:"cache,omitempty"`
-	SwapUsed  int64 `json:"swapUsed,omitempty"`
-	SwapTotal int64 `json:"swapTotal,omitempty"`
+	Cache            int64 `json:"cache,omitempty"`
+	UsageUnavailable bool  `json:"usageUnavailable,omitempty"`
+	SwapUsed         int64 `json:"swapUsed,omitempty"`
+	SwapTotal        int64 `json:"swapTotal,omitempty"`
 }
 
 const HostPackageUpdateFreshness = 45 * time.Minute
@@ -989,31 +991,32 @@ type DockerPodmanContainerMeta struct {
 
 // DockerData contains Docker host- and container-specific data.
 type DockerData struct {
-	HostSourceID      string    `json:"hostSourceId,omitempty"` // raw model ID for the docker host
-	AgentID           string    `json:"agentId,omitempty"`
-	ContainerID       string    `json:"containerId,omitempty"`
-	Hostname          string    `json:"hostname,omitempty"`
-	DisplayName       string    `json:"displayName,omitempty"`
-	CustomDisplayName string    `json:"customDisplayName,omitempty"`
-	MachineID         string    `json:"machineId,omitempty"`
-	Image             string    `json:"image,omitempty"`
-	Temperature       *float64  `json:"temperature,omitempty"`
-	Runtime           string    `json:"runtime,omitempty"`
-	RuntimeVersion    string    `json:"runtimeVersion,omitempty"`
-	DockerVersion     string    `json:"dockerVersion,omitempty"`
-	OS                string    `json:"os,omitempty"`
-	KernelVersion     string    `json:"kernelVersion,omitempty"`
-	Architecture      string    `json:"architecture,omitempty"`
-	AgentVersion      string    `json:"agentVersion,omitempty"`
-	CPUs              int       `json:"cpus,omitempty"`
-	TotalMemoryBytes  int64     `json:"totalMemoryBytes,omitempty"`
-	UptimeSeconds     int64     `json:"uptimeSeconds,omitempty"`
-	LoadAverage       []float64 `json:"loadAverage,omitempty"`
-	IntervalSeconds   int       `json:"intervalSeconds,omitempty"`
-	NetInRate         float64   `json:"netInRate,omitempty"`
-	NetOutRate        float64   `json:"netOutRate,omitempty"`
-	DiskReadRate      float64   `json:"diskReadRate,omitempty"`
-	DiskWriteRate     float64   `json:"diskWriteRate,omitempty"`
+	HostSourceID      string           `json:"hostSourceId,omitempty"` // raw model ID for the docker host
+	AgentID           string           `json:"agentId,omitempty"`
+	ContainerID       string           `json:"containerId,omitempty"`
+	Hostname          string           `json:"hostname,omitempty"`
+	DisplayName       string           `json:"displayName,omitempty"`
+	CustomDisplayName string           `json:"customDisplayName,omitempty"`
+	MachineID         string           `json:"machineId,omitempty"`
+	Image             string           `json:"image,omitempty"`
+	Temperature       *float64         `json:"temperature,omitempty"`
+	Runtime           string           `json:"runtime,omitempty"`
+	RuntimeVersion    string           `json:"runtimeVersion,omitempty"`
+	DockerVersion     string           `json:"dockerVersion,omitempty"`
+	OS                string           `json:"os,omitempty"`
+	KernelVersion     string           `json:"kernelVersion,omitempty"`
+	Architecture      string           `json:"architecture,omitempty"`
+	AgentVersion      string           `json:"agentVersion,omitempty"`
+	CPUs              int              `json:"cpus,omitempty"`
+	TotalMemoryBytes  int64            `json:"totalMemoryBytes,omitempty"`
+	Memory            *AgentMemoryMeta `json:"memory,omitempty"`
+	UptimeSeconds     int64            `json:"uptimeSeconds,omitempty"`
+	LoadAverage       []float64        `json:"loadAverage,omitempty"`
+	IntervalSeconds   int              `json:"intervalSeconds,omitempty"`
+	NetInRate         float64          `json:"netInRate,omitempty"`
+	NetOutRate        float64          `json:"netOutRate,omitempty"`
+	DiskReadRate      float64          `json:"diskReadRate,omitempty"`
+	DiskWriteRate     float64          `json:"diskWriteRate,omitempty"`
 
 	// Host-level summary fields (populated when Resource.Type == ResourceTypeAgent and Docker != nil)
 	ContainerCount        int                                `json:"containerCount,omitempty"`

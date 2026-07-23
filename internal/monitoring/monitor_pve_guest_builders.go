@@ -316,11 +316,6 @@ func (m *Monitor) buildVMFromClusterResource(
 		state.onBoot = m.fetchVMOnBoot(ctx, client, res.Node, res.VMID)
 	}
 
-	memFree := uint64(0)
-	if state.memTotal >= state.memUsed {
-		memFree = state.memTotal - state.memUsed
-	}
-
 	var snapshotNotes []string
 	state.memUsed, state.memorySource, snapshotNotes = stabilizeGuestLowTrustMemory(
 		prevSnapshot,
@@ -339,6 +334,10 @@ func (m *Monitor) buildVMFromClusterResource(
 			state.agentVersion,
 		),
 	)
+	memFree := uint64(0)
+	if state.memTotal >= state.memUsed {
+		memFree = state.memTotal - state.memUsed
+	}
 	currentMetrics := IOMetrics{
 		DiskRead:   state.diskReadBytes,
 		DiskWrite:  state.diskWriteBytes,
@@ -348,12 +347,14 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
-	memoryUsage := safePercentage(float64(state.memUsed), float64(state.memTotal))
-	memory := models.Memory{
-		Total: int64(state.memTotal),
-		Used:  int64(state.memUsed),
-		Free:  int64(memFree),
-		Usage: memoryUsage,
+	memory := models.UnavailableMemory(clampToInt64(state.memTotal))
+	if CanonicalMemorySource(state.memorySource) != "unavailable" {
+		memory = models.Memory{
+			Total: int64(state.memTotal),
+			Used:  int64(state.memUsed),
+			Free:  int64(memFree),
+			Usage: safePercentage(float64(state.memUsed), float64(state.memTotal)),
+		}
 	}
 	if memory.Free < 0 {
 		memory.Free = 0
@@ -363,7 +364,14 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 	// Free above is total-used, i.e. available. When the guest reported its
 	// truly-free pages (meminfo), split the reclaimable cache back out.
-	splitReclaimableMemory(&memory, state.guestRaw.MemInfoFree)
+	var trulyFree uint64
+	switch CanonicalMemorySource(state.memorySource) {
+	case "available-field", "derived-free-buffers-cached", "derived-total-minus-used":
+		trulyFree = state.guestRaw.MemInfoFree
+	case "guest-agent-meminfo", "guest-agent-meminfo-derived":
+		trulyFree = state.guestRaw.GuestAgentMemFree
+	}
+	splitReclaimableMemory(&memory, trulyFree)
 	if state.detailedStatus != nil && state.detailedStatus.Balloon > 0 {
 		memory.Balloon = int64(state.detailedStatus.Balloon)
 	}

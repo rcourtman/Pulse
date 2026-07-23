@@ -3486,6 +3486,13 @@ Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
 must compose those helpers instead of declaring local `metricFallback` /
 `finiteMetric` helpers or inlining centered muted dash fallback markup in
 metric cells.
+Canonical Linux memory usage-unavailable is a first-class metric fallback,
+not a numeric zero. Shared workload bars, platform tables, drawers, and live
+history labels must render `N/A` (while retaining known capacity where useful)
+and must not synthesize a zero-width used segment or a healthy-looking `0%`.
+When unified-resource metadata carries an unavailable raw Proxmox, agent, or
+Docker memory facet alongside a trusted metric from another source, the
+trusted merged metric wins; the raw facet remains diagnostic evidence only.
 Platform load-failure states are registry-backed as well.
 `PlatformErrorState` owns the repeated table-card error shell, warning icon,
 and Refresh action for platform page and table load failures; platform

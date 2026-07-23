@@ -250,9 +250,12 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
   const memoryRows = (): NodeOverviewRow[] => [
     {
       label: 'Usage',
-      value: `${getUsedPercent(props.node.memory?.used, props.node.memory?.total)} · ${formatBytes(
-        props.node.memory?.used || 0,
-      )}`,
+      value:
+        props.node.memory?.usageUnavailable === true
+          ? 'Unavailable'
+          : `${getUsedPercent(props.node.memory?.used, props.node.memory?.total)} · ${formatBytes(
+              props.node.memory?.used || 0,
+            )}`,
     },
     { label: 'Total', value: formatBytes(props.node.memory?.total || 0) },
     ...(props.node.memory?.cache
@@ -263,7 +266,9 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           } satisfies NodeOverviewRow,
         ]
       : []),
-    { label: 'Free', value: formatBytes(props.node.memory?.free || 0) },
+    ...(props.node.memory?.usageUnavailable === true
+      ? []
+      : [{ label: 'Free', value: formatBytes(props.node.memory?.free || 0) }]),
     ...(props.node.memory?.swapTotal
       ? [
           {

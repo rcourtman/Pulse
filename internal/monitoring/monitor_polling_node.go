@@ -11,6 +11,31 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const nodeMemoryCarryForwardMaxAge = 2 * time.Minute
+
+func (m *Monitor) canCarryForwardNodeMemory(instance, node string, now time.Time) bool {
+	if m == nil {
+		return false
+	}
+	m.diagMu.RLock()
+	snapshot, ok := m.nodeSnapshots[makeNodeSnapshotKey(instance, node)]
+	m.diagMu.RUnlock()
+	if !ok || !snapshot.Memory.HasKnownUsage() || snapshot.RetrievedAt.IsZero() {
+		return false
+	}
+	age := now.Sub(snapshot.RetrievedAt)
+	if age < 0 || age > nodeMemoryCarryForwardMaxAge {
+		return false
+	}
+	switch CanonicalMemorySource(snapshot.MemorySource) {
+	case "available-field", "derived-free-buffers-cached", "derived-total-minus-used",
+		"rrd-memavailable", "rrd-memused":
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *Monitor) pollPVENode(
 	ctx context.Context,
 	instanceName string,
@@ -25,23 +50,22 @@ func (m *Monitor) pollPVENode(
 	displayName := getNodeDisplayName(instanceCfg, node.Node)
 	connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, monitorDiscoveryConfig(m), node.Node)
 	nodeID, effectiveStatus := m.determineNodeIDAndStatus(instanceName, instanceCfg, node)
+	nodeFallbackFree := uint64(0)
+	if node.MaxMem >= node.Mem {
+		nodeFallbackFree = node.MaxMem - node.Mem
+	}
 
 	modelNode := models.Node{
-		ID:          nodeID,
-		Name:        node.Node,
-		DisplayName: displayName,
-		Instance:    instanceName,
-		Host:        connectionHost,
-		GuestURL:    guestURL,
-		Status:      effectiveStatus,
-		Type:        "node",
-		CPU:         safeFloat(node.CPU), // Proxmox returns 0-1 ratio (e.g., 0.15 = 15%)
-		Memory: models.Memory{
-			Total: int64(node.MaxMem),
-			Used:  int64(node.Mem),
-			Free:  int64(node.MaxMem - node.Mem),
-			Usage: safePercentage(float64(node.Mem), float64(node.MaxMem)),
-		},
+		ID:                           nodeID,
+		Name:                         node.Node,
+		DisplayName:                  displayName,
+		Instance:                     instanceName,
+		Host:                         connectionHost,
+		GuestURL:                     guestURL,
+		Status:                       effectiveStatus,
+		Type:                         "node",
+		CPU:                          safeFloat(node.CPU), // Proxmox returns 0-1 ratio (e.g., 0.15 = 15%)
+		Memory:                       models.UnavailableMemory(clampToInt64(node.MaxMem)),
 		Uptime:                       int64(node.Uptime),
 		LoadAverage:                  []float64{},
 		LastSeen:                     time.Now(),
@@ -56,15 +80,15 @@ func (m *Monitor) pollPVENode(
 	nodeSnapshotRaw := NodeMemoryRaw{
 		Total:               node.MaxMem,
 		Used:                node.Mem,
-		Free:                node.MaxMem - node.Mem,
+		Free:                nodeFallbackFree,
 		FallbackTotal:       node.MaxMem,
 		FallbackUsed:        node.Mem,
-		FallbackFree:        node.MaxMem - node.Mem,
+		FallbackFree:        nodeFallbackFree,
 		FallbackCalculated:  true,
 		ProxmoxMemorySource: "nodes-endpoint",
 	}
-	nodeMemorySource := "nodes-endpoint"
-	var nodeFallbackReason string
+	nodeMemorySource := "unavailable"
+	nodeFallbackReason := "cache-aware-memory-unavailable"
 
 	// Debug logging for disk metrics - note that these values can fluctuate
 	// due to thin provisioning and dynamic allocation
@@ -93,7 +117,7 @@ func (m *Monitor) pollPVENode(
 					Err(nodeErr).
 					Uint64("usingDisk", node.Disk).
 					Uint64("usingMaxDisk", node.MaxDisk).
-					Msg("Could not get node status - using fallback metrics (memory will include cache/buffers)")
+					Msg("Could not get node status - disk fallback retained; memory usage unavailable")
 			} else {
 				log.Warn().
 					Str("instance", instanceName).
@@ -101,7 +125,7 @@ func (m *Monitor) pollPVENode(
 					Err(nodeErr).
 					Uint64("disk", node.Disk).
 					Uint64("maxDisk", node.MaxDisk).
-					Msg("Could not get node status - no fallback metrics available (memory will include cache/buffers)")
+					Msg("Could not get node status - memory usage unavailable")
 			}
 		} else if nodeInfo != nil {
 			if nodeInfo.Memory != nil {
@@ -159,11 +183,9 @@ func (m *Monitor) pollPVENode(
 				if ok {
 					modelNode.Memory = resolvedMemory
 					nodeMemorySource = resolvedSource
-					if resolvedFallback != "" {
-						nodeFallbackReason = resolvedFallback
-					}
+					nodeFallbackReason = resolvedFallback
 					nodeSnapshotRaw = resolvedRaw
-					memoryUpdated = true
+					memoryUpdated = resolvedMemory.HasKnownUsage()
 				}
 			}
 
@@ -195,8 +217,10 @@ func (m *Monitor) pollPVENode(
 	}
 
 	// If we couldn't update memory metrics using detailed status, preserve previous accurate values if available
-	if !memoryUpdated && effectiveStatus == "online" {
-		if prevMem, exists := prevNodeMemory[modelNode.ID]; exists && prevMem.Total > 0 {
+	if !memoryUpdated &&
+		effectiveStatus == "online" &&
+		m.canCarryForwardNodeMemory(instanceName, node.Node, time.Now()) {
+		if prevMem, exists := prevNodeMemory[modelNode.ID]; exists && prevMem.HasKnownUsage() {
 			total := int64(node.MaxMem)
 			if total == 0 {
 				total = prevMem.Total
@@ -222,9 +246,7 @@ func (m *Monitor) pollPVENode(
 				Str("node", node.Node).
 				Msg("Preserving previous memory metrics - node status unavailable this cycle")
 
-			if nodeFallbackReason == "" {
-				nodeFallbackReason = "preserved-previous-snapshot"
-			}
+			nodeFallbackReason = "preserved-previous-snapshot"
 			nodeMemorySource = "previous-snapshot"
 			if nodeSnapshotRaw.ProxmoxMemorySource == "node-status" && nodeSnapshotRaw.Total == 0 {
 				nodeSnapshotRaw.ProxmoxMemorySource = "previous-snapshot"

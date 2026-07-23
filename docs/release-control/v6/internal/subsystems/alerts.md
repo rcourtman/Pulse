@@ -37,6 +37,12 @@ Availability incident and alert identity belongs to the source-owned
 machine, but it must not copy the check incident onto that machine or create a
 second alert lifecycle. Failure, recovery, history, acknowledgement, and
 notification routing therefore remain stable under relinking and restart.
+Linux memory thresholds consume only canonical cache-aware usage. An explicit
+usage-unavailable sample, a non-finite percentage, or contradictory
+used/free/total evidence must not open or clear a memory alert. If such a
+sample follows an active alert, the alert remains active with its last trusted
+value until a subsequent trusted sample proves recovery; missing evidence is
+not evidence that pressure disappeared.
 
 ## Canonical Files
 

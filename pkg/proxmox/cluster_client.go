@@ -1377,6 +1377,21 @@ func (cc *ClusterClient) GetVMMemAvailableFromAgent(ctx context.Context, node st
 	return result, err
 }
 
+// GetVMMemoryAvailabilityFromAgent reads cache-aware /proc/meminfo evidence
+// through the first healthy cluster client.
+func (cc *ClusterClient) GetVMMemoryAvailabilityFromAgent(ctx context.Context, node string, vmid int) (LinuxMemoryAvailability, error) {
+	var result LinuxMemoryAvailability
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		availability, err := client.GetVMMemoryAvailabilityFromAgent(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = availability
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterResources returns all resources (VMs, containers) across the cluster in a single call
 func (cc *ClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]ClusterResource, error) {
 	var result []ClusterResource

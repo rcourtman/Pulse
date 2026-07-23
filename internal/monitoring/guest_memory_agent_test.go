@@ -13,6 +13,7 @@ type guestMemoryAgentTestClient struct {
 	*stubPVEClient
 	vmRRDPoints  []proxmox.GuestRRDPoint
 	memAvailable uint64
+	memInfo      *proxmox.LinuxMemoryAvailability
 	memErr       error
 	rrdCalls     int
 	memCalls     int
@@ -29,6 +30,24 @@ func (c *guestMemoryAgentTestClient) GetVMMemAvailableFromAgent(ctx context.Cont
 		return 0, c.memErr
 	}
 	return c.memAvailable, nil
+}
+
+func (c *guestMemoryAgentTestClient) GetVMMemoryAvailabilityFromAgent(ctx context.Context, node string, vmid int) (proxmox.LinuxMemoryAvailability, error) {
+	c.memCalls++
+	if c.memErr != nil {
+		return proxmox.LinuxMemoryAvailability{}, c.memErr
+	}
+	if c.memInfo != nil {
+		return *c.memInfo, nil
+	}
+	if c.memAvailable == 0 {
+		return proxmox.LinuxMemoryAvailability{}, nil
+	}
+	return proxmox.LinuxMemoryAvailability{
+		Available:          c.memAvailable,
+		EffectiveAvailable: c.memAvailable,
+		Source:             "meminfo-available",
+	}, nil
 }
 
 func TestGetVMRRDMetricsCacheKeyIncludesInstance(t *testing.T) {
@@ -62,6 +81,79 @@ func TestGetVMRRDMetricsCacheKeyIncludesInstance(t *testing.T) {
 	}
 	if clientA.rrdCalls != 1 || clientB.rrdCalls != 1 {
 		t.Fatalf("expected isolated cache fetches, got clientA=%d clientB=%d", clientA.rrdCalls, clientB.rrdCalls)
+	}
+}
+
+func TestResolveGuestStatusMemoryAcceptsExplicitZeroRRDUsed(t *testing.T) {
+	t.Parallel()
+
+	const gib = uint64(1024 * 1024 * 1024)
+	mon := &Monitor{vmRRDMemCache: make(map[string]rrdMemCacheEntry)}
+	client := &guestMemoryAgentTestClient{
+		stubPVEClient: &stubPVEClient{},
+		vmRRDPoints: []proxmox.GuestRRDPoint{{
+			MaxMem:  floatPtr(float64(8 * gib)),
+			MemUsed: floatPtr(0),
+		}},
+	}
+
+	total, used, source := mon.resolveGuestStatusMemory(
+		context.Background(),
+		client,
+		"pve-a",
+		"idle-vm",
+		"node1",
+		100,
+		"pve-a:node1:100",
+		&proxmox.VMStatus{MaxMem: 8 * gib, Mem: 8 * gib},
+		nil,
+		8*gib,
+		"",
+		&VMMemoryRaw{},
+	)
+	if total != 8*gib || used != 0 || source != "rrd-memused" {
+		t.Fatalf("resolved memory = total %d used %d source %q, want idle RRD sample", total, used, source)
+	}
+}
+
+func TestResolveGuestStatusMemoryAcceptsExplicitZeroGuestAgentAvailable(t *testing.T) {
+	t.Parallel()
+
+	const gib = uint64(1024 * 1024 * 1024)
+	mon := &Monitor{
+		vmRRDMemCache:   make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache: make(map[string]agentMemCacheEntry),
+	}
+	client := &guestMemoryAgentTestClient{
+		stubPVEClient: &stubPVEClient{},
+		memInfo: &proxmox.LinuxMemoryAvailability{
+			Total:              8 * gib,
+			Available:          0,
+			EffectiveAvailable: 0,
+			Source:             "meminfo-available",
+		},
+	}
+
+	total, used, source := mon.resolveGuestStatusMemory(
+		context.Background(),
+		client,
+		"pve-a",
+		"pressured-vm",
+		"node1",
+		101,
+		"pve-a:node1:101",
+		&proxmox.VMStatus{
+			MaxMem: 8 * gib,
+			Mem:    8 * gib,
+			Agent:  proxmox.VMAgentField{Value: 1},
+		},
+		nil,
+		8*gib,
+		"",
+		&VMMemoryRaw{},
+	)
+	if total != 8*gib || used != 8*gib || source != "guest-agent-meminfo" {
+		t.Fatalf("resolved memory = total %d used %d source %q, want full-pressure guest-agent sample", total, used, source)
 	}
 }
 

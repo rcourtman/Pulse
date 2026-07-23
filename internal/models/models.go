@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"sort"
@@ -2803,11 +2804,43 @@ type Memory struct {
 	Used  int64 `json:"used"`
 	Free  int64 `json:"free"`
 	// Reclaimable buff/cache (available - truly free); used + cache + free ≈ total.
-	Cache     int64   `json:"cache,omitempty"`
-	Usage     float64 `json:"usage"`
-	Balloon   int64   `json:"balloon,omitempty"`
-	SwapUsed  int64   `json:"swapUsed,omitempty"`
-	SwapTotal int64   `json:"swapTotal,omitempty"`
+	Cache int64 `json:"cache,omitempty"`
+	// UsageUnavailable is true when total capacity is known but no cache-aware
+	// source can establish current usage. Consumers must not interpret the
+	// zero-valued Used, Free, or Usage fields as a measurement in that state.
+	UsageUnavailable bool    `json:"usageUnavailable,omitempty"`
+	Usage            float64 `json:"usage"`
+	Balloon          int64   `json:"balloon,omitempty"`
+	SwapUsed         int64   `json:"swapUsed,omitempty"`
+	SwapTotal        int64   `json:"swapTotal,omitempty"`
+}
+
+// HasKnownUsage reports whether this memory value is safe for live
+// projections, history, and threshold evaluation.
+func (m Memory) HasKnownUsage() bool {
+	if m.UsageUnavailable || math.IsNaN(m.Usage) || math.IsInf(m.Usage, 0) || m.Usage < 0 || m.Usage > 100 {
+		return false
+	}
+	if m.Total == 0 {
+		return m.Usage > 0
+	}
+	return m.Total > 0 &&
+		m.Used >= 0 &&
+		m.Used <= m.Total &&
+		m.Free >= 0 &&
+		m.Free <= m.Total
+}
+
+// UnavailableMemory preserves a known capacity without inventing usage from
+// total-free when cache-aware evidence is missing.
+func UnavailableMemory(total int64) Memory {
+	if total < 0 {
+		total = 0
+	}
+	return Memory{
+		Total:            total,
+		UsageUnavailable: true,
+	}
 }
 
 type GuestNetworkInterface struct {

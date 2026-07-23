@@ -679,6 +679,54 @@ describe('buildMemory (via nodeFromResource)', () => {
     expect(node?.memory.balloon).toBe(30);
   });
 
+  it('preserves explicit unavailable usage from the fallback memory contract', () => {
+    const node = nodeFromResource(
+      agentNode({
+        memory: undefined,
+        proxmox: {
+          nodeName: 'n1',
+          memory: {
+            total: 8192,
+            used: 0,
+            free: 0,
+            usage: 0,
+            usageUnavailable: true,
+          },
+        } as unknown as Resource['proxmox'],
+      }),
+    );
+    expect(node?.memory).toMatchObject({
+      total: 8192,
+      used: 0,
+      usage: 0,
+      usageUnavailable: true,
+    });
+  });
+
+  it('lets a trusted merged metric override an unavailable Proxmox fallback', () => {
+    const node = nodeFromResource(
+      agentNode({
+        memory: { current: 50, total: 8192, used: 4096, free: 4096 },
+        proxmox: {
+          nodeName: 'n1',
+          memory: {
+            total: 8192,
+            used: 0,
+            free: 0,
+            usage: 0,
+            usageUnavailable: true,
+          },
+        } as unknown as Resource['proxmox'],
+      }),
+    );
+    expect(node?.memory).toMatchObject({
+      total: 8192,
+      used: 4096,
+      usage: 50,
+      usageUnavailable: false,
+    });
+  });
+
   it('prefers proxmoxMeta.memoryCache over fallback.cache', () => {
     const node = nodeFromResource(
       agentNode({
