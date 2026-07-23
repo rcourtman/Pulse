@@ -110,6 +110,42 @@ console. The repository now proves this mapping before SSH and fails with
 peer-map, ping, and TCP/22 diagnostics if it drifts. No OAuth, tag-owner, or ACL
 change is required for the currently verified `tag:infra` path.
 
+## v6.1.1 Production Proof
+
+- Stable release `v6.1.1` was published on 2026-07-23 by release pipeline run
+  `30018065352` from exact candidate
+  `dc8a64b3b3242b118007a9ad471088d6e94ed99b`. The annotated tag peels to that
+  exact SHA.
+- Frontend checks, backend tests, integration tests, Helm smoke, Docker build,
+  immutable candidate validation, macOS signing and notarization, release
+  creation, live asset validation, Docker publication, Helm publication,
+  `install.sh` smoke, floating-tag promotion, private paid-runtime publication,
+  stable-demo verification, and the terminal `Definitive Release Verdict` all
+  succeeded.
+- The release contains 213 assets. Live validation confirmed the required
+  artifacts, versions, architectures, checksums, detached PGP and SSH
+  signatures, manifests, and release SBOM.
+- The Windows artifacts use the explicitly approved, version-bounded
+  `v6.1.1` unsigned exception because SignPath configuration was unavailable.
+  The public notes disclose the Unknown Publisher warning and retain checksum,
+  detached-signature, manifest, and digest verification. macOS artifacts remain
+  signed and notarized.
+- The release packet includes the customer-harm fixes for Mageia manual agent
+  updates and durable Docker update recovery, plus the post-packet Proxmox
+  backup-posture canonical identity correction. Its declared rollback target is
+  `v6.1.0`.
+- The stable demo reported version `6.1.1`, returned healthy status with all
+  declared dependencies healthy, matched the deployed frontend asset, and
+  passed the public login-page browser smoke.
+- The first demo-browser runner stopped producing progress during Playwright
+  setup after every preceding demo check had succeeded. The incomplete attempt
+  was cancelled and only the demo job plus its dependent verdict were rerun.
+  The fresh runner completed the same browser smoke in 75 seconds and the
+  terminal verdict passed, isolating the event to the replaced runner rather
+  than a product or deployment failure.
+- Downstream Pulse Enterprise build run `30020237178` and Pulse Pro paid-runtime
+  promotion run `30023566801` both succeeded.
+
 ## Current Verdict
 
 Passed. A routine stable patch now uses one noninteractive publish dispatch
