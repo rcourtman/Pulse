@@ -106,43 +106,65 @@ func setAgentHeaders(req *http.Request, token string) {
 
 // Agent collects Docker / Podman metrics and posts them to Pulse.
 type Agent struct {
-	cfg                Config
-	docker             dockerClient
-	daemonHost         string
-	daemonID           string // Cached at init; Podman can return unstable IDs across calls
-	runtime            RuntimeKind
-	runtimeVer         string
-	agentVersion       string
-	supportsSwarm      bool
-	httpClients        map[bool]*http.Client
-	trustedHTTPClients map[string]*http.Client
-	logger             zerolog.Logger
-	machineID          string
-	hostName           string
-	cpuCount           int
-	targets            []TargetConfig
-	allowedStates      map[string]struct{}
-	stateFilters       []string
-	hostID             string
-	prevContainerCPU   map[string]cpuSample
-	cpuMu              sync.Mutex // protects prevContainerCPU
-	reportBuffer       *utils.Queue[agentsdocker.Report]
-	reportBuffers      map[string]*utils.Queue[agentsdocker.Report]
-	registryChecker    *RegistryChecker // For checking container image updates
-	collectMu          sync.Mutex       // serializes collectOnce calls
-	backgroundMu       sync.Mutex       // protects updateCheckRunning, cleanupTaskRunning
-	updateCheckRunning bool
-	cleanupTaskRunning bool
-	asyncOnce          sync.Once
-	asyncCtx           context.Context
-	asyncCancel        context.CancelFunc
-	asyncWG            sync.WaitGroup
-	closeOnce          sync.Once
-	closeErr           error
+	cfg                 Config
+	docker              dockerClient
+	daemonHost          string
+	daemonID            string // Cached at init; Podman can return unstable IDs across calls
+	runtime             RuntimeKind
+	runtimeVer          string
+	agentVersion        string
+	supportsSwarm       bool
+	httpClients         map[bool]*http.Client
+	trustedHTTPClients  map[string]*http.Client
+	logger              zerolog.Logger
+	machineID           string
+	hostName            string
+	cpuCount            int
+	targets             []TargetConfig
+	allowedStates       map[string]struct{}
+	stateFilters        []string
+	hostID              string
+	prevContainerCPU    map[string]cpuSample
+	cpuMu               sync.Mutex // protects prevContainerCPU
+	reportBuffer        *utils.Queue[agentsdocker.Report]
+	reportBuffers       map[string]*utils.Queue[agentsdocker.Report]
+	registryChecker     *RegistryChecker // For checking container image updates
+	collectMu           sync.Mutex       // serializes collectOnce calls
+	manualCheckMu       sync.Mutex       // protects manualCheckActiveID and manualCheckResults
+	manualCheckActiveID string
+	manualCheckResults  map[string]manualUpdateCheckResult
+	manualCheckCollect  func(context.Context) (agentsdocker.Report, error) // test seam for bounded manual checks
+	backgroundMu        sync.Mutex                                         // protects updateCheckRunning, cleanupTaskRunning
+	updateCheckRunning  bool
+	cleanupTaskRunning  bool
+	asyncOnce           sync.Once
+	asyncCtx            context.Context
+	asyncCancel         context.CancelFunc
+	asyncWG             sync.WaitGroup
+	closeOnce           sync.Once
+	closeErr            error
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
 var ErrStopRequested = errors.New("docker host stop requested")
+
+const (
+	manualUpdateCheckResultTTL       = 10 * time.Minute
+	manualUpdateCheckResultLimit     = 64
+	manualUpdateCheckAckAttempts     = 3
+	manualUpdateCheckTerminalAckTime = 50 * time.Second
+)
+
+var (
+	manualUpdateCheckTimeout       = dockerCollectCycleTimeout
+	manualUpdateCheckAckRetryDelay = 250 * time.Millisecond
+)
+
+type manualUpdateCheckResult struct {
+	status     string
+	message    string
+	finishedAt time.Time
+}
 
 type cpuSample struct {
 	totalUsage  uint64
@@ -807,15 +829,23 @@ func (a *Agent) waitForAsyncDelay(delay time.Duration) bool {
 }
 
 func (a *Agent) collectOnce(ctx context.Context) error {
+	_, err := a.collectOnceWithReport(ctx)
+	return err
+}
+
+func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report, error) {
 	a.collectMu.Lock()
 	defer a.collectMu.Unlock()
 
 	report, err := a.buildReport(ctx)
 	if err != nil {
-		return fmt.Errorf("build docker report: %w", err)
+		return agentsdocker.Report{}, fmt.Errorf("build docker report: %w", err)
 	}
 
-	return a.deliverReport(ctx, report)
+	if err := a.deliverReport(ctx, report); err != nil {
+		return report, err
+	}
+	return report, nil
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
@@ -1074,6 +1104,27 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 }
 
 func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
+	command.ID = strings.TrimSpace(command.ID)
+	if command.ID == "" {
+		a.logger.Warn().
+			Str("target", target.URL).
+			Msg("Ignoring check updates command without an identifier")
+		return nil
+	}
+
+	result, shouldStart := a.beginManualUpdateCheck(command.ID)
+	if !shouldStart {
+		a.logger.Info().
+			Str("commandID", command.ID).
+			Str("target", target.URL).
+			Str("status", result.status).
+			Msg("Received replayed or concurrent check updates command; registry scan will not be repeated")
+		if err := a.sendCommandAck(ctx, target, command.ID, result.status, result.message); err != nil {
+			a.logManualUpdateCheckAckFailure(err, target, command.ID, result.status)
+		}
+		return nil
+	}
+
 	a.logger.Info().
 		Str("commandID", command.ID).
 		Str("target", target.URL).
@@ -1083,34 +1134,221 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 		a.registryChecker.ForceCheck()
 	}
 
-	// Send intermediate completion ack. Don't propagate the error — the
-	// report was already delivered successfully. Propagating causes the
-	// report to be buffered and retried, which re-fetches the same command
-	// and creates a loop (issue #1504).
-	if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusCompleted, "Registry cache cleared; checking for updates on next report cycle"); err != nil {
-		a.logger.Warn().
-			Err(err).
-			Str("commandID", command.ID).
-			Str("target", target.URL).
-			Msg("Failed to send check updates acknowledgement")
+	if err := a.sendCommandAck(ctx, target, command.ID, result.status, result.message); err != nil {
+		// The server dispatches each command once. An acknowledgement failure
+		// must not feed the enclosing report back into delivery/replay, and the
+		// terminal acknowledgement below gets its own bounded retry budget.
+		a.logManualUpdateCheckAckFailure(err, target, command.ID, result.status)
 	}
 
-	// Trigger an immediate collection cycle to report updates.
 	a.runAsync(func(asyncCtx context.Context) {
-		if !a.waitForAsyncDelay(1 * time.Second) {
-			return
-		}
-		select {
-		case <-asyncCtx.Done():
-			return
-		case <-ctx.Done():
-			return
-		default:
-		}
-		_ = a.collectOnce(ctx)
+		a.executeManualUpdateCheck(asyncCtx, target, command.ID)
 	})
 
 	return nil
+}
+
+func (a *Agent) beginManualUpdateCheck(commandID string) (manualUpdateCheckResult, bool) {
+	a.manualCheckMu.Lock()
+	defer a.manualCheckMu.Unlock()
+
+	now := time.Now()
+	if a.manualCheckResults == nil {
+		a.manualCheckResults = make(map[string]manualUpdateCheckResult)
+	}
+	a.pruneManualUpdateCheckResultsLocked(now)
+
+	if result, ok := a.manualCheckResults[commandID]; ok {
+		return result, false
+	}
+
+	if a.manualCheckActiveID != "" {
+		result := manualUpdateCheckResult{
+			status:     agentsdocker.CommandStatusFailed,
+			message:    "Another container update check is already running; this command was not executed",
+			finishedAt: now,
+		}
+		a.manualCheckResults[commandID] = result
+		a.trimManualUpdateCheckResultsLocked()
+		return result, false
+	}
+
+	result := manualUpdateCheckResult{
+		status:  agentsdocker.CommandStatusInProgress,
+		message: "Checking container registries for updates",
+	}
+	a.manualCheckActiveID = commandID
+	a.manualCheckResults[commandID] = result
+	return result, true
+}
+
+func (a *Agent) finishManualUpdateCheck(commandID, status, message string) manualUpdateCheckResult {
+	a.manualCheckMu.Lock()
+	defer a.manualCheckMu.Unlock()
+
+	if a.manualCheckResults == nil {
+		a.manualCheckResults = make(map[string]manualUpdateCheckResult)
+	}
+	result := manualUpdateCheckResult{
+		status:     status,
+		message:    message,
+		finishedAt: time.Now(),
+	}
+	a.manualCheckResults[commandID] = result
+	if a.manualCheckActiveID == commandID {
+		a.manualCheckActiveID = ""
+	}
+	a.trimManualUpdateCheckResultsLocked()
+	return result
+}
+
+func (a *Agent) pruneManualUpdateCheckResultsLocked(now time.Time) {
+	cutoff := now.Add(-manualUpdateCheckResultTTL)
+	for commandID, result := range a.manualCheckResults {
+		if commandID == a.manualCheckActiveID || result.finishedAt.IsZero() {
+			continue
+		}
+		if result.finishedAt.Before(cutoff) {
+			delete(a.manualCheckResults, commandID)
+		}
+	}
+	a.trimManualUpdateCheckResultsLocked()
+}
+
+func (a *Agent) trimManualUpdateCheckResultsLocked() {
+	for len(a.manualCheckResults) > manualUpdateCheckResultLimit {
+		var oldestID string
+		var oldestFinishedAt time.Time
+		for commandID, result := range a.manualCheckResults {
+			if commandID == a.manualCheckActiveID || result.finishedAt.IsZero() {
+				continue
+			}
+			if oldestID == "" || result.finishedAt.Before(oldestFinishedAt) {
+				oldestID = commandID
+				oldestFinishedAt = result.finishedAt
+			}
+		}
+		if oldestID == "" {
+			return
+		}
+		delete(a.manualCheckResults, oldestID)
+	}
+}
+
+func (a *Agent) executeManualUpdateCheck(asyncCtx context.Context, target TargetConfig, commandID string) {
+	checkCtx, cancel := context.WithTimeout(asyncCtx, manualUpdateCheckTimeout)
+	report, err := a.collectManualUpdateCheck(checkCtx)
+	checkCtxErr := checkCtx.Err()
+	cancel()
+
+	status := agentsdocker.CommandStatusCompleted
+	message := summarizeManualUpdateCheck(report)
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(checkCtxErr, context.DeadlineExceeded):
+		status = agentsdocker.CommandStatusFailed
+		message = fmt.Sprintf("Container update check timed out after %s", manualUpdateCheckTimeout)
+	case errors.Is(err, context.Canceled), errors.Is(checkCtxErr, context.Canceled):
+		status = agentsdocker.CommandStatusFailed
+		message = "Container update check was cancelled because the agent is shutting down"
+	case err != nil:
+		status = agentsdocker.CommandStatusFailed
+		message = fmt.Sprintf("Container update check failed: %v", err)
+	}
+	result := a.finishManualUpdateCheck(commandID, status, message)
+
+	a.logger.Info().
+		Str("commandID", commandID).
+		Str("target", target.URL).
+		Str("status", result.status).
+		Str("message", result.message).
+		Msg("Container update check finished")
+
+	ackCtx, ackCancel := context.WithTimeout(asyncCtx, manualUpdateCheckTerminalAckTime)
+	defer ackCancel()
+	if err := a.sendManualUpdateCheckAckWithRetry(ackCtx, target, commandID, result); err != nil {
+		a.logManualUpdateCheckAckFailure(err, target, commandID, result.status)
+	}
+}
+
+func (a *Agent) collectManualUpdateCheck(ctx context.Context) (agentsdocker.Report, error) {
+	if a.manualCheckCollect != nil {
+		return a.manualCheckCollect(ctx)
+	}
+	return a.collectOnceWithReport(ctx)
+}
+
+func summarizeManualUpdateCheck(report agentsdocker.Report) string {
+	var checked, updates, skipped, registryErrors, rateLimited int
+	for _, container := range report.Containers {
+		if container.UpdateStatus == nil {
+			skipped++
+			continue
+		}
+		updateError := strings.TrimSpace(container.UpdateStatus.Error)
+		if strings.EqualFold(updateError, "digest-pinned image") {
+			skipped++
+			continue
+		}
+		checked++
+		if container.UpdateStatus.UpdateAvailable {
+			updates++
+		}
+		if updateError != "" {
+			registryErrors++
+			if strings.Contains(strings.ToLower(updateError), "rate limit") {
+				rateLimited++
+			}
+		}
+	}
+
+	message := fmt.Sprintf("Container update check completed: %d checked, %d updates available", checked, updates)
+	if skipped > 0 {
+		message += fmt.Sprintf(", %d skipped", skipped)
+	}
+	if registryErrors > 0 {
+		message += fmt.Sprintf(", %d registry errors", registryErrors)
+		if rateLimited > 0 {
+			message += fmt.Sprintf(" (%d rate limited)", rateLimited)
+		}
+	}
+	return message
+}
+
+func (a *Agent) sendManualUpdateCheckAckWithRetry(ctx context.Context, target TargetConfig, commandID string, result manualUpdateCheckResult) error {
+	var err error
+	for attempt := 0; attempt < manualUpdateCheckAckAttempts; attempt++ {
+		err = a.sendCommandAck(ctx, target, commandID, result.status, result.message)
+		if err == nil {
+			return nil
+		}
+		if attempt+1 == manualUpdateCheckAckAttempts || !waitForContextDelay(ctx, manualUpdateCheckAckRetryDelay*time.Duration(1<<attempt)) {
+			break
+		}
+	}
+	return err
+}
+
+func waitForContextDelay(ctx context.Context, delay time.Duration) bool {
+	if delay <= 0 {
+		return ctx.Err() == nil
+	}
+	timer := newTimerFn(delay)
+	defer stopTimer(timer)
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func (a *Agent) logManualUpdateCheckAckFailure(err error, target TargetConfig, commandID, status string) {
+	a.logger.Warn().
+		Err(err).
+		Str("commandID", commandID).
+		Str("target", target.URL).
+		Str("status", status).
+		Msg("Failed to send container update check acknowledgement")
 }
 
 func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {

@@ -2030,6 +2030,30 @@ last-seen, reasons, identity evidence, and non-command repair actions, and
 must never embed host-local update or uninstall commands because those can
 carry install tokens.
 
+### Manual Docker update checks are bounded, replay-safe commands
+
+The Docker / Podman module treats `check_updates` as one bounded agent
+operation rather than as permission to start a registry scan on every report
+poll. The monitoring-owned server queue dispatches a command only on its
+`queued` to `dispatched` transition; after receipt, the module keeps one active
+manual check plus a bounded ten-minute cache of terminal command IDs. A replay
+of the same ID may restore its current acknowledgement but must not clear the
+registry cache or collect again, and a different command arriving while the
+first is active must fail without starting another scan.
+
+The first receipt clears registry result/error caches once, reports
+`in_progress`, and runs an immediate collection through the same collection
+mutex used by automatic reports. That shared mutex, not a scheduling sleep,
+serializes manual and automatic work. The manual operation inherits the
+five-minute whole-cycle ceiling and registry request cancellation from the
+Docker collector. Only after collection finishes may it report `completed`
+with checked, update, skipped, registry-error, and rate-limit counts; a fatal
+collection error or deadline reports `failed`. Terminal acknowledgement
+delivery has a small bounded retry budget, while acknowledgement failure never
+feeds the enclosing report back into command execution. The API and monitoring
+contracts continue to own host command admission, command TTL expiry, and UI
+in-flight projection.
+
 ### Governed action readiness remains outside agent lifecycle authority
 
 The canonical Actions lifecycle may ask an executor-owned

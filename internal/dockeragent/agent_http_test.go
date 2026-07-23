@@ -561,6 +561,7 @@ func TestHandleCommand(t *testing.T) {
 				},
 			},
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		cmd := agentsdocker.Command{
 			ID:   "cmd3",
@@ -610,6 +611,9 @@ func TestHandleCommand(t *testing.T) {
 			logger:          zerolog.Nop(),
 			hostID:          "host1",
 			registryChecker: registryChecker,
+			manualCheckCollect: func(context.Context) (agentsdocker.Report, error) {
+				return agentsdocker.Report{}, nil
+			},
 		}
 		t.Cleanup(func() { _ = agent.Close() })
 
