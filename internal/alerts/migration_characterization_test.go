@@ -463,9 +463,7 @@ func TestAlertCharacterizationReevaluatesAlertsWhenConfigChanges(t *testing.T) {
 
 	assertAlertMissing(t, m, alertID)
 
-	m.resolvedMutex.RLock()
 	_, wasResolved := testLookupResolvedAlert(t, m, alertID)
-	m.resolvedMutex.RUnlock()
 	if !wasResolved {
 		t.Fatalf("expected %q in recently resolved after config change", alertID)
 	}

@@ -59,6 +59,30 @@ func (m *Manager) pruneRecentlyResolvedUnlocked(now time.Time) {
 	}
 }
 
+// consumeRecentlyResolvedForRefireWithPrimaryLock consumes a resolved alert
+// that is still inside the refire window. The caller must hold m.mu.
+//
+// Lock order is always m.mu -> resolvedMutex. This helper performs only
+// resolved-map access while resolvedMutex is held; history, dispatch, and
+// notification work remain the caller's responsibility.
+func (m *Manager) consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey string, now time.Time) (time.Time, time.Time, bool) {
+	m.resolvedMutex.Lock()
+	defer m.resolvedMutex.Unlock()
+
+	resolved, ok := m.getResolvedAlertNoLock(storageKey)
+	if !ok || resolved == nil || resolved.Alert == nil {
+		return time.Time{}, time.Time{}, false
+	}
+	if !resolved.ResolvedTime.After(now.Add(-recentlyResolvedRetention)) {
+		return time.Time{}, time.Time{}, false
+	}
+
+	startTime := resolved.Alert.StartTime
+	resolvedAt := resolved.ResolvedTime
+	m.removeResolvedAlertUnlocked(storageKey)
+	return startTime, resolvedAt, true
+}
+
 // addRecentlyResolvedWithPrimaryLock records a resolved alert while preserving the caller's
 // ownership of m.mu. Callers must hold m.mu before invoking this helper.
 func (m *Manager) addRecentlyResolvedWithPrimaryLock(resolved *ResolvedAlert) {

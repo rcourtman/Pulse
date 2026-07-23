@@ -2319,6 +2319,7 @@
               "internal/alerts/history_test.go",
               "internal/alerts/intent_policy_test.go",
               "internal/alerts/operational_contract_test.go",
+              "internal/alerts/resolved_lock_discipline_test.go",
               "internal/alerts/synology_test.go",
               "internal/alerts/threshold_resolution_shared_test.go",
               "internal/alerts/update_alerts_test.go",

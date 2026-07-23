@@ -164,8 +164,10 @@ func testHasActiveAlert(t testing.TB, m *Manager, alertID string) bool {
 func testLookupResolvedAlert(t testing.TB, m *Manager, alertID string) (*ResolvedAlert, bool) {
 	t.Helper()
 
-	m.resolvedMutex.RLock()
-	defer m.resolvedMutex.RUnlock()
+	// getResolvedAlertNoLock can repair a missing canonical alias, so lookups
+	// require the write lock even when the resolved alert itself is read-only.
+	m.resolvedMutex.Lock()
+	defer m.resolvedMutex.Unlock()
 
 	if resolved, exists := m.getResolvedAlertNoLock(alertID); exists {
 		return resolved, true

@@ -298,6 +298,16 @@ unbounded history store. `recentlyResolved` must prune expired entries and cap
 the newest retained entries on insert as well as during cleanup, so monitor
 sync and websocket state snapshots remain bounded; durable resolved-alert
 history belongs in the alert history store, not in this live transition cache.
+`recentlyResolved` and `resolvedAlias` have one lock owner:
+`Manager.resolvedMutex`. Every access holds that mutex, including alias-repair
+lookups, which require the write lock. When an operation needs both manager
+state and resolved state, the only permitted nested order is
+`Manager.mu` then `Manager.resolvedMutex`; no path may acquire `Manager.mu`
+while holding `Manager.resolvedMutex`. Resolved critical sections are limited
+to map access and must not dispatch, persist history, invoke callbacks, or
+perform notification work. Canonical lifecycle and stateful cooldown refires
+consume resolved state through the shared lock-order-aware helper, preserve the
+original alert `StartTime`, and keep the five-minute refire/history semantics.
 The browser thresholds surface is also platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. It must use the shared
 FilterBar chip and "+ Filter" pattern for resource filtering, and alert tables

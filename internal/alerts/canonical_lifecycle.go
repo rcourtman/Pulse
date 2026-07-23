@@ -445,23 +445,11 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			return result, true
 		}
 
-		// The resolved maps are resolvedMutex-guarded; take it for the
-		// lookup/removal only and keep history/dispatch outside the lock.
-		var reactivatedAt time.Time
-		reactivated := false
-		m.resolvedMutex.Lock()
-		if resolved, ok := m.getResolvedAlertNoLock(storageKey); ok && resolved != nil && resolved.Alert != nil {
-			if resolved.ResolvedTime.After(time.Now().Add(-5 * time.Minute)) {
-				if !resolved.Alert.StartTime.IsZero() {
-					alert.StartTime = resolved.Alert.StartTime
-				}
-				m.removeResolvedAlertUnlocked(storageKey)
-				reactivated = true
-				reactivatedAt = resolved.ResolvedTime
-			}
-		}
-		m.resolvedMutex.Unlock()
+		reactivatedStart, reactivatedAt, reactivated := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
 		if reactivated {
+			if !reactivatedStart.IsZero() {
+				alert.StartTime = reactivatedStart
+			}
 			if params.AddToHistory {
 				m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
 			}
@@ -618,23 +606,11 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 
 		if existing == nil {
-			// The resolved maps are resolvedMutex-guarded; take it for the
-			// lookup/removal only and keep history/dispatch outside the lock.
-			var reactivatedAt time.Time
-			reactivated := false
-			m.resolvedMutex.Lock()
-			if resolved, ok := m.getResolvedAlertNoLock(storageKey); ok && resolved != nil && resolved.Alert != nil {
-				if resolved.ResolvedTime.After(time.Now().Add(-5 * time.Minute)) {
-					if !resolved.Alert.StartTime.IsZero() {
-						alert.StartTime = resolved.Alert.StartTime
-					}
-					m.removeResolvedAlertUnlocked(storageKey)
-					reactivated = true
-					reactivatedAt = resolved.ResolvedTime
-				}
-			}
-			m.resolvedMutex.Unlock()
+			reactivatedStart, reactivatedAt, reactivated := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
 			if reactivated {
+				if !reactivatedStart.IsZero() {
+					alert.StartTime = reactivatedStart
+				}
 				if params.AddToHistory {
 					m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
 				}
