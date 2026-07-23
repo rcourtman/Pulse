@@ -20,9 +20,14 @@ type actionHandlerProvider interface {
 	ActionHandlerNames() []string
 }
 
+type actionDispatchOperationProvider interface {
+	ActionDispatchOperationKinds() []string
+}
+
 type routedActionExecutor struct {
-	resources *ResourceHandlers
-	byHandler map[string]ActionExecutor
+	resources   *ResourceHandlers
+	byHandler   map[string]ActionExecutor
+	byOperation map[string]ActionExecutor
 }
 
 func newRoutedActionExecutor(resources *ResourceHandlers, executors ...ActionExecutor) ActionExecutor {
@@ -30,8 +35,9 @@ func newRoutedActionExecutor(resources *ResourceHandlers, executors ...ActionExe
 		return nil
 	}
 	routed := routedActionExecutor{
-		resources: resources,
-		byHandler: map[string]ActionExecutor{},
+		resources:   resources,
+		byHandler:   map[string]ActionExecutor{},
+		byOperation: map[string]ActionExecutor{},
 	}
 	for _, executor := range executors {
 		if executor == nil {
@@ -45,6 +51,14 @@ func newRoutedActionExecutor(resources *ResourceHandlers, executors ...ActionExe
 			handler = strings.TrimSpace(handler)
 			if handler != "" {
 				routed.byHandler[handler] = executor
+			}
+		}
+		if operations, ok := executor.(actionDispatchOperationProvider); ok {
+			for _, operation := range operations.ActionDispatchOperationKinds() {
+				operation = strings.TrimSpace(operation)
+				if operation != "" {
+					routed.byOperation[operation] = executor
+				}
 			}
 		}
 	}
@@ -79,7 +93,7 @@ func (e routedActionExecutor) BindActionDispatch(ctx context.Context, record uni
 }
 
 func (e routedActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
-	executor, err := e.executorForAction(ctx, record.Request)
+	executor, err := e.executorForDispatchAttempt(record, attempt)
 	if err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
@@ -88,6 +102,27 @@ func (e routedActionExecutor) ReconcileActionDispatch(ctx context.Context, recor
 		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
 	return reconciler.ReconcileActionDispatch(ctx, record, attempt)
+}
+
+// executorForDispatchAttempt routes query-only recovery from the immutable
+// operation binding committed before dispatch. Current inventory is
+// deliberately not consulted: a successful mutation can replace the resource,
+// while a safe preflight refusal can remove the capability that originally
+// admitted the action. Either outcome must still be able to consume its exact
+// durable receipt and terminalize the audit row.
+func (e routedActionExecutor) executorForDispatchAttempt(record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (ActionExecutor, error) {
+	if strings.TrimSpace(attempt.ActionID) == "" || attempt.ActionID != record.ID {
+		return nil, fmt.Errorf("durable dispatch attempt does not belong to action %q", record.ID)
+	}
+	operation := strings.TrimSpace(attempt.OperationKind)
+	if operation == "" {
+		return nil, fmt.Errorf("durable dispatch operation binding is missing")
+	}
+	executor := e.byOperation[operation]
+	if executor == nil {
+		return nil, fmt.Errorf("unsupported durable dispatch operation %q", operation)
+	}
+	return executor, nil
 }
 
 func (e routedActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {

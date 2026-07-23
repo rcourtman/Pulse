@@ -39,7 +39,7 @@ const agentConnection = (overrides: Partial<Connection> = {}): Connection => ({
   agentVersion: '6.1.0',
   expectedAgentVersion: '6.2.0',
   agentUpdateAvailable: true,
-  agentIdentity: { hostname: 'host-1', platform: 'ubuntu', architecture: 'amd64' },
+  agentIdentity: { hostname: 'host-1', platform: 'linux', architecture: 'amd64' },
   capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
   ...overrides,
 });
@@ -197,41 +197,15 @@ describe('resolveKnownAgentCommandPlatform', () => {
     expect(resolveKnownAgentCommandPlatform(caption)).toBe(expected);
   });
 
-  it.each([
-    'linux',
-    'ubuntu',
-    'debian',
-    'debian 12',
-    'almalinux',
-    'amazon',
-    'arch',
-    'centos',
-    'fedora',
-    'gentoo',
-    'manjaro',
-    'nixos',
-    'openwrt',
-    'opensuse',
-    'oracle',
-    'proxmox',
-    'qnap',
-    'raspbian',
-    'redhat',
-    'rhel',
-    'rocky',
-    'sles',
-    'suse',
-    'synology',
-    'unraid',
-    'Ubuntu 22.04.4 LTS',
-  ])('classifies known linux caption %s as linux', (caption) => {
-    expect(resolveKnownAgentCommandPlatform(caption)).toBe('linux');
+  it('classifies the canonical linux runtime family', () => {
+    expect(resolveKnownAgentCommandPlatform('linux')).toBe('linux');
+    expect(resolveKnownAgentCommandPlatform('LINUX')).toBe('linux');
   });
 
-  it('treats a known distro substring (without trailing space) as unknown', () => {
-    // "ubuntufork" neither equals a known distro nor starts with `${candidate} `,
-    // so the strict resolver refuses to guess.
-    expect(resolveKnownAgentCommandPlatform('ubuntufork')).toBeNull();
+  it('classifies legacy Linux distro identifiers without a distro allowlist', () => {
+    expect(resolveKnownAgentCommandPlatform('mageia')).toBe('linux');
+    expect(resolveKnownAgentCommandPlatform('ubuntu')).toBe('linux');
+    expect(resolveKnownAgentCommandPlatform('ubuntufork')).toBe('linux');
   });
 });
 

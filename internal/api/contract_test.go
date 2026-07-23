@@ -20413,6 +20413,7 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 		"resource.Docker.AgentID",
 		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))",
 		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",
+		"ActionDispatchOperationKinds",
 		"BindActionDispatch",
 		"ReconcileActionDispatch",
 		"dockerContainerExecutionResult",
@@ -20426,6 +20427,24 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	}
 	if !strings.Contains(sharedSrc, "GetAgentForHost(hostname string) (string, bool)") {
 		t.Fatal("shared action command interface must keep hostname-based command-agent resolution available")
+	}
+	for _, snippet := range []string{
+		"byOperation map[string]ActionExecutor",
+		"executorForDispatchAttempt(record, attempt)",
+		"executor := e.byOperation[operation]",
+	} {
+		if !strings.Contains(sharedSrc, snippet) {
+			t.Fatalf("durable recovery routing must use immutable operation binding snippet %q", snippet)
+		}
+	}
+	reconcileStart := strings.Index(sharedSrc, "func (e routedActionExecutor) ReconcileActionDispatch")
+	reconcileEnd := strings.Index(sharedSrc, "func (e routedActionExecutor) CheckActionAvailable")
+	if reconcileStart < 0 || reconcileEnd <= reconcileStart {
+		t.Fatal("shared action executor is missing its bounded reconciliation section")
+	}
+	reconcileSource := sharedSrc[reconcileStart:reconcileEnd]
+	if strings.Contains(reconcileSource, "executorForAction(ctx, record.Request)") {
+		t.Fatal("durable reconciliation must not rediscover its executor from current resource inventory")
 	}
 	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
 		strings.Index(src, "e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))") {

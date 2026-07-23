@@ -1825,23 +1825,30 @@ platform and network evidence, profile drift, and safe repair-handoff support.
 It hashes raw machine IDs, filters malformed interface addresses, and redacts
 unbounded error strings before returning evidence. Derivation must not mutate
 monitor state, probe providers, enqueue commands, or turn a repair hint into
-execution authority. Unknown updater states remain explicit warnings; unknown
-platforms and unverified FreeBSD/pfSense installer state fail closed for
-upgrade-command support. `internal/fleethealth/agent_test.go` and
+execution authority. Runtime-family normalization is shared with agent
+lifecycle through `platformsupport.ResolveAgentRuntimePlatform`. Explicit
+Windows, macOS, and FreeBSD families remain distinct; known unsupported OS
+families and missing evidence fail closed; and unmatched non-empty values from
+legacy agents resolve to Linux because those releases reported gopsutil
+distribution identifiers instead of their compiled GOOS. This intentionally
+avoids a duplicated distro allowlist, so long-tail distributions such as
+Mageia receive the same Linux repair handoff as Ubuntu or Debian. Unknown
+updater states remain explicit warnings, and unverified FreeBSD/pfSense
+installer state still fails closed for upgrade-command support.
+`internal/fleethealth/agent_test.go` and
 `internal/monitoring/agent_fleet_doctor_test.go` are the focused runtime proofs.
 
 Removed-agent rows keep command-scoping identity instead of losing it with the
 live record: host and Docker removal capture the agent's last-known reported
 platform onto the removed record (`RemovedHostAgent.Platform`,
 `RemovedDockerHost.Platform`), and the fleet diagnostic resolves that retained
-value through the same strict platform normalization as live subjects, so
-`/api/agents/diagnostics` reports a platform for a removed agent only when its
-last live report identified one. A retained value that does not normalize to a
-known agent platform yields an empty diagnostic platform rather than a guess,
-and removed Kubernetes clusters retain no platform because the cluster report
-never carries one; downstream host-side cleanup handoffs must treat an empty
-platform as "offer explicitly labeled commands for every family, never one
-guessed executable". The retained field is additive and optional on the
+value through the same runtime-family normalization as live subjects, so
+`/api/agents/diagnostics` reports Linux for retained legacy distro identifiers
+but no platform for missing or explicitly unsupported evidence. Removed
+Kubernetes clusters retain no platform because the cluster report never
+carries one; downstream host-side cleanup handoffs must treat an empty platform
+as "offer explicitly labeled commands for every family, never one guessed
+executable". The retained field is additive and optional on the
 serialized removed lists, so snapshots recorded before the field existed load
 unchanged with an empty platform.
 

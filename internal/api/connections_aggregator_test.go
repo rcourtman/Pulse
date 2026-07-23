@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 )
 
@@ -287,6 +288,34 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 		},
 	) {
 		t.Fatalf("agent identity = %+v", got[0].AgentIdentity)
+	}
+}
+
+func TestBuildConnections_ProjectsLegacyLinuxDistroToRuntimePlatform(t *testing.T) {
+	now := time.Now()
+	got := buildConnections(aggregatorInputs{
+		hosts: []models.Host{{
+			ID:              "mageia-host",
+			Hostname:        "mageia-host",
+			Platform:        "mageia",
+			OSName:          "Mageia",
+			Architecture:    "x86_64",
+			LastSeen:        now,
+			AgentVersion:    "6.1.0-rc.4",
+			CommandsEnabled: true,
+		}},
+		expectedAgentVersion: "6.1.1",
+		now:                  now,
+	})
+
+	if len(got) != 1 || got[0].AgentIdentity == nil {
+		t.Fatalf("expected one connection with agent identity, got %+v", got)
+	}
+	if got[0].AgentIdentity.Platform != platformsupport.RuntimePlatformLinux {
+		t.Fatalf("agent platform = %q, want linux", got[0].AgentIdentity.Platform)
+	}
+	if got[0].AgentIdentity.OSName != "Mageia" {
+		t.Fatalf("agent OS name = %q, want Mageia", got[0].AgentIdentity.OSName)
 	}
 }
 

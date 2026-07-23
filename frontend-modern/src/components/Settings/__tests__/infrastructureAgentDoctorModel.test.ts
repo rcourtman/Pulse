@@ -147,6 +147,25 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toContain('will not guess');
   });
 
+  it('offers the Linux update handoff for a legacy long-tail distro identifier', () => {
+    const connection = connectionFixture({
+      agentIdentity: { hostname: 'mageia-host', platform: 'mageia', osName: 'Mageia' },
+    });
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnosticsAvailable: false,
+      targetVersion: '6.2.0',
+    });
+
+    expect(targets[0]).toMatchObject({
+      source: 'ledger-fallback',
+      needsUpdate: true,
+      commandPlatform: 'linux',
+    });
+    expect(targets[0].commandBlockedReason).toBeUndefined();
+  });
+
   it('classifies eligible v6 convergence as waiting but keeps the manual command available', () => {
     const connection = connectionFixture({
       agentUpdate: {

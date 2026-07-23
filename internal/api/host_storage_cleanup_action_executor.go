@@ -54,6 +54,10 @@ func (e hostStorageCleanupActionExecutor) ActionHandlerNames() []string {
 	return []string{hostStorageCleanupActionHandler}
 }
 
+func (e hostStorageCleanupActionExecutor) ActionDispatchOperationKinds() []string {
+	return []string{agentexec.HostStorageCleanupOperationPackageCache}
+}
+
 func (e hostStorageCleanupActionExecutor) CheckActionAvailable(_ context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
 	if strings.TrimSpace(req.CapabilityName) != hostStorageCleanupCapability {
 		return unified.ResourceActionReadiness{}

@@ -156,6 +156,30 @@ func TestAgentFleetDiagnosticsDoesNotOfferUpgradeCommandForUnknownPlatform(t *te
 	}
 }
 
+func TestAgentFleetDiagnosticsOffersUpgradeCommandForLegacyLinuxDistro(t *testing.T) {
+	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:           "agent-mageia",
+		Hostname:     "mageia-node",
+		Platform:     "mageia",
+		OSName:       "Mageia",
+		Architecture: "x86_64",
+		Status:       "online",
+		LastSeen:     now,
+		AgentVersion: "6.1.0-rc.4",
+	})
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.1.1", now), "agent-agent-mageia")
+	repair := requireRepairCode(t, agent, AgentFleetActionCopyUpgradeCommand)
+	if !repair.Supported || repair.Platform != platformsupport.RuntimePlatformLinux {
+		t.Fatalf("Mageia upgrade repair = %+v, want supported Linux repair", repair)
+	}
+	if agent.Platform != platformsupport.RuntimePlatformLinux {
+		t.Fatalf("Mageia diagnostic platform = %q, want linux", agent.Platform)
+	}
+}
+
 func TestAgentFleetDiagnosticsDoesNotOfferUpgradeCommandForUnverifiedFreeBSDState(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	monitor := newAgentFleetDoctorTestMonitor(t)

@@ -112,6 +112,15 @@ func (e dockerContainerActionExecutor) ActionHandlerNames() []string {
 	return []string{dockerContainerLifecycleHandler, dockerContainerUpdateHandler}
 }
 
+func (e dockerContainerActionExecutor) ActionDispatchOperationKinds() []string {
+	return []string{
+		agentexec.DockerContainerOperationStart,
+		agentexec.DockerContainerOperationStop,
+		agentexec.DockerContainerOperationRestart,
+		agentexec.DockerContainerOperationUpdate,
+	}
+}
+
 func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
 	attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)
 	if !ok || attempt.ActionID != record.ID {

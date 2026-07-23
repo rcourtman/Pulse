@@ -120,8 +120,8 @@ func TestNew_ResolvesProxmoxVEHostIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if agent.platform != "debian" {
-		t.Fatalf("platform = %q, want Debian runtime platform", agent.platform)
+	if agent.platform != "linux" {
+		t.Fatalf("platform = %q, want Linux runtime platform", agent.platform)
 	}
 	if agent.osName != proxmoxPVEOSName {
 		t.Fatalf("osName = %q, want %q", agent.osName, proxmoxPVEOSName)
@@ -1225,6 +1225,28 @@ func TestNormalisePlatformCanonicalisesReportedCaptions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := normalisePlatform(tc.platform); got != tc.want {
 				t.Fatalf("normalisePlatform(%q) = %q, want %q", tc.platform, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormaliseRuntimePlatformUsesBuildTarget(t *testing.T) {
+	cases := []struct {
+		name     string
+		goos     string
+		reported string
+		want     string
+	}{
+		{"linux distro", "linux", "mageia", "linux"},
+		{"macOS caption", "darwin", "darwin", "macos"},
+		{"FreeBSD caption", "freebsd", "FreeBSD 14.1-RELEASE", "freebsd"},
+		{"Windows caption", "windows", "Microsoft Windows 11 Pro", "windows"},
+		{"unknown build target preserves report", "plan9", "plan9", "plan9"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normaliseRuntimePlatform(tc.goos, tc.reported); got != tc.want {
+				t.Fatalf("normaliseRuntimePlatform(%q, %q) = %q, want %q", tc.goos, tc.reported, got, tc.want)
 			}
 		})
 	}

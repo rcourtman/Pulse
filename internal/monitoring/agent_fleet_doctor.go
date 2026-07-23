@@ -749,26 +749,11 @@ func safeAgentUpdatePlatform(subject agentFleetSubject) (string, bool) {
 			platformsupport.RuntimePlatformLinux:
 			return normalized, true
 		}
-		if knownLinuxAgentPlatform(normalized) {
-			return platformsupport.RuntimePlatformLinux, true
+		if runtimePlatform, ok := platformsupport.ResolveAgentRuntimePlatform(normalized); ok {
+			return runtimePlatform, true
 		}
 	}
 	return "", false
-}
-
-func knownLinuxAgentPlatform(value string) bool {
-	value = strings.ToLower(strings.TrimSpace(value))
-	for _, token := range []string{
-		"almalinux", "alpine", "amazon linux", "arch", "centos", "debian",
-		"fedora", "gentoo", "linux", "nixos", "opensuse", "oracle linux",
-		"proxmox", "qnap", "raspbian", "red hat", "rhel", "rocky", "suse",
-		"synology", "ubuntu", "unraid",
-	} {
-		if value == token || strings.Contains(value, token+" ") || strings.Contains(value, token+"-") {
-			return true
-		}
-	}
-	return false
 }
 
 func machineIDFingerprint(machineID string) string {

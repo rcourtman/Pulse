@@ -7712,7 +7712,13 @@ query-only reconciliation, payload-to-tombstone retention, and explicit agent
 receipt-protocol capability gate consumed by the APT adapters. A query
 `not_found`, interrupted record, or replay-denial tombstone leaves the action
 `executing` with its dispatch `receipt_pending`; it never authorizes executor
-or transport resend. Task 10 remains sole schema owner for execution,
+or transport resend. Query-only executor routing is derived from the immutable
+operation kind and action identity committed on the dispatch attempt. Each
+durable executor registers the operation kinds it owns; recovery must not
+rediscover that route through current resource inventory. A successful mutation
+may replace the resource, and a terminal preflight drift refusal may remove the
+capability that admitted the action. In both cases the exact receipt still has
+authority to terminalize its own audit row. Task 10 remains sole schema owner for execution,
 verification, evidence, and compensation truth. Compensation and
 verification-attempt recovery plus mobile/relay inbox and push-dedup
 consumption remain separate work; no mobile or relay-local workaround may
@@ -7721,12 +7727,13 @@ resumption, real browser/lab evidence, and Task 12 certification.
 
 That callable reconciliation path is production-driven, not merely callable:
 the API server runs `RecoverExecutingActions` for every organization from a
-startup background worker and again whenever an agent (re)registers on the
-agentexec command server, because a receipt-pending attempt can only be
-answered while the owning agent is connected. Both triggers reuse the same
-bounded, serialized pass; neither introduces a new resend authority, and a
-disconnected agent simply leaves the action `executing`/`receipt_pending`
-until its next registration re-drives reconciliation.
+startup background worker, on a bounded periodic interval, and whenever an
+agent (re)registers on the agentexec command server, because a receipt-pending
+attempt can only be answered while the owning agent is connected. All triggers
+reuse the same bounded, serialized pass; none introduces a new resend
+authority, and a disconnected agent simply leaves the action
+`executing`/`receipt_pending` until a later periodic or registration pass can
+query it.
 
 Typed Docker / Podman container start, stop, and restart operations extend that
 same durable boundary rather than creating a provider-local action protocol.

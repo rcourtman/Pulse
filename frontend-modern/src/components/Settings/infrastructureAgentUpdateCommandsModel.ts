@@ -113,38 +113,11 @@ const connectionNeedsUpdate = (connection: Connection, targetVersion?: string | 
 const expectedVersionFor = (connection: Connection, targetVersion?: string | null) =>
   connection.expectedAgentVersion?.trim() || formatAgentVersionDisplay(targetVersion) || undefined;
 
-const KNOWN_LINUX_PLATFORMS = new Set([
-  'alpine',
-  'almalinux',
-  'amazon',
-  'arch',
-  'centos',
-  'debian',
-  'fedora',
-  'gentoo',
-  'linux',
-  'manjaro',
-  'nixos',
-  'openwrt',
-  'opensuse',
-  'oracle',
-  'proxmox',
-  'qnap',
-  'raspbian',
-  'redhat',
-  'rhel',
-  'rocky',
-  'sles',
-  'suse',
-  'synology',
-  'ubuntu',
-  'unraid',
-]);
-
 /**
  * Agent Doctor must never turn an unknown platform into an executable command.
- * The general installer defaults unknown values to Linux for legacy callers;
- * this stricter resolver is intentionally limited to host-local repair output.
+ * Pulse only publishes agent binaries for Linux, macOS, FreeBSD, and Windows.
+ * Legacy Linux agents report distro identifiers instead of GOOS, so unmatched
+ * non-empty values are Linux unless they name a known unsupported OS family.
  */
 export const resolveKnownAgentCommandPlatform = (
   platform?: string | null,
@@ -168,14 +141,31 @@ export const resolveKnownAgentCommandPlatform = (
   ) {
     return 'freebsd';
   }
-  if (
-    normalized.includes('linux') ||
-    KNOWN_LINUX_PLATFORMS.has(normalized) ||
-    Array.from(KNOWN_LINUX_PLATFORMS).some((candidate) => normalized.startsWith(`${candidate} `))
-  ) {
-    return 'linux';
+  for (const unsupported of [
+    'aix',
+    'android',
+    'beos',
+    'dragonfly',
+    'haiku',
+    'hurd',
+    'illumos',
+    'ios',
+    'js',
+    'netbsd',
+    'openbsd',
+    'plan9',
+    'solaris',
+    'wasip1',
+  ]) {
+    if (
+      normalized === unsupported ||
+      normalized.startsWith(`${unsupported} `) ||
+      normalized.startsWith(`${unsupported}-`)
+    ) {
+      return null;
+    }
   }
-  return null;
+  return 'linux';
 };
 
 const pushTarget = (

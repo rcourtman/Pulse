@@ -59,6 +59,10 @@ func (e hostUpdateActionExecutor) ActionHandlerNames() []string {
 	return []string{hostPackageUpdateActionHandler}
 }
 
+func (e hostUpdateActionExecutor) ActionDispatchOperationKinds() []string {
+	return []string{agentexec.HostUpdateOperationInstall}
+}
+
 func (e hostUpdateActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
 	if strings.TrimSpace(req.CapabilityName) != hostPackageUpdateCapability {
 		return unified.ResourceActionReadiness{}

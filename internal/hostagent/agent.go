@@ -280,7 +280,7 @@ func New(cfg Config) (*Agent, error) {
 		agentID = hostname
 	}
 
-	platform := normalisePlatform(info.Platform)
+	platform := normaliseRuntimePlatform(collector.GOOS(), info.Platform)
 	// Use Platform (specific distro like "ubuntu") over PlatformFamily (distro family like "debian")
 	// This ensures Ubuntu shows as "ubuntu 24.04" not "debian 24.04" (refs #927)
 	osName := strings.TrimSpace(info.Platform)
@@ -1382,6 +1382,21 @@ func normalisePlatform(platform string) string {
 		return runtimePlatform
 	}
 	return normalized
+}
+
+func normaliseRuntimePlatform(goos, reportedPlatform string) string {
+	switch strings.ToLower(strings.TrimSpace(goos)) {
+	case "linux":
+		return platformsupport.RuntimePlatformLinux
+	case "darwin":
+		return platformsupport.RuntimePlatformMacOS
+	case "freebsd":
+		return platformsupport.RuntimePlatformFreeBSD
+	case "windows":
+		return platformsupport.RuntimePlatformWindows
+	default:
+		return normalisePlatform(reportedPlatform)
+	}
 }
 
 func normalizePulseURL(rawURL string) (string, error) {

@@ -414,6 +414,19 @@ spellings as the same recovered state while preserving the same fail-closed
 URL-plus-token threshold. Windows stale-agent update commands remain on the
 existing token-gated install transport until the Windows installer owns an
 equivalent saved-state update mode.
+The report contract separates runtime family from OS identity. Newly built
+agents derive `Host.Platform` from their compiled GOOS and keep the
+distribution or appliance caption in `Host.OSName`; a Mageia agent therefore
+reports `linux` plus `Mageia`, not `mageia` as an unclassified runtime. Server
+ingest and connection-ledger projection must remain compatible with older
+agents whose gopsutil platform field contains a Linux distribution identifier.
+That compatibility is expressed once through
+`platformsupport.ResolveAgentRuntimePlatform`: Pulse's published Windows,
+macOS, and FreeBSD families resolve explicitly, known unsupported OS families
+fail closed, and the remaining non-empty legacy distribution identifiers
+resolve to Linux without a distro allowlist. Agent Doctor's browser fallback
+mirrors that bounded release-family rule so a stale server payload cannot
+regress long-tail Linux distributions back to an unavailable manual command.
 Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
 surface: `GET /api/agents/diagnostics` may explain stale versions, missing
 reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,
@@ -429,9 +442,11 @@ Repair entries remain handoffs to existing lifecycle operations:
 `copy_upgrade_command` renders a local operator command and
 `allow_reenroll` invokes the existing removed-agent flow. They never enqueue a
 remote command or create an action plan. A stale agent with an unknown or
-unsupported platform, or with FreeBSD/pfSense installer state that the server
-cannot verify, must receive an unsupported handoff rather than a guessed
-command. When automatic update is enabled and checking or applying, Agent
+explicitly unsupported runtime family, or with FreeBSD/pfSense installer state
+that the server cannot verify, must receive an unsupported handoff rather than
+a guessed command. A non-empty legacy Linux distribution identifier is not
+unknown: it resolves through the published agent runtime-family contract.
+When automatic update is enabled and checking or applying, Agent
 Doctor waits and reports that state instead of prematurely offering a manual
 installer path. The `agentDoctor` route key is canonical; the older
 `agentUpdates` deep link remains a read-side compatibility alias only. Agent

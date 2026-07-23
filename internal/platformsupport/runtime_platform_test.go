@@ -54,3 +54,31 @@ func TestAgentCommandPlatform(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveAgentRuntimePlatform(t *testing.T) {
+	cases := []struct {
+		name     string
+		platform string
+		want     string
+		ok       bool
+	}{
+		{"missing", "", "", false},
+		{"canonical linux", "linux", RuntimePlatformLinux, true},
+		{"legacy mageia distro", "Mageia", RuntimePlatformLinux, true},
+		{"legacy slackware distro", "slackware 15.0", RuntimePlatformLinux, true},
+		{"windows caption", "Microsoft Windows 11 Pro", RuntimePlatformWindows, true},
+		{"darwin", "darwin", RuntimePlatformMacOS, true},
+		{"freebsd caption", "FreeBSD 14.1-RELEASE", RuntimePlatformFreeBSD, true},
+		{"unsupported haiku", "Haiku", "", false},
+		{"unsupported plan9 caption", "plan9-9front", "", false},
+		{"unsupported openbsd caption", "OpenBSD 7.7", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ResolveAgentRuntimePlatform(tc.platform)
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("ResolveAgentRuntimePlatform(%q) = (%q, %t), want (%q, %t)", tc.platform, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}

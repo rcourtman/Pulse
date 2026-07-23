@@ -519,6 +519,14 @@ without blind redispatch, and an interrupted, missing, conflicting, or
 tombstoned receipt cannot authorize another mutation. Storage/recovery code must
 not add a Docker-specific receipt journal, infer restore readiness from a
 terminal container action, or represent cleanup as recovery compensation.
+Query-only reconciliation routes that receipt through the immutable action id
+and operation kind recorded on the admitted dispatch attempt, not through the
+resource's current capability inventory. A completed mutation may replace the
+resource, while a safe update preflight refusal may remove the capability that
+admitted the action; neither condition may strand terminal agent truth or
+authorize redispatch. This routing remains API/action-lifecycle authority, and
+storage/recovery consumers gain no executor selection or recovery authority
+from the operation binding.
 Disconnected command-agent readiness for those lifecycle actions remains an
 API/runtime fail-closed condition; storage/recovery consumers may observe that
 an action is unavailable, but must not reinterpret it as recovery degradation

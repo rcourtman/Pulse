@@ -1232,7 +1232,11 @@ func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {
 }
 
 func connectionAgentPlatformForHost(host models.Host, hostProfile string) string {
-	return platformsupport.NormalizeRuntimePlatformForAgentHostProfile(hostProfile, host.Platform)
+	platform := platformsupport.NormalizeRuntimePlatformForAgentHostProfile(hostProfile, host.Platform)
+	if runtimePlatform, ok := platformsupport.ResolveAgentRuntimePlatform(platform); ok {
+		return runtimePlatform
+	}
+	return platformsupport.NormalizeAgentReportedPlatform(platform)
 }
 
 func connectionAgentHostProfileForHost(host models.Host) string {
