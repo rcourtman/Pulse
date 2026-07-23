@@ -108,3 +108,69 @@ func TestApplySSORoleAssignmentsUsesAuthoritativeMapping(t *testing.T) {
 		t.Fatalf("updated roles = %q, want viewer", got)
 	}
 }
+
+func TestApplySSORoleAssignmentsMovesLegacySQLiteAlias(t *testing.T) {
+	manager, err := auth.NewSQLiteManager(auth.SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+	if err := manager.UpdateUserRoles("alice@example.com", []string{auth.RoleViewer}); err != nil {
+		t.Fatalf("seed legacy assignment: %v", err)
+	}
+	principal := "sso:oidc:okta:stable"
+
+	if err := applySSORoleAssignments(
+		manager,
+		principal,
+		[]string{"alice@example.com"},
+		nil,
+		false,
+		true,
+	); err != nil {
+		t.Fatalf("applySSORoleAssignments: %v", err)
+	}
+
+	assignment, ok := manager.GetUserAssignment(principal)
+	if !ok || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != auth.RoleViewer {
+		t.Fatalf("canonical assignment = %#v, exists=%v", assignment, ok)
+	}
+	if stale, ok := manager.GetUserAssignment("alice@example.com"); ok {
+		t.Fatalf("legacy alias retained a reusable grant: %#v", stale)
+	}
+}
+
+func TestApplySSORoleAssignmentsRejectsConflictingLegacySQLiteAlias(t *testing.T) {
+	manager, err := auth.NewSQLiteManager(auth.SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+	if err := manager.UpdateUserRoles("alice@example.com", []string{auth.RoleAdmin}); err != nil {
+		t.Fatalf("seed legacy assignment: %v", err)
+	}
+	principal := "sso:oidc:okta:stable"
+	if err := manager.UpdateUserRoles(principal, []string{auth.RoleViewer}); err != nil {
+		t.Fatalf("seed canonical assignment: %v", err)
+	}
+
+	err = applySSORoleAssignments(
+		manager,
+		principal,
+		[]string{"alice@example.com"},
+		nil,
+		false,
+		true,
+	)
+	if err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("error = %v, want a conflicting-grant failure", err)
+	}
+	canonical, ok := manager.GetUserAssignment(principal)
+	if !ok || len(canonical.RoleIDs) != 1 || canonical.RoleIDs[0] != auth.RoleViewer {
+		t.Fatalf("canonical assignment changed: %#v, exists=%v", canonical, ok)
+	}
+	legacy, ok := manager.GetUserAssignment("alice@example.com")
+	if !ok || len(legacy.RoleIDs) != 1 || legacy.RoleIDs[0] != auth.RoleAdmin {
+		t.Fatalf("legacy assignment changed before conflict resolution: %#v, exists=%v", legacy, ok)
+	}
+}

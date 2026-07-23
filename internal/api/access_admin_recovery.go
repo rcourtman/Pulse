@@ -34,7 +34,17 @@ func VerifyRBACIntegrity(provider *TenantRBACProvider, orgID string) RBACIntegri
 	result.DBAccessible = true
 
 	// If manager access succeeds, schema queries are available through manager methods.
-	roles := manager.GetRoles()
+	var roles []auth.Role
+	if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+		roles, err = errorAware.GetRolesWithError()
+		if err != nil {
+			result.Error = fmt.Sprintf("failed to read roles: %v", err)
+			RecordRBACIntegrityCheck("unhealthy")
+			return result
+		}
+	} else {
+		roles = manager.GetRoles()
+	}
 	result.TablesPresent = true
 	result.TotalRoles = len(roles)
 
@@ -44,7 +54,18 @@ func VerifyRBACIntegrity(provider *TenantRBACProvider, orgID string) RBACIntegri
 		}
 	}
 
-	assignments := manager.GetUserAssignments()
+	var assignments []auth.UserRoleAssignment
+	if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+		assignments, err = errorAware.GetUserAssignmentsWithError()
+		if err != nil {
+			result.Error = fmt.Sprintf("failed to read assignments: %v", err)
+			result.TablesPresent = false
+			RecordRBACIntegrityCheck("unhealthy")
+			return result
+		}
+	} else {
+		assignments = manager.GetUserAssignments()
+	}
 	result.TotalAssignments = len(assignments)
 
 	// Healthy if db accessible, tables present, and at least 4 built-in roles exist.

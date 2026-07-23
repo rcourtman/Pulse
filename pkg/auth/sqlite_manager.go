@@ -3,8 +3,13 @@ package auth
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,7 +105,8 @@ func NewSQLiteManager(cfg SQLiteManagerConfig) (*SQLiteManager, error) {
 	// Migrate from file-based storage if requested
 	if cfg.MigrateFromFiles {
 		if err := m.migrateFromFiles(dataDir); err != nil {
-			log.Warn().Err(err).Msg("Failed to migrate RBAC from files (may not exist)")
+			db.Close()
+			return nil, fmt.Errorf("migrate legacy RBAC data: %w", err)
 		}
 	}
 
@@ -134,13 +140,26 @@ func (m *SQLiteManager) initSchema() error {
 	);
 
 	-- User role assignments
+	CREATE TABLE IF NOT EXISTS rbac_users (
+		username TEXT PRIMARY KEY,
+		updated_at INTEGER NOT NULL
+	);
+
 	CREATE TABLE IF NOT EXISTS rbac_user_assignments (
 		username TEXT NOT NULL,
 		role_id TEXT NOT NULL,
 		updated_at INTEGER NOT NULL,
 		PRIMARY KEY (username, role_id),
+		FOREIGN KEY (username) REFERENCES rbac_users(username) ON DELETE CASCADE,
 		FOREIGN KEY (role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE
 	);
+
+	-- Backfill the identity table for databases created before rbac_users
+	-- existed. This preserves users when their last role is removed.
+	INSERT OR IGNORE INTO rbac_users (username, updated_at)
+	SELECT username, MAX(updated_at)
+	FROM rbac_user_assignments
+	GROUP BY username;
 
 	-- Change log
 	CREATE TABLE IF NOT EXISTS rbac_changelog (
@@ -254,17 +273,30 @@ func (m *SQLiteManager) Close() error {
 
 // GetRoles returns all roles.
 func (m *SQLiteManager) GetRoles() []Role {
+	roles, err := m.GetRolesWithError()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to query roles")
+		return nil
+	}
+	return roles
+}
+
+// GetRolesWithError returns all roles and preserves storage errors.
+func (m *SQLiteManager) GetRolesWithError() ([]Role, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	return m.getRolesUnsafe()
+}
+
+func (m *SQLiteManager) getRolesUnsafe() ([]Role, error) {
 	rows, err := m.db.Query(`
 		SELECT id, name, description, parent_id, is_built_in, priority, created_at, updated_at
 		FROM rbac_roles
 		ORDER BY name
 	`)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to query roles")
-		return nil
+		return nil, err
 	}
 
 	// Collect roles first, then close rows before loading permissions
@@ -277,8 +309,8 @@ func (m *SQLiteManager) GetRoles() []Role {
 		var isBuiltIn int
 
 		if err := rows.Scan(&role.ID, &role.Name, &role.Description, &parentID, &isBuiltIn, &role.Priority, &createdAt, &updatedAt); err != nil {
-			log.Error().Err(err).Msg("Failed to scan role")
-			continue
+			rows.Close()
+			return nil, err
 		}
 
 		role.ParentID = parentID.String
@@ -288,25 +320,46 @@ func (m *SQLiteManager) GetRoles() []Role {
 
 		roles = append(roles, role)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
 	// Load permissions after releasing the connection
 	for i := range roles {
-		roles[i].Permissions = m.loadRolePermissions(roles[i].ID)
+		permissions, err := m.loadRolePermissionsWithError(roles[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		roles[i].Permissions = permissions
 	}
 
-	return roles
+	if roles == nil {
+		roles = []Role{}
+	}
+	return roles, nil
 }
 
 func (m *SQLiteManager) loadRolePermissions(roleID string) []Permission {
+	permissions, err := m.loadRolePermissionsWithError(roleID)
+	if err != nil {
+		log.Error().Err(err).Str("roleId", roleID).Msg("Failed to query permissions")
+		return nil
+	}
+	return permissions
+}
+
+func (m *SQLiteManager) loadRolePermissionsWithError(roleID string) ([]Permission, error) {
 	rows, err := m.db.Query(`
 		SELECT action, resource, effect, conditions
 		FROM rbac_permissions
 		WHERE role_id = ?
 	`, roleID)
 	if err != nil {
-		log.Error().Err(err).Str("roleId", roleID).Msg("Failed to query permissions")
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -316,20 +369,25 @@ func (m *SQLiteManager) loadRolePermissions(roleID string) []Permission {
 		var conditions sql.NullString
 
 		if err := rows.Scan(&perm.Action, &perm.Resource, &perm.Effect, &conditions); err != nil {
-			log.Error().Err(err).Msg("Failed to scan permission")
-			continue
+			return nil, err
 		}
 
 		if conditions.Valid && conditions.String != "" {
 			if err := json.Unmarshal([]byte(conditions.String), &perm.Conditions); err != nil {
-				log.Error().Err(err).Msg("Failed to parse permission conditions")
+				return nil, fmt.Errorf("parse conditions for role %s: %w", roleID, err)
 			}
 		}
 
 		perms = append(perms, perm)
 	}
 
-	return perms
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if perms == nil {
+		perms = []Permission{}
+	}
+	return perms, nil
 }
 
 // GetRole returns a role by ID.
@@ -531,77 +589,138 @@ func (m *SQLiteManager) DeleteRoleWithContext(id string, username string) error 
 
 // GetUserAssignments returns all user role assignments.
 func (m *SQLiteManager) GetUserAssignments() []UserRoleAssignment {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// Collect usernames first, then close rows before nested queries
-	// (avoids holding the connection during nested queries with MaxOpenConns=1)
-	rows, err := m.db.Query("SELECT DISTINCT username FROM rbac_user_assignments")
+	assignments, err := m.GetUserAssignmentsWithError()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query user assignments")
 		return nil
+	}
+	return assignments
+}
+
+// GetUserAssignmentsWithError returns every known RBAC identity, including
+// identities that currently have no roles, and preserves storage errors.
+func (m *SQLiteManager) GetUserAssignmentsWithError() ([]UserRoleAssignment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.getUserAssignmentsUnsafe()
+}
+
+func (m *SQLiteManager) getUserAssignmentsUnsafe() ([]UserRoleAssignment, error) {
+	// Collect identities first, then close rows before nested queries
+	// (avoids holding the connection during nested queries with MaxOpenConns=1)
+	rows, err := m.db.Query("SELECT username FROM rbac_users ORDER BY username")
+	if err != nil {
+		return nil, err
 	}
 
 	var usernames []string
 	for rows.Next() {
 		var username string
 		if err := rows.Scan(&username); err != nil {
-			continue
+			rows.Close()
+			return nil, err
 		}
 		usernames = append(usernames, username)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 
 	var assignments []UserRoleAssignment
 	for _, username := range usernames {
-		assignment := m.getUserAssignmentUnsafe(username)
-		if len(assignment.RoleIDs) > 0 {
-			assignments = append(assignments, assignment)
+		assignment, _, err := m.getUserAssignmentWithErrorUnsafe(username)
+		if err != nil {
+			return nil, err
 		}
+		assignments = append(assignments, assignment)
 	}
 
-	return assignments
+	if assignments == nil {
+		assignments = []UserRoleAssignment{}
+	}
+	return assignments, nil
 }
 
 func (m *SQLiteManager) getUserAssignmentUnsafe(username string) UserRoleAssignment {
+	assignment, _, err := m.getUserAssignmentWithErrorUnsafe(username)
+	if err != nil {
+		log.Error().Err(err).Str("username", username).Msg("Failed to query user assignment")
+		return UserRoleAssignment{Username: username}
+	}
+	return assignment
+}
+
+func (m *SQLiteManager) getUserAssignmentWithErrorUnsafe(username string) (UserRoleAssignment, bool, error) {
+	var userUpdatedAt int64
+	err := m.db.QueryRow(`
+		SELECT updated_at
+		FROM rbac_users
+		WHERE username = ?
+	`, username).Scan(&userUpdatedAt)
+	if err == sql.ErrNoRows {
+		return UserRoleAssignment{Username: username, RoleIDs: []string{}}, false, nil
+	}
+	if err != nil {
+		return UserRoleAssignment{}, false, err
+	}
+
 	rows, err := m.db.Query(`
 		SELECT role_id, updated_at
 		FROM rbac_user_assignments
 		WHERE username = ?
+		ORDER BY role_id
 	`, username)
 	if err != nil {
-		return UserRoleAssignment{Username: username}
+		return UserRoleAssignment{}, false, err
 	}
 	defer rows.Close()
 
-	var roleIDs []string
-	var latestUpdate int64
+	roleIDs := []string{}
+	latestUpdate := userUpdatedAt
 	for rows.Next() {
 		var roleID string
 		var updatedAt int64
 		if err := rows.Scan(&roleID, &updatedAt); err != nil {
-			continue
+			return UserRoleAssignment{}, false, err
 		}
 		roleIDs = append(roleIDs, roleID)
 		if updatedAt > latestUpdate {
 			latestUpdate = updatedAt
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return UserRoleAssignment{}, false, err
+	}
 
 	return UserRoleAssignment{
 		Username:  username,
 		RoleIDs:   roleIDs,
 		UpdatedAt: time.Unix(latestUpdate, 0),
-	}
+	}, true, nil
 }
 
 // GetUserAssignment returns the role assignment for a user.
 func (m *SQLiteManager) GetUserAssignment(username string) (UserRoleAssignment, bool) {
+	assignment, ok, err := m.GetUserAssignmentWithError(username)
+	if err != nil {
+		log.Error().Err(err).Str("username", username).Msg("Failed to query user assignment")
+		return UserRoleAssignment{}, false
+	}
+	return assignment, ok
+}
+
+// GetUserAssignmentWithError returns an assignment and preserves storage
+// errors. A known identity with zero roles still exists.
+func (m *SQLiteManager) GetUserAssignmentWithError(username string) (UserRoleAssignment, bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	assignment := m.getUserAssignmentUnsafe(username)
-	return assignment, len(assignment.RoleIDs) > 0
+	return m.getUserAssignmentWithErrorUnsafe(username)
 }
 
 // AssignRole adds a role to a user.
@@ -619,12 +738,26 @@ func (m *SQLiteManager) AssignRole(username string, roleID string) error {
 	}
 
 	now := time.Now().Unix()
-	_, err := m.db.Exec(`
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`
+		INSERT INTO rbac_users (username, updated_at)
+		VALUES (?, ?)
+		ON CONFLICT(username) DO UPDATE SET updated_at = excluded.updated_at
+	`, username, now); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
 		INSERT OR IGNORE INTO rbac_user_assignments (username, role_id, updated_at)
 		VALUES (?, ?, ?)
-	`, username, roleID, now)
-
-	return err
+	`, username, roleID, now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // UpdateUserRoles replaces all roles for a user.
@@ -658,6 +791,15 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	now := time.Now().Unix()
+	if _, err = tx.Exec(`
+		INSERT INTO rbac_users (username, updated_at)
+		VALUES (?, ?)
+		ON CONFLICT(username) DO UPDATE SET updated_at = excluded.updated_at
+	`, username, now); err != nil {
+		return err
+	}
+
 	// Delete existing assignments
 	_, err = tx.Exec("DELETE FROM rbac_user_assignments WHERE username = ?", username)
 	if err != nil {
@@ -665,7 +807,6 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	}
 
 	// Insert new assignments
-	now := time.Now().Unix()
 	for _, roleID := range roleIDs {
 		_, err = tx.Exec(`
 			INSERT INTO rbac_user_assignments (username, role_id, updated_at)
@@ -688,6 +829,94 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	return nil
 }
 
+// MigrateUserAssignment atomically moves a legacy identity alias to a
+// canonical principal. Conflicting canonical roles fail closed rather than
+// unioning grants and accidentally escalating access.
+func (m *SQLiteManager) MigrateUserAssignment(fromUsername, toUsername string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	fromUsername = strings.TrimSpace(fromUsername)
+	toUsername = strings.TrimSpace(toUsername)
+	if fromUsername == "" || toUsername == "" {
+		return fmt.Errorf("source and destination usernames are required")
+	}
+	if fromUsername == toUsername {
+		return nil
+	}
+
+	source, sourceExists, err := m.getUserAssignmentWithErrorUnsafe(fromUsername)
+	if err != nil {
+		return err
+	}
+	if !sourceExists {
+		return nil
+	}
+	target, targetExists, err := m.getUserAssignmentWithErrorUnsafe(toUsername)
+	if err != nil {
+		return err
+	}
+	sourceRoleIDs := append([]string{}, source.RoleIDs...)
+	targetRoleIDs := append([]string{}, target.RoleIDs...)
+	sort.Strings(sourceRoleIDs)
+	sort.Strings(targetRoleIDs)
+	if targetExists && len(targetRoleIDs) > 0 &&
+		strings.Join(sourceRoleIDs, "\x00") != strings.Join(targetRoleIDs, "\x00") {
+		return fmt.Errorf("canonical assignment for %q conflicts with legacy identity %q", toUsername, fromUsername)
+	}
+
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now().Unix()
+	if _, err := tx.Exec(`
+		INSERT INTO rbac_users (username, updated_at)
+		VALUES (?, ?)
+		ON CONFLICT(username) DO UPDATE SET updated_at = excluded.updated_at
+	`, toUsername, now); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM rbac_user_assignments WHERE username = ?", toUsername); err != nil {
+		return err
+	}
+	for _, roleID := range sourceRoleIDs {
+		if _, err := tx.Exec(`
+			INSERT INTO rbac_user_assignments (username, role_id, updated_at)
+			VALUES (?, ?, ?)
+		`, toUsername, roleID, now); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM rbac_user_assignments WHERE username = ?", fromUsername); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM rbac_users WHERE username = ?", fromUsername); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	oldValueJSON, _ := json.Marshal(source)
+	newValueJSON, _ := json.Marshal(UserRoleAssignment{
+		Username:  toUsername,
+		RoleIDs:   sourceRoleIDs,
+		UpdatedAt: time.Unix(now, 0),
+	})
+	m.logChangeUnsafe(
+		ActionUserRolesUpdate,
+		"assignment",
+		toUsername,
+		string(oldValueJSON),
+		string(newValueJSON),
+		"identity-migration",
+	)
+	return nil
+}
+
 // RemoveRole removes a role from a user.
 func (m *SQLiteManager) RemoveRole(username string, roleID string) error {
 	m.mu.Lock()
@@ -703,30 +932,47 @@ func (m *SQLiteManager) RemoveRole(username string, roleID string) error {
 
 // GetUserPermissions returns the effective permissions for a user.
 func (m *SQLiteManager) GetUserPermissions(username string) []Permission {
+	permissions, err := m.GetUserPermissionsWithError(username)
+	if err != nil {
+		log.Error().Err(err).Str("username", username).Msg("Failed to query user permissions")
+		return nil
+	}
+	return permissions
+}
+
+// GetUserPermissionsWithError returns effective permissions and preserves
+// storage failures.
+func (m *SQLiteManager) GetUserPermissionsWithError(username string) ([]Permission, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	assignment := m.getUserAssignmentUnsafe(username)
+	assignment, _, err := m.getUserAssignmentWithErrorUnsafe(username)
+	if err != nil {
+		return nil, err
+	}
 	if len(assignment.RoleIDs) == 0 {
-		return nil
+		return []Permission{}, nil
 	}
 
 	// Collect unique permissions from all assigned roles
 	permMap := make(map[string]Permission)
 	for _, roleID := range assignment.RoleIDs {
-		perms := m.loadRolePermissions(roleID)
+		perms, err := m.loadRolePermissionsWithError(roleID)
+		if err != nil {
+			return nil, err
+		}
 		for _, perm := range perms {
 			key := perm.Action + ":" + perm.Resource + ":" + perm.GetEffect()
 			permMap[key] = perm
 		}
 	}
 
-	var perms []Permission
+	perms := make([]Permission, 0, len(permMap))
 	for _, perm := range permMap {
 		perms = append(perms, perm)
 	}
 
-	return perms
+	return perms, nil
 }
 
 // GetRoleWithInheritance returns a role and all inherited permissions.
@@ -936,53 +1182,438 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 		return fmt.Errorf("resolve legacy assignments backup path: %w", err)
 	}
 
-	// Check if migration is needed
-	var roleCount int
-	if err := m.db.QueryRow("SELECT COUNT(*) FROM rbac_roles WHERE is_built_in = 0").Scan(&roleCount); err != nil {
-		log.Warn().Err(err).Msg("Failed to count custom roles before migration")
+	roles, rolesExist, err := readLegacyRBACFile[Role](rolesFile, "roles")
+	if err != nil {
+		return err
 	}
-	if roleCount > 0 {
-		return nil // Already have custom roles, skip migration
+	assignments, assignmentsExist, err := readLegacyRBACFile[UserRoleAssignment](assignmentsFile, "assignments")
+	if err != nil {
+		return err
+	}
+	if !rolesExist && !assignmentsExist {
+		return nil
+	}
+	if rolesExist {
+		rolesBackup, err = availableLegacyBackupPath(rolesBackup)
+		if err != nil {
+			return err
+		}
+	}
+	if assignmentsExist {
+		assignmentsBackup, err = availableLegacyBackupPath(assignmentsBackup)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Migrate roles
-	if data, err := securityutil.ReadSecureStorageFile(rolesFile, maxLegacyRBACFileSize); err == nil {
-		var roles []Role
-		if err := json.Unmarshal(data, &roles); err == nil {
-			for _, role := range roles {
-				if !role.IsBuiltIn {
-					if err := m.SaveRoleWithContext(role, "migration"); err != nil {
-						log.Warn().Err(err).Str("roleId", role.ID).Msg("Failed to migrate role")
-					}
-				}
+	if err := m.importLegacyRBAC(roles, assignments); err != nil {
+		return err
+	}
+
+	// Source files remain untouched until the complete import transaction has
+	// committed. A rename failure is returned so an operator can resolve it;
+	// the next start safely verifies the imported records before retrying.
+	if rolesExist {
+		if err := securityutil.RenameSecureStorageFile(rolesFile, rolesBackup); err != nil {
+			return fmt.Errorf("archive migrated legacy roles: %w", err)
+		}
+	}
+	if assignmentsExist {
+		if err := securityutil.RenameSecureStorageFile(assignmentsFile, assignmentsBackup); err != nil {
+			return fmt.Errorf("archive migrated legacy assignments: %w", err)
+		}
+	}
+
+	log.Info().
+		Int("roles", len(roles)).
+		Int("assignments", len(assignments)).
+		Msg("Migrated legacy RBAC data to SQLite")
+	return nil
+}
+
+func readLegacyRBACFile[T any](path, kind string) ([]T, bool, error) {
+	data, err := securityutil.ReadSecureStorageFile(path, maxLegacyRBACFileSize)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("read legacy RBAC %s: %w", kind, err)
+	}
+
+	var records []T
+	if err := json.Unmarshal(data, &records); err != nil {
+		return nil, true, fmt.Errorf("decode legacy RBAC %s: %w", kind, err)
+	}
+	if records == nil {
+		records = []T{}
+	}
+	return records, true, nil
+}
+
+func availableLegacyBackupPath(path string) (string, error) {
+	for index := 0; index < 1000; index++ {
+		candidate := path
+		if index > 0 {
+			candidate = fmt.Sprintf("%s.%d", path, index)
+		}
+		_, err := os.Lstat(candidate)
+		if errors.Is(err, os.ErrNotExist) {
+			return candidate, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("inspect legacy RBAC backup %s: %w", filepath.Base(candidate), err)
+		}
+	}
+	return "", fmt.Errorf("too many legacy RBAC backups for %s", filepath.Base(path))
+}
+
+func (m *SQLiteManager) importLegacyRBAC(roles []Role, assignments []UserRoleAssignment) error {
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	existingRoles, err := loadMigrationRoles(tx)
+	if err != nil {
+		return fmt.Errorf("load current roles: %w", err)
+	}
+
+	legacyRoles := make(map[string]Role, len(roles))
+	for _, role := range roles {
+		if strings.TrimSpace(role.ID) == "" {
+			return fmt.Errorf("legacy role has an empty ID")
+		}
+		if previous, duplicate := legacyRoles[role.ID]; duplicate {
+			if canonicalRole(previous) != canonicalRole(role) {
+				return fmt.Errorf("conflicting duplicate legacy role %q", role.ID)
 			}
-			log.Info().Int("count", len(roles)).Msg("Migrated roles from file")
+			continue
+		}
+		legacyRoles[role.ID] = role
+	}
 
-			// Rename old file
-			if err := securityutil.RenameSecureStorageFile(rolesFile, rolesBackup); err != nil {
-				log.Warn().Err(err).Msg("Failed to rename migrated roles file")
+	parentByRole := make(map[string]string, len(existingRoles)+len(legacyRoles))
+	for id, role := range existingRoles {
+		parentByRole[id] = role.ParentID
+	}
+	for id, role := range legacyRoles {
+		if role.IsBuiltIn {
+			existing, ok := existingRoles[id]
+			if !ok || !existing.IsBuiltIn {
+				return fmt.Errorf("legacy built-in role %q is not recognized", id)
+			}
+			if canonicalRole(existing) != canonicalRole(role) {
+				return fmt.Errorf("legacy built-in role %q differs from the canonical definition", id)
+			}
+			continue
+		}
+		if existing, ok := existingRoles[id]; ok && canonicalRole(existing) != canonicalRole(role) {
+			return fmt.Errorf("legacy role %q conflicts with current v6 data", id)
+		}
+		parentByRole[id] = role.ParentID
+	}
+	for id, parentID := range parentByRole {
+		if parentID != "" {
+			if _, ok := parentByRole[parentID]; !ok {
+				return fmt.Errorf("role %q references missing parent %q", id, parentID)
+			}
+		}
+	}
+	if err := validateRoleParentGraph(parentByRole); err != nil {
+		return err
+	}
+
+	newRoleIDs := make([]string, 0, len(legacyRoles))
+	for id, role := range legacyRoles {
+		if role.IsBuiltIn {
+			continue
+		}
+		if _, exists := existingRoles[id]; exists {
+			continue
+		}
+		if strings.TrimSpace(role.Name) == "" {
+			return fmt.Errorf("legacy role %q has an empty name", id)
+		}
+		createdAt := role.CreatedAt.Unix()
+		updatedAt := role.UpdatedAt.Unix()
+		now := time.Now().Unix()
+		if role.CreatedAt.IsZero() {
+			createdAt = now
+		}
+		if role.UpdatedAt.IsZero() {
+			updatedAt = createdAt
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO rbac_roles
+				(id, name, description, parent_id, is_built_in, priority, created_at, updated_at)
+			VALUES (?, ?, ?, NULL, 0, ?, ?, ?)
+		`, role.ID, role.Name, role.Description, role.Priority, createdAt, updatedAt); err != nil {
+			return fmt.Errorf("insert legacy role %q: %w", role.ID, err)
+		}
+		for _, permission := range role.Permissions {
+			if strings.TrimSpace(permission.Action) == "" || strings.TrimSpace(permission.Resource) == "" {
+				return fmt.Errorf("legacy role %q has an invalid permission", role.ID)
+			}
+			effect := permission.GetEffect()
+			if effect != EffectAllow && effect != EffectDeny {
+				return fmt.Errorf("legacy role %q has invalid permission effect %q", role.ID, effect)
+			}
+			var conditions interface{}
+			if len(permission.Conditions) > 0 {
+				encoded, err := json.Marshal(permission.Conditions)
+				if err != nil {
+					return fmt.Errorf("encode legacy role %q conditions: %w", role.ID, err)
+				}
+				conditions = string(encoded)
+			}
+			if _, err := tx.Exec(`
+				INSERT INTO rbac_permissions (role_id, action, resource, effect, conditions)
+				VALUES (?, ?, ?, ?, ?)
+			`, role.ID, permission.Action, permission.Resource, effect, conditions); err != nil {
+				return fmt.Errorf("insert permission for legacy role %q: %w", role.ID, err)
+			}
+		}
+		newRoleIDs = append(newRoleIDs, id)
+	}
+	for _, id := range newRoleIDs {
+		if parentID := legacyRoles[id].ParentID; parentID != "" {
+			if _, err := tx.Exec("UPDATE rbac_roles SET parent_id = ? WHERE id = ?", parentID, id); err != nil {
+				return fmt.Errorf("set parent for legacy role %q: %w", id, err)
 			}
 		}
 	}
 
-	// Migrate assignments
-	if data, err := securityutil.ReadSecureStorageFile(assignmentsFile, maxLegacyRBACFileSize); err == nil {
-		var assignments []UserRoleAssignment
-		if err := json.Unmarshal(data, &assignments); err == nil {
-			for _, a := range assignments {
-				if err := m.UpdateUserRolesWithContext(a.Username, a.RoleIDs, "migration"); err != nil {
-					log.Warn().Err(err).Str("username", a.Username).Msg("Failed to migrate assignment")
-				}
+	knownRoleIDs := make(map[string]struct{}, len(parentByRole))
+	for id := range parentByRole {
+		knownRoleIDs[id] = struct{}{}
+	}
+	legacyAssignments := make(map[string][]string, len(assignments))
+	for _, assignment := range assignments {
+		username := strings.TrimSpace(assignment.Username)
+		if username == "" {
+			return fmt.Errorf("legacy assignment has an empty username")
+		}
+		roleIDs, err := normalizedRoleIDs(assignment.RoleIDs, knownRoleIDs)
+		if err != nil {
+			return fmt.Errorf("legacy assignment for %q: %w", username, err)
+		}
+		if previous, duplicate := legacyAssignments[username]; duplicate {
+			if strings.Join(previous, "\x00") != strings.Join(roleIDs, "\x00") {
+				return fmt.Errorf("conflicting duplicate legacy assignment for %q", username)
 			}
-			log.Info().Int("count", len(assignments)).Msg("Migrated assignments from file")
+			continue
+		}
+		legacyAssignments[username] = roleIDs
+	}
 
-			// Rename old file
-			if err := securityutil.RenameSecureStorageFile(assignmentsFile, assignmentsBackup); err != nil {
-				log.Warn().Err(err).Msg("Failed to rename migrated assignments file")
+	usernames := make([]string, 0, len(legacyAssignments))
+	for username := range legacyAssignments {
+		usernames = append(usernames, username)
+	}
+	sort.Strings(usernames)
+	for _, username := range usernames {
+		roleIDs := legacyAssignments[username]
+		currentRoleIDs, exists, err := loadMigrationAssignment(tx, username)
+		if err != nil {
+			return fmt.Errorf("load current assignment for %q: %w", username, err)
+		}
+		if exists {
+			if strings.Join(currentRoleIDs, "\x00") != strings.Join(roleIDs, "\x00") {
+				return fmt.Errorf("legacy assignment for %q conflicts with current v6 data", username)
+			}
+			continue
+		}
+		now := time.Now().Unix()
+		if _, err := tx.Exec(
+			"INSERT INTO rbac_users (username, updated_at) VALUES (?, ?)",
+			username,
+			now,
+		); err != nil {
+			return fmt.Errorf("insert legacy identity %q: %w", username, err)
+		}
+		for _, roleID := range roleIDs {
+			if _, err := tx.Exec(`
+				INSERT INTO rbac_user_assignments (username, role_id, updated_at)
+				VALUES (?, ?, ?)
+			`, username, roleID, now); err != nil {
+				return fmt.Errorf("insert legacy assignment for %q: %w", username, err)
 			}
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit legacy RBAC import: %w", err)
+	}
+	return nil
+}
+
+func loadMigrationRoles(tx *sql.Tx) (map[string]Role, error) {
+	rows, err := tx.Query(`
+		SELECT id, name, description, parent_id, is_built_in, priority
+		FROM rbac_roles
+	`)
+	if err != nil {
+		return nil, err
+	}
+	roles := make(map[string]Role)
+	for rows.Next() {
+		var role Role
+		var parentID sql.NullString
+		var isBuiltIn int
+		if err := rows.Scan(&role.ID, &role.Name, &role.Description, &parentID, &isBuiltIn, &role.Priority); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		role.ParentID = parentID.String
+		role.IsBuiltIn = isBuiltIn == 1
+		roles[role.ID] = role
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	permissionRows, err := tx.Query(`
+		SELECT role_id, action, resource, effect, conditions
+		FROM rbac_permissions
+		ORDER BY role_id, id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer permissionRows.Close()
+	for permissionRows.Next() {
+		var roleID string
+		var permission Permission
+		var conditions sql.NullString
+		if err := permissionRows.Scan(&roleID, &permission.Action, &permission.Resource, &permission.Effect, &conditions); err != nil {
+			return nil, err
+		}
+		if conditions.Valid && conditions.String != "" {
+			if err := json.Unmarshal([]byte(conditions.String), &permission.Conditions); err != nil {
+				return nil, fmt.Errorf("decode conditions for role %q: %w", roleID, err)
+			}
+		}
+		role, ok := roles[roleID]
+		if !ok {
+			return nil, fmt.Errorf("permission references missing role %q", roleID)
+		}
+		role.Permissions = append(role.Permissions, permission)
+		roles[roleID] = role
+	}
+	if err := permissionRows.Err(); err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+func loadMigrationAssignment(tx *sql.Tx, username string) ([]string, bool, error) {
+	var count int
+	if err := tx.QueryRow("SELECT COUNT(*) FROM rbac_users WHERE username = ?", username).Scan(&count); err != nil {
+		return nil, false, err
+	}
+	if count == 0 {
+		return nil, false, nil
+	}
+	rows, err := tx.Query(`
+		SELECT role_id
+		FROM rbac_user_assignments
+		WHERE username = ?
+		ORDER BY role_id
+	`, username)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	roleIDs := []string{}
+	for rows.Next() {
+		var roleID string
+		if err := rows.Scan(&roleID); err != nil {
+			return nil, false, err
+		}
+		roleIDs = append(roleIDs, roleID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	return roleIDs, true, nil
+}
+
+func normalizedRoleIDs(roleIDs []string, known map[string]struct{}) ([]string, error) {
+	unique := make(map[string]struct{}, len(roleIDs))
+	for _, roleID := range roleIDs {
+		if _, exists := known[roleID]; !exists {
+			return nil, fmt.Errorf("references missing role %q", roleID)
+		}
+		unique[roleID] = struct{}{}
+	}
+	normalized := make([]string, 0, len(unique))
+	for roleID := range unique {
+		normalized = append(normalized, roleID)
+	}
+	sort.Strings(normalized)
+	return normalized, nil
+}
+
+func canonicalRole(role Role) string {
+	permissions := make([]string, 0, len(role.Permissions))
+	for _, permission := range role.Permissions {
+		var conditions []byte
+		if len(permission.Conditions) > 0 {
+			conditions, _ = json.Marshal(permission.Conditions)
+		}
+		permissions = append(permissions, strings.Join([]string{
+			permission.Action,
+			permission.Resource,
+			permission.GetEffect(),
+			string(conditions),
+		}, "\x00"))
+	}
+	sort.Strings(permissions)
+	return strings.Join([]string{
+		role.ID,
+		role.Name,
+		role.Description,
+		role.ParentID,
+		fmt.Sprintf("%t", role.IsBuiltIn),
+		fmt.Sprintf("%d", role.Priority),
+		strings.Join(permissions, "\x01"),
+	}, "\x02")
+}
+
+func validateRoleParentGraph(parentByRole map[string]string) error {
+	const (
+		unvisited = iota
+		visiting
+		visited
+	)
+	state := make(map[string]int, len(parentByRole))
+	var visit func(string) error
+	visit = func(roleID string) error {
+		switch state[roleID] {
+		case visiting:
+			return fmt.Errorf("role inheritance cycle contains %q", roleID)
+		case visited:
+			return nil
+		}
+		state[roleID] = visiting
+		if parentID := parentByRole[roleID]; parentID != "" {
+			if err := visit(parentID); err != nil {
+				return err
+			}
+		}
+		state[roleID] = visited
+		return nil
+	}
+	for roleID := range parentByRole {
+		if err := visit(roleID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

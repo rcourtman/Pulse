@@ -62,9 +62,8 @@ func applySSORoleAssignments(manager internalauth.Manager, principal string, leg
 		return manager.UpdateUserRoles(principal, mappedRoles)
 	}
 
-	if assignment, ok := manager.GetUserAssignment(principal); ok && len(assignment.RoleIDs) > 0 {
-		return nil
-	}
+	principalAssignment, principalExists := manager.GetUserAssignment(principal)
+	principalHasRoles := principalExists && len(principalAssignment.RoleIDs) > 0
 
 	for _, candidate := range legacyCandidates {
 		candidate = strings.TrimSpace(candidate)
@@ -75,9 +74,18 @@ func applySSORoleAssignments(manager internalauth.Manager, principal string, leg
 		if !ok || len(assignment.RoleIDs) == 0 {
 			continue
 		}
+		if migrator, ok := manager.(internalauth.AssignmentMigrator); ok {
+			return migrator.MigrateUserAssignment(candidate, principal)
+		}
+		if principalHasRoles {
+			return nil
+		}
 		return manager.UpdateUserRoles(principal, assignment.RoleIDs)
 	}
 
+	if principalHasRoles {
+		return nil
+	}
 	if ensureListed {
 		return manager.UpdateUserRoles(principal, nil)
 	}

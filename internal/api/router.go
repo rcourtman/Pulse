@@ -318,6 +318,19 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		auth.SetAdminUser(cfg.AuthUser)
 	}
 
+	// The tenant provider is the sole owner of v6 RBAC persistence. Initialize
+	// the default manager before SSO services and routes so settings, SSO role
+	// mapping, and authorization all observe the same SQLite store.
+	r.rbacProvider = NewTenantRBACProvider(r.config.DataPath)
+	defaultRBACManager, err := r.rbacProvider.GetManager("default")
+	if err != nil {
+		auth.SetManager(nil)
+		log.Error().Err(err).Msg("Failed to initialize the canonical RBAC store")
+	} else {
+		auth.SetManager(defaultRBACManager)
+		log.Info().Msg("Canonical RBAC store initialized")
+	}
+
 	// Initialize SSO service managers
 	r.oidcManager = NewOIDCServiceManager()
 	r.samlManager = NewSAMLServiceManager("")
@@ -595,8 +608,7 @@ func (r *Router) setupRoutes() {
 			InstanceFingerprint: state.InstanceFingerprint,
 		}, true
 	})
-	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
-	r.rbacProvider = rbacProvider
+	rbacProvider := r.rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	orgHandlers.SetHostedMode(r.hostedMode)
 	orgHandlers.SetOnDelete(func(ctx context.Context, orgID string) error {
@@ -2785,6 +2797,21 @@ func (r *Router) ShutdownAIIntelligence() {
 	}
 
 	log.Info().Msg("AI Intelligence: Graceful shutdown complete")
+}
+
+// ShutdownRBAC closes every organization RBAC store owned by this router and
+// clears the global manager only when it points at the same provider.
+func (r *Router) ShutdownRBAC() {
+	if r.rbacProvider == nil {
+		return
+	}
+	ownsGlobal := r.rbacProvider.ownsManager(auth.GetManager())
+	if err := r.rbacProvider.Close(); err != nil {
+		log.Error().Err(err).Msg("Failed to close RBAC stores")
+	}
+	if ownsGlobal {
+		auth.SetManager(nil)
+	}
 }
 
 func (r *Router) shutdownBackgroundWorkers() {

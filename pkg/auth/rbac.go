@@ -118,6 +118,22 @@ type ExtendedManager interface {
 	UpdateUserRolesWithContext(username string, roleIDs []string, byUser string) error
 }
 
+// ErrorAwareManager exposes storage failures that the legacy Manager interface
+// cannot represent. HTTP handlers use this interface when available so a
+// damaged or unavailable RBAC store is never presented as an empty data set.
+type ErrorAwareManager interface {
+	GetRolesWithError() ([]Role, error)
+	GetUserAssignmentsWithError() ([]UserRoleAssignment, error)
+	GetUserAssignmentWithError(username string) (UserRoleAssignment, bool, error)
+	GetUserPermissionsWithError(username string) ([]Permission, error)
+}
+
+// AssignmentMigrator atomically moves a role assignment from a legacy
+// identity alias to its canonical principal.
+type AssignmentMigrator interface {
+	MigrateUserAssignment(fromUsername, toUsername string) error
+}
+
 var (
 	globalManager Manager
 	managerMu     sync.RWMutex

@@ -10,13 +10,16 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rs/zerolog/log"
 )
 
 // validRoleID matches alphanumeric IDs with hyphens and underscores (1-64 chars)
 var validRoleID = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
-// validUsername matches reasonable username formats (1-128 chars, alphanumeric, plus common chars)
-var validUsername = regexp.MustCompile(`^[a-zA-Z0-9._@+-]{1,128}$`)
+// validUsername accepts local identities plus the colon-delimited opaque SSO
+// principals emitted by stableSSOPrincipal. Slashes and path traversal
+// characters remain excluded.
+var validUsername = regexp.MustCompile(`^[a-zA-Z0-9._@+:-]{1,256}$`)
 
 // RBACHandlers provides HTTP handlers for RBAC management.
 type RBACHandlers struct {
@@ -39,34 +42,49 @@ func NewRBACHandlers(cfg *config.Config, rbacProvider ...*TenantRBACProvider) *R
 
 // getManager returns the RBAC Manager for the org in the request context.
 // Falls back to global manager if no provider is set (backward compat).
-func (h *RBACHandlers) getManager(ctx context.Context) auth.Manager {
+func (h *RBACHandlers) getManager(ctx context.Context) (auth.Manager, error) {
 	if h.rbacProvider != nil {
 		orgID := GetOrgID(ctx)
 		manager, err := h.rbacProvider.GetManager(orgID)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		return manager
+		return manager, nil
 	}
-	return auth.GetManager()
+	return auth.GetManager(), nil
 }
 
 // getExtendedManager returns the ExtendedManager for the org in the request context.
-func (h *RBACHandlers) getExtendedManager(ctx context.Context) auth.ExtendedManager {
+func (h *RBACHandlers) getExtendedManager(ctx context.Context) (auth.ExtendedManager, error) {
 	if h.rbacProvider != nil {
 		orgID := GetOrgID(ctx)
 		manager, err := h.rbacProvider.GetManager(orgID)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		return manager
+		return manager, nil
 	}
-	return auth.GetExtendedManager()
+	return auth.GetExtendedManager(), nil
+}
+
+func writeRBACStoreError(w http.ResponseWriter, err error) {
+	log.Error().Err(err).Msg("RBAC store is unavailable")
+	writeErrorResponse(
+		w,
+		http.StatusServiceUnavailable,
+		"rbac_store_unavailable",
+		"RBAC data could not be loaded; check the server logs before retrying",
+		nil,
+	)
 }
 
 // HandleRoles handles list, create, update, and delete actions for roles.
 func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
-	manager := h.getManager(r.Context())
+	manager, err := h.getManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -86,7 +104,19 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		if roleID == "" {
 			// List all roles
-			roles := manager.GetRoles()
+			var roles []auth.Role
+			if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+				roles, err = errorAware.GetRolesWithError()
+				if err != nil {
+					writeRBACStoreError(w, err)
+					return
+				}
+			} else {
+				roles = manager.GetRoles()
+			}
+			if roles == nil {
+				roles = []auth.Role{}
+			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(roles)
 		} else {
@@ -191,20 +221,40 @@ func (h *RBACHandlers) HandleGetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager := h.getManager(r.Context())
+	manager, err := h.getManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
 	}
 
-	assignments := manager.GetUserAssignments()
+	var assignments []auth.UserRoleAssignment
+	if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+		assignments, err = errorAware.GetUserAssignmentsWithError()
+		if err != nil {
+			writeRBACStoreError(w, err)
+			return
+		}
+	} else {
+		assignments = manager.GetUserAssignments()
+	}
+	if assignments == nil {
+		assignments = []auth.UserRoleAssignment{}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(assignments)
 }
 
 // HandleUserRoleActions handles assigning/updating roles for a user.
 func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Request) {
-	manager := h.getManager(r.Context())
+	manager, err := h.getManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -269,14 +319,36 @@ func (h *RBACHandlers) HandleUserRoleActions(w http.ResponseWriter, r *http.Requ
 	case http.MethodGet:
 		// Get effective permissions
 		if len(parts) > 1 && parts[1] == "permissions" {
-			perms := manager.GetUserPermissions(username)
+			var perms []auth.Permission
+			if errorAware, ok := manager.(auth.ErrorAwareManager); ok {
+				perms, err = errorAware.GetUserPermissionsWithError(username)
+				if err != nil {
+					writeRBACStoreError(w, err)
+					return
+				}
+			} else {
+				perms = manager.GetUserPermissions(username)
+			}
+			if perms == nil {
+				perms = []auth.Permission{}
+			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(perms)
 			return
 		}
 
 		// Get specific assignment
-		assignment, ok := manager.GetUserAssignment(username)
+		var assignment auth.UserRoleAssignment
+		var ok bool
+		if errorAware, supportsErrors := manager.(auth.ErrorAwareManager); supportsErrors {
+			assignment, ok, err = errorAware.GetUserAssignmentWithError(username)
+			if err != nil {
+				writeRBACStoreError(w, err)
+				return
+			}
+		} else {
+			assignment, ok = manager.GetUserAssignment(username)
+		}
 		if !ok {
 			writeErrorResponse(w, http.StatusNotFound, "not_found", "User assignment not found", nil)
 			return
@@ -296,7 +368,11 @@ func (h *RBACHandlers) HandleRBACChangelog(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	em := h.getExtendedManager(r.Context())
+	em, err := h.getExtendedManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if em == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC changelog is not available (requires Pro)", nil)
 		return
@@ -347,7 +423,11 @@ func (h *RBACHandlers) HandleRoleEffective(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	em := h.getExtendedManager(r.Context())
+	em, err := h.getExtendedManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if em == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "Role inheritance is not available (requires Pro)", nil)
 		return
@@ -389,7 +469,11 @@ func (h *RBACHandlers) HandleUserEffectivePermissions(w http.ResponseWriter, r *
 		return
 	}
 
-	manager := h.getManager(r.Context())
+	manager, err := h.getManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if manager == nil {
 		writeErrorResponse(w, http.StatusNotImplemented, "rbac_unavailable", "RBAC management is not available", nil)
 		return
@@ -406,7 +490,11 @@ func (h *RBACHandlers) HandleUserEffectivePermissions(w http.ResponseWriter, r *
 	}
 
 	// Check if we have extended manager for inheritance
-	em := h.getExtendedManager(r.Context())
+	em, err := h.getExtendedManager(r.Context())
+	if err != nil {
+		writeRBACStoreError(w, err)
+		return
+	}
 	if em != nil {
 		roles := em.GetRolesWithInheritance(username)
 

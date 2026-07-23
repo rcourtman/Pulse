@@ -57,7 +57,8 @@ func (p *TenantRBACProvider) GetManager(orgID string) (auth.ExtendedManager, err
 	}
 
 	manager, err = auth.NewSQLiteManager(auth.SQLiteManagerConfig{
-		DataDir: dataDir,
+		DataDir:          dataDir,
+		MigrateFromFiles: orgID == "default",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize RBAC manager for org %s: %w", orgID, err)
@@ -117,6 +118,20 @@ func (p *TenantRBACProvider) ManagerCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return len(p.managers)
+}
+
+func (p *TenantRBACProvider) ownsManager(manager auth.Manager) bool {
+	if manager == nil {
+		return false
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, candidate := range p.managers {
+		if manager == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *TenantRBACProvider) resolveDataDir(orgID string) (string, error) {

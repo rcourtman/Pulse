@@ -102,6 +102,30 @@ func TestRBACIntegrity_DefaultOrg(t *testing.T) {
 	}
 }
 
+func TestRBACIntegrity_ReportsSQLiteReadFailure(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	manager, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager(default): %v", err)
+	}
+	sqliteManager, ok := manager.(*auth.SQLiteManager)
+	if !ok {
+		t.Fatalf("manager type = %T, want *auth.SQLiteManager", manager)
+	}
+	if err := sqliteManager.Close(); err != nil {
+		t.Fatalf("close manager: %v", err)
+	}
+
+	result := VerifyRBACIntegrity(provider, "default")
+	if result.Healthy {
+		t.Fatalf("closed SQLite store reported healthy: %+v", result)
+	}
+	if result.Error == "" || !strings.Contains(result.Error, "failed to read roles") {
+		t.Fatalf("read failure was not reported explicitly: %+v", result)
+	}
+}
+
 func TestResetAdminRole_RestoresAccess(t *testing.T) {
 	baseDir := t.TempDir()
 	orgID := "ops"

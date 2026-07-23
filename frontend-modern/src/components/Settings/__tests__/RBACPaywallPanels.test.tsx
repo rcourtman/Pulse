@@ -161,6 +161,29 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
   });
 
+  it('fails closed with a persistent retry notice when roles cannot be read', async () => {
+    getRolesMock.mockRejectedValueOnce(
+      Object.assign(new Error('RBAC data could not be loaded'), {
+        status: 503,
+        code: 'rbac_store_unavailable',
+      }),
+    );
+
+    render(() => <RolesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to load roles');
+    });
+    expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
+    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to load roles');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(screen.getByText('Admin')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows the user assignments paywall for free entitlements and does not load users', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
 
@@ -190,6 +213,30 @@ describe('RBAC paywall settings panels', () => {
     expect(getUsersMock).toHaveBeenCalled();
     expect(getRolesMock).toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search users...')).not.toBeDisabled();
+  });
+
+  it('does not render stale user data when assignment storage is unavailable', async () => {
+    getUsersMock.mockRejectedValueOnce(
+      Object.assign(new Error('RBAC data could not be loaded'), {
+        status: 503,
+        code: 'rbac_store_unavailable',
+      }),
+    );
+
+    render(() => <UserAssignmentsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to load user assignments');
+    });
+    expect(screen.queryByText('alice')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search users...')).toBeDisabled();
+    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to load user assignments');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(screen.getByText('alice')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('keeps user assignment upgrade actions quiet when self-hosted upgrade prompts are hidden', async () => {

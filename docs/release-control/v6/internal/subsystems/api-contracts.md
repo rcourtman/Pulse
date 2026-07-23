@@ -2973,6 +2973,12 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Completion Obligations
 
+RBAC transport changes must prove that settings, SSO role mapping, and
+authorization share one default-organization manager; that healthy empty
+collections serialize as arrays; and that provider, migration, or read errors
+retain the stable `503 rbac_store_unavailable` envelope instead of becoming
+successful empty payloads.
+
 Manual Patrol execution is a canonical identity-bearing API contract. A scoped
 `POST /api/ai/patrol/run` request accepts only the declared resource and alert
 fields, rejects client-authored prompt context and trailing or unknown JSON,
@@ -7260,6 +7266,15 @@ principal on governed API routes: when token metadata carries `ownerUserId`,
 RBAC and audit-facing auth resolution must use that bound user identity rather
 than a detached synthetic `token:<id>` subject, while still preserving token
 scope and org enforcement.
+RBAC administration routes now also have an explicit store-availability
+contract. `internal/api/router.go` and
+`internal/api/access_tenant_provider.go` must resolve the default organization,
+SSO role mapping, authorization checks, and Settings transport through one
+canonical manager. Healthy empty role-assignment collections serialize as
+`[]`; provider initialization, legacy migration, or SQLite read failures
+return `503 rbac_store_unavailable` and must not be normalized into a
+successful empty response. Stable colon-delimited SSO principals remain valid
+assignment targets, while slashes and path-traversal input remain rejected.
 The onboarding QR payload flow now also carries explicit token-bound auth
 semantics: when the frontend requests `/api/onboarding/qr` with a pairing
 token, the API client must send that token explicitly so the returned payload

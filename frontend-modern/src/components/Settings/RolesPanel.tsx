@@ -11,6 +11,8 @@ import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 
 export const RolesPanel: Component = () => {
   const state = useRolesPanelState();
@@ -25,7 +27,7 @@ export const RolesPanel: Component = () => {
             size="settingsAction"
             class="w-full gap-2 sm:w-auto"
             onClick={state.openCreateRole}
-            disabled={!state.featureGate.rbacEnabled()}
+            disabled={!state.featureGate.rbacEnabled() || Boolean(state.loadError())}
           >
             <Plus class="w-4 h-4" />
             New Role
@@ -48,7 +50,23 @@ export const RolesPanel: Component = () => {
           </div>
         </Show>
 
-        <Show when={!state.loading() && state.featureGate.rbacEnabled()}>
+        <Show when={!state.loading() && state.featureGate.rbacEnabled() && state.loadError()}>
+          {(message) => (
+            <InlineNotice
+              role="alert"
+              aria-live="polite"
+              tone="danger"
+              layout="banner"
+              icon={<TriangleAlert />}
+              actionLabel="Retry"
+              actionOnClick={() => void state.loadRoles()}
+            >
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
+        <Show when={!state.loading() && state.featureGate.rbacEnabled() && !state.loadError()}>
           <PulseDataGrid
             data={state.roles()}
             columns={[

@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -316,6 +318,364 @@ func TestSQLiteManagerMigration(t *testing.T) {
 			t.Error("Assignments backup file should be created")
 		}
 	})
+}
+
+func TestSQLiteManagerMigrationPreservesZeroRoleIdentities(t *testing.T) {
+	tmpDir := t.TempDir()
+	fileManager, err := NewFileManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewFileManager: %v", err)
+	}
+	if err := fileManager.UpdateUserRoles("local-user", nil); err != nil {
+		t.Fatalf("create empty local assignment: %v", err)
+	}
+	if err := fileManager.UpdateUserRoles("sso:oidc:okta:stable", []string{RoleViewer}); err != nil {
+		t.Fatalf("create SSO assignment: %v", err)
+	}
+
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{
+		DataDir:          tmpDir,
+		MigrateFromFiles: true,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+
+	empty, ok := manager.GetUserAssignment("local-user")
+	if !ok {
+		t.Fatal("zero-role local identity was lost during migration")
+	}
+	if len(empty.RoleIDs) != 0 {
+		t.Fatalf("zero-role identity has roles: %v", empty.RoleIDs)
+	}
+	sso, ok := manager.GetUserAssignment("sso:oidc:okta:stable")
+	if !ok || len(sso.RoleIDs) != 1 || sso.RoleIDs[0] != RoleViewer {
+		t.Fatalf("SSO assignment not migrated: %#v, exists=%v", sso, ok)
+	}
+}
+
+func TestSQLiteManagerMigrationPreservesExistingBackups(t *testing.T) {
+	tmpDir := t.TempDir()
+	fileManager, err := NewFileManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewFileManager: %v", err)
+	}
+	if err := fileManager.SaveRole(Role{
+		ID:          "legacy-role",
+		Name:        "Legacy role",
+		Permissions: []Permission{{Action: "read", Resource: "*"}},
+	}); err != nil {
+		t.Fatalf("create legacy role: %v", err)
+	}
+	if err := fileManager.UpdateUserRoles("legacy-user", []string{RoleViewer}); err != nil {
+		t.Fatalf("create legacy assignment: %v", err)
+	}
+	for _, name := range []string{"rbac_roles.json.bak", "rbac_assignments.json.bak"} {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte("existing backup"), 0600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{
+		DataDir:          tmpDir,
+		MigrateFromFiles: true,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+
+	for _, name := range []string{"rbac_roles.json.bak", "rbac_assignments.json.bak"} {
+		original, err := os.ReadFile(filepath.Join(tmpDir, name))
+		if err != nil {
+			t.Fatalf("read original %s: %v", name, err)
+		}
+		if string(original) != "existing backup" {
+			t.Fatalf("existing backup %s was replaced", name)
+		}
+		if _, err := os.Stat(filepath.Join(tmpDir, name+".1")); err != nil {
+			t.Fatalf("new migration backup %s.1 missing: %v", name, err)
+		}
+	}
+}
+
+func TestSQLiteManagerMigrationRejectsCorruptAndStaleData(t *testing.T) {
+	tests := []struct {
+		name        string
+		roles       string
+		assignments string
+		wantError   string
+	}{
+		{
+			name:        "corrupt roles",
+			roles:       `[{"id":`,
+			assignments: `[]`,
+			wantError:   "decode legacy RBAC roles",
+		},
+		{
+			name: "corrupt assignments rolls back roles",
+			roles: mustJSON(t, []Role{{
+				ID:          "legacy-viewer",
+				Name:        "Legacy Viewer",
+				Permissions: []Permission{{Action: "read", Resource: "*"}},
+			}}),
+			assignments: `[{"username":`,
+			wantError:   "decode legacy RBAC assignments",
+		},
+		{
+			name: "stale assignment",
+			roles: mustJSON(t, []Role{{
+				ID:          "legacy-viewer",
+				Name:        "Legacy Viewer",
+				Permissions: []Permission{{Action: "read", Resource: "*"}},
+			}}),
+			assignments: mustJSON(t, []UserRoleAssignment{{
+				Username: "stale-user",
+				RoleIDs:  []string{"deleted-role"},
+			}}),
+			wantError: "references missing role",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			rolesPath := filepath.Join(tmpDir, "rbac_roles.json")
+			assignmentsPath := filepath.Join(tmpDir, "rbac_assignments.json")
+			if err := os.WriteFile(rolesPath, []byte(tt.roles), 0600); err != nil {
+				t.Fatalf("write roles: %v", err)
+			}
+			if err := os.WriteFile(assignmentsPath, []byte(tt.assignments), 0600); err != nil {
+				t.Fatalf("write assignments: %v", err)
+			}
+
+			manager, err := NewSQLiteManager(SQLiteManagerConfig{
+				DataDir:          tmpDir,
+				MigrateFromFiles: true,
+			})
+			if manager != nil {
+				_ = manager.Close()
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("error = %v, want substring %q", err, tt.wantError)
+			}
+			if _, err := os.Stat(rolesPath); err != nil {
+				t.Fatalf("legacy roles source was not preserved: %v", err)
+			}
+			if _, err := os.Stat(assignmentsPath); err != nil {
+				t.Fatalf("legacy assignments source was not preserved: %v", err)
+			}
+			if _, err := os.Stat(rolesPath + ".bak"); !os.IsNotExist(err) {
+				t.Fatalf("roles backup must not be created on failed migration: %v", err)
+			}
+
+			reopened, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: tmpDir})
+			if err != nil {
+				t.Fatalf("reopen after failed migration: %v", err)
+			}
+			defer reopened.Close()
+			if _, ok := reopened.GetRole("legacy-viewer"); ok {
+				t.Fatal("failed migration committed a partial role")
+			}
+		})
+	}
+}
+
+func TestSQLiteManagerMigrationRejectsCurrentStateConflicts(t *testing.T) {
+	tmpDir := t.TempDir()
+	current, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: tmpDir})
+	if err != nil {
+		t.Fatalf("create current manager: %v", err)
+	}
+	if err := current.SaveRole(Role{
+		ID:          "existing",
+		Name:        "Current v6 role",
+		Permissions: []Permission{{Action: "read", Resource: "nodes"}},
+	}); err != nil {
+		t.Fatalf("save current role: %v", err)
+	}
+	if err := current.Close(); err != nil {
+		t.Fatalf("close current manager: %v", err)
+	}
+
+	legacyRoles := []Role{{
+		ID:          "existing",
+		Name:        "Legacy conflicting role",
+		Permissions: []Permission{{Action: "admin", Resource: "*"}},
+	}}
+	if err := os.WriteFile(filepath.Join(tmpDir, "rbac_roles.json"), []byte(mustJSON(t, legacyRoles)), 0600); err != nil {
+		t.Fatalf("write legacy roles: %v", err)
+	}
+
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{
+		DataDir:          tmpDir,
+		MigrateFromFiles: true,
+	})
+	if manager != nil {
+		_ = manager.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "conflicts with current v6 data") {
+		t.Fatalf("error = %v, want current-state conflict", err)
+	}
+
+	reopened, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: tmpDir})
+	if err != nil {
+		t.Fatalf("reopen current manager: %v", err)
+	}
+	defer reopened.Close()
+	role, ok := reopened.GetRole("existing")
+	if !ok || role.Name != "Current v6 role" {
+		t.Fatalf("current v6 role was changed: %#v, exists=%v", role, ok)
+	}
+}
+
+func TestSQLiteManagerMigrationMergesDistinctLegacyAndV6State(t *testing.T) {
+	tmpDir := t.TempDir()
+	current, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: tmpDir})
+	if err != nil {
+		t.Fatalf("create current manager: %v", err)
+	}
+	if err := current.SaveRole(Role{
+		ID:          "v6-role",
+		Name:        "V6 role",
+		Permissions: []Permission{{Action: "write", Resource: "nodes"}},
+	}); err != nil {
+		t.Fatalf("save v6 role: %v", err)
+	}
+	if err := current.UpdateUserRoles("v6-user", []string{"v6-role"}); err != nil {
+		t.Fatalf("save v6 assignment: %v", err)
+	}
+	if err := current.Close(); err != nil {
+		t.Fatalf("close v6 manager: %v", err)
+	}
+
+	legacyRoles := []Role{{
+		ID:          "legacy-role",
+		Name:        "Legacy role",
+		Permissions: []Permission{{Action: "read", Resource: "nodes"}},
+	}}
+	legacyAssignments := []UserRoleAssignment{{
+		Username: "legacy-user",
+		RoleIDs:  []string{"legacy-role"},
+	}}
+	if err := os.WriteFile(filepath.Join(tmpDir, "rbac_roles.json"), []byte(mustJSON(t, legacyRoles)), 0600); err != nil {
+		t.Fatalf("write legacy roles: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "rbac_assignments.json"), []byte(mustJSON(t, legacyAssignments)), 0600); err != nil {
+		t.Fatalf("write legacy assignments: %v", err)
+	}
+
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{
+		DataDir:          tmpDir,
+		MigrateFromFiles: true,
+	})
+	if err != nil {
+		t.Fatalf("migrate distinct states: %v", err)
+	}
+	defer manager.Close()
+	for _, roleID := range []string{"v6-role", "legacy-role"} {
+		if _, ok := manager.GetRole(roleID); !ok {
+			t.Fatalf("role %q missing after merge", roleID)
+		}
+	}
+	for username, roleID := range map[string]string{
+		"v6-user":     "v6-role",
+		"legacy-user": "legacy-role",
+	} {
+		assignment, ok := manager.GetUserAssignment(username)
+		if !ok || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != roleID {
+			t.Fatalf("assignment for %q = %#v, exists=%v", username, assignment, ok)
+		}
+	}
+}
+
+func TestSQLiteManagerKeepsIdentityWhenRolesAreEmptyOrDeleted(t *testing.T) {
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+
+	if err := manager.UpdateUserRoles("empty-user", nil); err != nil {
+		t.Fatalf("UpdateUserRoles empty: %v", err)
+	}
+	if assignment, ok := manager.GetUserAssignment("empty-user"); !ok || len(assignment.RoleIDs) != 0 {
+		t.Fatalf("empty identity not retained: %#v, exists=%v", assignment, ok)
+	}
+
+	role := Role{
+		ID:          "temporary-role",
+		Name:        "Temporary",
+		Permissions: []Permission{{Action: "read", Resource: "nodes"}},
+	}
+	if err := manager.SaveRole(role); err != nil {
+		t.Fatalf("SaveRole: %v", err)
+	}
+	if err := manager.AssignRole("renamed-user", role.ID); err != nil {
+		t.Fatalf("AssignRole: %v", err)
+	}
+	if err := manager.DeleteRole(role.ID); err != nil {
+		t.Fatalf("DeleteRole: %v", err)
+	}
+	assignment, ok := manager.GetUserAssignment("renamed-user")
+	if !ok || len(assignment.RoleIDs) != 0 {
+		t.Fatalf("role deletion left a stale grant or removed identity: %#v, exists=%v", assignment, ok)
+	}
+	if permissions := manager.GetUserPermissions("renamed-user"); len(permissions) != 0 {
+		t.Fatalf("deleted role still grants permissions: %#v", permissions)
+	}
+
+	assignments, err := manager.GetUserAssignmentsWithError()
+	if err != nil {
+		t.Fatalf("GetUserAssignmentsWithError: %v", err)
+	}
+	if len(assignments) != 2 {
+		t.Fatalf("known identities = %d, want 2: %#v", len(assignments), assignments)
+	}
+
+	if _, err := manager.db.Exec(`
+		INSERT INTO rbac_user_assignments (username, role_id, updated_at)
+		VALUES ('orphaned-user', ?, ?)
+	`, RoleViewer, time.Now().Unix()); err == nil {
+		t.Fatal("assignment schema accepted an identity missing from rbac_users")
+	}
+}
+
+func TestSQLiteManagerIdentityMigrationRejectsConflictingGrant(t *testing.T) {
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+	if err := manager.UpdateUserRoles("legacy@example.com", []string{RoleAdmin}); err != nil {
+		t.Fatalf("seed legacy assignment: %v", err)
+	}
+	if err := manager.UpdateUserRoles("sso:oidc:okta:stable", []string{RoleViewer}); err != nil {
+		t.Fatalf("seed canonical assignment: %v", err)
+	}
+
+	err = manager.MigrateUserAssignment("legacy@example.com", "sso:oidc:okta:stable")
+	if err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("error = %v, want conflict", err)
+	}
+	legacy, legacyExists := manager.GetUserAssignment("legacy@example.com")
+	canonical, canonicalExists := manager.GetUserAssignment("sso:oidc:okta:stable")
+	if !legacyExists || len(legacy.RoleIDs) != 1 || legacy.RoleIDs[0] != RoleAdmin {
+		t.Fatalf("legacy assignment changed after conflict: %#v, exists=%v", legacy, legacyExists)
+	}
+	if !canonicalExists || len(canonical.RoleIDs) != 1 || canonical.RoleIDs[0] != RoleViewer {
+		t.Fatalf("canonical assignment changed after conflict: %#v, exists=%v", canonical, canonicalExists)
+	}
+}
+
+func mustJSON(t *testing.T, value interface{}) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal test data: %v", err)
+	}
+	return string(data)
 }
 
 func TestSQLiteManagerCircularInheritance(t *testing.T) {

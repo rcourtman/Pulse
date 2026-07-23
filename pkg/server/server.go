@@ -32,7 +32,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -200,15 +199,6 @@ func Run(ctx context.Context, version string) error {
 	// It uses cfg.DataPath, which already includes PULSE_DATA_DIR overrides.
 	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
 	baseDataDir := mtPersistence.BaseDataDir()
-
-	// Initialize RBAC manager for role-based access control
-	rbacManager, err := auth.NewFileManager(baseDataDir)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize RBAC manager, role management will be unavailable")
-	} else {
-		auth.SetManager(rbacManager)
-		log.Info().Msg("RBAC manager initialized")
-	}
 
 	// Run multi-tenant data migration only when the feature is explicitly enabled.
 	// This prevents any on-disk layout changes for default (single-tenant) users.
@@ -830,6 +820,9 @@ shutdown:
 
 	// Stop license grant refresh loops
 	router.StopGrantRefresh()
+
+	// Close organization RBAC databases and clear the canonical global manager.
+	router.ShutdownRBAC()
 
 	// Gracefully stop AI intelligence services (patrol, investigations, triggers)
 	router.ShutdownAIIntelligence()

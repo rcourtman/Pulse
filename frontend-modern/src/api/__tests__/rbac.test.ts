@@ -118,6 +118,20 @@ describe('RBACAPI', () => {
         }),
       );
     });
+
+    it('encodes stable SSO principals without changing their identity', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      await RBACAPI.updateUserRoles('sso:oidc:okta:opaque_subject', ['viewer']);
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/admin/users/sso%3Aoidc%3Aokta%3Aopaque_subject/roles',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ roleIds: ['viewer'] }),
+        }),
+      );
+    });
   });
 
   describe('getUserPermissions', () => {

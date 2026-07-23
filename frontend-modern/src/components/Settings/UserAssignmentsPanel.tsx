@@ -11,6 +11,8 @@ import Pencil from 'lucide-solid/icons/pencil';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { getUserAssignmentsEmptyStateCopy } from '@/utils/rbacPresentation';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 
 export const UserAssignmentsPanel: Component = () => {
   const state = useUserAssignmentsPanelState();
@@ -25,7 +27,7 @@ export const UserAssignmentsPanel: Component = () => {
             placeholder="Search users..."
             value={state.searchQuery()}
             onChange={state.setSearchQuery}
-            disabled={!state.featureGate.rbacEnabled()}
+            disabled={!state.featureGate.rbacEnabled() || Boolean(state.loadError())}
             class="min-w-[15rem]"
             inputClass="min-h-10 sm:min-h-9 py-2.5"
           />
@@ -47,10 +49,27 @@ export const UserAssignmentsPanel: Component = () => {
           </div>
         </Show>
 
+        <Show when={!state.loading() && state.featureGate.rbacEnabled() && state.loadError()}>
+          {(message) => (
+            <InlineNotice
+              role="alert"
+              aria-live="polite"
+              tone="danger"
+              layout="banner"
+              icon={<TriangleAlert />}
+              actionLabel="Retry"
+              actionOnClick={() => void state.loadData()}
+            >
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+
         <Show
           when={
             !state.loading() &&
             state.featureGate.rbacEnabled() &&
+            !state.loadError() &&
             state.filteredAssignments().length === 0
           }
         >
@@ -73,6 +92,7 @@ export const UserAssignmentsPanel: Component = () => {
           when={
             !state.loading() &&
             state.featureGate.rbacEnabled() &&
+            !state.loadError() &&
             state.filteredAssignments().length > 0
           }
         >

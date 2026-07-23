@@ -31,6 +31,38 @@ func TestTenantRBACProvider_DefaultOrg(t *testing.T) {
 	}
 }
 
+func TestTenantRBACProvider_DefaultOrgMigratesLegacyState(t *testing.T) {
+	baseDir := t.TempDir()
+	legacy, err := auth.NewFileManager(baseDir)
+	if err != nil {
+		t.Fatalf("NewFileManager: %v", err)
+	}
+	if err := legacy.SaveRole(auth.Role{
+		ID:          "legacy-readonly",
+		Name:        "Legacy read only",
+		Permissions: []auth.Permission{{Action: "read", Resource: "*"}},
+	}); err != nil {
+		t.Fatalf("save legacy role: %v", err)
+	}
+	if err := legacy.UpdateUserRoles("legacy-local", []string{"legacy-readonly"}); err != nil {
+		t.Fatalf("save legacy assignment: %v", err)
+	}
+
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+	manager, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager(default): %v", err)
+	}
+	if _, ok := manager.GetRole("legacy-readonly"); !ok {
+		t.Fatal("default organization did not migrate the legacy role")
+	}
+	assignment, ok := manager.GetUserAssignment("legacy-local")
+	if !ok || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != "legacy-readonly" {
+		t.Fatalf("default organization did not migrate assignment: %#v, exists=%v", assignment, ok)
+	}
+}
+
 func TestTenantRBACProvider_NonDefaultOrg(t *testing.T) {
 	baseDir := t.TempDir()
 	orgID := "acme"
@@ -53,6 +85,35 @@ func TestTenantRBACProvider_NonDefaultOrg(t *testing.T) {
 	dbPath := filepath.Join(baseDir, "orgs", orgID, "rbac", "rbac.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatalf("expected tenant rbac db at %s: %v", dbPath, err)
+	}
+}
+
+func TestTenantRBACProvider_NonDefaultOrgDoesNotConsumeLegacyState(t *testing.T) {
+	baseDir := t.TempDir()
+	legacy, err := auth.NewFileManager(baseDir)
+	if err != nil {
+		t.Fatalf("NewFileManager: %v", err)
+	}
+	if err := legacy.SaveRole(auth.Role{
+		ID:          "default-only",
+		Name:        "Default only",
+		Permissions: []auth.Permission{{Action: "read", Resource: "*"}},
+	}); err != nil {
+		t.Fatalf("save legacy role: %v", err)
+	}
+
+	createOrgDir(t, baseDir, "other-org")
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+	manager, err := provider.GetManager("other-org")
+	if err != nil {
+		t.Fatalf("GetManager(other-org): %v", err)
+	}
+	if _, ok := manager.GetRole("default-only"); ok {
+		t.Fatal("legacy default-organization role leaked into another organization")
+	}
+	if _, err := os.Stat(filepath.Join(baseDir, "rbac_roles.json")); err != nil {
+		t.Fatalf("non-default organization consumed legacy source: %v", err)
 	}
 }
 

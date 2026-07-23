@@ -6382,6 +6382,9 @@
         "pkg/audit/async_logger.go",
         "pkg/audit/audit.go",
         "pkg/audit/sqlite_logger.go",
+        "pkg/auth/rbac.go",
+        "pkg/auth/sqlite_manager.go",
+        "pkg/server/server.go",
         "pkg/server/telemetry_pulse_intelligence.go",
         "pkg/tlsutil/fingerprint.go",
         "scripts/telemetry_adoption_report.py",
@@ -6590,6 +6593,25 @@
               "internal/api/security_tokens_owner_binding_test.go",
               "internal/api/security_tokens_test.go",
               "internal/api/system_settings_telemetry_test.go"
+            ]
+          },
+          {
+            "id": "rbac-runtime-persistence",
+            "label": "RBAC runtime persistence and upgrade proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/auth/rbac.go",
+              "pkg/auth/sqlite_manager.go",
+              "pkg/server/server.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/rbac_handlers_test.go",
+              "internal/api/rbac_tenant_provider_test.go",
+              "internal/api/security_regression_test.go",
+              "pkg/auth/rbac_manager_test.go",
+              "pkg/auth/sqlite_manager_test.go"
             ]
           }
         ],

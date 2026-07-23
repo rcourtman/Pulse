@@ -392,3 +392,140 @@ func TestMultiTenantRBACRoleUpdateChangesPermissions(t *testing.T) {
 		t.Fatalf("permissions leaked into %s: %+v", orgB, permsInOrgB)
 	}
 }
+
+func TestRBACHandlersReturnEmptyAssignmentsAsArray(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+	handler := NewRBACHandlers(&config.Config{DataPath: baseDir}, provider)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	response := httptest.NewRecorder()
+	handler.HandleGetUsers(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", response.Code, response.Body.String())
+	}
+	if response.Body.String() != "[]\n" {
+		t.Fatalf("body = %q, want an empty JSON array", response.Body.String())
+	}
+}
+
+func TestRBACHandlersReportLegacyMigrationFailure(t *testing.T) {
+	baseDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(baseDir, "rbac_roles.json"), []byte(`[{"id":`), 0600); err != nil {
+		t.Fatalf("write corrupt legacy roles: %v", err)
+	}
+
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+	handler := NewRBACHandlers(&config.Config{DataPath: baseDir}, provider)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/roles", nil)
+	response := httptest.NewRecorder()
+	handler.HandleRoles(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503; body=%s", response.Code, response.Body.String())
+	}
+	if !bytes.Contains(response.Body.Bytes(), []byte(`"code":"rbac_store_unavailable"`)) {
+		t.Fatalf("missing explicit RBAC store error: %s", response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(baseDir, "rbac_roles.json")); err != nil {
+		t.Fatalf("corrupt source was not preserved: %v", err)
+	}
+}
+
+func TestRBACHandlersReportSQLiteReadFailure(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	manager, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager(default): %v", err)
+	}
+	sqliteManager, ok := manager.(*auth.SQLiteManager)
+	if !ok {
+		t.Fatalf("manager type = %T, want *auth.SQLiteManager", manager)
+	}
+	if err := sqliteManager.Close(); err != nil {
+		t.Fatalf("close manager: %v", err)
+	}
+
+	handler := NewRBACHandlers(&config.Config{DataPath: baseDir}, provider)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	response := httptest.NewRecorder()
+	handler.HandleGetUsers(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503; body=%s", response.Code, response.Body.String())
+	}
+	if !bytes.Contains(response.Body.Bytes(), []byte(`"code":"rbac_store_unavailable"`)) {
+		t.Fatalf("missing explicit RBAC store error: %s", response.Body.String())
+	}
+}
+
+func TestRBACHandlersAllowStableSSOPrincipalAssignments(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+	handler := NewRBACHandlers(&config.Config{DataPath: baseDir}, provider)
+	principal := "sso:oidc:okta:opaque-subject"
+
+	body := bytes.NewBufferString(`{"roleIds":["viewer"]}`)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/api/admin/users/"+principal+"/roles",
+		body,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleUserRoleActions(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body=%s", response.Code, response.Body.String())
+	}
+	manager, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager(default): %v", err)
+	}
+	assignment, ok := manager.GetUserAssignment(principal)
+	if !ok || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != auth.RoleViewer {
+		t.Fatalf("stable SSO assignment not saved: %#v, exists=%v", assignment, ok)
+	}
+}
+
+func TestNewRouterSharesCanonicalRBACManagerWithSSOAndSettings(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	legacy, err := auth.NewFileManager(cfg.DataPath)
+	if err != nil {
+		t.Fatalf("NewFileManager: %v", err)
+	}
+	if err := legacy.SaveRole(auth.Role{
+		ID:          "legacy-operator",
+		Name:        "Legacy operator",
+		Permissions: []auth.Permission{{Action: "read", Resource: "nodes"}},
+	}); err != nil {
+		t.Fatalf("save legacy role: %v", err)
+	}
+	if err := legacy.UpdateUserRoles("legacy-user", []string{"legacy-operator"}); err != nil {
+		t.Fatalf("save legacy assignment: %v", err)
+	}
+
+	originalManager := auth.GetManager()
+	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	t.Cleanup(func() {
+		router.shutdownBackgroundWorkers()
+		router.ShutdownRBAC()
+		auth.SetManager(originalManager)
+	})
+
+	settingsManager, err := router.rbacProvider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager(default): %v", err)
+	}
+	if auth.GetManager() != settingsManager {
+		t.Fatal("SSO/authorization global manager differs from the settings manager")
+	}
+	assignment, ok := auth.GetManager().GetUserAssignment("legacy-user")
+	if !ok || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != "legacy-operator" {
+		t.Fatalf("upgraded legacy assignment unavailable to canonical manager: %#v, exists=%v", assignment, ok)
+	}
+}

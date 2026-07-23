@@ -22,6 +22,7 @@ export function useRolesPanelState() {
   const [formName, setFormName] = createSignal('');
   const [formDescription, setFormDescription] = createSignal('');
   const [formPermissions, setFormPermissions] = createSignal<Permission[]>([]);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
 
   const featureGate = useRBACFeatureGateState({
     kind: 'roles',
@@ -32,19 +33,24 @@ export function useRolesPanelState() {
   const loadRoles = async () => {
     if (!featureGate.rbacEnabled()) {
       setRoles([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await RBACAPI.getRoles();
       setRoles(data || []);
     } catch (err) {
       if (err instanceof Error && /feature not included in license/i.test(err.message)) {
         setRoles([]);
+        setLoadError(null);
         return;
       }
+      setRoles([]);
+      setLoadError(getRolesLoadErrorMessage());
       logger.error('Failed to load roles', err);
       notificationStore.error(getRolesLoadErrorMessage());
     } finally {
@@ -59,6 +65,7 @@ export function useRolesPanelState() {
     }
     if (!featureGate.rbacEnabled()) {
       setRoles([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
@@ -159,6 +166,8 @@ export function useRolesPanelState() {
     handleDeleteRole,
     handleSaveRole,
     loading,
+    loadError,
+    loadRoles,
     openCreateRole,
     openEditRole,
     removePermission,

@@ -131,6 +131,9 @@ create, review, and approve cross-organization shares.
    behavior; frontend-primitives owns primary, danger-outline, success-ghost,
    danger-ghost, ghost, accent, danger, focus, disabled, and settings-action
    chrome.
+10. Keep role and assignment panels fail closed on store errors: clear stale
+    rows, disable mutations, retain a visible retry notice, and do not render
+    the normal empty state until a healthy response has been received.
 
 ## Current State
 
@@ -357,3 +360,14 @@ self-digesting foreign revocation or activation cannot be attributed to or
 activate the victim tenant. Each tenant's atomic AI config owns its history,
 while provider/MSP inheritance, delegated acknowledgement, tenant-default UI,
 and multi-actor administration remain explicit residual product work.
+
+The RBAC settings transport consumes the security-owned canonical persistence
+boundary rather than constructing a settings-local manager.
+`internal/api/access_tenant_provider.go` isolates organization databases and
+only the default organization may consume v5 file-based migration input.
+Role and assignment panels must receive healthy empty collections as `[]`, but
+store initialization, migration, and read failures stay visible as
+`rbac_store_unavailable`; the settings layer must not reinterpret corruption
+as an organization with no roles or users. Local identities and opaque stable
+SSO principals are both valid assignment subjects, including principals with
+an intentionally empty role set.

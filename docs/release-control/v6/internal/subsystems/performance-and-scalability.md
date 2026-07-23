@@ -837,6 +837,10 @@ shell clickable behind another overlay.
    `internal/api/router.go` may consult the already-wired runtime entitlement
    service, but it must not add broad persistence scans, metrics fan-out, or
    external network calls to protected settings or chat request paths.
+7. Initialize and cache each organization RBAC manager once per router
+   lifecycle. Request handlers may reuse the cached manager but must not reopen
+   or remigrate SQLite on each role or assignment request, and shutdown must
+   close the owned manager set.
 
 ## Current State
 

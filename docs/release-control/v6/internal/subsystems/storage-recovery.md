@@ -1581,6 +1581,13 @@ recovery scope, or a storage/recovery-owned secret source.
 
 ## Completion Obligations
 
+Legacy RBAC JSON import is an adjacent security-owned migration, not recovery
+inventory or restore evidence. When shared `internal/api/` construction
+triggers that import, validation and SQLite writes must complete atomically,
+corrupt or stale inputs must keep their source files, and non-default
+organization stores must never consume the default organization's legacy
+files.
+
 1. Update this contract when canonical storage or recovery entry points move. Routes added under the shared `internal/api/` extension point that are clearly outside storage/recovery ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem. Exact scoped-run identity resolution and structured `present`, `resolved`, or `uncertain` Patrol finding assessments on that shared boundary are also adjacent AI/API state. Storage and recovery may supply evidence or observe the resulting finding, but an assessment is not backup success, restore verification, recovery freshness, storage health, or permission to mutate a storage system.
    Content-free Pulse Intelligence telemetry rollups under shared
    `internal/api/` are also adjacent-only. Storage and recovery may consume

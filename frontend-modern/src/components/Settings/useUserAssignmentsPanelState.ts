@@ -20,6 +20,7 @@ export function useUserAssignmentsPanelState() {
   const [userPermissions, setUserPermissions] = createSignal<Permission[]>([]);
   const [loadingPermissions, setLoadingPermissions] = createSignal(false);
   const [formRoleIds, setFormRoleIds] = createSignal<string[]>([]);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
 
   const featureGate = useRBACFeatureGateState({
     kind: 'user-assignments',
@@ -31,11 +32,13 @@ export function useUserAssignmentsPanelState() {
     if (!featureGate.rbacEnabled()) {
       setAssignments([]);
       setRoles([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setLoadError(null);
     try {
       const [usersData, rolesData] = await Promise.all([RBACAPI.getUsers(), RBACAPI.getRoles()]);
       setAssignments(usersData || []);
@@ -44,8 +47,12 @@ export function useUserAssignmentsPanelState() {
       if (err instanceof Error && /feature not included in license/i.test(err.message)) {
         setAssignments([]);
         setRoles([]);
+        setLoadError(null);
         return;
       }
+      setAssignments([]);
+      setRoles([]);
+      setLoadError(getUserAssignmentsLoadErrorMessage());
       logger.error('Failed to load user assignments', err);
       notificationStore.error(getUserAssignmentsLoadErrorMessage());
     } finally {
@@ -61,6 +68,7 @@ export function useUserAssignmentsPanelState() {
     if (!featureGate.rbacEnabled()) {
       setAssignments([]);
       setRoles([]);
+      setLoadError(null);
       setLoading(false);
       return;
     }
@@ -143,6 +151,8 @@ export function useUserAssignmentsPanelState() {
     getRoleName,
     handleSaveAssignments,
     loading,
+    loadData,
+    loadError,
     loadingPermissions,
     openManageAccess,
     roles,
