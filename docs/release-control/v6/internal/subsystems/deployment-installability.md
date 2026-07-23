@@ -843,7 +843,10 @@ TLS floor in the dynamic config.
    packets must also enumerate every customer-visible support fix included in
    the cut, and the release-asset proof must pin the current packet to those
    runtime fixes so a patch that includes support work cannot ship as a
-   metadata-only release note.
+   metadata-only release note. If a customer-visible runtime fix lands after a
+   stable packet is prepared but before publication, the next dispatch must
+   update both the release notes and changelog and bind that named fix in the
+   release-promotion packet proof.
    Release integration failures must leave enough evidence to classify the
    failure after the compose stack is torn down. `create-release.yml` must
    upload the Playwright report and a `release-integration-failures` artifact

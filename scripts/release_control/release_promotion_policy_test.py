@@ -397,6 +397,21 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn(f"`v{current_version}`", release_notes)
                 self.assertIn(f"Pulse v{current_version}", changelog)
 
+    def test_v611_packet_records_proxmox_backup_posture_identity_fix(self) -> None:
+        release_notes = normalize_ws(read("docs/releases/RELEASE_NOTES_v6.1.1.md"))
+        changelog = normalize_ws(read("docs/releases/V6_CHANGELOG_v6.1.1.md"))
+
+        self.assertIn(
+            "Proxmox backup and snapshot recovery points preserve canonical workload identity",
+            release_notes,
+        )
+        self.assertIn("obsolete protection-posture row is removed", release_notes)
+        self.assertIn(
+            "Proxmox backup, snapshot, and PBS recovery points preserve canonical workload identity",
+            changelog,
+        )
+        self.assertIn("posture refresh removes obsolete rows", changelog)
+
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
         current_version = read("VERSION").strip()

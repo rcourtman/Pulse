@@ -26,6 +26,9 @@ _This changelog describes stable `v6.1.1` compared with stable `v6.1.0`._
 - Cluster node aggregation no longer conflates separate clusters that reuse a
   node name.
 - Missing Patrol verdicts retain bounded follow-up.
+- Proxmox backup, snapshot, and PBS recovery points preserve canonical
+  workload identity, and posture refresh removes obsolete rows when a
+  persisted point is corrected to a different subject.
 - The Proxmox VE setup script avoids an `awk` identifier collision.
 
 ## Release Metadata

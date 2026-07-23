@@ -9176,7 +9176,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "release-operator-611-release-gate-stable-patch-unattended-release-path",
+      "agent_id": "release-operator-611",
+      "summary": "Publish v6.1.1 stable patch including Proxmox backup posture identity correction",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-23T14:49:52Z",
+      "heartbeat_at": "2026-07-23T14:49:52Z",
+      "expires_at": "2026-07-23T18:49:52Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "stable-patch-unattended-release-path"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

@@ -20,6 +20,8 @@ completed on `main` after the `v6.1.0` cutoff.
 - Infrastructure pages retain navigation through stream reconnects, proxy and
   SSO bootstrap is more reliable, node edits use the correct update endpoint,
   and PBS datastore alert overrides appear on the thresholds page.
+- Proxmox backup and snapshot recovery points preserve canonical workload
+  identity, keeping protection posture attached to the correct VM or container.
 
 ## Changed
 
@@ -66,6 +68,10 @@ are not stored in telemetry rows.
   works correctly through proxy and SSO configurations.
 - Infrastructure node edits route to the update endpoint.
 - PBS datastore alert overrides are projected onto the thresholds page.
+- Proxmox backup, snapshot, and PBS recovery points no longer re-hash an
+  already canonical workload ID as provider identity. When an existing point
+  is corrected to a different subject, the obsolete protection-posture row is
+  removed alongside the refreshed canonical posture.
 - The Proxmox VE setup script avoids an `awk` variable name that conflicts with
   implementations where `exp` is reserved.
 
