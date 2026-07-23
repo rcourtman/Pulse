@@ -13415,6 +13415,43 @@ func TestContract_AgentExecWebSocketBindsProxmoxInstallTokenOnFirstUse(t *testin
 	}
 }
 
+func TestContract_ProxmoxInstallTokenCreatesOneDeclaredSource(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	rawToken := "contract-proxmox-registration-install.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, map[string]string{
+		"install_type": proxmoxInstallTypePVE,
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{record},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	payload := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://contract-pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-contract-pve",
+		TokenValue: "contract-proxmox-secret",
+		ServerName: "contract-pve",
+		Source:     "agent",
+	}
+
+	first := runAgentAutoRegister(t, handler, rawToken, payload)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first install registration status = %d, body=%s", first.Code, first.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("PVE instances = %d, want 1", len(cfg.PVEInstances))
+	}
+
+	cfg.PVEInstances = nil
+	reused := runAgentAutoRegister(t, handler, rawToken, payload)
+	if reused.Code != http.StatusForbidden {
+		t.Fatalf("reused install registration status = %d, want 403; body=%s", reused.Code, reused.Body.String())
+	}
+}
+
 func TestContract_AgentConfigSuppressesCommandsForUnboundExecToken(t *testing.T) {
 	handler, monitor := newUnifiedAgentHandlers(t, nil)
 	hostID := seedUnifiedAgentHost(t, monitor)

@@ -29,12 +29,187 @@ import (
 )
 
 // agentAutoRegContextKey marks a request authenticated via agent:report token.
-// When set, handleCanonicalAutoRegister restricts to updating existing nodes only.
+// Ordinary runtime tokens remain update-only. A Proxmox install token minted by
+// a settings:write endpoint may additionally carry one bounded, one-time grant
+// to create the declared PVE/PBS source.
 type agentAutoRegContextKey struct{}
 
+type agentAutoRegAuth struct {
+	tokenID          string
+	installBootstrap bool
+}
+
+func getAgentAutoRegAuth(ctx context.Context) (agentAutoRegAuth, bool) {
+	v, ok := ctx.Value(agentAutoRegContextKey{}).(agentAutoRegAuth)
+	return v, ok
+}
+
 func isAgentAutoRegAuth(ctx context.Context) bool {
-	v, _ := ctx.Value(agentAutoRegContextKey{}).(bool)
-	return v
+	_, ok := getAgentAutoRegAuth(ctx)
+	return ok
+}
+
+const (
+	proxmoxInstallRegistrationCompletedKey = "proxmox_registration_completed"
+	proxmoxInstallRegistrationTypeKey      = "proxmox_registration_type"
+	proxmoxInstallRegistrationHostnameKey  = "proxmox_registration_hostname"
+	proxmoxInstallRegistrationHostKey      = "proxmox_registration_host"
+	proxmoxInstallRegistrationNodeKey      = "proxmox_registration_node"
+	proxmoxInstallRegistrationAtKey        = "proxmox_registration_at"
+)
+
+func canBootstrapProxmoxInstallRegistration(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
+	if record == nil || req == nil || strings.TrimSpace(req.Source) != "agent" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationCompletedKey]), "true") {
+		return false
+	}
+	if strings.TrimSpace(record.Metadata["install_type"]) != strings.TrimSpace(req.Type) {
+		return false
+	}
+	switch strings.TrimSpace(record.Metadata["issued_via"]) {
+	case agentInstallIssuedViaConfig, agentInstallIssuedViaHosted:
+	default:
+		return false
+	}
+	requestedHostname := strings.TrimSpace(req.ServerName)
+	if requestedHostname == "" {
+		return false
+	}
+	if boundHostname := strings.TrimSpace(record.Metadata["bound_hostname"]); boundHostname != "" {
+		return strings.EqualFold(boundHostname, requestedHostname)
+	}
+	return true
+}
+
+func completedProxmoxInstallRegistrationMatches(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
+	if record == nil || req == nil ||
+		!strings.EqualFold(strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationCompletedKey]), "true") {
+		return false
+	}
+	return strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationTypeKey]) == strings.TrimSpace(req.Type) &&
+		strings.EqualFold(
+			strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationHostnameKey]),
+			strings.TrimSpace(req.ServerName),
+		)
+}
+
+// prepareProxmoxInstallBootstrap binds an unused install token to the first
+// fully validated host request that presents it.
+func (h *ConfigHandlers) prepareProxmoxInstallBootstrap(ctx context.Context, req *AutoRegisterRequest) (bool, error) {
+	auth, ok := getAgentAutoRegAuth(ctx)
+	if !ok || !auth.installBootstrap || strings.TrimSpace(auth.tokenID) == "" {
+		return false, nil
+	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return false, fmt.Errorf("configuration unavailable")
+	}
+	for i := range cfg.APITokens {
+		record := &cfg.APITokens[i]
+		if record.ID != auth.tokenID {
+			continue
+		}
+		if !canBootstrapProxmoxInstallRegistration(record, req) {
+			return false, nil
+		}
+		if strings.TrimSpace(record.Metadata["bound_hostname"]) != "" {
+			return true, nil
+		}
+
+		if record.Metadata == nil {
+			record.Metadata = make(map[string]string)
+		}
+		previousMetadata := make(map[string]string, len(record.Metadata))
+		for key, value := range record.Metadata {
+			previousMetadata[key] = value
+		}
+		record.Metadata["bound_hostname"] = strings.TrimSpace(req.ServerName)
+		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
+		if persistence := h.getPersistence(ctx); persistence != nil {
+			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+				record.Metadata = previousMetadata
+				return false, fmt.Errorf("persist Proxmox install token host binding: %w", err)
+			}
+		}
+		return true, nil
+	}
+	return false, fmt.Errorf("Proxmox install token no longer exists")
+}
+
+func (h *ConfigHandlers) proxmoxInstallBootstrapAvailable(ctx context.Context, req *AutoRegisterRequest) bool {
+	auth, ok := getAgentAutoRegAuth(ctx)
+	if !ok || !auth.installBootstrap || strings.TrimSpace(auth.tokenID) == "" {
+		return false
+	}
+
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return false
+	}
+	for i := range cfg.APITokens {
+		record := &cfg.APITokens[i]
+		if record.ID == auth.tokenID {
+			return canBootstrapProxmoxInstallRegistration(record, req)
+		}
+	}
+	return false
+}
+
+func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, req *AutoRegisterRequest, host, node string) error {
+	auth, ok := getAgentAutoRegAuth(ctx)
+	if !ok || !auth.installBootstrap || strings.TrimSpace(auth.tokenID) == "" {
+		return nil
+	}
+
+	persistence := h.getPersistence(ctx)
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return fmt.Errorf("configuration unavailable")
+	}
+	for i := range cfg.APITokens {
+		record := &cfg.APITokens[i]
+		if record.ID != auth.tokenID {
+			continue
+		}
+		if completedProxmoxInstallRegistrationMatches(record, req) {
+			return nil
+		}
+		if !canBootstrapProxmoxInstallRegistration(record, req) {
+			return fmt.Errorf("Proxmox install registration grant is no longer available")
+		}
+		if record.Metadata == nil {
+			record.Metadata = make(map[string]string)
+		}
+		previousMetadata := make(map[string]string, len(record.Metadata))
+		for key, value := range record.Metadata {
+			previousMetadata[key] = value
+		}
+		record.Metadata[proxmoxInstallRegistrationCompletedKey] = "true"
+		record.Metadata[proxmoxInstallRegistrationTypeKey] = strings.TrimSpace(req.Type)
+		record.Metadata[proxmoxInstallRegistrationHostnameKey] = strings.TrimSpace(req.ServerName)
+		record.Metadata[proxmoxInstallRegistrationHostKey] = strings.TrimSpace(host)
+		record.Metadata[proxmoxInstallRegistrationNodeKey] = strings.TrimSpace(node)
+		record.Metadata[proxmoxInstallRegistrationAtKey] = time.Now().UTC().Format(time.RFC3339)
+		if persistence != nil {
+			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+				record.Metadata = previousMetadata
+				return fmt.Errorf("persist Proxmox install registration grant: %w", err)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("Proxmox install token no longer exists")
 }
 
 // HandleSetupScript serves the setup script for Proxmox/PBS nodes
@@ -865,7 +1040,9 @@ func (h *ConfigHandlers) notifyAutoUnregisterSuccess(ctx context.Context, req *A
 }
 
 type autoRegisterCheckResponse struct {
-	Registered bool `json:"registered"`
+	Registered   bool `json:"registered"`
+	SourceExists bool `json:"sourceExists"`
+	CanRegister  bool `json:"canRegister"`
 }
 
 func autoRegisterHostMatchesCandidates(existingHost string, candidates []string) bool {
@@ -956,6 +1133,31 @@ func (h *ConfigHandlers) autoRegisteredNodeExists(ctx context.Context, req *Auto
 		}
 	}
 
+	return false
+}
+
+func (h *ConfigHandlers) autoRegisteredNodeConfigured(ctx context.Context, req *AutoRegisterRequest, candidates []string) bool {
+	if req == nil {
+		return false
+	}
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return false
+	}
+	switch req.Type {
+	case "pve":
+		for _, node := range cfg.PVEInstances {
+			if matched, _ := autoRegisterPVEInstanceMatchesCandidates(node, candidates); matched {
+				return true
+			}
+		}
+	case "pbs":
+		for _, node := range cfg.PBSInstances {
+			if autoRegisterHostMatchesCandidates(node.Host, candidates) {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -1280,20 +1482,16 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 		h.codeMutex.Unlock()
 	}
 
-	// Fallback: allow agents with a valid agent:report API token to re-register their
-	// Proxmox node. This is needed when an agent reinstalls — it rotates the PVE token
-	// but can't fetch a one-time setup token (that endpoint requires settings:write).
-	// For security this path is restricted to updating existing nodes only.
+	// Fallback: allow agents with a valid agent:report API token to re-register
+	// an existing Proxmox node. Ordinary tokens remain update-only. A
+	// settings-authorized Proxmox install token may additionally bootstrap one
+	// source of its declared type, bound to the first presenting hostname.
 	if !authenticated {
 		if apiToken, hasToken := explicitAPITokenFromRequest(r); hasToken {
-			config.Mu.RLock()
+			config.Mu.Lock()
 			cfg := h.getConfig(r.Context())
-			isValid := cfg != nil && cfg.IsValidAPIToken(apiToken)
-			config.Mu.RUnlock()
-			if isValid {
-				config.Mu.Lock()
+			if cfg != nil {
 				record, ok := cfg.ValidateAPIToken(apiToken)
-				config.Mu.Unlock()
 				if ok && record != nil && record.HasScope(config.ScopeAgentReport) {
 					// Reject cross-org tokens: if the request context has an explicit
 					// non-default org, the token must belong to that same org.
@@ -1301,15 +1499,29 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 					orgMismatch := requestOrgID != "" && requestOrgID != "default" &&
 						record.OrgID != "" && record.OrgID != requestOrgID
 					if !orgMismatch {
+						installBootstrap := canBootstrapProxmoxInstallRegistration(record, &req)
 						authenticated = true
-						r = r.WithContext(context.WithValue(r.Context(), agentAutoRegContextKey{}, true))
-						log.Info().
+						r = r.WithContext(context.WithValue(r.Context(), agentAutoRegContextKey{}, agentAutoRegAuth{
+							tokenID:          record.ID,
+							installBootstrap: installBootstrap,
+						}))
+						event := log.Info()
+						if req.CheckRegistration {
+							event = log.Debug()
+						}
+						message := "Auto-register authenticated via agent API token (update-only mode)"
+						if installBootstrap {
+							message = "Auto-register authenticated via Proxmox install token"
+						}
+						event.
 							Str("type", req.Type).
 							Str("host", req.Host).
-							Msg("Auto-register authenticated via agent API token (update-only mode)")
+							Bool("install_bootstrap", installBootstrap).
+							Msg(message)
 					}
 				}
 			}
+			config.Mu.Unlock()
 		}
 	}
 
@@ -1338,9 +1550,17 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 			clientIP = forwarded
 		}
 	}
-	log.Info().Str("clientIP", clientIP).Msg("Auto-register request from")
+	requestEvent := log.Info()
+	if req.CheckRegistration {
+		requestEvent = log.Debug()
+	}
+	requestEvent.Str("clientIP", clientIP).Msg("Auto-register request from")
 
-	log.Info().
+	requestEvent = log.Info()
+	if req.CheckRegistration {
+		requestEvent = log.Debug()
+	}
+	requestEvent.
 		Str("type", req.Type).
 		Str("host", req.Host).
 		Str("tokenId", req.TokenID).
@@ -1353,7 +1573,11 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 // handleCanonicalAutoRegister handles the canonical /api/auto-register flow.
 func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *http.Request, req *AutoRegisterRequest, clientIP string) {
-	log.Info().
+	event := log.Info()
+	if req.CheckRegistration {
+		event = log.Debug()
+	}
+	event.
 		Str("type", req.Type).
 		Str("host", req.Host).
 		Msg("Processing canonical auto-register request")
@@ -1387,6 +1611,11 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	req.ServerName = serverName
 	req.Source = registrationSource
 
+	// Serialize checks and completions. Checks can bind or consume an install
+	// grant, and must not race the source mutation performed by completion.
+	h.autoRegisterMutex.Lock()
+	defer h.autoRegisterMutex.Unlock()
+
 	if req.CheckRegistration {
 		if typeValue == "" || hostValue == "" || serverName == "" {
 			missingMessage := canonicalAutoRegisterCheckMissingFieldsMessage(typeValue, hostValue, serverName)
@@ -1404,10 +1633,40 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if _, err := h.prepareProxmoxInstallBootstrap(r.Context(), req); err != nil {
+			log.Error().
+				Err(err).
+				Str("type", req.Type).
+				Str("host", req.Host).
+				Msg("Failed to bind Proxmox install registration token")
+			http.Error(w, "Failed to persist Proxmox install registration authorization", http.StatusInternalServerError)
+			return
+		}
+		sourceExists := h.autoRegisteredNodeConfigured(r.Context(), req, normalizedCandidates)
+		registered := h.autoRegisteredNodeExists(r.Context(), req, normalizedCandidates)
+		if registered {
+			actualName := h.findInstanceNameByHost(r.Context(), req.Type, normalizedCandidates[0])
+			if actualName == "" {
+				actualName = req.ServerName
+			}
+			if err := h.completeProxmoxInstallBootstrap(r.Context(), req, normalizedCandidates[0], actualName); err != nil {
+				log.Error().
+					Err(err).
+					Str("type", req.Type).
+					Str("host", req.Host).
+					Msg("Failed to consume Proxmox install registration grant for existing source")
+				http.Error(w, "Failed to finalize Proxmox install registration authorization", http.StatusInternalServerError)
+				return
+			}
+		}
+		canRegister := sourceExists || !isAgentAutoRegAuth(r.Context()) ||
+			h.proxmoxInstallBootstrapAvailable(r.Context(), req)
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(autoRegisterCheckResponse{
-			Registered: h.autoRegisteredNodeExists(r.Context(), req, normalizedCandidates),
+			Registered:   registered,
+			SourceExists: sourceExists,
+			CanRegister:  canRegister,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to encode auto-register registration check response")
 		}
@@ -1442,6 +1701,15 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	host, fingerprint, verifySSL, candidateHosts, err := selectAutoRegisterHost(req.Type, req.Host, req.CandidateHosts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := h.prepareProxmoxInstallBootstrap(r.Context(), req); err != nil {
+		log.Error().
+			Err(err).
+			Str("type", req.Type).
+			Str("host", req.Host).
+			Msg("Failed to bind Proxmox install registration token")
+		http.Error(w, "Failed to persist Proxmox install registration authorization", http.StatusInternalServerError)
 		return
 	}
 
@@ -1542,7 +1810,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint"))
 		} else {
 			// Agent-token auth is restricted to updating existing nodes only.
-			if isAgentAutoRegAuth(r.Context()) {
+			if isAgentAutoRegAuth(r.Context()) && !h.proxmoxInstallBootstrapAvailable(r.Context(), req) {
 				log.Warn().Str("host", host).Str("type", "pve").Msg("Agent API token auth rejected for new PVE node registration")
 				http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
 				return
@@ -1620,7 +1888,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else {
 			// Agent-token auth is restricted to updating existing nodes only.
-			if isAgentAutoRegAuth(r.Context()) {
+			if isAgentAutoRegAuth(r.Context()) && !h.proxmoxInstallBootstrapAvailable(r.Context(), req) {
 				log.Warn().Str("host", host).Str("type", "pbs").Msg("Agent API token auth rejected for new PBS node registration")
 				http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
 				return
@@ -1652,6 +1920,15 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
 	if actualName == "" {
 		actualName = serverName
+	}
+	if err := h.completeProxmoxInstallBootstrap(r.Context(), req, host, actualName); err != nil {
+		log.Error().
+			Err(err).
+			Str("type", req.Type).
+			Str("host", host).
+			Msg("Failed to consume Proxmox install registration grant")
+		http.Error(w, "Failed to finalize Proxmox install registration authorization", http.StatusInternalServerError)
+		return
 	}
 	h.markAutoRegistered(req.Type, actualName)
 

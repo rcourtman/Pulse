@@ -1863,6 +1863,11 @@ must not treat starter
     tolerate absent notification managers and other optional runtime managers
     so adjacent browser surfaces inherit a fail-closed API response instead of
     a panic after the archive import succeeds.
+25. Treat the shared Proxmox auto-register authority split as lifecycle/API
+    context only. Direct agent-token health checks and a one-time,
+    server-minted install registration grant must not widen backup, snapshot,
+    restore, retention, replication, datastore-management, or recovery-policy
+    authority.
 
 ### Attention posture join
 
@@ -4468,6 +4473,17 @@ Browser-facing storage/recovery surfaces must also treat
 `/api/security/status.sessionCapabilities.demoMode` as the canonical
 public-demo bootstrap signal instead of inferring demo posture from headers,
 `/api/health`, or hostname heuristics.
+
+### Adjacent Proxmox registration authorization neutrality
+
+The shared `internal/api/config_setup_handlers.go` Proxmox registration fix is
+adjacent lifecycle/API authority only. Runtime agents now use
+`/api/auto-register` directly, ordinary agent tokens remain update-only, and a
+server-minted Proxmox install token may consume one type- and host-bound initial
+source grant. This does not grant backup, snapshot, restore, retention,
+replication, datastore-management, or recovery-policy authority. The
+`settings:write` boundary on setup-artifact generation and all existing
+storage/recovery permission and evidence contracts remain unchanged.
 That same adjacent platform-connections boundary now also assumes direct
 TrueNAS and VMware connection writes fail closed while canonical
 monitored-system usage is unavailable. Storage and recovery may depend on the

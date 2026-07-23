@@ -213,6 +213,7 @@ type ConfigHandlers struct {
 	lastClusterDetection     map[string]time.Time
 	recentAutoRegistered     map[string]time.Time
 	recentAutoRegMutex       sync.Mutex
+	autoRegisterMutex        sync.Mutex
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance

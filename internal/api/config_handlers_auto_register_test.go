@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,43 @@ func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 	h.defaultMonitor = monitor
 
 	return h
+}
+
+func TestHandleAutoRegisterProxmoxInstallCheckBindsWithoutConsumingGrant(t *testing.T) {
+	rawToken := "proxmox-install-check.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, map[string]string{
+		"install_type": "pve",
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{record},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:              "pve",
+		Host:              "https://pve-install.local:8006",
+		ServerName:        "pve-install",
+		Source:            "agent",
+		CheckRegistration: true,
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("registration check status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var response autoRegisterCheckResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode registration check: %v", err)
+	}
+	if response.Registered || response.SourceExists || !response.CanRegister {
+		t.Fatalf("fresh install registration check = %#v, want missing source with completion authority", response)
+	}
+	if got := cfg.APITokens[0].Metadata["bound_hostname"]; got != "pve-install" {
+		t.Fatalf("bound hostname = %q, want pve-install", got)
+	}
+	if strings.EqualFold(cfg.APITokens[0].Metadata[proxmoxInstallRegistrationCompletedKey], "true") {
+		t.Fatal("read-only registration check consumed the one-time install grant")
+	}
 }
 
 func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {

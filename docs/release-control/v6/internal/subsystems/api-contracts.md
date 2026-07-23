@@ -3581,6 +3581,14 @@ off with context, or intentionally has no mobile surface. A `mobile-required`
 change is incomplete while either generated projection or the mobile consumer
 contract is stale.
 
+Proxmox runtime registration checks and completions must use the canonical
+`/api/auto-register` transport with `X-API-Token`; the admin-only
+`/api/setup-script-url` route is not a runtime probe. Ordinary
+`agent:report` tokens remain update-only. Only a server-authored config/hosted
+PVE/PBS install token may create one matching source, after durable first-host
+binding, and completion must consume that grant under the serialized
+auto-register mutation boundary.
+
 ## Current State
 
 ### vSphere host composition on the vCenter system row
@@ -8208,3 +8216,40 @@ real router middleware, token persistence/reload, monitor reconstruction,
 delete and config handlers, generated install token, alias re-enrollment, and
 shared-token isolation. It is the production-path contract proof alongside the
 monitoring race and continuity-store tests.
+
+### Proxmox auto-register authorization transport
+
+`POST /api/auto-register` is the sole runtime transport for Unified Agent
+Proxmox registration checks and completions. A caller with a runtime API token
+uses `X-API-Token` directly and omits body `authToken`; body `authToken` remains
+the one-time setup-script/bootstrap transport for token-optional or manual
+setup flows. `/api/setup-script-url` continues to require `settings:write` and
+must not be treated as a runtime capability-probing endpoint.
+
+An authenticated `agent:report` token can read registration state and update
+credentials on a matching existing PVE/PBS source. Only an unused install token
+minted through the config or hosted agent-install command may create a new
+source, and only when its server-authored `install_type` matches. First use
+binds the token after request validation to the presenting hostname; successful
+serialized completion persists consumption and registration identity metadata.
+Malformed requests do not bind the grant. Reuse, cross-type or cross-host use,
+and ordinary agent tokens return `403` for a missing source.
+Authentication failure at the canonical endpoint remains a warning/error
+diagnostic rather than being suppressed as an expected setup-artifact denial.
+
+The registration-check response distinguishes `registered` (the source is
+currently healthy), `sourceExists` (matching persisted configuration exists),
+and `canRegister` (this caller may complete a repair or bootstrap). Current
+agents do not rotate local credentials when a source is missing and
+`canRegister` is false; for rolling-update compatibility, they preserve the
+legacy repair behavior when an older server omits the two newer fields.
+
+Negative `checkRegistration` calls do not consume the install grant; a positive
+match consumes an otherwise-unneeded fresh-install grant so reinstalling an
+already-registered source cannot leave dormant creation authority. Successful
+steady-state authentication/processing emits only at debug severity.
+`internal/api/config_handlers_auto_register_test.go`,
+`internal/api/proxmox_install_registration_test.go`, and
+`internal/hostagent/proxmox_setup_test.go` prove the wire headers, omitted
+setup credential, one-time bootstrap, concurrency, and rejected-token
+diagnostics.

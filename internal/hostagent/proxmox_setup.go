@@ -86,7 +86,15 @@ type autoRegisterResponse struct {
 }
 
 type autoRegisterCheckResponse struct {
-	Registered bool `json:"registered"`
+	Registered   bool  `json:"registered"`
+	SourceExists *bool `json:"sourceExists,omitempty"`
+	CanRegister  *bool `json:"canRegister,omitempty"`
+}
+
+type registrationState struct {
+	registered   bool
+	sourceExists bool
+	canRegister  bool
 }
 
 const maxRegistrationCheckResponseBytes = 8 * 1024
@@ -501,14 +509,22 @@ func (p *ProxmoxSetup) RunHealthCheck(ctx context.Context) ([]*ProxmoxSetupResul
 		}
 
 		hostURL := p.getHostURL(ctx, ptype)
-		registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
+		registration, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
 		if err != nil {
 			p.logger.Warn().Err(err).Str("type", string(ptype)).
 				Msg("Proxmox health check: could not verify registration with Pulse")
 			continue
 		}
-		if registered {
+		if registration.registered {
 			continue // still healthy
+		}
+		if !registration.canRegister {
+			p.logger.Warn().
+				Str("type", string(ptype)).
+				Str("host", hostURL).
+				Bool("source_exists", registration.sourceExists).
+				Msg("Proxmox health check: Pulse has no matching source and this agent token cannot create one; re-run the Proxmox agent install command")
+			continue
 		}
 
 		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).
@@ -539,7 +555,7 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	// mutating a Proxmox token. This prevents a missing local marker or a Pulse
 	// startup outage from rotating credentials that a healthy Pulse instance is
 	// still using.
-	registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
+	registration, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
 	if err != nil {
 		p.logger.Warn().
 			Err(err).
@@ -547,11 +563,19 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 			Msg("Failed to verify Proxmox registration state with Pulse; leaving credentials unchanged")
 		return nil, nil
 	}
-	if registered {
+	if registration.registered {
 		if !p.isTypeRegistered(ptype) {
 			p.markTypeAsRegistered(ptype)
 		}
 		p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
+		return nil, nil
+	}
+	if !registration.canRegister {
+		p.logger.Warn().
+			Str("type", string(ptype)).
+			Str("host", hostURL).
+			Bool("source_exists", registration.sourceExists).
+			Msg("Pulse has no matching Proxmox source and this agent token cannot create one; leaving local credentials unchanged and requiring a fresh install command")
 		return nil, nil
 	}
 	if p.isTypeRegistered(ptype) {
@@ -577,7 +601,7 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	p.logger.Info().Str("type", string(ptype)).Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Register with Pulse
-	registered = false
+	registered := false
 	registerResp, err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue)
 	if err != nil {
 		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to register with Pulse (node may already exist)")
@@ -614,19 +638,17 @@ func (p *ProxmoxSetup) orderedCandidateHosts(ctx context.Context, ptype proxmoxP
 	return candidateHosts
 }
 
-func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL string) (bool, error) {
-	setupToken, err := p.fetchSetupToken(ctx, ptype, hostURL)
-	if err != nil {
-		var ce *clientError
-		var pe *permanentError
-		if errors.As(err, &pe) {
-			return false, fmt.Errorf("fetch setup token: %w", err)
-		}
-		if errors.As(err, &ce) {
-			// Fall through without a setup token; server will authenticate via X-API-Token.
-			setupToken = ""
-		} else {
-			return false, fmt.Errorf("fetch setup token: %w", err)
+func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL string) (registrationState, error) {
+	// Runtime agent tokens authenticate directly against the canonical
+	// auto-register endpoint. The setup-script-url endpoint is an operator
+	// control-plane surface protected by settings:write and must never be used
+	// as a runtime token-discovery probe.
+	setupToken := ""
+	if strings.TrimSpace(p.apiToken) == "" {
+		var err error
+		setupToken, err = p.fetchSetupToken(ctx, ptype, hostURL)
+		if err != nil {
+			return registrationState{}, fmt.Errorf("fetch setup token: %w", err)
 		}
 	}
 
@@ -642,12 +664,12 @@ func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype pro
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return false, fmt.Errorf("marshal registration-check payload: %w", err)
+		return registrationState{}, fmt.Errorf("marshal registration-check payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
 	if err != nil {
-		return false, fmt.Errorf("create registration-check request: %w", err)
+		return registrationState{}, fmt.Errorf("create registration-check request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if token := autoRegisterAPITokenHeader(p.apiToken, setupToken); token != "" {
@@ -656,7 +678,7 @@ func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype pro
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("registration-check request failed: %w", err)
+		return registrationState{}, fmt.Errorf("registration-check request failed: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -666,17 +688,35 @@ func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype pro
 
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxRegistrationCheckResponseBytes))
 	if err != nil {
-		return false, fmt.Errorf("read registration-check response: %w", err)
+		return registrationState{}, fmt.Errorf("read registration-check response: %w", err)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
-		return false, fmt.Errorf("registration-check returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+		return registrationState{}, &clientError{
+			statusCode: resp.StatusCode,
+			body:       strings.TrimSpace(string(bodyBytes)),
+		}
 	}
 
 	var parsed autoRegisterCheckResponse
 	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
-		return false, fmt.Errorf("decode registration-check response: %w", err)
+		return registrationState{}, fmt.Errorf("decode registration-check response: %w", err)
 	}
-	return parsed.Registered, nil
+	// Older Pulse servers returned only registered. Preserve their repair
+	// behavior during rolling updates by treating omitted capability fields as
+	// permissive; current servers always send both fields explicitly.
+	sourceExists := parsed.Registered
+	if parsed.SourceExists != nil {
+		sourceExists = *parsed.SourceExists
+	}
+	canRegister := true
+	if parsed.CanRegister != nil {
+		canRegister = *parsed.CanRegister
+	}
+	return registrationState{
+		registered:   parsed.Registered,
+		sourceExists: sourceExists,
+		canRegister:  canRegister,
+	}, nil
 }
 
 // detectProxmoxType checks for pvesh (PVE) or proxmox-backup-manager (PBS).
@@ -1415,24 +1455,17 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 			}
 		}
 
-		setupToken, err := p.fetchSetupToken(ctx, ptype, hostURL)
-		if err != nil {
-			lastErr = fmt.Errorf("fetch setup token: %w", err)
-			var ce *clientError
-			var pe *permanentError
-			if errors.As(lastErr, &pe) {
-				return autoRegisterResponse{}, lastErr
-			}
-			if errors.As(lastErr, &ce) {
-				// The setup-script-url endpoint requires settings:write scope; agent tokens
-				// only have agent:report. Fall through without a setup token — the server
-				// will authenticate via the X-API-Token header instead (update-only path).
-				p.logger.Info().
-					Int("statusCode", ce.statusCode).
-					Str("type", string(ptype)).
-					Msg("Setup token fetch returned client error; falling back to agent API token auth")
-				setupToken = ""
-			} else {
+		setupToken := ""
+		if strings.TrimSpace(p.apiToken) == "" {
+			var err error
+			setupToken, err = p.fetchSetupToken(ctx, ptype, hostURL)
+			if err != nil {
+				lastErr = fmt.Errorf("fetch setup token: %w", err)
+				var ce *clientError
+				var pe *permanentError
+				if errors.As(lastErr, &ce) || errors.As(lastErr, &pe) {
+					return autoRegisterResponse{}, lastErr
+				}
 				p.logger.Warn().Err(lastErr).
 					Int("attempt", attempt+1).
 					Int("max_attempts", len(backoffs)+1).

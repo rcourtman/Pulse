@@ -2030,6 +2030,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
     rollback, progress errors, and durable reconnect replay. The opt-in live
     Docker Compose proof must exercise those network modes against a real
     daemon; a fake-only sanitizer test is not sufficient lifecycle evidence.
+21. Keep Proxmox runtime health and bootstrap authority separate. Agent-token
+    startup and periodic registration checks must call `/api/auto-register`
+    directly; `/api/setup-script-url` remains `settings:write`. Ordinary agent
+    tokens stay update-only, while a server-minted PVE/PBS install token may
+    consume one declared-type initial registration after durable first-host
+    binding and serialized completion.
 
 ## Current State
 
@@ -5002,3 +5008,45 @@ That handoff is lifecycle continuity only: it prevents post-reload agent
 reports and resource projection from observing an orphaned metadata cache, and
 does not add a report shape, credential, command, or remote-configuration
 authority.
+
+### Proxmox install bootstrap and runtime-health authority
+
+The Proxmox Unified Agent has one canonical runtime registration surface:
+`/api/auto-register`. When the agent already has an API token, startup checks,
+five-minute health checks, token repair, re-registration, and URL-candidate
+changes must authenticate directly to that endpoint. They must not probe
+`/api/setup-script-url` to discover whether the runtime token can mint a setup
+artifact. That endpoint remains an operator control-plane surface protected by
+`settings:write`; an expected denial there is not part of a healthy runtime
+control flow.
+
+Registration checks return separate `registered`, `sourceExists`, and
+`canRegister` facts. A disconnected configured source can therefore be repaired,
+while a removed source paired with an ordinary agent token leaves local
+credentials untouched and directs the operator to run a fresh install command.
+Agents treat the two capability fields as permissive only when talking to an
+older server that omits them during a rolling update.
+
+Ordinary `agent:report` tokens remain limited to registration checks and token
+updates for existing PVE/PBS sources. The PVE/PBS token minted by the
+settings-authorized agent-install command carries a narrower bootstrap
+exception: its server-owned `install_type` and `issued_via` metadata may create
+one source of the declared type. The server binds that grant to the first
+fully validated presenting hostname before local Proxmox credentials are
+mutated, serializes checks with completion, persists the completed type,
+hostname, selected host, node, and time, and then permanently returns the token
+to update-only behavior. A malformed request, wrong type, different hostname,
+reused grant, rejected/rotated token, or arbitrary agent token must fail closed
+with visible authorization diagnostics.
+A positive registration preflight for an already-existing source consumes the
+fresh-install grant without rotating local credentials; a negative preflight
+keeps it available for the immediately following initial completion.
+
+Token-optional installations retain the setup-token bootstrap path. Ordinary
+hosts never enter this Proxmox registration loop, while PVE, PBS, mixed-product
+hosts, restarts, and hosted-tenant install tokens retain the same authority
+split. `internal/hostagent/proxmox_setup_test.go`,
+`internal/api/config_handlers_auto_register_test.go`, and
+`internal/api/proxmox_install_registration_test.go` prove the recurring health,
+first-install, type/host binding, one-time consumption, rejection, and
+concurrent-completion contracts.

@@ -308,8 +308,7 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 	t.Run("success sends expected request body and headers", func(t *testing.T) {
 		var gotReq *http.Request
 		var gotPayload map[string]any
-		var gotSetupReq *http.Request
-		var gotSetupPayload map[string]any
+		setupTokenRequests := 0
 
 		p := &ProxmoxSetup{
 			pulseURL: "https://pulse.example",
@@ -319,20 +318,10 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 					switch req.URL.Path {
 					case "/api/setup-script-url":
-						gotSetupReq = req
-
-						bodyBytes, err := io.ReadAll(req.Body)
-						if err != nil {
-							t.Fatalf("read setup body: %v", err)
-						}
-
-						if err := json.Unmarshal(bodyBytes, &gotSetupPayload); err != nil {
-							t.Fatalf("unmarshal setup body: %v", err)
-						}
-
+						setupTokenRequests++
 						return &http.Response{
-							StatusCode: http.StatusOK,
-							Body:       io.NopCloser(strings.NewReader(canonicalSetupScriptURLResponseJSON("https://pulse.example", "pbs", "https://10.0.0.2:8007", "setup-token-123"))),
+							StatusCode: http.StatusForbidden,
+							Body:       io.NopCloser(strings.NewReader("Forbidden")),
 							Header:     make(http.Header),
 						}, nil
 					case "/api/auto-register":
@@ -368,26 +357,11 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 			t.Fatalf("response nodeName = %q, want %q", resp.NodeName, "node-1")
 		}
 
-		if gotSetupReq == nil {
-			t.Fatalf("expected setup token request to be sent")
-		}
 		if gotReq == nil {
 			t.Fatalf("expected auto-register request to be sent")
 		}
-		if gotSetupReq.Method != http.MethodPost {
-			t.Fatalf("setup method = %q, want %q", gotSetupReq.Method, http.MethodPost)
-		}
-		if gotSetupReq.URL.Path != "/api/setup-script-url" {
-			t.Fatalf("setup path = %q, want %q", gotSetupReq.URL.Path, "/api/setup-script-url")
-		}
-		if gotSetupReq.Header.Get("X-API-Token") != "api-token" {
-			t.Fatalf("setup X-API-Token = %q, want %q", gotSetupReq.Header.Get("X-API-Token"), "api-token")
-		}
-		if gotSetupPayload["type"] != "pbs" {
-			t.Fatalf("setup payload[type] = %#v, want %q", gotSetupPayload["type"], "pbs")
-		}
-		if gotSetupPayload["host"] != "https://10.0.0.2:8007" {
-			t.Fatalf("setup payload[host] = %#v, want %q", gotSetupPayload["host"], "https://10.0.0.2:8007")
+		if setupTokenRequests != 0 {
+			t.Fatalf("setup-script-url requests = %d, want 0", setupTokenRequests)
 		}
 		if gotReq.Method != http.MethodPost {
 			t.Fatalf("method = %q, want %q", gotReq.Method, http.MethodPost)
@@ -398,8 +372,8 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 		if gotReq.Header.Get("Content-Type") != "application/json" {
 			t.Fatalf("Content-Type = %q, want %q", gotReq.Header.Get("Content-Type"), "application/json")
 		}
-		if gotReq.Header.Get("X-API-Token") != "" {
-			t.Fatalf("X-API-Token = %q, want empty", gotReq.Header.Get("X-API-Token"))
+		if gotReq.Header.Get("X-API-Token") != "api-token" {
+			t.Fatalf("X-API-Token = %q, want runtime token", gotReq.Header.Get("X-API-Token"))
 		}
 
 		if gotPayload["type"] != "pbs" {
@@ -411,8 +385,8 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 		if gotPayload["serverName"] != "node-1" {
 			t.Fatalf("payload[serverName] = %#v, want %q", gotPayload["serverName"], "node-1")
 		}
-		if gotPayload["authToken"] != "setup-token-123" {
-			t.Fatalf("payload[authToken] = %#v, want %q", gotPayload["authToken"], "setup-token-123")
+		if _, exists := gotPayload["authToken"]; exists {
+			t.Fatalf("payload must not contain setup authToken, got %#v", gotPayload["authToken"])
 		}
 		if gotPayload["tokenId"] != "token-id" {
 			t.Fatalf("payload[tokenId] = %#v, want %q", gotPayload["tokenId"], "token-id")

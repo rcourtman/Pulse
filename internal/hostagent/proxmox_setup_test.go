@@ -134,25 +134,19 @@ func TestProxmoxSetupNormalizePulseURL_AllowsLocalNetworkHTTP(t *testing.T) {
 
 func TestRegisterWithPulse_Payload(t *testing.T) {
 	var gotPayload autoRegisterRequest
-	var setupTokenHeader string
-	var setupTokenPayload map[string]any
+	setupTokenRequests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("unexpected method %s", r.Method)
 		}
 		switch r.URL.Path {
 		case "/api/setup-script-url":
-			setupTokenHeader = r.Header.Get("X-API-Token")
-			if err := json.NewDecoder(r.Body).Decode(&setupTokenPayload); err != nil {
-				t.Fatalf("decode setup token payload: %v", err)
-			}
-			publicURL := "http://" + r.Host
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.4:8006", "setup-token-123")))
+			setupTokenRequests++
+			http.Error(w, "runtime must not request setup artifacts", http.StatusForbidden)
 			return
 		case "/api/auto-register":
-			if gotToken := r.Header.Get("X-API-Token"); gotToken != "" {
-				t.Fatalf("unexpected X-API-Token header %q", gotToken)
+			if gotToken := r.Header.Get("X-API-Token"); gotToken != "pulse-token" {
+				t.Fatalf("X-API-Token header = %q, want runtime token", gotToken)
 			}
 			if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
 				t.Fatalf("decode payload: %v", err)
@@ -201,8 +195,8 @@ func TestRegisterWithPulse_Payload(t *testing.T) {
 	if gotPayload.ServerName != "node-1" {
 		t.Fatalf("unexpected serverName %q", gotPayload.ServerName)
 	}
-	if gotPayload.AuthToken != "setup-token-123" {
-		t.Fatalf("unexpected authToken %q", gotPayload.AuthToken)
+	if gotPayload.AuthToken != "" {
+		t.Fatalf("unexpected setup authToken %q", gotPayload.AuthToken)
 	}
 	if gotPayload.TokenID != "token-id" {
 		t.Fatalf("unexpected tokenId %q", gotPayload.TokenID)
@@ -213,14 +207,8 @@ func TestRegisterWithPulse_Payload(t *testing.T) {
 	if gotPayload.Source != autoRegisterSourceAgent {
 		t.Fatalf("unexpected source %q", gotPayload.Source)
 	}
-	if setupTokenHeader != "pulse-token" {
-		t.Fatalf("unexpected setup token auth header %q", setupTokenHeader)
-	}
-	if setupTokenPayload["type"] != "pve" {
-		t.Fatalf("unexpected setup token type %#v", setupTokenPayload["type"])
-	}
-	if setupTokenPayload["host"] != "https://10.0.0.4:8006" {
-		t.Fatalf("unexpected setup token host %#v", setupTokenPayload["host"])
+	if setupTokenRequests != 0 {
+		t.Fatalf("setup-script-url requests = %d, want 0", setupTokenRequests)
 	}
 }
 
@@ -230,6 +218,201 @@ func TestAutoRegisterAPITokenHeader(t *testing.T) {
 	}
 	if got := autoRegisterAPITokenHeader(" api-token ", "   "); got != "api-token" {
 		t.Fatalf("autoRegisterAPITokenHeader()=%q, want %q when falling back to agent API token auth", got, "api-token")
+	}
+}
+
+func TestRunHealthCheckUsesAgentTokenDirectly(t *testing.T) {
+	for _, nodeType := range []proxmoxProductType{proxmoxProductPVE, proxmoxProductPBS} {
+		t.Run(string(nodeType), func(t *testing.T) {
+			setupArtifactRequests := 0
+			registrationChecks := 0
+			port := "8006"
+			if nodeType == proxmoxProductPBS {
+				port = "8007"
+			}
+			expectedHost := "https://10.0.0.9:" + port
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/setup-script-url":
+					setupArtifactRequests++
+					http.Error(w, "runtime must not request setup artifacts", http.StatusForbidden)
+				case "/api/auto-register":
+					registrationChecks++
+					if got := r.Header.Get("X-API-Token"); got != "agent-runtime-token" {
+						t.Fatalf("X-API-Token = %q, want runtime token", got)
+					}
+					var payload autoRegisterRequest
+					if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+						t.Fatalf("decode registration check: %v", err)
+					}
+					if !payload.CheckRegistration {
+						t.Fatalf("expected registration check, got %#v", payload)
+					}
+					if payload.Host != expectedHost {
+						t.Fatalf("host = %q, want %q", payload.Host, expectedHost)
+					}
+					if payload.AuthToken != "" {
+						t.Fatalf("unexpected setup auth token %q", payload.AuthToken)
+					}
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"registered":true}`))
+				default:
+					t.Fatalf("unexpected path %s", r.URL.Path)
+				}
+			}))
+			defer server.Close()
+
+			mc := &mockCollector{}
+			setup := NewProxmoxSetup(
+				zerolog.Nop(),
+				server.Client(),
+				mc,
+				server.URL,
+				"agent-runtime-token",
+				string(nodeType),
+				"node-1",
+				"10.0.0.9",
+				t.TempDir(),
+				false,
+			)
+			stateFile := setup.stateFileForType(nodeType)
+			mc.statFn = func(name string) (os.FileInfo, error) {
+				if name == stateFile {
+					return nil, nil
+				}
+				return nil, os.ErrNotExist
+			}
+
+			for i := 0; i < 3; i++ {
+				results, err := setup.RunHealthCheck(context.Background())
+				if err != nil {
+					t.Fatalf("RunHealthCheck() iteration %d: %v", i+1, err)
+				}
+				if len(results) != 0 {
+					t.Fatalf("healthy iteration %d returned repair results %#v", i+1, results)
+				}
+			}
+			if registrationChecks != 3 {
+				t.Fatalf("registration checks = %d, want 3", registrationChecks)
+			}
+			if setupArtifactRequests != 0 {
+				t.Fatalf("setup-script-url requests = %d, want 0", setupArtifactRequests)
+			}
+		})
+	}
+}
+
+func TestRunHealthCheckSurfacesRejectedAgentToken(t *testing.T) {
+	setupArtifactRequests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/setup-script-url":
+			setupArtifactRequests++
+			http.Error(w, "runtime must not request setup artifacts", http.StatusForbidden)
+		case "/api/auto-register":
+			http.Error(w, "token expired or rotated", http.StatusForbidden)
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	var logs strings.Builder
+	logger := zerolog.New(&logs)
+	mc := &mockCollector{}
+	setup := NewProxmoxSetup(
+		logger,
+		server.Client(),
+		mc,
+		server.URL,
+		"rejected-agent-token",
+		"pve",
+		"node-1",
+		"10.0.0.9",
+		t.TempDir(),
+		false,
+	)
+	stateFile := setup.pveStateFilePath()
+	mc.statFn = func(name string) (os.FileInfo, error) {
+		if name == stateFile {
+			return nil, nil
+		}
+		return nil, os.ErrNotExist
+	}
+
+	results, err := setup.RunHealthCheck(context.Background())
+	if err != nil {
+		t.Fatalf("RunHealthCheck(): %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("rejected token returned repair results %#v", results)
+	}
+	if setupArtifactRequests != 0 {
+		t.Fatalf("setup-script-url requests = %d, want 0", setupArtifactRequests)
+	}
+	if got := logs.String(); !strings.Contains(got, "HTTP 403") || !strings.Contains(got, "token expired or rotated") {
+		t.Fatalf("authorization failure diagnostics missing from logs: %s", got)
+	}
+}
+
+func TestRunAllLeavesCredentialsUnchangedWhenAgentCannotCreateMissingSource(t *testing.T) {
+	setupArtifactRequests := 0
+	registrationChecks := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/setup-script-url":
+			setupArtifactRequests++
+			http.Error(w, "runtime must not request setup artifacts", http.StatusForbidden)
+		case "/api/auto-register":
+			registrationChecks++
+			if got := r.Header.Get("X-API-Token"); got != "ordinary-agent-token" {
+				t.Fatalf("X-API-Token = %q, want ordinary agent token", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"registered":false,"sourceExists":false,"canRegister":false}`))
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	var logs strings.Builder
+	logger := zerolog.New(&logs)
+	mc := &mockCollector{
+		statFn: func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+			t.Fatalf("local credential command must not run when server denies source creation: %s %v", name, arg)
+			return "", nil
+		},
+	}
+	setup := NewProxmoxSetup(
+		logger,
+		server.Client(),
+		mc,
+		server.URL,
+		"ordinary-agent-token",
+		"pve",
+		"node-1",
+		"10.0.0.9",
+		t.TempDir(),
+		false,
+	)
+	results, err := setup.RunAll(context.Background())
+	if err != nil {
+		t.Fatalf("RunAll(): %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("missing source returned setup results %#v", results)
+	}
+	if registrationChecks != 1 {
+		t.Fatalf("registration checks = %d, want 1", registrationChecks)
+	}
+	if setupArtifactRequests != 0 {
+		t.Fatalf("setup-script-url requests = %d, want 0", setupArtifactRequests)
+	}
+	if got := logs.String(); !strings.Contains(got, "leaving local credentials unchanged") {
+		t.Fatalf("missing-source diagnostic absent from logs: %s", got)
 	}
 }
 
