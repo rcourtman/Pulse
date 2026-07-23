@@ -173,10 +173,48 @@ export const buildAppContainerMetadataId = ({
   return `app-container:${hostId}:name:${containerName}`;
 };
 
+type KubernetesWorkloadMetadataIdentity = {
+  kubernetesClusterId?: string | null;
+  kind?: string | null;
+  namespace?: string | null;
+  name?: string | null;
+};
+
+export const buildKubernetesWorkloadMetadataId = ({
+  kubernetesClusterId,
+  kind = 'pod',
+  namespace,
+  name,
+}: KubernetesWorkloadMetadataIdentity): string | null => {
+  const clusterId = (kubernetesClusterId || '').trim();
+  const workloadNamespace = (namespace || '').trim();
+  const workloadName = (name || '').trim();
+  const rawKind = (kind || '').trim().toLowerCase();
+  const workloadKind =
+    rawKind === 'pod'
+      ? 'pod'
+      : rawKind === 'k8s-deployment' || rawKind === 'deployment'
+        ? 'deployment'
+        : rawKind === 'k8s-service' || rawKind === 'service'
+          ? 'service'
+          : '';
+  if (!clusterId || !workloadKind || !workloadNamespace || !workloadName) return null;
+  return `k8s-workload:${clusterId}:${workloadKind}:${workloadNamespace}:${workloadName}`;
+};
+
 export const getWorkloadMetadataIdCandidates = (
   guest: Pick<
     WorkloadGuest,
-    'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid' | 'dockerHostId' | 'name'
+    | 'id'
+    | 'workloadType'
+    | 'type'
+    | 'instance'
+    | 'node'
+    | 'vmid'
+    | 'dockerHostId'
+    | 'kubernetesClusterId'
+    | 'namespace'
+    | 'name'
   >,
 ): string[] => {
   const canonicalId = getCanonicalWorkloadId(guest);
@@ -185,6 +223,10 @@ export const getWorkloadMetadataIdCandidates = (
   if (isDockerManagedAppContainer(guest)) {
     const appContainerId = buildAppContainerMetadataId(guest);
     if (appContainerId) candidates.push(appContainerId);
+  }
+  if (resolveWorkloadType(guest) === 'pod') {
+    const kubernetesWorkloadId = buildKubernetesWorkloadMetadataId(guest);
+    if (kubernetesWorkloadId) candidates.push(kubernetesWorkloadId);
   }
 
   if (canonicalId) candidates.push(canonicalId);
@@ -195,7 +237,16 @@ export const getWorkloadMetadataIdCandidates = (
 export const getWorkloadMetadataId = (
   guest: Pick<
     WorkloadGuest,
-    'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid' | 'dockerHostId' | 'name'
+    | 'id'
+    | 'workloadType'
+    | 'type'
+    | 'instance'
+    | 'node'
+    | 'vmid'
+    | 'dockerHostId'
+    | 'kubernetesClusterId'
+    | 'namespace'
+    | 'name'
   >,
 ): string => getWorkloadMetadataIdCandidates(guest)[0] || getCanonicalWorkloadId(guest);
 

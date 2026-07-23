@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
 // EntitlementPayload is the normalized entitlement response for frontend consumption.
@@ -183,8 +184,10 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 
 	// Count canonical top-level monitored systems from monitor state.
 	var monitorResolved bool
+	var resolvedMonitor *monitoring.Monitor
 	if h.mtMonitor != nil {
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
+			resolvedMonitor = monitor
 			state := monitor.MonitoredSystemUsage()
 			if state.Available {
 				usage.MonitoredSystems = int64(state.Count)
@@ -197,6 +200,7 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 		}
 	}
 	if !monitorResolved && orgID == "default" && h.monitor != nil {
+		resolvedMonitor = h.monitor
 		state := h.monitor.MonitoredSystemUsage()
 		if state.Available {
 			usage.MonitoredSystems = int64(state.Count)
@@ -208,7 +212,9 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 	}
 
 	// Guest metadata for guest limit tracking.
-	if h.mtPersistence != nil {
+	if resolvedMonitor != nil && resolvedMonitor.GuestMetadataStore() != nil {
+		usage.Guests = int64(len(resolvedMonitor.GuestMetadataStore().GetAll()))
+	} else if h.mtPersistence != nil {
 		if persistence, err := h.mtPersistence.GetPersistence(orgID); err == nil && persistence != nil {
 			if guestStore := persistence.GetGuestMetadataStore(); guestStore != nil {
 				usage.Guests = int64(len(guestStore.GetAll()))

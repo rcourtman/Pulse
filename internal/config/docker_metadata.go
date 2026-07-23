@@ -273,3 +273,53 @@ func (s *DockerMetadataStore) ReplaceAll(metadata map[string]*DockerMetadata) er
 
 	return s.save()
 }
+
+// UpdateAll applies one atomic in-memory container-metadata mutation and
+// persists it once while preserving host metadata. Concurrent Set/Delete
+// calls cannot be lost between snapshot and replacement.
+func (s *DockerMetadataStore) UpdateAll(
+	update func(map[string]*DockerMetadata) bool,
+) error {
+	if update == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	working := make(map[string]*DockerMetadata, len(s.metadata))
+	for id, meta := range s.metadata {
+		if meta == nil {
+			continue
+		}
+		clone := *meta
+		if len(meta.Tags) > 0 {
+			clone.Tags = append([]string(nil), meta.Tags...)
+		}
+		if len(meta.Notes) > 0 {
+			clone.Notes = append([]string(nil), meta.Notes...)
+		}
+		working[id] = &clone
+	}
+	if !update(working) {
+		return nil
+	}
+	for id, meta := range working {
+		if meta == nil {
+			delete(working, id)
+			continue
+		}
+		meta.ID = id
+		if meta.Tags == nil {
+			meta.Tags = []string{}
+		}
+	}
+
+	previous := s.metadata
+	s.metadata = working
+	if err := s.save(); err != nil {
+		s.metadata = previous
+		return err
+	}
+	return nil
+}

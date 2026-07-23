@@ -14,7 +14,11 @@ import {
   getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
-import { buildAppContainerMetadataId, getCanonicalWorkloadIdForResource } from '@/utils/workloads';
+import {
+  buildAppContainerMetadataId,
+  buildKubernetesWorkloadMetadataId,
+  getCanonicalWorkloadIdForResource,
+} from '@/utils/workloads';
 
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
@@ -38,6 +42,7 @@ type DockerPlatformData = {
 };
 
 type KubernetesPlatformData = {
+  clusterId?: string;
   agentId?: string;
   namespace?: string;
   podName?: string;
@@ -102,7 +107,7 @@ const getDockerContainerMetadataId = (
 
 const getMetadataTarget = (
   resource: Resource,
-  resourceType: DiscoveryResourceType,
+  resourceType: Resource['type'],
   platformData: PlatformData | undefined,
 ): Pick<DiscoveryConfig, 'metadataKind' | 'metadataId'> => {
   if (resourceType === 'app-container') {
@@ -129,6 +134,28 @@ const getMetadataTarget = (
       return {
         metadataKind: 'docker',
         metadataId: dockerMetadataId,
+      };
+    }
+  }
+
+  if (
+    resourceType === 'pod' ||
+    resourceType === 'k8s-deployment' ||
+    resourceType === 'k8s-service'
+  ) {
+    const kubernetesPlatformData = platformData?.kubernetes;
+    const stableMetadataId = buildKubernetesWorkloadMetadataId({
+      kubernetesClusterId:
+        asString(resource.kubernetes?.clusterId) || asString(kubernetesPlatformData?.clusterId),
+      kind: resourceType,
+      namespace:
+        asString(resource.kubernetes?.namespace) || asString(kubernetesPlatformData?.namespace),
+      name: asString(resource.name),
+    });
+    if (stableMetadataId) {
+      return {
+        metadataKind: 'guest',
+        metadataId: stableMetadataId,
       };
     }
   }
@@ -330,8 +357,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         agentId: workloadAgentId,
         resourceId: kubernetesResourceId || resource.id,
         hostname,
-        metadataKind: 'guest',
-        metadataId: resource.id,
+        ...getMetadataTarget(resource, canonicalResourceType, platformData),
         targetLabel: 'workload',
       };
     default:

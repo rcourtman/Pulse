@@ -36,6 +36,7 @@ WWN only when the match is unique and the hardware identifier is usable.
 1. `internal/api/contract_test.go`
    1a. `internal/api/platform_connection_shared.go`
    1b. `internal/api/metadata_handlers_shared.go`
+   1c. `internal/config/persistence_metadata_accessors.go`
 2. `internal/api/resources.go`
 3. `internal/api/discovery_handlers.go`
 4. `internal/api/alerts.go`
@@ -1820,7 +1821,16 @@ a new API state machine, queue contract, or verification-accounting field.
    be forgotten. `internal/api/metadata_handlers_shared.go` owns the
    guest/docker metadata GET/PUT payload semantics (empty object instead of
    null, zero record instead of 404 — pinned by
-   `TestContract_MetadataGetPayloadsUseZeroRecordsInsteadOf404`). Deploy
+   `TestContract_MetadataGetPayloadsUseZeroRecordsInsteadOf404`). Guest,
+   Docker, and host metadata handlers must resolve the active tenant monitor's
+   live metadata stores. `ConfigPersistence`, export/import, entitlement usage,
+   and reload-time router wiring must share those store
+   instances rather than retaining independent in-memory caches of the same
+   files; a successful API write must therefore be visible to backend resource
+   projection and configuration export immediately. Assistant URL updates must
+   resolve a provider per organization and refresh existing services after a
+   monitor replacement; a default provider must not be shared across tenants.
+   Deploy
    preflights and jobs share `handleDeployJobStatus` /
    `handleDeployJobEvents` in `internal/api/deploy_handlers.go`; recovery
    points series/facets share `parseRecoveryListPointsOptions`; docker and

@@ -4990,3 +4990,10 @@ restart. `internal/api/host_agent_removal_lifecycle_integration_test.go`,
 `internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`, and the
 existing `scripts/installtests/agent_state_dir_lifecycle_test.go`,
 `install_sh_test.go`, and `install_ps1_test.go` are the production-path proofs.
+
+Config reload must also hand the replacement monitor's tenant-scoped guest,
+Docker, and host metadata stores to shared API/config persistence consumers.
+That handoff is lifecycle continuity only: it prevents post-reload agent
+reports and resource projection from observing an orphaned metadata cache, and
+does not add a report shape, credential, command, or remote-configuration
+authority.

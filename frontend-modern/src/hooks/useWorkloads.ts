@@ -557,6 +557,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         ? (resource.docker?.hostname || '').trim() || undefined
         : undefined,
     kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
+    kubernetesClusterId: workloadType === 'pod' ? resource.kubernetes?.clusterId : undefined,
     platformType,
     platformScopes,
     discoveryTarget,

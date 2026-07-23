@@ -467,6 +467,7 @@ describe('useWorkloads', () => {
           type: 'pod',
           name: 'pod-1',
           kubernetes: {
+            clusterId: 'cluster-id-a',
             clusterName: 'cluster-a',
             context: 'cluster-context',
             namespace: 'default',
@@ -490,6 +491,7 @@ describe('useWorkloads', () => {
 
     expect(result!.workloads()[0]?.contextLabel).toBe('cluster-a');
     expect(result!.workloads()[0]?.instance).toBe('cluster-a');
+    expect(result!.workloads()[0]?.kubernetesClusterId).toBe('cluster-id-a');
 
     dispose();
   });

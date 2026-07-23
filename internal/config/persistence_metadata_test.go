@@ -31,3 +31,16 @@ func TestConfigPersistence_LoadDockerMetadata(t *testing.T) {
 	// Ensure we can use the store
 	assert.Empty(t, store.GetAll())
 }
+
+func TestConfigPersistenceSharesActiveMetadataStores(t *testing.T) {
+	cp := config.NewConfigPersistence(t.TempDir())
+	guest := config.NewGuestMetadataStore(t.TempDir(), nil)
+	docker := config.NewDockerMetadataStore(t.TempDir(), nil)
+	host := config.NewHostMetadataStore(t.TempDir(), nil)
+
+	cp.SetMetadataStores(guest, docker, host)
+
+	assert.Same(t, guest, cp.GetGuestMetadataStore())
+	assert.Same(t, docker, cp.GetDockerMetadataStore())
+	assert.Same(t, host, cp.GetHostMetadataStore())
+}

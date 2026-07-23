@@ -18,6 +18,7 @@ const (
 // DockerMetadataHandler handles Docker resource metadata operations
 type DockerMetadataHandler struct {
 	mtPersistence *config.MultiTenantPersistence
+	storeResolver func(context.Context) *config.DockerMetadataStore
 }
 
 // NewDockerMetadataHandler creates a new Docker metadata handler
@@ -27,7 +28,20 @@ func NewDockerMetadataHandler(mtPersistence *config.MultiTenantPersistence) *Doc
 	}
 }
 
+// SetStoreResolver makes API reads and writes use the active monitor's store.
+// The persistence-backed store remains the initialization/test fallback.
+func (h *DockerMetadataHandler) SetStoreResolver(
+	resolver func(context.Context) *config.DockerMetadataStore,
+) {
+	h.storeResolver = resolver
+}
+
 func (h *DockerMetadataHandler) getStore(ctx context.Context) *config.DockerMetadataStore {
+	if h != nil && h.storeResolver != nil {
+		if store := h.storeResolver(ctx); store != nil {
+			return store
+		}
+	}
 	orgID := "default"
 	if ctx != nil {
 		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {

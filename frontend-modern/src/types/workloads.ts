@@ -40,6 +40,9 @@ export type WorkloadGuest = (VM | Container) & {
   dockerHostName?: string;
   // Kubernetes agent ID (when available) — preferred for actionable operations.
   kubernetesAgentId?: string;
+  // Stable Kubernetes cluster identity used with namespace, kind, and name
+  // for persisted workload metadata. Runtime pod UIDs remain separate.
+  kubernetesClusterId?: string;
   // Canonical discovery ownership. API-backed platforms such as TrueNAS should
   // only expose Discovery when the unified resource contract supplies a target.
   discoveryTarget?: ResourceDiscoveryTarget;

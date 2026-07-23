@@ -221,6 +221,11 @@ data cannot wrap into a fabricated healthy value.
 58. `internal/monitoring/proxmox_action_observer.go`
 59. `internal/monitoring/agent_fleet_doctor.go`
 60. `internal/config/host_continuity.go`
+61. `internal/monitoring/docker_metadata_migration.go`
+62. `internal/monitoring/kubernetes_metadata_migration.go`
+63. `internal/monitoring/metadata_stores.go`
+63a. `internal/config/docker_metadata.go`
+63b. `internal/config/guest_metadata.go`
 
 ## Shared Boundaries
 
@@ -1495,6 +1500,26 @@ Docker metadata and legacy app-container guest metadata to that key when a
 Docker report is ingested, then prefer that stable guest key when projecting
 unified app-container custom URLs. Runtime container IDs remain action and
 metric identities, not the persistent URL metadata identity.
+When a container retains its runtime ID but changes normalized name, monitoring
+must move stable guest and Docker metadata to the new name and remove the
+obsolete name key after a successful or already-resolved destination. Rename
+migration must snapshot all sources before writing so swaps do not exchange
+URLs accidentally, and ambiguous normalized source or target names must fail
+closed. A later unrelated container that reuses the old name must not inherit
+the renamed container's URL.
+Kubernetes pod, Deployment, and Service web-interface metadata uses
+`k8s-workload:<cluster>:<kind>:<namespace>:<name>` as its stable logical
+identity. Monitoring must migrate a current legacy unified-resource key, plus
+the legacy `k8s:<cluster>:pod:<pod-uid>` key for pods, when that resource is
+observed. Runtime UIDs remain discovery and metrics coordinates. Every scope
+component is required so a URL cannot cross cluster, namespace, or kind
+boundaries, and an existing empty stable record is an intentional clear that
+must block legacy fallback.
+The monitor-owned guest, Docker, and host metadata stores are the live
+in-memory authority for projection and migration. API, config export/import,
+tenant usage, Assistant URL discovery, and reload paths must share those exact
+tenant-scoped store instances rather than opening parallel caches over the
+same files.
 The same applies to proxmox topology coordinates exposed through typed views:
 node, cluster, and instance accessors must return canonical trimmed values so
 monitoring consumers do not fork topology grouping or labeling on `" pve-a "`

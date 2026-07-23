@@ -1551,3 +1551,10 @@ accepts only a non-empty reason and bounded future expiry. Action offer and
 planning require the `ai_autofix` entitlement in addition to current RBAC,
 evidence, resource-capability, executor-readiness, approval, and action-policy
 checks.
+
+Guest, Docker, and host metadata reads, writes, and reloads must resolve the
+active request tenant's monitor-owned store. A default-tenant cache must never
+be reused to satisfy another organization, including Assistant-authored URL
+updates, and stable workload identities must retain their full host or cluster,
+namespace, kind, and name scope so a saved URL cannot cross a tenant or
+resource boundary.

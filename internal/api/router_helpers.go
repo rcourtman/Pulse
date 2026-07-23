@@ -115,9 +115,11 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
 			r.monitor = m
+			r.bindDefaultMetadataStores(m)
 		}
 		mtm.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
+	r.configureMetadataProviderFactory()
 
 	// Wire tenant state provider to resource handlers
 	if r.resourceHandlers != nil {

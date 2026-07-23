@@ -527,7 +527,7 @@ describe('toDiscoveryConfig — main switch (no usable explicit target)', () => 
   });
 
   describe('pod / k8s-deployment / k8s-service cases', () => {
-    it('maps a bare pod to a workload config with resource.id as resourceId', () => {
+    it('falls back to resource.id for a pod without complete stable metadata scope', () => {
       const resource = baseResource({ type: 'pod', id: 'pod-1', name: 'pod-1' });
       expect(toDiscoveryConfig(resource)).toEqual({
         resourceType: 'pod',
@@ -548,6 +548,25 @@ describe('toDiscoveryConfig — main switch (no usable explicit target)', () => 
         kubernetes: { podUid: 'uid-1' } as Resource['kubernetes'],
       });
       expect(toDiscoveryConfig(resource)?.resourceId).toBe('uid-1');
+    });
+
+    it('uses stable logical metadata identity for Kubernetes workload kinds', () => {
+      for (const type of ['pod', 'k8s-deployment', 'k8s-service'] as const) {
+        const resource = baseResource({
+          type,
+          id: `runtime-${type}`,
+          name: 'checkout',
+          kubernetes: {
+            clusterId: 'cluster-a',
+            namespace: 'payments',
+            podUid: type === 'pod' ? 'pod-uid-old' : undefined,
+          } as Resource['kubernetes'],
+        });
+
+        expect(toDiscoveryConfig(resource)?.metadataId).toBe(
+          `k8s-workload:cluster-a:${type === 'pod' ? 'pod' : type.slice(4)}:payments:checkout`,
+        );
+      }
     });
 
     it('derives resourceId from namespace/podName when podUid is absent', () => {

@@ -147,6 +147,9 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
+		if current := s.metadata[guestID]; current != nil {
+			return cloneGuestMetadata(current)
+		}
 		legacyMeta := s.metadata[legacyID]
 		if legacyMeta == nil {
 			return cloneGuestMetadata(s.metadata[guestID])
@@ -164,6 +167,8 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 		// Persist while holding the store lock. save() assumes locked access.
 		if err := s.save(); err != nil {
 			log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+			s.metadata[legacyID] = legacyMeta
+			delete(s.metadata, guestID)
 		}
 
 		return cloneGuestMetadata(migrated)
@@ -256,4 +261,45 @@ func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) erro
 	}
 
 	return s.save()
+}
+
+// UpdateAll applies one atomic in-memory mutation and persists it once.
+// The callback receives a deep-cloned working set and returns whether it
+// changed. Concurrent Set/Delete calls cannot be lost between snapshot and
+// replacement.
+func (s *GuestMetadataStore) UpdateAll(
+	update func(map[string]*GuestMetadata) bool,
+) error {
+	if update == nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	working := make(map[string]*GuestMetadata, len(s.metadata))
+	for id, meta := range s.metadata {
+		working[id] = cloneGuestMetadata(meta)
+	}
+	if !update(working) {
+		return nil
+	}
+	for id, meta := range working {
+		if meta == nil {
+			delete(working, id)
+			continue
+		}
+		meta.ID = id
+		if meta.Tags == nil {
+			meta.Tags = []string{}
+		}
+	}
+
+	previous := s.metadata
+	s.metadata = working
+	if err := s.save(); err != nil {
+		s.metadata = previous
+		return err
+	}
+	return nil
 }

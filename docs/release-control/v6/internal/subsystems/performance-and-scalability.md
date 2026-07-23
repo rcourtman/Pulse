@@ -168,7 +168,8 @@ admission records a stable refusal without invoking executor or network code.
     WebSocket startup, so a delayed or blocked first stream snapshot cannot
     hide server-owned platform scopes; auth-mode branches must not fork
     additional state probes or perform the same hydration twice.
-17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+17. `frontend-modern/src/utils/workloads.ts` shared with `unified-resources`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
+18. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 
 Governed action decisions preserve SQLite and MemoryStore parity through one
 shared pure append command. Every accepted approval advances a monotonic
@@ -1997,3 +1998,11 @@ The completed Operational Trust path preserves these explicit bounds:
    covered by query-plan and retention tests;
 6. Operational Trust telemetry uses bounded enumerated labels only and never
    introduces resource-cardinality labels.
+
+Workload URL persistence remains lookup-only on the hot path. Docker and
+Kubernetes stable metadata candidates are derived synchronously from platform
+identity already present on each workload; the workload hook may carry the
+cluster scope needed for that calculation, but must not add per-row requests,
+runtime-UID scans, or a second metadata cache. Kubernetes persistence uses the
+fully scoped cluster, kind, namespace, and name identity; runtime pod UIDs are
+legacy fallback coordinates only.

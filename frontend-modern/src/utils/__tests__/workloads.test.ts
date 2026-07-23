@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildKubernetesWorkloadMetadataId,
   buildCanonicalNodeScopedWorkloadId,
   canonicalizeWorkloadFilterType,
   getDiscoveryResourceTypeForWorkload,
@@ -293,6 +294,59 @@ describe('getWorkloadMetadataId', () => {
     expect(getWorkloadMetadataIdCandidates(guest)).toEqual([
       'app-container:truenas-main:nextcloud',
     ]);
+  });
+
+  it('uses cluster, kind, namespace, and name for Kubernetes pod URL identity', () => {
+    const oldPod = {
+      id: 'k8s:cluster-a:pod:pod-uid-old',
+      name: 'checkout',
+      type: 'pod',
+      workloadType: 'pod' as const,
+      kubernetesClusterId: 'cluster-a',
+      namespace: 'payments',
+      instance: '',
+      node: '',
+      vmid: 0,
+    };
+    const recreatedPod = {
+      ...oldPod,
+      id: 'k8s:cluster-a:pod:pod-uid-new',
+    };
+
+    expect(buildKubernetesWorkloadMetadataId(oldPod)).toBe(
+      'k8s-workload:cluster-a:pod:payments:checkout',
+    );
+    expect(getWorkloadMetadataIdCandidates(oldPod)).toEqual([
+      'k8s-workload:cluster-a:pod:payments:checkout',
+      'k8s:cluster-a:pod:pod-uid-old',
+    ]);
+    expect(getWorkloadMetadataId(recreatedPod)).toBe(
+      'k8s-workload:cluster-a:pod:payments:checkout',
+    );
+  });
+
+  it('does not build a Kubernetes URL identity without every isolation scope', () => {
+    expect(
+      buildKubernetesWorkloadMetadataId({
+        kubernetesClusterId: '',
+        namespace: 'payments',
+        name: 'checkout',
+      }),
+    ).toBeNull();
+    expect(
+      buildKubernetesWorkloadMetadataId({
+        kubernetesClusterId: 'cluster-a',
+        namespace: '',
+        name: 'checkout',
+      }),
+    ).toBeNull();
+    expect(
+      buildKubernetesWorkloadMetadataId({
+        kubernetesClusterId: 'cluster-a',
+        namespace: 'payments',
+        name: '',
+      }),
+    ).toBeNull();
   });
 });
 

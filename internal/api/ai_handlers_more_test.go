@@ -24,6 +24,58 @@ func (stubMetadataProvider) SetGuestURL(string, string) error  { return nil }
 func (stubMetadataProvider) SetDockerURL(string, string) error { return nil }
 func (stubMetadataProvider) SetHostURL(string, string) error   { return nil }
 
+type recordingMetadataProvider struct {
+	guestURLs map[string]string
+}
+
+func (p *recordingMetadataProvider) SetGuestURL(id, url string) error {
+	p.guestURLs[id] = url
+	return nil
+}
+
+func (*recordingMetadataProvider) SetDockerURL(string, string) error { return nil }
+func (*recordingMetadataProvider) SetHostURL(string, string) error   { return nil }
+
+func TestAISettingsHandlerMetadataProviderFactoryScopesExistingServices(t *testing.T) {
+	handler := NewAISettingsHandler(config.NewMultiTenantPersistence(t.TempDir()), nil, nil)
+	tenantContext := context.WithValue(context.Background(), OrgIDContextKey, "tenant-a")
+
+	defaultService := handler.GetAIService(context.Background())
+	tenantService := handler.GetAIService(tenantContext)
+	if defaultService == nil || tenantService == nil {
+		t.Fatal("expected default and tenant AI services")
+	}
+
+	providers := map[string]*recordingMetadataProvider{}
+	handler.SetMetadataProviderFactory(func(orgID string) ai.MetadataProvider {
+		provider := &recordingMetadataProvider{guestURLs: make(map[string]string)}
+		providers[orgID] = provider
+		return provider
+	})
+
+	if err := defaultService.SetResourceURL("vm", "shared-id", "https://default.internal"); err != nil {
+		t.Fatalf("set default URL: %v", err)
+	}
+	if err := tenantService.SetResourceURL("vm", "shared-id", "https://tenant.internal"); err != nil {
+		t.Fatalf("set tenant URL: %v", err)
+	}
+	if got := providers["default"].guestURLs["shared-id"]; got != "https://default.internal" {
+		t.Fatalf("default provider URL = %q", got)
+	}
+	if got := providers["tenant-a"].guestURLs["shared-id"]; got != "https://tenant.internal" {
+		t.Fatalf("tenant provider URL = %q", got)
+	}
+
+	newTenantContext := context.WithValue(context.Background(), OrgIDContextKey, "tenant-b")
+	newTenantService := handler.GetAIService(newTenantContext)
+	if err := newTenantService.SetResourceURL("vm", "shared-id", "https://new-tenant.internal"); err != nil {
+		t.Fatalf("set new tenant URL: %v", err)
+	}
+	if got := providers["tenant-b"].guestURLs["shared-id"]; got != "https://new-tenant.internal" {
+		t.Fatalf("new tenant provider URL = %q", got)
+	}
+}
+
 type stubThresholdProvider struct{}
 
 func (stubThresholdProvider) GetNodeCPUThreshold() float64    { return 80 }

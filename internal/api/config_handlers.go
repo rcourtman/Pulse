@@ -332,6 +332,7 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 	// and setup state.
 	if orgID == "default" &&
 		(defaultConfig != nil || defaultPersistence != nil || defaultMonitor != nil) {
+		bindMonitorMetadataStores(defaultPersistence, defaultMonitor)
 		return defaultConfig, defaultPersistence, defaultMonitor
 	}
 
@@ -345,6 +346,7 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 			if mtPersistence != nil {
 				p, _ = mtPersistence.GetPersistence(orgID)
 			}
+			bindMonitorMetadataStores(p, m)
 			return cfg, p, m
 		} else {
 			if orgID == "default" {
@@ -366,6 +368,20 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 		return defaultConfig, defaultPersistence, defaultMonitor
 	}
 	return nil, nil, nil
+}
+
+func bindMonitorMetadataStores(
+	persistence *config.ConfigPersistence,
+	monitor *monitoring.Monitor,
+) {
+	if persistence == nil || monitor == nil {
+		return
+	}
+	persistence.SetMetadataStores(
+		monitor.GuestMetadataStore(),
+		monitor.DockerMetadataStore(),
+		monitor.HostMetadataStore(),
+	)
 }
 
 func (h *ConfigHandlers) getConfig(ctx context.Context) *config.Config {

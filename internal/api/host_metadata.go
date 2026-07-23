@@ -28,6 +28,7 @@ func hostMetadataPathParts(path string) (agentID string, isCollection bool, ok b
 // HostMetadataHandler handles agent metadata operations.
 type HostMetadataHandler struct {
 	mtPersistence *config.MultiTenantPersistence
+	storeResolver func(context.Context) *config.HostMetadataStore
 }
 
 // NewHostMetadataHandler creates a new host metadata handler
@@ -37,7 +38,20 @@ func NewHostMetadataHandler(mtPersistence *config.MultiTenantPersistence) *HostM
 	}
 }
 
+// SetStoreResolver makes API reads and writes use the active monitor's store.
+// The persistence-backed store remains the initialization/test fallback.
+func (h *HostMetadataHandler) SetStoreResolver(
+	resolver func(context.Context) *config.HostMetadataStore,
+) {
+	h.storeResolver = resolver
+}
+
 func (h *HostMetadataHandler) getStore(ctx context.Context) *config.HostMetadataStore {
+	if h != nil && h.storeResolver != nil {
+		if store := h.storeResolver(ctx); store != nil {
+			return store
+		}
+	}
 	orgID := "default"
 	if ctx != nil {
 		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {

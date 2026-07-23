@@ -4008,7 +4008,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 	unifiedView := m.currentUnifiedStateView()
 	metricsTargetResolver := broadcastMetricsTargetResolver(unifiedView.readState)
 	broadcastResources := unifiedresources.CoalescePresentationHostResources(unifiedView.resources)
-	broadcastResources = m.applyDockerMetadataToUnifiedResources(broadcastResources)
+	broadcastResources = m.applyPersistedMetadataToUnifiedResources(broadcastResources)
 	frontendState.Resources = convertResourcesForBroadcast(broadcastResources, metricsTargetResolver)
 	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
@@ -4618,7 +4618,7 @@ func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.T
 	// REST /api/resources seeds its registry from this snapshot. Apply the
 	// same user-metadata hydration (container customUrl) as the websocket
 	// broadcast path, so the two payload shapes cannot drift.
-	return m.applyDockerMetadataToUnifiedResources(view.resources), view.freshness
+	return m.applyPersistedMetadataToUnifiedResources(view.resources), view.freshness
 }
 
 // GetUnifiedReadState returns a typed unified read-state provider when the
@@ -5347,12 +5347,12 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 	store := m.resourceStore
 	m.mu.RUnlock()
 	return convertResourcesForBroadcast(
-		m.applyDockerMetadataToUnifiedResources(m.getUnifiedResourcesForBroadcast()),
+		m.applyPersistedMetadataToUnifiedResources(m.getUnifiedResourcesForBroadcast()),
 		broadcastMetricsTargetResolver(store),
 	)
 }
 
-func (m *Monitor) applyDockerMetadataToUnifiedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
+func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
 	if len(resources) == 0 || m == nil {
 		return resources
 	}
@@ -5361,16 +5361,29 @@ func (m *Monitor) applyDockerMetadataToUnifiedResources(resources []unifiedresou
 	copy(out, resources)
 	for i := range out {
 		resource := &out[i]
-		if resource.Type != unifiedresources.ResourceTypeAppContainer || strings.TrimSpace(resource.CustomURL) != "" || resource.Docker == nil {
+		if strings.TrimSpace(resource.CustomURL) != "" {
 			continue
 		}
-		hostID := strings.TrimSpace(resource.Docker.HostSourceID)
-		containerID := strings.TrimSpace(resource.Docker.ContainerID)
-		if hostID == "" {
-			continue
-		}
-		if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
-			resource.CustomURL = customURL
+
+		switch unifiedresources.CanonicalResourceType(resource.Type) {
+		case unifiedresources.ResourceTypeAppContainer:
+			if resource.Docker == nil {
+				continue
+			}
+			hostID := strings.TrimSpace(resource.Docker.HostSourceID)
+			containerID := strings.TrimSpace(resource.Docker.ContainerID)
+			if hostID == "" {
+				continue
+			}
+			if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
+				resource.CustomURL = customURL
+			}
+		case unifiedresources.ResourceTypePod,
+			unifiedresources.ResourceTypeK8sDeployment,
+			unifiedresources.ResourceTypeK8sService:
+			if customURL, ok := m.kubernetesWorkloadCustomURL(*resource); ok {
+				resource.CustomURL = customURL
+			}
 		}
 	}
 	return out

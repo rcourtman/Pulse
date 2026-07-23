@@ -296,6 +296,7 @@ describe('toDiscoveryConfig', () => {
       ...baseResource(),
       id: 'resource:pod:hash-1',
       type: 'pod',
+      name: 'checkout',
       platformType: 'kubernetes',
       clusterId: 'cluster-a',
       kubernetes: {
@@ -319,7 +320,7 @@ describe('toDiscoveryConfig', () => {
       resourceId: 'pod-uid-1',
       hostname: 'stale-hostname',
       metadataKind: 'guest',
-      metadataId: 'resource:pod:hash-1',
+      metadataId: 'k8s-workload:cluster-a:pod:default:checkout',
       targetLabel: 'workload',
     });
   });
@@ -329,6 +330,7 @@ describe('toDiscoveryConfig', () => {
       ...baseResource(),
       id: 'resource:pod:hash-2',
       type: 'pod',
+      name: 'checkout',
       platformType: 'kubernetes',
       kubernetes: {
         agentId: 'k8s-agent-1',
@@ -353,7 +355,7 @@ describe('toDiscoveryConfig', () => {
       resourceId: 'pod-uid-2',
       hostname: 'stale-hostname',
       metadataKind: 'guest',
-      metadataId: 'resource:pod:hash-2',
+      metadataId: 'k8s-workload:cluster-a:pod:default:checkout',
       targetLabel: 'workload',
     });
   });

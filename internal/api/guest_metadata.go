@@ -12,6 +12,7 @@ import (
 // GuestMetadataHandler handles guest metadata operations
 type GuestMetadataHandler struct {
 	mtPersistence *config.MultiTenantPersistence
+	storeResolver func(context.Context) *config.GuestMetadataStore
 }
 
 // NewGuestMetadataHandler creates a new guest metadata handler
@@ -21,7 +22,20 @@ func NewGuestMetadataHandler(mtPersistence *config.MultiTenantPersistence) *Gues
 	}
 }
 
+// SetStoreResolver makes API reads and writes use the active monitor's store.
+// The persistence-backed store remains the initialization/test fallback.
+func (h *GuestMetadataHandler) SetStoreResolver(
+	resolver func(context.Context) *config.GuestMetadataStore,
+) {
+	h.storeResolver = resolver
+}
+
 func (h *GuestMetadataHandler) getStore(ctx context.Context) *config.GuestMetadataStore {
+	if h != nil && h.storeResolver != nil {
+		if store := h.storeResolver(ctx); store != nil {
+			return store
+		}
+	}
 	// Default to "default" org if none specified (though middleware should always set it)
 	orgID := "default"
 	if ctx != nil {
@@ -33,15 +47,12 @@ func (h *GuestMetadataHandler) getStore(ctx context.Context) *config.GuestMetada
 	return p.GetGuestMetadataStore()
 }
 
-// Reload reloads the guest metadata from disk
-func (h *GuestMetadataHandler) Reload() error {
-	// For multi-tenant, we might need to reload all loaded stores?
-	// Or we just rely on lazy loading.
-	// Since stores are cached in ConfigPersistence, we currently don't have an easy way to iterate all.
-	// But stores load on init. Reload() method on store might be needed if modified on disk externally.
-	// For now, this is a no-op or TODO for multi-tenant deep reload.
-	// Actually, we can get "default" store and reload it for legacy compat.
-	return h.getStore(context.Background()).Load()
+// Reload reloads the request tenant's guest metadata from disk.
+func (h *GuestMetadataHandler) Reload(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return h.getStore(ctx).Load()
 }
 
 // Store returns the underlying metadata store for the default tenant (Legacy support)

@@ -2278,6 +2278,11 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+Config export/import remains adjacent persistence infrastructure rather than a
+storage/recovery authority. Guest metadata import must reload the active
+tenant monitor's live store so recovery and resource projections observe one
+post-import state; it must not leave a parallel persistence cache or reload the
+default tenant on behalf of another organization.
 
 Host-agent removal tombstones in `internal/config/host_continuity.go` are an
 adjacent agent-lifecycle security journal, not storage or recovery inventory.

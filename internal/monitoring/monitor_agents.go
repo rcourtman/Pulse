@@ -1969,6 +1969,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	}
 
 	if hasPrevious {
+		m.migrateDockerContainerMetadataForRenamedContainers(identifier, previous.Containers(), host.Containers)
 		m.migrateDockerContainerMetadataForRecreatedContainers(identifier, previous.Containers(), host.Containers)
 	}
 	m.migrateCurrentDockerContainerMetadataToStableIdentities(identifier, host.Containers)

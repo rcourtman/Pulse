@@ -186,7 +186,7 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 
 	// Reload guest metadata from disk.
 	if h.guestMetadataHandler != nil {
-		if err := h.guestMetadataHandler.Reload(); err != nil {
+		if err := h.guestMetadataHandler.Reload(r.Context()); err != nil {
 			log.Warn().Err(err).Msg("Failed to reload guest metadata after import")
 		} else {
 			log.Info().Msg("Reloaded guest metadata after import")

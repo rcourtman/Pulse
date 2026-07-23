@@ -652,3 +652,61 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ConcurrentMigration(t *testin
 		t.Error("New ID should exist after migration")
 	}
 }
+
+func TestGuestMetadataStoreUpdateAllAppliesOneWorkingSet(t *testing.T) {
+	store := NewGuestMetadataStore(t.TempDir(), nil)
+	if err := store.Set("old", &GuestMetadata{CustomURL: "https://old.internal"}); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
+	if err := store.UpdateAll(func(metadata map[string]*GuestMetadata) bool {
+		metadata["new"] = metadata["old"]
+		delete(metadata, "old")
+		return true
+	}); err != nil {
+		t.Fatalf("UpdateAll: %v", err)
+	}
+
+	if store.Get("old") != nil {
+		t.Fatal("old metadata key still exists")
+	}
+	if meta := store.Get("new"); meta == nil || meta.ID != "new" || meta.CustomURL != "https://old.internal" {
+		t.Fatalf("new metadata = %#v", meta)
+	}
+
+	reloaded := NewGuestMetadataStore(store.dataPath, nil)
+	if reloaded.Get("old") != nil {
+		t.Fatal("persisted old metadata key still exists")
+	}
+	if meta := reloaded.Get("new"); meta == nil || meta.ID != "new" || meta.CustomURL != "https://old.internal" {
+		t.Fatalf("persisted new metadata = %#v", meta)
+	}
+}
+
+func TestGuestMetadataStoreUpdateAllRollsBackFailedPersistence(t *testing.T) {
+	store := NewGuestMetadataStore(t.TempDir(), nil)
+	if err := store.Set("old", &GuestMetadata{CustomURL: "https://old.internal"}); err != nil {
+		t.Fatalf("seed metadata: %v", err)
+	}
+
+	badPath := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(badPath, []byte("occupied"), 0o600); err != nil {
+		t.Fatalf("create invalid data path: %v", err)
+	}
+	store.dataPath = badPath
+
+	err := store.UpdateAll(func(metadata map[string]*GuestMetadata) bool {
+		metadata["new"] = metadata["old"]
+		delete(metadata, "old")
+		return true
+	})
+	if err == nil {
+		t.Fatal("expected persistence error")
+	}
+	if meta := store.Get("old"); meta == nil || meta.CustomURL != "https://old.internal" {
+		t.Fatalf("rolled-back old metadata = %#v", meta)
+	}
+	if meta := store.Get("new"); meta != nil {
+		t.Fatalf("failed update remained in memory: %#v", meta)
+	}
+}

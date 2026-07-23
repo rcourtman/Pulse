@@ -145,3 +145,32 @@ func TestDockerMetadataStore_Save_Error(t *testing.T) {
 	err := store.Set("c1", &DockerMetadata{ID: "c1"})
 	assert.Error(t, err)
 }
+
+func TestDockerMetadataStoreUpdateAllPreservesHostMetadata(t *testing.T) {
+	store := NewDockerMetadataStore(t.TempDir(), nil)
+	require.NoError(t, store.Set("old", &DockerMetadata{CustomURL: "https://old.internal"}))
+	require.NoError(t, store.SetHostMetadata("host", &DockerHostMetadata{
+		CustomURL: "https://host.internal",
+	}))
+
+	require.NoError(t, store.UpdateAll(func(metadata map[string]*DockerMetadata) bool {
+		metadata["new"] = metadata["old"]
+		delete(metadata, "old")
+		return true
+	}))
+
+	assert.Nil(t, store.Get("old"))
+	require.NotNil(t, store.Get("new"))
+	assert.Equal(t, "new", store.Get("new").ID)
+	assert.Equal(t, "https://old.internal", store.Get("new").CustomURL)
+	require.NotNil(t, store.GetHostMetadata("host"))
+	assert.Equal(t, "https://host.internal", store.GetHostMetadata("host").CustomURL)
+
+	reloaded := NewDockerMetadataStore(store.dataPath, nil)
+	assert.Nil(t, reloaded.Get("old"))
+	require.NotNil(t, reloaded.Get("new"))
+	assert.Equal(t, "new", reloaded.Get("new").ID)
+	assert.Equal(t, "https://old.internal", reloaded.Get("new").CustomURL)
+	require.NotNil(t, reloaded.GetHostMetadata("host"))
+	assert.Equal(t, "https://host.internal", reloaded.GetHostMetadata("host").CustomURL)
+}

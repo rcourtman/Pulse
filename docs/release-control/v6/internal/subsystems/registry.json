@@ -508,6 +508,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/utils/workloads.ts",
+      "rationale": "the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary",
+      "subsystems": [
+        "performance-and-scalability",
+        "unified-resources"
+      ]
+    },
+    {
       "path": "internal/agentcapabilities/action_target.go",
       "rationale": "the Pulse Intelligence governed action target type and resource-to-action-target mapping vocabulary are both the Assistant approval/runtime routing contract and the canonical API/agent target contract for governed actions",
       "subsystems": [
@@ -1880,6 +1888,7 @@
             ],
             "exact_files": [
               "internal/api/ai_handler_test.go",
+              "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/ai_handlers_test.go",
               "internal/api/ai_intelligence_handlers_test.go",
@@ -2462,6 +2471,7 @@
         "frontend-modern/src/utils/apiTokenPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/setup_script_render.go",
+        "internal/config/persistence_metadata_accessors.go",
         "internal/websocket/hub.go",
         "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
@@ -2808,6 +2818,20 @@
             ]
           },
           {
+            "id": "metadata-persistence-cache-authority",
+            "label": "metadata persistence live-store authority proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/config/persistence_metadata_accessors.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/metadata_handlers_test.go",
+              "internal/config/persistence_metadata_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [
@@ -2820,9 +2844,11 @@
             ],
             "exact_files": [
               "frontend-modern/src/types/api.ts",
+              "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/contract_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
+              "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go"
             ]
           },
@@ -5132,6 +5158,8 @@
       ],
       "owned_files": [
         "docker-entrypoint.sh",
+        "internal/config/docker_metadata.go",
+        "internal/config/guest_metadata.go",
         "internal/config/host_continuity.go",
         "internal/dockeragent/collect.go",
         "internal/dockeragent/docker_client.go",
@@ -5200,6 +5228,7 @@
               "internal/config/host_continuity_test.go",
               "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
+              "internal/monitoring/monitor_docker_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_package_updates_test.go",
@@ -5528,10 +5557,15 @@
             "match_prefixes": [
               "internal/monitoring/"
             ],
-            "match_files": [],
+            "match_files": [
+              "internal/config/docker_metadata.go",
+              "internal/config/guest_metadata.go"
+            ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/config/docker_metadata_test.go",
+              "internal/config/guest_metadata_test.go",
               "internal/monitoring/availability_poller_test.go",
               "internal/monitoring/availability_udp_test.go",
               "internal/monitoring/canonical_guardrails_test.go",
@@ -5540,6 +5574,7 @@
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_alert_override_migration_test.go",
               "internal/monitoring/monitor_backups_readstate_test.go",
+              "internal/monitoring/monitor_docker_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/unifiedresources/code_standards_test.go"
@@ -7013,6 +7048,7 @@
         "frontend-modern/src/utils/serviceHealthPresentation.ts",
         "frontend-modern/src/utils/sourcePlatforms.ts",
         "frontend-modern/src/utils/sourceTypePresentation.ts",
+        "frontend-modern/src/utils/workloads.ts",
         "frontend-modern/src/utils/workloadTypePresentation.ts",
         "internal/api/resources.go",
         "internal/platformsupport/manifest_generated.go"
@@ -7183,6 +7219,7 @@
               "frontend-modern/src/routing/resourceLinks.ts",
               "frontend-modern/src/types/resource.ts",
               "frontend-modern/src/utils/resourceIdentity.ts",
+              "frontend-modern/src/utils/workloads.ts",
               "internal/api/resources.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -7246,6 +7283,7 @@
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "frontend-modern/src/types/__tests__/resource.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/workloads.test.ts",
               "internal/unifiedresources/code_standards_test.go"
             ]
           },

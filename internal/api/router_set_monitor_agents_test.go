@@ -37,13 +37,17 @@ func TestRouterSetMonitor_UpdatesAgentHandlers(t *testing.T) {
 	// fallback, which is exactly the field SetMonitor must refresh.
 	kubernetesHandlers := NewKubernetesAgentHandlers(nil, monitor1, nil)
 	dockerHandlers := NewDockerAgentHandlers(nil, monitor1, nil, cfg)
+	multiTenantPersistence := config.NewMultiTenantPersistence(tempDir)
 
 	// Minimal router, as in TestReloadSystemSettings_AppliesWebhookCIDRsToNewMonitor:
 	// SetMonitor only touches the handlers that are non-nil.
 	router := &Router{
 		config:                  cfg,
+		persistence:             config.NewConfigPersistence(tempDir),
+		multiTenant:             multiTenantPersistence,
 		kubernetesAgentHandlers: kubernetesHandlers,
 		dockerAgentHandlers:     dockerHandlers,
+		aiSettingsHandler:       NewAISettingsHandler(multiTenantPersistence, nil, nil),
 	}
 
 	router.SetMonitor(monitor2)
@@ -54,5 +58,27 @@ func TestRouterSetMonitor_UpdatesAgentHandlers(t *testing.T) {
 	}
 	if got := dockerHandlers.getMonitor(ctx); got != monitor2 {
 		t.Fatal("docker agent handlers still resolve the pre-reload monitor after Router.SetMonitor")
+	}
+	if got := router.persistence.GetGuestMetadataStore(); got != monitor2.GuestMetadataStore() {
+		t.Fatal("config persistence still resolves the pre-reload guest metadata store")
+	}
+	if got := router.persistence.GetDockerMetadataStore(); got != monitor2.DockerMetadataStore() {
+		t.Fatal("config persistence still resolves the pre-reload Docker metadata store")
+	}
+	if got := router.persistence.GetHostMetadataStore(); got != monitor2.HostMetadataStore() {
+		t.Fatal("config persistence still resolves the pre-reload host metadata store")
+	}
+	if err := router.aiSettingsHandler.GetAIService(ctx).SetResourceURL(
+		"vm",
+		"instance:node:100",
+		"https://guest.internal",
+	); err != nil {
+		t.Fatalf("AI metadata update after monitor reload: %v", err)
+	}
+	if meta := monitor2.GuestMetadataStore().Get("instance:node:100"); meta == nil || meta.CustomURL != "https://guest.internal" {
+		t.Fatalf("replacement monitor guest metadata = %#v", meta)
+	}
+	if meta := monitor1.GuestMetadataStore().Get("instance:node:100"); meta != nil {
+		t.Fatalf("pre-reload monitor received URL update: %#v", meta)
 	}
 }

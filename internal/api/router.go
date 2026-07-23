@@ -432,7 +432,26 @@ func (r *Router) setupRoutes() {
 	r.configHandlers = NewConfigHandlers(r.multiTenant, r.mtMonitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
 	if r.monitor != nil {
 		r.configHandlers.SetMonitor(r.monitor)
+		r.bindDefaultMetadataStores(r.monitor)
 	}
+	guestMetadataHandler.SetStoreResolver(func(ctx context.Context) *config.GuestMetadataStore {
+		if monitor := r.configHandlers.getMonitor(ctx); monitor != nil {
+			return monitor.GuestMetadataStore()
+		}
+		return nil
+	})
+	dockerMetadataHandler.SetStoreResolver(func(ctx context.Context) *config.DockerMetadataStore {
+		if monitor := r.configHandlers.getMonitor(ctx); monitor != nil {
+			return monitor.DockerMetadataStore()
+		}
+		return nil
+	})
+	hostMetadataHandler.SetStoreResolver(func(ctx context.Context) *config.HostMetadataStore {
+		if monitor := r.configHandlers.getMonitor(ctx); monitor != nil {
+			return monitor.HostMetadataStore()
+		}
+		return nil
+	})
 	r.configHandlers.SetConfig(r.config)
 	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
 	r.trueNASHandlers = &TrueNASHandlers{
@@ -755,14 +774,9 @@ func (r *Router) setupRoutes() {
 	} else {
 		log.Warn().Msg("[Router] unified resource provider is nil, cannot inject unified resource provider")
 	}
-	// Inject metadata provider for AI URL discovery feature
-	// This allows AI to set resource URLs when it discovers web services
-	metadataProvider := NewMetadataProvider(
-		guestMetadataHandler.Store(),
-		dockerMetadataHandler.Store(),
-		hostMetadataHandler.Store(),
-	)
-	r.aiSettingsHandler.SetMetadataProvider(metadataProvider)
+	// Inject tenant-scoped metadata providers for AI URL discovery. Existing
+	// tenant services are refreshed when Router.SetMonitor replaces a monitor.
+	r.configureMetadataProviderFactory()
 
 	// Wire the per-tenant AI narrator, fleet narrator, and Patrol
 	// findings provider into reporting. The AI service implements all
@@ -1483,6 +1497,8 @@ func (r *Router) startLifecycleWorker(worker func()) {
 // SetMonitor updates the router and associated handlers with a new monitor instance.
 func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	r.monitor = m
+	r.bindDefaultMetadataStores(m)
+	r.configureMetadataProviderFactory()
 	if r.alertHandlers != nil {
 		r.alertHandlers.SetMonitor(NewAlertMonitorWrapper(m))
 	}
@@ -1539,6 +1555,72 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 
 		r.configureProxmoxGuestDockerDetection(m)
 	}
+}
+
+func (r *Router) bindDefaultMetadataStores(monitor *monitoring.Monitor) {
+	if r == nil || monitor == nil {
+		return
+	}
+	if r.persistence != nil {
+		r.persistence.SetMetadataStores(
+			monitor.GuestMetadataStore(),
+			monitor.DockerMetadataStore(),
+			monitor.HostMetadataStore(),
+		)
+	}
+	if r.multiTenant != nil {
+		if persistence, err := r.multiTenant.GetPersistence("default"); err == nil {
+			persistence.SetMetadataStores(
+				monitor.GuestMetadataStore(),
+				monitor.DockerMetadataStore(),
+				monitor.HostMetadataStore(),
+			)
+		}
+	}
+}
+
+func (r *Router) configureMetadataProviderFactory() {
+	if r == nil || r.aiSettingsHandler == nil {
+		return
+	}
+	r.aiSettingsHandler.SetMetadataProviderFactory(func(orgID string) ai.MetadataProvider {
+		orgID = strings.TrimSpace(orgID)
+		if orgID == "" {
+			orgID = "default"
+		}
+
+		var monitor *monitoring.Monitor
+		if orgID == "default" {
+			monitor = r.monitor
+		} else if r.mtMonitor != nil {
+			monitor, _ = r.mtMonitor.GetMonitor(orgID)
+		}
+		if monitor != nil {
+			return NewMetadataProvider(
+				monitor.GuestMetadataStore(),
+				monitor.DockerMetadataStore(),
+				monitor.HostMetadataStore(),
+			)
+		}
+
+		if r.multiTenant != nil {
+			if persistence, err := r.multiTenant.GetPersistence(orgID); err == nil && persistence != nil {
+				return NewMetadataProvider(
+					persistence.GetGuestMetadataStore(),
+					persistence.GetDockerMetadataStore(),
+					persistence.GetHostMetadataStore(),
+				)
+			}
+		}
+		if orgID == "default" && r.persistence != nil {
+			return NewMetadataProvider(
+				r.persistence.GetGuestMetadataStore(),
+				r.persistence.GetDockerMetadataStore(),
+				r.persistence.GetHostMetadataStore(),
+			)
+		}
+		return nil
+	})
 }
 
 func (r *Router) configureProxmoxGuestDockerDetection(m *monitoring.Monitor) {

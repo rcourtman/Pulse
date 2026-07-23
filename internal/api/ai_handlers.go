@@ -69,6 +69,7 @@ type AISettingsHandler struct {
 	policyMutation          func(func() error) error
 	patrolAutopilotPolicy   func() unifiedresources.PatrolAutopilotServerPolicy
 	metadataProvider        ai.MetadataProvider
+	metadataProviderFactory func(orgID string) ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
 	baselineStore           *ai.BaselineStore
@@ -237,6 +238,7 @@ type aiSettingsProviderSnapshot struct {
 	defaultAIService        *ai.Service
 	stateProvider           ai.StateProvider
 	metadataProvider        ai.MetadataProvider
+	metadataProviderFactory func(orgID string) ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
 	baselineStore           *ai.BaselineStore
@@ -268,6 +270,7 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 		defaultAIService:        h.defaultAIService,
 		stateProvider:           h.stateProvider,
 		metadataProvider:        h.metadataProvider,
+		metadataProviderFactory: h.metadataProviderFactory,
 		patrolThresholdProvider: h.patrolThresholdProvider,
 		metricsHistoryProvider:  h.metricsHistoryProvider,
 		baselineStore:           h.baselineStore,
@@ -415,6 +418,10 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	if svc, exists = h.aiServices[orgID]; exists {
 		return svc
 	}
+	// A provider factory can be replaced while this service is waiting on
+	// aiServicesMu during monitor reload. Refresh after acquiring the creation
+	// lock so the new service cannot retain the pre-reload metadata store.
+	providers = h.providerSnapshot()
 
 	// Create new service for this tenant
 	persistence, err := mtPersistence.GetPersistence(orgID)
@@ -449,8 +456,8 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	if provider := h.unifiedResourceProviderForOrg(orgID); provider != nil {
 		svc.SetUnifiedResourceProvider(provider)
 	}
-	if providers.metadataProvider != nil {
-		svc.SetMetadataProvider(providers.metadataProvider)
+	if metadataProvider := providers.metadataProviderForOrg(orgID); metadataProvider != nil {
+		svc.SetMetadataProvider(metadataProvider)
 	}
 	if orgID == "default" {
 		if providers.patrolThresholdProvider != nil {
@@ -752,10 +759,21 @@ func (h *AISettingsHandler) SetUnifiedResourceProvider(urp ai.UnifiedResourcePro
 	}
 }
 
+func (p aiSettingsProviderSnapshot) metadataProviderForOrg(orgID string) ai.MetadataProvider {
+	if p.metadataProviderFactory != nil {
+		return p.metadataProviderFactory(orgID)
+	}
+	return p.metadataProvider
+}
+
 // SetMetadataProvider sets the metadata provider for AI URL discovery
 func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
+	if h == nil {
+		return
+	}
 	h.stateMu.Lock()
 	h.metadataProvider = mp
+	h.metadataProviderFactory = nil
 	defaultAIService := h.defaultAIService
 	h.stateMu.Unlock()
 	if defaultAIService != nil {
@@ -766,6 +784,42 @@ func (h *AISettingsHandler) SetMetadataProvider(mp ai.MetadataProvider) {
 	defer h.aiServicesMu.Unlock()
 	for _, svc := range h.aiServices {
 		svc.SetMetadataProvider(mp)
+	}
+}
+
+// SetMetadataProviderFactory scopes URL metadata updates to each AI service's
+// organization and refreshes providers already created before a monitor reload.
+func (h *AISettingsHandler) SetMetadataProviderFactory(
+	factory func(orgID string) ai.MetadataProvider,
+) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	h.metadataProvider = nil
+	h.metadataProviderFactory = factory
+	defaultAIService := h.defaultAIService
+	h.stateMu.Unlock()
+
+	if defaultAIService != nil {
+		var provider ai.MetadataProvider
+		if factory != nil {
+			provider = factory("default")
+		}
+		defaultAIService.SetMetadataProvider(provider)
+	}
+
+	h.aiServicesMu.Lock()
+	defer h.aiServicesMu.Unlock()
+	for orgID, svc := range h.aiServices {
+		if svc == nil {
+			continue
+		}
+		var provider ai.MetadataProvider
+		if factory != nil {
+			provider = factory(orgID)
+		}
+		svc.SetMetadataProvider(provider)
 	}
 }
 

@@ -128,6 +128,7 @@ life is derived.
 58. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
 59. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
 60. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+60a. `frontend-modern/src/utils/workloads.ts`
 61. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
 62. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
 63. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
@@ -470,6 +471,15 @@ the resource name through the shared `WebInterfaceNameLink` primitive. Proxmox
 host table columns are governed by `proxmoxHostTableModel.ts`; that model must
 not reintroduce a separate `Web` column or move the web-interface launch back
 into a page-local icon cell.
+Persisted workload URLs must also use the same stable identity in the workload
+and infrastructure drawers. Docker app containers use
+`app-container:<host>:name:<normalized-name>`; Kubernetes pods, Deployments,
+and Services use
+`k8s-workload:<cluster>:<kind>:<namespace>:<name>`. Runtime container IDs,
+pod UIDs, and generated registry IDs remain fallback migration, action,
+discovery, or metrics coordinates and must not be the primary metadata write
+key. Missing cluster/host, namespace, kind, or name scope must fail closed to
+the legacy resource key rather than constructing a broadened stable key.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through
@@ -630,7 +640,8 @@ container inventory table.
     display/source family; `platformScopes` is the overlap set used when a
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
-18. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+18. `frontend-modern/src/utils/workloads.ts` shared with `performance-and-scalability`: the stable workload metadata identity helper is both a unified-resource persistence boundary and a workloads hot-path lookup boundary.
+19. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     `/api/resources` type filters must accept URL-encoded comma-separated lists
     from browser query builders exactly like literal comma separators, so Docker
     / Podman runtime pages do not lose `docker-host` inventory while requesting

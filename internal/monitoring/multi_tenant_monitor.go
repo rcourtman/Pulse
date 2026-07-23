@@ -225,6 +225,11 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create monitor for org %s: %w", orgID, err)
 	}
+	tenantPersistence.SetMetadataStores(
+		monitor.GuestMetadataStore(),
+		monitor.DockerMetadataStore(),
+		monitor.HostMetadataStore(),
+	)
 
 	// Set org ID for tenant isolation
 	// This enables tenant-scoped WebSocket broadcasts

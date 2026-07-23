@@ -6719,3 +6719,9 @@ status/history read remains bounded and cannot trigger a replacement run.
 `internal/api/ai_handlers_patrol_actions_additional_test.go`, and
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`
 are the focused acceptance, API, and cold-start timing proofs.
+
+Assistant web-interface URL updates resolve metadata providers per organization
+from the active tenant monitor. Provider replacement refreshes both the default
+service and already-created tenant services after monitor reload, so no AI
+service retains an orphaned cache or writes a tenant's URL through another
+organization's guest, Docker, or host metadata store.

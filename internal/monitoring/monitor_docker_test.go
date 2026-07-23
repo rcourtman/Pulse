@@ -511,9 +511,193 @@ func TestApplyDockerReportMigratesGuestMetadataToStableContainerName(t *testing.
 		},
 	}
 
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "https://app.internal" {
 		t.Fatalf("CustomURL after recreate gap = %q, want https://app.internal", got[0].CustomURL)
+	}
+}
+
+func TestApplyDockerReportMovesStableMetadataOnRenameWithoutLeakingToReusedName(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseTimestamp := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-rename",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-host-rename",
+			MachineID: "machine-rename",
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-stable", Name: "app"},
+		},
+		Timestamp: baseTimestamp,
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+	oldKey := dockerAppContainerMetadataKey(host.ID, "app")
+	if err := monitor.guestMetadataStore.Set(oldKey, &config.GuestMetadata{
+		CustomURL:     "https://app.internal",
+		LastKnownName: "app",
+		LastKnownType: "app-container",
+	}); err != nil {
+		t.Fatalf("seed stable guest metadata: %v", err)
+	}
+	oldDockerKey := dockerContainerNameMetadataKey(host.ID, "app")
+	if err := monitor.dockerMetadataStore.Set(oldDockerKey, &config.DockerMetadata{
+		CustomURL: "https://app-drawer.internal",
+	}); err != nil {
+		t.Fatalf("seed stable Docker metadata: %v", err)
+	}
+
+	report.Timestamp = baseTimestamp.Add(30 * time.Second)
+	report.Containers = []agentsdocker.Container{
+		{ID: "container-stable", Name: "renamed-app"},
+	}
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("renamed-container ApplyDockerReport failed: %v", err)
+	}
+
+	newKey := dockerAppContainerMetadataKey(host.ID, "renamed-app")
+	if meta := monitor.guestMetadataStore.Get(newKey); meta == nil || meta.CustomURL != "https://app.internal" {
+		t.Fatalf("renamed stable metadata = %#v, want preserved URL", meta)
+	}
+	if meta := monitor.guestMetadataStore.Get(oldKey); meta != nil {
+		t.Fatalf("old stable metadata key still exists after rename: %#v", meta)
+	}
+	newDockerKey := dockerContainerNameMetadataKey(host.ID, "renamed-app")
+	if meta := monitor.dockerMetadataStore.Get(newDockerKey); meta == nil || meta.CustomURL != "https://app-drawer.internal" {
+		t.Fatalf("renamed stable Docker metadata = %#v, want preserved URL", meta)
+	}
+	if meta := monitor.dockerMetadataStore.Get(oldDockerKey); meta != nil {
+		t.Fatalf("old stable Docker metadata key still exists after rename: %#v", meta)
+	}
+
+	report.Timestamp = baseTimestamp.Add(60 * time.Second)
+	report.Containers = []agentsdocker.Container{
+		{ID: "container-stable", Name: "renamed-app"},
+		{ID: "container-unrelated", Name: "app"},
+	}
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("reused-name ApplyDockerReport failed: %v", err)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   dockerAppContainerLegacyResourceID(host.ID, "container-stable"),
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "renamed-app",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: host.ID,
+				ContainerID:  "container-stable",
+			},
+		},
+		{
+			ID:   dockerAppContainerLegacyResourceID(host.ID, "container-unrelated"),
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "app",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: host.ID,
+				ContainerID:  "container-unrelated",
+			},
+		},
+	}
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "https://app.internal" {
+		t.Fatalf("renamed container CustomURL = %q, want preserved URL", got[0].CustomURL)
+	}
+	if got[1].CustomURL != "" {
+		t.Fatalf("unrelated container reusing old name inherited CustomURL %q", got[1].CustomURL)
+	}
+}
+
+func TestDockerContainerStableMetadataMovesFailClosedOnAmbiguousNames(t *testing.T) {
+	moves := dockerContainerStableMetadataMoves(
+		"docker-host",
+		[]models.DockerContainer{
+			{ID: "container-a", Name: "/app"},
+			{ID: "container-b", Name: "app"},
+		},
+		[]models.DockerContainer{
+			{ID: "container-a", Name: "renamed-app"},
+			{ID: "container-b", Name: "app"},
+		},
+		dockerAppContainerMetadataKey,
+	)
+	if len(moves) != 0 {
+		t.Fatalf("ambiguous normalized source names produced moves: %#v", moves)
+	}
+}
+
+func TestMigrateDockerContainerMetadataForRenamedContainersPreservesNameSwapOwnership(t *testing.T) {
+	monitor := newTestMonitor(t)
+	hostID := "docker-host-swap"
+	if err := monitor.guestMetadataStore.Set(
+		dockerAppContainerMetadataKey(hostID, "blue"),
+		&config.GuestMetadata{CustomURL: "https://blue.internal"},
+	); err != nil {
+		t.Fatalf("seed blue metadata: %v", err)
+	}
+	if err := monitor.guestMetadataStore.Set(
+		dockerAppContainerMetadataKey(hostID, "green"),
+		&config.GuestMetadata{CustomURL: "https://green.internal"},
+	); err != nil {
+		t.Fatalf("seed green metadata: %v", err)
+	}
+
+	monitor.migrateDockerContainerMetadataForRenamedContainers(
+		hostID,
+		[]models.DockerContainer{
+			{ID: "container-blue", Name: "blue"},
+			{ID: "container-green", Name: "green"},
+		},
+		[]models.DockerContainer{
+			{ID: "container-blue", Name: "green"},
+			{ID: "container-green", Name: "blue"},
+		},
+	)
+
+	if meta := monitor.guestMetadataStore.Get(dockerAppContainerMetadataKey(hostID, "green")); meta == nil || meta.CustomURL != "https://blue.internal" {
+		t.Fatalf("container-blue metadata after swap = %#v", meta)
+	}
+	if meta := monitor.guestMetadataStore.Get(dockerAppContainerMetadataKey(hostID, "blue")); meta == nil || meta.CustomURL != "https://green.internal" {
+		t.Fatalf("container-green metadata after swap = %#v", meta)
+	}
+}
+
+func TestMigrateDockerContainerMetadataForRenamedContainersPreservesExistingDestination(t *testing.T) {
+	monitor := newTestMonitor(t)
+	hostID := "docker-host-destination"
+	oldKey := dockerAppContainerMetadataKey(hostID, "old-name")
+	newKey := dockerAppContainerMetadataKey(hostID, "reserved-name")
+	if err := monitor.guestMetadataStore.Set(oldKey, &config.GuestMetadata{
+		CustomURL: "https://old.internal",
+	}); err != nil {
+		t.Fatalf("seed old metadata: %v", err)
+	}
+	if err := monitor.guestMetadataStore.Set(newKey, &config.GuestMetadata{
+		CustomURL: "https://reserved.internal",
+	}); err != nil {
+		t.Fatalf("seed destination metadata: %v", err)
+	}
+
+	monitor.migrateDockerContainerMetadataForRenamedContainers(
+		hostID,
+		[]models.DockerContainer{{ID: "container", Name: "old-name"}},
+		[]models.DockerContainer{{ID: "container", Name: "reserved-name"}},
+	)
+
+	if meta := monitor.guestMetadataStore.Get(newKey); meta == nil || meta.CustomURL != "https://reserved.internal" {
+		t.Fatalf("destination metadata = %#v", meta)
+	}
+	if meta := monitor.guestMetadataStore.Get(oldKey); meta != nil {
+		t.Fatalf("obsolete source could leak onto later name reuse: %#v", meta)
 	}
 }
 
@@ -575,7 +759,7 @@ func TestApplyDockerReportFoldsRuntimeKeyDockerMetadataIntoStableGuestKey(t *tes
 			},
 		},
 	}
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "https://wud.internal" {
 		t.Fatalf("projected CustomURL = %q, want https://wud.internal", got[0].CustomURL)
 	}
@@ -643,7 +827,7 @@ func TestApplyDockerReportKeepsClearedStableGuestKeyOverRuntimeDockerMetadata(t 
 			},
 		},
 	}
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "" {
 		t.Fatalf("projected CustomURL = %q, want empty (cleared)", got[0].CustomURL)
 	}
@@ -716,12 +900,12 @@ func TestApplyDockerMetadataToUnifiedResourcesAddsContainerCustomURL(t *testing.
 		},
 	}
 
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "https://app.internal" {
 		t.Fatalf("CustomURL = %q, want migrated Docker metadata URL", got[0].CustomURL)
 	}
 	if resources[0].CustomURL != "" {
-		t.Fatalf("applyDockerMetadataToUnifiedResources mutated input CustomURL to %q", resources[0].CustomURL)
+		t.Fatalf("applyPersistedMetadataToUnifiedResources mutated input CustomURL to %q", resources[0].CustomURL)
 	}
 }
 
@@ -745,7 +929,7 @@ func TestApplyDockerMetadataToUnifiedResourcesKeepsResourceCustomURL(t *testing.
 		},
 	}
 
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "https://resource.internal" {
 		t.Fatalf("CustomURL = %q, want existing resource URL to win", got[0].CustomURL)
 	}
@@ -771,7 +955,7 @@ func TestApplyDockerMetadataToUnifiedResourcesUsesStableDockerMetadata(t *testin
 		},
 	}
 
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "https://stable-docker.internal" {
 		t.Fatalf("CustomURL = %q, want stable Docker metadata URL", got[0].CustomURL)
 	}
@@ -802,9 +986,182 @@ func TestApplyDockerMetadataToUnifiedResourcesStableGuestMetadataBlocksLegacyFal
 		},
 	}
 
-	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "" {
 		t.Fatalf("CustomURL = %q, want stable empty guest metadata to block legacy fallback", got[0].CustomURL)
+	}
+}
+
+func TestApplyPersistedMetadataToUnifiedResourcesMigratesKubernetesURLToStableLogicalIdentity(t *testing.T) {
+	monitor := newTestMonitor(t)
+	legacyPodID := "k8s:cluster-a:pod:pod-uid-old"
+	if err := monitor.guestMetadataStore.Set(legacyPodID, &config.GuestMetadata{
+		CustomURL: "https://checkout.internal",
+	}); err != nil {
+		t.Fatalf("seed legacy pod metadata: %v", err)
+	}
+
+	oldPod := unifiedresources.Resource{
+		ID:   "resource:pod:old",
+		Type: unifiedresources.ResourceTypePod,
+		Name: "checkout",
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterID:    "cluster-a",
+			Namespace:    "payments",
+			ResourceKind: "Pod",
+			PodUID:       "pod-uid-old",
+		},
+	}
+	got := monitor.applyPersistedMetadataToUnifiedResources([]unifiedresources.Resource{oldPod})
+	if got[0].CustomURL != "https://checkout.internal" {
+		t.Fatalf("legacy pod CustomURL = %q, want migrated URL", got[0].CustomURL)
+	}
+
+	recreatedPod := oldPod
+	recreatedPod.ID = "resource:pod:new"
+	recreatedPod.Kubernetes = &unifiedresources.K8sData{
+		ClusterID:    "cluster-a",
+		Namespace:    "payments",
+		ResourceKind: "Pod",
+		PodUID:       "pod-uid-new",
+	}
+	got = monitor.applyPersistedMetadataToUnifiedResources([]unifiedresources.Resource{recreatedPod})
+	if got[0].CustomURL != "https://checkout.internal" {
+		t.Fatalf("recreated pod CustomURL = %q, want stable logical URL", got[0].CustomURL)
+	}
+
+	unrelated := []unifiedresources.Resource{
+		{
+			ID:   "resource:pod:other-cluster",
+			Type: unifiedresources.ResourceTypePod,
+			Name: "checkout",
+			Kubernetes: &unifiedresources.K8sData{
+				ClusterID:    "cluster-b",
+				Namespace:    "payments",
+				ResourceKind: "Pod",
+				PodUID:       "pod-uid-other-cluster",
+			},
+		},
+		{
+			ID:   "resource:pod:other-namespace",
+			Type: unifiedresources.ResourceTypePod,
+			Name: "checkout",
+			Kubernetes: &unifiedresources.K8sData{
+				ClusterID:    "cluster-a",
+				Namespace:    "staging",
+				ResourceKind: "Pod",
+				PodUID:       "pod-uid-other-namespace",
+			},
+		},
+		{
+			ID:   "resource:deployment:same-name",
+			Type: unifiedresources.ResourceTypeK8sDeployment,
+			Name: "checkout",
+			Kubernetes: &unifiedresources.K8sData{
+				ClusterID:    "cluster-a",
+				Namespace:    "payments",
+				ResourceKind: "Deployment",
+				ResourceUID:  "deployment-uid",
+			},
+		},
+		{
+			ID:   "resource:pod:different-name",
+			Type: unifiedresources.ResourceTypePod,
+			Name: "checkout-canary",
+			Kubernetes: &unifiedresources.K8sData{
+				ClusterID:    "cluster-a",
+				Namespace:    "payments",
+				ResourceKind: "Pod",
+				PodUID:       "pod-uid-different-name",
+			},
+		},
+	}
+	got = monitor.applyPersistedMetadataToUnifiedResources(unrelated)
+	for i := range got {
+		if got[i].CustomURL != "" {
+			t.Fatalf("unrelated resource %d inherited CustomURL %q", i, got[i].CustomURL)
+		}
+	}
+}
+
+func TestApplyPersistedMetadataToUnifiedResourcesMigratesKubernetesControllersToStableLogicalIdentity(t *testing.T) {
+	for _, testCase := range []struct {
+		name         string
+		resourceType unifiedresources.ResourceType
+		kind         string
+	}{
+		{
+			name:         "deployment",
+			resourceType: unifiedresources.ResourceTypeK8sDeployment,
+			kind:         "Deployment",
+		},
+		{
+			name:         "service",
+			resourceType: unifiedresources.ResourceTypeK8sService,
+			kind:         "Service",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			monitor := newTestMonitor(t)
+			oldResourceID := "resource:" + testCase.name + ":old"
+			if err := monitor.guestMetadataStore.Set(oldResourceID, &config.GuestMetadata{
+				CustomURL: "https://" + testCase.name + ".internal",
+			}); err != nil {
+				t.Fatalf("seed legacy metadata: %v", err)
+			}
+
+			resource := unifiedresources.Resource{
+				ID:   oldResourceID,
+				Type: testCase.resourceType,
+				Name: "checkout",
+				Kubernetes: &unifiedresources.K8sData{
+					ClusterID:    "cluster-a",
+					Namespace:    "payments",
+					ResourceKind: testCase.kind,
+					ResourceUID:  testCase.name + "-uid-old",
+				},
+			}
+			got := monitor.applyPersistedMetadataToUnifiedResources([]unifiedresources.Resource{resource})
+			if got[0].CustomURL != "https://"+testCase.name+".internal" {
+				t.Fatalf("legacy %s CustomURL = %q", testCase.name, got[0].CustomURL)
+			}
+
+			resource.ID = "resource:" + testCase.name + ":new"
+			resource.Kubernetes.ResourceUID = testCase.name + "-uid-new"
+			got = monitor.applyPersistedMetadataToUnifiedResources([]unifiedresources.Resource{resource})
+			if got[0].CustomURL != "https://"+testCase.name+".internal" {
+				t.Fatalf("recreated %s CustomURL = %q", testCase.name, got[0].CustomURL)
+			}
+		})
+	}
+}
+
+func TestApplyPersistedMetadataToUnifiedResourcesKubernetesStableClearBlocksLegacyFallback(t *testing.T) {
+	monitor := newTestMonitor(t)
+	resource := unifiedresources.Resource{
+		ID:   "resource:pod:current",
+		Type: unifiedresources.ResourceTypePod,
+		Name: "checkout",
+		Kubernetes: &unifiedresources.K8sData{
+			ClusterID:    "cluster-a",
+			Namespace:    "payments",
+			ResourceKind: "Pod",
+			PodUID:       "pod-uid-current",
+		},
+	}
+	stableKey := "k8s-workload:cluster-a:pod:payments:checkout"
+	if err := monitor.guestMetadataStore.Set(stableKey, &config.GuestMetadata{CustomURL: ""}); err != nil {
+		t.Fatalf("seed cleared stable pod metadata: %v", err)
+	}
+	if err := monitor.guestMetadataStore.Set("k8s:cluster-a:pod:pod-uid-current", &config.GuestMetadata{
+		CustomURL: "https://stale.internal",
+	}); err != nil {
+		t.Fatalf("seed legacy pod metadata: %v", err)
+	}
+
+	got := monitor.applyPersistedMetadataToUnifiedResources([]unifiedresources.Resource{resource})
+	if got[0].CustomURL != "" {
+		t.Fatalf("CustomURL = %q, want stable empty Kubernetes metadata to block legacy fallback", got[0].CustomURL)
 	}
 }
 

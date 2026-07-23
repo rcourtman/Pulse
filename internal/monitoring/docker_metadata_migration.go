@@ -34,44 +34,48 @@ func (m *Monitor) CopyDockerContainerMetadata(hostID, oldContainerID, newContain
 	oldKey := dockerContainerRuntimeMetadataKey(hostID, oldContainerID)
 	newKey := dockerContainerRuntimeMetadataKey(hostID, newContainerID)
 
-	oldMeta := m.dockerMetadataStore.Get(oldKey)
-	if oldMeta == nil {
-		return nil
-	}
-	if oldMeta.CustomURL == "" && oldMeta.Description == "" && len(oldMeta.Tags) == 0 && len(oldMeta.Notes) == 0 {
-		return nil
-	}
+	return m.dockerMetadataStore.UpdateAll(func(metadata map[string]*config.DockerMetadata) bool {
+		oldMeta := metadata[oldKey]
+		if oldMeta == nil {
+			return false
+		}
+		if oldMeta.CustomURL == "" && oldMeta.Description == "" && len(oldMeta.Tags) == 0 && len(oldMeta.Notes) == 0 {
+			return false
+		}
 
-	newMeta := m.dockerMetadataStore.Get(newKey)
-	var merged config.DockerMetadata
-	if newMeta != nil {
-		merged = *newMeta
-	}
+		newMeta := metadata[newKey]
+		var merged config.DockerMetadata
+		if newMeta != nil {
+			merged = *newMeta
+		}
 
-	// Merge missing fields from old -> new, so we don't clobber any metadata already present under the new ID.
-	if merged.CustomURL == "" {
-		merged.CustomURL = oldMeta.CustomURL
-	}
-	if merged.Description == "" {
-		merged.Description = oldMeta.Description
-	}
-	if len(merged.Tags) == 0 && len(oldMeta.Tags) > 0 {
-		merged.Tags = append([]string(nil), oldMeta.Tags...)
-	}
-	if len(merged.Notes) == 0 && len(oldMeta.Notes) > 0 {
-		merged.Notes = append([]string(nil), oldMeta.Notes...)
-	}
+		// Merge missing fields from old -> new, so a concurrent or already
+		// persisted value under the recreated runtime ID always wins.
+		if merged.CustomURL == "" {
+			merged.CustomURL = oldMeta.CustomURL
+		}
+		if merged.Description == "" {
+			merged.Description = oldMeta.Description
+		}
+		if len(merged.Tags) == 0 && len(oldMeta.Tags) > 0 {
+			merged.Tags = append([]string(nil), oldMeta.Tags...)
+		}
+		if len(merged.Notes) == 0 && len(oldMeta.Notes) > 0 {
+			merged.Notes = append([]string(nil), oldMeta.Notes...)
+		}
 
-	// Avoid an unnecessary disk write if nothing changed.
-	if newMeta != nil &&
-		merged.CustomURL == newMeta.CustomURL &&
-		merged.Description == newMeta.Description &&
-		slices.Equal(merged.Tags, newMeta.Tags) &&
-		slices.Equal(merged.Notes, newMeta.Notes) {
-		return nil
-	}
+		if newMeta != nil &&
+			merged.CustomURL == newMeta.CustomURL &&
+			merged.Description == newMeta.Description &&
+			slices.Equal(merged.Tags, newMeta.Tags) &&
+			slices.Equal(merged.Notes, newMeta.Notes) {
+			return false
+		}
 
-	return m.dockerMetadataStore.Set(newKey, &merged)
+		merged.ID = newKey
+		metadata[newKey] = &merged
+		return true
+	})
 }
 
 func dockerContainerRuntimeMetadataKey(hostID, containerID string) string {
@@ -148,24 +152,28 @@ func copyDockerMetadataAliasIfTargetMissing(store *config.DockerMetadataStore, s
 	if store == nil || strings.TrimSpace(sourceKey) == "" || strings.TrimSpace(targetKey) == "" {
 		return nil
 	}
-	if store.Get(targetKey) != nil {
-		return nil
-	}
-	source := store.Get(sourceKey)
-	if source == nil {
-		return nil
-	}
-	clone := &config.DockerMetadata{
-		CustomURL:   source.CustomURL,
-		Description: source.Description,
-	}
-	if len(source.Tags) > 0 {
-		clone.Tags = append([]string(nil), source.Tags...)
-	}
-	if len(source.Notes) > 0 {
-		clone.Notes = append([]string(nil), source.Notes...)
-	}
-	return store.Set(targetKey, clone)
+	return store.UpdateAll(func(metadata map[string]*config.DockerMetadata) bool {
+		if metadata[targetKey] != nil {
+			return false
+		}
+		source := metadata[sourceKey]
+		if source == nil {
+			return false
+		}
+		clone := &config.DockerMetadata{
+			ID:          targetKey,
+			CustomURL:   source.CustomURL,
+			Description: source.Description,
+		}
+		if len(source.Tags) > 0 {
+			clone.Tags = append([]string(nil), source.Tags...)
+		}
+		if len(source.Notes) > 0 {
+			clone.Notes = append([]string(nil), source.Notes...)
+		}
+		metadata[targetKey] = clone
+		return true
+	})
 }
 
 func copyGuestMetadataAliasIfTargetMissing(
@@ -177,26 +185,248 @@ func copyGuestMetadataAliasIfTargetMissing(
 	if store == nil || strings.TrimSpace(sourceKey) == "" || strings.TrimSpace(targetKey) == "" {
 		return nil
 	}
-	if store.Get(targetKey) != nil {
+	return store.UpdateAll(func(metadata map[string]*config.GuestMetadata) bool {
+		if metadata[targetKey] != nil {
+			return false
+		}
+		source := metadata[sourceKey]
+		if source == nil {
+			return false
+		}
+		clone := &config.GuestMetadata{
+			ID:            targetKey,
+			CustomURL:     source.CustomURL,
+			Description:   source.Description,
+			LastKnownName: normalizeDockerContainerMetadataIdentity(containerName),
+			LastKnownType: "app-container",
+		}
+		if len(source.Tags) > 0 {
+			clone.Tags = append([]string(nil), source.Tags...)
+		}
+		if len(source.Notes) > 0 {
+			clone.Notes = append([]string(nil), source.Notes...)
+		}
+		metadata[targetKey] = clone
+		return true
+	})
+}
+
+type dockerStableMetadataMove struct {
+	sourceKey  string
+	targetKey  string
+	targetName string
+}
+
+func dockerContainerStableMetadataMoves(
+	hostID string,
+	previousContainers []models.DockerContainer,
+	currentContainers []models.DockerContainer,
+	keyForName func(string, string) string,
+) []dockerStableMetadataMove {
+	previousByID := make(map[string]models.DockerContainer, len(previousContainers))
+	ambiguousIDs := make(map[string]struct{})
+	previousNameCounts := make(map[string]int, len(previousContainers))
+	for _, container := range previousContainers {
+		containerID := strings.TrimSpace(container.ID)
+		if name := normalizeDockerContainerMetadataIdentity(container.Name); name != "" {
+			previousNameCounts[keyForName(hostID, name)]++
+		}
+		if containerID == "" {
+			continue
+		}
+		if _, exists := previousByID[containerID]; exists {
+			ambiguousIDs[containerID] = struct{}{}
+			delete(previousByID, containerID)
+			continue
+		}
+		if _, ambiguous := ambiguousIDs[containerID]; ambiguous {
+			continue
+		}
+		previousByID[containerID] = container
+	}
+
+	currentNameCounts := make(map[string]int, len(currentContainers))
+	for _, container := range currentContainers {
+		if name := normalizeDockerContainerMetadataIdentity(container.Name); name != "" {
+			currentNameCounts[keyForName(hostID, name)]++
+		}
+	}
+
+	sourceCounts := make(map[string]int)
+	targetCounts := make(map[string]int)
+	candidates := make([]dockerStableMetadataMove, 0)
+	for _, current := range currentContainers {
+		containerID := strings.TrimSpace(current.ID)
+		if containerID == "" {
+			continue
+		}
+		previous, ok := previousByID[containerID]
+		if !ok {
+			continue
+		}
+		previousName := normalizeDockerContainerMetadataIdentity(previous.Name)
+		currentName := normalizeDockerContainerMetadataIdentity(current.Name)
+		if previousName == "" || currentName == "" || previousName == currentName {
+			continue
+		}
+		sourceKey := keyForName(hostID, previousName)
+		targetKey := keyForName(hostID, currentName)
+		if sourceKey == "" || targetKey == "" || sourceKey == targetKey {
+			continue
+		}
+		candidates = append(candidates, dockerStableMetadataMove{
+			sourceKey:  sourceKey,
+			targetKey:  targetKey,
+			targetName: currentName,
+		})
+		sourceCounts[sourceKey]++
+		targetCounts[targetKey]++
+	}
+
+	moves := make([]dockerStableMetadataMove, 0, len(candidates))
+	for _, move := range candidates {
+		if sourceCounts[move.sourceKey] == 1 &&
+			targetCounts[move.targetKey] == 1 &&
+			previousNameCounts[move.sourceKey] == 1 &&
+			currentNameCounts[move.targetKey] == 1 {
+			moves = append(moves, move)
+		}
+	}
+	return moves
+}
+
+func applyStableMetadataMoves[T any](
+	moves []dockerStableMetadataMove,
+	updateAll func(func(map[string]*T) bool) error,
+	cloneForTarget func(*T, dockerStableMetadataMove) *T,
+) error {
+	if len(moves) == 0 {
 		return nil
 	}
-	source := store.Get(sourceKey)
-	if source == nil {
-		return nil
+	return updateAll(func(metadata map[string]*T) bool {
+		sourceSnapshots := make(map[string]*T, len(moves))
+		sourceKeys := make(map[string]struct{}, len(moves))
+		targetKeys := make(map[string]struct{}, len(moves))
+		for _, move := range moves {
+			sourceKeys[move.sourceKey] = struct{}{}
+			targetKeys[move.targetKey] = struct{}{}
+			if _, loaded := sourceSnapshots[move.sourceKey]; !loaded {
+				sourceSnapshots[move.sourceKey] = metadata[move.sourceKey]
+			}
+		}
+
+		changed := false
+		for _, move := range moves {
+			source := sourceSnapshots[move.sourceKey]
+			if source == nil {
+				continue
+			}
+			target := metadata[move.targetKey]
+			_, targetIsMovingSource := sourceKeys[move.targetKey]
+			if target != nil && !targetIsMovingSource {
+				// The destination already has intentional name-scoped metadata.
+				// Preserve it rather than attaching a renamed container's metadata
+				// to a name that may represent a different logical resource.
+				continue
+			}
+			metadata[move.targetKey] = cloneForTarget(source, move)
+			changed = true
+		}
+
+		for _, move := range moves {
+			if sourceSnapshots[move.sourceKey] == nil {
+				continue
+			}
+			if _, sourceIsAnotherTarget := targetKeys[move.sourceKey]; sourceIsAnotherTarget {
+				continue
+			}
+			delete(metadata, move.sourceKey)
+			changed = true
+		}
+		return changed
+	})
+}
+
+func (m *Monitor) migrateDockerContainerMetadataForRenamedContainers(
+	hostID string,
+	previousContainers []models.DockerContainer,
+	currentContainers []models.DockerContainer,
+) {
+	if m == nil {
+		return
 	}
-	clone := &config.GuestMetadata{
-		CustomURL:     source.CustomURL,
-		Description:   source.Description,
-		LastKnownName: normalizeDockerContainerMetadataIdentity(containerName),
-		LastKnownType: "app-container",
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" || len(previousContainers) == 0 || len(currentContainers) == 0 {
+		return
 	}
-	if len(source.Tags) > 0 {
-		clone.Tags = append([]string(nil), source.Tags...)
+
+	if m.guestMetadataStore != nil {
+		moves := dockerContainerStableMetadataMoves(
+			hostID,
+			previousContainers,
+			currentContainers,
+			dockerAppContainerMetadataKey,
+		)
+		err := applyStableMetadataMoves(
+			moves,
+			m.guestMetadataStore.UpdateAll,
+			func(source *config.GuestMetadata, move dockerStableMetadataMove) *config.GuestMetadata {
+				clone := &config.GuestMetadata{
+					CustomURL:     source.CustomURL,
+					Description:   source.Description,
+					LastKnownName: move.targetName,
+					LastKnownType: "app-container",
+				}
+				if len(source.Tags) > 0 {
+					clone.Tags = append([]string(nil), source.Tags...)
+				}
+				if len(source.Notes) > 0 {
+					clone.Notes = append([]string(nil), source.Notes...)
+				}
+				return clone
+			},
+		)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("dockerHostID", hostID).
+				Int("renameCount", len(moves)).
+				Msg("Failed to move guest metadata after Docker container rename")
+		}
 	}
-	if len(source.Notes) > 0 {
-		clone.Notes = append([]string(nil), source.Notes...)
+
+	if m.dockerMetadataStore != nil {
+		moves := dockerContainerStableMetadataMoves(
+			hostID,
+			previousContainers,
+			currentContainers,
+			dockerContainerNameMetadataKey,
+		)
+		err := applyStableMetadataMoves(
+			moves,
+			m.dockerMetadataStore.UpdateAll,
+			func(source *config.DockerMetadata, _ dockerStableMetadataMove) *config.DockerMetadata {
+				clone := &config.DockerMetadata{
+					CustomURL:   source.CustomURL,
+					Description: source.Description,
+				}
+				if len(source.Tags) > 0 {
+					clone.Tags = append([]string(nil), source.Tags...)
+				}
+				if len(source.Notes) > 0 {
+					clone.Notes = append([]string(nil), source.Notes...)
+				}
+				return clone
+			},
+		)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("dockerHostID", hostID).
+				Int("renameCount", len(moves)).
+				Msg("Failed to move Docker metadata after container rename")
+		}
 	}
-	return store.Set(targetKey, clone)
 }
 
 func (m *Monitor) migrateCurrentDockerContainerMetadataToStableIdentities(
@@ -260,19 +490,26 @@ func (m *Monitor) migrateCurrentDockerContainerMetadataToStableIdentities(
 					source = m.dockerMetadataStore.Get(dockerContainerNameMetadataKey(hostID, containerName))
 				}
 				if source != nil {
-					clone := &config.GuestMetadata{
-						CustomURL:     source.CustomURL,
-						Description:   source.Description,
-						LastKnownName: containerName,
-						LastKnownType: "app-container",
-					}
-					if len(source.Tags) > 0 {
-						clone.Tags = append([]string(nil), source.Tags...)
-					}
-					if len(source.Notes) > 0 {
-						clone.Notes = append([]string(nil), source.Notes...)
-					}
-					if err := m.guestMetadataStore.Set(stableKey, clone); err != nil {
+					if err := m.guestMetadataStore.UpdateAll(func(metadata map[string]*config.GuestMetadata) bool {
+						if metadata[stableKey] != nil {
+							return false
+						}
+						clone := &config.GuestMetadata{
+							ID:            stableKey,
+							CustomURL:     source.CustomURL,
+							Description:   source.Description,
+							LastKnownName: containerName,
+							LastKnownType: "app-container",
+						}
+						if len(source.Tags) > 0 {
+							clone.Tags = append([]string(nil), source.Tags...)
+						}
+						if len(source.Notes) > 0 {
+							clone.Notes = append([]string(nil), source.Notes...)
+						}
+						metadata[stableKey] = clone
+						return true
+					}); err != nil {
 						log.Warn().
 							Err(err).
 							Str("dockerHostID", hostID).
