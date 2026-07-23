@@ -154,6 +154,21 @@ neutral rather than borrowing telemetry from another disk.
 Negative percentage-used counters remain unknown; values above 100 clamp to
 exhausted before deriving remaining life, so invalid or over-limit controller
 data cannot wrap into a fabricated healthy value.
+Proxmox cluster API polling has one configured connection authority: the
+operator-saved `PVEInstance.Host` and its single credential set. Auto-discovered
+member/corosync addresses remain ordered failover candidates and direct
+reachability evidence; they are not per-node API connections or credentials and
+must not randomly displace a healthy configured authority. When the authority
+is healthy, recovery checks for unreachable members run bounded and
+asynchronously so snapshots, storage content, replication, and other API-only
+data do not wait on cluster-private addresses. When no endpoint is healthy,
+recovery remains synchronous so a reachable member can restore service.
+Periodic cluster discovery refreshes changed member addresses and rebuilds the
+failover client. Pulse reachability evidence survives that reconciliation only
+when the member's effective dial URL is unchanged; a network move resets the
+old result until the new target is checked. Infrastructure Settings presents
+one cluster-level API source while retaining member addresses and their
+node-local Agent evidence.
 
 ## Canonical Files
 

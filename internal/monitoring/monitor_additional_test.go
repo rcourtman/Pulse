@@ -327,12 +327,12 @@ func TestBuildClusterEndpointsForInit_RespectsDiscoveryPolicy(t *testing.T) {
 	})
 
 	if len(endpoints) != 2 {
-		t.Fatalf("expected allowed endpoint plus main host fallback, got %#v", endpoints)
+		t.Fatalf("expected configured authority plus allowed member failover, got %#v", endpoints)
 	}
-	if endpoints[0] != "https://allowed.local:8006" {
-		t.Fatalf("expected discovery-allowed endpoint first, got %#v", endpoints)
+	if endpoints[0] != "https://main.local:8006" {
+		t.Fatalf("expected configured authority first, got %#v", endpoints)
 	}
-	if endpoints[1] != "https://main.local:8006" {
-		t.Fatalf("expected main host fallback retained, got %#v", endpoints)
+	if endpoints[1] != "https://allowed.local:8006" {
+		t.Fatalf("expected only the discovery-allowed member as failover, got %#v", endpoints)
 	}
 }

@@ -78,7 +78,7 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 // node addresses changed, the config is persisted and the failover client is
 // rebuilt so polling stops dialing the dead addresses.
 func (m *Monitor) refreshClusterEndpoints(instanceName string, instanceCfg *config.PVEInstance, clusterName string, discovered []config.ClusterEndpoint) {
-	refreshed := mergeRefreshedClusterEndpoints(instanceCfg.ClusterEndpoints, discovered)
+	refreshed := mergeRefreshedClusterEndpoints(instanceCfg.ClusterEndpoints, discovered, instanceCfg.VerifySSL)
 	if !clusterEndpointIdentityChanged(instanceCfg.ClusterEndpoints, refreshed) {
 		return
 	}
@@ -120,15 +120,17 @@ func (m *Monitor) refreshClusterEndpoints(instanceName string, instanceCfg *conf
 // mergeRefreshedClusterEndpoints folds freshly discovered endpoints over the
 // stored set. The cluster status API can omit per-node fields, so discovery
 // never erases information Pulse already had; Pulse-side reachability
-// bookkeeping is carried over because it is recomputed each poll and dropping
-// it would flap the UI to "unknown" after every refresh.
-func mergeRefreshedClusterEndpoints(existing, discovered []config.ClusterEndpoint) []config.ClusterEndpoint {
+// bookkeeping is carried over only while the effective dial target is
+// unchanged. Reusing a success/error from an address that was just replaced
+// would present stale reachability evidence after a cluster network move.
+func mergeRefreshedClusterEndpoints(existing, discovered []config.ClusterEndpoint, verifySSL bool) []config.ClusterEndpoint {
 	merged := make([]config.ClusterEndpoint, 0, len(discovered))
 	for _, ep := range discovered {
 		for _, old := range existing {
 			if !strings.EqualFold(strings.TrimSpace(old.NodeName), strings.TrimSpace(ep.NodeName)) {
 				continue
 			}
+			oldEffectiveURL := clusterEndpointEffectiveURL(old, verifySSL, false)
 			if strings.TrimSpace(ep.IP) == "" {
 				ep.IP = old.IP
 			}
@@ -138,9 +140,11 @@ func mergeRefreshedClusterEndpoints(existing, discovered []config.ClusterEndpoin
 			if strings.TrimSpace(ep.NodeID) == "" {
 				ep.NodeID = old.NodeID
 			}
-			ep.PulseReachable = old.PulseReachable
-			ep.LastPulseCheck = old.LastPulseCheck
-			ep.PulseError = old.PulseError
+			if clusterEndpointEffectiveURL(ep, verifySSL, false) == oldEffectiveURL {
+				ep.PulseReachable = old.PulseReachable
+				ep.LastPulseCheck = old.LastPulseCheck
+				ep.PulseError = old.PulseError
+			}
 			break
 		}
 		merged = append(merged, ep)

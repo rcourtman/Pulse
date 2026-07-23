@@ -82,6 +82,147 @@ func TestClusterClient_GetStorageContent(t *testing.T) {
 	}
 }
 
+func TestClusterClient_ConfiguredAuthorityDoesNotWaitForMemberRecovery(t *testing.T) {
+	var authorityDataCalls atomic.Int32
+	authority := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api2/json/nodes/node1/qemu/100/snapshot":
+			authorityDataCalls.Add(1)
+			fmt.Fprint(w, `{"data":[{"name":"snap-authority","description":"cluster snapshot"}]}`)
+		case "/api2/json/nodes/node1/storage/local/content":
+			authorityDataCalls.Add(1)
+			fmt.Fprint(w, `{"data":[{"volid":"local:backup/vzdump-qemu-100.vma.zst","format":"vma.zst","size":1000,"content":"backup"}]}`)
+		default:
+			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
+		}
+	}))
+	defer authority.Close()
+
+	recoveryStarted := make(chan struct{}, 2)
+	releaseRecovery := make(chan struct{})
+	recoveryReleased := false
+
+	var memberDataCalls atomic.Int32
+	newMember := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Path == "/api2/json/nodes" {
+				recoveryStarted <- struct{}{}
+				<-releaseRecovery
+				fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
+				return
+			}
+			memberDataCalls.Add(1)
+			fmt.Fprint(w, `{"data":[]}`)
+		}))
+	}
+	memberA := newMember()
+	defer memberA.Close()
+	memberB := newMember()
+	defer memberB.Close()
+	defer func() {
+		if !recoveryReleased {
+			close(releaseRecovery)
+		}
+	}()
+
+	cfg := ClientConfig{
+		Host:       authority.URL,
+		TokenName:  "u@p!t",
+		TokenValue: "v",
+		Timeout:    2 * time.Second,
+	}
+	authorityClient, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("create configured authority client: %v", err)
+	}
+
+	endpoints := []string{authority.URL, memberA.URL, memberB.URL}
+	cc := &ClusterClient{
+		name:                 "remote-cluster",
+		clients:              map[string]*Client{authority.URL: authorityClient},
+		endpoints:            endpoints,
+		endpointFingerprints: make(map[string]string),
+		nodeHealth: map[string]bool{
+			authority.URL: true,
+			memberA.URL:   false,
+			memberB.URL:   false,
+		},
+		lastHealthCheck: make(map[string]time.Time),
+		lastError: map[string]string{
+			memberA.URL: "Network unreachable - check network connectivity to Proxmox host",
+			memberB.URL: "Network unreachable - check network connectivity to Proxmox host",
+		},
+		config:         cfg,
+		rateLimitUntil: make(map[string]time.Time),
+	}
+
+	snapshotResult := make(chan error, 1)
+	go func() {
+		snapshots, snapshotErr := cc.GetVMSnapshots(context.Background(), "node1", 100)
+		if snapshotErr == nil && (len(snapshots) != 1 || snapshots[0].Name != "snap-authority") {
+			snapshotErr = fmt.Errorf("unexpected authority snapshots: %+v", snapshots)
+		}
+		snapshotResult <- snapshotErr
+	}()
+
+	select {
+	case <-recoveryStarted:
+		// Recovery is actively blocked on a member-only address.
+	case <-time.After(2 * time.Second):
+		t.Fatal("member recovery did not start")
+	}
+
+	select {
+	case err := <-snapshotResult:
+		if err != nil {
+			t.Fatalf("snapshot polling through configured authority failed: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("snapshot polling waited for unreachable member recovery")
+	}
+
+	health := cc.GetHealthStatus()
+	if !health[authority.URL] || health[memberA.URL] || health[memberB.URL] {
+		t.Fatalf("expected healthy authority with degraded member evidence, got %+v", health)
+	}
+
+	close(releaseRecovery)
+	recoveryReleased = true
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		health = cc.GetHealthStatus()
+		cc.mu.RLock()
+		recoveryDone := !cc.recoveryInProgress
+		cc.mu.RUnlock()
+		if health[memberA.URL] && health[memberB.URL] && recoveryDone {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected member refresh to recover both failovers, got %+v", health)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	for i := 0; i < 20; i++ {
+		content, err := cc.GetStorageContent(context.Background(), "node1", "local")
+		if err != nil {
+			t.Fatalf("storage content poll %d failed: %v", i+1, err)
+		}
+		if len(content) != 1 {
+			t.Fatalf("storage content poll %d returned %+v", i+1, content)
+		}
+	}
+	if got := memberDataCalls.Load(); got != 0 {
+		t.Fatalf("expected recovered members to remain failovers, got %d member data calls", got)
+	}
+	if got := authorityDataCalls.Load(); got != 21 {
+		t.Fatalf("expected all API-only data from configured authority, got %d calls", got)
+	}
+}
+
 func TestClusterClient_RecoverUnhealthyNodes(t *testing.T) {
 	var callCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

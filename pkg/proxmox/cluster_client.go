@@ -26,12 +26,15 @@ type ClusterClient struct {
 	lastError            map[string]string    // Track last error per endpoint
 	config               ClientConfig         // Base config (auth info)
 	rateLimitUntil       map[string]time.Time // Cooldown window for rate-limited endpoints
+	recoveryInProgress   bool                 // Prevent overlapping background recovery sweeps
 }
 
 const (
-	rateLimitBaseDelay   = 150 * time.Millisecond
-	rateLimitMaxJitter   = 200 * time.Millisecond
-	rateLimitRetryBudget = 2
+	rateLimitBaseDelay        = 150 * time.Millisecond
+	rateLimitMaxJitter        = 200 * time.Millisecond
+	rateLimitRetryBudget      = 2
+	backgroundRecoveryTimeout = 6 * time.Second
+	unhealthyRecoveryInterval = 10 * time.Second
 )
 
 var statusCodePattern = regexp.MustCompile(`(?i)(?:api error|status)\s+(\d{3})`)
@@ -382,27 +385,65 @@ func (cc *ClusterClient) initialHealthCheck() {
 		Msg("Initial cluster health check completed")
 }
 
-// getHealthyClient returns a healthy client using round-robin selection
+func (cc *ClusterClient) availableEndpointsLocked(now time.Time) (healthyEndpoints, coolingEndpoints []string) {
+	for _, endpoint := range cc.endpoints {
+		if !cc.nodeHealth[endpoint] {
+			continue
+		}
+		if cooldown, exists := cc.rateLimitUntil[endpoint]; exists {
+			if now.Before(cooldown) {
+				coolingEndpoints = append(coolingEndpoints, endpoint)
+				continue
+			}
+			delete(cc.rateLimitUntil, endpoint)
+		}
+		healthyEndpoints = append(healthyEndpoints, endpoint)
+	}
+	return healthyEndpoints, coolingEndpoints
+}
+
+func (cc *ClusterClient) startBackgroundRecoveryLocked() {
+	if cc.recoveryInProgress {
+		return
+	}
+	cc.recoveryInProgress = true
+
+	go func() {
+		defer func() {
+			cc.mu.Lock()
+			cc.recoveryInProgress = false
+			cc.mu.Unlock()
+		}()
+
+		recoveryCtx, cancel := context.WithTimeout(context.Background(), backgroundRecoveryTimeout)
+		defer cancel()
+		cc.recoverUnhealthyNodes(recoveryCtx)
+	}()
+}
+
+func (cc *ClusterClient) hasRecoverableUnhealthyEndpointLocked(now time.Time) bool {
+	for _, endpoint := range cc.endpoints {
+		if cc.nodeHealth[endpoint] {
+			continue
+		}
+		lastCheck, checked := cc.lastHealthCheck[endpoint]
+		if !checked || now.Sub(lastCheck) >= unhealthyRecoveryInterval {
+			return true
+		}
+	}
+	return false
+}
+
+// getHealthyClient returns the first available endpoint in configured priority
+// order. The first endpoint is the operator-configured cluster URL; discovered
+// member addresses are failover candidates rather than a random load-balancing
+// pool.
 func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 
-	// Get list of healthy endpoints
-	var healthyEndpoints []string
-	var coolingEndpoints []string
 	now := time.Now()
-	for endpoint, healthy := range cc.nodeHealth {
-		if healthy {
-			if cooldown, exists := cc.rateLimitUntil[endpoint]; exists {
-				if now.Before(cooldown) {
-					coolingEndpoints = append(coolingEndpoints, endpoint)
-					continue
-				}
-				delete(cc.rateLimitUntil, endpoint)
-			}
-			healthyEndpoints = append(healthyEndpoints, endpoint)
-		}
-	}
+	healthyEndpoints, coolingEndpoints := cc.availableEndpointsLocked(now)
 
 	if len(healthyEndpoints) == 0 && len(coolingEndpoints) > 0 {
 		// Nothing is immediately available, fall back to endpoints that are in cooldown
@@ -435,36 +476,27 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 			Msg("Checking for healthy endpoints")
 	}
 
-	// Trigger recovery if we have any unhealthy endpoints
-	// This ensures degraded clusters recover individual nodes over time,
-	// not just when all nodes are down
+	// Keep failover evidence fresh, but do not make a healthy API request wait
+	// for member addresses that may only be reachable on the cluster network.
 	if unhealthyCount > 0 {
-		// Use an anonymous function to ensure the lock is re-acquired even if
-		// recoverUnhealthyNodes panics, preventing double-unlock from defer
-		func() {
-			cc.mu.Unlock()
-			defer cc.mu.Lock()
-			cc.recoverUnhealthyNodes(ctx)
-		}()
-
-		// Refresh the healthy/cooling endpoints lists after recovery attempt
-		// since cluster state may have changed while lock was released
-		healthyEndpoints = nil
-		coolingEndpoints = nil
-		now = time.Now() // Refresh time for accurate cooldown checks
-		for endpoint, healthy := range cc.nodeHealth {
-			if healthy {
-				if cooldown, exists := cc.rateLimitUntil[endpoint]; exists && now.Before(cooldown) {
-					coolingEndpoints = append(coolingEndpoints, endpoint)
-					continue
-				}
-				healthyEndpoints = append(healthyEndpoints, endpoint)
+		if len(healthyEndpoints) > 0 {
+			if cc.hasRecoverableUnhealthyEndpointLocked(now) {
+				cc.startBackgroundRecoveryLocked()
 			}
-		}
+		} else {
+			// With no usable authority, recovery remains synchronous so this
+			// request can fail over to a member that has just become reachable.
+			func() {
+				cc.mu.Unlock()
+				defer cc.mu.Lock()
+				cc.recoverUnhealthyNodes(ctx)
+			}()
 
-		// Re-apply cooldown fallback if no healthy endpoints but some cooling
-		if len(healthyEndpoints) == 0 && len(coolingEndpoints) > 0 {
-			healthyEndpoints = append(healthyEndpoints, coolingEndpoints...)
+			now = time.Now()
+			healthyEndpoints, coolingEndpoints = cc.availableEndpointsLocked(now)
+			if len(healthyEndpoints) == 0 && len(coolingEndpoints) > 0 {
+				healthyEndpoints = append(healthyEndpoints, coolingEndpoints...)
+			}
 		}
 	}
 
@@ -507,8 +539,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		}
 	}
 
-	// Use random selection for better load distribution
-	selectedEndpoint := healthyEndpoints[rand.Intn(len(healthyEndpoints))]
+	selectedEndpoint := healthyEndpoints[0]
 
 	// Get or create client for this endpoint
 	client, exists := cc.clients[selectedEndpoint]
@@ -638,10 +669,10 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 	now := time.Now()
 	for endpoint, healthy := range cc.nodeHealth {
 		if !healthy {
-			// Skip if we checked this endpoint recently (within 10 seconds)
+			// Skip if we checked this endpoint recently.
 			// Balance between recovery speed and avoiding excessive checks
 			if lastCheck, exists := cc.lastHealthCheck[endpoint]; exists {
-				if now.Sub(lastCheck) < 10*time.Second {
+				if now.Sub(lastCheck) < unhealthyRecoveryInterval {
 					throttledEndpoints = append(throttledEndpoints, endpoint)
 					continue
 				}

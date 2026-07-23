@@ -401,6 +401,63 @@ describe('InfrastructureSourceManager setup summary', () => {
     );
   });
 
+  it('shows one cluster API connection while retaining member reachability addresses', () => {
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: 'pve:remote-cluster',
+            ownerType: 'pve',
+            name: 'Remote cluster',
+            subtitle: 'Proxmox VE cluster',
+            source: 'api',
+            host: 'https://management.example.test:8006',
+            isCluster: true,
+            coverageLabels: ['Nodes', 'Guests', 'Storage'],
+            connection: connectionFixture({
+              id: 'pve:remote-cluster',
+              type: 'pve',
+              name: 'Remote cluster',
+              address: 'https://management.example.test:8006',
+              source: 'manual',
+              surfaces: ['nodes', 'guests', 'storage'],
+              scope: { nodes: true, guests: true, storage: true },
+              capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+            }),
+            members: [
+              member({
+                id: 'pve-a',
+                name: 'pve-a',
+                source: 'api',
+                host: 'https://10.15.5.11:8006',
+                coverageLabels: ['Cluster API'],
+              }),
+              member({
+                id: 'pve-b',
+                name: 'pve-b',
+                source: 'api',
+                host: 'https://10.15.5.12:8006',
+                coverageLabels: ['Cluster API'],
+              }),
+            ],
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+      />
+    ));
+
+    expect(screen.getAllByText('API')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for Remote cluster' }));
+
+    expect(screen.getAllByText('API')).toHaveLength(1);
+    expect(screen.getByText('https://10.15.5.11:8006')).toBeInTheDocument();
+    expect(screen.getByText('https://10.15.5.12:8006')).toBeInTheDocument();
+  });
+
   it('labels vSphere member composition as hosts, not cluster nodes', () => {
     render(() => (
       <InfrastructureSourceManager

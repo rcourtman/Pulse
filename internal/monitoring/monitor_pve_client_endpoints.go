@@ -1,142 +1,74 @@
 package monitoring
 
 import (
-	"net"
-	"net/url"
-	"strings"
-
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
 func (m *Monitor) buildClusterEndpointsForInit(pve config.PVEInstance) ([]string, map[string]string) {
-	// For clusters, check if endpoints have IPs/resolvable hosts
-	// If not, use the main host for all connections (Proxmox will route cluster API calls)
-	hasValidEndpoints := false
-	endpoints := make([]string, 0, len(pve.ClusterEndpoints))
-	endpointFingerprints := make(map[string]string)
-	discoveryCfg := monitorDiscoveryConfig(m)
-
-	hasFingerprint := pve.Fingerprint != ""
-	for _, ep := range pve.ClusterEndpoints {
-		effectiveURL := clusterEndpointRuntimeURL(ep, pve.VerifySSL, hasFingerprint, discoveryCfg)
-		if effectiveURL == "" {
-			log.Warn().
-				Str("node", ep.NodeName).
-				Msg("Skipping cluster endpoint with no allowed host/IP")
-			continue
-		}
-
-		if parsed, err := url.Parse(effectiveURL); err == nil {
-			hostname := parsed.Hostname()
-			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-				hasValidEndpoints = true
-			}
-		} else {
-			hostname := normalizeEndpointHost(effectiveURL)
-			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-				hasValidEndpoints = true
-			}
-		}
-
-		endpoints = append(endpoints, effectiveURL)
-		// Store per-endpoint fingerprint for TOFU (Trust On First Use)
-		if ep.Fingerprint != "" {
-			endpointFingerprints[effectiveURL] = ep.Fingerprint
-		}
-	}
-
-	// If endpoints are just node names (not FQDNs or IPs), use main host only
-	// This is common when cluster nodes are discovered but not directly reachable
-	if !hasValidEndpoints || len(endpoints) == 0 {
-		log.Info().
-			Str("instance", pve.Name).
-			Str("mainHost", pve.Host).
-			Msg("Cluster endpoints are not resolvable, using main host for all cluster operations")
-		fallback := ensureClusterEndpointURL(pve.Host)
-		if fallback == "" {
-			fallback = ensureClusterEndpointURL(pve.Host)
-		}
-		endpoints = []string{fallback}
-	} else {
-		// Always include the main host URL as a fallback endpoint.
-		// This handles remote cluster scenarios where Proxmox reports internal IPs
-		// that aren't reachable from Pulse's network. The user-provided URL is
-		// reachable, so include it as a fallback for cluster API routing.
-		mainHostURL := ensureClusterEndpointURL(pve.Host)
-		mainHostAlreadyIncluded := false
-		for _, ep := range endpoints {
-			if ep == mainHostURL {
-				mainHostAlreadyIncluded = true
-				break
-			}
-		}
-		if !mainHostAlreadyIncluded && mainHostURL != "" {
-			log.Info().
-				Str("instance", pve.Name).
-				Str("mainHost", mainHostURL).
-				Int("clusterEndpoints", len(endpoints)).
-				Msg("Adding main host as fallback for remote cluster access")
-			endpoints = append(endpoints, mainHostURL)
-		}
-	}
-
-	return endpoints, endpointFingerprints
+	return m.buildClusterClientEndpoints(pve)
 }
 
 func (m *Monitor) buildClusterEndpointsForReconnect(pve config.PVEInstance) ([]string, map[string]string) {
-	hasValidEndpoints := false
-	endpoints := make([]string, 0, len(pve.ClusterEndpoints))
+	return m.buildClusterClientEndpoints(pve)
+}
+
+// buildClusterClientEndpoints preserves the configured connection as the
+// cluster API authority. Proxmox can advertise corosync/member addresses that
+// are valid inside the cluster but unreachable from the Pulse container; those
+// addresses remain useful failover and reachability evidence, but they must
+// never displace the URL the operator proved reachable when adding the cluster.
+func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string, map[string]string) {
+	endpoints := make([]string, 0, len(pve.ClusterEndpoints)+1)
 	endpointFingerprints := make(map[string]string)
 	discoveryCfg := monitorDiscoveryConfig(m)
 	hasFingerprint := pve.Fingerprint != ""
+	seen := make(map[string]struct{}, len(pve.ClusterEndpoints)+1)
 
+	addEndpoint := func(endpoint string) bool {
+		if endpoint == "" {
+			return false
+		}
+		if _, exists := seen[endpoint]; exists {
+			return false
+		}
+		seen[endpoint] = struct{}{}
+		endpoints = append(endpoints, endpoint)
+		return true
+	}
+
+	configuredAuthority := ensureClusterEndpointURL(pve.Host)
+	addEndpoint(configuredAuthority)
+
+	failoverCount := 0
 	for _, ep := range pve.ClusterEndpoints {
 		host := clusterEndpointRuntimeURL(ep, pve.VerifySSL, hasFingerprint, discoveryCfg)
 		if host == "" {
+			log.Warn().
+				Str("node", ep.NodeName).
+				Msg("Skipping cluster member endpoint with no allowed host/IP")
 			continue
 		}
-
-		if parsed, err := url.Parse(host); err == nil {
-			hostname := parsed.Hostname()
-			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-				hasValidEndpoints = true
-			}
-		} else {
-			hostname := normalizeEndpointHost(host)
-			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
-				hasValidEndpoints = true
-			}
+		if addEndpoint(host) {
+			failoverCount++
 		}
-
-		if !strings.HasPrefix(host, "http") {
-			host = ensureClusterEndpointURL(host)
-		}
-		endpoints = append(endpoints, host)
 		if ep.Fingerprint != "" {
 			endpointFingerprints[host] = ep.Fingerprint
 		}
 	}
 
-	if !hasValidEndpoints || len(endpoints) == 0 {
-		fallback := ensureClusterEndpointURL(pve.Host)
-		if fallback == "" {
-			fallback = ensureClusterEndpointURL(pve.Host)
-		}
-		endpoints = []string{fallback}
-		return endpoints, endpointFingerprints
-	}
-
-	mainHostURL := ensureClusterEndpointURL(pve.Host)
-	mainHostAlreadyIncluded := false
-	for _, ep := range endpoints {
-		if ep == mainHostURL {
-			mainHostAlreadyIncluded = true
-			break
-		}
-	}
-	if !mainHostAlreadyIncluded && mainHostURL != "" {
-		endpoints = append(endpoints, mainHostURL)
+	if configuredAuthority != "" {
+		log.Info().
+			Str("instance", pve.Name).
+			Str("authority", configuredAuthority).
+			Int("memberFailovers", failoverCount).
+			Msg("Using configured Proxmox cluster connection as API authority")
+	} else if len(endpoints) > 0 {
+		log.Warn().
+			Str("instance", pve.Name).
+			Str("authority", endpoints[0]).
+			Int("memberFailovers", len(endpoints)-1).
+			Msg("Configured Proxmox cluster URL is empty; using first discovered member as API authority")
 	}
 
 	return endpoints, endpointFingerprints
