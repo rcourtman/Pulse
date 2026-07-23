@@ -2279,6 +2279,15 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+Host-agent removal tombstones in `internal/config/host_continuity.go` are an
+adjacent agent-lifecycle security journal, not storage or recovery inventory.
+Storage/recovery consumers may observe the resulting absence of a removed host
+from canonical resources, but they must not load, repair, discard, or project
+that journal. If it is unreadable, monitor startup fails closed; recovery code
+must not substitute a backup continuity file or an empty removal set. Re-linking
+storage resources after a fresh-token agent re-enrollment follows the canonical
+resource ingest path and does not create a storage-local identity override.
+
 ### Backup-aware alert intent is not recovery assurance
 
 The alerts subsystem may defer an offline alert while monitoring supplies

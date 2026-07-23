@@ -276,7 +276,7 @@ func (h *UnifiedAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.R
 	// Remove the agent from state.
 	host, err := h.getMonitor(r.Context()).RemoveHostAgent(agentID)
 	if err != nil {
-		writeErrorResponse(w, http.StatusNotFound, "agent_not_found", err.Error(), nil)
+		writeErrorResponse(w, http.StatusInternalServerError, "agent_removal_failed", err.Error(), nil)
 		return
 	}
 

@@ -686,7 +686,8 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"type MonitorSupplementalInventoryReadinessProvider interface {",
 			"SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)",
 			"hostContinuityStore        *config.HostContinuityStore",
-			"hostContinuityStore:        config.NewHostContinuityStore(cfg.DataPath, nil),",
+			"hostContinuityStore := config.NewHostContinuityStore(cfg.DataPath, nil)",
+			"hostContinuityStore:        hostContinuityStore,",
 			"func (m *Monitor) HostsSnapshot() []models.Host {",
 			"readState = m.readStateWithStandaloneHostContinuity(readState)",
 			"func (m *Monitor) unifiedStateViewWithStandaloneHostContinuity(view monitorUnifiedStateView) monitorUnifiedStateView {",
@@ -2241,7 +2242,8 @@ func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"blockedID, removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)",
+		"blocked, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)",
+		"removedHostAgentAllowsFreshReenroll(blocked, identifier, report, tokenRecord)",
 		"func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, hostname, machineID, tokenID string) bool {",
 		"entryTokenID == \"\" || tokenID == \"\" || entryTokenID != tokenID",
 		`Str("hostID", identifier)`,

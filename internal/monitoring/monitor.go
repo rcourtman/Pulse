@@ -1096,6 +1096,7 @@ type Monitor struct {
 	dockerMetadataStore        *config.DockerMetadataStore
 	hostMetadataStore          *config.HostMetadataStore
 	hostContinuityStore        *config.HostContinuityStore
+	hostAgentLifecycleMu       sync.RWMutex
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -1522,6 +1523,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
 
+	hostContinuityStore := config.NewHostContinuityStore(cfg.DataPath, nil)
+	if err := hostContinuityStore.LoadError(); err != nil {
+		return nil, fmt.Errorf("load host continuity lifecycle journal: %w", err)
+	}
+
 	// Initialize temperature collector with sensors SSH key
 	// Will use root user for now - can be made configurable later
 	homeDir := os.Getenv("HOME")
@@ -1670,7 +1676,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath, nil),
 		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath, nil),
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
-		hostContinuityStore:        config.NewHostContinuityStore(cfg.DataPath, nil),
+		hostContinuityStore:        hostContinuityStore,
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)
@@ -1740,6 +1746,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	}
 
 	m.executor = newRealExecutor(m)
+	m.hydrateRemovedHostAgents(time.Now().UTC())
 	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
 	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)

@@ -1303,7 +1303,8 @@ payload shape change when the portal presents compact client rows.
     controls. That sequence is presentation guidance for the existing setup
     payload phases; it does not create a second node setup API model or allow
     page-local payload ownership.
-63. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+63. `internal/api/agent_ingest.go` shared with `agent-lifecycle`: Unified Agent report admission, removal, remote-config identity binding, and re-enrollment responses are both an agent lifecycle authority and a canonical authenticated API contract boundary.
+64. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
     Frontend and backend Unix install command builders must stay on the same
     token-file and preflight transport contract: tokens are passed to the
     installer as ephemeral files, and host install snippets must verify the
@@ -8147,3 +8148,37 @@ rollback, and preview behavior.
 `frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts` and the
 availability target API and settings tests prove the canonical browser routes
 and additive UDP wire fields.
+
+### Host-agent removal and re-enrollment transport
+
+The canonical host lifecycle routes are
+`POST /api/agents/agent/report`,
+`DELETE /api/agents/agent/{agentId}`,
+`POST /api/agents/agent/{agentId}/allow-reenroll`,
+`GET /api/agents/agent/{agentId}/config`, and
+`POST /api/agent-install-command`; the `/api/agents/host/` forms remain legacy
+aliases only. Deletion and manual allowance require an authenticated admin
+credential with `settings:write`. Report and config reads retain their
+agent-report/config scope gates and exact token-to-agent binding.
+
+A successful delete means the durable removal tombstone exists before the API
+returns. Journal persistence failure returns `500 agent_removal_failed` and
+leaves the live host present. A removed or detached host report reaches the
+handler with a valid token but returns `400 invalid_report`; an absent,
+revoked, or expired token returns `401` in authentication; a valid token
+without `agent:report` returns `403 missing_scope`. Remote configuration for a
+removed host or for a shared token bound to a different requested host returns
+`404 agent_not_found`, never another host's configuration.
+
+`POST /api/agent-install-command` remains the explicit automatic re-enrollment
+intent: its newly created scoped token can clear only the matching persisted
+machine tombstone and receives the original canonical agent ID. The prior
+credential remains denied for that identity after re-enrollment, even if it is
+still valid for another active agent. The admin-only `allow-reenroll` route is
+the explicit policy override that permits the prior credential again.
+
+`internal/api/host_agent_removal_lifecycle_integration_test.go` exercises the
+real router middleware, token persistence/reload, monitor reconstruction,
+delete and config handlers, generated install token, alias re-enrollment, and
+shared-token isolation. It is the production-path contract proof alongside the
+monitoring race and continuity-store tests.

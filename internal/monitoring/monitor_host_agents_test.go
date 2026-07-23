@@ -3463,14 +3463,14 @@ func TestApplyHostReport_FreshTokenClearsRemovalBlock(t *testing.T) {
 	}
 
 	if len(monitor.state.GetRemovedHostAgents()) != 0 {
-		t.Fatal("expected persisted removal block to be cleared")
+		t.Fatal("expected state removal block to be cleared")
 	}
 }
 
-// TestAllowHostAgentReenroll_ClearsPersistedBlockAfterRestart pins the #1581
-// restart hole: the in-memory map is empty after a restart, but the persisted
-// entry must still be found and cleared.
-func TestAllowHostAgentReenroll_ClearsPersistedBlockAfterRestart(t *testing.T) {
+// TestAllowHostAgentReenroll_ClearsStateMirrorWithoutMemoryEntry preserves
+// compatibility with callers that only populated the models.State mirror.
+// The production restart path is covered by TestHostAgentRemovalLifecycleSurvivesMonitorReconstruction.
+func TestAllowHostAgentReenroll_ClearsStateMirrorWithoutMemoryEntry(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
@@ -3492,14 +3492,13 @@ func TestAllowHostAgentReenroll_ClearsPersistedBlockAfterRestart(t *testing.T) {
 		t.Fatalf("allow host reenroll: %v", err)
 	}
 	if len(monitor.state.GetRemovedHostAgents()) != 0 {
-		t.Fatal("expected persisted removal block to be cleared without an in-memory entry")
+		t.Fatal("expected state removal block to be cleared without an in-memory entry")
 	}
 }
 
-// TestCleanupRemovedHostAgents_ExpiresPersistedEntries pins the #1581 TTL
-// hole: persisted blocks must expire by their own RemovedAt even when the
-// in-memory map lost them across a restart.
-func TestCleanupRemovedHostAgents_ExpiresPersistedEntries(t *testing.T) {
+// TestCleanupRemovedHostAgents_ExpiresStateMirrorEntries pins expiry for
+// models.State-only compatibility entries when the in-memory map lacks them.
+func TestCleanupRemovedHostAgents_ExpiresStateMirrorEntries(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),
 		hostTokenBindings: make(map[string]string),

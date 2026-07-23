@@ -268,16 +268,51 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		return models.Host{}, fmt.Errorf("host id is required")
 	}
 
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
+
+	continuity, hasContinuity := config.HostContinuityEntry{}, false
+	if m.hostContinuityStore != nil {
+		continuity, hasContinuity = m.hostContinuityStore.Get(hostID)
+	}
+
 	host, removed := m.state.RemoveHost(hostID)
 	if !removed {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
 			log.Debug().Str("hostID", hostID).Msg("host not present in state during removal")
 		}
-		host = models.Host{
-			ID:       hostID,
-			Hostname: hostID,
+		if hasContinuity {
+			host = hostFromContinuityEntry(continuity)
+		} else {
+			host = models.Host{
+				ID:       hostID,
+				Hostname: hostID,
+			}
 		}
 	}
+
+	removedAt := time.Now().UTC()
+	if !continuity.RemovedAt.IsZero() {
+		removedAt = continuity.RemovedAt.UTC()
+	}
+	tombstone := removedHostContinuityEntry(hostID, host, continuity, removedAt)
+	if m.hostContinuityStore != nil {
+		if err := m.hostContinuityStore.Upsert(tombstone); err != nil {
+			if removed {
+				m.state.UpsertHost(host)
+			}
+			return models.Host{}, fmt.Errorf("persist host agent removal tombstone: %w", err)
+		}
+	}
+
+	removedEntry := removedHostAgentFromContinuity(tombstone)
+	m.mu.Lock()
+	if m.removedHostAgents == nil {
+		m.removedHostAgents = make(map[string]time.Time)
+	}
+	m.removedHostAgents[hostID] = removedAt
+	m.mu.Unlock()
+	m.state.AddRemovedHostAgent(removedEntry)
 
 	tokenID := strings.TrimSpace(host.TokenID)
 	hostname := strings.TrimSpace(host.Hostname)
@@ -369,26 +404,6 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 			Msg("Unbound host agent token bindings after host removal")
 	}
 
-	removedAt := time.Now()
-	m.mu.Lock()
-	if m.removedHostAgents == nil {
-		m.removedHostAgents = make(map[string]time.Time)
-	}
-	m.removedHostAgents[hostID] = removedAt
-	m.mu.Unlock()
-
-	m.state.AddRemovedHostAgent(models.RemovedHostAgent{
-		ID:                hostID,
-		Hostname:          host.Hostname,
-		DisplayName:       host.DisplayName,
-		Platform:          firstNonEmpty(host.Platform, host.OSName),
-		MachineID:         host.MachineID,
-		TokenID:           host.TokenID,
-		LinkedVMID:        host.LinkedVMID,
-		LinkedContainerID: host.LinkedContainerID,
-		RemovedAt:         removedAt,
-	})
-
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)
 
 	// Clear LinkedAgentID from any nodes that were linked to this host agent
@@ -409,7 +424,6 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	if m.alertManager != nil {
 		m.alertManager.HandleHostRemoved(host)
 	}
-	m.removeHostContinuity(hostID)
 	m.hostReportOrderMu.Lock()
 	delete(m.hostReportOrders, hostID)
 	m.hostReportOrderMu.Unlock()
@@ -417,11 +431,75 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	return host, nil
 }
 
+func removedHostContinuityEntry(
+	hostID string,
+	host models.Host,
+	continuity config.HostContinuityEntry,
+	removedAt time.Time,
+) config.HostContinuityEntry {
+	continuity.HostID = strings.TrimSpace(hostID)
+	continuity.Hostname = firstNonEmpty(continuity.Hostname, host.Hostname)
+	continuity.DisplayName = firstNonEmpty(continuity.DisplayName, host.DisplayName)
+	continuity.MachineID = firstNonEmpty(continuity.MachineID, host.MachineID)
+	continuity.TokenID = firstNonEmpty(continuity.TokenID, host.TokenID)
+	continuity.DeniedTokenIDs = uniqueNonEmptyStrings(
+		append(continuity.DeniedTokenIDs, continuity.TokenID, host.TokenID)...,
+	)
+	continuity.AgentVersion = firstNonEmpty(continuity.AgentVersion, host.AgentVersion)
+	continuity.Platform = firstNonEmpty(continuity.Platform, host.Platform, host.OSName)
+	continuity.LinkedNodeID = firstNonEmpty(continuity.LinkedNodeID, host.LinkedNodeID)
+	continuity.LinkedVMID = firstNonEmpty(continuity.LinkedVMID, host.LinkedVMID)
+	continuity.LinkedContainerID = firstNonEmpty(continuity.LinkedContainerID, host.LinkedContainerID)
+	continuity.IsLegacy = continuity.IsLegacy || host.IsLegacy
+	if continuity.LastSeen.IsZero() {
+		continuity.LastSeen = host.LastSeen.UTC()
+	}
+	continuity.RemovedAt = removedAt.UTC()
+	return continuity
+}
+
+func removedHostAgentFromContinuity(entry config.HostContinuityEntry) models.RemovedHostAgent {
+	return models.RemovedHostAgent{
+		ID:                strings.TrimSpace(entry.HostID),
+		ReportHostID:      strings.TrimSpace(entry.ReportHostID),
+		AgentReportedID:   strings.TrimSpace(entry.AgentReportedID),
+		Hostname:          strings.TrimSpace(entry.Hostname),
+		DisplayName:       strings.TrimSpace(entry.DisplayName),
+		Platform:          strings.TrimSpace(entry.Platform),
+		MachineID:         strings.TrimSpace(entry.MachineID),
+		TokenID:           strings.TrimSpace(entry.TokenID),
+		LinkedVMID:        strings.TrimSpace(entry.LinkedVMID),
+		LinkedContainerID: strings.TrimSpace(entry.LinkedContainerID),
+		RemovedAt:         entry.RemovedAt.UTC(),
+	}
+}
+
 // AllowHostAgentReenroll removes a host agent ID from the removal blocklist so it can report again.
 func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 	hostID = strings.TrimSpace(hostID)
 	if hostID == "" {
 		return fmt.Errorf("host id is required")
+	}
+
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
+	_, err := m.allowHostAgentReenrollLocked(hostID, "", true)
+	return err
+}
+
+func (m *Monitor) allowHostAgentReenrollLocked(
+	hostID string,
+	replacementTokenID string,
+	clearDeniedTokens bool,
+) (bool, error) {
+	hasDurableStore := m.hostContinuityStore != nil
+	existsOnDisk := false
+	if hasDurableStore {
+		cleared, err := m.hostContinuityStore.ClearRemoval(hostID, replacementTokenID, clearDeniedTokens)
+		if err != nil {
+			return false, fmt.Errorf("persist host agent re-enrollment allowance: %w", err)
+		}
+		existsOnDisk = cleared
 	}
 
 	m.mu.Lock()
@@ -432,9 +510,6 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 	delete(m.removedHostAgents, hostID)
 	m.mu.Unlock()
 
-	// The in-memory map resets on restart while the persisted entry keeps
-	// blocking reports, so the persisted store must be checked and cleared
-	// independently of memory presence (#1581).
 	existsInState := false
 	for _, entry := range m.state.GetRemovedHostAgents() {
 		if strings.TrimSpace(entry.ID) == hostID {
@@ -443,11 +518,15 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 		}
 	}
 
-	if !existsInMemory && !existsInState {
+	transitioned := existsOnDisk
+	if !hasDurableStore {
+		transitioned = existsInMemory || existsInState
+	}
+	if !transitioned {
 		log.Info().
 			Str("hostID", hostID).
 			Msg("allow re-enroll requested but host agent was not blocked; ignoring")
-		return nil
+		return false, nil
 	}
 
 	m.state.RemoveRemovedHostAgent(hostID)
@@ -456,33 +535,38 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 		Str("hostID", hostID).
 		Msg("Host agent removal block cleared; host may report again")
 
-	return nil
+	return transitioned, nil
 }
 
-func (m *Monitor) lookupRemovedHostAgent(identifier, hostname, machineID, tokenID string) (string, time.Time, bool) {
+func (m *Monitor) lookupRemovedHostAgent(identifier, hostname, machineID, tokenID string) (models.RemovedHostAgent, bool) {
 	identifier = strings.TrimSpace(identifier)
 	machineID = sanitizeDockerHostSuffix(machineID)
 	tokenID = strings.TrimSpace(tokenID)
+
+	for _, entry := range m.state.GetRemovedHostAgents() {
+		if removedHostAgentMatchesReport(entry, identifier, hostname, machineID, tokenID) {
+			return entry, true
+		}
+	}
 
 	m.mu.RLock()
 	removedAt, wasRemoved := m.removedHostAgents[identifier]
 	m.mu.RUnlock()
 	if wasRemoved {
-		return identifier, removedAt, true
+		return models.RemovedHostAgent{
+			ID:        identifier,
+			RemovedAt: removedAt,
+		}, true
 	}
 
-	for _, entry := range m.state.GetRemovedHostAgents() {
-		if removedHostAgentMatchesReport(entry, identifier, hostname, machineID, tokenID) {
-			return strings.TrimSpace(entry.ID), entry.RemovedAt, true
-		}
-	}
-
-	return "", time.Time{}, false
+	return models.RemovedHostAgent{}, false
 }
 
 func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, hostname, machineID, tokenID string) bool {
-	if strings.TrimSpace(entry.ID) == strings.TrimSpace(identifier) {
-		return true
+	for _, persistedID := range []string{entry.ID, entry.ReportHostID, entry.AgentReportedID} {
+		if hostAgentIdentifiersMatch(persistedID, identifier) {
+			return true
+		}
 	}
 
 	entryMachineID := sanitizeDockerHostSuffix(entry.MachineID)
@@ -504,6 +588,67 @@ func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, ho
 		machineID != "" &&
 		entryMachineID == machineID &&
 		hostAgentHostnamesMatch(entry.Hostname, hostname)
+}
+
+func removedHostAgentAllowsFreshReenroll(
+	entry models.RemovedHostAgent,
+	identifier string,
+	report agentshost.Report,
+	tokenRecord *config.APITokenRecord,
+) bool {
+	if tokenRecord == nil ||
+		tokenRecord.CreatedAt.IsZero() ||
+		!tokenRecord.CreatedAt.After(entry.RemovedAt) {
+		return false
+	}
+
+	oldTokenID := strings.TrimSpace(entry.TokenID)
+	newTokenID := strings.TrimSpace(tokenRecord.ID)
+	if newTokenID == "" || (oldTokenID != "" && oldTokenID == newTokenID) {
+		return false
+	}
+
+	hostname := strings.TrimSpace(report.Host.Hostname)
+	if strings.TrimSpace(entry.Hostname) != "" &&
+		hostname != "" &&
+		!hostAgentHostnamesMatch(entry.Hostname, hostname) {
+		return false
+	}
+
+	entryMachineID := sanitizeDockerHostSuffix(entry.MachineID)
+	reportMachineID := sanitizeDockerHostSuffix(report.Host.MachineID)
+	if entryMachineID != "" && reportMachineID != "" && !hostAgentIdentifiersMatch(entryMachineID, reportMachineID) {
+		return false
+	}
+
+	persistedIDs := []string{
+		entry.ID,
+		entry.ReportHostID,
+		entry.AgentReportedID,
+		entry.MachineID,
+	}
+	reportedIDs := []string{
+		identifier,
+		report.Host.ID,
+		report.Host.MachineID,
+		report.Agent.ID,
+	}
+	for _, persistedID := range persistedIDs {
+		for _, reportedID := range reportedIDs {
+			if hostAgentIdentifiersMatch(persistedID, reportedID) {
+				return true
+			}
+		}
+	}
+	return entryMachineID != "" &&
+		reportMachineID != "" &&
+		hostAgentIdentifiersMatch(entryMachineID, reportMachineID)
+}
+
+func hostAgentIdentifiersMatch(left, right string) bool {
+	left = sanitizeDockerHostSuffix(left)
+	right = sanitizeDockerHostSuffix(right)
+	return left != "" && right != "" && strings.EqualFold(left, right)
 }
 
 // LinkHostAgent manually links a host agent to a specific PVE node.
@@ -1016,6 +1161,25 @@ func (m *Monitor) matchPersistedHostContinuity(
 	)
 }
 
+func hostContinuityDeniesToken(
+	entry config.HostContinuityEntry,
+	tokenRecord *config.APITokenRecord,
+) bool {
+	if tokenRecord == nil {
+		return false
+	}
+	tokenID := strings.TrimSpace(tokenRecord.ID)
+	if tokenID == "" {
+		return false
+	}
+	for _, deniedTokenID := range entry.DeniedTokenIDs {
+		if strings.TrimSpace(deniedTokenID) == tokenID {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchHostConfigContinuity resolves a host identity for agent config fetches
 // from the persisted continuity store. Live state loses agent-reported hosts
 // across monitor reloads and restarts until the next report lands, and config
@@ -1036,7 +1200,10 @@ func (m *Monitor) MatchHostConfigContinuity(agentID, tokenID string) (models.Hos
 				continue
 			}
 		} else if agentID == "" ||
-			(entry.HostID != agentID && entry.ReportHostID != agentID && entry.AgentReportedID != agentID) {
+			(!hostAgentIdentifiersMatch(entry.HostID, agentID) &&
+				!hostAgentIdentifiersMatch(entry.ReportHostID, agentID) &&
+				!hostAgentIdentifiersMatch(entry.AgentReportedID, agentID) &&
+				!hostAgentIdentifiersMatch(entry.MachineID, agentID)) {
 			continue
 		}
 		return models.Host{
@@ -1082,6 +1249,9 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 			[]string(nil),
 			order.RetiredStreamIDs...,
 		),
+	}
+	if previous, ok := m.hostContinuityStore.Get(entry.HostID); ok {
+		entry.DeniedTokenIDs = append([]string(nil), previous.DeniedTokenIDs...)
 	}
 	if err := m.hostContinuityStore.Upsert(entry); err != nil {
 		log.Warn().
@@ -1146,18 +1316,6 @@ func (m *Monitor) applyRejectedHostReportLiveness(
 		Time("reportTimestamp", report.Timestamp).
 		Msg("Ignored stale or duplicate host report state while refreshing receipt-time liveness")
 	return host
-}
-
-func (m *Monitor) removeHostContinuity(hostID string) {
-	if m == nil || m.hostContinuityStore == nil {
-		return
-	}
-	if err := m.hostContinuityStore.Delete(hostID); err != nil {
-		log.Warn().
-			Err(err).
-			Str("hostID", hostID).
-			Msg("failed to delete host continuity state")
-	}
 }
 
 // HostReportMatchesKnownIdentity returns true when a host report targets either
@@ -2016,6 +2174,9 @@ func normalizedSecurityStrings(values []string) []string {
 
 // ApplyHostReport ingests a host agent report into the shared state.
 func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.APITokenRecord) (models.Host, error) {
+	m.hostAgentLifecycleMu.RLock()
+	defer m.hostAgentLifecycleMu.RUnlock()
+
 	receivedAt := time.Now()
 	observedAt := receivedAt.UTC()
 
@@ -2057,6 +2218,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		baseIdentifier = fmt.Sprintf("agent-%s", hex.EncodeToString(sum[:6]))
 	}
 	if persisted, ok := m.matchPersistedHostContinuity(report, tokenRecord); ok {
+		if hostContinuityDeniesToken(persisted, tokenRecord) {
+			return models.Host{}, fmt.Errorf(
+				"API token %q was explicitly detached from host agent %q during removal and cannot report for that identity",
+				strings.TrimSpace(tokenRecord.ID),
+				strings.TrimSpace(persisted.HostID),
+			)
+		}
 		baseIdentifier = strings.TrimSpace(persisted.HostID)
 	}
 
@@ -2134,29 +2302,48 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if tokenRecord != nil {
 		tokenID = strings.TrimSpace(tokenRecord.ID)
 	}
-	blockedID, removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
-	if wasRemoved && tokenRecord != nil && !tokenRecord.CreatedAt.IsZero() && tokenRecord.CreatedAt.After(removedAt) {
+	blocked, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
+	if wasRemoved && removedHostAgentAllowsFreshReenroll(blocked, identifier, report, tokenRecord) {
 		// A token minted after the host was removed means the user generated a
 		// fresh install command for this machine: that is explicit re-enroll
 		// intent, so clear the block instead of rejecting until the TTL
 		// expires. A still-running old agent keeps presenting its pre-removal
 		// token and stays blocked (#1581).
-		if err := m.AllowHostAgentReenroll(blockedID); err == nil {
+		cleared, err := m.allowHostAgentReenrollLocked(blocked.ID, tokenID, false)
+		if err == nil && cleared {
+			identifier = strings.TrimSpace(blocked.ID)
+			if tokenID != "" {
+				m.mu.Lock()
+				if m.hostTokenBindings == nil {
+					m.hostTokenBindings = make(map[string]string)
+				}
+				m.hostTokenBindings[hostTokenBindingKey(tokenID, hostname)] = identifier
+				m.mu.Unlock()
+			}
 			log.Info().
 				Str("hostID", identifier).
-				Str("blockedID", blockedID).
-				Time("removedAt", removedAt).
+				Str("blockedID", blocked.ID).
+				Time("removedAt", blocked.RemovedAt).
 				Time("tokenCreatedAt", tokenRecord.CreatedAt).
 				Msg("Cleared host agent removal block: report presented a token created after removal")
 			wasRemoved = false
+		} else if err != nil {
+			log.Warn().
+				Err(err).
+				Str("blockedID", blocked.ID).
+				Msg("Failed to persist host agent re-enrollment allowance; report remains blocked")
+		} else {
+			log.Info().
+				Str("blockedID", blocked.ID).
+				Msg("Host agent re-enrollment transition was already consumed; report remains blocked")
 		}
 	}
 	if wasRemoved {
 		log.Info().
 			Str("hostID", identifier).
-			Time("removedAt", removedAt).
+			Time("removedAt", blocked.RemovedAt).
 			Msg("Rejecting report from deliberately removed host agent")
-		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Re-enroll by reinstalling the agent with a newly generated API token, or wait for the block to clear 24 hours after removal", identifier, removedAt.Format(time.RFC3339))
+		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Re-enroll by reinstalling the agent with a newly generated API token, or wait for the block to clear 24 hours after removal", identifier, blocked.RemovedAt.Format(time.RFC3339))
 	}
 
 	unlockHostReport := m.lockHostReportApplication(identifier)
@@ -3353,12 +3540,44 @@ func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
 	}
 }
 
-// cleanupRemovedHostAgents expires removed host-agent blocks older than 24 hours.
-// The persisted entries must be swept by their own RemovedAt, not via the
-// in-memory map: the map resets on restart while lookupRemovedHostAgent keeps
-// matching persisted entries, which made a deleted host's block immortal and
-// permanently rejected its agent's re-enrollment (#1581).
+// hydrateRemovedHostAgents restores durable removal tombstones before the
+// monitor accepts reports. Expired tombstones are deleted eagerly; if that
+// delete cannot be persisted, the block is retained in memory to fail closed.
+func (m *Monitor) hydrateRemovedHostAgents(now time.Time) {
+	if m == nil || m.hostContinuityStore == nil || m.state == nil {
+		return
+	}
+
+	for _, continuity := range m.hostContinuityStore.RemovedEntries() {
+		if now.Sub(continuity.RemovedAt) > removedHostAgentsTTL {
+			if err := m.hostContinuityStore.Delete(continuity.HostID); err == nil {
+				continue
+			} else {
+				log.Warn().
+					Err(err).
+					Str("hostID", continuity.HostID).
+					Msg("Failed to expire durable host-agent removal tombstone; retaining block")
+			}
+		}
+
+		entry := removedHostAgentFromContinuity(continuity)
+		m.state.AddRemovedHostAgent(entry)
+		m.mu.Lock()
+		if m.removedHostAgents == nil {
+			m.removedHostAgents = make(map[string]time.Time)
+		}
+		m.removedHostAgents[entry.ID] = entry.RemovedAt
+		m.mu.Unlock()
+	}
+}
+
+// cleanupRemovedHostAgents expires removal tombstones older than 24 hours.
+// Durable state is deleted before memory so a persistence failure retains the
+// deny boundary across this process and the next restart.
 func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
+
 	expired := make(map[string]time.Time)
 
 	for _, entry := range m.state.GetRemovedHostAgents() {
@@ -3376,6 +3595,18 @@ func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
 	m.mu.Unlock()
 
 	for hostID, removedAt := range expired {
+		if m.hostContinuityStore != nil {
+			if continuity, ok := m.hostContinuityStore.Get(hostID); ok && !continuity.RemovedAt.IsZero() {
+				if err := m.hostContinuityStore.Delete(hostID); err != nil {
+					log.Warn().
+						Err(err).
+						Str("hostID", hostID).
+						Msg("Failed to expire durable host-agent removal tombstone; retaining block")
+					continue
+				}
+			}
+		}
+
 		m.state.RemoveRemovedHostAgent(hostID)
 
 		m.mu.Lock()

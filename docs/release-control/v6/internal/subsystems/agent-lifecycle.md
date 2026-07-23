@@ -321,8 +321,9 @@ update, profile rollout, command reachability, or fleet-control authority.
     Linux commands must keep custom CA, insecure/plain-HTTP, and optional-auth
     behavior aligned so the Machines onboarding path does not diverge by OS.
 18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
-19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-    19a. `internal/api/cloud_agent_install_command.go` shared with `api-contracts`, `cloud-paid`: hosted tenant agent install command generation is both an agent lifecycle enrollment surface and a provider-hosted tenant boundary.
+19. `internal/api/agent_ingest.go` shared with `api-contracts`: Unified Agent report admission, removal, remote-config identity binding, and re-enrollment responses are both an agent lifecycle authority and a canonical authenticated API contract boundary.
+20. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+    20a. `internal/api/cloud_agent_install_command.go` shared with `api-contracts`, `cloud-paid`: hosted tenant agent install command generation is both an agent lifecycle enrollment surface and a provider-hosted tenant boundary.
     The hosted PVE/PBS install command path must stay on the same token-file
     command transport as the normal lifecycle install helpers, while failing
     closed unless hosted mode is active, the target org exists, and the minted
@@ -332,8 +333,8 @@ update, profile rollout, command reachability, or fleet-control authority.
     with tenant-local tokens; branding is report rendering configuration inside
     that runtime, not a control-plane token, agent profile, or cross-client
     ingest path.
-20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-21. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+21. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+22. `internal/api/setup_script_render.go` shared with `api-contracts`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
     PBS setup-script auto-registration remains lifecycle-owned bootstrap
     transport: rendered scripts must post registration payloads to the canonical
     Pulse base URL plus `/api/auto-register`, not to the script download
@@ -345,9 +346,13 @@ update, profile rollout, command reachability, or fleet-control authority.
     that would be sent to Pulse. A failed smoke check may leave manual token
     details for the operator, but it must not POST an unproven token as a
     completed lifecycle registration.
-22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
-24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
+23. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+24. `internal/config/host_continuity.go` shared with `monitoring`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
+25. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
+26. `internal/models/models.go` shared with `monitoring`: removed host-agent identity aliases and tombstone state are both agent lifecycle authority and monitoring runtime report state.
+27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
+28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
+29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
     Every current agent process authors a process-unique report stream and a
     monotonic sequence within that stream. Reconnect delivery must preserve
     collection order by draining each destination's persisted FIFO before
@@ -357,7 +362,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     retain it. Unraid collection treats positive `mdResyncPos` / `mdResync` as
     authoritative active-operation evidence and emits zero progress whenever
     no active sync action exists, even if terminal percentage fields linger.
-25. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+30. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file
     enrollment input, and must persist plain-HTTP/insecure runtime continuity
@@ -373,7 +378,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     version replacement, logged readiness, forced-process recovery, service
     restart or OS reboot persistence, and complete uninstall cleanup through
     the reusable lifecycle harness under `scripts/installtests/`.
-26. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+31. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     `--state-dir` is a whole-lifecycle ownership boundary, not only a runtime
     flag. The resolved directory owns the protected bootstrap token,
     enrollment runtime token, server-acknowledged `agent-id`, buffered and
@@ -4936,3 +4941,52 @@ Neither an expected-transient decision nor an indeterminate UDP outcome may be
 translated into an agent action. Any later customer-infrastructure mutation
 still requires the canonical Actions planner, approval, executor, receipt,
 audit, and verification boundaries.
+
+### Server-side host deletion and re-enrollment authority
+
+Agent lifecycle owns the complete server-side host deletion transition through
+`internal/config/host_continuity.go`, `internal/monitoring/monitor.go`,
+`internal/monitoring/monitor_agents.go`, `internal/models/models.go`, and
+`internal/api/agent_ingest.go`. Removing a host must atomically convert its
+active continuity record into a durable removal tombstone before token
+revocation, live-state deletion, alert cleanup, resource unlinking, or remote
+configuration cleanup can be reported as successful. A journal write failure
+restores the live host and returns a server error. An unreadable journal blocks
+monitor startup rather than starting with an empty deny set.
+
+The tombstone retains the canonical host ID, machine ID, agent-reported ID,
+report-host ID, hostname, platform, token ID, and removal time. Monitor
+construction hydrates non-expired tombstones before report admission; active
+continuity, licensing, inventory, and remote-config lookups exclude them.
+Tombstones expire durably after 24 hours. If expiry cannot be persisted, the
+server keeps the deny boundary in memory and on the next restart.
+
+A report may clear a tombstone automatically only when it presents a different
+token created after removal and its canonical or retained alias, machine ID,
+and hostname still identify the removed machine. A fresh token for a cloned
+machine, different hostname, or conflicting machine ID must not clear the
+record. Successful re-enrollment preserves the original canonical host ID and
+retains the detached old token in the identity's deny lineage. This lets a
+shared old token continue serving an unrelated active agent without allowing
+that credential to recreate or remote-configure the removed host. Revoked,
+expired, missing-scope, and pre-removal credentials remain denied. The
+operator-only `allow-reenroll` action is the explicit override that may clear
+both the tombstone and detached-token lineage.
+
+Report ingestion holds a shared lifecycle lock for the full state transition;
+deletion, manual allowance, and tombstone expiry hold the exclusive side.
+Reports that began before deletion complete first, then deletion removes their
+result. Reports arriving after deletion see the tombstone. A completed delete
+therefore cannot be undone by an in-flight report, while unrelated and
+duplicate-machine agents remain concurrent and independently bound by token
+plus hostname.
+
+The server transition does not introduce a second installer lifecycle.
+Generated host install commands still mint the canonical scoped token, and the
+existing Unix systemd/state-directory and Windows ProgramData/service
+installers remain idempotent across rerun, process restart, and service
+restart. `internal/api/host_agent_removal_lifecycle_integration_test.go`,
+`internal/config/host_continuity_test.go`,
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`, and the
+existing `scripts/installtests/agent_state_dir_lifecycle_test.go`,
+`install_sh_test.go`, and `install_ps1_test.go` are the production-path proofs.

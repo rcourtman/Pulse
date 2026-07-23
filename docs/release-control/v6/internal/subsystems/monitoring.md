@@ -224,9 +224,13 @@ data cannot wrap into a fabricated healthy value.
 
 ## Shared Boundaries
 
-1. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
-2. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
-3. `pkg/agents/host/report.go` shared with `agent-lifecycle`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
+1. `internal/config/host_continuity.go` shared with `agent-lifecycle`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
+2. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
+3. `internal/models/models.go` shared with `agent-lifecycle`: removed host-agent identity aliases and tombstone state are both agent lifecycle authority and monitoring runtime report state.
+4. `internal/monitoring/monitor.go` shared with `agent-lifecycle`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
+5. `internal/monitoring/monitor_agents.go` shared with `agent-lifecycle`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
+6. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+7. `pkg/agents/host/report.go` shared with `agent-lifecycle`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
 
 ## Extension Points
 
@@ -2027,3 +2031,40 @@ reachability. `internal/monitoring/availability_udp_test.go`,
 `internal/monitoring/monitor_alert_intent_test.go`, and the backup polling
 assertion in `internal/monitoring/monitor_full_coverage_test.go` are the focused
 proofs.
+
+### Durable host-agent removal admission
+
+Monitoring ingest shares server-side host lifecycle authority with the
+agent-lifecycle subsystem. `Monitor.RemoveHostAgent` must persist a tombstone
+in the host continuity journal before it revokes an unused token, removes the
+live record, unlinks resources, clears connection health, or resolves alerts.
+The journal transition is rollback-safe. Persistence failure leaves the live
+host present; journal load failure prevents monitor construction; expiry
+failure retains the block. Monitoring must never convert an unavailable
+security journal into an empty in-memory removal map.
+
+`Monitor.New` hydrates canonical ID plus report-host, agent, machine, hostname,
+platform, and token aliases from every non-expired tombstone. Removed entries
+are excluded from active standalone-host continuity, monitored-system
+projection, and remote-config fallback. The 24-hour expiry is based on the
+persisted `removedAt` timestamp and deletes durable state before clearing the
+snapshot and cache.
+
+`ApplyHostReport` and removal are ordered by the dedicated host lifecycle
+read/write lock. Concurrent reports may proceed together, but deletion waits
+for earlier reports and prevents later reports from resurrecting the host.
+Only a post-removal token and matching retained machine identity may transition
+the tombstone back to active continuity. The canonical host ID survives report
+ID or persisted-agent-ID alias changes across Linux/systemd, Docker unified
+agents, and Windows MachineGuid identities. Token-plus-hostname disambiguation
+continues to keep simultaneous cloned or duplicate machine IDs distinct.
+
+After fresh-token re-enrollment, the old token stays attached to the host's
+denied-token lineage even when that token is intentionally shared and remains
+valid for another active agent. Monitoring rejects the detached credential
+before token binding can manufacture a duplicate host. Manual operator
+allowance is the only path that clears that lineage. Focused proofs are
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`,
+`internal/monitoring/monitor_host_agents_test.go`, and
+`internal/api/host_agent_removal_lifecycle_integration_test.go`; the concurrency
+proof must also pass under the Go race detector.

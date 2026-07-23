@@ -919,6 +919,8 @@ type RemovedDockerHost struct {
 // RemovedHostAgent tracks a host agent that was deliberately removed and blocked from reporting.
 type RemovedHostAgent struct {
 	ID                string    `json:"id"`
+	ReportHostID      string    `json:"reportHostId,omitempty"`
+	AgentReportedID   string    `json:"agentReportedId,omitempty"`
 	Hostname          string    `json:"hostname,omitempty"`
 	DisplayName       string    `json:"displayName,omitempty"`
 	Platform          string    `json:"platform,omitempty"` // last-known reported platform, retained for host-side cleanup guidance
