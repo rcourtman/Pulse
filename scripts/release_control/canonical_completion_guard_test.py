@@ -189,9 +189,42 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             self.assertIn("require_explicit_path_policy_coverage", rule["verification"])
             self.assertIn("path_policies", rule["verification"])
 
-    def test_monitoring_runtime_change_requires_monitoring_contract(self):
+    def test_monitoring_runtime_change_requires_monitoring_and_agent_lifecycle_contracts(
+        self,
+    ):
         required = infer_impacted_subsystems(["internal/monitoring/monitor.go"])
-        self.assertEqual(set(required), {"monitoring"})
+        self.assertEqual(set(required), {"agent-lifecycle", "monitoring"})
+
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(
+            lifecycle["touched_runtime_files"],
+            ["internal/monitoring/monitor.go"],
+        )
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "host-agent-server-lifecycle",
+                    "label": "server-side host-agent deletion and re-enrollment lifecycle proof",
+                    "touched_runtime_files": ["internal/monitoring/monitor.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/host_agent_removal_lifecycle_integration_test.go",
+                        "internal/config/host_continuity_test.go",
+                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
+                        "internal/monitoring/monitor_host_agents_test.go",
+                        "scripts/installtests/agent_state_dir_lifecycle_test.go",
+                        "scripts/installtests/install_ps1_test.go",
+                        "scripts/installtests/install_sh_test.go",
+                    ],
+                }
+            ],
+        )
 
         monitoring = required["monitoring"]
         self.assertEqual(monitoring["id"], "monitoring")
@@ -226,6 +259,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "kubernetes-native-agent-runtime",
                 "runtime-report-model",
                 "proxmox-zfs-runtime",
+                "proxmox-cluster-client-runtime",
                 "proxmox-ceph-runtime",
                 "proxmox-backup-identity-monitoring",
                 "container-entrypoint-runtime",
@@ -246,14 +280,21 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/config/docker_metadata_test.go",
+                        "internal/config/guest_metadata_test.go",
                         "internal/monitoring/availability_poller_test.go",
                         "internal/monitoring/availability_udp_test.go",
                         "internal/monitoring/canonical_guardrails_test.go",
+                        "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                         "internal/monitoring/issue1595_collection_trust_test.go",
+                        "internal/monitoring/monitor_additional_test.go",
                         "internal/monitoring/monitor_alert_intent_test.go",
                         "internal/monitoring/monitor_alert_override_migration_test.go",
                         "internal/monitoring/monitor_backups_readstate_test.go",
+                        "internal/monitoring/monitor_docker_test.go",
+                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
+                        "internal/monitoring/monitor_pve_cluster_refresh_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
@@ -322,9 +363,44 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_host_agent_ingest_runtime_change_requires_monitoring_contract(self):
+    def test_host_agent_ingest_runtime_change_requires_monitoring_and_agent_lifecycle_contracts(
+        self,
+    ):
         required = infer_impacted_subsystems(["internal/monitoring/monitor_agents.go"])
-        self.assertEqual(set(required), {"monitoring"})
+        self.assertEqual(set(required), {"agent-lifecycle", "monitoring"})
+
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(
+            lifecycle["touched_runtime_files"],
+            ["internal/monitoring/monitor_agents.go"],
+        )
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "host-agent-server-lifecycle",
+                    "label": "server-side host-agent deletion and re-enrollment lifecycle proof",
+                    "touched_runtime_files": [
+                        "internal/monitoring/monitor_agents.go"
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/host_agent_removal_lifecycle_integration_test.go",
+                        "internal/config/host_continuity_test.go",
+                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
+                        "internal/monitoring/monitor_host_agents_test.go",
+                        "scripts/installtests/agent_state_dir_lifecycle_test.go",
+                        "scripts/installtests/install_ps1_test.go",
+                        "scripts/installtests/install_sh_test.go",
+                    ],
+                }
+            ],
+        )
 
         monitoring = required["monitoring"]
         self.assertEqual(
@@ -345,7 +421,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/config/host_continuity_test.go",
+                        "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                         "internal/monitoring/issue1595_collection_trust_test.go",
+                        "internal/monitoring/monitor_docker_test.go",
+                        "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "internal/monitoring/monitor_package_updates_test.go",
                         "internal/unifiedresources/code_standards_test.go",
@@ -594,6 +674,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/agentupdate/coverage_test.go",
+                        "internal/hostagent/agent_flushbuffer_test.go",
                         "internal/hostagent/agent_metrics_test.go",
                         "internal/hostagent/agent_new_test.go",
                         "internal/hostagent/command_client_test.go",
@@ -607,6 +688,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/hostagent/send_report_test.go",
                         "internal/hostagent/smartctl_standby_guard_test.go",
                         "internal/hostagent/storage_cleanup_test.go",
+                        "internal/hostagent/unraid_test.go",
+                        "pkg/agents/host/report_test.go",
                     ],
                 }
             ],
@@ -1072,8 +1155,11 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": ["frontend-modern/src/api/__tests__/"],
                     "exact_files": [
                         "frontend-modern/src/types/api.ts",
+                        "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
                         "internal/api/contract_test.go",
+                        "internal/api/host_agent_removal_lifecycle_integration_test.go",
+                        "internal/api/metadata_handlers_test.go",
                         "internal/api/patrol_autopilot_test.go",
                     ],
                 }
@@ -1999,11 +2085,18 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_monitoring_owned_runtime_does_not_require_unified_resources_contract(self):
+    def test_monitoring_owned_runtime_requires_each_shared_owner_contract(self):
         required = required_contract_updates(["internal/monitoring/monitor.go"])
         self.assertEqual(
             required,
             {
+                "docs/release-control/v6/internal/subsystems/agent-lifecycle.md": {
+                    "subsystem": "agent-lifecycle",
+                    "contract": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+                    "reason": "owner",
+                    "touched_runtime_files": ["internal/monitoring/monitor.go"],
+                    "matched_references": [],
+                },
                 "docs/release-control/v6/internal/subsystems/monitoring.md": {
                     "subsystem": "monitoring",
                     "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",

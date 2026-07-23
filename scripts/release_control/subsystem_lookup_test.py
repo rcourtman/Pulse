@@ -2978,12 +2978,11 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             api_match["matched_contract_references"],
             [
-                {
-                    "heading": "## Shared Boundaries",
-                    "path": "internal/api/access_control_handlers.go",
-                    "line": 1268,
-                    "heading_line": 166,
-                }
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                    "62. `internal/api/access_control_handlers.go` shared with `organization-settings`",
+                    "internal/api/access_control_handlers.go",
+                ),
             ],
         )
 
@@ -4128,23 +4127,64 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
-    def test_lookup_paths_assigns_host_agent_ingest_runtime_to_monitoring(self) -> None:
+    def test_lookup_paths_assigns_host_agent_ingest_runtime_to_shared_monitoring_and_agent_lifecycle(
+        self,
+    ) -> None:
         result = lookup_paths(["internal/monitoring/monitor_agents.go"])
         self.assertEqual(result["unowned_runtime_files"], [])
 
         file_entry = result["files"][0]
         self.assertEqual(file_entry["classification"], "runtime")
-        self.assertEqual(len(file_entry["matches"]), 1)
-
-        match = file_entry["matches"][0]
-        self.assertEqual(match["subsystem"], "monitoring")
-        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/monitoring.md")
-        self.assertEqual(match["lane_context"]["lane_id"], "L13")
-        self.assertEqual(match["verification_requirement"]["id"], "host-agent-ingest-runtime")
         self.assertEqual(
-            match["verification_requirement"]["exact_files"],
+            file_entry["shared_ownership"]["subsystems"],
+            ["agent-lifecycle", "monitoring"],
+        )
+        self.assertEqual(len(file_entry["matches"]), 2)
+
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        self.assertEqual(set(by_subsystem), {"agent-lifecycle", "monitoring"})
+
+        lifecycle_match = by_subsystem["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle_match["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(lifecycle_match["lane_context"]["lane_id"], "L16")
+        self.assertEqual(
+            lifecycle_match["verification_requirement"]["id"],
+            "host-agent-server-lifecycle",
+        )
+        self.assertEqual(
+            lifecycle_match["verification_requirement"]["exact_files"],
             [
+                "internal/api/host_agent_removal_lifecycle_integration_test.go",
+                "internal/config/host_continuity_test.go",
+                "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
+                "internal/monitoring/monitor_host_agents_test.go",
+                "scripts/installtests/agent_state_dir_lifecycle_test.go",
+                "scripts/installtests/install_ps1_test.go",
+                "scripts/installtests/install_sh_test.go",
+            ],
+        )
+
+        monitoring_match = by_subsystem["monitoring"]
+        self.assertEqual(
+            monitoring_match["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(monitoring_match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(
+            monitoring_match["verification_requirement"]["id"],
+            "host-agent-ingest-runtime",
+        )
+        self.assertEqual(
+            monitoring_match["verification_requirement"]["exact_files"],
+            [
+                "internal/config/host_continuity_test.go",
+                "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                 "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/monitor_docker_test.go",
+                "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
                 "internal/monitoring/monitor_package_updates_test.go",
                 "internal/unifiedresources/code_standards_test.go",
@@ -4461,6 +4501,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/agentupdate/coverage_test.go",
+                "internal/hostagent/agent_flushbuffer_test.go",
                 "internal/hostagent/agent_metrics_test.go",
                 "internal/hostagent/agent_new_test.go",
                 "internal/hostagent/command_client_test.go",
@@ -4474,6 +4515,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/send_report_test.go",
                 "internal/hostagent/smartctl_standby_guard_test.go",
                 "internal/hostagent/storage_cleanup_test.go",
+                "internal/hostagent/unraid_test.go",
+                "pkg/agents/host/report_test.go",
             ],
         )
 
