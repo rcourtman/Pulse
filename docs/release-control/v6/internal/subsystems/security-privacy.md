@@ -334,6 +334,13 @@ the `white_label` branding entitlement.
    counts, because versions that predate client-side mock suppression keep
    pinging the synthetic fleet until upgraded; `--include-mock-fleet` remains
    the audit path.
+   The existing `known_install_age_bucket` wire field must be presented as
+   time since the first schema-v2 lifecycle observation. For an upgraded
+   install it is only a lower bound, never original installation age.
+   Deployment-method buckets are best-effort current-runtime evidence.
+   `container_other` and `binary_other` are unknown fallbacks for many upgraded
+   installs and must not be presented as precise original installation
+   provenance.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
    Control-plane portal session lifetime rides on that same service: the auth
    service session TTL is configurable (`CP_SESSION_TTL`, longer
@@ -456,6 +463,10 @@ the `white_label` branding entitlement.
 2. Keep shared API-contract proof routing aligned whenever auth, token, or telemetry settings payloads change.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
+4a. Keep full-history Pulse Intelligence cohort and funnel aggregation linear
+    in the number of input rows. Parse and order each install's timestamps once,
+    share that analysis across cohort and funnel projections, and preserve
+    exact aggregate counts, rates, exclusions, and privacy boundaries.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
 5a. Keep localized privacy and telemetry settings copy covered by catalog
     completeness, fallback, and non-translatable-token tests so translated
@@ -977,6 +988,11 @@ recipients, endpoints, alert content, notification content, prompts, commands,
 or an event-level journey/clickstream. Known install age for an upgraded
 installation is therefore a lower bound beginning with its first schema-v2
 observation, not a reconstructed installation date.
+The adoption report must name that bucket as time since the first schema-v2
+lifecycle observation without renaming the wire field. Its deployment-method
+projection must preserve the closed wire buckets while clearly marking the
+signal as best effort. Unknown `container_other` and `binary_other` fallbacks
+must not be interpreted as precise original installation provenance.
 Schema v3 preserves that field/type allowlist but corrects
 `notification_failures_7d` from all unsuccessful attempts to terminal
 failed/dead-letter outcomes; `notification_attempts_7d` still includes retry

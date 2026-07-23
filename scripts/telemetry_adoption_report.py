@@ -68,8 +68,14 @@ FEATURE_BOOL_FIELDS = (
     ("has_api_tokens", "Has API tokens"),
 )
 USER_BASE_CATEGORY_FIELDS = (
-    ("deployment_method", "Deployment method"),
-    ("known_install_age_bucket", "Known install age"),
+    (
+        "deployment_method",
+        "Deployment method signal (best effort; upgraded installs often report container_other or binary_other)",
+    ),
+    (
+        "known_install_age_bucket",
+        "Time since first schema-v2 lifecycle observation",
+    ),
     ("activation_stage", "Highest observed activation stage"),
     ("time_to_first_monitored_resource_bucket", "Time to first monitored resource"),
     ("estate_size_bucket", "Estate size"),
@@ -916,6 +922,80 @@ class ClassifiedVersion:
     is_published_release: bool
 
 
+@dataclass(frozen=True)
+class PulseIntelligenceInstallAnalysis:
+    latest_received_at: datetime
+    first_paid_at: datetime | None
+    observed_free_start: bool
+    observed_free_to_paid: bool
+    cohort_keys: frozenset[str]
+    free_cohort_keys: frozenset[str]
+    signal_groups: frozenset[str]
+    free_signal_groups: frozenset[str]
+
+
+PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS = tuple(
+    sorted(
+        {
+            field
+            for _, _, bool_fields, _ in PULSE_INTELLIGENCE_OUTCOME_COHORTS
+            for field in bool_fields
+        }
+        | {
+            field
+            for bool_fields, _ in PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS.values()
+            for field in bool_fields
+        }
+    )
+)
+PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS = tuple(
+    sorted(
+        {
+            field
+            for _, _, _, count_fields in PULSE_INTELLIGENCE_OUTCOME_COHORTS
+            for field in count_fields
+        }
+        | {
+            field
+            for _, count_fields in PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS.values()
+            for field in count_fields
+        }
+    )
+)
+PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD = {
+    field: frozenset(
+        key
+        for key, _, bool_fields, _ in PULSE_INTELLIGENCE_OUTCOME_COHORTS
+        if field in bool_fields
+    )
+    for field in PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS
+}
+PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD = {
+    field: frozenset(
+        key
+        for key, _, _, count_fields in PULSE_INTELLIGENCE_OUTCOME_COHORTS
+        if field in count_fields
+    )
+    for field in PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS
+}
+PULSE_INTELLIGENCE_SIGNAL_GROUP_BOOL_KEYS_BY_FIELD = {
+    field: frozenset(
+        key
+        for key, (bool_fields, _) in PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS.items()
+        if field in bool_fields
+    )
+    for field in PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS
+}
+PULSE_INTELLIGENCE_SIGNAL_GROUP_COUNT_KEYS_BY_FIELD = {
+    field: frozenset(
+        key
+        for key, (_, count_fields) in PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS.items()
+        if field in count_fields
+    )
+    for field in PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS
+}
+
+
 def normalize_reported_version(raw: str) -> str:
     value = raw.strip()
     if value.startswith("v"):
@@ -1461,6 +1541,70 @@ def pulse_intelligence_timed_rows(
     return timed_rows
 
 
+def pulse_intelligence_row_analysis_keys(
+    row: dict[str, Any],
+) -> tuple[set[str], set[str]]:
+    cohort_keys: set[str] = set()
+    signal_groups: set[str] = set()
+    for field in PULSE_INTELLIGENCE_ANALYSIS_BOOL_FIELDS:
+        if not parse_optional_bool(row.get(field)):
+            continue
+        cohort_keys.update(PULSE_INTELLIGENCE_COHORT_BOOL_KEYS_BY_FIELD[field])
+        signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_BOOL_KEYS_BY_FIELD[field])
+    for field in PULSE_INTELLIGENCE_ANALYSIS_COUNT_FIELDS:
+        if parse_optional_nonnegative_int(row.get(field)) <= 0:
+            continue
+        cohort_keys.update(PULSE_INTELLIGENCE_COHORT_COUNT_KEYS_BY_FIELD[field])
+        signal_groups.update(PULSE_INTELLIGENCE_SIGNAL_GROUP_COUNT_KEYS_BY_FIELD[field])
+    return cohort_keys, signal_groups
+
+
+def analyze_pulse_intelligence_install(
+    install_rows: Iterable[dict[str, Any]],
+) -> PulseIntelligenceInstallAnalysis:
+    timed_rows = pulse_intelligence_timed_rows(install_rows)
+    if not timed_rows:
+        raise ValueError("Pulse Intelligence install analysis requires at least one row")
+
+    first_free_at = next(
+        (received_at for received_at, _, posture in timed_rows if posture is False),
+        None,
+    )
+    first_paid_at = next(
+        (received_at for received_at, _, posture in timed_rows if posture is True),
+        None,
+    )
+    observed_free_start = first_free_at is not None and (
+        first_paid_at is None or first_free_at < first_paid_at
+    )
+
+    cohort_keys: set[str] = set()
+    free_cohort_keys: set[str] = set()
+    signal_groups: set[str] = set()
+    free_signal_groups: set[str] = set()
+
+    for received_at, row, posture in timed_rows:
+        row_cohort_keys, row_signal_groups = pulse_intelligence_row_analysis_keys(row)
+        cohort_keys.update(row_cohort_keys)
+        signal_groups.update(row_signal_groups)
+        if posture is False and (first_paid_at is None or received_at < first_paid_at):
+            free_cohort_keys.update(row_cohort_keys)
+            free_signal_groups.update(row_signal_groups)
+
+    pulse_intelligence_derive_signal_groups(signal_groups)
+    pulse_intelligence_derive_signal_groups(free_signal_groups)
+    return PulseIntelligenceInstallAnalysis(
+        latest_received_at=timed_rows[-1][0],
+        first_paid_at=first_paid_at,
+        observed_free_start=observed_free_start,
+        observed_free_to_paid=observed_free_start and first_paid_at is not None,
+        cohort_keys=frozenset(cohort_keys),
+        free_cohort_keys=frozenset(free_cohort_keys),
+        signal_groups=frozenset(signal_groups),
+        free_signal_groups=frozenset(free_signal_groups),
+    )
+
+
 def pulse_intelligence_first_paid_at(
     timed_rows: Iterable[tuple[datetime, dict[str, Any], bool | None]],
 ) -> datetime | None:
@@ -1594,6 +1738,7 @@ def summarize_pulse_intelligence_install_outcomes(
     current_time: datetime,
     retention_window: timedelta,
     signal_outcomes_by_install: dict[str, tuple[bool, bool]] | None = None,
+    analysis_by_install: dict[str, PulseIntelligenceInstallAnalysis] | None = None,
 ) -> dict[str, int]:
     install_id_list = list(install_ids)
     retained_installs = 0
@@ -1608,16 +1753,29 @@ def summarize_pulse_intelligence_install_outcomes(
         latest = latest_by_install.get(install_id)
         if latest is None:
             continue
-        latest_received_at = parse_received_at(str(latest["received_at"]))
+        analysis = (
+            analysis_by_install.get(install_id)
+            if analysis_by_install is not None
+            else None
+        )
+        latest_received_at = (
+            analysis.latest_received_at
+            if analysis is not None
+            else parse_received_at(str(latest["received_at"]))
+        )
         if current_time - latest_received_at <= retention_window:
             retained_installs += 1
         if parse_optional_bool(latest.get("paid_license")) is True:
             paid_latest += 1
         else:
             free_latest += 1
-        free_start, converted = pulse_intelligence_observed_conversion(
-            rows_by_install.get(install_id, [])
-        )
+        if analysis is not None:
+            free_start = analysis.observed_free_start
+            converted = analysis.observed_free_to_paid
+        else:
+            free_start, converted = pulse_intelligence_observed_conversion(
+                rows_by_install.get(install_id, [])
+            )
         if free_start:
             observed_free_starts += 1
         if converted:
@@ -1671,35 +1829,47 @@ def group_pulse_intelligence_rows_by_install(
     return rows_by_install
 
 
+def analyze_pulse_intelligence_rows(
+    rows: Iterable[dict[str, Any]],
+) -> dict[str, PulseIntelligenceInstallAnalysis]:
+    return {
+        install_id: analyze_pulse_intelligence_install(install_rows)
+        for install_id, install_rows in group_pulse_intelligence_rows_by_install(rows).items()
+    }
+
+
 def summarize_pulse_intelligence_outcome_cohorts(
     rows: Iterable[dict[str, Any]],
     latest_by_install: dict[str, dict[str, Any]],
     *,
     now: datetime | None = None,
     retention_window: timedelta = timedelta(days=7),
+    analysis_by_install: dict[str, PulseIntelligenceInstallAnalysis] | None = None,
 ) -> dict[str, Any]:
     current_time = now or datetime.now(timezone.utc)
     cohort_install_ids: dict[str, set[str]] = {
         key: set() for key, _, _, _ in PULSE_INTELLIGENCE_OUTCOME_COHORTS
     }
-    rows_by_install = group_pulse_intelligence_rows_by_install(rows)
+    analyses = (
+        analysis_by_install
+        if analysis_by_install is not None
+        else analyze_pulse_intelligence_rows(rows)
+    )
 
-    for install_id, install_rows in rows_by_install.items():
-        for row in install_rows:
-            for key, _, bool_fields, count_fields in PULSE_INTELLIGENCE_OUTCOME_COHORTS:
-                if pulse_intelligence_row_matches_cohort(row, bool_fields, count_fields):
-                    cohort_install_ids[key].add(install_id)
+    for install_id, analysis in analyses.items():
+        for key in analysis.cohort_keys:
+            cohort_install_ids[key].add(install_id)
 
     cohorts: list[dict[str, Any]] = []
-    for key, label, bool_fields, count_fields in PULSE_INTELLIGENCE_OUTCOME_COHORTS:
+    for key, label, _, _ in PULSE_INTELLIGENCE_OUTCOME_COHORTS:
         install_ids = cohort_install_ids[key]
         signal_outcomes_by_install = {
-            install_id: pulse_intelligence_signal_observed_conversion(
-                install_rows,
-                bool_fields,
-                count_fields,
+            install_id: (
+                key in analyses[install_id].free_cohort_keys,
+                key in analyses[install_id].free_cohort_keys
+                and analyses[install_id].first_paid_at is not None,
             )
-            for install_id, install_rows in rows_by_install.items()
+            for install_id in install_ids
         }
         cohorts.append(
             {
@@ -1708,10 +1878,11 @@ def summarize_pulse_intelligence_outcome_cohorts(
                 **summarize_pulse_intelligence_install_outcomes(
                     install_ids,
                     latest_by_install,
-                    rows_by_install,
+                    {},
                     current_time,
                     retention_window,
                     signal_outcomes_by_install,
+                    analyses,
                 ),
             }
         )
@@ -1728,34 +1899,32 @@ def summarize_pulse_intelligence_operations_funnel(
     *,
     now: datetime | None = None,
     retention_window: timedelta = timedelta(days=7),
+    analysis_by_install: dict[str, PulseIntelligenceInstallAnalysis] | None = None,
 ) -> dict[str, Any]:
     current_time = now or datetime.now(timezone.utc)
-    rows_by_install = group_pulse_intelligence_rows_by_install(rows)
-    signal_groups_by_install: dict[str, set[str]] = {
-        install_id: set() for install_id in rows_by_install
-    }
-
-    for install_id, install_rows in rows_by_install.items():
-        for row in install_rows:
-            signal_groups_by_install[install_id].update(
-                pulse_intelligence_row_signal_groups(row)
-            )
-        pulse_intelligence_derive_signal_groups(signal_groups_by_install[install_id])
+    analyses = (
+        analysis_by_install
+        if analysis_by_install is not None
+        else analyze_pulse_intelligence_rows(rows)
+    )
 
     stages: list[dict[str, Any]] = []
     for key, label, required_groups in PULSE_INTELLIGENCE_OPERATIONS_FUNNEL_STAGES:
         install_ids = [
             install_id
-            for install_id, groups in signal_groups_by_install.items()
-            if all(group in groups for group in required_groups)
+            for install_id, analysis in analyses.items()
+            if all(group in analysis.signal_groups for group in required_groups)
         ]
-        signal_outcomes_by_install = {
-            install_id: pulse_intelligence_stage_signal_observed_conversion(
-                install_rows,
-                required_groups,
+        signal_outcomes_by_install: dict[str, tuple[bool, bool]] = {}
+        for install_id in install_ids:
+            observed_free_signal = all(
+                group in analyses[install_id].free_signal_groups
+                for group in required_groups
             )
-            for install_id, install_rows in rows_by_install.items()
-        }
+            signal_outcomes_by_install[install_id] = (
+                observed_free_signal,
+                observed_free_signal and analyses[install_id].first_paid_at is not None,
+            )
         stages.append(
             {
                 "key": key,
@@ -1764,10 +1933,11 @@ def summarize_pulse_intelligence_operations_funnel(
                 **summarize_pulse_intelligence_install_outcomes(
                     install_ids,
                     latest_by_install,
-                    rows_by_install,
+                    {},
                     current_time,
                     retention_window,
                     signal_outcomes_by_install,
+                    analyses,
                 ),
             }
         )
@@ -1923,6 +2093,8 @@ def summarize_rows(
     published_versions: set[str],
     target_version: str | None = None,
     include_mock_fleet: bool = False,
+    *,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     row_list: list[dict[str, Any]] = []
     mock_fleet_rows = 0
@@ -1941,7 +2113,8 @@ def summarize_rows(
         if existing is None or str(row["received_at"]) > str(existing["received_at"]):
             latest_by_install[install_id] = row
 
-    current_time = datetime.now(timezone.utc)
+    current_time = now or datetime.now(timezone.utc)
+    pulse_intelligence_analysis = analyze_pulse_intelligence_rows(row_list)
     latest_install_windows = summarize_latest_install_windows(
         latest_by_install,
         published_versions,
@@ -1975,11 +2148,13 @@ def summarize_rows(
             row_list,
             latest_by_install,
             now=current_time,
+            analysis_by_install=pulse_intelligence_analysis,
         ),
         "pulse_intelligence_operations_loop_funnel": summarize_pulse_intelligence_operations_funnel(
             row_list,
             latest_by_install,
             now=current_time,
+            analysis_by_install=pulse_intelligence_analysis,
         ),
         "target_release_coverage_7d": summarize_target_version_coverage(
             latest_by_install,
@@ -2137,7 +2312,12 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             )
         lines.append(
             "- interpretation: known install age begins when schema v2 lifecycle tracking is first initialized; "
-            "older upgraded installs are therefore lower bounds"
+            "for upgraded installs it is only a lower bound, not original installation age"
+        )
+        lines.append(
+            "- interpretation: deployment method is best-effort current-runtime evidence; "
+            "upgraded installs often fall back to container_other or binary_other, so these buckets "
+            "must not be read as precise original installation provenance"
         )
         lines.append(
             "- notification failure semantics: schema v2 counted unsuccessful retry attempts; "

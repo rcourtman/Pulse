@@ -9,6 +9,7 @@ import gzip
 import json
 import subprocess
 import sys
+import time
 import unittest
 from unittest import mock
 
@@ -1289,6 +1290,143 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertEqual(stages["approved_action_success"]["observed_signal_free_starts"], 1)
         self.assertEqual(stages["approved_action_success"]["observed_signal_free_to_paid"], 1)
 
+    def test_precomputed_pulse_intelligence_analysis_matches_reference_helpers(self) -> None:
+        rows = [
+            {
+                "install_id": "mixed-posture",
+                "received_at": "2026-07-20 09:00:00",
+                "paid_license": "yes",
+                "pulse_intelligence_patrol_resolved_findings_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "mixed-posture",
+                "received_at": "2026-07-18 09:00:00",
+                "paid_license": 0,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_assistant_context_ai_calls_30d": 2,
+            },
+            {
+                "install_id": "mixed-posture",
+                "received_at": "2026-07-19 09:00:00",
+                "paid_license": "false",
+                "pulse_intelligence_approved_action_decisions_30d": 1,
+                "pulse_intelligence_external_agent_action_requests_30d": "3",
+                "pulse_intelligence_mcp_adapter_used_30d": "true",
+            },
+            {
+                "install_id": "mixed-posture",
+                "received_at": "2026-07-17 09:00:00",
+                "paid_license": None,
+                "pulse_intelligence_patrol_runs_30d": -1,
+                "pulse_intelligence_loop_configured": "not-a-bool",
+            },
+        ]
+
+        analysis = report.analyze_pulse_intelligence_install(rows)
+        expected_free_start, expected_conversion = report.pulse_intelligence_observed_conversion(rows)
+        self.assertEqual(analysis.observed_free_start, expected_free_start)
+        self.assertEqual(analysis.observed_free_to_paid, expected_conversion)
+
+        for key, _, bool_fields, count_fields in report.PULSE_INTELLIGENCE_OUTCOME_COHORTS:
+            with self.subTest(cohort=key):
+                expected_match = any(
+                    report.pulse_intelligence_row_matches_cohort(row, bool_fields, count_fields)
+                    for row in rows
+                )
+                expected_free_signal, expected_signal_conversion = (
+                    report.pulse_intelligence_signal_observed_conversion(
+                        rows,
+                        bool_fields,
+                        count_fields,
+                    )
+                )
+                self.assertEqual(key in analysis.cohort_keys, expected_match)
+                self.assertEqual(key in analysis.free_cohort_keys, expected_free_signal)
+                self.assertEqual(
+                    key in analysis.free_cohort_keys and analysis.first_paid_at is not None,
+                    expected_signal_conversion,
+                )
+
+        expected_groups: set[str] = set()
+        for row in rows:
+            expected_groups.update(report.pulse_intelligence_row_signal_groups(row))
+        report.pulse_intelligence_derive_signal_groups(expected_groups)
+        self.assertEqual(analysis.signal_groups, expected_groups)
+
+        for key, _, required_groups in report.PULSE_INTELLIGENCE_OPERATIONS_FUNNEL_STAGES:
+            with self.subTest(stage=key):
+                expected_free_signal, expected_signal_conversion = (
+                    report.pulse_intelligence_stage_signal_observed_conversion(
+                        rows,
+                        required_groups,
+                    )
+                )
+                observed_free_signal = all(
+                    group in analysis.free_signal_groups for group in required_groups
+                )
+                self.assertEqual(observed_free_signal, expected_free_signal)
+                self.assertEqual(
+                    observed_free_signal and analysis.first_paid_at is not None,
+                    expected_signal_conversion,
+                )
+
+    def test_pulse_intelligence_production_scale_performance_guard(self) -> None:
+        now = datetime(2026, 7, 23, 12, tzinfo=timezone.utc)
+        rows: list[dict[str, object]] = []
+        latest_by_install: dict[str, dict[str, object]] = {}
+        install_count = 500
+        rows_per_install = 100
+        for install_index in range(install_count):
+            install_id = f"install-{install_index:04d}"
+            for row_index in range(rows_per_install):
+                row: dict[str, object] = {
+                    "install_id": install_id,
+                    "received_at": (
+                        now - timedelta(minutes=rows_per_install - row_index)
+                    ).strftime("%Y-%m-%d %H:%M:%S"),
+                    "paid_license": row_index >= rows_per_install // 2,
+                    "pulse_intelligence_loop_configured": 1,
+                    "pulse_intelligence_patrol_new_findings_30d": row_index % 3 == 0,
+                    "pulse_intelligence_assistant_context_ai_calls_30d": row_index % 5,
+                    "pulse_intelligence_external_agent_context_requests_30d": row_index % 7,
+                    "pulse_intelligence_approved_action_decisions_30d": row_index % 11 == 0,
+                    "pulse_intelligence_approved_action_attempts_30d": row_index % 13 == 0,
+                    "pulse_intelligence_approved_action_successes_30d": row_index % 17 == 0,
+                }
+                rows.append(row)
+                latest_by_install[install_id] = row
+
+        original_parse_received_at = report.parse_received_at
+        started = time.perf_counter()
+        with mock.patch.object(
+            report,
+            "parse_received_at",
+            wraps=original_parse_received_at,
+        ) as parse_received_at:
+            analyses = report.analyze_pulse_intelligence_rows(rows)
+            report.summarize_pulse_intelligence_outcome_cohorts(
+                rows,
+                latest_by_install,
+                now=now,
+                analysis_by_install=analyses,
+            )
+            report.summarize_pulse_intelligence_operations_funnel(
+                rows,
+                latest_by_install,
+                now=now,
+                analysis_by_install=analyses,
+            )
+        elapsed = time.perf_counter() - started
+
+        self.assertEqual(len(analyses), install_count)
+        self.assertEqual(parse_received_at.call_count, len(rows))
+        self.assertLess(
+            elapsed,
+            5.0,
+            f"50,000-row Pulse Intelligence aggregation took {elapsed:.3f}s",
+        )
+
     def test_is_mock_fleet_row_matches_scaled_fixture_signature(self) -> None:
         self.assertTrue(report.is_mock_fleet_row({"kubernetes_pods": 120, "vmware_hosts": 7}))
         self.assertTrue(report.is_mock_fleet_row({"kubernetes_pods": 600, "vmware_hosts": 35}))
@@ -1378,8 +1516,21 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             item for item in summary["category_signals"] if item["field"] == "deployment_method"
         )
         self.assertEqual(
+            deployment["label"],
+            "Deployment method signal (best effort; upgraded installs often report container_other or binary_other)",
+        )
+        self.assertEqual(
             deployment["buckets"],
             [{"bucket": "docker_compose", "installs": 1}, {"bucket": "legacy_unknown", "installs": 1}],
+        )
+        known_age = next(
+            item
+            for item in summary["category_signals"]
+            if item["field"] == "known_install_age_bucket"
+        )
+        self.assertEqual(
+            known_age["label"],
+            "Time since first schema-v2 lifecycle observation",
         )
         configured = next(
             item for item in summary["count_signals"] if item["field"] == "configured_connections"
@@ -1475,7 +1626,14 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("User-base lifecycle and outcomes (7d):", rendered)
         self.assertIn("Highest observed activation stage: monitoring 2", rendered)
         self.assertIn("Alerts resolved (30d): 4 across 1 installs", rendered)
-        self.assertIn("older upgraded installs are therefore lower bounds", rendered)
+        self.assertIn(
+            "for upgraded installs it is only a lower bound, not original installation age",
+            rendered,
+        )
+        self.assertIn(
+            "upgraded installs often fall back to container_other or binary_other",
+            rendered,
+        )
 
     def test_format_text_includes_latest_install_windows(self) -> None:
         summary = {
@@ -1771,6 +1929,14 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 self.assertIn("route parameters, resource IDs", content)
                 self.assertIn("Those reports do not add prompts, findings", content)
                 self.assertIn("account links, or exact commercial tiers", content)
+                self.assertIn(
+                    "not precise evidence of the original installation path",
+                    content,
+                )
+                self.assertIn(
+                    "time since Pulse first created the schema-v2 lifecycle record",
+                    content,
+                )
 
 
 if __name__ == "__main__":
