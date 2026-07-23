@@ -9178,16 +9178,16 @@
   ],
   "work_claims": [
     {
-      "id": "codex-release-gate-operational-trust-canonical-lifecycle",
+      "id": "codex-release-gate-stable-patch-unattended-release-path",
       "agent_id": "codex",
-      "summary": "Repair v6.1.1 backend release-gate failures in action admission and monitoring mock history",
+      "summary": "Publish v6.1.1 emergency stable patch after backend release-gate repair",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-23T12:59:07Z",
-      "heartbeat_at": "2026-07-23T12:59:07Z",
-      "expires_at": "2026-07-23T16:59:07Z",
+      "claimed_at": "2026-07-23T13:06:46Z",
+      "heartbeat_at": "2026-07-23T13:06:46Z",
+      "expires_at": "2026-07-23T17:06:46Z",
       "work_item": {
         "kind": "release-gate",
-        "id": "operational-trust-canonical-lifecycle"
+        "id": "stable-patch-unattended-release-path"
       }
     }
   ],
