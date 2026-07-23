@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"math"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +73,27 @@ func TestBuildTieredTimestamps_IncludesCanonicalTerminalNow(t *testing.T) {
 	last := timestamps[len(timestamps)-1]
 	if !last.Equal(now) {
 		t.Fatalf("expected seed timestamps to include terminal now, got %v with now=%v", last, now)
+	}
+}
+
+func TestGeneratePlateauSeriesPreservesCollapsedBoundsExactly(t *testing.T) {
+	const bound = 42.0
+	got := generatePlateauSeries(
+		bound,
+		240,
+		bound,
+		bound,
+		100,
+		rand.New(rand.NewSource(17)),
+	)
+
+	if len(got) != 240 {
+		t.Fatalf("series length = %d, want 240", len(got))
+	}
+	for i, value := range got {
+		if value != bound {
+			t.Fatalf("point %d = %v, want exact bound %v", i, value, bound)
+		}
 	}
 }
 

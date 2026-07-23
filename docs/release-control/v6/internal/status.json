@@ -9178,16 +9178,16 @@
   ],
   "work_claims": [
     {
-      "id": "codex-release-gate-stable-patch-unattended-release-path",
+      "id": "codex-release-gate-operational-trust-canonical-lifecycle",
       "agent_id": "codex",
-      "summary": "Prepare and publish v6.1.1 emergency stable patch with owner-approved unsigned Windows exception",
+      "summary": "Repair v6.1.1 backend release-gate failures in action admission and monitoring mock history",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-23T12:19:02Z",
-      "heartbeat_at": "2026-07-23T12:19:02Z",
-      "expires_at": "2026-07-23T16:19:02Z",
+      "claimed_at": "2026-07-23T12:59:07Z",
+      "heartbeat_at": "2026-07-23T12:59:07Z",
+      "expires_at": "2026-07-23T16:59:07Z",
       "work_item": {
         "kind": "release-gate",
-        "id": "stable-patch-unattended-release-path"
+        "id": "operational-trust-canonical-lifecycle"
       }
     }
   ],

@@ -102,6 +102,7 @@ type Service struct {
 	OnActionTransition func(orgID string, record unified.ActionAuditRecord)
 	Now                func() time.Time
 	PolicyAdmission    *PolicyAdmissionCoordinator
+	policyAdmissionMu  sync.Mutex
 }
 
 type ActionDetail struct {
@@ -123,6 +124,8 @@ type PolicyAdmissionCoordinator struct{ mu sync.RWMutex }
 var dispatchWorkerSequence atomic.Uint64
 
 func (s *Service) admissionCoordinator() *PolicyAdmissionCoordinator {
+	s.policyAdmissionMu.Lock()
+	defer s.policyAdmissionMu.Unlock()
 	if s.PolicyAdmission == nil {
 		s.PolicyAdmission = &PolicyAdmissionCoordinator{}
 	}

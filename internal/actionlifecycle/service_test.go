@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -67,6 +68,46 @@ func serviceForStore(t *testing.T, store unified.ResourceStore, resource unified
 		Executor:            executor,
 		DecisionAuthorizer:  DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
 		ExecutionAuthorizer: ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
+	}
+}
+
+func TestWithPolicyMutationConcurrentFirstUseSharesCoordinator(t *testing.T) {
+	const writers = 64
+
+	service := &Service{}
+	start := make(chan struct{})
+	coordinators := make(chan *PolicyAdmissionCoordinator, writers)
+	var ready sync.WaitGroup
+	var done sync.WaitGroup
+	ready.Add(writers)
+	done.Add(writers)
+
+	for range writers {
+		go func() {
+			defer done.Done()
+			ready.Done()
+			<-start
+			coordinators <- service.admissionCoordinator()
+		}()
+	}
+
+	ready.Wait()
+	close(start)
+	done.Wait()
+	close(coordinators)
+
+	var shared *PolicyAdmissionCoordinator
+	for coordinator := range coordinators {
+		if shared == nil {
+			shared = coordinator
+			continue
+		}
+		if coordinator != shared {
+			t.Fatal("concurrent first use returned more than one policy admission coordinator")
+		}
+	}
+	if shared == nil {
+		t.Fatal("concurrent first use did not initialize a policy admission coordinator")
 	}
 }
 

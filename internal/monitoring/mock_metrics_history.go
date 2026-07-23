@@ -361,6 +361,14 @@ func generateSpikySeries(current float64, points int, seed uint64, min, max, spa
 // generatePlateauSeries produces stable levels with slow transitions —
 // matching how real memory usage behaves (applications hold allocations).
 func generatePlateauSeries(current float64, points int, min, max, span float64, rng *rand.Rand) []float64 {
+	raw := make([]float64, points)
+	if min == max {
+		for i := range raw {
+			raw[i] = min
+		}
+		return raw
+	}
+
 	plateauCount := 3 + rng.Intn(4) // 3-6 plateaus
 
 	// Generate plateau levels near current.
@@ -371,7 +379,6 @@ func generatePlateauSeries(current float64, points int, min, max, span float64, 
 	}
 	levels[plateauCount-1] = current + rng.NormFloat64()*span*0.01
 
-	raw := make([]float64, points)
 	segmentLen := points / plateauCount
 
 	for i := 0; i < points; i++ {

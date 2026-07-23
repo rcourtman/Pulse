@@ -992,6 +992,9 @@ and curve shape from the same canonical resource-role registry, so database,
 cache, backup, web, and storage workloads keep believable long-range behavior
 instead of switching from one generic seeded pattern to a different recent
 runtime pattern.
+Bounded plateau generation must preserve an exact constant when the lower and
+upper metric bounds are equal; interpolation and noise must not introduce
+floating-point drift into a synthetic flat series.
 That same mock chart boundary also owns request-path efficiency. Demo chart
 reads must reuse monitor-owned downsampled mock history for the current mock
 sampler generation instead of regenerating or re-downsampling the same seeded

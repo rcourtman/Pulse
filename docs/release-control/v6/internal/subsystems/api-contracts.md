@@ -1993,6 +1993,9 @@ a new API state machine, queue contract, or verification-accounting field.
    admission coordinator, binds it to a typed versioned lease, then persists
    the `pulse_patrol_policy` / `policy` approval and `executing` transition in
    one store CAS transaction. No reusable policy-approved state exists.
+   Lazy initialization of that shared coordinator must be concurrency-safe:
+   simultaneous first policy writers on one lifecycle service must converge on
+   one coordinator and cannot enter parallel admission or mutation sections.
    Missing, malformed, stale, unreadable, or revoked policy records a stable
    refused-before-dispatch failure with no executor call. Human approval stays
    a distinct path: automatic-mode, allowlist, and recurring-window changes do
