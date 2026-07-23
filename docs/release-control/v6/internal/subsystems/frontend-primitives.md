@@ -4044,6 +4044,21 @@ owns availability-state policy and alert-removal side effects. The table-shell
 hook should not re-accumulate raw override mutation logic,
 recovery-threshold defaults policy, or resource-family projection engines
 inline.
+TrueNAS system threshold rows follow that same feature-owner split and the
+canonical alert identity chain. `useThresholdsPlatformData.ts` must project
+the current canonical resource ID as the writable storage ID, accept bounded
+superseded/metric-target candidates for legacy readback, and retain the
+projected row while `editingId` is active so WebSocket resource repolls,
+reordering, or changing display telemetry cannot reset the input.
+`useThresholdsOverrideMutations.ts` owns the blur commit: it removes every
+bounded candidate, writes exactly one current-ID raw override, marks the
+configuration dirty, and leaves the global Save Changes control to perform the
+API persistence. Multiple same-hostname TrueNAS systems must stay independent
+because configured connection identity, not display name or DMI serial, owns
+the row. The regression boundary is
+`frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`;
+the global payload boundary is
+`frontend-modern/src/features/alerts/__tests__/useAlertsConfigurationState.test.tsx`.
 
 The updates settings surface now follows the same presentation-owner rule.
 `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx` stays the

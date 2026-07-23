@@ -252,6 +252,30 @@ alert feature gating from the shared entitlements layer, not from a per-surface
 Canonical alert identity and evaluation are the live runtime model. Remaining
 legacy references should exist only in explicit migration or negative test
 boundaries.
+TrueNAS per-resource threshold overrides use the unified resource's current
+canonical ID as their persistence and evaluation key. API-backed TrueNAS
+systems are keyed by configured connection, never reported hostname or DMI
+serial, so repolls, result reordering, missing serials, DR clones, and multiple
+same-hostname appliances cannot transfer or strand an override. The browser
+may read provider-declared superseded IDs and metric-target IDs while
+projecting a legacy `alerts.json`, but an edit must remove those candidates
+and persist exactly one row under the current canonical ID. While an input is
+active, the thresholds projector must retain the edited row across WebSocket
+resource refreshes; blur commits that retained row into the unsaved
+configuration, and the global configuration save remains the only API
+persistence boundary.
+
+The monitoring bridge may migrate only provider-declared, unambiguous
+canonical-ID successions before evaluation. It must persist the migrated
+configuration before installing it in the alert manager, let a current-key
+override win while removing its retired duplicate, and retain unknown or
+temporarily absent override rows until a provider proves succession. The same
+persisted override must drive trigger, clear, derived critical severity, and
+notification dispatch before and after restart. Regression ownership is
+`frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`,
+`frontend-modern/src/features/alerts/__tests__/useAlertsConfigurationState.test.tsx`,
+`internal/alerts/canonical_override_migration_test.go`, and
+`internal/monitoring/monitor_alert_override_migration_test.go`.
 All v6 platform alert targets must enter runtime threshold evaluation through
 `UnifiedResourceInput` and `internal/alerts/unified_eval.go`: Proxmox guests/
 nodes/storage, Docker hosts/containers/services, Kubernetes clusters/nodes/

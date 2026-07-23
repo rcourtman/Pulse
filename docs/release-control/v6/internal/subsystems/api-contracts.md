@@ -8053,6 +8053,28 @@ acceptance and typed-conflict payloads, while
 `frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`
 proves bounded status/history reconciliation against the returned run ID.
 
+### Alert configuration persistence transport
+
+`GET /api/alerts/config` and `PUT /api/alerts/config` carry the one canonical
+alert configuration shape used by the thresholds editor, alert evaluator, and
+notification runtime. Per-resource TrueNAS overrides are keyed by the current
+unified canonical resource ID; connection IDs and provider-declared
+superseded IDs are read/migration candidates, not additional writable rows.
+The browser's blur commit is local unsaved state. Only a successful
+`PUT /api/alerts/config` confirms persistence, and an API or persistence
+failure must remain an error so the browser keeps the unsaved banner and shows
+the actionable backend message instead of claiming that the threshold was
+saved.
+
+`internal/api/alerts_test.go`,
+`frontend-modern/src/features/alerts/__tests__/useAlertsConfigurationState.test.tsx`,
+and
+`internal/monitoring/monitor_alert_override_migration_test.go` jointly prove
+the transport, persistence-error, canonical-key, reload, and restart
+boundaries. Alert evaluation after that save remains alerts-owned and must use
+the persisted trigger/recovery pair plus a valid derived critical threshold;
+the API must not invent a TrueNAS-specific threshold sidecar.
+
 ### Alert intent and UDP availability transport
 
 `GET /api/alerts/intent-policies` and
