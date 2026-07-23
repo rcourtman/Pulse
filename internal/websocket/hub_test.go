@@ -4,11 +4,187 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
+
+func TestClientSafeSendAndCloseAreSynchronized(t *testing.T) {
+	client := &Client{send: make(chan []byte, 1)}
+	start := make(chan struct{})
+	var senders sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		senders.Add(1)
+		go func() {
+			defer senders.Done()
+			<-start
+			for attempt := 0; attempt < 1_000; attempt++ {
+				client.safeSend([]byte("state"))
+			}
+		}()
+	}
+
+	close(start)
+	client.closeSend()
+	senders.Wait()
+	if client.safeSend([]byte("after-close")) {
+		t.Fatal("safeSend succeeded after closeSend")
+	}
+}
+
+func TestHubDisconnectedClientsDoNotBuildInitialState(t *testing.T) {
+	var stateBuilds atomic.Int64
+	hub := NewHub(func(string) interface{} {
+		stateBuilds.Add(1)
+		return map[string]interface{}{
+			"resources": make([]map[string]interface{}, 4_000),
+		}
+	})
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	const reconnects = 32
+	for i := 0; i < reconnects; i++ {
+		client := &Client{
+			hub:  hub,
+			id:   "disconnected-before-initial-state",
+			send: make(chan []byte, 1),
+		}
+		hub.register <- client
+		hub.unregister <- client
+	}
+
+	hub.Stop()
+	if got := stateBuilds.Load(); got != 0 {
+		t.Fatalf("built %d initial states for clients that had already disconnected", got)
+	}
+}
+
+func TestHubCurrentStateBroadcastsStaySerializedUnderChurn(t *testing.T) {
+	hub := NewHub(nil)
+	hub.coalesceWindow = time.Millisecond
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	client := &Client{
+		hub:  hub,
+		id:   "state-broadcast-soak",
+		send: make(chan []byte, 128),
+	}
+	hub.register <- client
+
+	var active, maxActive, builds atomic.Int64
+	hub.SetStateGetter(func(string) interface{} {
+		builds.Add(1)
+		current := active.Add(1)
+		for {
+			maximum := maxActive.Load()
+			if current <= maximum || maxActive.CompareAndSwap(maximum, current) {
+				break
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+		active.Add(-1)
+		return map[string]string{"status": "ok"}
+	})
+
+	for i := 0; i < 50; i++ {
+		hub.BroadcastCurrentState()
+		time.Sleep(2 * time.Millisecond)
+	}
+	time.Sleep(250 * time.Millisecond)
+	hub.Stop()
+
+	if got := maxActive.Load(); got != 1 {
+		t.Fatalf("maximum concurrent current-state builds = %d, want 1", got)
+	}
+	if got := builds.Load(); got > 10 {
+		t.Fatalf("current-state builds = %d for 50 supersedable signals, want at most 10 serialized builds", got)
+	}
+}
+
+func TestHubInitialAndBroadcastStateBuildsShareSerialization(t *testing.T) {
+	var active, maxActive atomic.Int64
+	hub := NewHub(func(string) interface{} {
+		current := active.Add(1)
+		for {
+			maximum := maxActive.Load()
+			if current <= maximum || maxActive.CompareAndSwap(maximum, current) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		active.Add(-1)
+		return map[string]string{"status": "ok"}
+	})
+	hub.coalesceWindow = time.Millisecond
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	const clients = 8
+	for i := 0; i < clients; i++ {
+		hub.register <- &Client{
+			hub:  hub,
+			id:   "simultaneous-initial-state",
+			send: make(chan []byte, 8),
+		}
+	}
+	time.AfterFunc(initialWelcomeDelay+initialStateMessageDelay, hub.BroadcastCurrentState)
+	time.Sleep(initialWelcomeDelay + initialStateMessageDelay + 400*time.Millisecond)
+	hub.Stop()
+
+	if got := maxActive.Load(); got != 1 {
+		t.Fatalf("maximum concurrent initial and broadcast state builds = %d, want 1", got)
+	}
+}
+
+func TestHubRequestedStateBuildsShareSerialization(t *testing.T) {
+	var active, maxActive atomic.Int64
+	hub := NewHub(func(string) interface{} {
+		current := active.Add(1)
+		for {
+			maximum := maxActive.Load()
+			if current <= maximum || maxActive.CompareAndSwap(maximum, current) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		active.Add(-1)
+		return map[string]string{"status": "ok"}
+	})
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	const clients = 8
+	registered := make([]*Client, 0, clients)
+	for i := 0; i < clients; i++ {
+		client := &Client{
+			hub:  hub,
+			id:   "simultaneous-requested-state",
+			send: make(chan []byte, 8),
+		}
+		hub.register <- client
+		registered = append(registered, client)
+	}
+
+	var done sync.WaitGroup
+	done.Add(len(registered))
+	for _, client := range registered {
+		go func() {
+			defer done.Done()
+			hub.sendRequestedState(client)
+		}()
+	}
+	done.Wait()
+	hub.Stop()
+
+	if got := maxActive.Load(); got != 1 {
+		t.Fatalf("maximum concurrent requested state builds = %d, want 1", got)
+	}
+}
 
 func TestIsValidPrivateOrigin(t *testing.T) {
 	tests := []struct {

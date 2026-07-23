@@ -29,6 +29,38 @@ type recoveryIngestBatch struct {
 	reconcile    *recoveryReconcileScope
 }
 
+type recoveryIngestCoalesceKey struct {
+	provider string
+	idPrefix string
+	instance string
+}
+
+func (batch recoveryIngestBatch) coalesceKey() (recoveryIngestCoalesceKey, bool) {
+	if batch.reconcile == nil {
+		return recoveryIngestCoalesceKey{}, false
+	}
+	return recoveryIngestCoalesceKey{
+		provider: batch.reconcile.provider,
+		idPrefix: batch.reconcile.idPrefix,
+		instance: batch.reconcile.instance,
+	}, true
+}
+
+func (m *Monitor) coalescePendingRecoveryIngest(batch recoveryIngestBatch) bool {
+	key, ok := batch.coalesceKey()
+	if !ok {
+		return false
+	}
+	for i := len(m.recoveryIngestPending) - 1; i >= 0; i-- {
+		pendingKey, pendingOK := m.recoveryIngestPending[i].coalesceKey()
+		if pendingOK && pendingKey == key {
+			m.recoveryIngestPending[i] = batch
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Monitor) ingestRecoveryPointsAsync(points []recovery.RecoveryPoint) {
 	m.enqueueRecoveryIngest(recoveryIngestBatch{points: points})
 }
@@ -68,14 +100,27 @@ func (m *Monitor) enqueueRecoveryIngest(batch recoveryIngestBatch) {
 
 	m.recoveryIngestMu.Lock()
 	if m.recoveryIngestRunning {
-		// Queue rather than replace: batches come from different sources (PVE
-		// storage, PBS, snapshots), and dropping one loses a full poll cycle
-		// for that source.
+		// A reconcile batch is a complete current enumeration for one source
+		// scope, so only its newest pending value is authoritative. Distinct
+		// scopes and non-reconciling event batches remain FIFO; this preserves
+		// their facts without retaining every superseded full poll result.
+		if m.coalescePendingRecoveryIngest(batch) {
+			pending := len(m.recoveryIngestPending)
+			m.recoveryIngestMu.Unlock()
+			log.Debug().
+				Int("points", len(batch.points)).
+				Int("provider_observations", len(batch.observations)).
+				Int("pending_batches", pending).
+				Msg("Coalesced recovery point ingest behind active batch")
+			return
+		}
 		m.recoveryIngestPending = append(m.recoveryIngestPending, batch)
+		pending := len(m.recoveryIngestPending)
 		m.recoveryIngestMu.Unlock()
 		log.Debug().
 			Int("points", len(batch.points)).
 			Int("provider_observations", len(batch.observations)).
+			Int("pending_batches", pending).
 			Msg("Queued recovery point ingest behind active batch")
 		return
 	}

@@ -3215,3 +3215,23 @@ func TestPendingActionAuditReaderReturnsOldestPendingFirst(t *testing.T) {
 		t.Fatalf("pending actions = %#v, want oldest pending first", got)
 	}
 }
+
+func TestSQLiteResourceStoreCloseJoinsRetentionLoopAndIsIdempotent(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	select {
+	case <-store.retentionDone:
+	default:
+		t.Fatal("Close returned before the retention loop exited")
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+}

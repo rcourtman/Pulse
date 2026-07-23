@@ -239,8 +239,11 @@ func TestRetentionLoop_RunsInitialPrune(t *testing.T) {
 		t.Fatalf("RecordChange: %v", err)
 	}
 
-	stop := store.startRetentionLoop()
-	defer close(stop)
+	stop, done := store.startRetentionLoop()
+	defer func() {
+		close(stop)
+		<-done
+	}()
 
 	deadline := time.Now().Add(initialRetentionDelay + 10*time.Second)
 	for time.Now().Before(deadline) {

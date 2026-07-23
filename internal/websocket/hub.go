@@ -26,8 +26,10 @@ const (
 	// maxWebSocketInboundMessageSize bounds client->server websocket message size.
 	maxWebSocketInboundMessageSize = 64 * 1024
 	// maxWebSocketOrgIDLength keeps org IDs bounded to prevent oversized header/query abuse.
-	maxWebSocketOrgIDLength = 64
-	websocketHubComponent   = "websocket_hub"
+	maxWebSocketOrgIDLength  = 64
+	websocketHubComponent    = "websocket_hub"
+	initialWelcomeDelay      = 500 * time.Millisecond
+	initialStateMessageDelay = 100 * time.Millisecond
 )
 
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
@@ -250,30 +252,47 @@ type Client struct {
 	hub           *Hub
 	conn          *websocket.Conn
 	send          chan []byte
+	sendMu        sync.RWMutex
 	id            string
 	orgID         string // Organization ID for tenant isolation
 	lastPing      time.Time
 	closed        atomic.Bool // Set when the client is unregistered; prevents sends to closed channel
 	writeFailures int32       // Consecutive write failures; disconnects after maxWriteFailures
+	lifecycleDone chan struct{}
+	lifecycleOnce sync.Once
+}
+
+func (c *Client) initializeLifecycle() {
+	if c.lifecycleDone == nil {
+		c.lifecycleDone = make(chan struct{})
+	}
+}
+
+func (c *Client) closeLifecycle() {
+	c.lifecycleOnce.Do(func() {
+		if c.lifecycleDone != nil {
+			close(c.lifecycleDone)
+		}
+	})
+}
+
+func (c *Client) closeSend() {
+	c.sendMu.Lock()
+	defer c.sendMu.Unlock()
+	if !c.closed.Swap(true) {
+		close(c.send)
+	}
 }
 
 // safeSend attempts to send data to the client's send channel.
 // Returns false if the client is closed or the channel buffer is full.
-// Uses defer/recover to handle the race between close(c.send) and send.
 func (c *Client) safeSend(data []byte) (sent bool) {
-	// Early check to avoid most attempts on closed clients.
+	c.sendMu.RLock()
+	defer c.sendMu.RUnlock()
+
 	if c.closed.Load() {
 		return false
 	}
-
-	// Recover from panic if the channel was closed between the check above
-	// and the send below. This is a defensive pattern to prevent server crashes.
-	defer func() {
-		if r := recover(); r != nil {
-			// Channel was closed concurrently; mark as not sent.
-			sent = false
-		}
-	}()
 
 	select {
 	case c.send <- data:
@@ -413,6 +432,8 @@ type Hub struct {
 	runDone            chan struct{}
 	runStartOnce       sync.Once
 	runDoneOnce        sync.Once
+	initialStateWG     sync.WaitGroup
+	stateBuildSlot     chan struct{}
 	mu                 sync.RWMutex
 	getState           func(orgID string) interface{} // Function to get state for specific tenant
 	allowedOrigins     []string                       // Allowed origins for CORS
@@ -420,13 +441,20 @@ type Hub struct {
 	multiTenantChecker MultiTenantChecker             // Multi-tenant feature flag and license checker
 	isTrustedProxy     func(ip string) bool           // Optional: checks if peer IP is a trusted reverse proxy
 	// Broadcast coalescing fields
-	coalesceWindow  time.Duration
-	coalescePending *Message
-	coalesceTimer   *time.Timer
-	coalesceMutex   sync.Mutex
+	coalesceWindow     time.Duration
+	coalescePending    *Message
+	coalesceReady      *Message
+	coalesceTimer      *time.Timer
+	coalesceGeneration uint64
+	nextGeneration     uint64
+	coalesceMutex      sync.Mutex
 	// Per-tenant coalescing
-	tenantCoalescePending map[string]*Message
-	tenantCoalesceTimers  map[string]*time.Timer
+	tenantCoalescePending    map[string]*Message
+	tenantCoalesceReady      map[string]*Message
+	tenantCoalesceTimers     map[string]*time.Timer
+	tenantCoalesceGeneration map[string]uint64
+	stateBroadcastWake       chan struct{}
+	stateBroadcastDone       chan struct{}
 }
 
 // Message represents a WebSocket message
@@ -495,21 +523,26 @@ func (h *Hub) getStateForOrg(orgID string) interface{} {
 // NewHub creates a new WebSocket hub
 func NewHub(getState func(orgID string) interface{}) *Hub {
 	return &Hub{
-		clients:               make(map[*Client]bool),
-		clientsByTenant:       make(map[string]map[*Client]bool),
-		broadcast:             make(chan []byte, 256),
-		broadcastSeq:          make(chan Message, 256),         // Buffered sequenced channel
-		tenantBroadcast:       make(chan TenantBroadcast, 256), // Per-tenant broadcasts
-		register:              make(chan *Client),
-		unregister:            make(chan *Client),
-		stopChan:              make(chan struct{}),
-		runStarted:            make(chan struct{}),
-		runDone:               make(chan struct{}),
-		getState:              getState,
-		allowedOrigins:        []string{},             // Default to empty (will be set based on actual host)
-		coalesceWindow:        100 * time.Millisecond, // Coalesce rapid updates within 100ms
-		tenantCoalescePending: make(map[string]*Message),
-		tenantCoalesceTimers:  make(map[string]*time.Timer),
+		clients:                  make(map[*Client]bool),
+		clientsByTenant:          make(map[string]map[*Client]bool),
+		broadcast:                make(chan []byte, 256),
+		broadcastSeq:             make(chan Message, 256),         // Buffered sequenced channel
+		tenantBroadcast:          make(chan TenantBroadcast, 256), // Per-tenant broadcasts
+		register:                 make(chan *Client),
+		unregister:               make(chan *Client),
+		stopChan:                 make(chan struct{}),
+		runStarted:               make(chan struct{}),
+		runDone:                  make(chan struct{}),
+		stateBuildSlot:           make(chan struct{}, 1),
+		getState:                 getState,
+		allowedOrigins:           []string{},             // Default to empty (will be set based on actual host)
+		coalesceWindow:           100 * time.Millisecond, // Coalesce rapid updates within 100ms
+		tenantCoalescePending:    make(map[string]*Message),
+		tenantCoalesceReady:      make(map[string]*Message),
+		tenantCoalesceTimers:     make(map[string]*time.Timer),
+		tenantCoalesceGeneration: make(map[string]uint64),
+		stateBroadcastWake:       make(chan struct{}, 1),
+		stateBroadcastDone:       make(chan struct{}),
 	}
 }
 
@@ -525,8 +558,10 @@ func (h *Hub) Run() {
 		defer close(sequencerDone)
 		h.runBroadcastSequencer()
 	}()
+	go h.runStateBroadcastWorker()
 	defer func() {
 		<-sequencerDone
+		<-h.stateBroadcastDone
 		h.runDoneOnce.Do(func() {
 			close(h.runDone)
 		})
@@ -539,6 +574,7 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
+			client.initializeLifecycle()
 			h.mu.Lock()
 			h.clients[client] = true
 			// Also register by tenant if org ID is set
@@ -556,67 +592,10 @@ func (h *Hub) Run() {
 			hasGetState := h.hasStateGetter()
 			log.Debug().Bool("hasGetState", hasGetState).Msg("Checking getState function for new client")
 			if hasGetState {
-				// Add a small delay to ensure client is ready
+				h.initialStateWG.Add(1)
 				go func() {
-					log.Debug().Str("client", client.id).Msg("starting initial state goroutine")
-					time.Sleep(500 * time.Millisecond)
-
-					// First send a small welcome message
-					welcomeMsg := Message{
-						Type: "welcome",
-						Data: map[string]string{"message": "Connected to Pulse WebSocket", "orgId": client.orgID},
-					}
-					if data, err := json.Marshal(welcomeMsg); err == nil {
-						// Check if client is still registered before sending (must hold lock)
-						h.mu.RLock()
-						_, stillRegistered := h.clients[client]
-						h.mu.RUnlock()
-
-						if stillRegistered {
-							log.Info().Str("client", client.id).Msg("sending welcome message")
-							if client.safeSend(data) {
-								log.Info().Str("client", client.id).Msg("welcome message sent")
-							} else {
-								log.Warn().Str("client", client.id).Msg("failed to send welcome message - client closed or buffer full")
-							}
-						} else {
-							log.Debug().Str("client", client.id).Msg("client disconnected before welcome message")
-						}
-					} else {
-						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal welcome message")
-					}
-
-					// Then send the initial state after another delay
-					time.Sleep(100 * time.Millisecond)
-					log.Debug().Str("client", client.id).Msg("about to get state")
-
-					// Get the state using tenant-aware getter
-					stateData := h.getStateForClient(client)
-					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("got state for initial message")
-
-					initialMsg := Message{
-						Type: "initialState",
-						Data: sanitizeData(h.prepareStateForBroadcast(stateData)),
-					}
-					if data, err := json.Marshal(initialMsg); err == nil {
-						// Check if client is still registered before sending (must hold lock)
-						h.mu.RLock()
-						_, stillRegistered := h.clients[client]
-						h.mu.RUnlock()
-
-						if stillRegistered {
-							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("sending initial state to client")
-							if client.safeSend(data) {
-								log.Info().Str("client", client.id).Msg("initial state sent successfully")
-							} else {
-								log.Warn().Str("client", client.id).Msg("client closed or buffer full, skipping initial state")
-							}
-						} else {
-							log.Debug().Str("client", client.id).Msg("client disconnected before initial state")
-						}
-					} else {
-						log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
-					}
+					defer h.initialStateWG.Done()
+					h.sendInitialState(client)
 				}()
 			} else {
 				log.Warn().
@@ -644,18 +623,32 @@ func (h *Hub) Run() {
 
 		case <-h.stopChan:
 			log.Info().Msg("webSocket hub shutting down")
-			// Close all client connections
+			// Cancel delayed initial-state work first, then let every producer
+			// finish before closing client channels. Broadcast workers and
+			// initial-state delivery otherwise race a final safeSend against
+			// channel closure during shutdown.
 			h.mu.Lock()
 			for client := range h.clients {
-				if !client.closed.Swap(true) {
-					close(client.send)
-				}
+				client.closeLifecycle()
 			}
 			for _, tenantClients := range h.clientsByTenant {
 				for client := range tenantClients {
-					if !client.closed.Swap(true) {
-						close(client.send)
-					}
+					client.closeLifecycle()
+				}
+			}
+			h.mu.Unlock()
+
+			<-sequencerDone
+			<-h.stateBroadcastDone
+			h.initialStateWG.Wait()
+
+			h.mu.Lock()
+			for client := range h.clients {
+				client.closeSend()
+			}
+			for _, tenantClients := range h.clientsByTenant {
+				for client := range tenantClients {
+					client.closeSend()
 				}
 			}
 			h.clients = make(map[*Client]bool)
@@ -676,6 +669,7 @@ func (h *Hub) Stop() {
 		<-h.runDone
 	default:
 	}
+	h.initialStateWG.Wait()
 }
 
 func (h *Hub) isStopping() bool {
@@ -685,6 +679,140 @@ func (h *Hub) isStopping() bool {
 	default:
 		return false
 	}
+}
+
+func (h *Hub) waitForActiveClient(client *Client, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		h.mu.RLock()
+		_, registered := h.clients[client]
+		h.mu.RUnlock()
+		return registered && !client.closed.Load() && !h.isStopping()
+	case <-client.lifecycleDone:
+		return false
+	case <-h.stopChan:
+		return false
+	}
+}
+
+func (h *Hub) sendInitialState(client *Client) {
+	log.Debug().Str("client", client.id).Msg("starting initial state goroutine")
+	if !h.waitForActiveClient(client, initialWelcomeDelay) {
+		log.Debug().Str("client", client.id).Msg("client disconnected before welcome message")
+		return
+	}
+
+	welcomeMsg := Message{
+		Type: "welcome",
+		Data: map[string]string{"message": "Connected to Pulse WebSocket", "orgId": client.orgID},
+	}
+	data, err := json.Marshal(welcomeMsg)
+	if err != nil {
+		log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal welcome message")
+		return
+	}
+	log.Info().Str("client", client.id).Msg("sending welcome message")
+	if !client.safeSend(data) {
+		log.Warn().Str("client", client.id).Msg("failed to send welcome message - client closed or buffer full")
+		return
+	}
+	log.Info().Str("client", client.id).Msg("welcome message sent")
+
+	if !h.waitForActiveClient(client, initialStateMessageDelay) {
+		log.Debug().Str("client", client.id).Msg("client disconnected before initial state")
+		return
+	}
+	if !h.acquireStateBuildSlot(client) {
+		log.Debug().Str("client", client.id).Msg("client disconnected while waiting to build initial state")
+		return
+	}
+	defer h.releaseStateBuildSlot()
+
+	log.Debug().Str("client", client.id).Msg("about to get state")
+	stateData := h.getStateForClient(client)
+	log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("got state for initial message")
+	initialMsg := Message{
+		Type: "initialState",
+		Data: sanitizeData(h.prepareStateForBroadcast(stateData)),
+	}
+	data, err = json.Marshal(initialMsg)
+	if err != nil {
+		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
+		return
+	}
+
+	h.mu.RLock()
+	_, stillRegistered := h.clients[client]
+	h.mu.RUnlock()
+	if !stillRegistered {
+		log.Debug().Str("client", client.id).Msg("client disconnected before initial state")
+		return
+	}
+
+	log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("sending initial state to client")
+	if client.safeSend(data) {
+		log.Info().Str("client", client.id).Msg("initial state sent successfully")
+	} else {
+		log.Warn().Str("client", client.id).Msg("client closed or buffer full, skipping initial state")
+	}
+}
+
+func (h *Hub) sendRequestedState(client *Client) {
+	if client == nil || !h.hasStateGetter() {
+		return
+	}
+	if !h.acquireStateBuildSlot(client) {
+		log.Debug().Str("client", client.id).Msg("client disconnected while waiting to build requested state")
+		return
+	}
+	defer h.releaseStateBuildSlot()
+
+	stateMsg := Message{
+		Type: "rawData",
+		Data: sanitizeData(h.prepareStateForBroadcast(h.getStateForClient(client))),
+	}
+	data, err := json.Marshal(stateMsg)
+	if err != nil {
+		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal state for requestData")
+		return
+	}
+	if !client.safeSend(data) {
+		log.Warn().Str("client", client.id).Msg("Failed to queue requestData state response; client channel closed or full")
+	}
+}
+
+func (h *Hub) acquireStateBuildSlot(client *Client) bool {
+	if client == nil {
+		select {
+		case h.stateBuildSlot <- struct{}{}:
+			return true
+		case <-h.stopChan:
+			return false
+		}
+	}
+
+	select {
+	case h.stateBuildSlot <- struct{}{}:
+		h.mu.RLock()
+		_, registered := h.clients[client]
+		h.mu.RUnlock()
+		if registered && !client.closed.Load() && !h.isStopping() {
+			return true
+		}
+		h.releaseStateBuildSlot()
+		return false
+	case <-client.lifecycleDone:
+		return false
+	case <-h.stopChan:
+		return false
+	}
+}
+
+func (h *Hub) releaseStateBuildSlot() {
+	<-h.stateBuildSlot
 }
 
 func (h *Hub) tryRegisterClient(client *Client) bool {
@@ -891,8 +1019,9 @@ func (h *Hub) removeClientLocked(client *Client) bool {
 		}
 	}
 
-	if removed && !client.closed.Swap(true) {
-		close(client.send)
+	if removed {
+		client.closeLifecycle()
+		client.closeSend()
 	}
 
 	return removed
@@ -919,18 +1048,89 @@ func (h *Hub) dispatchToClients(data []byte, dropLog string) {
 	}
 }
 
-func (h *Hub) popCoalescedMessage() *Message {
+func (h *Hub) markGlobalStateBroadcastReady(generation uint64) {
+	h.coalesceMutex.Lock()
+	if generation != h.coalesceGeneration || h.coalescePending == nil {
+		h.coalesceMutex.Unlock()
+		return
+	}
+	h.coalesceReady = h.coalescePending
+	h.coalescePending = nil
+	h.coalesceTimer = nil
+	h.coalesceMutex.Unlock()
+	h.wakeStateBroadcastWorker()
+}
+
+func (h *Hub) markTenantStateBroadcastReady(orgID string, generation uint64) {
+	h.coalesceMutex.Lock()
+	if generation != h.tenantCoalesceGeneration[orgID] {
+		h.coalesceMutex.Unlock()
+		return
+	}
+	pending := h.tenantCoalescePending[orgID]
+	if pending == nil {
+		h.coalesceMutex.Unlock()
+		return
+	}
+	h.tenantCoalesceReady[orgID] = pending
+	delete(h.tenantCoalescePending, orgID)
+	delete(h.tenantCoalesceTimers, orgID)
+	delete(h.tenantCoalesceGeneration, orgID)
+	h.coalesceMutex.Unlock()
+	h.wakeStateBroadcastWorker()
+}
+
+func (h *Hub) wakeStateBroadcastWorker() {
+	select {
+	case h.stateBroadcastWake <- struct{}{}:
+	default:
+	}
+}
+
+func (h *Hub) popReadyStateBroadcasts() (*Message, map[string]*Message) {
 	h.coalesceMutex.Lock()
 	defer h.coalesceMutex.Unlock()
 
-	if h.coalescePending == nil {
-		return nil
-	}
+	global := h.coalesceReady
+	h.coalesceReady = nil
+	tenants := h.tenantCoalesceReady
+	h.tenantCoalesceReady = make(map[string]*Message)
+	return global, tenants
+}
 
-	msg := *h.coalescePending
-	h.coalescePending = nil
-	h.coalesceTimer = nil
-	return &msg
+func (h *Hub) dispatchStateBroadcast(pending *Message, orgID string) {
+	if pending == nil || h.isStopping() || !h.hasRecipientsForMessage(*pending, orgID) {
+		return
+	}
+	if !h.acquireStateBuildSlot(nil) {
+		return
+	}
+	defer h.releaseStateBuildSlot()
+	data, ok := h.marshalBroadcastMessage(*pending, orgID)
+	if !ok {
+		return
+	}
+	if orgID == "" {
+		h.dispatchToClients(data, "Client send channel full, dropping coalesced message and closing connection")
+		return
+	}
+	h.dispatchToTenantClients(orgID, data, "Client send channel full, dropping tenant coalesced message and closing connection")
+}
+
+func (h *Hub) runStateBroadcastWorker() {
+	defer close(h.stateBroadcastDone)
+	for {
+		select {
+		case <-h.stateBroadcastWake:
+			global, tenants := h.popReadyStateBroadcasts()
+			h.dispatchStateBroadcast(global, "")
+			for orgID, pending := range tenants {
+				h.dispatchStateBroadcast(pending, orgID)
+			}
+		case <-h.stopChan:
+			return
+		}
+	}
 }
 
 func (h *Hub) messageHasCurrentStateRequest(msg Message) (stateBroadcastRequest, bool) {
@@ -1009,18 +1209,13 @@ func (h *Hub) runBroadcastSequencer() {
 				// Update pending message
 				current := msg
 				h.coalescePending = &current
+				h.nextGeneration++
+				generation := h.nextGeneration
+				h.coalesceGeneration = generation
 
 				// Set timer to send after coalesce window
 				h.coalesceTimer = time.AfterFunc(h.coalesceWindow, func() {
-					pending := h.popCoalescedMessage()
-					if pending != nil {
-						if !h.hasRecipientsForMessage(*pending, "") {
-							return
-						}
-						if data, ok := h.marshalBroadcastMessage(*pending, ""); ok {
-							h.dispatchToClients(data, "Client send channel full, dropping coalesced message and closing connection")
-						}
-					}
+					h.markGlobalStateBroadcastReady(generation)
 				})
 
 				h.coalesceMutex.Unlock()
@@ -1044,24 +1239,14 @@ func (h *Hub) runBroadcastSequencer() {
 				// Update pending message for this tenant
 				msgCopy := tb.Message
 				h.tenantCoalescePending[tb.OrgID] = &msgCopy
+				h.nextGeneration++
+				generation := h.nextGeneration
+				h.tenantCoalesceGeneration[tb.OrgID] = generation
 
 				// Set timer to send after coalesce window
 				orgID := tb.OrgID // Capture for closure
 				h.tenantCoalesceTimers[orgID] = time.AfterFunc(h.coalesceWindow, func() {
-					h.coalesceMutex.Lock()
-					pending := h.tenantCoalescePending[orgID]
-					delete(h.tenantCoalescePending, orgID)
-					delete(h.tenantCoalesceTimers, orgID)
-					h.coalesceMutex.Unlock()
-
-					if pending != nil {
-						if !h.hasRecipientsForMessage(*pending, orgID) {
-							return
-						}
-						if data, ok := h.marshalBroadcastMessage(*pending, orgID); ok {
-							h.dispatchToTenantClients(orgID, data, "Client send channel full, dropping tenant coalesced message and closing connection")
-						}
-					}
+					h.markTenantStateBroadcastReady(orgID, generation)
 				})
 
 				h.coalesceMutex.Unlock()
@@ -1447,20 +1632,7 @@ func (c *Client) readPump() {
 				log.Error().Err(err).Str("client", c.id).Msg("Failed to marshal pong response")
 			}
 		case "requestData":
-			// Send current state with lock-safe getter lookup.
-			if c.hub.hasStateGetter() {
-				stateMsg := Message{
-					Type: "rawData",
-					Data: sanitizeData(c.hub.prepareStateForBroadcast(c.hub.getStateForClient(c))),
-				}
-				if data, err := json.Marshal(stateMsg); err == nil {
-					if !c.safeSend(data) {
-						log.Warn().Str("client", c.id).Msg("Failed to queue requestData state response; client channel closed or full")
-					}
-				} else {
-					log.Error().Err(err).Str("client", c.id).Msg("failed to marshal state for requestData")
-				}
-			}
+			c.hub.sendRequestedState(c)
 		default:
 			log.Debug().Str("client", c.id).Str("type", msg.Type).Msg("received WebSocket message")
 		}

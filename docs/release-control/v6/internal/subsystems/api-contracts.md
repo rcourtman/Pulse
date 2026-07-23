@@ -253,7 +253,15 @@ not a parallel API payload contract. `internal/api/agent_handlers_base.go` and
 `BroadcastCurrentState` / `BroadcastCurrentStateToTenant`; they must not build
 or retain full frontend-state payloads at the handler boundary. The WebSocket
 hub owns tenant-aware state resolution after coalescing, through the same state
-getter that backs the canonical `/api/state` payload.
+getter that backs the canonical `/api/state` payload. The hub must serialize
+whole-state resolution and JSON construction across coalesced broadcasts,
+initial-client delivery, and explicit client data requests; cancel delayed or
+queued work when its client leaves; and join every state producer before
+closing client channels. Reconnect, request, or invalidation churn must not
+multiply concurrent clones of that canonical payload or race shutdown sends
+against channel closure. Ordinary unregister and slow-client eviction must use
+the same synchronized send/close ownership; recovering a send-on-closed panic
+is not a substitute for a race-free channel lifecycle.
 
 Docker and Podman app-container CPU payloads expose two API facts with
 different meanings: canonical resource metrics and `/api/metrics-store/history`

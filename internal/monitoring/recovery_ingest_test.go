@@ -267,3 +267,59 @@ func TestIngestRecoveryPointsBestEffortPersistsProviderObservationBeforePointFai
 		)
 	}
 }
+
+func TestRecoveryIngestAcceptedProofCoalescesSameScope(t *testing.T) {
+	monitor := &Monitor{recoveryIngestRunning: true}
+	scope := recoveryReconcileScope{
+		provider: string(recovery.ProviderProxmoxPBS),
+		idPrefix: "pbs-backup:",
+		instance: "pbs-large",
+	}
+
+	monitor.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:    []recovery.RecoveryPoint{{ID: "pbs-backup:superseded"}},
+		reconcile: &scope,
+	})
+	for i := 1; i < 64; i++ {
+		monitor.enqueueRecoveryIngest(recoveryIngestBatch{
+			points:    []recovery.RecoveryPoint{{ID: "pbs-backup:latest"}},
+			reconcile: &scope,
+		})
+	}
+	if got := len(monitor.recoveryIngestPending); got != 1 {
+		t.Fatalf("pending complete enumerations = %d, want one same-scope latest batch", got)
+	}
+	if got := monitor.recoveryIngestPending[0].points[0].ID; got != "pbs-backup:latest" {
+		t.Fatalf("pending point = %q, want latest complete enumeration", got)
+	}
+}
+
+func TestRecoveryIngestPendingKeepsDistinctScopesAndEventBatches(t *testing.T) {
+	monitor := &Monitor{recoveryIngestRunning: true}
+	pbsScope := recoveryReconcileScope{
+		provider: string(recovery.ProviderProxmoxPBS),
+		idPrefix: "pbs-backup:",
+		instance: "pbs-a",
+	}
+	pveScope := recoveryReconcileScope{
+		provider: string(recovery.ProviderProxmoxPVE),
+		idPrefix: "pve-snapshot:",
+		instance: "pve-a",
+	}
+
+	monitor.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:    []recovery.RecoveryPoint{{ID: "pbs-backup:1"}},
+		reconcile: &pbsScope,
+	})
+	monitor.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:    []recovery.RecoveryPoint{{ID: "pve-snapshot:1"}},
+		reconcile: &pveScope,
+	})
+	monitor.enqueueRecoveryIngest(recoveryIngestBatch{
+		points: []recovery.RecoveryPoint{{ID: "pve-task:1"}},
+	})
+
+	if got := len(monitor.recoveryIngestPending); got != 3 {
+		t.Fatalf("pending batches = %d, want two source enumerations and one event batch", got)
+	}
+}

@@ -49,6 +49,7 @@ func TestRunBroadcastSequencerImmediate(t *testing.T) {
 		hub.runBroadcastSequencer()
 		close(done)
 	}()
+	go hub.runStateBroadcastWorker()
 
 	hub.broadcastSeq <- Message{
 		Type: "alert",
@@ -74,6 +75,11 @@ func TestRunBroadcastSequencerImmediate(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("broadcast sequencer did not exit")
 	}
+	select {
+	case <-hub.stateBroadcastDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("state broadcast worker did not exit")
+	}
 }
 
 func TestRunBroadcastSequencerCoalescesRawData(t *testing.T) {
@@ -94,6 +100,7 @@ func TestRunBroadcastSequencerCoalescesRawData(t *testing.T) {
 		hub.runBroadcastSequencer()
 		close(done)
 	}()
+	go hub.runStateBroadcastWorker()
 
 	hub.broadcastSeq <- Message{Type: "rawData", Data: map[string]string{"value": "first"}}
 	hub.broadcastSeq <- Message{Type: "rawData", Data: map[string]string{"value": "second"}}
@@ -123,5 +130,10 @@ func TestRunBroadcastSequencerCoalescesRawData(t *testing.T) {
 	case <-done:
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("broadcast sequencer did not exit")
+	}
+	select {
+	case <-hub.stateBroadcastDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("state broadcast worker did not exit")
 	}
 }

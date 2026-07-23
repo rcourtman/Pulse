@@ -153,7 +153,9 @@ type SQLiteResourceStore struct {
 	identityPinCache []ResourceIdentityPin
 	identityPinFresh bool
 
-	retentionStop chan struct{}
+	retentionStop     chan struct{}
+	retentionDone     chan struct{}
+	retentionStopOnce sync.Once
 }
 
 const (
@@ -254,7 +256,7 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 		log.Printf("[INFO] unified_resources: database %q recreated successfully after corruption recovery", path)
 	}
 	store.migrateAutoVacuum()
-	store.retentionStop = store.startRetentionLoop()
+	store.retentionStop, store.retentionDone = store.startRetentionLoop()
 	return store, nil
 }
 
@@ -1317,9 +1319,11 @@ func (s *SQLiteResourceStore) reclaimFreePages() {
 // Without this, resource_changes, action_audits, and related tables grow
 // without bound and the database file never shrinks (GitHub issue #1496).
 // Returns a stop channel; closing it signals the goroutine to exit.
-func (s *SQLiteResourceStore) startRetentionLoop() chan struct{} {
+func (s *SQLiteResourceStore) startRetentionLoop() (chan struct{}, chan struct{}) {
 	stop := make(chan struct{})
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		initial := time.NewTimer(initialRetentionDelay)
 		defer initial.Stop()
 		ticker := time.NewTicker(retentionInterval)
@@ -1335,7 +1339,7 @@ func (s *SQLiteResourceStore) startRetentionLoop() chan struct{} {
 			}
 		}
 	}()
-	return stop
+	return stop, done
 }
 
 // capResourceChanges deletes the oldest resource_changes rows beyond limit,
@@ -1438,7 +1442,12 @@ func (s *SQLiteResourceStore) pruneOldRecords() {
 
 func (s *SQLiteResourceStore) Close() error {
 	if s.retentionStop != nil {
-		close(s.retentionStop)
+		s.retentionStopOnce.Do(func() {
+			close(s.retentionStop)
+		})
+	}
+	if s.retentionDone != nil {
+		<-s.retentionDone
 	}
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {

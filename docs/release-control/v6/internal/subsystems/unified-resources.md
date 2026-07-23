@@ -3990,7 +3990,9 @@ per cycle and grew `resource_changes` without bound (issue #1496, demo
 outage 2026-07-08). Retention pruning must also enforce a hard row cap on
 `resource_changes` (`maxResourceChangesRows` in `store.go`) so a
 pathological writer cannot grow the table unbounded inside the time-based
-retention window.
+retention window. Store shutdown must close the retention signal exactly once,
+join the retention loop, and only then close the single-connection SQLite
+pool; a concurrent pruning pass must never outlive its database owner.
 Action plans in `actions.go` still keep stale-plan protection to the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields, so stale execution
 checks stay in the shared resource action model rather than provider-local

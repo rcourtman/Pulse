@@ -70,7 +70,10 @@ must be pruned to the retained group set after a completed poll, while
 preserving cache metadata only for groups still observed or intentionally reused
 after transient datastore failures. Recovery-point ingestion started by backup
 polling must be serialized and coalesced so slow store writes cannot retain one
-full backup point batch per poll cycle.
+full backup point batch per poll cycle. Complete authoritative enumerations
+coalesce only within the same provider, ID-prefix, and instance scope; distinct
+source scopes and non-reconciling event batches remain FIFO so bounding memory
+does not discard independent recovery facts.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.
@@ -345,7 +348,9 @@ data cannot wrap into a fabricated healthy value.
    worker count rather than datastore cardinality. Per-group cache timestamps
    must be removed when successful group discovery no longer retains that
    group, and recovery-store ingestion must be a bounded latest-batch pipeline
-   rather than an untracked goroutine per poll.
+   rather than an untracked goroutine per poll. Latest-batch replacement applies
+   only to complete enumerations with the same provider, ID-prefix, and instance
+   scope; distinct scopes and event batches must remain independently queued.
 12. Add or change agentless availability monitoring only through the
    poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
    TCP, and HTTP probes, provider health, scheduler task construction, and

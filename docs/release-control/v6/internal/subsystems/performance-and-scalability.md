@@ -193,7 +193,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    paths must enqueue coalesced current-state invalidations instead of building
    full frontend-state payloads at every signal. The hub owns delayed
    tenant-aware state resolution so superseded signals do not retain large
-   state snapshots.
+   state snapshots. Full state resolution and serialization must run through
+   one cancellable build slot across broadcast, initial-client delivery, and
+   client-requested refresh delivery: reconnect churn must cancel work for
+   clients that have already left, and active reconnects or refreshes must not
+   overlap whole-state clones with each other or with the coalesced broadcast
+   worker.
    The operations-loop status endpoint is performance-adjacent because it
    aggregates fleet, action-audit, workflow-starter, AI-usage, and
    external-agent activity evidence for every request. Starter and contextual
