@@ -21,6 +21,11 @@ Docker and Podman container CPU thresholds evaluate host-capacity-normalized
 CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
 carry the raw per-core value and reporting host CPU count for evidence, but the
 threshold value and canonical `cpuPercent` metadata remain normalized.
+Proxmox VM and LXC CPU thresholds consume the same canonical guest CPU-percent
+normalizer as unified live state and guest history. Proxmox guest CPU is the
+authoritative observation for that guest; a Pulse host agent running inside the
+guest may retain its own agent alert identity, but its host CPU observation
+must not replace or renormalize the Proxmox guest value.
 Docker and Podman OOM alerts require authoritative runtime evidence: the
 container must be stopped (`exited` or `dead`) and its reported `OOMKilled`
 state must be explicitly true. Exit code 137 alone is only SIGKILL evidence;

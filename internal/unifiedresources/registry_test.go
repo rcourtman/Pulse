@@ -4390,7 +4390,7 @@ func TestMergeMetric_LiveSourceOverridesStaleHigherPriority(t *testing.T) {
 	existing := &MetricValue{Value: 0, Percent: 0, Source: SourceAgent}
 	incoming := &MetricValue{Value: 6.2, Percent: 6.2, Source: SourceProxmox}
 
-	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceProxmox, now, status)
+	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceProxmox, now, status, nil)
 	if got == nil || got.Percent != 6.2 || got.Source != SourceProxmox {
 		t.Fatalf("expected live proxmox CPU to override stale agent CPU, got %+v", got)
 	}
@@ -4407,7 +4407,7 @@ func TestMergeMetric_FreshHigherPriorityStillWins(t *testing.T) {
 	existing := &MetricValue{Percent: 6.2, Source: SourceProxmox}
 	incoming := &MetricValue{Percent: 12.5, Source: SourceAgent}
 
-	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceAgent, now, status)
+	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceAgent, now, status, nil)
 	if got == nil || got.Percent != 12.5 || got.Source != SourceAgent {
 		t.Fatalf("expected fresh agent CPU to win by priority, got %+v", got)
 	}
@@ -4417,7 +4417,7 @@ func TestMergeMetric_FreshHigherPriorityStillWins(t *testing.T) {
 // reports the node's CPU, not the container's. On a hypervisor-managed guest
 // the platform metric must survive an agent merge even though the agent
 // outranks Proxmox on host-shaped resources.
-func TestMergeMetric_GuestKeepsPlatformCPUOverInGuestAgent(t *testing.T) {
+func TestMergeCPUMetric_GuestKeepsPlatformCPUOverInGuestAgent(t *testing.T) {
 	now := time.Now().UTC()
 	status := map[DataSource]SourceStatus{
 		SourceAgent:   {Status: "online", LastSeen: now},
@@ -4430,7 +4430,7 @@ func TestMergeMetric_GuestKeepsPlatformCPUOverInGuestAgent(t *testing.T) {
 	existing := &MetricValue{Percent: 0.58, Source: SourceProxmox}
 	incoming := &MetricValue{Percent: 58, Source: SourceAgent}
 
-	got := mergeMetric(guest, existing, incoming, SourceAgent, now, status)
+	got := mergeCPUMetric(guest, existing, incoming, SourceAgent, now, status, nil)
 	if got == nil || got.Percent != 0.58 || got.Source != SourceProxmox {
 		t.Fatalf("expected platform CPU to survive in-guest agent merge, got %+v", got)
 	}
@@ -4438,7 +4438,7 @@ func TestMergeMetric_GuestKeepsPlatformCPUOverInGuestAgent(t *testing.T) {
 
 // Reverse ingest order for the same guest: the platform metric arrives while
 // the agent's value is already in place. The platform must take over.
-func TestMergeMetric_GuestPlatformOverridesEarlierAgentValue(t *testing.T) {
+func TestMergeCPUMetric_GuestPlatformOverridesEarlierAgentValue(t *testing.T) {
 	now := time.Now().UTC()
 	status := map[DataSource]SourceStatus{
 		SourceAgent:   {Status: "online", LastSeen: now},
@@ -4451,16 +4451,16 @@ func TestMergeMetric_GuestPlatformOverridesEarlierAgentValue(t *testing.T) {
 	existing := &MetricValue{Percent: 58, Source: SourceAgent}
 	incoming := &MetricValue{Percent: 0.58, Source: SourceProxmox}
 
-	got := mergeMetric(guest, existing, incoming, SourceProxmox, now, status)
+	got := mergeCPUMetric(guest, existing, incoming, SourceProxmox, now, status, nil)
 	if got == nil || got.Percent != 0.58 || got.Source != SourceProxmox {
 		t.Fatalf("expected platform CPU to override earlier agent value on guest, got %+v", got)
 	}
 }
 
-// The freshness gate still lets a live in-guest agent cover for a platform
-// source that went stale (e.g. PVE API unreachable while the guest keeps
-// reporting).
-func TestMergeMetric_GuestStalePlatformFallsBackToAgent(t *testing.T) {
+// Source freshness is reported independently from semantic authority. A live
+// in-guest agent must not replace a stale platform CPU observation because the
+// two values use different accounting and history remains platform-keyed.
+func TestMergeCPUMetric_GuestRetainsStalePlatformObservation(t *testing.T) {
 	now := time.Now().UTC()
 	status := map[DataSource]SourceStatus{
 		SourceAgent:   {Status: "online", LastSeen: now},
@@ -4473,9 +4473,9 @@ func TestMergeMetric_GuestStalePlatformFallsBackToAgent(t *testing.T) {
 	existing := &MetricValue{Percent: 0.58, Source: SourceProxmox}
 	incoming := &MetricValue{Percent: 12.5, Source: SourceAgent}
 
-	got := mergeMetric(guest, existing, incoming, SourceAgent, now, status)
-	if got == nil || got.Percent != 12.5 || got.Source != SourceAgent {
-		t.Fatalf("expected live agent CPU to cover for stale platform source, got %+v", got)
+	got := mergeCPUMetric(guest, existing, incoming, SourceAgent, now, status, nil)
+	if got == nil || got.Percent != 0.58 || got.Source != SourceProxmox {
+		t.Fatalf("expected stale platform CPU to remain authoritative, got %+v", got)
 	}
 }
 
@@ -4489,9 +4489,378 @@ func TestMergeMetric_StaleSourceDoesNotClobberLive(t *testing.T) {
 	existing := &MetricValue{Percent: 6.2, Source: SourceProxmox}
 	incoming := &MetricValue{Percent: 0, Source: SourceAgent}
 
-	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceAgent, now, status)
+	got := mergeMetric(&Resource{Type: ResourceTypeAgent}, existing, incoming, SourceAgent, now, status, nil)
 	if got == nil || got.Percent != 6.2 || got.Source != SourceProxmox {
 		t.Fatalf("expected live proxmox CPU to survive stale agent merge, got %+v", got)
+	}
+}
+
+func TestResourceRegistry_ManualGuestAgentLinksPreserveMetricAuthority(t *testing.T) {
+	now := time.Now().UTC()
+	type guestShape struct {
+		name           string
+		resourceType   ResourceType
+		technology     string
+		targetType     string
+		containerType  string
+		guestID        string
+		guestSourceID  string
+		guestSourceCPU float64
+	}
+	guestShapes := []guestShape{
+		{
+			name:           "lxc",
+			resourceType:   ResourceTypeSystemContainer,
+			technology:     "lxc",
+			targetType:     "system-container",
+			containerType:  "lxc",
+			guestID:        "system-container-cluster-a-node-1-301",
+			guestSourceID:  "cluster-a-node-1-301",
+			guestSourceCPU: 0.58,
+		},
+		{
+			name:           "qemu",
+			resourceType:   ResourceTypeVM,
+			technology:     "qemu",
+			targetType:     "vm",
+			guestID:        "vm-cluster-a-node-1-302",
+			guestSourceID:  "cluster-a-node-1-302",
+			guestSourceCPU: 37.5,
+		},
+	}
+	freshnessCases := []struct {
+		name             string
+		platformLastSeen time.Time
+		agentLastSeen    time.Time
+		thresholds       map[DataSource]time.Duration
+		wantMemorySource DataSource
+	}{
+		{
+			name:             "both-fresh",
+			platformLastSeen: now,
+			agentLastSeen:    now,
+			wantMemorySource: SourceProxmox,
+		},
+		{
+			name:             "platform-stale-agent-fresh",
+			platformLastSeen: now.Add(-2 * time.Hour),
+			agentLastSeen:    now,
+			wantMemorySource: SourceAgent,
+		},
+		{
+			name:             "platform-fresh-agent-stale",
+			platformLastSeen: now,
+			agentLastSeen:    now.Add(-2 * time.Hour),
+			wantMemorySource: SourceProxmox,
+		},
+		{
+			name:             "both-stale",
+			platformLastSeen: now.Add(-2 * time.Hour),
+			agentLastSeen:    now.Add(-2 * time.Hour),
+			wantMemorySource: SourceProxmox,
+		},
+		{
+			name:             "caller-threshold-keeps-platform-fresh",
+			platformLastSeen: now.Add(-2 * time.Minute),
+			agentLastSeen:    now,
+			thresholds:       map[DataSource]time.Duration{SourceProxmox: 5 * time.Minute},
+			wantMemorySource: SourceProxmox,
+		},
+	}
+
+	for _, shape := range guestShapes {
+		for _, freshness := range freshnessCases {
+			for _, primaryIsAgent := range []bool{false, true} {
+				direction := "guest-primary"
+				if primaryIsAgent {
+					direction = "agent-primary"
+				}
+				t.Run(shape.name+"/"+freshness.name+"/"+direction, func(t *testing.T) {
+					const agentID = "agent-inside-guest"
+					primaryID := shape.guestID
+					if primaryIsAgent {
+						primaryID = agentID
+					}
+					store := NewMemoryStore()
+					if err := store.AddLink(ResourceLink{
+						ResourceA: shape.guestID,
+						ResourceB: agentID,
+						PrimaryID: primaryID,
+						Reason:    "same guest",
+					}); err != nil {
+						t.Fatalf("add link: %v", err)
+					}
+
+					rr := NewRegistry(store)
+					rr.IngestResourcesWithStaleThresholds([]Resource{
+						{
+							ID:         shape.guestID,
+							Type:       shape.resourceType,
+							Technology: shape.technology,
+							Name:       shape.name + "-guest",
+							Status:     StatusOnline,
+							LastSeen:   freshness.platformLastSeen,
+							Sources:    []DataSource{SourceProxmox},
+							SourceStatus: map[DataSource]SourceStatus{
+								SourceProxmox: {Status: "online", LastSeen: freshness.platformLastSeen},
+							},
+							Proxmox: &ProxmoxData{
+								SourceID:      shape.guestSourceID,
+								Instance:      "pve-a",
+								ClusterName:   "cluster-a",
+								NodeName:      "node-1",
+								VMID:          301,
+								ContainerType: shape.containerType,
+								CPUs:          8,
+							},
+							Metrics: &ResourceMetrics{
+								CPU:    &MetricValue{Percent: shape.guestSourceCPU, Source: SourceProxmox},
+								Memory: &MetricValue{Percent: 40, Source: SourceProxmox},
+							},
+						},
+						{
+							ID:       agentID,
+							Type:     ResourceTypeAgent,
+							Name:     shape.name + "-guest",
+							Status:   StatusOnline,
+							LastSeen: freshness.agentLastSeen,
+							Sources:  []DataSource{SourceAgent},
+							SourceStatus: map[DataSource]SourceStatus{
+								SourceAgent: {Status: "online", LastSeen: freshness.agentLastSeen},
+							},
+							Agent: &AgentData{AgentID: agentID, Hostname: shape.name + "-guest", CPUCount: 8},
+							Metrics: &ResourceMetrics{
+								CPU:    &MetricValue{Percent: 94, Source: SourceAgent},
+								Memory: &MetricValue{Percent: 70, Source: SourceAgent},
+								NetOut: &MetricValue{Value: 4096, Unit: "bytes/s", Source: SourceAgent},
+							},
+						},
+					}, freshness.thresholds)
+
+					resources := rr.List()
+					if len(resources) != 1 {
+						t.Fatalf("resources = %d, want one merged guest: %+v", len(resources), resources)
+					}
+					got := resources[0]
+					if got.ID != shape.guestID || got.Type != shape.resourceType {
+						t.Fatalf("merged resource = %s/%s, want guest %s/%s", got.ID, got.Type, shape.guestID, shape.resourceType)
+					}
+					if got.Proxmox == nil || got.Agent == nil {
+						t.Fatalf("merged guest lost provider payloads: proxmox=%+v agent=%+v", got.Proxmox, got.Agent)
+					}
+					if got.Metrics == nil || got.Metrics.CPU == nil {
+						t.Fatalf("merged guest lost CPU metrics: %+v", got.Metrics)
+					}
+					if got.Metrics.CPU.Percent != shape.guestSourceCPU || got.Metrics.CPU.Source != SourceProxmox {
+						t.Fatalf("CPU = %+v, want authoritative proxmox %.2f", got.Metrics.CPU, shape.guestSourceCPU)
+					}
+					if got.Metrics.Memory == nil || got.Metrics.Memory.Source != freshness.wantMemorySource {
+						t.Fatalf("memory = %+v, want source %s", got.Metrics.Memory, freshness.wantMemorySource)
+					}
+					if got.Metrics.NetOut == nil || got.Metrics.NetOut.Value != 4096 || got.Metrics.NetOut.Source != SourceAgent {
+						t.Fatalf("agent-only network metric was not preserved: %+v", got.Metrics.NetOut)
+					}
+
+					target := BuildMetricsTargetForRegistry(rr, got.ID)
+					if target == nil || target.ResourceType != shape.targetType || target.ResourceID != shape.guestSourceID {
+						t.Fatalf("metrics target = %+v, want %s/%s", target, shape.targetType, shape.guestSourceID)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestResourceRegistry_ManualGuestAgentLinkUsesAgentCPUOnlyWhenPlatformHasNoCPU(t *testing.T) {
+	now := time.Now().UTC()
+	const (
+		guestID = "vm-cluster-a-node-1-401"
+		agentID = "agent-inside-vm-401"
+	)
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{
+		ResourceA: guestID,
+		ResourceB: agentID,
+		PrimaryID: agentID,
+	}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+	rr.IngestResources([]Resource{
+		{
+			ID:       guestID,
+			Type:     ResourceTypeVM,
+			Name:     "vm-401",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceProxmox: {Status: "online", LastSeen: now},
+			},
+			Proxmox: &ProxmoxData{SourceID: "cluster-a-node-1-401", VMID: 401},
+			Metrics: &ResourceMetrics{
+				Memory: &MetricValue{Percent: 50, Source: SourceProxmox},
+			},
+		},
+		{
+			ID:       agentID,
+			Type:     ResourceTypeAgent,
+			Name:     "vm-401",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceAgent},
+			SourceStatus: map[DataSource]SourceStatus{
+				SourceAgent: {Status: "online", LastSeen: now},
+			},
+			Agent: &AgentData{AgentID: agentID},
+			Metrics: &ResourceMetrics{
+				CPU: &MetricValue{Percent: 33, Source: SourceAgent},
+			},
+		},
+	})
+
+	got, ok := rr.Get(guestID)
+	if !ok || got.Metrics == nil || got.Metrics.CPU == nil {
+		t.Fatalf("merged guest missing fallback CPU: %+v", got)
+	}
+	if got.Metrics.CPU.Percent != 33 || got.Metrics.CPU.Source != SourceAgent {
+		t.Fatalf("CPU = %+v, want agent fallback when platform observation is absent", got.Metrics.CPU)
+	}
+}
+
+func TestResourceRegistry_ManualGuestAgentLinkReconnectRestoresFreshPlatformCPU(t *testing.T) {
+	now := time.Now().UTC()
+	const (
+		guestID       = "system-container-cluster-a-node-1-451"
+		guestSourceID = "cluster-a-node-1-451"
+		agentID       = "agent-inside-lxc-451"
+	)
+	store := NewMemoryStore()
+	if err := store.AddLink(ResourceLink{
+		ResourceA: guestID,
+		ResourceB: agentID,
+		PrimaryID: agentID,
+	}); err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	rr := NewRegistry(store)
+
+	ingest := func(platformCPU float64, platformLastSeen time.Time) {
+		t.Helper()
+		rr.IngestResources([]Resource{
+			{
+				ID:       guestID,
+				Type:     ResourceTypeSystemContainer,
+				Name:     "lxc-451",
+				Status:   StatusOnline,
+				LastSeen: platformLastSeen,
+				Sources:  []DataSource{SourceProxmox},
+				SourceStatus: map[DataSource]SourceStatus{
+					SourceProxmox: {Status: "online", LastSeen: platformLastSeen},
+				},
+				Proxmox: &ProxmoxData{SourceID: guestSourceID, VMID: 451, ContainerType: "lxc"},
+				Metrics: &ResourceMetrics{
+					CPU: &MetricValue{Percent: platformCPU, Source: SourceProxmox},
+				},
+			},
+			{
+				ID:       agentID,
+				Type:     ResourceTypeAgent,
+				Name:     "lxc-451",
+				Status:   StatusOnline,
+				LastSeen: now,
+				Sources:  []DataSource{SourceAgent},
+				SourceStatus: map[DataSource]SourceStatus{
+					SourceAgent: {Status: "online", LastSeen: now},
+				},
+				Agent: &AgentData{AgentID: agentID},
+				Metrics: &ResourceMetrics{
+					CPU: &MetricValue{Percent: 94, Source: SourceAgent},
+				},
+			},
+		})
+	}
+
+	ingest(0.58, now.Add(-2*time.Hour))
+	first, ok := rr.Get(guestID)
+	if !ok || first.Metrics == nil || first.Metrics.CPU == nil {
+		t.Fatalf("first merged guest missing CPU: %+v", first)
+	}
+	if first.Metrics.CPU.Percent != 0.58 || first.Metrics.CPU.Source != SourceProxmox {
+		t.Fatalf("stale platform CPU = %+v, want proxmox 0.58", first.Metrics.CPU)
+	}
+
+	ingest(12.5, now.Add(time.Second))
+	reconnected, ok := rr.Get(guestID)
+	if !ok || reconnected.Metrics == nil || reconnected.Metrics.CPU == nil {
+		t.Fatalf("reconnected guest missing CPU: %+v", reconnected)
+	}
+	if reconnected.Metrics.CPU.Percent != 12.5 || reconnected.Metrics.CPU.Source != SourceProxmox {
+		t.Fatalf("reconnected CPU = %+v, want fresh proxmox 12.5", reconnected.Metrics.CPU)
+	}
+	target := BuildMetricsTargetForRegistry(rr, guestID)
+	if target == nil || target.ResourceType != "system-container" || target.ResourceID != guestSourceID {
+		t.Fatalf("reconnected metrics target = %+v", target)
+	}
+}
+
+func TestResourceRegistry_LinkHintsKeepClusterGuestsDistinctAndPlatformAuthoritative(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "cluster-a-node-1", Name: "node-1", Instance: "pve-a", ClusterName: "cluster-a", IsClusterMember: true, Status: "online", LastSeen: now},
+			{ID: "cluster-b-node-1", Name: "node-1", Instance: "pve-b", ClusterName: "cluster-b", IsClusterMember: true, Status: "online", LastSeen: now},
+		},
+		VMs: []models.VM{
+			{ID: "cluster-a-node-1-501", VMID: 501, Name: "duplicate-vmid", Node: "node-1", Instance: "pve-a", Status: "running", CPU: 0.0058, CPUs: 1, LastSeen: now},
+			{ID: "cluster-b-node-1-501", VMID: 501, Name: "duplicate-vmid", Node: "node-1", Instance: "pve-b", Status: "running", CPU: 0.375, CPUs: 8, LastSeen: now},
+		},
+		Containers: []models.Container{
+			{ID: "cluster-a-node-1-601", VMID: 601, Name: "lxc-with-agent", Node: "node-1", Instance: "pve-a", Type: "lxc", Status: "running", CPU: 0.0058, CPUs: 4, LastSeen: now},
+		},
+		Hosts: []models.Host{
+			{ID: "agent-vm-501", Hostname: "duplicate-vmid", LinkedVMID: "cluster-a-node-1-501", CPUUsage: 94, Status: "online", LastSeen: now},
+			{ID: "agent-lxc-601", Hostname: "lxc-with-agent", LinkedContainerID: "cluster-a-node-1-601", CPUUsage: 88, Status: "online", LastSeen: now},
+		},
+	})
+
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != 2 {
+		t.Fatalf("VMs = %d, want two distinct cluster-scoped identities: %+v", len(vms), vms)
+	}
+	wantVMCPU := map[string]float64{
+		"cluster-a-node-1-501": 0.58,
+		"cluster-b-node-1-501": 37.5,
+	}
+	for _, vm := range vms {
+		if vm.Proxmox == nil || vm.Metrics == nil || vm.Metrics.CPU == nil {
+			t.Fatalf("VM missing proxmox CPU: %+v", vm)
+		}
+		want, ok := wantVMCPU[vm.Proxmox.SourceID]
+		if !ok {
+			t.Fatalf("unexpected VM source identity: %+v", vm.Proxmox)
+		}
+		if vm.Metrics.CPU.Percent != want || vm.Metrics.CPU.Source != SourceProxmox {
+			t.Fatalf("VM %s CPU = %+v, want proxmox %.2f", vm.Proxmox.SourceID, vm.Metrics.CPU, want)
+		}
+	}
+
+	containers := rr.ListByType(ResourceTypeSystemContainer)
+	if len(containers) != 1 || containers[0].Metrics == nil || containers[0].Metrics.CPU == nil {
+		t.Fatalf("LXC resources = %+v, want one with CPU", containers)
+	}
+	if containers[0].Metrics.CPU.Percent != 0.58 || containers[0].Metrics.CPU.Source != SourceProxmox {
+		t.Fatalf("LXC CPU = %+v, want proxmox 0.58", containers[0].Metrics.CPU)
+	}
+	hostAgentCount := 0
+	for _, resource := range rr.ListByType(ResourceTypeAgent) {
+		if resource.Agent != nil {
+			hostAgentCount++
+		}
+	}
+	if hostAgentCount != 2 {
+		t.Fatalf("link hints must not implicitly merge guest identities; host agents = %d", hostAgentCount)
 	}
 }
 

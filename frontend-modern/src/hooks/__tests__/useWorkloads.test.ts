@@ -115,6 +115,51 @@ describe('useWorkloads', () => {
     expect(useWorkloadsSource).toContain('createSignal<WorkloadGuest[]>');
   });
 
+  it('projects authoritative LXC and QEMU CPU once regardless of agent sources or cores', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'cluster-a-pve1-101',
+          type: 'vm',
+          name: 'qemu-101',
+          sources: ['proxmox'],
+          metrics: { ...sampleResource.metrics, cpu: { percent: 0.58 } },
+          proxmox: { vmid: 101, nodeName: 'pve1', instance: 'cluster-a', cpus: 8 },
+        },
+        {
+          ...sampleResource,
+          id: 'cluster-a-pve1-102',
+          type: 'system-container',
+          name: 'lxc-102',
+          vmid: 102,
+          sources: ['proxmox', 'agent'],
+          metrics: { ...sampleResource.metrics, cpu: { percent: 0.58 } },
+          proxmox: { vmid: 102, nodeName: 'pve1', instance: 'cluster-a', cpus: 1 },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await waitForWorkloadCount(() => result!.workloads().length, 2);
+
+    const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
+    expect(byName.get('qemu-101')?.cpu).toBe(0.0058);
+    expect(byName.get('qemu-101')?.cpus).toBe(8);
+    expect(byName.get('lxc-102')?.cpu).toBe(0.0058);
+    expect(byName.get('lxc-102')?.cpus).toBe(1);
+
+    dispose();
+  });
+
   it('handles empty responses without mutating into undefined state', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [],

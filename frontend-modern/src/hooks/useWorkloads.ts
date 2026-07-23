@@ -10,6 +10,7 @@ import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
 import {
   buildCanonicalNodeScopedWorkloadId,
+  getWorkloadCPUFraction,
   isDockerManagedAppContainer,
   resolveWorkloadTypeFromString,
 } from '@/utils/workloads';
@@ -460,7 +461,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
           : workloadType === 'pod'
             ? 'pod'
             : 'app-container',
-    cpu: cpuPercent / 100,
+    cpu: getWorkloadCPUFraction(cpuPercent),
     cpus: resource.proxmox?.cpus ?? 1,
     memory: (() => {
       const base = buildMetric(resource.metrics?.memory);

@@ -498,7 +498,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 
 	rr.mu.Lock()
 	rr.pbsBackups = clonePBSBackups(snapshot.PBSBackups)
-	rr.applyManualLinks()
+	rr.applyManualLinks(thresholds)
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -667,7 +667,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	for _, resourceID := range seededIDs {
 		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
 	}
-	rr.applyManualLinks()
+	rr.applyManualLinks(thresholds)
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
@@ -3180,7 +3180,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.ParentID = rr.resolveCanonicalParentID(existing)
 
 	existing.Status = chooseStatus(existing.Status, incoming.Status, source)
-	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus)
+	existing.Metrics = mergeMetrics(existing, existing.Metrics, incoming.Metrics, source, now, existing.SourceStatus, nil)
 
 	// Prefer agent naming when available
 	if incoming.Name != "" {
@@ -3675,7 +3675,7 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	return &merged
 }
 
-func (rr *ResourceRegistry) applyManualLinks() {
+func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Duration) {
 	if len(rr.links) == 0 {
 		return
 	}
@@ -3706,13 +3706,22 @@ func (rr *ResourceRegistry) applyManualLinks() {
 			continue
 		}
 
-		rr.mergeResourceData(primary, other)
+		// A manual link records operator intent to unify identities, but its
+		// direction must not change the semantic resource shape. In particular,
+		// an agent running inside a VM/LXC supplements that guest; it does not
+		// turn the guest into an agent resource with an agent metrics target.
+		if primary.Type == ResourceTypeAgent && hypervisorManagedGuest(other) {
+			primary, other = other, primary
+			primaryID, otherID = otherID, primaryID
+		}
+
+		rr.mergeResourceData(primary, other, thresholds)
 		delete(rr.resources, otherID)
 		rr.updateSourceMappings(otherID, primaryID)
 	}
 }
 
-func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource) {
+func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource, thresholds map[DataSource]time.Duration) {
 	if other == nil || primary == nil {
 		return
 	}
@@ -3768,7 +3777,9 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 		primary.Ceph = other.Ceph
 	}
 
-	primary.Metrics = mergeMetrics(primary, primary.Metrics, other.Metrics, SourceAgent, time.Now().UTC(), primary.SourceStatus)
+	// Manual links combine already-normalized resources. Preserve each metric's
+	// recorded source instead of flattening the linked resource to SourceAgent.
+	primary.Metrics = mergeMetrics(primary, primary.Metrics, other.Metrics, "", time.Now().UTC(), primary.SourceStatus, thresholds)
 	primary.Status = aggregateStatus(primary)
 }
 
@@ -4722,28 +4733,41 @@ func addSources(sources []DataSource, more []DataSource) []DataSource {
 	return out
 }
 
-func mergeMetrics(target *Resource, existing *ResourceMetrics, incoming *ResourceMetrics, source DataSource, now time.Time, status map[DataSource]SourceStatus) *ResourceMetrics {
-	if existing == nil {
-		return incoming
-	}
+func mergeMetrics(
+	target *Resource,
+	existing *ResourceMetrics,
+	incoming *ResourceMetrics,
+	source DataSource,
+	now time.Time,
+	status map[DataSource]SourceStatus,
+	thresholds map[DataSource]time.Duration,
+) *ResourceMetrics {
 	if incoming == nil {
 		return existing
 	}
-	merged := *existing
-	merged.CPU = mergeMetric(target, existing.CPU, incoming.CPU, source, now, status)
-	merged.Memory = mergeMetric(target, existing.Memory, incoming.Memory, source, now, status)
-	merged.Disk = mergeMetric(target, existing.Disk, incoming.Disk, source, now, status)
-	merged.NetIn = mergeMetric(target, existing.NetIn, incoming.NetIn, source, now, status)
-	merged.NetOut = mergeMetric(target, existing.NetOut, incoming.NetOut, source, now, status)
-	merged.DiskRead = mergeMetric(target, existing.DiskRead, incoming.DiskRead, source, now, status)
-	merged.DiskWrite = mergeMetric(target, existing.DiskWrite, incoming.DiskWrite, source, now, status)
+	var merged ResourceMetrics
+	if existing != nil {
+		merged = *existing
+	}
+	merged.CPU = mergeCPUMetric(target, merged.CPU, incoming.CPU, source, now, status, thresholds)
+	merged.Memory = mergeMetric(target, merged.Memory, incoming.Memory, source, now, status, thresholds)
+	merged.Disk = mergeMetric(target, merged.Disk, incoming.Disk, source, now, status, thresholds)
+	merged.NetIn = mergeMetric(target, merged.NetIn, incoming.NetIn, source, now, status, thresholds)
+	merged.NetOut = mergeMetric(target, merged.NetOut, incoming.NetOut, source, now, status, thresholds)
+	merged.DiskRead = mergeMetric(target, merged.DiskRead, incoming.DiskRead, source, now, status, thresholds)
+	merged.DiskWrite = mergeMetric(target, merged.DiskWrite, incoming.DiskWrite, source, now, status, thresholds)
 	return &merged
 }
 
 // metricSourceStale reports whether a source's most recent report is older than
 // its stale threshold. A zero/unknown last-seen is treated as NOT stale so the
 // merge never demotes a source on missing information.
-func metricSourceStale(now time.Time, status map[DataSource]SourceStatus, source DataSource) bool {
+func metricSourceStale(
+	now time.Time,
+	status map[DataSource]SourceStatus,
+	source DataSource,
+	thresholds map[DataSource]time.Duration,
+) bool {
 	if status == nil {
 		return false
 	}
@@ -4751,19 +4775,37 @@ func metricSourceStale(now time.Time, status map[DataSource]SourceStatus, source
 	if !ok || st.LastSeen.IsZero() {
 		return false
 	}
-	threshold, ok := defaultStaleThresholds[source]
-	if !ok {
+	threshold := time.Duration(0)
+	if configured := thresholds[source]; configured > 0 {
+		threshold = configured
+	}
+	if threshold <= 0 {
+		threshold = defaultStaleThresholds[source]
+	}
+	if threshold <= 0 {
 		threshold = 60 * time.Second
 	}
 	return now.Sub(st.LastSeen) > threshold
 }
 
-func mergeMetric(target *Resource, existing *MetricValue, incoming *MetricValue, source DataSource, now time.Time, status map[DataSource]SourceStatus) *MetricValue {
+func mergeMetric(
+	target *Resource,
+	existing *MetricValue,
+	incoming *MetricValue,
+	source DataSource,
+	now time.Time,
+	status map[DataSource]SourceStatus,
+	thresholds map[DataSource]time.Duration,
+) *MetricValue {
 	if incoming == nil {
 		return existing
 	}
 	incomingCopy := *incoming
-	incomingCopy.Source = source
+	incomingSource := source
+	if incomingSource == "" {
+		incomingSource = incoming.Source
+	}
+	incomingCopy.Source = incomingSource
 	if existing == nil {
 		return &incomingCopy
 	}
@@ -4771,18 +4813,68 @@ func mergeMetric(target *Resource, existing *MetricValue, incoming *MetricValue,
 	// metric against a live one, and a live source overrides a stale one
 	// regardless of priority. Mirrors the presentation-coalesce rule so the
 	// "live source wins a metric" invariant holds in both metric-merge paths.
-	existingStale := metricSourceStale(now, status, existing.Source)
-	incomingStale := metricSourceStale(now, status, source)
+	existingStale := metricSourceStale(now, status, existing.Source, thresholds)
+	incomingStale := metricSourceStale(now, status, incomingSource, thresholds)
 	if existingStale != incomingStale {
 		if existingStale {
 			return &incomingCopy
 		}
 		return existing
 	}
-	if metricMergePriority(target, source) >= metricMergePriority(target, existing.Source) {
+	if metricMergePriority(target, incomingSource) >= metricMergePriority(target, existing.Source) {
 		return &incomingCopy
 	}
 	return existing
+}
+
+// mergeCPUMetric enforces semantic authority before freshness. An in-guest
+// agent cannot provide a comparable CPU observation for a hypervisor-managed
+// guest: LXC sees the shared host kernel and QEMU uses different accounting.
+// Once a platform CPU observation exists, retain it even while that source is
+// stale so live state, alerts, and platform-keyed history cannot disagree.
+// SourceStatus remains the separate signal that the observation is stale.
+func mergeCPUMetric(
+	target *Resource,
+	existing *MetricValue,
+	incoming *MetricValue,
+	source DataSource,
+	now time.Time,
+	status map[DataSource]SourceStatus,
+	thresholds map[DataSource]time.Duration,
+) *MetricValue {
+	if incoming == nil {
+		return existing
+	}
+	incomingSource := source
+	if incomingSource == "" {
+		incomingSource = incoming.Source
+	}
+	if existing != nil && hypervisorManagedGuest(target) {
+		existingAuthoritative := authoritativeGuestCPUSource(target, existing.Source)
+		incomingAuthoritative := authoritativeGuestCPUSource(target, incomingSource)
+		if existingAuthoritative != incomingAuthoritative {
+			if existingAuthoritative {
+				return existing
+			}
+			incomingCopy := *incoming
+			incomingCopy.Source = incomingSource
+			return &incomingCopy
+		}
+	}
+	return mergeMetric(target, existing, incoming, source, now, status, thresholds)
+}
+
+func authoritativeGuestCPUSource(target *Resource, source DataSource) bool {
+	if !hypervisorManagedGuest(target) {
+		return false
+	}
+	if target.Proxmox != nil {
+		return source == SourceProxmox
+	}
+	if target.VMware != nil {
+		return source == SourceVMware
+	}
+	return source == SourceProxmox || source == SourceVMware
 }
 
 // hypervisorManagedGuest reports whether the resource is a guest workload whose
@@ -4805,9 +4897,9 @@ func hypervisorManagedGuest(r *Resource) bool {
 // on a specific resource. On hypervisor-managed guests the platform's numbers
 // are authoritative — an agent inside an LXC measures through the shared
 // kernel and reports the node's utilisation, and history charts follow the
-// platform series — so the agent must not outrank the platform there. The
-// freshness gate in mergeMetric still lets a live agent cover for a stale
-// platform source.
+// platform series — so the agent must not outrank the platform there. CPU has
+// the stronger semantic rule in mergeCPUMetric; other overlapping metrics keep
+// the ordinary freshness gate and this priority policy.
 func metricMergePriority(target *Resource, source DataSource) int {
 	if source == SourceAgent && hypervisorManagedGuest(target) {
 		return 1

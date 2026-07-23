@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type guestKind uint8
@@ -100,7 +101,7 @@ func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 		Instance:   vm.Instance,
 		Status:     vm.Status,
 		Lock:       vm.Lock,
-		CPUPercent: vm.CPU * 100,
+		CPUPercent: unifiedresources.ProxmoxGuestCPUPercent(vm.CPU),
 		MemUsage:   vm.Memory.Usage,
 		DiskUsage:  vm.Disk.Usage,
 		DiskRead:   vm.DiskRead,
@@ -123,7 +124,7 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		Instance:   container.Instance,
 		Status:     container.Status,
 		Lock:       container.Lock,
-		CPUPercent: container.CPU * 100,
+		CPUPercent: unifiedresources.ProxmoxGuestCPUPercent(container.CPU),
 		MemUsage:   container.Memory.Usage,
 		DiskUsage:  container.Disk.Usage,
 		DiskRead:   container.DiskRead,

@@ -1,4 +1,5 @@
 import type { VM, Container } from '@/types/api';
+import { getWorkloadCPUPercent } from '@/utils/workloads';
 
 // Exclusion-aware split of a free-text search. Terms prefixed with `-` hide
 // matching rows ("-watchtower" hides anything whose haystack contains
@@ -143,8 +144,7 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
 
   switch (condition.field) {
     case 'cpu':
-      // CPU is stored as decimal (0-1), convert to percentage
-      value = ('cpu' in guest ? guest.cpu || 0 : 0) * 100;
+      value = getWorkloadCPUPercent('cpu' in guest ? guest.cpu : undefined) ?? 0;
       break;
     case 'memory':
       value = 'memory' in guest && guest.memory ? guest.memory.usage : 0;

@@ -184,7 +184,7 @@ func buildVMMetricPayload(
 	source DataSource,
 ) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(cpu)
+	cpuPercent := ProxmoxGuestCPUPercent(cpu)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
 	if memory.Total > 0 {
 		percent := percentFromUsage(memory.Usage)
@@ -792,6 +792,15 @@ func percentFromUsage(value float64) float64 {
 		return value * 100
 	}
 	return value
+}
+
+// ProxmoxGuestCPUPercent converts the Proxmox guest capacity ratio to the
+// canonical 0..100 percent unit shared by live state, alerts, and history.
+// Values already expressed as percent are retained for compatibility with
+// normalized fixtures and read-state adapters. Guest CPU is not divided by
+// the configured core count: Proxmox already reports capacity utilization.
+func ProxmoxGuestCPUPercent(value float64) float64 {
+	return percentFromUsage(value)
 }
 
 func percentFromReportedPercent(value float64) float64 {

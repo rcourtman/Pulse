@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
@@ -123,7 +124,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			}
 			// IO/network series are not recorded on the traditional polling
 			// path (parity with the historical inline writes).
-			m.recordGuestMetric("vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)
 		}
 	}
 

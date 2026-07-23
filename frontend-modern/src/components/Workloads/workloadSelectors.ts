@@ -10,6 +10,7 @@ import { getNodeDisplayName } from '@/utils/nodes';
 import {
   isContainerWorkloadViewMode,
   getCanonicalWorkloadId,
+  getWorkloadCPUPercent,
   resolveWorkloadType,
   workloadMatchesPlatformScope,
   workloadMatchesViewMode,
@@ -253,8 +254,8 @@ export const createWorkloadSortComparator = (
     let bVal: SortValue = null;
 
     if (sortKey === 'cpu') {
-      aVal = a.cpu * 100;
-      bVal = b.cpu * 100;
+      aVal = getWorkloadCPUPercent(a.cpu) ?? 0;
+      bVal = getWorkloadCPUPercent(b.cpu) ?? 0;
     } else if (sortKey === 'memory') {
       aVal = a.memory ? a.memory.usage || 0 : 0;
       bVal = b.memory ? b.memory.usage || 0 : 0;

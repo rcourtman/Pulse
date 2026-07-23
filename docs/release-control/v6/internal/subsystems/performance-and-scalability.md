@@ -132,6 +132,10 @@ admission records a stable refusal without invoking executor or network code.
 104. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
 105. `frontend-modern/src/components/Workloads/nestedWorkloadContext.ts`
 106. `frontend-modern/src/components/Workloads/__tests__/nestedWorkloadContext.test.ts`
+107. `frontend-modern/src/utils/workloads.ts`
+108. `frontend-modern/src/utils/__tests__/workloads.test.ts`
+109. `frontend-modern/src/utils/searchQuery.ts`
+110. `frontend-modern/src/utils/__tests__/searchQuery.test.ts`
 
 ## Shared Boundaries
 
@@ -1582,6 +1586,18 @@ tooltip lifecycle lives in
 `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts`. Future
 CPU-bar runtime changes must extend through those owners instead of
 reintroducing mixed tooltip state and formatting logic into the shell.
+The Workloads CPU unit boundary is shared across rows, sorting, filtering, and
+drawer history fallback. Canonical unified-resource APIs supply percent values;
+`frontend-modern/src/hooks/useWorkloads.ts` converts that value exactly once
+into the `WorkloadGuest.cpu` ratio, and
+`frontend-modern/src/utils/workloads.ts` owns the inverse ratio-to-percent
+projection used by `GuestRow.tsx`, `workloadSelectors.ts`,
+`frontend-modern/src/utils/searchQuery.ts`, and `guestDrawerModel.ts`.
+`WorkloadGuest.cpus` is allocated-core metadata only and must never divide or
+multiply the CPU observation. Workloads consumers must not infer source
+precedence, reinterpret ratios above an arbitrary threshold, or replace an
+established provider history series; source authority and canonical identity
+convergence belong upstream in the unified-resource and monitoring contracts.
 
 The unified resource table hot path is now also governed as explicit
 performance-owned runtime, with shared ownership against the unified-resource

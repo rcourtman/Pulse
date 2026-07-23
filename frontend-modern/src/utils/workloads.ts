@@ -14,6 +14,21 @@ import {
   normalizeSourcePlatformScopes,
 } from '@/utils/sourcePlatforms';
 
+// WorkloadGuest.cpu is a normalized utilization ratio. It is independent of
+// the guest's allocated core count; convert it exactly once at presentation
+// boundaries so rows, filters, drawers, and history fallbacks cannot drift.
+export const getWorkloadCPUPercent = (cpu: unknown): number | undefined => {
+  if (typeof cpu !== 'number' || !Number.isFinite(cpu)) return undefined;
+  return Math.max(0, cpu * 100);
+};
+
+// Unified-resource APIs expose canonical CPU as a percentage. WorkloadGuest is
+// the legacy presentation boundary that stores the same value as a ratio.
+export const getWorkloadCPUFraction = (percent: unknown): number => {
+  if (typeof percent !== 'number' || !Number.isFinite(percent)) return 0;
+  return Math.max(0, percent) / 100;
+};
+
 /**
  * Resolve a raw type string (from API or backend) to a semantic WorkloadType.
  * Returns null when the value cannot be mapped to any known workload type.

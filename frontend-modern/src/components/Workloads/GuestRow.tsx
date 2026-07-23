@@ -17,7 +17,7 @@ import {
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import { resolveWorkloadType } from '@/utils/workloads';
+import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
@@ -100,7 +100,7 @@ export function GuestRow(props: GuestRowProps) {
     availabilityPresentation,
   } = useGuestRowState(props);
 
-  const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
+  const cpuPercent = createMemo(() => getWorkloadCPUPercent(props.guest.cpu) ?? 0);
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
   const detailControlsId = createMemo(() => buildSummaryDisclosureControlsId(guestId()));

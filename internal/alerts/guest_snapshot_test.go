@@ -19,6 +19,32 @@ func TestGuestSnapshotResourceTypeUsesCanonicalSystemContainer(t *testing.T) {
 	}
 }
 
+func TestGuestSnapshotUsesCanonicalProxmoxCPUPercent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cpu  float64
+		want float64
+	}{
+		{name: "zero", cpu: 0, want: 0},
+		{name: "fractional-capacity", cpu: 0.0058, want: 0.58},
+		{name: "full-capacity", cpu: 1, want: 100},
+		{name: "already-percent", cpu: 12.5, want: 12.5},
+	} {
+		t.Run("vm/"+tc.name, func(t *testing.T) {
+			snapshot := guestSnapshotFromVM(models.VM{CPU: tc.cpu})
+			if snapshot.CPUPercent != tc.want {
+				t.Fatalf("VM CPU percent = %v, want %v", snapshot.CPUPercent, tc.want)
+			}
+		})
+		t.Run("lxc/"+tc.name, func(t *testing.T) {
+			snapshot := guestSnapshotFromContainer(models.Container{CPU: tc.cpu})
+			if snapshot.CPUPercent != tc.want {
+				t.Fatalf("LXC CPU percent = %v, want %v", snapshot.CPUPercent, tc.want)
+			}
+		})
+	}
+}
+
 func TestParsePulseTagsRecognizesGuestRuntimeControls(t *testing.T) {
 	settings := parsePulseTags([]string{
 		" PULSE-NO-ALERTS ",

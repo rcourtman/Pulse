@@ -250,6 +250,117 @@ func TestConvertResourcesForBroadcastAttachesResolvedStorageMetricsTarget(t *tes
 	}
 }
 
+func TestConvertResourcesForBroadcastKeepsLinkedGuestCPUAndHistoryTargetAligned(t *testing.T) {
+	now := time.Now().UTC()
+	tests := []struct {
+		name          string
+		resourceType  unifiedresources.ResourceType
+		technology    string
+		targetType    string
+		containerType string
+	}{
+		{
+			name:          "lxc",
+			resourceType:  unifiedresources.ResourceTypeSystemContainer,
+			technology:    "lxc",
+			targetType:    "system-container",
+			containerType: "lxc",
+		},
+		{
+			name:         "qemu",
+			resourceType: unifiedresources.ResourceTypeVM,
+			technology:   "qemu",
+			targetType:   "vm",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			guestID := string(tc.resourceType) + "-guest-301"
+			guestSourceID := "cluster-a-node-1-" + tc.name + "-301"
+			const agentID = "agent-inside-guest-301"
+			store := unifiedresources.NewMemoryStore()
+			if err := store.AddLink(unifiedresources.ResourceLink{
+				ResourceA: guestID,
+				ResourceB: agentID,
+				PrimaryID: agentID,
+			}); err != nil {
+				t.Fatalf("add link: %v", err)
+			}
+			registry := unifiedresources.NewRegistry(store)
+			registry.IngestResources([]unifiedresources.Resource{
+				{
+					ID:         guestID,
+					Type:       tc.resourceType,
+					Technology: tc.technology,
+					Name:       tc.name + "-301",
+					Status:     unifiedresources.StatusOnline,
+					LastSeen:   now,
+					Sources:    []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+					SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+						unifiedresources.SourceProxmox: {Status: "online", LastSeen: now},
+					},
+					Proxmox: &unifiedresources.ProxmoxData{
+						SourceID:      guestSourceID,
+						VMID:          301,
+						ContainerType: tc.containerType,
+						CPUs:          8,
+					},
+					Metrics: &unifiedresources.ResourceMetrics{
+						CPU: &unifiedresources.MetricValue{
+							Value:   0.58,
+							Percent: 0.58,
+							Unit:    "percent",
+							Source:  unifiedresources.SourceProxmox,
+						},
+					},
+				},
+				{
+					ID:       agentID,
+					Type:     unifiedresources.ResourceTypeAgent,
+					Name:     tc.name + "-301",
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: now,
+					Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+					SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+						unifiedresources.SourceAgent: {Status: "online", LastSeen: now},
+					},
+					Agent: &unifiedresources.AgentData{AgentID: agentID, CPUCount: 8},
+					Metrics: &unifiedresources.ResourceMetrics{
+						CPU: &unifiedresources.MetricValue{
+							Value:   94,
+							Percent: 94,
+							Unit:    "percent",
+							Source:  unifiedresources.SourceAgent,
+						},
+					},
+				},
+			})
+
+			adapter := unifiedresources.NewMonitorAdapter(registry)
+			frontend := convertResourcesForBroadcast(adapter.GetAll(), adapter)
+			if len(frontend) != 1 {
+				t.Fatalf("broadcast resources = %d, want one merged guest: %+v", len(frontend), frontend)
+			}
+			got := frontend[0]
+			if got.ID != guestID || got.Type != string(tc.resourceType) || got.Technology != tc.technology {
+				t.Fatalf("broadcast resource = %s/%s/%s, want %s/%s/%s", got.ID, got.Type, got.Technology, guestID, tc.resourceType, tc.technology)
+			}
+			if got.CPU == nil || got.CPU.Current != 0.58 {
+				t.Fatalf("broadcast CPU = %+v, want proxmox 0.58", got.CPU)
+			}
+
+			var target unifiedresources.MetricsTarget
+			if err := json.Unmarshal(got.MetricsTarget, &target); err != nil {
+				t.Fatalf("decode metrics target: %v", err)
+			}
+			if target.ResourceType != tc.targetType || target.ResourceID != guestSourceID {
+				t.Fatalf("broadcast metrics target = %+v, want %s/%s", target, tc.targetType, guestSourceID)
+			}
+		})
+	}
+}
+
 func hasFrontendResourceName(resources []models.ResourceFrontend, name string) bool {
 	for _, resource := range resources {
 		if resource.Name == name {

@@ -3,6 +3,8 @@ import {
   buildCanonicalNodeScopedWorkloadId,
   canonicalizeWorkloadFilterType,
   getDiscoveryResourceTypeForWorkload,
+  getWorkloadCPUFraction,
+  getWorkloadCPUPercent,
   normalizeWorkloadViewModeParam,
   resolveWorkloadType,
   resolveWorkloadTypeFromString,
@@ -15,6 +17,27 @@ import {
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
+
+describe('workload CPU normalization', () => {
+  it('round-trips canonical percent without applying allocated core count', () => {
+    const canonicalPercent = 0.58;
+    const ratio = getWorkloadCPUFraction(canonicalPercent);
+
+    expect(ratio).toBe(0.0058);
+    expect(getWorkloadCPUPercent(ratio)).toBeCloseTo(canonicalPercent);
+  });
+
+  it('keeps ratios above one as percentages above 100 instead of reinterpreting units', () => {
+    expect(getWorkloadCPUPercent(2)).toBe(200);
+  });
+
+  it('rejects non-finite values and clamps negative observations to zero', () => {
+    expect(getWorkloadCPUPercent(Number.NaN)).toBeUndefined();
+    expect(getWorkloadCPUFraction(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(getWorkloadCPUPercent(-0.5)).toBe(0);
+    expect(getWorkloadCPUFraction(-50)).toBe(0);
+  });
+});
 
 describe('resolveWorkloadType', () => {
   it('returns workloadType when present', () => {

@@ -87,6 +87,37 @@ func TestMetricsFromDockerContainerKeepsCapacityPercentValues(t *testing.T) {
 	}
 }
 
+func TestMetricsFromProxmoxGuestsNormalizesCPUOnceIndependentOfCoreCount(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cores int
+	}{
+		{name: "one-core", cores: 1},
+		{name: "four-cores", cores: 4},
+		{name: "eight-cores", cores: 8},
+	} {
+		t.Run("vm-"+tc.name, func(t *testing.T) {
+			metrics := metricsFromVM(models.VM{CPU: 0.0058, CPUs: tc.cores})
+			if metrics.CPU == nil {
+				t.Fatal("VM CPU metric is nil")
+			}
+			if metrics.CPU.Percent != 0.58 || metrics.CPU.Value != 0.58 || metrics.CPU.Source != SourceProxmox {
+				t.Fatalf("VM CPU = %+v, want canonical proxmox percent 0.58", metrics.CPU)
+			}
+		})
+
+		t.Run("lxc-"+tc.name, func(t *testing.T) {
+			metrics := metricsFromContainer(models.Container{CPU: 0.0058, CPUs: tc.cores})
+			if metrics.CPU == nil {
+				t.Fatal("LXC CPU metric is nil")
+			}
+			if metrics.CPU.Percent != 0.58 || metrics.CPU.Value != 0.58 || metrics.CPU.Source != SourceProxmox {
+				t.Fatalf("LXC CPU = %+v, want canonical proxmox percent 0.58", metrics.CPU)
+			}
+		})
+	}
+}
+
 func TestMetricsFromKubernetesClusterAggregatesLinkedHostReportedPercents(t *testing.T) {
 	cluster := models.KubernetesCluster{ID: "cluster-1", Name: "cluster-1"}
 	hosts := []*models.Host{

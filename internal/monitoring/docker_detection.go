@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog/log"
 )
@@ -693,7 +694,7 @@ func enrichGuestDockerReportFromContainer(report *agentsdocker.Report, container
 		return
 	}
 	if report.Host.CPUUsagePercent == 0 && container.CPU > 0 {
-		report.Host.CPUUsagePercent = container.CPU * 100
+		report.Host.CPUUsagePercent = unifiedresources.ProxmoxGuestCPUPercent(container.CPU)
 	}
 	if report.Host.Memory.TotalBytes == 0 && container.Memory.Total > 0 {
 		report.Host.Memory.TotalBytes = container.Memory.Total

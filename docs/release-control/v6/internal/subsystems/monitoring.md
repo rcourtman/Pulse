@@ -126,6 +126,13 @@ unified-resource CPU metrics are 0..100 percentages, while legacy
 0..1 ratio fields. Monitoring-owned read-state conversion must divide canonical
 Proxmox node, VM, and LXC CPU percentages before handing them back to legacy
 snapshot/current-row paths.
+Proxmox guest live state, alerts, and history share one guest CPU-percent
+normalizer. Efficient cluster polling and traditional per-node polling must
+write VM/LXC history under the Proxmox guest ID in that same 0..100 unit, with
+no core-count division and no in-guest host-agent substitution. A linked host
+agent may supplement metrics the platform does not provide, but guest CPU and
+its `vm` / `system-container` history target remain platform-owned so dashboard,
+details, API state, alerts, and history cannot select different authorities.
 Tenant monitor enumeration is monitoring-owned runtime topology, not a
 reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
 persisted organization IDs to API-owned background workers, but it must not

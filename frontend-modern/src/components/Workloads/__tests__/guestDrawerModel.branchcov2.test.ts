@@ -77,7 +77,7 @@ describe('guestDrawerModel (branch coverage)', () => {
   });
 
   describe('getGuestDrawerHistoryFallbackMetrics', () => {
-    it('scales a fractional cpu (<=1.5) by 100 and returns finite metric values', () => {
+    it('scales the canonical workload cpu ratio by 100 and returns finite metric values', () => {
       const guest = makeGuest({
         cpu: 1.0,
         memory: { total: 100, used: 40, free: 60, usage: 0.4 },
@@ -98,8 +98,8 @@ describe('guestDrawerModel (branch coverage)', () => {
       });
     });
 
-    it('passes a cpu value greater than 1.5 through unchanged', () => {
-      expect(getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: 2.0 })).cpu).toBe(2);
+    it('uses the same ratio contract above 100 percent', () => {
+      expect(getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: 2.0 })).cpu).toBe(200);
     });
 
     it('treats the cpu boundary of exactly 1.5 as a ratio (150)', () => {

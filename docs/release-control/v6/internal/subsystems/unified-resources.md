@@ -33,6 +33,16 @@ reported as 0..100 percentages. Unified-resource host metric payloads and
 host-derived storage adapters must clamp those reported percentages directly
 rather than passing them through ratio-to-percent normalization, which is
 reserved for providers that report 0..1 usage ratios.
+Proxmox VM and LXC CPU is a semantic-authority exception to ordinary
+freshness-based metric selection. The Proxmox guest observation is normalized
+from its capacity ratio to canonical 0..100 percent exactly once, without
+dividing by configured cores, and remains the guest CPU value whenever that
+observation exists—even if the Proxmox source is stale. Source freshness stays
+visible through `SourceStatus`; an in-guest host agent cannot supply a
+comparable fallback because LXC observes the shared kernel and QEMU accounting
+is independently scoped. Agent CPU may fill the field only when the platform
+has no CPU observation. Agent-only fields that the platform does not provide
+remain eligible per metric.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART
@@ -1657,7 +1667,12 @@ two source facets contribute the same metric, source priority decides only if
 both sources have equivalent freshness. A stale source must not hold CPU,
 memory, disk, network, or disk I/O metrics against a live source, and a stale
 incoming source must not clobber a live metric already attached to the
-canonical resource. This freshness gate belongs in
+canonical resource. The explicit exception is hypervisor-managed guest CPU:
+when a Proxmox or VMware platform CPU observation exists, semantic authority
+precedes freshness so an in-guest agent never replaces it. Manual guest-agent
+links are direction-independent: the hypervisor guest remains the canonical
+resource and metrics target, each selected metric retains its real source, and
+agent-only fields are preserved. This selection policy belongs in
 `internal/unifiedresources/registry.go` and
 `internal/unifiedresources/presentation_coalesce.go`, not in platform-page
 rendering or frontend fallback code.

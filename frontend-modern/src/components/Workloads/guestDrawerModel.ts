@@ -8,7 +8,11 @@ import type {
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 import { formatBytes, formatPercent } from '@/utils/format';
-import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getCanonicalWorkloadId,
+  getWorkloadCPUPercent,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 
 type Guest = WorkloadGuest;
@@ -67,13 +71,7 @@ export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadTyp
 export const getGuestDrawerHistoryFallbackMetrics = (
   guest: Guest,
 ): Record<string, number | undefined> => {
-  const cpuRaw = typeof guest.cpu === 'number' ? guest.cpu : undefined;
-  const cpuPercent =
-    cpuRaw === undefined || !Number.isFinite(cpuRaw)
-      ? undefined
-      : cpuRaw <= 1.5
-        ? cpuRaw * 100
-        : cpuRaw;
+  const cpuPercent = getWorkloadCPUPercent(guest.cpu);
   const memUsage = guest.memory?.usage;
   const diskUsage = guest.disk?.usage;
   const finite = (value: number | undefined): number | undefined =>

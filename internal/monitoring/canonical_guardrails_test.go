@@ -1998,14 +1998,14 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			file: "monitor_polling_vm.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.recordGuestMetric("vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)`,
+				`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, -1, -1, -1, -1, now)`,
 			},
 		},
 		{
 			file: "monitor_polling_containers.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.recordGuestMetric("container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage, -1, -1, -1, -1, now)`,
+				`m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), ct.Memory.Usage, ct.Disk.Usage, -1, -1, -1, -1, now)`,
 			},
 		},
 		{

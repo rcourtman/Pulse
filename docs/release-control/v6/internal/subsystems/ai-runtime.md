@@ -30,6 +30,11 @@ contracts. The subsystem also owns AI orchestration, runtime cost control,
 shared AI transport surfaces, and browser-visible Assistant transcript actions
 that define what visible operator/model text can leave the transcript without
 exposing hidden provider/tool metadata.
+Patrol guest inventory consumes canonical unified-resource CPU percent when
+read-state is available and the shared Proxmox guest CPU-percent normalizer for
+legacy snapshot fallback. It must not independently rescale by configured cores
+or substitute a linked in-guest host-agent CPU value, so Patrol evaluates the
+same guest observation as dashboard, alerts, and history.
 
 Interactive Assistant invocation authority is fail-closed and request-local.
 The `read_only` presentation means no model-invokable durable Pulse-state or

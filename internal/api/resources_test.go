@@ -1659,6 +1659,159 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	}
 }
 
+func TestResourceLinkFromAgentKeepsHypervisorGuestAuthorityInAPIState(t *testing.T) {
+	now := time.Now().UTC()
+	tests := []struct {
+		name           string
+		guestType      unified.ResourceType
+		targetType     string
+		snapshot       models.StateSnapshot
+		guestSourceID  string
+		wantTechnology string
+	}{
+		{
+			name:          "lxc",
+			guestType:     unified.ResourceTypeSystemContainer,
+			targetType:    "system-container",
+			guestSourceID: "pve-a-node-1-301",
+			snapshot: models.StateSnapshot{
+				Containers: []models.Container{{
+					ID:       "pve-a-node-1-301",
+					VMID:     301,
+					Name:     "lxc-301",
+					Node:     "node-1",
+					Instance: "pve-a",
+					Type:     "lxc",
+					Status:   "running",
+					CPU:      0.0058,
+					CPUs:     4,
+					LastSeen: now,
+				}},
+				Hosts: []models.Host{{
+					ID:           "agent-lxc-301",
+					Hostname:     "agent-for-lxc-301",
+					Status:       "online",
+					CPUUsage:     94,
+					NetOutRate:   4096,
+					CPUCount:     4,
+					LastSeen:     now,
+					Memory:       models.Memory{Total: 100, Used: 70, Usage: 70},
+					ReportIP:     "10.0.30.1",
+					AgentVersion: "6.1.1",
+				}},
+			},
+			wantTechnology: "lxc",
+		},
+		{
+			name:          "qemu",
+			guestType:     unified.ResourceTypeVM,
+			targetType:    "vm",
+			guestSourceID: "pve-a-node-1-302",
+			snapshot: models.StateSnapshot{
+				VMs: []models.VM{{
+					ID:       "pve-a-node-1-302",
+					VMID:     302,
+					Name:     "vm-302",
+					Node:     "node-1",
+					Instance: "pve-a",
+					Type:     "qemu",
+					Status:   "running",
+					CPU:      0.0058,
+					CPUs:     8,
+					LastSeen: now,
+				}},
+				Hosts: []models.Host{{
+					ID:           "agent-vm-302",
+					Hostname:     "agent-for-vm-302",
+					Status:       "online",
+					CPUUsage:     94,
+					NetOutRate:   4096,
+					CPUCount:     8,
+					LastSeen:     now,
+					Memory:       models.Memory{Total: 100, Used: 70, Usage: 70},
+					ReportIP:     "10.0.30.2",
+					AgentVersion: "6.1.1",
+				}},
+			},
+			wantTechnology: "qemu",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{DataPath: t.TempDir()}
+			h := NewResourceHandlers(cfg)
+			h.SetStateProvider(resourceStateProvider{snapshot: tc.snapshot})
+
+			list := func() ResourcesResponse {
+				t.Helper()
+				rec := httptest.NewRecorder()
+				req := httptest.NewRequest(http.MethodGet, "/api/resources", nil)
+				h.HandleListResources(rec, req)
+				if rec.Code != http.StatusOK {
+					t.Fatalf("list status = %d, body=%s", rec.Code, rec.Body.String())
+				}
+				var response ResourcesResponse
+				if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+					t.Fatalf("decode list response: %v", err)
+				}
+				return response
+			}
+
+			before := list()
+			var agentID, guestID string
+			for _, resource := range before.Data {
+				switch resource.Type {
+				case unified.ResourceTypeAgent:
+					agentID = resource.ID
+				case tc.guestType:
+					guestID = resource.ID
+				}
+			}
+			if agentID == "" || guestID == "" {
+				t.Fatalf("missing pre-link resources: agent=%q guest=%q data=%+v", agentID, guestID, before.Data)
+			}
+
+			payload, err := json.Marshal(map[string]string{
+				"targetId": guestID,
+				"reason":   "agent runs inside guest",
+			})
+			if err != nil {
+				t.Fatalf("marshal link payload: %v", err)
+			}
+			linkRec := httptest.NewRecorder()
+			linkReq := httptest.NewRequest(http.MethodPost, "/api/resources/"+agentID+"/link", bytes.NewReader(payload))
+			h.HandleLink(linkRec, linkReq)
+			if linkRec.Code != http.StatusOK {
+				t.Fatalf("link status = %d, body=%s", linkRec.Code, linkRec.Body.String())
+			}
+
+			after := list()
+			if len(after.Data) != 1 {
+				t.Fatalf("resources after link = %d, want one guest: %+v", len(after.Data), after.Data)
+			}
+			resource := after.Data[0]
+			if resource.ID != guestID || resource.Type != tc.guestType || resource.Technology != tc.wantTechnology {
+				t.Fatalf("linked API resource = %s/%s/%s, want guest %s/%s/%s", resource.ID, resource.Type, resource.Technology, guestID, tc.guestType, tc.wantTechnology)
+			}
+			if resource.Proxmox == nil || resource.Agent == nil {
+				t.Fatalf("linked API resource lost source payloads: proxmox=%+v agent=%+v", resource.Proxmox, resource.Agent)
+			}
+			if resource.Metrics == nil || resource.Metrics.CPU == nil || resource.Metrics.CPU.Percent != 0.58 {
+				t.Fatalf("API CPU = %+v, want canonical proxmox 0.58", resource.Metrics)
+			}
+			if resource.Metrics.NetOut == nil || resource.Metrics.NetOut.Value != 4096 {
+				t.Fatalf("API state lost agent-only network metric: %+v", resource.Metrics.NetOut)
+			}
+			if resource.MetricsTarget == nil ||
+				resource.MetricsTarget.ResourceType != tc.targetType ||
+				resource.MetricsTarget.ResourceID != tc.guestSourceID {
+				t.Fatalf("API metrics target = %+v, want %s/%s", resource.MetricsTarget, tc.targetType, tc.guestSourceID)
+			}
+		})
+	}
+}
+
 func TestResourceReportMergeCreatesExclusions(t *testing.T) {
 	now := time.Now().UTC()
 	sharedInterfaces := []models.HostNetworkInterface{

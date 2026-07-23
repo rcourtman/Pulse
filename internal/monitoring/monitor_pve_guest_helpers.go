@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
@@ -109,12 +110,12 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 	now := time.Now()
 	for _, vm := range allVMs {
 		if vm.Status == "running" {
-			m.recordGuestMetric("vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, now)
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), vm.Memory.Usage, vm.Disk.Usage, vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, now)
 		}
 	}
 	for _, ct := range allContainers {
 		if ct.Status == "running" {
-			m.recordGuestMetric("container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage, ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, now)
+			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), ct.Memory.Usage, ct.Disk.Usage, ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, now)
 		}
 	}
 }

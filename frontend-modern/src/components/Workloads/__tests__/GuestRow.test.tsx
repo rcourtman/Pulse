@@ -244,6 +244,16 @@ describe('GuestRow', () => {
       expect(cpuBar.dataset.usage).toBe('75');
     });
 
+    it.each([1, 4, 8])(
+      'does not renormalize authoritative guest CPU by %i allocated cores',
+      (cpus) => {
+        renderGuestRow({ guest: makeGuest({ cpu: 0.0058, cpus }) });
+        const cpuBar = screen.getByTestId('cpu-bar');
+        expect(Number(cpuBar.dataset.usage)).toBeCloseTo(0.58);
+        expect(cpuBar.dataset.cores).toBe(String(cpus));
+      },
+    );
+
     it('renders memory bar', () => {
       renderGuestRow({ guest: makeGuest() });
       expect(screen.getByTestId('memory-bar')).toBeTruthy();
