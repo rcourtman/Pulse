@@ -214,11 +214,11 @@ else
     --arg rollback_version "$ROLLBACK_TAG" \
     --arg ga_date "" \
     --arg v5_eos_date "" \
-    --argjson hotfix_exception "$HOTFIX_EXCEPTION" \
+    --arg hotfix_exception "$HOTFIX_EXCEPTION" \
     --arg hotfix_reason "$HOTFIX_REASON" \
-    --argjson unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION" \
+    --arg unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION" \
     --arg unsigned_windows_reason "$UNSIGNED_WINDOWS_REASON" \
-    --argjson draft_only false \
+    --arg draft_only "false" \
     --arg mobile_release_decision "$MOBILE_RELEASE_DECISION" \
     --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
     '{

@@ -1128,6 +1128,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--unsigned-windows-exception", helper)
         self.assertIn("unsigned_windows_exception", helper)
         self.assertIn("unsigned_windows_reason", helper)
+        self.assertIn('--arg hotfix_exception "$HOTFIX_EXCEPTION"', helper)
+        self.assertIn(
+            '--arg unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION"',
+            helper,
+        )
+        self.assertIn('--arg draft_only "false"', helper)
+        self.assertNotIn("--argjson", helper)
         self.assertIn("Single-Build Release Path", policy)
         self.assertIn("Routine Stable Patch Path", policy)
         self.assertIn("single publish workflow performs the exact-SHA preflight", normalize_ws(policy))
