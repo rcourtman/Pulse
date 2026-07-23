@@ -167,6 +167,59 @@ func TestStoreProtectionPosturePersistsProviderAwareTruth(t *testing.T) {
 	}
 }
 
+func TestStoreProtectionPostureMovesWhenPointIdentityIsCorrected(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	completedAt := now.Add(-time.Hour)
+	point := recovery.RecoveryPoint{
+		ID:                "pbs-backup:vm-100",
+		Provider:          recovery.ProviderProxmoxPBS,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeRemote,
+		Outcome:           recovery.OutcomeSuccess,
+		CompletedAt:       &completedAt,
+		SubjectResourceID: "vm-double-hashed",
+		ProviderScope:     "pbs-main",
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints(old identity) error = %v", err)
+	}
+
+	point.SubjectResourceID = "vm-canonical"
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints(corrected identity) error = %v", err)
+	}
+
+	var oldCount int
+	if err := store.db.QueryRow(
+		`SELECT COUNT(*) FROM protection_postures WHERE subject_resource_id = ?`,
+		"vm-double-hashed",
+	).Scan(&oldCount); err != nil {
+		t.Fatalf("count obsolete posture: %v", err)
+	}
+	if oldCount != 0 {
+		t.Fatalf("obsolete posture count = %d, want 0", oldCount)
+	}
+
+	var newCount int
+	if err := store.db.QueryRow(
+		`SELECT COUNT(*) FROM protection_postures WHERE subject_resource_id = ?`,
+		"vm-canonical",
+	).Scan(&newCount); err != nil {
+		t.Fatalf("count corrected posture: %v", err)
+	}
+	if newCount != 1 {
+		t.Fatalf("corrected posture count = %d, want 1", newCount)
+	}
+}
+
 func TestStoreProtectionSchemaMigratesLegacyRecoveryDatabase(t *testing.T) {
 	t.Parallel()
 

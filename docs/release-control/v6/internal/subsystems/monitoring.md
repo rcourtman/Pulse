@@ -1358,6 +1358,11 @@ name, and type context from canonical `ReadState` instead of from
 snapshot-owned VM/container arrays, so storage backup polling, guest snapshot
 polling, timeout sizing, PBS recovery candidate assembly, and Proxmox recovery
 ingest all follow unified runtime truth when a live resource registry exists.
+That recovery identity adapter must carry the canonical unified-resource
+`ResourceID` separately from the provider-native Proxmox `SourceID`. Recovery
+mappers consume the canonical ID directly for subject linkage and retain the
+source ID only for provider correlation and fallback derivation; a canonical
+workload ID must never be passed through source-specific ID generation again.
 That same monitoring-owned workload boundary now includes canonical app
 workloads projected through unified resources, not only VM/LXC-style guests.
 Consumers that need runtime workload truth must treat `ReadState.Workloads()`

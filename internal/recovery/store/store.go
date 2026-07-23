@@ -1048,6 +1048,68 @@ func normalizePage(page int) int {
 	return page
 }
 
+func (s *Store) existingSubjectKeysByPointID(
+	ctx context.Context,
+	points []recovery.RecoveryPoint,
+) (map[string]string, error) {
+	const chunkSize = 200
+
+	ids := make([]string, 0, len(points))
+	seen := make(map[string]struct{}, len(points))
+	for _, point := range points {
+		id := strings.TrimSpace(point.ID)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	out := make(map[string]string, len(ids))
+	for start := 0; start < len(ids); start += chunkSize {
+		end := start + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		rows, err := s.db.QueryContext(
+			ctx,
+			"SELECT id, subject_key FROM recovery_points WHERE id IN ("+placeholders+")",
+			args...,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id string
+			var subjectKey sql.NullString
+			if err := rows.Scan(&id, &subjectKey); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			if key := strings.TrimSpace(subjectKey.String); key != "" {
+				out[strings.TrimSpace(id)] = key
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 // UpsertPoints inserts or updates recovery points by ID.
 func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoint) error {
 	if err := s.ensureInitialized(); err != nil {
@@ -1060,6 +1122,11 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 	s.maybePrune(ctx)
 
 	proxmoxPBSIdentities, proxmoxPBSLooseIdentities, err := s.loadHistoricalProxmoxPBSGuestIdentities(ctx)
+	if err != nil {
+		return err
+	}
+
+	existingSubjectKeys, err := s.existingSubjectKeysByPointID(ctx, points)
 	if err != nil {
 		return err
 	}
@@ -1127,7 +1194,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 	}
 	defer stmt.Close()
 
-	affectedSubjectKeys := make(map[string]struct{}, len(points))
+	affectedSubjectKeys := make(map[string]struct{}, len(points)*2)
 	for _, p := range points {
 		adoptHistoricalProxmoxPBSGuestIdentity(&p, proxmoxPBSIdentities, proxmoxPBSLooseIdentities)
 
@@ -1141,6 +1208,9 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 		outcome := strings.TrimSpace(string(p.Outcome))
 		if provider == "" || kind == "" || mode == "" || outcome == "" {
 			continue
+		}
+		if previousKey := strings.TrimSpace(existingSubjectKeys[id]); previousKey != "" {
+			affectedSubjectKeys[previousKey] = struct{}{}
 		}
 
 		subjectRef, err := marshalJSON(p.SubjectRef)

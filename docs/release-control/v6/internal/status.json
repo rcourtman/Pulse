@@ -9176,21 +9176,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-release-gate-stable-patch-unattended-release-path",
-      "agent_id": "codex",
-      "summary": "Publish v6.1.1 emergency stable patch after backend release-gate repair",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-23T13:06:46Z",
-      "heartbeat_at": "2026-07-23T13:06:46Z",
-      "expires_at": "2026-07-23T17:06:46Z",
-      "work_item": {
-        "kind": "release-gate",
-        "id": "stable-patch-unattended-release-path"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

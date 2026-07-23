@@ -855,6 +855,7 @@ func TestBuildPBSGuestCandidates_UsesCanonicalReadState(t *testing.T) {
 				Instance: "pve1",
 				NodeName: "nodeA",
 				VMID:     100,
+				SourceID: "pve1:nodeA:100",
 			},
 		},
 		{
@@ -866,6 +867,7 @@ func TestBuildPBSGuestCandidates_UsesCanonicalReadState(t *testing.T) {
 				Instance: "pve1",
 				NodeName: "nodeB",
 				VMID:     200,
+				SourceID: "pve1:nodeB:200",
 			},
 		},
 	})
@@ -879,7 +881,8 @@ func TestBuildPBSGuestCandidates_UsesCanonicalReadState(t *testing.T) {
 			t.Fatalf("expected one candidate for %s, got %+v", key, entries)
 		}
 		if entries[0] != (proxmoxmapper.GuestCandidate{
-			SourceID:     fmt.Sprintf("%s-store-%d", map[unifiedresources.ResourceType]string{unifiedresources.ResourceTypeVM: "vm", unifiedresources.ResourceTypeSystemContainer: "ct"}[resourceType], vmid),
+			ResourceID:   fmt.Sprintf("%s-store-%d", map[unifiedresources.ResourceType]string{unifiedresources.ResourceTypeVM: "vm", unifiedresources.ResourceTypeSystemContainer: "ct"}[resourceType], vmid),
+			SourceID:     fmt.Sprintf("pve1:%s:%d", node, vmid),
 			ResourceType: resourceType,
 			DisplayName:  fmt.Sprintf("%s%d", map[unifiedresources.ResourceType]string{unifiedresources.ResourceTypeVM: "vm", unifiedresources.ResourceTypeSystemContainer: "ct"}[resourceType], vmid),
 			InstanceName: "pve1",
@@ -905,6 +908,7 @@ func TestBuildProxmoxGuestInfoIndex_UsesCanonicalReadState(t *testing.T) {
 				Instance: "pve1",
 				NodeName: "nodeA",
 				VMID:     100,
+				SourceID: "pve1:nodeA:100",
 			},
 		},
 		{
@@ -916,13 +920,14 @@ func TestBuildProxmoxGuestInfoIndex_UsesCanonicalReadState(t *testing.T) {
 				Instance: "pve1",
 				NodeName: "nodeB",
 				VMID:     200,
+				SourceID: "pve1:nodeB:200",
 			},
 		},
 	})
 
 	index := buildProxmoxGuestInfoIndex(readState)
 
-	assertInfo := func(key string, resourceType unifiedresources.ResourceType, name string) {
+	assertInfo := func(key, resourceID, sourceID string, resourceType unifiedresources.ResourceType, name string) {
 		t.Helper()
 		info, ok := index[key]
 		if !ok {
@@ -931,11 +936,17 @@ func TestBuildProxmoxGuestInfoIndex_UsesCanonicalReadState(t *testing.T) {
 		if info.ResourceType != resourceType {
 			t.Errorf("expected type %v, got %v", resourceType, info.ResourceType)
 		}
+		if info.ResourceID != resourceID {
+			t.Errorf("expected resource ID %q, got %q", resourceID, info.ResourceID)
+		}
+		if info.SourceID != sourceID {
+			t.Errorf("expected source ID %q, got %q", sourceID, info.SourceID)
+		}
 		if info.Name != name {
 			t.Errorf("expected name %q, got %q", name, info.Name)
 		}
 	}
 
-	assertInfo("pve1|nodeA|100", unifiedresources.ResourceTypeVM, "vm100")
-	assertInfo("pve1|nodeB|200", unifiedresources.ResourceTypeSystemContainer, "ct200")
+	assertInfo("pve1|nodeA|100", "vm-store-100", "pve1:nodeA:100", unifiedresources.ResourceTypeVM, "vm100")
+	assertInfo("pve1|nodeB|200", "ct-store-200", "pve1:nodeB:200", unifiedresources.ResourceTypeSystemContainer, "ct200")
 }

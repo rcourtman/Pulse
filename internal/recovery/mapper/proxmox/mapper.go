@@ -11,15 +11,17 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// GuestInfo is best-effort metadata used to attach display identity and unified resource IDs.
-// Keyed by guest source ID (see guestSourceID()).
+// GuestInfo is best-effort metadata used to attach display, canonical, and provider identity.
+// Callers key it by guestLookupKey().
 type GuestInfo struct {
+	ResourceID   string
 	SourceID     string
 	ResourceType unifiedresources.ResourceType
 	Name         string
 }
 
 type GuestCandidate struct {
+	ResourceID    string
 	SourceID      string
 	ResourceType  unifiedresources.ResourceType
 	DisplayName   string
@@ -35,6 +37,16 @@ func guestSourceID(instanceName, nodeName string, vmid int) string {
 
 func guestLookupKey(instanceName, nodeName string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%d", strings.TrimSpace(instanceName), strings.TrimSpace(nodeName), vmid)
+}
+
+func subjectResourceID(resourceType unifiedresources.ResourceType, resourceID, sourceID string) string {
+	if resourceID = strings.TrimSpace(resourceID); resourceID != "" {
+		return resourceID
+	}
+	if sourceID = strings.TrimSpace(sourceID); sourceID != "" {
+		return unifiedresources.SourceSpecificID(resourceType, unifiedresources.SourceProxmox, sourceID)
+	}
+	return ""
 }
 
 func preferredPBSBackupSubjectName(comment, vmid string) string {
@@ -166,7 +178,7 @@ func FromPVEGuestSnapshots(snapshots []models.GuestSnapshot, guestInfoByKey map[
 				resourceType = resourceTypeFromGuestType(snap.Type)
 			}
 			if resourceType != "" {
-				subjectRID = unifiedresources.SourceSpecificID(resourceType, unifiedresources.SourceProxmox, sourceID)
+				subjectRID = subjectResourceID(resourceType, info.ResourceID, sourceID)
 				subjectRef = proxmoxSubjectRef(resourceType, info, instanceName, nodeName, vmid, sourceID)
 			}
 		}
@@ -200,7 +212,7 @@ func FromPVEGuestSnapshots(snapshots []models.GuestSnapshot, guestInfoByKey map[
 	return out
 }
 
-func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoBySourceID map[string]GuestInfo) []recovery.RecoveryPoint {
+func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[string]GuestInfo) []recovery.RecoveryPoint {
 	if len(backups) == 0 {
 		return nil
 	}
@@ -220,7 +232,7 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoBySourceID m
 
 		if vmid > 0 && instanceName != "" && nodeName != "" {
 			key := guestLookupKey(instanceName, nodeName, vmid)
-			info := guestInfoBySourceID[key]
+			info := guestInfoByKey[key]
 			sourceID := strings.TrimSpace(info.SourceID)
 			if sourceID == "" {
 				sourceID = guestSourceID(instanceName, nodeName, vmid)
@@ -230,7 +242,7 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoBySourceID m
 				resourceType = resourceTypeFromGuestType(b.Type)
 			}
 			if resourceType != "" {
-				subjectRID = unifiedresources.SourceSpecificID(resourceType, unifiedresources.SourceProxmox, sourceID)
+				subjectRID = subjectResourceID(resourceType, info.ResourceID, sourceID)
 				subjectRef = proxmoxSubjectRef(resourceType, info, instanceName, nodeName, vmid, sourceID)
 			}
 		}
@@ -287,7 +299,7 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoBySourceID m
 	return out
 }
 
-func FromPVEBackupTasks(tasks []models.BackupTask, guestInfoBySourceID map[string]GuestInfo) []recovery.RecoveryPoint {
+func FromPVEBackupTasks(tasks []models.BackupTask, guestInfoByKey map[string]GuestInfo) []recovery.RecoveryPoint {
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -307,13 +319,13 @@ func FromPVEBackupTasks(tasks []models.BackupTask, guestInfoBySourceID map[strin
 
 		if vmid > 0 && instanceName != "" && nodeName != "" {
 			key := guestLookupKey(instanceName, nodeName, vmid)
-			info, ok := guestInfoBySourceID[key]
+			info, ok := guestInfoByKey[key]
 			sourceID := strings.TrimSpace(info.SourceID)
 			if sourceID == "" {
 				sourceID = guestSourceID(instanceName, nodeName, vmid)
 			}
 			if ok && info.ResourceType != "" {
-				subjectRID = unifiedresources.SourceSpecificID(info.ResourceType, unifiedresources.SourceProxmox, sourceID)
+				subjectRID = subjectResourceID(info.ResourceType, info.ResourceID, sourceID)
 				subjectRef = proxmoxSubjectRef(info.ResourceType, info, instanceName, nodeName, vmid, sourceID)
 			} else {
 				// At least show something in UIs even when type is unknown.
@@ -384,7 +396,7 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 		// Link to a unified resource when the candidate set is already singular or can be
 		// disambiguated by PBS namespace / guest label without guessing across guest collisions.
 		if c, ok := selectPBSGuestCandidate(b, candidates); ok {
-			subjectRID = unifiedresources.SourceSpecificID(c.ResourceType, unifiedresources.SourceProxmox, c.SourceID)
+			subjectRID = subjectResourceID(c.ResourceType, c.ResourceID, c.SourceID)
 			subjectRef = proxmoxSubjectRef(c.ResourceType, GuestInfo{Name: c.DisplayName, ResourceType: c.ResourceType, SourceID: c.SourceID}, c.InstanceName, c.NodeName, c.VMID, c.SourceID)
 		} else {
 			guestType := strings.ToLower(strings.TrimSpace(b.BackupType))

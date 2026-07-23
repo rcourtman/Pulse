@@ -9,6 +9,49 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+func TestSubjectResourceIDPrefersCanonicalIdentityAndFallsBackToSourceIdentity(t *testing.T) {
+	t.Parallel()
+
+	resourceType := unifiedresources.ResourceTypeVM
+	sourceID := "pve-main:pve-a:100"
+	fallback := unifiedresources.SourceSpecificID(
+		resourceType,
+		unifiedresources.SourceProxmox,
+		sourceID,
+	)
+
+	tests := []struct {
+		name       string
+		resourceID string
+		sourceID   string
+		want       string
+	}{
+		{
+			name:       "canonical resource identity",
+			resourceID: " vm-canonical ",
+			sourceID:   sourceID,
+			want:       "vm-canonical",
+		},
+		{
+			name:     "provider source fallback",
+			sourceID: " " + sourceID + " ",
+			want:     fallback,
+		},
+		{
+			name: "missing identity",
+			want: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := subjectResourceID(resourceType, test.resourceID, test.sourceID); got != test.want {
+				t.Fatalf("subjectResourceID() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestFromPVEGuestSnapshots_Empty(t *testing.T) {
 	result := FromPVEGuestSnapshots(nil, nil)
 	if result != nil {
@@ -74,7 +117,8 @@ func TestFromPVEGuestSnapshots_WithGuestInfo(t *testing.T) {
 
 	guestInfoByKey := map[string]GuestInfo{
 		"pve-cluster|pve1|100": {
-			SourceID:     "unified-resource-1",
+			ResourceID:   "vm-unified-resource-1",
+			SourceID:     "pve-cluster:pve1:100",
 			ResourceType: unifiedresources.ResourceTypeVM,
 			Name:         "web-server",
 		},
@@ -87,8 +131,11 @@ func TestFromPVEGuestSnapshots_WithGuestInfo(t *testing.T) {
 	}
 
 	p := result[0]
-	if p.SubjectResourceID == "" {
-		t.Error("expected SubjectResourceID to be set when GuestInfo is provided")
+	if got, want := p.SubjectResourceID, "vm-unified-resource-1"; got != want {
+		t.Fatalf("SubjectResourceID = %q, want canonical resource ID %q", got, want)
+	}
+	if p.SubjectRef == nil || p.SubjectRef.ID != "pve-cluster:pve1:100" {
+		t.Fatalf("SubjectRef = %#v, want provider-native source ID", p.SubjectRef)
 	}
 }
 
@@ -325,7 +372,8 @@ func TestFromPBSBackups_WithCandidates(t *testing.T) {
 	candidatesByKey := map[string][]GuestCandidate{
 		"vm:100": {
 			{
-				SourceID:      "unified-resource-1",
+				ResourceID:    "vm-unified-resource-1",
+				SourceID:      "pve-cluster:pve1:100",
 				ResourceType:  unifiedresources.ResourceTypeVM,
 				DisplayName:   "web-server",
 				InstanceName:  "pbs1",
@@ -343,8 +391,8 @@ func TestFromPBSBackups_WithCandidates(t *testing.T) {
 	}
 
 	p := result[0]
-	if p.SubjectResourceID == "" {
-		t.Error("expected SubjectResourceID to be set when candidate matches")
+	if got, want := p.SubjectResourceID, "vm-unified-resource-1"; got != want {
+		t.Fatalf("SubjectResourceID = %q, want canonical resource ID %q", got, want)
 	}
 }
 
@@ -365,7 +413,8 @@ func TestFromPBSBackups_DisambiguatesCandidatesByNamespace(t *testing.T) {
 	candidatesByKey := map[string][]GuestCandidate{
 		"ct:112": {
 			{
-				SourceID:      "system-container-fb42a70d89bd20a6",
+				ResourceID:    "system-container-fb42a70d89bd20a6",
+				SourceID:      "delly:minipc:112",
 				ResourceType:  unifiedresources.ResourceTypeSystemContainer,
 				DisplayName:   "debian-go",
 				InstanceName:  "delly",
@@ -374,7 +423,8 @@ func TestFromPBSBackups_DisambiguatesCandidatesByNamespace(t *testing.T) {
 				BackupTypeKey: "ct",
 			},
 			{
-				SourceID:      "system-container-deadbeefdeadbeef",
+				ResourceID:    "system-container-deadbeefdeadbeef",
+				SourceID:      "other:pve-b:112",
 				ResourceType:  unifiedresources.ResourceTypeSystemContainer,
 				DisplayName:   "other-guest",
 				InstanceName:  "other",
@@ -390,11 +440,7 @@ func TestFromPBSBackups_DisambiguatesCandidatesByNamespace(t *testing.T) {
 		t.Fatalf("expected 1 point, got %d", len(result))
 	}
 
-	expectedRID := unifiedresources.SourceSpecificID(
-		unifiedresources.ResourceTypeSystemContainer,
-		unifiedresources.SourceProxmox,
-		"system-container-fb42a70d89bd20a6",
-	)
+	expectedRID := "system-container-fb42a70d89bd20a6"
 
 	if got := result[0].SubjectResourceID; got != expectedRID {
 		t.Fatalf("SubjectResourceID = %q, want %q", got, expectedRID)
@@ -423,7 +469,8 @@ func TestFromPBSBackupsWithEvidenceAddsProviderScopeAndCorrelation(t *testing.T)
 	candidates := map[string][]GuestCandidate{
 		"vm:100": {
 			{
-				SourceID:     "vm-100",
+				ResourceID:   "vm-100",
+				SourceID:     "pve-main:pve-a:100",
 				ResourceType: unifiedresources.ResourceTypeVM,
 				DisplayName:  "database",
 				InstanceName: "pve-main",

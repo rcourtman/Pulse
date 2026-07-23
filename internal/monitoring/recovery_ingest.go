@@ -224,11 +224,13 @@ func buildProxmoxGuestInfoIndex(readState unifiedresources.ReadState) map[string
 			continue
 		}
 		key := proxmoxmapperKey(vm.Instance(), vm.Node(), vm.VMID())
-		sourceID := strings.TrimSpace(vm.ID())
+		resourceID := strings.TrimSpace(vm.ID())
+		sourceID := strings.TrimSpace(vm.SourceID())
 		if sourceID == "" {
 			sourceID = makeGuestID(vm.Instance(), vm.Node(), vm.VMID())
 		}
 		out[key] = proxmoxmapper.GuestInfo{
+			ResourceID:   resourceID,
 			SourceID:     sourceID,
 			ResourceType: unifiedresources.ResourceTypeVM,
 			Name:         strings.TrimSpace(vm.Name()),
@@ -240,11 +242,13 @@ func buildProxmoxGuestInfoIndex(readState unifiedresources.ReadState) map[string
 			continue
 		}
 		key := proxmoxmapperKey(ct.Instance(), ct.Node(), ct.VMID())
-		sourceID := strings.TrimSpace(ct.ID())
+		resourceID := strings.TrimSpace(ct.ID())
+		sourceID := strings.TrimSpace(ct.SourceID())
 		if sourceID == "" {
 			sourceID = makeGuestID(ct.Instance(), ct.Node(), ct.VMID())
 		}
 		out[key] = proxmoxmapper.GuestInfo{
+			ResourceID:   resourceID,
 			SourceID:     sourceID,
 			ResourceType: unifiedresources.ResourceTypeSystemContainer,
 			Name:         strings.TrimSpace(ct.Name()),
@@ -267,11 +271,13 @@ func buildPBSGuestCandidates(readState unifiedresources.ReadState) map[string][]
 			continue
 		}
 		key := "vm:" + fmt.Sprintf("%d", vm.VMID())
-		sourceID := strings.TrimSpace(vm.ID())
+		resourceID := strings.TrimSpace(vm.ID())
+		sourceID := strings.TrimSpace(vm.SourceID())
 		if sourceID == "" {
 			sourceID = makeGuestID(vm.Instance(), vm.Node(), vm.VMID())
 		}
 		out[key] = append(out[key], proxmoxmapper.GuestCandidate{
+			ResourceID:   resourceID,
 			SourceID:     sourceID,
 			ResourceType: unifiedresources.ResourceTypeVM,
 			DisplayName:  strings.TrimSpace(vm.Name()),
@@ -286,11 +292,13 @@ func buildPBSGuestCandidates(readState unifiedresources.ReadState) map[string][]
 			continue
 		}
 		key := "ct:" + fmt.Sprintf("%d", ct.VMID())
-		sourceID := strings.TrimSpace(ct.ID())
+		resourceID := strings.TrimSpace(ct.ID())
+		sourceID := strings.TrimSpace(ct.SourceID())
 		if sourceID == "" {
 			sourceID = makeGuestID(ct.Instance(), ct.Node(), ct.VMID())
 		}
 		out[key] = append(out[key], proxmoxmapper.GuestCandidate{
+			ResourceID:   resourceID,
 			SourceID:     sourceID,
 			ResourceType: unifiedresources.ResourceTypeSystemContainer,
 			DisplayName:  strings.TrimSpace(ct.Name()),

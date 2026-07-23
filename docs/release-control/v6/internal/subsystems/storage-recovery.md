@@ -2343,6 +2343,10 @@ backfill, purge, and retention, and re-evaluates requested resource batches at
 read time so freshness cannot age into a reassuring stale snapshot. Legacy
 recovery rows receive additive provider scope and typed evidence during
 migration. Provider observations and recovery points share bounded retention.
+When an upserted recovery point changes subject identity, posture refresh must
+include both the previously persisted subject key and the new subject key so
+obsolete materialized posture rows are removed rather than surviving an
+identity correction.
 
 `GET /api/recovery/postures` is the bounded read boundary for one resource,
 resource-table batches, state-filtered attention lists, policy, evaluation
@@ -2961,6 +2965,12 @@ like `lxc-*` or raw source IDs while newer points carry hashed canonical
 resource IDs, and proxmox guest external keys must ignore display-name churn so
 renaming a backup comment does not fork the protected inventory from recent
 event history. That same store-owned continuity contract also applies when
+Proxmox recovery mappers receive unified-resource workload identity: canonical
+`ResourceID` is the stored `subject_resource_id`, while provider-native
+`SourceID` remains external correlation metadata or a fallback input when no
+canonical ID exists. Mappers must not hash an already canonical resource ID as
+if it were a provider-native source ID. That same store-owned continuity
+contract also applies when
 Proxmox PBS guest points temporarily lose unified-resource linkage or drift
 between historical PBS namespaces: if recovery history already proves one
 canonical linked guest identity for the same friendly label, guest type, and
