@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractHighlights, isReleaseVersion } from '../whatsNewModel';
+import whatsNewCardSource from '../WhatsNewCard.tsx?raw';
 
 describe('extractHighlights', () => {
   it('extracts the Highlights section from a release body', () => {
@@ -95,5 +96,16 @@ describe('isReleaseVersion', () => {
     expect(isReleaseVersion('4.13')).toBe(false);
     expect(isReleaseVersion('4.13.0-preview')).toBe(false);
     expect(isReleaseVersion('')).toBe(false);
+  });
+});
+
+describe('post-update telemetry disclosure', () => {
+  it('keeps the schema-v2 notice on the shared non-blocking release boundary', () => {
+    expect(whatsNewCardSource).toContain('TELEMETRY_PAYLOAD_NOTICE_VERSION');
+    expect(whatsNewCardSource).toContain('data-testid="telemetry-payload-update-notice"');
+    expect(whatsNewCardSource).toContain('layout="banner"');
+    expect(whatsNewCardSource).toContain("openTelemetrySettings('preview')");
+    expect(whatsNewCardSource).toContain("openTelemetrySettings('disable')");
+    expect(whatsNewCardSource).toContain('PRIVACY_DOC_URL');
   });
 });

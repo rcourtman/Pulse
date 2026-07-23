@@ -982,6 +982,12 @@ That same telemetry trust boundary must remain operator-inspectable in-product:
 the shared system settings surface may preview only the exact runtime payload
 Pulse would send, and it must allow an operator to rotate the local telemetry
 install ID immediately without waiting for the scheduled 30-day window.
+An existing installation's first published schema-v2 upgrade must also receive
+a one-time, non-blocking notice that names the coarse payload expansion and
+links directly to the exact preview, the disable action, and the governed
+privacy disclosure. Fresh installs stay silent because setup already presents
+the current disclosure. Acknowledging the notice may persist locally, but it
+must not change the operator's telemetry preference by itself.
 That same governed privacy disclosure must also state the current server-side
 telemetry retention and handling rules plainly. If the license-server path
 retains telemetry rows for a fixed window or uses client IPs transiently for

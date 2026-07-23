@@ -540,6 +540,14 @@ TLS floor in the dynamic config.
    while the post-update card may show that same section once per later
    installed release and must stay silent for a first baseline, malformed or
    development versions, missing releases, and releases without highlights.
+   The same post-update communication boundary owns the one-time schema-v2
+   telemetry payload notice. It must use a non-blocking shared notice banner,
+   appear only for existing installations on a published build, stay silent
+   for fresh installs and development/source builds, persist acknowledgement,
+   and provide direct payload-preview, disable, and privacy-disclosure actions.
+   The corresponding next-release disclosure must enumerate the added coarse
+   signal categories and exclusions without inventing a release version before
+   the packet is cut.
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, deterministic dev auth seeding, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/lib/hot-dev-runtime.sh`, `scripts/lib/hot-dev-auth.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
    First-run browser helpers are part of that dev-runtime proof boundary. They
    must preserve the setup-created API token in the shared runtime state, prefer

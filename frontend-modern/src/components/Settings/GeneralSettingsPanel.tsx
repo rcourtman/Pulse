@@ -216,6 +216,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
       {/* Usage Data + Privacy Card */}
       <SettingsPanel
+        id="usage-telemetry"
         title={t('settings.general.telemetry.section.title')}
         description={t('settings.general.telemetry.section.description')}
         noPadding

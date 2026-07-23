@@ -154,6 +154,40 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
     }
     return settingsPanelRegistry()[currentTab];
   });
+  let handledTelemetryActionHref = '';
+
+  createEffect(() => {
+    if (activeTab() !== 'system-general' || !infrastructureSettings.initialLoadComplete()) {
+      return;
+    }
+
+    const action = new URLSearchParams(location.search).get('telemetryAction');
+    if (action !== 'preview' && action !== 'disable') {
+      return;
+    }
+
+    const actionHref = `${location.pathname}${location.search}${location.hash}`;
+    if (actionHref === handledTelemetryActionHref) {
+      return;
+    }
+    handledTelemetryActionHref = actionHref;
+
+    queueMicrotask(() => {
+      document.getElementById('usage-telemetry')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+      if (action === 'preview') {
+        void systemSettings.handleLoadTelemetryPreview();
+      } else {
+        void systemSettings.handleTelemetryEnabledChange(false);
+      }
+      navigate('/settings/system-general#usage-telemetry', {
+        replace: true,
+        scroll: false,
+      });
+    });
+  });
 
   createEffect(() => {
     activeTab();

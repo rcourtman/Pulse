@@ -4,6 +4,11 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const versionInfoMock = vi.hoisted(() => vi.fn());
 const getReleaseNotesMock = vi.hoisted(() => vi.fn());
+const navigateMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@solidjs/router', () => ({
+  useNavigate: () => navigateMock,
+}));
 
 vi.mock('@/stores/updates', () => ({
   updateStore: {
@@ -25,6 +30,7 @@ describe('WhatsNewCard', () => {
   beforeEach(() => {
     versionInfoMock.mockReset();
     getReleaseNotesMock.mockReset();
+    navigateMock.mockReset();
     localStorage.clear();
   });
 
@@ -45,8 +51,79 @@ describe('WhatsNewCard', () => {
     await renderCard();
 
     expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
     expect(getReleaseNotesMock).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.1.0-rc.1');
+    expect(localStorage.getItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN)).toBe('2');
+  });
+
+  it('shows the telemetry payload update once to an existing installation', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.1.0-rc.1');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0-rc.1',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+
+    await renderCard();
+
+    expect(screen.getByTestId('telemetry-payload-update-notice')).toBeInTheDocument();
+    expect(screen.getByText('Telemetry payload updated.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview payload' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disable telemetry' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy details' })).toHaveAttribute(
+      'href',
+      '/docs/PRIVACY.md',
+    );
+  });
+
+  it('opens the exact payload preview and permanently dismisses the notice', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.1.0-rc.1');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0-rc.1',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+
+    await renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview payload' }));
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/settings/system-general?telemetryAction=preview#usage-telemetry',
+    );
+    expect(localStorage.getItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN)).toBe('2');
+    expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
+  });
+
+  it('opens the disable action and permanently dismisses the notice', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.1.0-rc.1');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0-rc.1',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+
+    await renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Disable telemetry' }));
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      '/settings/system-general?telemetryAction=disable#usage-telemetry',
+    );
+    expect(localStorage.getItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN)).toBe('2');
+  });
+
+  it('does not show the telemetry notice after it has been acknowledged', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.1.0-rc.1');
+    localStorage.setItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN, '2');
+    versionInfoMock.mockReturnValue({
+      version: '6.1.0-rc.1',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+
+    await renderCard();
+
+    expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
   });
 
   it('shows curated highlights after the running release changes', async () => {
@@ -114,7 +191,9 @@ describe('WhatsNewCard', () => {
     await renderCard();
 
     expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('telemetry-payload-update-notice')).not.toBeInTheDocument();
     expect(getReleaseNotesMock).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.0.5');
+    expect(localStorage.getItem(STORAGE_KEYS.TELEMETRY_PAYLOAD_NOTICE_SEEN)).toBeNull();
   });
 });

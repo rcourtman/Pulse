@@ -336,6 +336,14 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.general.telemetry.disabledPreview':
     'Telemetrie ist derzeit deaktiviert. Diese Vorschau zeigt den Payload, den Pulse senden wuerde, wenn Sie sie aktivieren.',
   'settings.general.telemetry.fullDetails': 'Details',
+  'settings.general.telemetry.notice.description':
+    'Pulse fuegt jetzt grobe Signale zu Bereitstellung, Lebenszyklus, Bestandsgroesse sowie aggregierte Alarm- und Benachrichtigungsergebnisse hinzu, wenn ausgehende Nutzungstelemetrie aktiviert ist. Persoenliche Daten, Infrastruktur-IDs, Inhalte, Browser-Ereignisse und Clickstream-Daten bleiben ausgeschlossen.',
+  'settings.general.telemetry.notice.disable': 'Telemetrie deaktivieren',
+  'settings.general.telemetry.notice.dismissLabel': 'Hinweis zum Telemetrie-Payload schliessen',
+  'settings.general.telemetry.notice.dismissTitle': 'Dauerhaft schliessen',
+  'settings.general.telemetry.notice.preview': 'Payload anzeigen',
+  'settings.general.telemetry.notice.privacy': 'Datenschutzdetails',
+  'settings.general.telemetry.notice.title': 'Telemetrie-Payload aktualisiert',
   'settings.general.telemetry.payloadAriaLabel': 'Telemetrie-Payload-Vorschau',
   'settings.general.telemetry.payloadTitle': 'Aktueller Heartbeat-Payload',
   'settings.general.telemetry.previewPayload': 'Payload anzeigen',

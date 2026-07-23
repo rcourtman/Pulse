@@ -2187,6 +2187,11 @@ default` instead of fusing provider and badge text such as
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
+    The one-time schema-v2 upgrade disclosure must compose the shared
+    `InlineNotice` banner layout on the existing post-update communication
+    boundary, use shared button and external-link primitives, and route its
+    Preview and Disable actions to the anchored General settings telemetry
+    control rather than duplicating privacy state in shell-local UI.
 31. Keep maintainer commercial-event controls out of customer settings.
     The shared general settings privacy panel may expose outbound usage
     telemetry controls, preview, and reset affordances, but it must not render

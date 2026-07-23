@@ -719,6 +719,11 @@ describe('settings architecture guardrails', () => {
     );
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.payloadAriaLabel');
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.resetId');
+    expect(generalSettingsPanelSource).toContain('id="usage-telemetry"');
+    expect(settingsSource).toContain("get('telemetryAction')");
+    expect(settingsSource).toContain('systemSettings.handleLoadTelemetryPreview()');
+    expect(settingsSource).toContain('systemSettings.handleTelemetryEnabledChange(false)');
+    expect(settingsSource).toContain("navigate('/settings/system-general#usage-telemetry'");
     expect(generalSettingsPanelSource).not.toContain('license_tier');
     expect(generalSettingsPanelSource).not.toContain('api_tokens');
   });
