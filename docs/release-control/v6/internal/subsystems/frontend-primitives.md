@@ -141,6 +141,7 @@ work extends shared components instead of creating new local variants.
 109. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 110. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 111. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+     111a. `frontend-modern/src/utils/storageSummaryCache.ts`
 112. `frontend-modern/src/components/shared/TableCardHeader.tsx`
 113. `frontend-modern/src/components/shared/UpgradeLink.tsx`
 114. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
@@ -2748,6 +2749,15 @@ surface instead of falling through the app-level `Loading view...` fallback.
 Feature slices such as recovery and infrastructure drawers may consume that
 helper, but they must not fork new suspense-escape helpers once the shared
 contract exists.
+That retained-value boundary is explicitly bounded for long-lived browser
+sessions. Fulfilled resource/range queries use a 64-entry LRU with a five-minute
+inactive lifetime, clear on organization changes, and reject late old-scope
+completions from the shared cache. Large storage summary history follows the
+same ownership rule through `frontend-modern/src/utils/storageSummaryCache.ts`:
+it keeps at most 20 recent node/range summaries and aborts in-flight requests
+when organization ownership changes. Drawer navigation, chart range churn,
+background tabs, reconnects, and server restarts must not turn either cache
+into an append-only browser history.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,

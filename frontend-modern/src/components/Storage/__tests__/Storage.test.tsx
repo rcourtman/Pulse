@@ -531,7 +531,9 @@ describe('Storage', () => {
     const storageContentSurface = screen.getByTestId('storage-content-surface');
     expect(await within(storageContentSurface).findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
     expect(within(storageContentSurface).getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
-    expect(storageSummarySpy).toHaveBeenCalledWith('24h', undefined, { nodeId: undefined });
+    expect(storageSummarySpy).toHaveBeenCalledWith('24h', expect.any(AbortSignal), {
+      nodeId: undefined,
+    });
 
     storageSummarySpy.mockRestore();
   });

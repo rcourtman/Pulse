@@ -66,7 +66,7 @@ describe('storageSummaryCache', () => {
 
       expect(result).toBe(response);
       expect(mockGetStorageSummaryCharts).toHaveBeenCalledTimes(1);
-      expect(mockGetStorageSummaryCharts).toHaveBeenCalledWith('1h', undefined, {
+      expect(mockGetStorageSummaryCharts).toHaveBeenCalledWith('1h', expect.any(AbortSignal), {
         nodeId: 'node-1',
       });
       expect(readStorageSummaryCache('1h', 'node-1')).toBe(response);
@@ -77,7 +77,7 @@ describe('storageSummaryCache', () => {
 
       await fetchStorageSummaryAndCache('24h');
 
-      expect(mockGetStorageSummaryCharts).toHaveBeenCalledWith('24h', undefined, {
+      expect(mockGetStorageSummaryCharts).toHaveBeenCalledWith('24h', expect.any(AbortSignal), {
         nodeId: undefined,
       });
     });
@@ -202,6 +202,44 @@ describe('storageSummaryCache', () => {
 
       expect(mockGetStorageSummaryCharts).toHaveBeenCalledTimes(2);
       expect(readStorageSummaryCache('1h')).toBe(second);
+    });
+
+    it('aborts an in-flight summary request when the organization changes', async () => {
+      let signal: AbortSignal | undefined;
+      mockGetStorageSummaryCharts.mockImplementationOnce(
+        (_range: TimeRange, requestSignal: AbortSignal) => {
+          signal = requestSignal;
+          return new Promise<StorageSummaryChartsResponse>((_resolve, reject) => {
+            requestSignal.addEventListener('abort', () => {
+              reject(new DOMException('Aborted', 'AbortError'));
+            });
+          });
+        },
+      );
+
+      const request = fetchStorageSummaryAndCache('1h');
+      expect(signal?.aborted).toBe(false);
+
+      eventBus.emit('org_switched', 'org-b');
+
+      expect(signal?.aborted).toBe(true);
+      await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      expect(readStorageSummaryCache('1h')).toBeNull();
+    });
+
+    it('keeps only the 20 most recently used node and range summaries', async () => {
+      mockGetStorageSummaryCharts.mockImplementation(
+        (_range: TimeRange, _signal: AbortSignal, options?: { nodeId?: string }) =>
+          Promise.resolve(makeResponse(Number(options?.nodeId?.split('-').at(-1)) || 1)),
+      );
+
+      for (let index = 0; index <= 20; index += 1) {
+        await fetchStorageSummaryAndCache('1h', { nodeId: `node-${index}` });
+      }
+
+      expect(readStorageSummaryCache('1h', 'node-0')).toBeNull();
+      expect(readStorageSummaryCache('1h', 'node-1')).not.toBeNull();
+      expect(readStorageSummaryCache('1h', 'node-20')).not.toBeNull();
     });
   });
 });

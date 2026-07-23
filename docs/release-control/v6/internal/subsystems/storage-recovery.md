@@ -1803,7 +1803,11 @@ must not treat starter
     bounded in-memory cache for same-tab remounts, but its cache key must carry
     an explicit summary contract version so long-lived demo sessions do not
     rehydrate stale pool or disk sparkline shapes after the storage summary
-    chart model changes.
+    chart model changes. The shared storage history owner at
+    `frontend-modern/src/utils/storageSummaryCache.ts` must likewise remain
+    bounded to 20 recent node/range summaries, use LRU replacement, and abort
+    in-flight requests when organization ownership changes so a late response
+    cannot recreate an old-scope cache entry.
 19. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
     chart transport may look up provider-backed VM history through unified
     metrics targets, but infrastructure/workloads/storage/recovery navigation
@@ -1896,6 +1900,16 @@ invoke recovery APIs, mutate storage, or treat a synthetic pass as evidence
 that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
+
+### Storage history remount state is bounded
+
+Storage summary history no longer treats every node/range combination visited
+by an always-open tab as permanent browser state. The shared cache keeps 20
+recent summaries, refreshes LRU order on reuse, and cancels outstanding chart
+requests during an organization switch. This cache is separate from backend
+metrics-history retention and recovery-ingest ownership: increasing backup
+polling or server-side recovery enumeration must not expand the browser cache
+outside the fixed remount budget.
 
 ### vSphere member composition is inventory, not protection evidence
 
