@@ -1203,7 +1203,7 @@ rows_sql = (
 output = gzip.GzipFile(fileobj=sys.stdout.buffer, mode="wb", compresslevel=6)
 
 def emit(value):
-    output.write(json.dumps(value, separators=(",", ":")).encode("utf-8") + b"\n")
+    output.write(json.dumps(value, separators=(",", ":")).encode("utf-8") + b"\\n")
 
 try:
     db_stats = dict(conn.execute(db_stats_sql).fetchone())

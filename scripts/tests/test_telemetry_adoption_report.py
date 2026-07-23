@@ -49,6 +49,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         remote_script = run_mock.call_args.kwargs["input"].decode("utf-8")
         self.assertNotIn("fetchall", remote_script)
         self.assertIn("received_at >= datetime('now', ?)", remote_script)
+        compile(remote_script, "<telemetry-remote-fetch>", "exec")
 
     def test_fetch_rows_remote_rejects_empty_response(self) -> None:
         completed = subprocess.CompletedProcess(

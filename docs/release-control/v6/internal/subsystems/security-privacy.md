@@ -978,6 +978,10 @@ new categorical value against its fixed set before storage. The adoption
 report may aggregate those latest-per-install signals and use indexed time
 filters plus compressed remote transport, but it must not enrich them with
 accounts, request IPs, customer records, or event-level browser data.
+The compressed remote-report transport must compile the exact generated Python
+program in its unit proof. Its JSON-lines delimiter is escaped at the outer
+generator boundary so the program sent over SSH contains a valid `b"\n"`
+literal rather than an unterminated bytes literal.
 That same telemetry trust boundary must remain operator-inspectable in-product:
 the shared system settings surface may preview only the exact runtime payload
 Pulse would send, and it must allow an operator to rotate the local telemetry
