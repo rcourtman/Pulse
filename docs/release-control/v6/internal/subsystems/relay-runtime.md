@@ -35,9 +35,12 @@ for Pulse instance bridging.
 9. `scripts/release_control/mobile_compatibility.py`
 10. `pulse-mobile:config/mobile-api-surface.json`
 11. `pulse-mobile:src/generated/coreCompatibility.ts`
-12. `pulse-pro:relay-server/main.go`
-13. `pulse-pro:relay-server/registry.go`
-14. `pulse-pro:relay-server/revocation_feed.go`
+12. `pulse-pro:relay-server/bridge.go`
+13. `pulse-pro:relay-server/device_store.go`
+14. `pulse-pro:relay-server/main.go`
+15. `pulse-pro:relay-server/metrics.go`
+16. `pulse-pro:relay-server/registry.go`
+17. `pulse-pro:relay-server/revocation_feed.go`
 
 ## Shared Boundaries
 
@@ -67,6 +70,7 @@ for Pulse instance bridging.
 4. Add or change the backend-owned mobile relay capability inventory, compatibility scope mapping, pairing contract, or push routing through `docs/release-control/v6/internal/MOBILE_COMPATIBILITY_MANIFEST.json`, then regenerate both repositories. Generated files are not extension points.
 5. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
 6. Add or change server-side grant revocation ingestion, readiness, active-session teardown, or reconnect-token invalidation through `pulse-pro:relay-server/main.go`, `pulse-pro:relay-server/revocation_feed.go`, and `pulse-pro:relay-server/registry.go`.
+7. Add or change privacy-safe server-side mobile operational observability through `pulse-pro:relay-server/bridge.go`, `pulse-pro:relay-server/device_store.go`, and `pulse-pro:relay-server/metrics.go`. Platform labels must remain bounded to `ios`, `android`, and `unknown`; user, installation, instance, and device-token identifiers must never become metric labels.
 
 ## Forbidden Paths
 
@@ -86,6 +90,7 @@ for Pulse instance bridging.
 6. Keep the operator Relay incapable of serving v6 grants until it has synchronously drained the authenticated revocation feed, and expose stale feed state through readiness.
 7. Keep feed-applied restrictive events tied to proof that already-connected stale grants are disconnected and their persisted reconnect credentials are invalidated.
 8. Keep exact-revision Pulse/Pulse Mobile compatibility evidence green in Canonical Governance and keep released-line compatibility green in the Pulse Mobile OTA gate.
+9. Keep server-side mobile operational metric changes tied to Relay bridge, device-store, and metric contract tests. These aggregate service signals must not be presented as unique-user, retention, app-open, screen-view, or feature-usage analytics.
 
 ## Current State
 
@@ -125,6 +130,13 @@ relay channel may not consume an unbounded share of the local HTTP proxy, so
 desktop relay runtime must enforce a channel-local request budget and fail
 excess DATA frames with owned proxy backpressure instead of letting one
 channel starve the rest of the connection.
+Relay mobile observability is part of the server runtime boundary. The Relay
+may expose aggregate connection outcomes, authenticated session counts,
+registered push-token counts, and push delivery health by a bounded platform
+label. It must not export user, installation, instance, or device-token
+identifiers as metric labels, and these operational aggregates must not be
+described as unique-user or behavioural analytics. The mobile client remains
+free of analytics and usage-event collection.
 Persisted relay config loading is part of the same owned surface. A missing
 `relay.enc` file must fall back cleanly to the canonical disabled default so a
 fresh v6 install or a partially migrated instance does not fail closed just

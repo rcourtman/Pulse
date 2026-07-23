@@ -6157,7 +6157,10 @@
         "internal/config/persistence_relay.go",
         "pulse-mobile:config/mobile-api-surface.json",
         "pulse-mobile:src/generated/coreCompatibility.ts",
+        "pulse-pro:relay-server/bridge.go",
+        "pulse-pro:relay-server/device_store.go",
         "pulse-pro:relay-server/main.go",
+        "pulse-pro:relay-server/metrics.go",
         "pulse-pro:relay-server/registry.go",
         "pulse-pro:relay-server/revocation_feed.go"
       ],
@@ -6180,6 +6183,9 @@
           "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
           "pulse-mobile:src/relay/__tests__/protocol.test.ts",
           "pulse-mobile:src/relay/__tests__/proxy.test.ts",
+          "pulse-pro:relay-server/bridge_test.go",
+          "pulse-pro:relay-server/device_store_test.go",
+          "pulse-pro:relay-server/metrics_test.go",
           "scripts/release_control/generate_mobile_compatibility_test.py",
           "scripts/release_control/mobile_compatibility_test.py"
         ],
@@ -6201,6 +6207,23 @@
               "pulse-pro:relay-server/main_test.go",
               "pulse-pro:relay-server/registry_test.go",
               "pulse-pro:relay-server/revocation_feed_test.go"
+            ]
+          },
+          {
+            "id": "relay-server-mobile-observability",
+            "label": "Relay server mobile observability proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:relay-server/bridge.go",
+              "pulse-pro:relay-server/device_store.go",
+              "pulse-pro:relay-server/metrics.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:relay-server/bridge_test.go",
+              "pulse-pro:relay-server/device_store_test.go",
+              "pulse-pro:relay-server/metrics_test.go"
             ]
           },
           {
