@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -96,6 +97,49 @@ func TestMultiTenantMonitorListOrganizationIDsFallsBackToDefault(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "default" {
 		t.Fatalf("ListOrganizationIDs() = %v, want [default]", got)
+	}
+}
+
+func TestVMwareManualConnectionTestPreservesDegradedDiagnostics(t *testing.T) {
+	poller := NewVMwarePoller(nil, time.Minute)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-degraded"
+	connection.Host = "vc.lab.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+
+	recordedAt := time.Date(2026, 7, 23, 19, 0, 0, 0, time.UTC)
+	poller.RecordConnectionTestSuccess("default", connection.ID, &vmware.InventorySummary{
+		Hosts:      2,
+		VMs:        14,
+		Datastores: 3,
+		Networks:   5,
+		VIRelease:  "8.0.2.0",
+		Degraded:   true,
+		Issues: []vmware.InventoryEnrichmentIssue{
+			{
+				Stage:      "signals",
+				EntityType: "host",
+				EntityID:   "host-101",
+				Category:   "endpoint",
+				Message:    "VMware HostSystem recent events request failed with HTTP 500",
+			},
+		},
+	}, recordedAt)
+
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || !summary.Poll.LastSuccessAt.Equal(recordedAt) {
+		t.Fatalf("expected degraded test to remain a successful connection attempt, got %+v", summary.Poll)
+	}
+	if summary.Observed == nil || !summary.Observed.Degraded || summary.Observed.IssueCount != 1 {
+		t.Fatalf("expected degraded observed summary, got %+v", summary.Observed)
+	}
+	if len(summary.Observed.Issues) != 1 ||
+		summary.Observed.Issues[0].Stage != "signals" ||
+		summary.Observed.Issues[0].Category != "endpoint" ||
+		summary.Observed.Issues[0].Message != "VMware HostSystem recent events request failed with HTTP 500" ||
+		summary.Observed.Issues[0].Occurrences != 1 {
+		t.Fatalf("expected preserved summarized diagnostic, got %+v", summary.Observed.Issues)
 	}
 }
 

@@ -90,6 +90,23 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
           )}
         </Show>
 
+        <Show when={props.state.connectionTestWarning()}>
+          {(warning) => (
+            <CalloutCard
+              data-testid="vmware-connection-test-warning"
+              tone="warning"
+              title={warning().title}
+              description={
+                <>
+                  <p>{warning().message}</p>
+                  <p class="mt-2">{warning().guidance}</p>
+                </>
+              }
+              icon={<ShieldAlert class="h-5 w-5" />}
+            />
+          )}
+        </Show>
+
         <div class="grid gap-4 sm:grid-cols-2">
           <label class={formField}>
             <span class={formLabel}>Name</span>

@@ -99,54 +99,88 @@ func (c *Client) validateSignalFloor(
 	eventManagerMoID string,
 	snapshot *InventorySnapshot,
 	perfCounters perfCounterCatalog,
-) error {
+) ([]InventoryEnrichmentIssue, error) {
 	if snapshot == nil {
-		return nil
+		return nil, nil
+	}
+
+	var issues []InventoryEnrichmentIssue
+	recordOptionalIssue := func(entityType, entityID string, err error) error {
+		if issue, ok := classifyInventoryEnrichmentIssue("signals", entityType, entityID, err); ok {
+			issues = append(issues, *issue)
+			return nil
+		}
+		return err
 	}
 
 	cache := &alarmNameCache{names: make(map[string]string)}
 	if len(snapshot.Hosts) > 0 {
 		host := snapshot.Hosts[0]
 		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", host.Host, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
-			return err
+			if err := recordOptionalIssue("host", host.Host, err); err != nil {
+				return nil, err
+			}
 		}
 		hostMetrics, err := c.collectHostPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, host)
 		if err != nil {
-			return err
-		}
-		if hostMetrics == nil || hostMetrics.CPUPercent == nil || hostMetrics.MemoryPercent == nil {
-			return &ConnectionError{Category: "endpoint", Message: "VMware performance metrics are unavailable for host inventory"}
+			if err := recordOptionalIssue("host", host.Host, err); err != nil {
+				return nil, err
+			}
+		} else if hostMetrics == nil || hostMetrics.CPUPercent == nil || hostMetrics.MemoryPercent == nil {
+			if err := recordOptionalIssue("host", host.Host, &ConnectionError{
+				Category: "endpoint",
+				Message:  "VMware performance metrics are unavailable for host inventory",
+			}); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if len(snapshot.VMs) > 0 {
 		vm := snapshot.VMs[0]
 		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", vm.VM, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
-			return err
+			if err := recordOptionalIssue("vm", vm.VM, err); err != nil {
+				return nil, err
+			}
 		}
 		if _, _, err := c.collectVMSnapshotTree(ctx, release, sessionID, vm.VM); err != nil && !isVIJSONNotFound(err) {
-			return err
+			if err := recordOptionalIssue("vm", vm.VM, err); err != nil {
+				return nil, err
+			}
 		}
 		vmMetrics, err := c.collectVMPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, vm)
 		if err != nil {
-			return err
-		}
-		if vmMetrics == nil || vmMetrics.CPUPercent == nil || vmMetrics.MemoryPercent == nil {
-			return &ConnectionError{Category: "endpoint", Message: "VMware performance metrics are unavailable for vm inventory"}
+			if err := recordOptionalIssue("vm", vm.VM, err); err != nil {
+				return nil, err
+			}
+		} else if vmMetrics == nil || vmMetrics.CPUPercent == nil || vmMetrics.MemoryPercent == nil {
+			if err := recordOptionalIssue("vm", vm.VM, &ConnectionError{
+				Category: "endpoint",
+				Message:  "VMware performance metrics are unavailable for vm inventory",
+			}); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if len(snapshot.Datastores) > 0 {
 		datastore := snapshot.Datastores[0]
 		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Datastore", datastore.Datastore, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
-			return err
+			if err := recordOptionalIssue("storage", datastore.Datastore, err); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if len(snapshot.Networks) > 0 {
 		network := snapshot.Networks[0]
 		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Network", network.Network, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
-			return err
+			if err := recordOptionalIssue("network", network.Network, err); err != nil {
+				return nil, err
+			}
 		}
 	}
-	return nil
+	sort.Slice(issues, func(i, j int) bool {
+		return inventoryEnrichmentIssueSortKey(issues[i]) < inventoryEnrichmentIssueSortKey(issues[j])
+	})
+	return issues, nil
 }
 
 func (c *Client) enrichInventorySnapshot(

@@ -827,6 +827,13 @@ with no edit overlay must refresh that same summary owner, and
 recomputing or shadowing it inside handler-local runtime state. Internal
 sub-second test harness intervals must not leak `intervalSeconds: 0` onto that
 operator-facing contract.
+Manual saved-connection tests that prove the required VMware API floor but
+encounter non-fatal optional signal or performance failures must record a
+successful poll attempt together with `observed.degraded`, `issueCount`, and
+the summarized upstream diagnostics. They must not erase the same
+partial-success evidence that a live inventory poll would publish, while
+authentication, TLS, network, and required API-family failures must continue
+to increment canonical poll failure state.
 That same monitoring boundary now also owns runtime mock rebind continuity for
 API-backed supplemental providers. When `/api/system/mock-mode` flips on a
 running server, the live TrueNAS and VMware provider bindings must swap to the

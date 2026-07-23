@@ -807,8 +807,11 @@ func (p *VMwarePoller) RecordConnectionTestSuccess(orgID, connID string, summary
 			Datastores:  summary.Datastores,
 			Networks:    summary.Networks,
 			VIRelease:   strings.TrimSpace(summary.VIRelease),
+			Degraded:    summary.Degraded || len(summary.Issues) > 0,
+			IssueCount:  len(summary.Issues),
+			Issues:      summarizeVMwareObservedIssues(summary.Issues),
 		}
-		status.observedIssueKey = ""
+		status.observedIssueKey = summarizeVMwareObservedIssueKey(summary.Issues)
 	}
 }
 
@@ -925,7 +928,9 @@ func cloneVMwareObservedSummary(value *VMwareConnectionObservedSummary) *VMwareC
 	}
 }
 
-func summarizeVMwareObservedIssues(issues []vmware.InventoryEnrichmentIssue) []VMwareConnectionObservedIssue {
+// SummarizeVMwareObservedIssues converts detailed optional-read failures into
+// the bounded operator-facing issue shape shared by polling and manual tests.
+func SummarizeVMwareObservedIssues(issues []vmware.InventoryEnrichmentIssue) []VMwareConnectionObservedIssue {
 	if len(issues) == 0 {
 		return nil
 	}
@@ -973,6 +978,10 @@ func summarizeVMwareObservedIssues(issues []vmware.InventoryEnrichmentIssue) []V
 		summary = summary[:3]
 	}
 	return summary
+}
+
+func summarizeVMwareObservedIssues(issues []vmware.InventoryEnrichmentIssue) []VMwareConnectionObservedIssue {
+	return SummarizeVMwareObservedIssues(issues)
 }
 
 func summarizeVMwareObservedIssueKey(issues []vmware.InventoryEnrichmentIssue) string {

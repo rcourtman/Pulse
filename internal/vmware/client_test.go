@@ -303,7 +303,7 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	}
 }
 
-func TestClientTestConnectionRequiresSignalFloor(t *testing.T) {
+func TestClientTestConnectionReportsUnavailableOptionalSignalAsDegraded(t *testing.T) {
 	server := newVMwareTestServer(t, vmwareTestServerConfig{
 		omitHostOverallStatus: true,
 	})
@@ -320,16 +320,49 @@ func TestClientTestConnectionRequiresSignalFloor(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
+	summary, err := client.TestConnection(context.Background())
+	if err != nil {
+		t.Fatalf("TestConnection: %v", err)
+	}
+	if summary == nil || !summary.Degraded {
+		t.Fatalf("expected degraded connection summary, got %+v", summary)
+	}
+	if len(summary.Issues) != 1 ||
+		summary.Issues[0].Stage != "signals" ||
+		summary.Issues[0].EntityType != "host" ||
+		summary.Issues[0].Category != "not_found" ||
+		!strings.Contains(summary.Issues[0].Message, "overall status") {
+		t.Fatalf("expected unavailable host signal diagnostic, got %+v", summary.Issues)
+	}
+}
+
+func TestClientTestConnectionStillRejectsSignalAuthenticationFailure(t *testing.T) {
+	server := newVMwareTestServer(t, vmwareTestServerConfig{
+		unauthorizedHostOverallStatus: true,
+	})
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
 	_, err = client.TestConnection(context.Background())
 	if err == nil {
-		t.Fatal("expected signal-floor validation error")
+		t.Fatal("expected authentication failure")
 	}
 	connectionErr, ok := err.(*ConnectionError)
 	if !ok {
 		t.Fatalf("expected ConnectionError, got %T", err)
 	}
-	if connectionErr.Category != "not_found" {
-		t.Fatalf("connection error category = %q, want not_found", connectionErr.Category)
+	if connectionErr.Category != "auth" {
+		t.Fatalf("connection error category = %q, want auth", connectionErr.Category)
 	}
 }
 
@@ -478,10 +511,11 @@ func TestClientResolveVIJSONReleaseClassifiesUnsupportedVersionFloor(t *testing.
 }
 
 type vmwareTestServerConfig struct {
-	omitHostOverallStatus  bool
-	denyHostOverallStatus  bool
-	denyClusterInventory   bool
-	unavailableVMGuestInfo bool
+	omitHostOverallStatus         bool
+	denyHostOverallStatus         bool
+	unauthorizedHostOverallStatus bool
+	denyClusterInventory          bool
+	unavailableVMGuestInfo        bool
 }
 
 func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Server {
@@ -874,6 +908,10 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	if !cfg.omitHostOverallStatus {
 		mux.HandleFunc("/sdk/vim25/9.0.0.0/HostSystem/host-101/overallStatus", func(w http.ResponseWriter, r *http.Request) {
 			requireVISession(t, r)
+			if cfg.unauthorizedHostOverallStatus {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 			if cfg.denyHostOverallStatus {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return

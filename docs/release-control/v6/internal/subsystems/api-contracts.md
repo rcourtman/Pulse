@@ -5360,6 +5360,17 @@ preserve the canonical top-level `code` plus string-valued `details.error` and
 `frontend-modern/src/utils/apiClient.ts` plus
 `frontend-modern/src/api/responseUtils.ts` must carry that metadata through the
 shared error object without inventing a VMware-only fetch or parsing path.
+After the required endpoint, TLS, Automation API session, base inventory,
+negotiated VI JSON login, and performance-counter catalog gates succeed, those
+same test routes must classify optional signal and performance read failures
+the same way as the live poller. Non-fatal enrichment categories
+(`permission`, `not_found`, `unavailable`, and `endpoint`) return
+`success: true` with `degraded`, the negotiated `viRelease`, `issueCount`, and
+preserved `issues`; authentication, TLS, network, unsupported-version, and
+required API-family failures remain hard failures. A degraded response is not
+a green test: the shared VMware settings client must preserve the diagnostic
+and present a limited-data warning instead of converting the optional upstream
+failure into either generic success or total connection failure.
 That same TrueNAS and VMware platform-connections contract now also owns
 per-surface scope as a first-class field on the connection shape. The
 TrueNAS connection payload must carry positive `monitorDatasets`,

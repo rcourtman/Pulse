@@ -86,7 +86,51 @@ export interface VMwareConnectionInput {
 
 export interface VMwareConnectionTestResult {
   success: boolean;
+  hosts: number;
+  vms: number;
+  datastores: number;
+  networks: number;
+  viRelease?: string;
+  degraded: boolean;
+  issueCount: number;
+  issues: VMwareConnectionTestIssue[];
 }
+
+export interface VMwareConnectionTestIssue {
+  stage?: string;
+  entityType?: string;
+  entityId?: string;
+  category?: string;
+  message?: string;
+}
+
+type RawVMwareConnectionTestIssue = Partial<VMwareConnectionTestIssue> & {
+  entity_type?: unknown;
+  entity_id?: unknown;
+};
+
+const normalizeVMwareConnectionTestResult = (
+  response: Partial<VMwareConnectionTestResult> & {
+    issues?: RawVMwareConnectionTestIssue[];
+  },
+): VMwareConnectionTestResult => ({
+  success: strictBoolean(response.success),
+  hosts: finiteNumberOrUndefined(response.hosts) ?? 0,
+  vms: finiteNumberOrUndefined(response.vms) ?? 0,
+  datastores: finiteNumberOrUndefined(response.datastores) ?? 0,
+  networks: finiteNumberOrUndefined(response.networks) ?? 0,
+  viRelease: optionalTrimmedString(response.viRelease),
+  degraded: strictBoolean(response.degraded),
+  issueCount: finiteNumberOrUndefined(response.issueCount) ?? 0,
+  issues:
+    arrayOrUndefined<RawVMwareConnectionTestIssue>(response.issues)?.map((issue) => ({
+      stage: optionalTrimmedString(issue.stage),
+      entityType: optionalTrimmedString(issue.entityType ?? issue.entity_type),
+      entityId: optionalTrimmedString(issue.entityId ?? issue.entity_id),
+      category: optionalTrimmedString(issue.category),
+      message: optionalTrimmedString(issue.message),
+    })) ?? [],
+});
 
 const normalizeVMwareConnectionPollError = (
   error: RawVMwareConnectionPollError | undefined,
@@ -213,9 +257,7 @@ export class VMwareAPI {
         body: JSON.stringify(serializeVMwareConnectionInput(input)),
       },
     );
-    return {
-      success: strictBoolean(response.success),
-    };
+    return normalizeVMwareConnectionTestResult(response);
   }
 
   static async testSavedConnection(
@@ -231,9 +273,7 @@ export class VMwareAPI {
           : {}),
       },
     );
-    return {
-      success: strictBoolean(response.success),
-    };
+    return normalizeVMwareConnectionTestResult(response);
   }
 
   static async previewConnection(

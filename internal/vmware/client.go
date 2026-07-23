@@ -83,6 +83,8 @@ type InventorySummary struct {
 	Datastores int
 	Networks   int
 	VIRelease  string
+	Degraded   bool
+	Issues     []InventoryEnrichmentIssue
 }
 
 // ClientConfig configures a VMware vCenter client.
@@ -169,7 +171,8 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 	if err != nil {
 		return nil, err
 	}
-	if err := c.validateSignalFloor(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, inventory, perfCounters); err != nil {
+	issues, err := c.validateSignalFloor(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, inventory, perfCounters)
+	if err != nil {
 		return nil, err
 	}
 	return &InventorySummary{
@@ -178,6 +181,8 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 		Datastores: len(inventory.Datastores),
 		Networks:   len(inventory.Networks),
 		VIRelease:  release,
+		Degraded:   len(issues) > 0,
+		Issues:     issues,
 	}, nil
 }
 

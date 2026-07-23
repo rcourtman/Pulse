@@ -1287,6 +1287,11 @@ recovery scope, or a storage/recovery-owned secret source.
     aliases.
 27. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
+    A successful VMware connection test with `degraded` optional signal or
+    performance diagnostics remains connection-readiness context only; storage
+    and recovery must not reinterpret that warning as datastore protection
+    damage, snapshot recovery failure, restore readiness, or recovery-point
+    evidence.
     The shared route-registration file may also expose the authenticated
     running-release notes endpoint for deployment/update presentation. That
     route remains deployment-installability and API-contract owned; storage

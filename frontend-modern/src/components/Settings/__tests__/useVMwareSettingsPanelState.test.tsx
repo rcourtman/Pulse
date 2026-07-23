@@ -22,6 +22,7 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     success: vi.fn(),
     error: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -220,6 +221,59 @@ describe('useVMwareSettingsPanelState', () => {
     );
     expect(VMwareAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
+  });
+
+  it('reports optional VMware test failures as a degraded success with diagnostics', async () => {
+    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([
+      {
+        id: 'conn-1',
+        name: 'lab-vcenter',
+        host: 'vcsa.lab.local',
+        port: 443,
+        username: 'administrator@vsphere.local',
+        password: '********',
+        insecureSkipVerify: true,
+        enabled: true,
+      },
+    ] as never);
+    vi.mocked(VMwareAPI.testSavedConnection).mockResolvedValueOnce({
+      success: true,
+      hosts: 2,
+      vms: 14,
+      datastores: 3,
+      networks: 5,
+      viRelease: '8.0.2.0',
+      degraded: true,
+      issueCount: 1,
+      issues: [
+        {
+          stage: 'signals',
+          entityType: 'host',
+          entityId: 'host-101',
+          category: 'endpoint',
+          message: 'VMware HostSystem recent events request failed with HTTP 500',
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await waitFor(() => expect(result.connections()).toHaveLength(1));
+
+    result.openEditDialog(result.connections()[0]);
+    const succeeded = await result.testCurrentForm();
+
+    expect(succeeded).toBe(true);
+    expect(notificationStore.warning).toHaveBeenCalledWith(
+      'VMware HostSystem recent events request failed with HTTP 500',
+    );
+    expect(notificationStore.success).not.toHaveBeenCalled();
+    expect(result.connectionFailure()).toBeNull();
+    expect(result.connectionTestWarning()).toEqual({
+      title: 'VMware connection has limited data access',
+      message: 'VMware HostSystem recent events request failed with HTTP 500',
+      guidance:
+        'Core inventory, authentication, and API compatibility checks succeeded using VI JSON 8.0.2.0. Pulse will keep monitoring and report affected optional data as degraded.',
+    });
   });
 
   it('saves a connection without requiring a monitored-system preview', async () => {

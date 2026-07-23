@@ -41,6 +41,18 @@ type vmwareConnectionResponse struct {
 	Observed *monitoring.VMwareConnectionObservedSummary `json:"observed,omitempty"`
 }
 
+type vmwareConnectionTestResponse struct {
+	Success    bool                              `json:"success"`
+	Hosts      int                               `json:"hosts"`
+	VMs        int                               `json:"vms"`
+	Datastores int                               `json:"datastores"`
+	Networks   int                               `json:"networks"`
+	VIRelease  string                            `json:"viRelease,omitempty"`
+	Degraded   bool                              `json:"degraded,omitempty"`
+	IssueCount int                               `json:"issueCount,omitempty"`
+	Issues     []vmware.InventoryEnrichmentIssue `json:"issues,omitempty"`
+}
+
 type vmwareConnectionRuntimeStatus struct {
 	Poll     *monitoring.VMwareConnectionPollStatus
 	Observed *monitoring.VMwareConnectionObservedSummary
@@ -477,7 +489,7 @@ func (h *VMwareHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *htt
 				h.recordTestSuccess(connectionID, summary, at)
 			}
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"success": true})
+		writeJSON(w, http.StatusOK, newVMwareConnectionTestResponse(summary))
 		return
 	}
 
@@ -489,12 +501,30 @@ func (h *VMwareHandlers) writeConnectionTestResult(
 	r *http.Request,
 	instance config.VMwareVCenterInstance,
 ) {
-	_, invalidConfig, err := h.testConnectionInstance(r, instance)
+	summary, invalidConfig, err := h.testConnectionInstance(r, instance)
 	if err != nil {
 		h.writeConnectionFailure(w, invalidConfig, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+	writeJSON(w, http.StatusOK, newVMwareConnectionTestResponse(summary))
+}
+
+func newVMwareConnectionTestResponse(summary *vmware.InventorySummary) vmwareConnectionTestResponse {
+	response := vmwareConnectionTestResponse{Success: true}
+	if summary == nil {
+		return response
+	}
+	response.Hosts = summary.Hosts
+	response.VMs = summary.VMs
+	response.Datastores = summary.Datastores
+	response.Networks = summary.Networks
+	response.VIRelease = strings.TrimSpace(summary.VIRelease)
+	response.Degraded = summary.Degraded || len(summary.Issues) > 0
+	response.IssueCount = len(summary.Issues)
+	if len(summary.Issues) > 0 {
+		response.Issues = append([]vmware.InventoryEnrichmentIssue(nil), summary.Issues...)
+	}
+	return response
 }
 
 func (h *VMwareHandlers) writeConnectionFailure(w http.ResponseWriter, invalidConfig bool, err error) {
@@ -719,6 +749,9 @@ func (h *VMwareHandlers) recordTestSuccess(connectionID string, summary *vmware.
 			Datastores:  summary.Datastores,
 			Networks:    summary.Networks,
 			VIRelease:   strings.TrimSpace(summary.VIRelease),
+			Degraded:    summary.Degraded || len(summary.Issues) > 0,
+			IssueCount:  len(summary.Issues),
+			Issues:      monitoring.SummarizeVMwareObservedIssues(summary.Issues),
 		}
 	}
 	h.statuses[connectionID] = current

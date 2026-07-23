@@ -1670,6 +1670,147 @@ func TestVMwareHandlers_HandleTestSavedConnection_MergesEditedPayloadWithoutOver
 	}
 }
 
+func TestVMwareHandlers_HandleTestSavedConnection_ReportsOptionalVIJSONFailureAsDegraded(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	var serviceContentProbes []string
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeUpstreamJSON := func(status int, payload any) {
+			t.Helper()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			if err := json.NewEncoder(w).Encode(payload); err != nil {
+				t.Fatalf("encode VMware upstream response: %v", err)
+			}
+		}
+
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/session":
+			username, password, ok := r.BasicAuth()
+			if !ok || username != "administrator@vsphere.local" || password != "super-secret" {
+				t.Fatalf("expected saved VMware credentials, got username=%q password=%q", username, password)
+			}
+			writeUpstreamJSON(http.StatusCreated, "automation-session")
+		case r.Method == http.MethodGet && r.URL.Path == "/api/vcenter/host":
+			writeUpstreamJSON(http.StatusOK, []map[string]any{{
+				"host":             "host-101",
+				"name":             "esxi-01.lab.local",
+				"connection_state": "CONNECTED",
+				"power_state":      "POWERED_ON",
+			}})
+		case r.Method == http.MethodGet && (r.URL.Path == "/api/vcenter/vm" ||
+			r.URL.Path == "/api/vcenter/datastore" ||
+			r.URL.Path == "/api/vcenter/network"):
+			writeUpstreamJSON(http.StatusOK, []map[string]any{})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/ServiceInstance/ServiceInstance/content"):
+			parts := strings.Split(r.URL.Path, "/")
+			if len(parts) < 4 {
+				t.Fatalf("unexpected VMware service-content path %q", r.URL.Path)
+			}
+			release := parts[3]
+			serviceContentProbes = append(serviceContentProbes, release)
+			if release != "8.0.2.0" {
+				writeUpstreamJSON(http.StatusInternalServerError, map[string]any{"error": "unsupported release path"})
+				return
+			}
+			writeUpstreamJSON(http.StatusOK, map[string]any{
+				"sessionManager": map[string]any{"value": "SessionManager"},
+				"perfManager":    map[string]any{"value": "PerformanceManager"},
+				"eventManager":   map[string]any{"value": "EventManager"},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/sdk/vim25/8.0.2.0/SessionManager/SessionManager/Login":
+			w.Header().Set("vmware-api-session-id", "vi-session")
+			writeUpstreamJSON(http.StatusOK, map[string]any{"value": "ok"})
+		case r.Method == http.MethodGet && r.URL.Path == "/sdk/vim25/8.0.2.0/PerformanceManager/PerformanceManager/perfCounter":
+			writeUpstreamJSON(http.StatusOK, []map[string]any{
+				{"key": 1, "groupInfo": map[string]any{"key": "cpu"}, "nameInfo": map[string]any{"key": "usage"}, "rollupType": "average"},
+				{"key": 2, "groupInfo": map[string]any{"key": "mem"}, "nameInfo": map[string]any{"key": "usage"}, "rollupType": "average"},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/sdk/vim25/8.0.2.0/HostSystem/host-101/overallStatus":
+			writeUpstreamJSON(http.StatusOK, "green")
+		case r.Method == http.MethodGet && r.URL.Path == "/sdk/vim25/8.0.2.0/HostSystem/host-101/triggeredAlarmState":
+			writeUpstreamJSON(http.StatusOK, []map[string]any{})
+		case r.Method == http.MethodGet && r.URL.Path == "/sdk/vim25/8.0.2.0/HostSystem/host-101/recentTask":
+			writeUpstreamJSON(http.StatusOK, []map[string]any{})
+		case r.Method == http.MethodPost && r.URL.Path == "/sdk/vim25/8.0.2.0/EventManager/EventManager/QueryEvents":
+			writeUpstreamJSON(http.StatusInternalServerError, map[string]any{"error": "vCenter event query failed"})
+		case r.Method == http.MethodPost && r.URL.Path == "/sdk/vim25/8.0.2.0/PerformanceManager/PerformanceManager/QueryPerfProviderSummary":
+			writeUpstreamJSON(http.StatusOK, map[string]any{"currentSupported": true, "refreshRate": 20})
+		case r.Method == http.MethodPost && r.URL.Path == "/sdk/vim25/8.0.2.0/PerformanceManager/PerformanceManager/QueryAvailablePerfMetric":
+			writeUpstreamJSON(http.StatusOK, []map[string]any{
+				{"counterId": 1, "instance": ""},
+				{"counterId": 2, "instance": ""},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/sdk/vim25/8.0.2.0/PerformanceManager/PerformanceManager/QueryPerf":
+			writeUpstreamJSON(http.StatusOK, []map[string]any{{
+				"entity": map[string]any{"type": "HostSystem", "value": "host-101"},
+				"value": []map[string]any{
+					{"id": map[string]any{"counterId": 1, "instance": ""}, "value": []int64{2140}},
+					{"id": map[string]any{"counterId": 2, "instance": ""}, "value": []int64{6320}},
+				},
+			}})
+		default:
+			t.Fatalf("unexpected VMware upstream request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{{
+		ID:                 "conn-1",
+		Name:               "lab-vcenter",
+		Host:               upstream.URL,
+		Username:           "administrator@vsphere.local",
+		Password:           "super-secret",
+		InsecureSkipVerify: true,
+		Enabled:            true,
+	}}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"name":               "lab-vcenter",
+		"host":               upstream.URL,
+		"username":           "administrator@vsphere.local",
+		"password":           "********",
+		"insecureSkipVerify": true,
+		"enabled":            true,
+	})
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/vmware/connections/conn-1/test",
+		bytes.NewReader(body),
+	)
+	rec := httptest.NewRecorder()
+	handler.HandleTestSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected compatible connection with optional event failure to return 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Success   bool                              `json:"success"`
+		Degraded  bool                              `json:"degraded"`
+		VIRelease string                            `json:"viRelease"`
+		Issues    []vmware.InventoryEnrichmentIssue `json:"issues"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode degraded connection-test response: %v", err)
+	}
+	if !payload.Success || !payload.Degraded || payload.VIRelease != "8.0.2.0" {
+		t.Fatalf("expected degraded success on negotiated 8.0.2.0 release, got %+v", payload)
+	}
+	if len(payload.Issues) != 1 ||
+		payload.Issues[0].Stage != "signals" ||
+		payload.Issues[0].EntityType != "host" ||
+		payload.Issues[0].Category != "endpoint" ||
+		payload.Issues[0].Message != "VMware HostSystem recent events request failed with HTTP 500" {
+		t.Fatalf("expected preserved recent-events diagnostic, got %+v", payload.Issues)
+	}
+	if got, want := strings.Join(serviceContentProbes, ","), "9.0.0.0,8.0.3,8.0.2.0"; got != want {
+		t.Fatalf("expected VI JSON release negotiation through %s, got %s", want, got)
+	}
+}
+
 func newVMwareHandlersForTest(t *testing.T) (*VMwareHandlers, *config.ConfigPersistence) {
 	t.Helper()
 

@@ -188,7 +188,17 @@ describe('VMwareAPI', () => {
         username: 'administrator@vsphere.local',
         password: 'secret',
       }),
-    ).resolves.toEqual({ success: true });
+    ).resolves.toEqual({
+      success: true,
+      hosts: 0,
+      vms: 0,
+      datastores: 0,
+      networks: 0,
+      viRelease: undefined,
+      degraded: false,
+      issueCount: 0,
+      issues: [],
+    });
     await expect(
       VMwareAPI.testSavedConnection('conn/1', {
         host: 'vcsa.lab.local',
@@ -196,7 +206,17 @@ describe('VMwareAPI', () => {
         password: '********',
         insecureSkipVerify: true,
       }),
-    ).resolves.toEqual({ success: true });
+    ).resolves.toEqual({
+      success: true,
+      hosts: 0,
+      vms: 0,
+      datastores: 0,
+      networks: 0,
+      viRelease: undefined,
+      degraded: false,
+      issueCount: 0,
+      issues: [],
+    });
 
     expect(apiFetchJSON).toHaveBeenNthCalledWith(
       1,
@@ -258,6 +278,54 @@ describe('VMwareAPI', () => {
         }),
       }),
     );
+  });
+
+  it('preserves degraded connection-test diagnostics', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      success: true,
+      hosts: 2,
+      vms: 14,
+      datastores: 3,
+      networks: 5,
+      viRelease: ' 8.0.2.0 ',
+      degraded: true,
+      issueCount: 1,
+      issues: [
+        {
+          stage: ' signals ',
+          entity_type: ' host ',
+          entity_id: ' host-101 ',
+          category: ' endpoint ',
+          message: ' VMware HostSystem recent events request failed with HTTP 500 ',
+        },
+      ],
+    });
+
+    await expect(
+      VMwareAPI.testSavedConnection('conn-1', {
+        host: 'vcsa.lab.local',
+        username: 'administrator@vsphere.local',
+        password: '********',
+      }),
+    ).resolves.toEqual({
+      success: true,
+      hosts: 2,
+      vms: 14,
+      datastores: 3,
+      networks: 5,
+      viRelease: '8.0.2.0',
+      degraded: true,
+      issueCount: 1,
+      issues: [
+        {
+          stage: 'signals',
+          entityType: 'host',
+          entityId: 'host-101',
+          category: 'endpoint',
+          message: 'VMware HostSystem recent events request failed with HTTP 500',
+        },
+      ],
+    });
   });
 
   it('recognizes the masked-secret placeholder used for update preservation', () => {

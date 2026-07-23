@@ -122,6 +122,17 @@ Phase-1 rule:
    through the shared browser client so the settings workflow can distinguish
    version-floor, auth, TLS, permission, and network failures without a
    VMware-only fetch path
+6. once endpoint, TLS, Automation session, base inventory, VI JSON release
+   negotiation and login, and the performance-counter catalog have succeeded,
+   optional signal or performance reads must use the same partial-success
+   classification as runtime polling; `permission`, `not_found`, `unavailable`,
+   and `endpoint` failures return a successful but explicitly `degraded` test
+   result with the negotiated `viRelease`, `issueCount`, and preserved `issues`,
+   while authentication, TLS, network, and required-family failures remain hard
+   connection-test failures
+7. the settings workflow must render that degraded result as a warning with the
+   upstream diagnostic, never as a fully green connection or as a total
+   connection failure
 
 ## Runtime Health And Poll Summary Contract
 

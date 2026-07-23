@@ -5,6 +5,7 @@ import {
   isRedactedVMwareSecret,
   type VMwareConnection,
   type VMwareConnectionInput,
+  type VMwareConnectionTestResult,
 } from '@/api/vmware';
 import { apiErrorCode, apiErrorDetailField, apiErrorStatus } from '@/api/responseUtils';
 import { notificationStore } from '@/stores/notifications';
@@ -30,6 +31,12 @@ export interface VMwareConnectionFormState {
   monitorHosts: boolean;
   monitorDatastores: boolean;
   hasStoredPassword: boolean;
+}
+
+export interface VMwareConnectionTestWarning {
+  title: string;
+  message: string;
+  guidance: string;
 }
 
 const REDACTED_SECRET = '********';
@@ -93,6 +100,25 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 const getVMwareErrorMessage = (error: unknown, fallback: string): string =>
   apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
 
+const buildConnectionTestWarning = (
+  result: VMwareConnectionTestResult,
+): VMwareConnectionTestWarning | null => {
+  if (!result.degraded) return null;
+  const diagnostic =
+    result.issues.find((issue) => issue.message?.trim())?.message?.trim() ||
+    `${result.issueCount || result.issues.length || 1} optional VMware read${
+      (result.issueCount || result.issues.length || 1) === 1 ? '' : 's'
+    } could not be completed.`;
+  const release = result.viRelease?.trim();
+  return {
+    title: 'VMware connection has limited data access',
+    message: diagnostic,
+    guidance: `Core inventory, authentication, and API compatibility checks succeeded${
+      release ? ` using VI JSON ${release}` : ''
+    }. Pulse will keep monitoring and report affected optional data as degraded.`,
+  };
+};
+
 const monitoredSystemImpactPreviewUnavailableStateFromError = (error: unknown) => {
   return buildMonitoredSystemImpactPreviewUnavailableState({
     code: apiErrorCode(error),
@@ -138,6 +164,8 @@ export function useVMwareSettingsPanelState() {
   const [previewing, setPreviewing] = createSignal(false);
   const [connectionFailure, setConnectionFailure] =
     createSignal<VMwareConnectionFailurePresentation | null>(null);
+  const [connectionTestWarning, setConnectionTestWarning] =
+    createSignal<VMwareConnectionTestWarning | null>(null);
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
     createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
   const [monitoredSystemPreviewUnavailableState, setMonitoredSystemPreviewUnavailableState] =
@@ -188,6 +216,7 @@ export function useVMwareSettingsPanelState() {
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
     setConnectionFailure(null);
+    setConnectionTestWarning(null);
     setMonitoredSystemPreview(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
@@ -198,6 +227,7 @@ export function useVMwareSettingsPanelState() {
     setEditingConnectionId(connection.id);
     setForm(buildFormStateFromConnection(connection));
     setConnectionFailure(null);
+    setConnectionTestWarning(null);
     setMonitoredSystemPreview(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
@@ -209,6 +239,7 @@ export function useVMwareSettingsPanelState() {
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
     setConnectionFailure(null);
+    setConnectionTestWarning(null);
     setMonitoredSystemPreview(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
@@ -236,6 +267,7 @@ export function useVMwareSettingsPanelState() {
 
   const updateForm = (patch: Partial<VMwareConnectionFormState>) => {
     setConnectionFailure(null);
+    setConnectionTestWarning(null);
     setMonitoredSystemPreview(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
@@ -245,14 +277,19 @@ export function useVMwareSettingsPanelState() {
   const testCurrentForm = async () => {
     setTesting(true);
     setConnectionFailure(null);
+    setConnectionTestWarning(null);
     try {
       const payload = buildConnectionInput(form());
-      if (editingConnectionId()) {
-        await VMwareAPI.testSavedConnection(editingConnectionId()!, payload);
+      const result = editingConnectionId()
+        ? await VMwareAPI.testSavedConnection(editingConnectionId()!, payload)
+        : await VMwareAPI.testConnection(payload);
+      const warning = buildConnectionTestWarning(result);
+      setConnectionTestWarning(warning);
+      if (warning) {
+        notificationStore.warning(warning.message);
       } else {
-        await VMwareAPI.testConnection(payload);
+        notificationStore.success('VMware connection successful');
       }
-      notificationStore.success('VMware connection successful');
       return true;
     } catch (error) {
       const failure = buildVMwareConnectionFailurePresentation({
@@ -273,10 +310,17 @@ export function useVMwareSettingsPanelState() {
   const testSavedConnection = async (connection: VMwareConnection) => {
     setTesting(true);
     try {
-      await VMwareAPI.testSavedConnection(connection.id);
-      notificationStore.success(
-        `VMware connection successful for ${connection.name || connection.host}`,
-      );
+      const result = await VMwareAPI.testSavedConnection(connection.id);
+      const warning = buildConnectionTestWarning(result);
+      if (warning) {
+        notificationStore.warning(
+          `VMware connection for ${connection.name || connection.host} has limited data access: ${warning.message}`,
+        );
+      } else {
+        notificationStore.success(
+          `VMware connection successful for ${connection.name || connection.host}`,
+        );
+      }
     } catch (error) {
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
@@ -394,6 +438,7 @@ export function useVMwareSettingsPanelState() {
     featureDisabledMessage,
     form,
     connectionFailure,
+    connectionTestWarning,
     loadConnections,
     loading,
     loadingError,
