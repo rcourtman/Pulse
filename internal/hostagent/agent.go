@@ -3,6 +3,8 @@ package hostagent
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
@@ -153,6 +156,8 @@ type Agent struct {
 	runCommandClient       func(*CommandClient, context.Context) error
 	packageUpdates         *packageUpdateManager
 	storageCleanup         *storageCleanupManager
+	reportStreamID         string
+	reportSequence         atomic.Uint64
 
 	// lastAuthFailureLog throttles the actionable 401 error so a permanently
 	// rejected token does not spam the log every report interval. Only touched
@@ -332,6 +337,11 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
+	reportStreamID, err := newReportStreamID()
+	if err != nil {
+		return nil, fmt.Errorf("create report stream ID: %w", err)
+	}
+
 	const bufferCapacity = 60
 
 	// Check if agent was recently auto-updated (only reported once per restart)
@@ -377,6 +387,7 @@ func New(cfg Config) (*Agent, error) {
 		runCommandClient:    runCommandClientFn,
 		packageUpdates:      packageUpdates,
 		storageCleanup:      storageCleanup,
+		reportStreamID:      reportStreamID,
 	}
 
 	// Create command client for AI command execution (only if enabled)
@@ -388,6 +399,21 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	return agent, nil
+}
+
+func newReportStreamID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw[:]), nil
+}
+
+func (a *Agent) nextReportSequenceID() string {
+	if a == nil || strings.TrimSpace(a.reportStreamID) == "" {
+		return ""
+	}
+	return agentshost.FormatReportSequenceID(a.reportStreamID, a.reportSequence.Add(1))
 }
 
 func newAgentHTTPClient(caCertPath string, insecureSkipVerify bool, serverFingerprint string) (*http.Client, error) {
@@ -704,6 +730,17 @@ func (a *Agent) process(ctx context.Context) error {
 }
 
 func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Report) error {
+	// Preserve collection order across reconnects. Sending the newest report
+	// before the buffered FIFO can let an older long-running-task snapshot
+	// overwrite a newer cancellation or completion on the server.
+	if !a.reportBuffer.IsEmpty() {
+		a.flushBuffer(ctx)
+		if !a.reportBuffer.IsEmpty() {
+			a.reportBuffer.Push(report)
+			return nil
+		}
+	}
+
 	if err := a.sendReport(ctx, report); err != nil {
 		agenttarget.MarkDelivery("host", "primary", "primary", false)
 		var statusErr *reportHTTPStatusError
@@ -755,6 +792,14 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 }
 
 func (a *Agent) deliverObserverReport(ctx context.Context, observer *observerReporter, report agentshost.Report) {
+	if !observer.reportBuffer.IsEmpty() {
+		a.flushObserverBuffer(ctx, observer)
+		if !observer.reportBuffer.IsEmpty() {
+			observer.reportBuffer.Push(report)
+			return
+		}
+	}
+
 	if err := a.sendReportToDestination(ctx, report, observer.target.PulseURL, observer.target.APIToken, observer.httpClient, false); err != nil {
 		agenttarget.MarkDelivery("host", observer.target.Name, "observer", false)
 		var statusErr *reportHTTPStatusError
@@ -805,8 +850,8 @@ func (a *Agent) flushObserverBuffer(ctx context.Context, observer *observerRepor
 }
 
 // logAuthFailure emits an actionable, throttled error when the server rejects
-// the agent's API token with 401. It is only called from the single-threaded
-// report loop, so lastAuthFailureLog needs no additional synchronisation.
+// the agent's API token. It is only called from the single-threaded report
+// loop, so lastAuthFailureLog needs no additional synchronisation.
 func (a *Agent) logAuthFailure(statusErr *reportHTTPStatusError) {
 	if time.Since(a.lastAuthFailureLog) < authFailureLogInterval {
 		return
@@ -822,11 +867,15 @@ func (a *Agent) logAuthFailure(statusErr *reportHTTPStatusError) {
 		statusCode = statusErr.StatusCode
 	}
 
-	a.logger.Error().
+	event := a.logger.Error().
 		Str("endpoint", endpoint).
 		Int("status_code", statusCode).
-		Str("pulse_url", a.trimmedPulseURL).
-		Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI to mint a fresh token. Reports are dropped until the token is replaced.")
+		Str("pulse_url", a.trimmedPulseURL)
+	if statusCode == http.StatusForbidden {
+		event.Msg("Pulse rejected this agent's API token (403 Forbidden). The token may lack the Unified Agent reporting scope. Re-run the agent install command from the Pulse UI to mint a correctly scoped token. Reports are dropped until the token is replaced.")
+		return
+	}
+	event.Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI to mint a fresh token. Reports are dropped until the token is replaced.")
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
@@ -845,7 +894,8 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 
 		if err := a.sendReport(ctx, report); err != nil {
 			var statusErr *reportHTTPStatusError
-			if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized {
+			if errors.As(err, &statusErr) &&
+				(statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden) {
 				// The token is rejected; buffered reports will never be
 				// accepted with it. Drop them so the buffer cannot grow
 				// unbounded across restarts, and surface the actionable error.
@@ -1080,6 +1130,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		ClusterSensors: clusterSensors,
 		Tags:           append([]string(nil), runtimeConfig.tags...),
 		Timestamp:      a.collector.Now(),
+		SequenceID:     a.nextReportSequenceID(),
 	}
 
 	return report, nil

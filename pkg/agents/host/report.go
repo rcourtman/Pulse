@@ -1,10 +1,45 @@
 package host
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
+
+const reportSequenceVersion = "v1"
+
+// FormatReportSequenceID returns the opaque report-ordering token carried by a
+// single agent process. The stream ID changes when the agent restarts and the
+// sequence increases for every report collected by that process.
+func FormatReportSequenceID(streamID string, sequence uint64) string {
+	streamID = strings.TrimSpace(streamID)
+	if streamID == "" || sequence == 0 || strings.Contains(streamID, ":") {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s:%d", reportSequenceVersion, streamID, sequence)
+}
+
+// ParseReportSequenceID decodes sequence IDs produced by
+// FormatReportSequenceID. Unknown formats remain valid opaque wire values but
+// are not used for ordering by current servers.
+func ParseReportSequenceID(value string) (streamID string, sequence uint64, ok bool) {
+	parts := strings.Split(strings.TrimSpace(value), ":")
+	if len(parts) != 3 || parts[0] != reportSequenceVersion {
+		return "", 0, false
+	}
+	streamID = strings.TrimSpace(parts[1])
+	if streamID == "" {
+		return "", 0, false
+	}
+	sequence, err := strconv.ParseUint(parts[2], 10, 64)
+	if err != nil || sequence == 0 {
+		return "", 0, false
+	}
+	return streamID, sequence, true
+}
 
 // Report represents the payload sent by the host module of pulse-agent.
 type Report struct {

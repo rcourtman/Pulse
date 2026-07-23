@@ -11,13 +11,22 @@ func TestHostContinuityStoreRoundTripAndMatch(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	if err := store.Upsert(HostContinuityEntry{
-		HostID:          "host-1",
-		ReportHostID:    "machine-1",
-		AgentReportedID: "agent-1",
-		Hostname:        "host-1.local",
-		MachineID:       "machine-1",
-		TokenID:         "token-1",
-		LastSeen:        now,
+		HostID:               "host-1",
+		ReportHostID:         "machine-1",
+		AgentReportedID:      "agent-1",
+		Hostname:             "host-1.local",
+		MachineID:            "machine-1",
+		TokenID:              "token-1",
+		LastSeen:             now,
+		IntervalSeconds:      30,
+		ReportObservedAt:     now.Add(-time.Second),
+		ReportLastReceivedAt: now.Add(time.Second),
+		ReportStreamID:       "stream-current",
+		ReportSequence:       14,
+		RetiredReportStreamIDs: []string{
+			"stream-old",
+			"stream-old",
+		},
 	}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
@@ -25,7 +34,15 @@ func TestHostContinuityStoreRoundTripAndMatch(t *testing.T) {
 	reloaded := NewHostContinuityStore(dir, nil)
 	if entry, ok := reloaded.Get("host-1"); !ok {
 		t.Fatal("expected reloaded entry")
-	} else if entry.TokenID != "token-1" || entry.Hostname != "host-1.local" {
+	} else if entry.TokenID != "token-1" ||
+		entry.Hostname != "host-1.local" ||
+		entry.IntervalSeconds != 30 ||
+		entry.ReportObservedAt != now.Add(-time.Second) ||
+		entry.ReportLastReceivedAt != now.Add(time.Second) ||
+		entry.ReportStreamID != "stream-current" ||
+		entry.ReportSequence != 14 ||
+		len(entry.RetiredReportStreamIDs) != 1 ||
+		entry.RetiredReportStreamIDs[0] != "stream-old" {
 		t.Fatalf("unexpected reloaded entry: %+v", entry)
 	}
 

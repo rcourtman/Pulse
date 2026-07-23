@@ -348,6 +348,15 @@ update, profile rollout, command reachability, or fleet-control authority.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
 24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
+    Every current agent process authors a process-unique report stream and a
+    monotonic sequence within that stream. Reconnect delivery must preserve
+    collection order by draining each destination's persisted FIFO before
+    sending a newly collected report, so buffered running-task snapshots cannot
+    overwrite a later cancellation or completion. Authentication/scope
+    rejection may discard an undeliverable FIFO; transient transport failures
+    retain it. Unraid collection treats positive `mdResyncPos` / `mdResync` as
+    authoritative active-operation evidence and emits zero progress whenever
+    no active sync action exists, even if terminal percentage fields linger.
 25. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
@@ -24,6 +25,163 @@ import (
 )
 
 const hostContinuityRetention = 72 * time.Hour
+
+const maxRetiredHostReportStreams = 8
+
+type hostReportOrder struct {
+	ObservedAt       time.Time
+	LastReceivedAt   time.Time
+	StreamID         string
+	Sequence         uint64
+	RetiredStreamIDs []string
+}
+
+type hostReportApplyLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+func hostReportOrderFromContinuity(entry config.HostContinuityEntry) hostReportOrder {
+	lastReceivedAt := entry.ReportLastReceivedAt.UTC()
+	if lastReceivedAt.IsZero() {
+		lastReceivedAt = entry.LastSeen.UTC()
+	}
+	return hostReportOrder{
+		ObservedAt:       entry.ReportObservedAt.UTC(),
+		LastReceivedAt:   lastReceivedAt,
+		StreamID:         strings.TrimSpace(entry.ReportStreamID),
+		Sequence:         entry.ReportSequence,
+		RetiredStreamIDs: append([]string(nil), entry.RetiredReportStreamIDs...),
+	}
+}
+
+func containsHostReportStream(streams []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, stream := range streams {
+		if strings.TrimSpace(stream) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func retireHostReportStream(streams []string, streamID string) []string {
+	streamID = strings.TrimSpace(streamID)
+	if streamID == "" || containsHostReportStream(streams, streamID) {
+		return streams
+	}
+	streams = append(streams, streamID)
+	if len(streams) > maxRetiredHostReportStreams {
+		streams = append([]string(nil), streams[len(streams)-maxRetiredHostReportStreams:]...)
+	}
+	return streams
+}
+
+func legacyHostReportReorderWindow(intervalSeconds int) time.Duration {
+	window := time.Duration(intervalSeconds) * time.Second / 2
+	if window < 2*time.Second {
+		return 2 * time.Second
+	}
+	if window > 15*time.Second {
+		return 15 * time.Second
+	}
+	return window
+}
+
+// lockHostReportApplication serializes the complete state transition for one
+// host while allowing different hosts to ingest concurrently. Reserving a
+// sequence number without holding this lock through the subsequent state write
+// would still allow two HTTP handlers to commit reports in reverse order.
+func (m *Monitor) lockHostReportApplication(hostID string) func() {
+	hostID = strings.TrimSpace(hostID)
+
+	m.hostReportApplyLocksMu.Lock()
+	if m.hostReportApplyLocks == nil {
+		m.hostReportApplyLocks = make(map[string]*hostReportApplyLock)
+	}
+	applyLock := m.hostReportApplyLocks[hostID]
+	if applyLock == nil {
+		applyLock = &hostReportApplyLock{}
+		m.hostReportApplyLocks[hostID] = applyLock
+	}
+	applyLock.refs++
+	m.hostReportApplyLocksMu.Unlock()
+
+	applyLock.mu.Lock()
+	return func() {
+		applyLock.mu.Unlock()
+		m.hostReportApplyLocksMu.Lock()
+		applyLock.refs--
+		if applyLock.refs == 0 && m.hostReportApplyLocks[hostID] == applyLock {
+			delete(m.hostReportApplyLocks, hostID)
+		}
+		m.hostReportApplyLocksMu.Unlock()
+	}
+}
+
+// reserveHostReportOrder separates source-authored ordering from transport
+// activity. Receipt time always records authenticated contact, while only a
+// non-retired, increasing report stream may replace telemetry and generate
+// metrics, history, or alerts.
+func (m *Monitor) reserveHostReportOrder(hostID string, report agentshost.Report, receivedAt time.Time) (hostReportOrder, bool) {
+	hostID = strings.TrimSpace(hostID)
+	authoredAt := report.Timestamp.UTC()
+	if authoredAt.IsZero() {
+		authoredAt = receivedAt.UTC()
+	}
+
+	m.hostReportOrderMu.Lock()
+	defer m.hostReportOrderMu.Unlock()
+
+	if m.hostReportOrders == nil {
+		m.hostReportOrders = make(map[string]hostReportOrder)
+	}
+	order, exists := m.hostReportOrders[hostID]
+	if !exists && m.hostContinuityStore != nil {
+		if entry, ok := m.hostContinuityStore.Get(hostID); ok {
+			order = hostReportOrderFromContinuity(entry)
+		}
+	}
+
+	streamID, sequence, sequenced := agentshost.ParseReportSequenceID(report.SequenceID)
+	accepted := true
+	switch {
+	case sequenced && containsHostReportStream(order.RetiredStreamIDs, streamID):
+		accepted = false
+	case sequenced && order.StreamID == streamID && sequence <= order.Sequence:
+		accepted = false
+	case sequenced && order.StreamID == streamID:
+		order.Sequence = sequence
+		order.ObservedAt = authoredAt
+	case sequenced:
+		order.RetiredStreamIDs = retireHostReportStream(order.RetiredStreamIDs, order.StreamID)
+		order.StreamID = streamID
+		order.Sequence = sequence
+		order.ObservedAt = authoredAt
+	default:
+		// Older agents have no process stream. Reject backwards timestamps only
+		// when they arrive in the reconnect burst; after a normal report
+		// interval, accept a clock epoch reset so a corrected host clock cannot
+		// freeze telemetry indefinitely.
+		if !order.ObservedAt.IsZero() &&
+			authoredAt.Before(order.ObservedAt) &&
+			!order.LastReceivedAt.IsZero() &&
+			receivedAt.Sub(order.LastReceivedAt) <= legacyHostReportReorderWindow(report.Agent.IntervalSeconds) {
+			accepted = false
+		} else {
+			order.RetiredStreamIDs = retireHostReportStream(order.RetiredStreamIDs, order.StreamID)
+			order.StreamID = ""
+			order.Sequence = 0
+			order.ObservedAt = authoredAt
+		}
+	}
+
+	if receivedAt.After(order.LastReceivedAt) {
+		order.LastReceivedAt = receivedAt.UTC()
+	}
+	m.hostReportOrders[hostID] = order
+	return order, accepted
+}
 
 func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	hostID = strings.TrimSpace(hostID)
@@ -252,6 +410,9 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		m.alertManager.HandleHostRemoved(host)
 	}
 	m.removeHostContinuity(hostID)
+	m.hostReportOrderMu.Lock()
+	delete(m.hostReportOrders, hostID)
+	m.hostReportOrderMu.Unlock()
 
 	return host, nil
 }
@@ -892,26 +1053,35 @@ func (m *Monitor) MatchHostConfigContinuity(agentID, tokenID string) (models.Hos
 	return models.Host{}, false
 }
 
-func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Report) {
+func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Report, order hostReportOrder) {
 	if m == nil || m.hostContinuityStore == nil {
 		return
 	}
 
 	entry := config.HostContinuityEntry{
-		HostID:            strings.TrimSpace(host.ID),
-		ReportHostID:      strings.TrimSpace(report.Host.ID),
-		AgentReportedID:   strings.TrimSpace(report.Agent.ID),
-		Hostname:          strings.TrimSpace(host.Hostname),
-		DisplayName:       strings.TrimSpace(host.DisplayName),
-		MachineID:         strings.TrimSpace(host.MachineID),
-		TokenID:           strings.TrimSpace(host.TokenID),
-		AgentVersion:      strings.TrimSpace(host.AgentVersion),
-		Platform:          strings.TrimSpace(host.Platform),
-		LinkedNodeID:      strings.TrimSpace(host.LinkedNodeID),
-		LinkedVMID:        strings.TrimSpace(host.LinkedVMID),
-		LinkedContainerID: strings.TrimSpace(host.LinkedContainerID),
-		IsLegacy:          host.IsLegacy,
-		LastSeen:          host.LastSeen.UTC(),
+		HostID:               strings.TrimSpace(host.ID),
+		ReportHostID:         strings.TrimSpace(report.Host.ID),
+		AgentReportedID:      strings.TrimSpace(report.Agent.ID),
+		Hostname:             strings.TrimSpace(host.Hostname),
+		DisplayName:          strings.TrimSpace(host.DisplayName),
+		MachineID:            strings.TrimSpace(host.MachineID),
+		TokenID:              strings.TrimSpace(host.TokenID),
+		AgentVersion:         strings.TrimSpace(host.AgentVersion),
+		Platform:             strings.TrimSpace(host.Platform),
+		LinkedNodeID:         strings.TrimSpace(host.LinkedNodeID),
+		LinkedVMID:           strings.TrimSpace(host.LinkedVMID),
+		LinkedContainerID:    strings.TrimSpace(host.LinkedContainerID),
+		IsLegacy:             host.IsLegacy,
+		LastSeen:             host.LastSeen.UTC(),
+		IntervalSeconds:      host.IntervalSeconds,
+		ReportObservedAt:     order.ObservedAt.UTC(),
+		ReportLastReceivedAt: order.LastReceivedAt.UTC(),
+		ReportStreamID:       strings.TrimSpace(order.StreamID),
+		ReportSequence:       order.Sequence,
+		RetiredReportStreamIDs: append(
+			[]string(nil),
+			order.RetiredStreamIDs...,
+		),
 	}
 	if err := m.hostContinuityStore.Upsert(entry); err != nil {
 		log.Warn().
@@ -919,6 +1089,63 @@ func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Repo
 			Str("hostID", host.ID).
 			Msg("failed to persist host continuity state")
 	}
+}
+
+func (m *Monitor) hostByID(hostID string) (models.Host, bool) {
+	for _, host := range m.state.GetHosts() {
+		if host.ID == hostID {
+			return host, true
+		}
+	}
+	return models.Host{}, false
+}
+
+func (m *Monitor) applyRejectedHostReportLiveness(
+	hostID string,
+	report agentshost.Report,
+	receivedAt time.Time,
+	order hostReportOrder,
+) models.Host {
+	host, exists := m.hostByID(hostID)
+	if !exists {
+		if m.hostContinuityStore != nil {
+			if entry, ok := m.hostContinuityStore.Get(hostID); ok {
+				host = hostFromContinuityEntry(entry)
+			}
+		}
+		if host.ID == "" {
+			host = models.Host{
+				ID:           hostID,
+				Hostname:     strings.TrimSpace(report.Host.Hostname),
+				DisplayName:  strings.TrimSpace(report.Host.DisplayName),
+				Platform:     platformsupport.NormalizeAgentReportedPlatform(report.Host.Platform),
+				AgentVersion: strings.TrimSpace(report.Agent.Version),
+				MachineID:    strings.TrimSpace(report.Host.MachineID),
+			}
+		}
+		if host.IntervalSeconds <= 0 {
+			host.IntervalSeconds = report.Agent.IntervalSeconds
+		}
+		if host.LastSeen.IsZero() ||
+			receivedAt.Sub(host.LastSeen) > hostAgentHealthWindow(host.IntervalSeconds) {
+			host.Status = "offline"
+		}
+		m.state.UpsertHost(host)
+	}
+
+	// An authenticated arrival proves the transport is reachable, but a report
+	// rejected by the authored-state watermark must not extend Host.LastSeen,
+	// clear an offline alert, or renew the accepted telemetry lease.
+	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
+	m.persistHostContinuity(host, report, order)
+	m.refreshUnifiedResourceStoreAfterAgentReport()
+
+	log.Debug().
+		Str("hostID", host.ID).
+		Str("sequenceId", report.SequenceID).
+		Time("reportTimestamp", report.Timestamp).
+		Msg("Ignored stale or duplicate host report state while refreshing receipt-time liveness")
+	return host
 }
 
 func (m *Monitor) removeHostContinuity(hostID string) {
@@ -967,6 +1194,7 @@ func hostFromContinuityEntry(entry config.HostContinuityEntry) models.Host {
 		TokenID:           strings.TrimSpace(entry.TokenID),
 		Platform:          platformsupport.NormalizeAgentReportedPlatform(entry.Platform),
 		IsLegacy:          entry.IsLegacy,
+		IntervalSeconds:   entry.IntervalSeconds,
 		LinkedNodeID:      strings.TrimSpace(entry.LinkedNodeID),
 		LinkedVMID:        strings.TrimSpace(entry.LinkedVMID),
 		LinkedContainerID: strings.TrimSpace(entry.LinkedContainerID),
@@ -1931,6 +2159,23 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Re-enroll by reinstalling the agent with a newly generated API token, or wait for the block to clear 24 hours after removal", identifier, removedAt.Format(time.RFC3339))
 	}
 
+	unlockHostReport := m.lockHostReportApplication(identifier)
+	defer unlockHostReport()
+
+	// Identity resolution happens before taking the per-host lock. Refresh the
+	// shared read model after waiting so token inheritance and previous-state
+	// comparisons use the latest accepted report, not the pre-wait snapshot.
+	readState = m.snapshotBackedUnifiedReadState()
+	existingHosts = nil
+	if readState != nil {
+		existingHosts = readState.Hosts()
+	}
+
+	reportOrder, accepted := m.reserveHostReportOrder(identifier, report, receivedAt)
+	if !accepted {
+		return m.applyRejectedHostReportLiveness(identifier, report, receivedAt, reportOrder), nil
+	}
+
 	var previous *unifiedresources.HostView
 	var hasPrevious bool
 	for _, candidate := range existingHosts {
@@ -2036,6 +2281,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				Slot:   dev.Slot,
 			})
 		}
+		operation := strings.TrimSpace(array.Operation)
+		rebuildPercent := safeFloat(array.RebuildPercent)
+		rebuildSpeed := strings.TrimSpace(array.RebuildSpeed)
+		if operation == "" {
+			rebuildPercent = 0
+			rebuildSpeed = ""
+		}
 		raid = append(raid, models.HostRAIDArray{
 			Device:         array.Device,
 			Name:           array.Name,
@@ -2048,9 +2300,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			SpareDevices:   array.SpareDevices,
 			UUID:           array.UUID,
 			Devices:        devices,
-			RebuildPercent: array.RebuildPercent,
-			RebuildSpeed:   array.RebuildSpeed,
-			Operation:      array.Operation,
+			RebuildPercent: rebuildPercent,
+			RebuildSpeed:   rebuildSpeed,
+			Operation:      operation,
 		})
 	}
 
@@ -2094,11 +2346,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				Slot:        disk.Slot,
 			})
 		}
+		syncAction := strings.TrimSpace(report.Unraid.SyncAction)
+		syncProgress := safeFloat(report.Unraid.SyncProgress)
+		if syncAction == "" {
+			syncProgress = 0
+		}
 		unraidData = &models.HostUnraidStorage{
 			ArrayStarted: report.Unraid.ArrayStarted,
 			ArrayState:   strings.TrimSpace(report.Unraid.ArrayState),
-			SyncAction:   strings.TrimSpace(report.Unraid.SyncAction),
-			SyncProgress: report.Unraid.SyncProgress,
+			SyncAction:   syncAction,
+			SyncProgress: syncProgress,
 			SyncErrors:   report.Unraid.SyncErrors,
 			NumProtected: report.Unraid.NumProtected,
 			NumDisabled:  report.Unraid.NumDisabled,
@@ -2368,7 +2625,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	// Store cluster peer sensor data if present and evict stale entries
 	m.applyClusterSensors(report.ClusterSensors, observedAt)
-	m.persistHostContinuity(host, report)
+	m.persistHostContinuity(host, report, reportOrder)
 	m.refreshUnifiedResourceStoreAfterAgentReport()
 
 	return host, nil
@@ -3364,22 +3621,28 @@ func (m *Monitor) evaluateDockerAgents(now time.Time) {
 	}
 }
 
+func hostAgentHealthWindow(interval int) time.Duration {
+	if interval <= 0 {
+		interval = int(hostMinimumHealthWindow / time.Second)
+	}
+	window := time.Duration(interval) * time.Second * hostOfflineGraceMultiplier
+	if window < hostMinimumHealthWindow {
+		return hostMinimumHealthWindow
+	}
+	if window > hostMaximumHealthWindow {
+		return hostMaximumHealthWindow
+	}
+	return window
+}
+
 // evaluateHostAgents updates health for host agents based on last report time.
 func (m *Monitor) evaluateHostAgents(now time.Time) {
 	hosts := m.state.GetHosts()
+	liveHostIDs := make(map[string]struct{}, len(hosts))
+	resourceRefreshNeeded := false
 	for _, host := range hosts {
-		interval := host.IntervalSeconds
-		if interval <= 0 {
-			interval = int(hostMinimumHealthWindow / time.Second)
-		}
-
-		window := time.Duration(interval) * time.Second * hostOfflineGraceMultiplier
-		if window < hostMinimumHealthWindow {
-			window = hostMinimumHealthWindow
-		} else if window > hostMaximumHealthWindow {
-			window = hostMaximumHealthWindow
-		}
-
+		liveHostIDs[host.ID] = struct{}{}
+		window := hostAgentHealthWindow(host.IntervalSeconds)
 		age := now.Sub(host.LastSeen)
 		healthy := !host.LastSeen.IsZero() && age <= window
 		key := hostConnectionPrefix + host.ID
@@ -3397,12 +3660,14 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 					Dur("window", window).
 					Msg("Host agent back online")
 			}
-			m.state.SetHostStatus(host.ID, "online")
+			if host.Status != "online" {
+				m.state.SetHostStatus(host.ID, "online")
+				resourceRefreshNeeded = true
+			}
 			if m.alertManager != nil {
 				m.alertManager.HandleHostOnline(hostCopy)
 			}
 		} else {
-			hostCopy.Status = "offline"
 			// Log status transition from online to offline with diagnostic info
 			if host.Status == "online" || host.Status == "" {
 				log.Debug().
@@ -3415,11 +3680,41 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 					Bool("lastSeenZero", host.LastSeen.IsZero()).
 					Msg("Host agent appears offline")
 			}
-			m.state.SetHostStatus(host.ID, "offline")
+			if expiredHost, changed := m.state.ExpireHostTelemetry(host.ID); expiredHost.ID != "" {
+				hostCopy = expiredHost
+				resourceRefreshNeeded = resourceRefreshNeeded || changed
+			} else {
+				hostCopy.Status = "offline"
+			}
 			if m.alertManager != nil {
 				m.alertManager.HandleHostOffline(hostCopy)
 			}
 		}
+	}
+
+	// Active alerts survive process restarts, while the live host snapshot does
+	// not. Continuity entries provide the durable receipt timestamp needed to
+	// expire those alerts after the same reporting lease, even if the agent
+	// never reconnects.
+	for _, entry := range m.recentStandaloneHostContinuityEntries() {
+		if _, live := liveHostIDs[entry.HostID]; live {
+			continue
+		}
+		window := hostAgentHealthWindow(entry.IntervalSeconds)
+		healthy := !entry.LastSeen.IsZero() && now.Sub(entry.LastSeen) <= window
+		m.state.SetConnectionHealth(hostConnectionPrefix+entry.HostID, healthy)
+		if healthy {
+			continue
+		}
+		host := hostFromContinuityEntry(entry)
+		host.Status = "offline"
+		if m.alertManager != nil {
+			m.alertManager.HandleHostOffline(host)
+		}
+	}
+
+	if resourceRefreshNeeded {
+		m.refreshUnifiedResourceStoreAfterAgentReport()
 	}
 }
 

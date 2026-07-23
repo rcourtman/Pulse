@@ -1,9 +1,13 @@
 package hostagent
 
 import (
+	"compress/gzip"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -11,6 +15,61 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
+
+func TestAgent_deliverPrimaryReport_DrainsBufferedReportsBeforeCurrent(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		received []string
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			reader, err := gzip.NewReader(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer reader.Close()
+			body = reader
+		}
+		var report agentshost.Report
+		if err := json.NewDecoder(body).Decode(&report); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		received = append(received, report.SequenceID)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	a := &Agent{
+		cfg:             Config{APIToken: "token"},
+		logger:          zerolog.Nop(),
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+		reportBuffer:    utils.New[agentshost.Report](10),
+	}
+	a.reportBuffer.Push(agentshost.Report{SequenceID: "oldest"})
+	a.reportBuffer.Push(agentshost.Report{SequenceID: "older"})
+
+	if err := a.deliverPrimaryReport(context.Background(), agentshost.Report{SequenceID: "current"}); err != nil {
+		t.Fatalf("deliverPrimaryReport: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{"oldest", "older", "current"}
+	if len(received) != len(want) {
+		t.Fatalf("received = %v, want %v", received, want)
+	}
+	for i := range want {
+		if received[i] != want[i] {
+			t.Fatalf("received = %v, want %v", received, want)
+		}
+	}
+}
 
 func TestAgent_flushBuffer_StopsOnFailureAndDoesNotDropReport(t *testing.T) {
 	var requestCount int32
@@ -85,5 +144,27 @@ func TestAgent_flushBuffer_RetryAfterTransientFailure(t *testing.T) {
 	a.flushBuffer(context.Background())
 	if !a.reportBuffer.IsEmpty() {
 		t.Fatalf("expected buffer to be empty, has %d items", a.reportBuffer.Len())
+	}
+}
+
+func TestAgent_flushBuffer_ForbiddenDropsBuffer(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	a := &Agent{
+		cfg:             Config{APIToken: "wrong-scope"},
+		logger:          zerolog.Nop(),
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+		reportBuffer:    utils.New[agentshost.Report](10),
+	}
+	a.reportBuffer.Push(agentshost.Report{Agent: agentshost.AgentInfo{ID: "r1"}})
+	a.reportBuffer.Push(agentshost.Report{Agent: agentshost.AgentInfo{ID: "r2"}})
+
+	a.flushBuffer(context.Background())
+	if !a.reportBuffer.IsEmpty() {
+		t.Fatalf("buffer should be drained after forbidden flush, len=%d", a.reportBuffer.Len())
 	}
 }

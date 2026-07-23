@@ -16,6 +16,23 @@ func TestLegacyReportJSONDefaultsOperationReceiptProtocolUnsupported(t *testing.
 	}
 }
 
+func TestReportSequenceIDRoundTrip(t *testing.T) {
+	value := FormatReportSequenceID("0123456789abcdef", 42)
+	if value != "v1:0123456789abcdef:42" {
+		t.Fatalf("FormatReportSequenceID() = %q", value)
+	}
+	streamID, sequence, ok := ParseReportSequenceID(value)
+	if !ok || streamID != "0123456789abcdef" || sequence != 42 {
+		t.Fatalf("ParseReportSequenceID() = (%q, %d, %v)", streamID, sequence, ok)
+	}
+
+	for _, invalid := range []string{"", "legacy", "v2:stream:1", "v1::1", "v1:stream:0", "v1:stream:not-a-number"} {
+		if _, _, ok := ParseReportSequenceID(invalid); ok {
+			t.Fatalf("ParseReportSequenceID(%q) unexpectedly succeeded", invalid)
+		}
+	}
+}
+
 func float64Ptr(value float64) *float64 {
 	return &value
 }

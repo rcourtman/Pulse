@@ -954,6 +954,10 @@ func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
 	if report.Agent.UpdatedFrom != "5.1.14" {
 		t.Fatalf("report updated_from = %q, want %q", report.Agent.UpdatedFrom, "5.1.14")
 	}
+	reportStreamID, reportSequence, ok := agentshost.ParseReportSequenceID(report.SequenceID)
+	if !ok || reportStreamID == "" || reportSequence != 1 {
+		t.Fatalf("first report sequence ID = %q, parsed (%q, %d, %v)", report.SequenceID, reportStreamID, reportSequence, ok)
+	}
 	if agent.updatedFrom != "" {
 		t.Fatalf("agent.updatedFrom after first build = %q, want empty string", agent.updatedFrom)
 	}
@@ -964,6 +968,10 @@ func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
 	}
 	if secondReport.Agent.UpdatedFrom != "" {
 		t.Fatalf("second report updated_from = %q, want empty string", secondReport.Agent.UpdatedFrom)
+	}
+	secondStreamID, secondSequence, ok := agentshost.ParseReportSequenceID(secondReport.SequenceID)
+	if !ok || secondStreamID != reportStreamID || secondSequence != 2 {
+		t.Fatalf("second report sequence ID = %q, parsed (%q, %d, %v), first stream %q", secondReport.SequenceID, secondStreamID, secondSequence, ok, reportStreamID)
 	}
 }
 

@@ -540,6 +540,17 @@ health handling, host cleanup, and host offline lifecycle handling; future host
 agent alert behavior should extend that resource checker owner while shared
 health-assessment evaluation remains package-level until all storage-health
 callers can be separated behind a narrower owner.
+Host long-running storage-operation alerts require fresh operation evidence.
+An accepted Unraid cancellation/completion or terminal Linux RAID report
+resolves the corresponding operation alert immediately. A normal polling gap
+does not imply completion; after the monitoring-owned reporting lease expires,
+alerts must re-evaluate with only transient operation/progress fields cleared,
+retain alerts backed by static degraded/topology evidence when that last-known
+topology remains available, and progress the separate confirmed
+host-connectivity alert. Persisted operation alerts also obey the durable
+accepted-telemetry lease after server restart, so restart cannot make a stale
+parity or rebuild alert immortal and missing telemetry is never represented as
+healthy reporting.
 Snapshot and backup-age alert evaluation now lives in
 `internal/alerts/backup_snapshot.go`. That file owns snapshot age/size
 evaluation, backup rollup age evaluation, backup inventory readiness, PVE

@@ -32,6 +32,29 @@ Host-agent report liveness is server-observed, not agent-clock-observed:
 freshness, and host-agent cluster sensor freshness from Pulse receipt time, so
 a reporting machine with a slow or fast local clock cannot be ingested as stale
 or keep offline/recovery alerts flapping while reports are still arriving.
+Report ordering is a separate, source-authored contract. Current agents publish
+a process-unique stream plus monotonic sequence, and monitoring must serialize
+each host's complete accept-and-apply transition, reject duplicate/older or
+retired-stream reports without replacing state or writing metrics/history/
+alerts, and still advance receipt-time liveness for every authenticated
+arrival. Transport activity must not extend `Host.LastSeen`, the accepted
+telemetry lease, or alert recovery when the payload itself is rejected. The
+accepted ordering watermark, reporting interval, accepted receipt time,
+transport receipt time, and observation time are durable host continuity so a
+server restart cannot let a delayed buffered report resurrect an operation
+that a newer report already stopped.
+Legacy reports without a sequence retain timestamp-based reconnect-burst
+protection, but a clock correction after a normal report interval must be
+admitted rather than freezing telemetry indefinitely.
+Host telemetry also has a reporting lease derived from the agent cadence.
+Monitoring must not clear a genuinely active Unraid parity operation or Linux
+RAID rebuild during an ordinary polling gap. Once the lease expires, it must
+clear transient operation/progress fields from host and canonical resource
+projections while retaining static topology/health evidence that remains in
+the live last-known host snapshot. After a server restart, durable continuity
+must still expire persisted operation alerts on the same accepted-telemetry
+lease; missing telemetry then remains visible through the separate confirmed
+connectivity lifecycle.
 PBS backup snapshot refresh is a bounded monitoring hot path: group-level
 snapshot fetches must run through the fixed worker pool in
 `internal/monitoring/monitor_backups.go`, reuse cached snapshots on per-group
@@ -187,6 +210,7 @@ data cannot wrap into a fabricated healthy value.
 57. `internal/monitoring/multi_tenant_monitor.go`
 58. `internal/monitoring/proxmox_action_observer.go`
 59. `internal/monitoring/agent_fleet_doctor.go`
+60. `internal/config/host_continuity.go`
 
 ## Shared Boundaries
 
@@ -741,6 +765,16 @@ legacy Unraid raw-status normalization at host-agent ingest: when older agents s
 must derive the canonical disk status before storage-risk assessment runs so
 v5 aggregate counters do not override clearly healthy per-disk state during v6
 compatibility operation.
+Unraid long-running operation state uses the same authoritative transition
+boundary. A non-empty active sync action may carry progress; cancellation,
+completion, or idle state is represented by an empty action and normalized
+zero progress even when an older collector or buffered payload retains a
+terminal percentage. Accepted terminal reports must immediately remove
+`unraid_sync_active` from host state, canonical storage resources, alerts, and
+UI-facing risk projections. Older reports must never restore it after that
+transition, while a mere loss of reports waits for the reporting lease and then
+clears only the transient operation evidence alongside an explicit connectivity
+signal.
 The same monitoring compatibility boundary owns Unraid slot filtering and
 operator health posture after host-agent ingest. Empty no-present Unraid slots
 must be removed before storage-risk assessment so unassigned array capacity is

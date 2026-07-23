@@ -88,11 +88,12 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 		return nil, fmt.Errorf("mdcmd status returned no key=value fields")
 	}
 
+	syncAction := unraidSyncAction(fields)
 	storage := &agentshost.UnraidStorage{
 		ArrayState:   strings.ToUpper(strings.TrimSpace(fields["mdState"])),
 		ArrayStarted: strings.EqualFold(strings.TrimSpace(fields["mdState"]), "STARTED"),
-		SyncAction:   unraidSyncAction(fields),
-		SyncProgress: unraidSyncProgress(fields),
+		SyncAction:   syncAction,
+		SyncProgress: unraidSyncProgress(fields, syncAction),
 		SyncErrors:   parseUnraidInt64Field(fields, "mdResyncCorr"),
 		NumProtected: parseUnraidIntField(fields, "mdNumProtected"),
 		NumDisabled:  parseUnraidIntField(fields, "mdNumDisabled"),
@@ -485,7 +486,10 @@ func unraidSyncAction(fields map[string]string) string {
 	return normalizeUnraidSyncAction(fields["mdResyncAction"])
 }
 
-func unraidSyncProgress(fields map[string]string) float64 {
+func unraidSyncProgress(fields map[string]string, syncAction string) float64 {
+	if strings.TrimSpace(syncAction) == "" {
+		return 0
+	}
 	pos := parseFirstInt64(fields["mdResyncPos"], fields["mdResync"])
 	size := parseFirstInt64(fields["mdResyncSize"], fields["mdSize"])
 	if pos > 0 && size > 0 {

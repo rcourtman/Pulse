@@ -4763,6 +4763,42 @@ func (s *State) SetHostStatus(hostID, status string) bool {
 	return false
 }
 
+// ExpireHostTelemetry marks a host offline and clears transient operation
+// claims that cannot remain authoritative after the reporting lease expires.
+// Static topology and health counters remain available as last-known context.
+func (s *State) ExpireHostTelemetry(hostID string) (Host, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, host := range s.Hosts {
+		if host.ID != hostID {
+			continue
+		}
+		changed := host.Status != "offline"
+		host.Status = "offline"
+		for idx := range host.RAID {
+			array := &host.RAID[idx]
+			if array.Operation != "" || array.RebuildPercent != 0 || array.RebuildSpeed != "" {
+				array.Operation = ""
+				array.RebuildPercent = 0
+				array.RebuildSpeed = ""
+				changed = true
+			}
+		}
+		if host.Unraid != nil && (host.Unraid.SyncAction != "" || host.Unraid.SyncProgress != 0) {
+			host.Unraid.SyncAction = ""
+			host.Unraid.SyncProgress = 0
+			changed = true
+		}
+		s.Hosts[i] = host
+		if changed {
+			s.LastUpdate = time.Now()
+		}
+		return cloneHost(host), changed
+	}
+	return Host{}, false
+}
+
 // TouchHost updates the last seen timestamp for a host.
 func (s *State) TouchHost(hostID string, ts time.Time) bool {
 	s.mu.Lock()

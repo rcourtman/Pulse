@@ -68,6 +68,7 @@ func TestParseUnraidStatusOutputStaleSyncAction(t *testing.T) {
 		name           string
 		output         string
 		wantSyncAction string
+		wantProgress   float64
 	}{
 		{
 			name: "sync active reports action",
@@ -78,6 +79,7 @@ mdResyncPos=500
 mdResyncSize=1000
 `,
 			wantSyncAction: "check",
+			wantProgress:   50,
 		},
 		{
 			name: "stale action cleared when position is zero",
@@ -86,8 +88,10 @@ mdState=STARTED
 mdResyncAction=check
 mdResyncPos=0
 mdResyncSize=0
+mdResyncPct=100
 `,
 			wantSyncAction: "",
+			wantProgress:   0,
 		},
 		{
 			name: "stale action cleared when position fields absent",
@@ -96,6 +100,7 @@ mdState=STARTED
 mdResyncAction=check
 `,
 			wantSyncAction: "",
+			wantProgress:   0,
 		},
 		{
 			name: "idle action always empty",
@@ -105,6 +110,7 @@ mdResyncAction=idle
 mdResyncPos=500
 `,
 			wantSyncAction: "",
+			wantProgress:   0,
 		},
 	}
 
@@ -116,6 +122,9 @@ mdResyncPos=500
 			}
 			if storage.SyncAction != tt.wantSyncAction {
 				t.Errorf("SyncAction = %q, want %q", storage.SyncAction, tt.wantSyncAction)
+			}
+			if storage.SyncProgress != tt.wantProgress {
+				t.Errorf("SyncProgress = %v, want %v", storage.SyncProgress, tt.wantProgress)
 			}
 		})
 	}

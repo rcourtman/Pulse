@@ -615,6 +615,88 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	m.clearHostUnraidAlerts(host.ID)
 }
 
+// HandleHostTelemetryExpired re-evaluates transient storage-operation evidence
+// after the host reporting lease ends. Connectivity remains a separate signal
+// evaluated by HandleHostOffline; non-transient metric and disk alerts retain
+// their existing confirmation policy until that connectivity transition.
+func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
+	if host.ID == "" {
+		return
+	}
+
+	if host.Unraid != nil {
+		unraid := *host.Unraid
+		unraid.SyncAction = ""
+		unraid.SyncProgress = 0
+		host.Unraid = &unraid
+	}
+	host.RAID = append([]models.HostRAIDArray(nil), host.RAID...)
+	for i := range host.RAID {
+		host.RAID[i].Operation = ""
+		host.RAID[i].RebuildPercent = 0
+		host.RAID[i].RebuildSpeed = ""
+	}
+
+	m.mu.RLock()
+	alertsEnabled := m.config.Enabled
+	disableAllAgents := m.config.DisableAllAgents
+	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+	m.mu.RUnlock()
+	if !alertsEnabled || disableAllAgents || thresholds.Disabled {
+		m.clearHostRAIDAlerts(host.ID)
+		m.clearHostUnraidAlerts(host.ID)
+		return
+	}
+
+	if host.Unraid == nil {
+		m.clearHostUnraidAlerts(host.ID)
+	} else {
+		baseMetadata := map[string]interface{}{
+			"resourceType": "agent",
+			"hostId":       host.ID,
+			"hostname":     host.Hostname,
+			"displayName":  host.DisplayName,
+			"platform":     host.Platform,
+			"osName":       host.OSName,
+			"osVersion":    host.OSVersion,
+			"agentVersion": host.AgentVersion,
+			"architecture": host.Architecture,
+		}
+		if linkedNodeID := strings.TrimSpace(host.LinkedNodeID); linkedNodeID != "" {
+			baseMetadata["linkedNodeId"] = linkedNodeID
+		}
+		if linkedVMID := strings.TrimSpace(host.LinkedVMID); linkedVMID != "" {
+			baseMetadata["linkedVmId"] = linkedVMID
+		}
+		if linkedContainerID := strings.TrimSpace(host.LinkedContainerID); linkedContainerID != "" {
+			baseMetadata["linkedContainerId"] = linkedContainerID
+		}
+		if len(host.Tags) > 0 {
+			baseMetadata["tags"] = append([]string(nil), host.Tags...)
+		}
+		m.syncHostUnraidStorageAlert(
+			host,
+			strings.TrimSpace(host.Hostname),
+			hostInstanceName(host),
+			hostDisplayName(host),
+			baseMetadata,
+		)
+	}
+
+	if len(host.RAID) == 0 {
+		m.clearHostRAIDAlerts(host.ID)
+		return
+	}
+	for _, array := range host.RAID {
+		assessment := storagehealth.AssessHostRAIDArray(array)
+		if assessment.Level != storagehealth.RiskHealthy {
+			continue
+		}
+		resourceID := fmt.Sprintf("%s/raid:%s", hostResourceID(host.ID), sanitizeRAIDDevice(array.Device))
+		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-health"))
+	}
+}
+
 // HandleHostOffline raises an alert when a host agent stops reporting.
 func (m *Manager) HandleHostOffline(host models.Host) {
 	if host.ID == "" {
@@ -626,6 +708,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 	if host.Hostname != "" {
 		m.UnregisterHostAgentHostname(host.Hostname)
 	}
+	m.HandleHostTelemetryExpired(host)
 
 	m.mu.RLock()
 	if !m.config.Enabled {
@@ -750,6 +833,8 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		m.clearAlertNoLock(staleAlertID)
 	}
 	m.mu.Unlock()
+	m.clearHostRAIDAlerts(host.ID)
+	m.clearHostUnraidAlerts(host.ID)
 
 	log.Error().
 		Str("host", resourceName).

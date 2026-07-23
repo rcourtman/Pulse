@@ -1367,6 +1367,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/agentupdate/coverage_test.go",
+              "internal/hostagent/agent_flushbuffer_test.go",
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/command_client_test.go",
@@ -1379,7 +1380,9 @@
               "internal/hostagent/package_updates_test.go",
               "internal/hostagent/send_report_test.go",
               "internal/hostagent/smartctl_standby_guard_test.go",
-              "internal/hostagent/storage_cleanup_test.go"
+              "internal/hostagent/storage_cleanup_test.go",
+              "internal/hostagent/unraid_test.go",
+              "pkg/agents/host/report_test.go"
             ]
           },
           {
@@ -2317,6 +2320,7 @@
               "internal/alerts/guest_snapshot_test.go",
               "internal/alerts/history_concurrency_test.go",
               "internal/alerts/history_test.go",
+              "internal/alerts/host_unraid_lifecycle_test.go",
               "internal/alerts/intent_policy_test.go",
               "internal/alerts/operational_contract_test.go",
               "internal/alerts/resolved_lock_discipline_test.go",
@@ -5059,6 +5063,7 @@
       ],
       "owned_files": [
         "docker-entrypoint.sh",
+        "internal/config/host_continuity.go",
         "internal/dockeragent/collect.go",
         "internal/dockeragent/docker_client.go",
         "internal/dockeragent/swarm.go",
@@ -5116,12 +5121,15 @@
             "label": "monitoring host-agent ingest proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/config/host_continuity.go",
               "internal/monitoring/monitor_agents.go",
               "pkg/agents/host/report.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/config/host_continuity_test.go",
+              "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_package_updates_test.go",
@@ -5285,6 +5293,7 @@
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
               "internal/models/deepcopy_test.go",
+              "internal/models/host_transient_expiry_test.go",
               "internal/models/state_host_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
@@ -5455,6 +5464,7 @@
               "internal/monitoring/availability_poller_test.go",
               "internal/monitoring/availability_udp_test.go",
               "internal/monitoring/canonical_guardrails_test.go",
+              "internal/monitoring/issue1485_unraid_lifecycle_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_alert_override_migration_test.go",

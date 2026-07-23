@@ -14,9 +14,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// HostContinuityEntry stores the minimum durable identity needed to recognise
-// an existing standalone host across restart and upgrade boundaries before the
-// next live report arrives.
+// HostContinuityEntry stores the minimum durable identity and report watermark
+// needed to recognise an existing standalone host and reject older telemetry
+// across restart and upgrade boundaries before the next live report arrives.
 type HostContinuityEntry struct {
 	HostID            string    `json:"hostId"`
 	ReportHostID      string    `json:"reportHostId,omitempty"`
@@ -32,10 +32,21 @@ type HostContinuityEntry struct {
 	LinkedContainerID string    `json:"linkedContainerId,omitempty"`
 	IsLegacy          bool      `json:"isLegacy,omitempty"`
 	LastSeen          time.Time `json:"lastSeen,omitempty"`
+	IntervalSeconds   int       `json:"intervalSeconds,omitempty"`
+	// Report ordering and transport activity are persisted independently from
+	// accepted telemetry freshness. LastSeen is the server receipt time of the
+	// last accepted report; ReportLastReceivedAt includes rejected stale or
+	// duplicate arrivals, while ReportObservedAt is the agent-authored clock.
+	ReportObservedAt       time.Time `json:"reportObservedAt,omitempty"`
+	ReportLastReceivedAt   time.Time `json:"reportLastReceivedAt,omitempty"`
+	ReportStreamID         string    `json:"reportStreamId,omitempty"`
+	ReportSequence         uint64    `json:"reportSequence,omitempty"`
+	RetiredReportStreamIDs []string  `json:"retiredReportStreamIds,omitempty"`
 }
 
-// HostContinuityStore persists recent standalone host identities so licensing
-// and grandfather-floor continuity survive process restarts.
+// HostContinuityStore persists recent standalone host identity and report
+// ordering so licensing, grandfather-floor, and telemetry-transition
+// continuity survive process restarts.
 type HostContinuityStore struct {
 	mu       sync.RWMutex
 	entries  map[string]HostContinuityEntry
@@ -75,6 +86,14 @@ func normalizeHostContinuityEntry(entry HostContinuityEntry) (HostContinuityEntr
 	entry.LinkedNodeID = strings.TrimSpace(entry.LinkedNodeID)
 	entry.LinkedVMID = strings.TrimSpace(entry.LinkedVMID)
 	entry.LinkedContainerID = strings.TrimSpace(entry.LinkedContainerID)
+	entry.ReportStreamID = strings.TrimSpace(entry.ReportStreamID)
+	entry.RetiredReportStreamIDs = uniqueTrimmedStrings(entry.RetiredReportStreamIDs...)
+	if len(entry.RetiredReportStreamIDs) > 8 {
+		entry.RetiredReportStreamIDs = append([]string(nil), entry.RetiredReportStreamIDs[len(entry.RetiredReportStreamIDs)-8:]...)
+	}
+	if entry.ReportStreamID == "" {
+		entry.ReportSequence = 0
+	}
 	return entry, true
 }
 
