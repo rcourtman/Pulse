@@ -965,9 +965,10 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 		return fmt.Errorf("compress report: %w", err)
 	}
 
-	var errs []error
 	containerCount := len(report.Containers)
+	a.logReportSize(containerCount, int64(len(compressed)), int64(len(payload)))
 
+	var errs []error
 	for _, target := range a.targets {
 		err := a.sendReportToTarget(ctx, target, compressed, containerCount)
 		if err == nil {
@@ -983,23 +984,49 @@ func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) erro
 		return errors.Join(errs...)
 	}
 
-	// Warn if payload is approaching the server's 512KB limit
-	const warnThresholdKB = 400
 	payloadSizeKB := len(payload) / 1024
-	if payloadSizeKB >= warnThresholdKB {
-		a.logger.Warn().
-			Int("containers", containerCount).
-			Int("payloadSizeKB", payloadSizeKB).
-			Msg("Report payload is large and approaching the 512KB limit. Consider reducing container count or running 'docker container prune' to remove stopped containers.")
-	}
-
 	a.logger.Debug().
 		Int("containers", containerCount).
 		Int("payloadSizeKB", payloadSizeKB).
 		Int("payloadBytes", len(payload)).
+		Int("reportEncodedBytes", len(compressed)).
+		Int64("reportEncodedLimitBytes", agentsdocker.ReportEncodedBodyLimitBytes).
+		Int64("reportDecodedLimitBytes", agentsdocker.ReportDecodedBodyLimitBytes).
 		Int("targets", len(a.targets)).
 		Msg("Report sent to Pulse targets")
 	return nil
+}
+
+func (a *Agent) logReportSize(containerCount int, encodedBytes, decodedBytes int64) {
+	assessment := agentsdocker.AssessReportSize(encodedBytes, decodedBytes)
+	if !assessment.ApproachingLimit() {
+		return
+	}
+
+	event := a.logger.Warn()
+	message := fmt.Sprintf(
+		"Docker / Podman report is approaching the server size limit (%s). Review the reported container inventory and remove stale containers if appropriate.",
+		agentsdocker.ReportSizeLimitDescription(),
+	)
+	if assessment.ExceedsLimit() {
+		event = a.logger.Error()
+		message = fmt.Sprintf(
+			"Docker / Podman report exceeds the server size limit (%s) and is expected to be rejected. Reduce the reported container inventory or metadata before the next cycle.",
+			agentsdocker.ReportSizeLimitDescription(),
+		)
+	}
+
+	event.
+		Int("containers", containerCount).
+		Int64("reportEncodedBytes", encodedBytes).
+		Int64("reportDecodedBytes", decodedBytes).
+		Int64("reportEncodedWarningBytes", agentsdocker.ReportEncodedBodyWarningBytes).
+		Int64("reportDecodedWarningBytes", agentsdocker.ReportDecodedBodyWarningBytes).
+		Int64("reportEncodedLimitBytes", agentsdocker.ReportEncodedBodyLimitBytes).
+		Int64("reportDecodedLimitBytes", agentsdocker.ReportDecodedBodyLimitBytes).
+		Bool("reportEncodedLimitExceeded", encodedBytes > agentsdocker.ReportEncodedBodyLimitBytes).
+		Bool("reportDecodedLimitExceeded", decodedBytes > agentsdocker.ReportDecodedBodyLimitBytes).
+		Msg(message)
 }
 
 func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, payload []byte, _ int) error {

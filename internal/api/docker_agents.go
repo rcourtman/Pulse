@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,21 +86,42 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Limit request body to 2MB to prevent memory exhaustion
-	// (512KB was too small for users with 100+ containers)
-	r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024)
+	// The shared report contract separately caps the encoded HTTP body and the
+	// decoded JSON body. Exact boundary values are accepted.
+	r.Body = http.MaxBytesReader(w, r.Body, agentsdocker.ReportEncodedBodyLimitBytes)
 	defer r.Body.Close()
 
-	// Support gzip-compressed reports from agents (backward compatible with uncompressed)
-	body, err := utils.DecompressBodyIfGzipped(r, 10*1024*1024)
+	encodedBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeErrorResponse(w, http.StatusUnsupportedMediaType, "unsupported_encoding", err.Error(), nil)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeDockerReportSizeError(w, &agentsdocker.ReportSizeError{
+				Dimension:  agentsdocker.ReportSizeEncodedBody,
+				LimitBytes: agentsdocker.ReportEncodedBodyLimitBytes,
+			})
+			return
+		}
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_body", "Failed to read request body", map[string]string{"error": err.Error()})
 		return
 	}
-	defer body.Close()
+
+	body, err := agentsdocker.DecodeReportBody(encodedBody, r.Header.Get("Content-Encoding"))
+	if err != nil {
+		var sizeErr *agentsdocker.ReportSizeError
+		var encodingErr *agentsdocker.UnsupportedReportContentEncodingError
+		switch {
+		case errors.As(err, &sizeErr):
+			writeDockerReportSizeError(w, sizeErr)
+		case errors.As(err, &encodingErr):
+			writeErrorResponse(w, http.StatusUnsupportedMediaType, "unsupported_encoding", encodingErr.Error(), nil)
+		default:
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_compression", "Failed to decompress request body", map[string]string{"error": err.Error()})
+		}
+		return
+	}
 
 	var report agentsdocker.Report
-	if err := json.NewDecoder(body).Decode(&report); err != nil {
+	if err := json.Unmarshal(body, &report); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
 		return
 	}
@@ -142,6 +166,27 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize Docker / Podman module response")
 	}
+}
+
+func writeDockerReportSizeError(w http.ResponseWriter, sizeErr *agentsdocker.ReportSizeError) {
+	details := map[string]string{
+		"dimension":  string(sizeErr.Dimension),
+		"limitBytes": strconv.FormatInt(sizeErr.LimitBytes, 10),
+	}
+	if sizeErr.ActualBytes > 0 {
+		details["actualBytes"] = strconv.FormatInt(sizeErr.ActualBytes, 10)
+	}
+
+	writeErrorResponse(
+		w,
+		http.StatusRequestEntityTooLarge,
+		"report_too_large",
+		fmt.Sprintf(
+			"Docker / Podman report exceeds the server size limit (%s)",
+			agentsdocker.ReportSizeLimitDescription(),
+		),
+		details,
+	)
 }
 
 // HandleDockerHostActions routes docker host management actions based on path and method.

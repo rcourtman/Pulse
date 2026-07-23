@@ -32,6 +32,11 @@ one compressed unified-agent report without a collector-side suffix cap.
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
 report admission, removal, update, profile, or command authority.
+Docker / Podman report sizing is a two-dimensional transport contract:
+`pkg/agents/docker/report_limits.go` owns the inclusive encoded HTTP-body and
+decoded JSON byte ceilings, derives the 80% early-warning boundaries, and
+generates the operator-facing limit description consumed by server ingress
+and every supported `pulse-agent` release target built from this source.
 
 ## Canonical Files
 
@@ -46,6 +51,7 @@ report admission, removal, update, profile, or command authority.
    5c. `internal/dockeragent/container_update_typed.go`
    5d. `internal/kubernetesagent/agent.go`
    5e. `internal/agentexec/verifier_postconditions.go`
+   5f. `pkg/agents/docker/report_limits.go`
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
@@ -115,6 +121,17 @@ report admission, removal, update, profile, or command authority.
 64. `pkg/securityutil/httpurl.go`
 
 ## Shared Boundaries
+
+Docker / Podman report transport is shared with `api-contracts`.
+`internal/dockeragent/agent.go` measures the gzip-encoded HTTP entity and the
+decoded JSON before attempting any destination, while
+`internal/api/docker_agents.go` enforces the same
+`pkg/agents/docker/report_limits.go` contract. Exactly 2,097,152 encoded bytes
+and 10,485,760 decoded bytes are accepted; only the first byte above either
+ceiling is rejected. Warning copy must derive its limit wording from that
+contract and retain exact structured byte fields, so Docker, Podman, native,
+containerized, updated, and restarted Unified Agent runtimes cannot silently
+return to a stale hard-coded threshold.
 
 Docker container update recreation under `internal/dockeragent/` is lifecycle
 mutation authority, not monitoring collection. The module must translate
@@ -1806,6 +1823,11 @@ the intentionally sparse public response.
 
 ## Completion Obligations
 
+Any Docker / Podman report-size change must update the shared contract, agent
+diagnostic proof, API encoded/decoded boundary proof, and the API-contract
+dependency in one slice. A handler-local literal, agent-local threshold, or
+freehand limit string is incomplete even if one side's tests pass.
+
 The shared router's canonical RBAC initialization is an adjacent
 security/API-contract boundary. It must remain a one-time startup and shutdown
 dependency and must not alter agent registration, install tokens, profiles,
@@ -2055,6 +2077,17 @@ Agent` secondary handoff against the live setup wizard instead of relying
     binding and serialized completion.
 
 ## Current State
+
+### Docker and Podman report sizes share one exact-byte contract
+
+The Unified Agent now measures the encoded gzip body and decoded report JSON
+against the same constants used by server ingress. The 80% warning boundaries
+are derived with integer ceiling semantics, the old 400 KiB/512 KB warning is
+retired, and diagnostics identify both byte counts and both ceilings before a
+send is attempted. All supported native release binaries and the
+container-agent entrypoint compile the same `internal/dockeragent` module; an
+installed older agent adopts this behavior only after the normal agent update
+and process/service restart loads a build containing the shared contract.
 
 ### Docker updates recreate desired configuration and replay terminal truth
 

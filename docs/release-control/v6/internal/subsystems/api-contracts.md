@@ -1903,6 +1903,14 @@ a new API state machine, queue contract, or verification-accounting field.
    hide/unhide, pending uninstall, display-name, and host metadata paths must
    use Docker / Podman module or host wording instead of generic container
    runtime labels.
+   3ba. Route Docker / Podman report body sizing through
+   `pkg/agents/docker/report_limits.go` and
+   `internal/api/docker_agents.go`. The endpoint accepts exact inclusive
+   ceilings of 2,097,152 encoded HTTP-body bytes and 10,485,760 decoded JSON
+   bytes, preserves empty-encoding and gzip compatibility, and returns
+   `413 report_too_large` with `dimension` and `limitBytes` diagnostics for the
+   first byte over either boundary. Unsupported encodings remain `415`;
+   malformed gzip and invalid JSON remain distinct `400` failures.
    3c. Route Assistant finding handoff context changes through
    `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
    `internal/api/contract_test.go` together. Patrol-originated handoffs must
@@ -2999,6 +3007,12 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Completion Obligations
 
+Docker / Podman report transport changes must prove uncompressed and gzip
+ingress, exact inclusive boundaries, encoded and decoded 413 rejection,
+ordinary and 163-container Docker/Podman fleets, and typed compression
+diagnostics. The handler must consume the agent-lifecycle-owned shared
+contract rather than restating size constants or warning text.
+
 RBAC transport changes must prove that settings, SSO role mapping, and
 authorization share one default-organization manager; that healthy empty
 collections serialize as arrays; and that provider, migration, or read errors
@@ -3607,6 +3621,15 @@ running version and a non-secret request-unique cache key, while the subsequent
 binary request names the exact returned target version. Query values affect
 intermediary cache identity only; they do not select an arbitrary server
 release, bypass artifact validation, or replace the canonical response body.
+
+### Docker and Podman report ingress enforces the shared size contract
+
+`POST /api/agents/docker/report` reads the complete encoded entity through
+`http.MaxBytesReader` before decoding, preventing unread gzip trailers or
+trailing entity bytes from evading the 2 MiB boundary. The shared decoder then
+applies the 10 MiB decoded ceiling and `json.Unmarshal` validates the complete
+JSON document. Boundary rejections are 413 responses with exact byte
+dimensions; compression-format and JSON failures retain separate diagnostics.
 
 ### vSphere host composition on the vCenter system row
 

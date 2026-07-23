@@ -1250,6 +1250,7 @@
         "internal/monitoring/monitor_agents.go",
         "internal/remoteconfig/client.go",
         "internal/securityutil/httpurl.go",
+        "pkg/agents/docker/report_limits.go",
         "pkg/agents/host/report.go",
         "pkg/securityutil/httpurl.go",
         "scripts/install.ps1",
@@ -1382,6 +1383,7 @@
               "internal/kubernetesagent/agent.go",
               "internal/remoteconfig/client.go",
               "internal/securityutil/httpurl.go",
+              "pkg/agents/docker/report_limits.go",
               "pkg/securityutil/httpurl.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -1391,11 +1393,13 @@
               "internal/agenttls/config_test.go",
               "internal/dockeragent/agent_internal_test.go",
               "internal/dockeragent/multi_target_test.go",
+              "internal/dockeragent/report_size_test.go",
               "internal/kubernetesagent/agent_new_test.go",
               "internal/kubernetesagent/multi_target_test.go",
               "internal/remoteconfig/client_additional_test.go",
               "internal/remoteconfig/client_test.go",
-              "internal/securityutil/httpurl_test.go"
+              "internal/securityutil/httpurl_test.go",
+              "pkg/agents/docker/report_limits_test.go"
             ]
           },
           {
@@ -2849,6 +2853,7 @@
               "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/contract_test.go",
+              "internal/api/docker_agents_report_size_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
               "internal/api/metadata_handlers_test.go",
               "internal/api/patrol_autopilot_test.go"

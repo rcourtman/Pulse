@@ -119,6 +119,14 @@ states do not change the underlying storage evidence or active lifecycle.
 
 ## Extension Points
 
+Docker / Podman report ingress under `internal/api/docker_agents.go` is outside
+storage/recovery ownership even though storage/recovery routes share the broad
+`internal/api/` extension boundary. Encoded/decoded report ceilings,
+compression diagnostics, and agent warning behavior remain owned by
+`api-contracts` and `agent-lifecycle`; storage/recovery consumers must not
+reinterpret an accepted large inventory report as backup coverage, recovery
+freshness, or restore evidence.
+
 Commercial v5-to-v6 migration posture may be carried by `internal/api/`
 handlers that storage/recovery references for setup or support-adjacent flows,
 but it remains API/cloud-paid state. Storage and recovery surfaces may point
