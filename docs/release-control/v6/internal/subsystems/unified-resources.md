@@ -46,6 +46,9 @@ missing. The canonical disk payload also carries provider vendor metadata and
 uses explicit SMART health, temperature, and wearout ahead of coarser
 contradictory inventory values without manufacturing facts when telemetry is
 absent.
+NVMe percentage-used conversion is shared with storage risk: negative values
+remain unknown, while values above 100 clamp to exhausted before remaining
+life is derived.
 
 ## Canonical Files
 

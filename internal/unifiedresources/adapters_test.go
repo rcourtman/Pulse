@@ -1778,3 +1778,13 @@ func TestCollectInterfaceIDsAllVirtualStillCollects(t *testing.T) {
 		t.Fatalf("expected virtual-only host to keep its address, got %v", ips)
 	}
 }
+
+func TestPhysicalDiskWearoutFromSMARTAttributesClampsExhaustedMedia(t *testing.T) {
+	percentageUsed := 143
+	got := physicalDiskWearoutFromSMARTAttributes(&models.SMARTAttributes{
+		PercentageUsed: &percentageUsed,
+	})
+	if got != 0 {
+		t.Fatalf("wearout remaining = %d, want 0 for percentage-used above 100", got)
+	}
+}

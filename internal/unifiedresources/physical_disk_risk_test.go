@@ -175,6 +175,37 @@ func TestPhysicalDiskAssessmentFromMeta_PercentageUsedProvesZeroLifeOnSATASSD(t 
 	}
 }
 
+func TestPhysicalDiskAssessmentFromMeta_ReportedZeroWearoutUsesMediaType(t *testing.T) {
+	if assessment := physicalDiskAssessmentFromMeta(&PhysicalDiskMeta{
+		DiskType: "ssd",
+		Health:   "PASSED",
+		Wearout:  0,
+	}); assessment.Level != storagehealth.RiskCritical {
+		t.Fatalf("reported SSD wearout=0 should be critical, got %+v", assessment)
+	}
+	if assessment := physicalDiskAssessmentFromMeta(&PhysicalDiskMeta{
+		DiskType: "sata",
+		Health:   "PASSED",
+		Wearout:  0,
+	}); assessment.Level != storagehealth.RiskHealthy {
+		t.Fatalf("SATA transport without endurance evidence should remain neutral, got %+v", assessment)
+	}
+}
+
+func TestPhysicalDiskAssessmentFromMeta_InvalidPercentageUsedRemainsUnknown(t *testing.T) {
+	percentageUsed := -4
+	meta := &PhysicalDiskMeta{
+		DiskType: "nvme",
+		SMART: &SMARTMeta{
+			PercentageUsed: &percentageUsed,
+		},
+	}
+	assessment := physicalDiskAssessmentFromMeta(meta)
+	if assessment.Level != storagehealth.RiskHealthy || len(assessment.Reasons) != 0 {
+		t.Fatalf("invalid percentage used should remain neutral, got %+v", assessment)
+	}
+}
+
 // --- physicalDiskStatus ---
 
 func TestPhysicalDiskStatus_CriticalAssessment(t *testing.T) {

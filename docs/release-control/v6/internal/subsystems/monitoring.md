@@ -118,6 +118,9 @@ identifiers, preserves explicit failure over a later coarse healthy value, and
 lets explicit SMART endurance replace contradictory Proxmox wearout. Missing
 permission, ambiguous identity, standby, and absent SMART fields remain
 neutral rather than borrowing telemetry from another disk.
+Negative percentage-used counters remain unknown; values above 100 clamp to
+exhausted before deriving remaining life, so invalid or over-limit controller
+data cannot wrap into a fabricated healthy value.
 
 ## Canonical Files
 

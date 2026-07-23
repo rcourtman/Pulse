@@ -5241,3 +5241,42 @@ func TestIngestRecordsSkipRecordDeclaredSuccessionForLiveOldID(t *testing.T) {
 		t.Fatalf("expected operator state to stay under live old ID (found=%v err=%v)", found, err)
 	}
 }
+
+func TestResourceRegistryClampsExhaustedSMARTWearout(t *testing.T) {
+	percentageUsed := 143
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-exhausted",
+				Hostname: "pve-exhausted",
+				Status:   "online",
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device: "/dev/nvme0n1",
+							Model:  "Example NVMe",
+							Serial: "EXHAUSTED-NVME",
+							Type:   "nvme",
+							Health: "PASSED",
+							Attributes: &models.SMARTAttributes{
+								PercentageUsed: &percentageUsed,
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	disks := registry.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 || disks[0].PhysicalDisk == nil {
+		t.Fatalf("expected one physical disk, got %+v", disks)
+	}
+	if disks[0].PhysicalDisk.Wearout != 0 {
+		t.Fatalf("wearout remaining = %d, want 0", disks[0].PhysicalDisk.Wearout)
+	}
+	if risk := disks[0].PhysicalDisk.Risk; risk == nil || risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("exhausted media risk = %+v, want critical", risk)
+	}
+}

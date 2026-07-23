@@ -885,14 +885,7 @@ func physicalDiskWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
 	if attrs == nil || attrs.PercentageUsed == nil {
 		return -1
 	}
-	used := *attrs.PercentageUsed
-	if used < 0 {
-		used = 0
-	}
-	if used > 100 {
-		used = 100
-	}
-	return 100 - used
+	return storagehealth.RemainingLifeFromPercentageUsed(*attrs.PercentageUsed)
 }
 
 func hostUnraidStorageIdentity(host models.Host) string {

@@ -77,8 +77,13 @@ func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 		}
 		if attrs.PercentageUsed != nil {
 			sample.PercentageUsed = *attrs.PercentageUsed
-			sample.Wearout = 100 - *attrs.PercentageUsed
-			sample.WearoutKnown = true
+			if remaining := RemainingLifeFromPercentageUsed(*attrs.PercentageUsed); remaining >= 0 {
+				sample.Wearout = remaining
+				sample.WearoutKnown = true
+			} else {
+				sample.Wearout = -1
+				sample.WearoutKnown = false
+			}
 		}
 		if attrs.AvailableSpare != nil {
 			sample.AvailableSpare = *attrs.AvailableSpare
@@ -122,8 +127,13 @@ func AssessHostSMARTDisk(disk models.HostDiskSMART) Assessment {
 		}
 		if attrs.PercentageUsed != nil {
 			sample.PercentageUsed = *attrs.PercentageUsed
-			sample.Wearout = 100 - *attrs.PercentageUsed
-			sample.WearoutKnown = true
+			if remaining := RemainingLifeFromPercentageUsed(*attrs.PercentageUsed); remaining >= 0 {
+				sample.Wearout = remaining
+				sample.WearoutKnown = true
+			} else {
+				sample.Wearout = -1
+				sample.WearoutKnown = false
+			}
 		}
 		if attrs.AvailableSpare != nil {
 			sample.AvailableSpare = *attrs.AvailableSpare
@@ -205,6 +215,19 @@ func AssessSample(sample Sample) Assessment {
 	})
 
 	return assessment
+}
+
+// RemainingLifeFromPercentageUsed converts the NVMe percentage-used counter
+// into Pulse's remaining-life representation. Negative controller values are
+// invalid and stay unknown; values above 100 mean endurance is exhausted.
+func RemainingLifeFromPercentageUsed(used int) int {
+	if used < 0 {
+		return -1
+	}
+	if used > 100 {
+		used = 100
+	}
+	return 100 - used
 }
 
 func isNonRotationalDiskType(diskType string) bool {

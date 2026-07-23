@@ -26,6 +26,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -730,15 +731,7 @@ func deriveWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
 	if attrs == nil || attrs.PercentageUsed == nil {
 		return -1
 	}
-
-	used := *attrs.PercentageUsed
-	if used < 0 {
-		used = 0
-	}
-	if used > 100 {
-		used = 100
-	}
-	return 100 - used
+	return storagehealth.RemainingLifeFromPercentageUsed(*attrs.PercentageUsed)
 }
 
 func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) models.PhysicalDisk {

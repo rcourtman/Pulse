@@ -108,8 +108,13 @@ func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assess
 		}
 		if meta.SMART.PercentageUsed != nil {
 			sample.PercentageUsed = *meta.SMART.PercentageUsed
-			sample.Wearout = 100 - *meta.SMART.PercentageUsed
-			sample.WearoutKnown = true
+			if remaining := storagehealth.RemainingLifeFromPercentageUsed(*meta.SMART.PercentageUsed); remaining >= 0 {
+				sample.Wearout = remaining
+				sample.WearoutKnown = true
+			} else {
+				sample.Wearout = -1
+				sample.WearoutKnown = false
+			}
 		}
 		if meta.SMART.AvailableSpare != nil {
 			sample.AvailableSpare = *meta.SMART.AvailableSpare

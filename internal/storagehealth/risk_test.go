@@ -156,6 +156,54 @@ func TestAssessPhysicalDisk_PercentageUsedProvesZeroLifeOnSATASSD(t *testing.T) 
 	}
 }
 
+func TestAssessPhysicalDisk_ReportedZeroWearoutUsesMediaType(t *testing.T) {
+	if assessment := AssessPhysicalDisk(models.PhysicalDisk{
+		Type:    "nvme",
+		Health:  "PASSED",
+		Wearout: 0,
+	}); assessment.Level != RiskCritical {
+		t.Fatalf("reported NVMe wearout=0 should be critical, got %+v", assessment)
+	}
+	if assessment := AssessPhysicalDisk(models.PhysicalDisk{
+		Type:    "sata",
+		Health:  "PASSED",
+		Wearout: 0,
+	}); assessment.Level != RiskHealthy {
+		t.Fatalf("SATA transport without endurance evidence should remain neutral, got %+v", assessment)
+	}
+}
+
+func TestRemainingLifeFromPercentageUsedClampsControllerValues(t *testing.T) {
+	for _, test := range []struct {
+		used int
+		want int
+	}{
+		{used: -4, want: -1},
+		{used: 0, want: 100},
+		{used: 95, want: 5},
+		{used: 100, want: 0},
+		{used: 143, want: 0},
+	} {
+		if got := RemainingLifeFromPercentageUsed(test.used); got != test.want {
+			t.Fatalf("RemainingLifeFromPercentageUsed(%d) = %d, want %d", test.used, got, test.want)
+		}
+	}
+}
+
+func TestAssessPhysicalDisk_InvalidPercentageUsedRemainsUnknown(t *testing.T) {
+	percentageUsed := -4
+	assessment := AssessPhysicalDisk(models.PhysicalDisk{
+		Type: "nvme",
+		SmartAttributes: &models.SMARTAttributes{
+			PercentageUsed: &percentageUsed,
+		},
+	})
+
+	if assessment.Level != RiskHealthy || len(assessment.Reasons) != 0 {
+		t.Fatalf("invalid percentage used should remain neutral, got %+v", assessment)
+	}
+}
+
 func TestAssessSample_WearoutWarning(t *testing.T) {
 	assessment := AssessSample(Sample{
 		Health:  "PASSED",
