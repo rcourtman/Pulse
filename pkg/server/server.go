@@ -476,8 +476,19 @@ func Run(ctx context.Context, version string) error {
 			}
 
 			snap := telemetry.Snapshot{
-				MultiTenant:  currentCfg.MultiTenantEnabled,
-				HasAPITokens: currentCfg.HasAPITokens(),
+				MultiTenant:           currentCfg.MultiTenantEnabled,
+				HasAPITokens:          currentCfg.HasAPITokens(),
+				AuthConfigured:        currentCfg.AuthUser != "" || currentCfg.AuthPass != "" || currentCfg.HasAPITokens() || currentCfg.ProxyAuthSecret != "",
+				ConfiguredConnections: len(currentCfg.PVEInstances) + len(currentCfg.PBSInstances) + len(currentCfg.PMGInstances),
+			}
+			if truenas, err := telemetryPersistence.LoadTrueNASConfig(); err == nil {
+				snap.ConfiguredConnections += len(truenas)
+			}
+			if vmware, err := telemetryPersistence.LoadVMwareConfig(); err == nil {
+				snap.ConfiguredConnections += len(vmware)
+			}
+			if targets, err := telemetryPersistence.LoadAvailabilityTargets(); err == nil {
+				snap.ConfiguredConnections += len(targets)
 			}
 
 			// Resource counts come from the tenant-aware monitor aggregate, not the
@@ -507,6 +518,12 @@ func Run(ctx context.Context, version string) error {
 			snap.VMwareDatastores = counts.VMwareDatastores
 			snap.AvailabilityTargets = counts.AvailabilityTargets
 			snap.ActiveAlerts = counts.ActiveAlerts
+			snap.AlertsFired30d = counts.AlertsFired30d
+			snap.AlertsAcknowledged30d = counts.AlertsAcknowledged30d
+			snap.AlertsResolved30d = counts.AlertsResolved30d
+			snap.NotificationAttempts7d = counts.NotificationAttempts7d
+			snap.NotificationDeliveries7d = counts.NotificationDeliveries7d
+			snap.NotificationFailures7d = counts.NotificationFailures7d
 			snap.DiscoveryEnabled = currentCfg.DiscoveryEnabled
 
 			// Feature flags from persisted config (using pre-created persistence).
@@ -523,6 +540,7 @@ func Run(ctx context.Context, version string) error {
 			// SSO/OIDC status.
 			if ssoCfg, err := telemetryPersistence.LoadSSOConfig(); err == nil && ssoCfg != nil {
 				snap.SSOEnabled = ssoCfg.HasEnabledProviders()
+				snap.AuthConfigured = snap.AuthConfigured || snap.SSOEnabled
 			}
 			if emailCfg, err := telemetryPersistence.LoadEmailConfig(); err == nil && emailCfg != nil && emailCfg.Enabled {
 				snap.NotificationsEnabled = true

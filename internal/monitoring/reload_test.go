@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,6 +166,26 @@ func TestAccumulateInstallSnapshotUnifiedResourceCountsUsesCoarseV6AdoptionSigna
 	assert.Equal(t, 1, counts.CephClusters)
 	assert.Equal(t, 1, counts.NetworkShares)
 	assert.Equal(t, 1, counts.AvailabilityTargets)
+}
+
+func TestAccumulateAlertOutcomeCountsUsesOnlyContentFreeLifecycleTotals(t *testing.T) {
+	now := time.Now().UTC()
+	recentAck := now.Add(-time.Hour)
+	oldAck := now.Add(-40 * 24 * time.Hour)
+	counts := InstallSnapshotCounts{}
+	accumulateAlertOutcomeCounts(&counts, []alerts.Alert{
+		{
+			AckTime: &recentAck,
+			OperationalRecord: &operationaltrust.OperationalRecord{
+				State: operationaltrust.OperationalResolved,
+			},
+		},
+		{AckTime: &oldAck},
+	}, now.Add(-30*24*time.Hour))
+
+	assert.Equal(t, 2, counts.AlertsFired30d)
+	assert.Equal(t, 1, counts.AlertsAcknowledged30d)
+	assert.Equal(t, 1, counts.AlertsResolved30d)
 }
 
 func testTelemetryMonitor(

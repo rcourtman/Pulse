@@ -1354,6 +1354,61 @@ func TestGetQueueStats(t *testing.T) {
 	})
 }
 
+func TestGetTelemetryStatsReturnsOnlyWindowedOutcomeCounts(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	now := time.Now().UTC()
+	entries := []*QueuedNotification{
+		{ID: "sent", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), CreatedAt: now.Add(-time.Hour)},
+		{ID: "failed", Type: "webhook", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), CreatedAt: now.Add(-2 * time.Hour)},
+		{ID: "old", Type: "email", Status: QueueStatusPending, MaxAttempts: 3, Config: []byte(`{}`), CreatedAt: now.Add(-8 * 24 * time.Hour)},
+	}
+	for _, entry := range entries {
+		if err := nq.Enqueue(entry); err != nil {
+			t.Fatalf("enqueue %s: %v", entry.ID, err)
+		}
+	}
+	entries[0].Attempts = 1
+	entries[0].Status = QueueStatusPending
+	if err := nq.RecordAudit(entries[0], false, "first attempt failed"); err != nil {
+		t.Fatalf("record sent retry: %v", err)
+	}
+	entries[0].Attempts = 2
+	entries[0].Status = QueueStatusSent
+	if err := nq.RecordAudit(entries[0], true, ""); err != nil {
+		t.Fatalf("record sent delivery: %v", err)
+	}
+	entries[1].Attempts = 1
+	entries[1].Status = QueueStatusFailed
+	if err := nq.RecordAudit(entries[1], false, "final attempt failed"); err != nil {
+		t.Fatalf("record failed delivery: %v", err)
+	}
+	entries[2].Attempts = 1
+	entries[2].Status = QueueStatusSent
+	if err := nq.RecordAudit(entries[2], true, ""); err != nil {
+		t.Fatalf("record old delivery: %v", err)
+	}
+	if _, err := nq.db.Exec(
+		`UPDATE notification_audit SET timestamp = ? WHERE notification_id = ?`,
+		now.Add(-8*24*time.Hour).Unix(),
+		"old",
+	); err != nil {
+		t.Fatalf("age old audit row: %v", err)
+	}
+
+	stats, err := nq.GetTelemetryStats(now.Add(-7 * 24 * time.Hour))
+	if err != nil {
+		t.Fatalf("GetTelemetryStats: %v", err)
+	}
+	if stats != (TelemetryStats{Attempts: 3, Deliveries: 1, Failures: 2}) {
+		t.Fatalf("telemetry stats = %#v", stats)
+	}
+}
+
 func TestPerformCleanup(t *testing.T) {
 	t.Run("cleanup removes old completed entries", func(t *testing.T) {
 		tempDir := t.TempDir()

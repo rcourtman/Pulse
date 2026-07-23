@@ -6,11 +6,18 @@
 //
 // # What is sent (the full list — nothing else)
 //
-// Identity:
+// Contract and identity:
+//   - Payload schema version and the UTC time this payload was built
 //   - A rotating install ID (UUID, generated locally and rotated periodically, not tied to any account)
 //   - Pulse version identity (normalized version plus raw build string when it differs)
 //   - Platform: "docker" or "binary"
+//   - Coarse deployment method from a fixed list, never an image name or path
 //   - OS and architecture (e.g. "linux/amd64")
+//
+// Lifecycle and audience posture (closed buckets, booleans, and counts only):
+//   - Known install age, highest activation stage, time to first monitored resource, and estate-size buckets
+//   - Whether authentication is configured, number of configured connections, and whether monitoring is active
+//   - Whether a core outcome was observed in the current aggregate windows
 //
 // Scale (counts only, no names):
 //   - Number of PVE nodes, PBS instances, PMG instances
@@ -28,6 +35,8 @@
 //   - Whether multi-tenant mode is enabled
 //   - Whether a paid license is active
 //   - Whether any API tokens are configured
+//   - Aggregate alert fired/acknowledged/resolved counts over 30 days
+//   - Aggregate notification attempt/delivery/failure counts over seven days
 //   - Coarse update funnel counters and last failure category over the current install-ID rotation window
 //   - Patrol, Assistant, and external-agent usage counters over the current install-ID rotation window:
 //     configured/active/governed-action/approved-execution/resolved-loop state,
@@ -65,6 +74,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -105,6 +116,11 @@ const (
 	// installIDFile is the filename persisted in the data directory.
 	installIDFile = ".install_id"
 
+	// lifecycleStateFile stores only local milestone timestamps and the highest
+	// coarse activation stage observed. It contains no user or infrastructure
+	// identifiers and is intentionally independent from the rotating install ID.
+	lifecycleStateFile = ".telemetry_lifecycle"
+
 	// installIDRotationWindow limits how long the same pseudonymous identifier
 	// can be reused before it is rotated locally.
 	installIDRotationWindow = 30 * 24 * time.Hour
@@ -114,6 +130,10 @@ const (
 	// intentionally matches the install-ID rotation window so counters cannot
 	// be linked to one stable pseudonymous identifier indefinitely.
 	PulseIntelligenceTelemetryWindow = installIDRotationWindow
+
+	// TelemetrySchemaVersion identifies the exact outbound payload contract.
+	// Increment this when fields or their semantics change.
+	TelemetrySchemaVersion = 2
 )
 
 type installIDRecord struct {
@@ -121,10 +141,18 @@ type installIDRecord struct {
 	IssuedAt  time.Time `json:"issued_at"`
 }
 
+type lifecycleRecord struct {
+	FirstObservedAt           time.Time  `json:"first_observed_at"`
+	FirstMonitoredResourceAt  *time.Time `json:"first_monitored_resource_at,omitempty"`
+	HighestObservedActivation string     `json:"highest_observed_activation"`
+}
+
 // Ping is the payload sent to the telemetry endpoint.
 // Every field is documented here so users can audit exactly what leaves their server.
 type Ping struct {
 	// Identity
+	SchemaVersion      int    `json:"schema_version"`               // Versioned payload contract
+	SentAt             string `json:"sent_at"`                      // UTC send/preview time; no client clock history
 	InstallID          string `json:"install_id"`                   // Rotating UUID, not tied to any account
 	Version            string `json:"version"`                      // Normalized Pulse version (e.g. "6.0.0-rc.1")
 	VersionRaw         string `json:"version_raw,omitempty"`        // Original version/build string when it differs
@@ -136,6 +164,19 @@ type Ping struct {
 	OS                 string `json:"os"`                           // runtime.GOOS (e.g. "linux")
 	Arch               string `json:"arch"`                         // runtime.GOARCH (e.g. "amd64")
 	Event              string `json:"event"`                        // "startup" or "heartbeat"
+	DeploymentMethod   string `json:"deployment_method"`            // Closed coarse install method, never a path or image name
+
+	// Coarse lifecycle and audience posture. These are closed buckets and
+	// aggregate states only; no user, account, locale, or resource identity is
+	// included.
+	KnownInstallAgeBucket              string `json:"known_install_age_bucket"`
+	ActivationStage                    string `json:"activation_stage"`
+	TimeToFirstMonitoredResourceBucket string `json:"time_to_first_monitored_resource_bucket"`
+	EstateSizeBucket                   string `json:"estate_size_bucket"`
+	AuthConfigured                     bool   `json:"auth_configured"`
+	ConfiguredConnections              int    `json:"configured_connections"`
+	MonitoringActive                   bool   `json:"monitoring_active"`
+	OutcomeObserved30d                 bool   `json:"outcome_observed_30d"`
 
 	// Scale (counts only — no names, IPs, or identifiers)
 	PVENodes              int `json:"pve_nodes"`
@@ -179,6 +220,15 @@ type Ping struct {
 	UpdateFailures30d    int  `json:"update_failures_30d"`
 	// Last coarse update failure category; never raw error text.
 	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
+
+	// Core product outcomes. Alert history is retained locally for 30 days;
+	// notification delivery rows are locally retention-bounded to seven days.
+	AlertsFired30d           int `json:"alerts_fired_30d"`
+	AlertsAcknowledged30d    int `json:"alerts_acknowledged_30d"`
+	AlertsResolved30d        int `json:"alerts_resolved_30d"`
+	NotificationAttempts7d   int `json:"notification_attempts_7d"`
+	NotificationDeliveries7d int `json:"notification_deliveries_7d"`
+	NotificationFailures7d   int `json:"notification_failures_7d"`
 
 	// Pulse Intelligence usage (30-day counts/booleans — no prompts, commands, outputs, resource IDs, or token values)
 	PulseIntelligenceLoopConfigured                                bool `json:"pulse_intelligence_loop_configured"`
@@ -290,6 +340,14 @@ type Snapshot struct {
 	UpdateSuccesses30d                                             int
 	UpdateFailures30d                                              int
 	UpdateLastFailureCategory                                      string
+	AuthConfigured                                                 bool
+	ConfiguredConnections                                          int
+	AlertsFired30d                                                 int
+	AlertsAcknowledged30d                                          int
+	AlertsResolved30d                                              int
+	NotificationAttempts7d                                         int
+	NotificationDeliveries7d                                       int
+	NotificationFailures7d                                         int
 	PulseIntelligenceLoopConfigured                                bool
 	PulseIntelligenceLoopActive30d                                 bool
 	PulseIntelligenceCompleteOperationsLoop30d                     bool
@@ -613,11 +671,15 @@ type SnapshotFunc func() Snapshot
 
 // Config holds the static configuration for the telemetry runner.
 type Config struct {
-	Version     string
-	DataDir     string
-	IsDocker    bool
-	Enabled     bool // From cfg.TelemetryEnabled (system settings or env var)
-	GetSnapshot SnapshotFunc
+	Version  string
+	DataDir  string
+	IsDocker bool
+	// DeploymentMethod may be one of docker_compose, docker_run,
+	// container_other, systemd, binary_other, or other. Empty/invalid values
+	// fall back to container_other or binary_other without exporting raw input.
+	DeploymentMethod string
+	Enabled          bool // From cfg.TelemetryEnabled (system settings or env var)
+	GetSnapshot      SnapshotFunc
 }
 
 // runner holds the state for the background heartbeat goroutine.
@@ -643,13 +705,10 @@ func Start(ctx context.Context, cfg Config) {
 		return
 	}
 
-	installID := getOrCreateInstallID(cfg.DataDir)
-	if installID == "" {
+	if getOrCreateInstallID(cfg.DataDir) == "" {
 		log.Warn().Msg("Could not determine install ID; telemetry will not run")
 		return
 	}
-
-	base := basePing(cfg, installID)
 
 	ctx, cancel := context.WithCancel(ctx)
 	r := &runner{cancel: cancel}
@@ -662,8 +721,8 @@ func Start(ctx context.Context, cfg Config) {
 	mu.Unlock()
 
 	log.Info().
-		Str("platform", base.Platform).
-		Msg("Outbound usage telemetry enabled — sends a rotating pseudonymous install ID, version identity, platform, OS/arch, resource counts, feature flags, and coarse Patrol, Assistant, and external-agent usage counters")
+		Str("platform", platformName(cfg.IsDocker)).
+		Msg("Outbound usage telemetry enabled — sends a rotating pseudonymous install ID, version identity, coarse lifecycle buckets, aggregate resource/outcome counts, feature flags, and content-free Patrol, Assistant, and capability-API usage counters")
 
 	r.wg.Add(1)
 	go func() {
@@ -679,7 +738,7 @@ func Start(ctx context.Context, cfg Config) {
 		}
 
 		// Send startup ping with current snapshot.
-		sendEvent(ctx, base, cfg.GetSnapshot, "startup")
+		sendEvent(ctx, cfg, "startup")
 
 		// Daily heartbeat with jitter.
 		for {
@@ -689,7 +748,7 @@ func Start(ctx context.Context, cfg Config) {
 				timer.Stop()
 				return
 			case <-timer.C:
-				sendEvent(ctx, base, cfg.GetSnapshot, "heartbeat")
+				sendEvent(ctx, cfg, "heartbeat")
 			}
 		}
 	}()
@@ -710,14 +769,7 @@ func Stop() {
 
 // BuildPreview returns the current heartbeat payload without sending it.
 func BuildPreview(cfg Config) (Ping, error) {
-	installID := getOrCreateInstallID(cfg.DataDir)
-	if installID == "" {
-		return Ping{}, errInstallIDUnavailable
-	}
-
-	ping := applySnapshot(basePing(cfg, installID), cfg.GetSnapshot)
-	ping.Event = "heartbeat"
-	return ping, nil
+	return buildPingAt(cfg, "heartbeat", time.Now().UTC())
 }
 
 // ResetInstallID rotates the locally stored telemetry install ID immediately
@@ -745,6 +797,7 @@ func jitteredHeartbeat() time.Duration {
 func basePing(cfg Config, installID string) Ping {
 	versionIdentity := updates.DescribeUsageDataVersion(cfg.Version)
 	return Ping{
+		SchemaVersion:      TelemetrySchemaVersion,
 		InstallID:          installID,
 		Version:            versionIdentity.Version,
 		VersionRaw:         versionIdentity.RawVersion,
@@ -755,7 +808,23 @@ func basePing(cfg Config, installID string) Ping {
 		Platform:           platformName(cfg.IsDocker),
 		OS:                 runtime.GOOS,
 		Arch:               runtime.GOARCH,
+		DeploymentMethod:   deploymentMethod(cfg),
 	}
+}
+
+func deploymentMethod(cfg Config) string {
+	raw := strings.ToLower(strings.TrimSpace(cfg.DeploymentMethod))
+	if raw == "" {
+		raw = strings.ToLower(strings.TrimSpace(os.Getenv("PULSE_DEPLOYMENT_METHOD")))
+	}
+	switch raw {
+	case "docker_compose", "docker_run", "container_other", "systemd", "binary_other", "other":
+		return raw
+	}
+	if cfg.IsDocker {
+		return "container_other"
+	}
+	return "binary_other"
 }
 
 func platformName(isDocker bool) string {
@@ -810,6 +879,14 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.UpdateSuccesses30d = s.UpdateSuccesses30d
 	ping.UpdateFailures30d = s.UpdateFailures30d
 	ping.UpdateLastFailureCategory = s.UpdateLastFailureCategory
+	ping.AuthConfigured = s.AuthConfigured
+	ping.ConfiguredConnections = s.ConfiguredConnections
+	ping.AlertsFired30d = s.AlertsFired30d
+	ping.AlertsAcknowledged30d = s.AlertsAcknowledged30d
+	ping.AlertsResolved30d = s.AlertsResolved30d
+	ping.NotificationAttempts7d = s.NotificationAttempts7d
+	ping.NotificationDeliveries7d = s.NotificationDeliveries7d // gitleaks:allow -- schema field name, not a credential
+	ping.NotificationFailures7d = s.NotificationFailures7d
 	ping.PulseIntelligenceLoopConfigured = s.PulseIntelligenceLoopConfigured
 	ping.PulseIntelligenceLoopActive30d = s.PulseIntelligenceLoopActive30d
 	ping.PulseIntelligenceCompleteOperationsLoop30d = s.PulseIntelligenceCompleteOperationsLoop30d
@@ -959,27 +1036,237 @@ func shouldKeepInstallIDRecord(record installIDRecord, now time.Time) bool {
 	return now.Sub(issuedAt) < installIDRotationWindow
 }
 
+var lifecycleMu sync.Mutex
+
+func applyLifecycle(ping *Ping, dataDir string, now time.Time) {
+	if ping == nil {
+		return
+	}
+	now = now.UTC()
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+
+	record := readLifecycleRecord(dataDir)
+	if record.FirstObservedAt.IsZero() || record.FirstObservedAt.After(now) {
+		record.FirstObservedAt = now
+	}
+
+	currentStage := activationStage(*ping)
+	if activationStageRank(currentStage) > activationStageRank(record.HighestObservedActivation) {
+		record.HighestObservedActivation = currentStage
+	}
+	if record.HighestObservedActivation == "" {
+		record.HighestObservedActivation = "started"
+	}
+
+	ping.MonitoringActive = monitoredResourceCount(*ping) > 0
+	ping.OutcomeObserved30d = ping.ActiveAlerts > 0 ||
+		ping.AlertsFired30d > 0 ||
+		ping.AlertsAcknowledged30d > 0 ||
+		ping.AlertsResolved30d > 0 ||
+		ping.NotificationDeliveries7d > 0
+	if ping.MonitoringActive && record.FirstMonitoredResourceAt == nil {
+		observedAt := now
+		record.FirstMonitoredResourceAt = &observedAt
+	}
+
+	ping.KnownInstallAgeBucket = durationBucket(now.Sub(record.FirstObservedAt), []durationBoundary{
+		{24 * time.Hour, "under_1d"},
+		{7 * 24 * time.Hour, "1_7d"},
+		{30 * 24 * time.Hour, "8_30d"},
+		{90 * 24 * time.Hour, "31_90d"},
+		{365 * 24 * time.Hour, "91_365d"},
+	}, "over_365d")
+	ping.ActivationStage = record.HighestObservedActivation
+	ping.EstateSizeBucket = estateSizeBucket(monitoredResourceCount(*ping))
+	ping.TimeToFirstMonitoredResourceBucket = "not_observed"
+	if record.FirstMonitoredResourceAt != nil {
+		if record.FirstMonitoredResourceAt.Equal(record.FirstObservedAt) {
+			ping.TimeToFirstMonitoredResourceBucket = "present_at_first_observation"
+		} else {
+			elapsed := record.FirstMonitoredResourceAt.Sub(record.FirstObservedAt)
+			if elapsed < 0 {
+				elapsed = 0
+			}
+			ping.TimeToFirstMonitoredResourceBucket = durationBucket(elapsed, []durationBoundary{
+				{15 * time.Minute, "under_15m"},
+				{time.Hour, "15m_1h"},
+				{6 * time.Hour, "1_6h"},
+				{24 * time.Hour, "6_24h"},
+				{3 * 24 * time.Hour, "1_3d"},
+				{7 * 24 * time.Hour, "4_7d"},
+				{30 * 24 * time.Hour, "8_30d"},
+			}, "over_30d")
+		}
+	}
+
+	if err := writeLifecycleRecord(dataDir, record); err != nil {
+		log.Debug().Err(err).Msg("Could not persist coarse telemetry lifecycle milestones")
+	}
+}
+
+type durationBoundary struct {
+	upper time.Duration
+	label string
+}
+
+func durationBucket(value time.Duration, boundaries []durationBoundary, overflow string) string {
+	for _, boundary := range boundaries {
+		if value < boundary.upper {
+			return boundary.label
+		}
+	}
+	return overflow
+}
+
+func activationStage(ping Ping) string {
+	switch {
+	case ping.ActiveAlerts > 0 || ping.AlertsFired30d > 0 || ping.AlertsResolved30d > 0 || ping.NotificationDeliveries7d > 0:
+		return "outcome_observed"
+	case monitoredResourceCount(ping) > 0:
+		return "monitoring"
+	case ping.ConfiguredConnections > 0:
+		return "connected"
+	case ping.AuthConfigured:
+		return "secured"
+	default:
+		return "started"
+	}
+}
+
+func activationStageRank(stage string) int {
+	switch stage {
+	case "secured":
+		return 2
+	case "connected":
+		return 3
+	case "monitoring":
+		return 4
+	case "outcome_observed":
+		return 5
+	default:
+		return 1
+	}
+}
+
+func validActivationStage(stage string) bool {
+	switch stage {
+	case "started", "secured", "connected", "monitoring", "outcome_observed":
+		return true
+	default:
+		return false
+	}
+}
+
+func monitoredResourceCount(ping Ping) int {
+	return ping.PVENodes + ping.PBSInstances + ping.PMGInstances + ping.VMs +
+		ping.Containers + ping.AgentHosts + ping.DockerHosts + ping.DockerContainers +
+		ping.KubernetesClusters + ping.KubernetesNodes + ping.KubernetesPods +
+		ping.KubernetesDeployments + ping.StoragePools + ping.PhysicalDisks +
+		ping.CephClusters + ping.NetworkShares + ping.TrueNASSystems + ping.TrueNASVMs +
+		ping.TrueNASApps + ping.VMwareHosts + ping.VMwareVMs + ping.VMwareDatastores +
+		ping.AvailabilityTargets
+}
+
+func estateSizeBucket(resources int) string {
+	switch {
+	case resources <= 0:
+		return "empty"
+	case resources <= 10:
+		return "1_10"
+	case resources <= 50:
+		return "11_50"
+	case resources <= 200:
+		return "51_200"
+	case resources <= 1000:
+		return "201_1000"
+	default:
+		return "over_1000"
+	}
+}
+
+func readLifecycleRecord(dataDir string) lifecycleRecord {
+	data, err := os.ReadFile(filepath.Join(dataDir, lifecycleStateFile))
+	if err != nil {
+		return lifecycleRecord{}
+	}
+	var record lifecycleRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		return lifecycleRecord{}
+	}
+	if !validActivationStage(record.HighestObservedActivation) {
+		record.HighestObservedActivation = ""
+	}
+	return record
+}
+
+func writeLifecycleRecord(dataDir string, record lifecycleRecord) error {
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dataDir, ".telemetry_lifecycle-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(append(encoded, '\n')); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, filepath.Join(dataDir, lifecycleStateFile))
+}
+
 // sendEvent builds and sends one ping for the given event unless mock mode is
 // active. A mock-mode snapshot describes the synthetic fixture fleet, not a
 // real installation, so it must never reach the telemetry endpoint. The check
 // runs per event (not once at Start) because mock mode can be toggled at
 // runtime.
-func sendEvent(ctx context.Context, base Ping, fn SnapshotFunc, event string) {
+func sendEvent(ctx context.Context, cfg Config, event string) {
 	if mock.IsMockEnabled() {
 		log.Debug().Str("event", event).Msg("Suppressing outbound telemetry ping while mock mode is enabled")
 		return
 	}
-	ping := applySnapshot(base, fn)
-	ping.Event = event
-	send(ctx, ping)
+	ping, err := buildPingAt(cfg, event, time.Now().UTC())
+	if err != nil {
+		log.Debug().Err(err).Str("event", event).Msg("Telemetry ping could not be built")
+		return
+	}
+	if err := send(ctx, ping); err != nil {
+		log.Debug().Err(err).Msg("Telemetry ping failed (will retry at next heartbeat)")
+	}
 }
 
-// send posts a ping to the telemetry endpoint. Failures are silently ignored
-// — telemetry must never interfere with normal operation.
-func send(ctx context.Context, ping Ping) {
+func buildPingAt(cfg Config, event string, now time.Time) (Ping, error) {
+	now = now.UTC()
+	installID := getOrCreateInstallIDAt(cfg.DataDir, now)
+	if installID == "" {
+		return Ping{}, errInstallIDUnavailable
+	}
+	ping := applySnapshot(basePing(cfg, installID), cfg.GetSnapshot)
+	ping.Event = event
+	ping.SentAt = now.Format(time.RFC3339)
+	applyLifecycle(&ping, cfg.DataDir, now)
+	return ping, nil
+}
+
+// send posts a ping to the telemetry endpoint. Errors are observable in debug
+// logs but never affect normal Pulse operation.
+func send(ctx context.Context, ping Ping) error {
 	body, err := json.Marshal(ping)
 	if err != nil {
-		return
+		return err
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, httpTimeout)
@@ -987,14 +1274,18 @@ func send(ctx context.Context, ping Ping) {
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, pingEndpoint, bytes.NewReader(body))
 	if err != nil {
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Debug().Err(err).Msg("Telemetry ping failed (will retry at next heartbeat)")
-		return
+		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	_, _ = io.CopyN(io.Discard, resp.Body, 4096)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("telemetry endpoint returned HTTP %d", resp.StatusCode)
+	}
+	return nil
 }

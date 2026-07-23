@@ -192,6 +192,11 @@ describe('i18n foundation', () => {
   });
 
   it('keeps machine-facing identifiers unchanged in first-wave settings general catalog copy', () => {
+    const telemetryPrivacyTerms = {
+      de: ['Lebenszyklus', 'Ergebniszahlen', 'URLs', 'Pfade', 'Browser-Ereignisse'],
+      es: ['ciclo de vida', 'resultados', 'URLs', 'rutas', 'eventos del navegador'],
+    } as const;
+
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       const telemetryDescription = I18N_MESSAGES[locale]['settings.general.telemetry.description'];
 
@@ -200,6 +205,9 @@ describe('i18n foundation', () => {
       expect(telemetryDescription).toContain('IP');
       expect(telemetryDescription).toContain('90');
       expect(telemetryDescription).not.toMatch(/anonymous/i);
+      for (const term of telemetryPrivacyTerms[locale]) {
+        expect(telemetryDescription, `${locale}:${term}`).toContain(term);
+      }
       expect(I18N_MESSAGES[locale]['settings.general.telemetry.copyJson']).toContain('JSON');
       expect(
         t(

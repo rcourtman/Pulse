@@ -7,6 +7,8 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 const mockTelemetryPreviewPayload = {
+  schema_version: 2,
+  sent_at: '2026-07-23T08:30:00Z',
   install_id: 'preview-install-id',
   version: '6.0.0',
   version_channel: 'stable',
@@ -16,6 +18,15 @@ const mockTelemetryPreviewPayload = {
   os: 'linux',
   arch: 'amd64',
   event: 'heartbeat',
+  deployment_method: 'docker_compose',
+  known_install_age_bucket: '1_7d',
+  activation_stage: 'monitoring',
+  time_to_first_monitored_resource_bucket: 'under_15m',
+  estate_size_bucket: '1_10',
+  auth_configured: true,
+  configured_connections: 1,
+  monitoring_active: true,
+  outcome_observed_30d: false,
   pve_nodes: 1,
   pbs_instances: 0,
   pmg_instances: 0,
@@ -54,6 +65,12 @@ const mockTelemetryPreviewPayload = {
   update_successes_30d: 0,
   update_failures_30d: 0,
   update_last_failure_category: undefined,
+  alerts_fired_30d: 0,
+  alerts_acknowledged_30d: 0,
+  alerts_resolved_30d: 0,
+  notification_attempts_7d: 0,
+  notification_deliveries_7d: 0,
+  notification_failures_7d: 0,
   pulse_intelligence_loop_configured: false,
   pulse_intelligence_loop_active_30d: false,
   pulse_intelligence_complete_operations_loop_30d: false,
@@ -110,6 +127,11 @@ const mockTelemetryPreviewPayload = {
   pulse_intelligence_approved_action_decisions_30d: 0,
   pulse_intelligence_approved_action_attempts_30d: 0,
   pulse_intelligence_approved_action_successes_30d: 0,
+  pulse_intelligence_approved_action_failures_pre_dispatch_30d: 0,
+  pulse_intelligence_approved_action_failures_execution_30d: 0,
+  pulse_intelligence_approved_action_failures_unverified_30d: 0,
+  pulse_intelligence_approved_action_stuck_executing_30d: 0,
+  pulse_intelligence_approved_action_last_failure_reason_30d: undefined,
 } satisfies TelemetryPingPreview;
 
 describe('SettingsAPI', () => {

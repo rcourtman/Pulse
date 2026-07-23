@@ -16,7 +16,7 @@ third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
 Pulse includes outbound usage telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours with a rotating pseudonymous install ID to help me understand how many active installations exist, which releases are actually deployed, which features are in use, and whether Patrol control and governed Pulse Intelligence operations are being adopted.
 
-The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. See the full field list below.
+The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, URLs, paths, locale, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts. Pulse does not send browser events or an event-level clickstream. See the full field list below.
 
 While mock/demo fixture mode is enabled, Pulse suppresses outbound telemetry entirely: a mock-mode instance reports a synthetic fixture fleet rather than a real installation, so it never pings.
 
@@ -37,6 +37,8 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
+| Schema version | `2` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
 | Version raw | `v6.0.0-rc.1-45-gabcdef` | Preserve the original build string when it differs so manual/dev builds do not pollute release reporting |
@@ -48,6 +50,15 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | OS | `linux` | See whether operating-system-specific issues exist |
 | Arch | `amd64` | See whether CPU-architecture-specific issues exist |
 | Event | `startup` or `heartbeat` | Distinguish first-run/session starts from daily active-install heartbeats |
+| Deployment method | `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other` | Compare coarse installation paths without sending an image name, filesystem path, command, or URL |
+| Known install age bucket | `under_1d`, `1_7d`, `8_30d`, `31_90d`, `91_365d`, or `over_365d` | Understand activation by coarse age; for upgraded installs this is a lower bound measured from the first v2 observation, not an original installation date |
+| Activation stage | `started`, `secured`, `connected`, `monitoring`, or `outcome_observed` | Measure the highest coarse setup milestone reached without sending a user journey or event log |
+| Time to first monitored resource bucket | `not_observed`, `present_at_first_observation`, `under_15m`, `15m_1h`, `1_6h`, `6_24h`, `1_3d`, `4_7d`, `8_30d`, or `over_30d` | Measure coarse time to initial monitoring value without sending exact timestamps or resource identity; `present_at_first_observation` keeps upgraded installs from being assigned an invented historical duration |
+| Estate size bucket | `empty`, `1_10`, `11_50`, `51_200`, `201_1000`, or `over_1000` | Segment aggregate usage by approximate monitored-resource scale without adding a new identifier |
+| Auth configured | `true`/`false` | See whether an installation has crossed the basic security setup milestone without sending auth type, usernames, or account data |
+| Configured connections | `4` | Count configured monitoring connections in aggregate without sending connection names, addresses, credentials, or resource IDs |
+| Monitoring active | `true`/`false` | Distinguish currently populated monitoring from historical activation without sending resource identity |
+| Outcome observed 30d | `true`/`false` | See whether alert or notification outcome evidence exists in the aggregate windows without sending alert or notification content |
 | PVE nodes | `3` | Understand Proxmox VE deployment size in aggregate |
 | PBS instances | `1` | Understand Proxmox Backup Server adoption in aggregate |
 | PMG instances | `0` | Understand Proxmox Mail Gateway adoption in aggregate |
@@ -77,6 +88,12 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notifications enabled | `true`/`false` | See whether alert notification delivery is configured |
 | AI actions enabled | `true`/`false` | See whether AI control tools are enabled without sending action history or command content |
 | Active alerts | `4` | Understand how noisy or quiet installations are in aggregate |
+| Alerts fired 30d | `18` | Count locally retained alert-history entries in the current 30-day window without sending alert text, resource IDs, or timestamps |
+| Alerts acknowledged 30d | `7` | Count acknowledgements in the current 30-day window without sending actors, reasons, alert IDs, or timestamps |
+| Alerts resolved 30d | `12` | Count resolved alert records in the current 30-day window without sending resolution details, alert IDs, or resource IDs |
+| Notification attempts 7d | `14` | Count delivery attempts in the locally retained seven-day queue window without sending recipients, endpoints, titles, or message content |
+| Notification deliveries 7d | `11` | Count successfully delivered queue records in the local seven-day window without sending channel, recipient, endpoint, or content |
+| Notification failures 7d | `3` | Count failed delivery attempts in the local seven-day window without sending error text, endpoint, recipient, or message content |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
@@ -154,6 +171,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 - The license server stores only the same coarse telemetry fields listed above; it does not expand them into exact commercial tiers, exact API-token counts, prompts, chat messages, command text, action output, token values, or resource identifiers.
 - Pulse may derive aggregate Pulse Intelligence adoption reports from those same rows, including whether an install reached Patrol issue activity, Patrol resolution, Assistant, direct external-agent, or MCP collaboration, Patrol mode starter use, paid Patrol mode cohorts, governed-action activity, approved or rejected action decisions, approved action success, completed Patrol control work, recent retention, and observed free-to-paid movement within the source window. Those reports do not add prompts, findings, resource identifiers, tool names, tool inputs, tool outputs, command payloads, action outputs, account links, or exact commercial tiers.
 - External-agent/MCP activity is stored only as a coarse adapter-origin flag plus capability-class counters: context, event stream, provisioning, operator state, findings, and action requests.
+- The receiver stores only fields in its versioned telemetry allowlist. A cross-repository parity check prevents client fields from being silently dropped and prevents the storage contract from growing beyond the disclosed payload.
 - Telemetry rows older than **90 days** are purged automatically.
 - The license server uses request IP addresses transiently for abuse/rate limiting, but it does **not** store IP addresses in telemetry rows.
 
@@ -161,6 +179,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 - No IP addresses are included in the telemetry payload or stored in telemetry rows
 - No hostnames, node names, VM names, or any infrastructure identifiers
+- No URLs, filesystem paths, locale, browser events, or event-level clickstream
 - No Proxmox credentials, API tokens, or passwords
 - No alert content, AI prompts, chat messages, tool names, tool inputs, tool outputs, command text, action output, or token values
 - No names, email addresses, account identifiers, or other intentionally identifying personal content
@@ -171,6 +190,12 @@ The telemetry install ID is pseudonymous, is not tied to a Pulse account, and ro
 Pulse keeps it only to avoid treating every startup ping as a brand-new install
 while still limiting long-term linkage from one heartbeat window to the next.
 Operators can also rotate it immediately from **Settings → System → General → Reset ID**.
+
+Pulse separately keeps three coarse lifecycle values on the local instance: the
+first v2 observation time, the first monitored-resource milestone time, and the
+highest activation stage reached. This local state contains no user, account,
+resource, URL, or content identifiers. It exists so daily pings can report
+buckets instead of exporting a sequence of setup events.
 
 #### Source code
 

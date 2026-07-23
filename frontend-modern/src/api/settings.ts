@@ -6,6 +6,8 @@ export interface SystemSettingsResponse extends SystemConfig {
 }
 
 export interface TelemetryPingPreview {
+  schema_version: number;
+  sent_at: string;
   install_id: string;
   version: string;
   version_raw?: string;
@@ -17,6 +19,15 @@ export interface TelemetryPingPreview {
   os: string;
   arch: string;
   event: string;
+  deployment_method: string;
+  known_install_age_bucket: string;
+  activation_stage: string;
+  time_to_first_monitored_resource_bucket: string;
+  estate_size_bucket: string;
+  auth_configured: boolean;
+  configured_connections: number;
+  monitoring_active: boolean;
+  outcome_observed_30d: boolean;
   pve_nodes: number;
   pbs_instances: number;
   pmg_instances: number;
@@ -55,6 +66,12 @@ export interface TelemetryPingPreview {
   update_successes_30d: number;
   update_failures_30d: number;
   update_last_failure_category?: string;
+  alerts_fired_30d: number;
+  alerts_acknowledged_30d: number;
+  alerts_resolved_30d: number;
+  notification_attempts_7d: number;
+  notification_deliveries_7d: number;
+  notification_failures_7d: number;
   pulse_intelligence_loop_configured: boolean;
   pulse_intelligence_loop_active_30d: boolean;
   pulse_intelligence_complete_operations_loop_30d: boolean;
@@ -111,6 +128,11 @@ export interface TelemetryPingPreview {
   pulse_intelligence_approved_action_decisions_30d: number;
   pulse_intelligence_approved_action_attempts_30d: number;
   pulse_intelligence_approved_action_successes_30d: number;
+  pulse_intelligence_approved_action_failures_pre_dispatch_30d: number;
+  pulse_intelligence_approved_action_failures_execution_30d: number;
+  pulse_intelligence_approved_action_failures_unverified_30d: number;
+  pulse_intelligence_approved_action_stuck_executing_30d: number;
+  pulse_intelligence_approved_action_last_failure_reason_30d?: string;
 }
 
 export interface TelemetryPreviewResponse {

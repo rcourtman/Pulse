@@ -317,7 +317,7 @@ export const EN_MESSAGES = {
   'settings.general.temperature.title': 'Temperature unit',
   'settings.general.telemetry.copyJson': 'Copy JSON',
   'settings.general.telemetry.description':
-    'Help improve Pulse by sharing outbound usage data: a rotating pseudonymous install ID, normalized release identity, runtime platform, aggregate self-hosted adoption counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters. The payload does not include hostnames, credentials, infrastructure identifiers, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
+    'Help improve Pulse by sharing outbound usage data: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, and content-free Patrol, Assistant, and capability-API usage counters. The payload does not include hostnames, credentials, infrastructure identifiers, URLs, paths, locale, browser events, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
   'settings.general.telemetry.disabledPreview':
     'Telemetry is currently disabled. This preview shows the payload Pulse would send if you enable it.',
   'settings.general.telemetry.fullDetails': 'Full details',

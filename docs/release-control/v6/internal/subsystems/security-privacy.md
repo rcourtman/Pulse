@@ -943,6 +943,36 @@ pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an
 active installation window, but it may not preserve one stable install
 identifier indefinitely or echo that identifier back into routine logs.
+The identifier must be resolved at each outbound event, not frozen when the
+process starts, so a continuously running installation still rotates after the
+30-day window. Each payload also carries a schema version and one UTC build
+time so receiver and reporting semantics can be selected explicitly.
+Schema v2 may add only privacy-bounded user-base signals: a closed deployment
+method, known-age/activation/time-to-first-resource/estate-size buckets,
+authentication and current-monitoring booleans, configured-connection count,
+and aggregate alert and notification outcome counts from the runtime's existing
+30-day and seven-day local retention windows. The lifecycle record kept on the
+instance may contain only first observation time, first monitored-resource
+milestone time, and highest coarse activation stage. It must not retain or send
+names, email addresses, account IDs, locale, URLs, paths, host/resource IDs,
+recipients, endpoints, alert content, notification content, prompts, commands,
+or an event-level journey/clickstream. Known install age for an upgraded
+installation is therefore a lower bound beginning with its first schema-v2
+observation, not a reconstructed installation date.
+If monitoring is already populated at that first observation, time-to-first
+resource must report a dedicated present-at-first-observation bucket rather
+than inventing an under-15-minute activation duration.
+The public Go payload, Settings preview TypeScript interface, and Pulse Pro
+receiver must remain field/type-equivalent under
+`scripts/check_telemetry_schema_parity.py`, except for explicitly named legacy
+receiver-only compatibility fields. The receiver JSON struct is the storage
+allowlist: unknown input fields are discarded, and inserts are generated from
+that allowlist so a declared client field cannot be silently dropped by a
+hand-maintained SQL list. Receiver values must clamp counts and validate every
+new categorical value against its fixed set before storage. The adoption
+report may aggregate those latest-per-install signals and use indexed time
+filters plus compressed remote transport, but it must not enrich them with
+accounts, request IPs, customer records, or event-level browser data.
 That same telemetry trust boundary must remain operator-inspectable in-product:
 the shared system settings surface may preview only the exact runtime payload
 Pulse would send, and it must allow an operator to rotate the local telemetry

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import gzip
 import json
 import subprocess
 import sys
@@ -36,15 +37,26 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             {"install_id": "b", "received_at": "2026-07-16 00:00:00"},
         ]
         stdout = "\n".join([json.dumps({"db_stats": db_stats}), *(json.dumps(row) for row in rows), ""])
-        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=gzip.compress(stdout.encode("utf-8")),
+            stderr=b"",
+        )
         with mock.patch.object(report.subprocess, "run", return_value=completed) as run_mock:
             result = report.fetch_rows_remote("pulse-license", "/opt/licenses.sqlite", 30)
         self.assertEqual(result, {"db_stats": db_stats, "rows": rows})
-        remote_script = run_mock.call_args.kwargs["input"]
+        remote_script = run_mock.call_args.kwargs["input"].decode("utf-8")
         self.assertNotIn("fetchall", remote_script)
+        self.assertIn("received_at >= datetime('now', ?)", remote_script)
 
     def test_fetch_rows_remote_rejects_empty_response(self) -> None:
-        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="\n", stderr="")
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=gzip.compress(b"\n"),
+            stderr=b"",
+        )
         with mock.patch.object(report.subprocess, "run", return_value=completed):
             with self.assertRaisesRegex(RuntimeError, "empty response"):
                 report.fetch_rows_remote("pulse-license", "/opt/licenses.sqlite", 30)
@@ -513,7 +525,10 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             entry["key"]: entry
             for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
         }
-        self.assertEqual(cohorts["external_agent_used_30d"]["label"], "External agent/MCP used 30d")
+        self.assertEqual(
+            cohorts["external_agent_used_30d"]["label"],
+            "Capability API/MCP adapter used 30d",
+        )
         self.assertEqual(cohorts["external_agent_used_30d"]["installs"], 1)
         self.assertEqual(cohorts["external_agent_used_30d"]["paid_latest"], 1)
         self.assertEqual(cohorts["external_agent_used_30d"]["observed_signal_free_starts"], 1)
@@ -1321,6 +1336,103 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             included["mock_fleet_exclusions"],
             {"enabled": False, "rows": 0, "installs": 0},
         )
+
+    def test_summarize_user_base_signals_uses_latest_active_install_rows(self) -> None:
+        now = datetime(2026, 7, 23, 12, tzinfo=timezone.utc)
+        summary = report.summarize_user_base_signals(
+            {
+                "active-v2": {
+                    "received_at": "2026-07-23 10:00:00",
+                    "schema_version": 2,
+                    "deployment_method": "docker_compose",
+                    "known_install_age_bucket": "1_7d",
+                    "activation_stage": "outcome_observed",
+                    "time_to_first_monitored_resource_bucket": "under_15m",
+                    "estate_size_bucket": "11_50",
+                    "auth_configured": 1,
+                    "monitoring_active": 1,
+                    "outcome_observed_30d": 1,
+                    "configured_connections": 3,
+                    "alerts_fired_30d": 4,
+                    "notification_deliveries_7d": 2,
+                },
+                "active-legacy": {
+                    "received_at": "2026-07-22 10:00:00",
+                },
+                "stale": {
+                    "received_at": "2026-07-01 10:00:00",
+                    "schema_version": 2,
+                    "configured_connections": 99,
+                },
+            },
+            now=now,
+        )
+
+        self.assertEqual(summary["active_installs"], 2)
+        self.assertEqual(
+            summary["schema_versions"],
+            [{"version": "2", "installs": 1}, {"version": "legacy", "installs": 1}],
+        )
+        deployment = next(
+            item for item in summary["category_signals"] if item["field"] == "deployment_method"
+        )
+        self.assertEqual(
+            deployment["buckets"],
+            [{"bucket": "docker_compose", "installs": 1}, {"bucket": "legacy_unknown", "installs": 1}],
+        )
+        configured = next(
+            item for item in summary["count_signals"] if item["field"] == "configured_connections"
+        )
+        self.assertEqual(configured, {
+            "field": "configured_connections",
+            "label": "Configured connections",
+            "installs": 1,
+            "total": 3,
+        })
+
+    def test_format_text_includes_user_base_privacy_bounded_signals(self) -> None:
+        rendered = report.format_text(
+            {
+                "db_stats": {},
+                "latest_install_windows": {
+                    label: {
+                        "active_installs": 0,
+                        "published_versions": [],
+                        "non_release_versions": [],
+                        "platforms": [],
+                        "adoption_counts": [],
+                        "feature_enabled_installs": [],
+                    }
+                    for label, _ in report.DEFAULT_LATEST_INSTALL_WINDOWS
+                },
+                "user_base_signals_7d": {
+                    "active_installs": 2,
+                    "schema_versions": [{"version": "2", "installs": 2}],
+                    "category_signals": [{
+                        "field": "activation_stage",
+                        "label": "Highest observed activation stage",
+                        "buckets": [{"bucket": "monitoring", "installs": 2}],
+                    }],
+                    "boolean_signals": [{
+                        "field": "monitoring_active",
+                        "label": "Monitoring currently active",
+                        "installs": 2,
+                    }],
+                    "count_signals": [{
+                        "field": "alerts_resolved_30d",
+                        "label": "Alerts resolved (30d)",
+                        "installs": 1,
+                        "total": 4,
+                    }],
+                },
+            },
+            "rcourtman/Pulse",
+            7,
+        )
+        self.assertIn("User-base lifecycle and outcomes (7d):", rendered)
+        self.assertIn("Highest observed activation stage: monitoring 2", rendered)
+        self.assertIn("Alerts resolved (30d): 4 across 1 installs", rendered)
+        self.assertIn("older upgraded installs are therefore lower bounds", rendered)
 
     def test_format_text_includes_latest_install_windows(self) -> None:
         summary = {

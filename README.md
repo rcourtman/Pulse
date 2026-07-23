@@ -124,6 +124,7 @@ docker run -d \
   --name pulse \
   -p 7655:7655 \
   -v pulse_data:/data \
+  -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```

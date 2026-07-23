@@ -547,12 +547,13 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
 5. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    The panel owns compact settings-shell framing for outbound usage telemetry, but
-   its vocabulary must stay aligned with `security-privacy`: aggregate
-   self-hosted adoption counts, coarse feature flags, and coarse Patrol,
-   Assistant, and external-agent usage counters may be named, while
-   hostnames, credentials, infrastructure identifiers, prompts, chat messages,
-   command text, action output, token values, and personal information must
-   stay explicitly excluded.
+   its vocabulary must stay aligned with `security-privacy`: coarse deployment
+   and lifecycle buckets, aggregate resource and outcome counts, coarse feature
+   flags, and content-free Patrol, Assistant, and capability-API usage counters
+   may be named, while hostnames, credentials, infrastructure identifiers,
+   URLs, paths, locale, browser events, prompts, chat messages, command text,
+   action output, token values, and personal information must stay explicitly
+   excluded.
 7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    These settings panels consume the privileged security-status projection,
@@ -4846,10 +4847,11 @@ external URLs.
 That same shared-shell framing also covers the concise telemetry summary in
 General settings. The shell may present the privacy contract in compact product
 copy, but the vocabulary for outbound usage telemetry must stay aligned
-with `security-privacy`: aggregate self-hosted adoption counts, coarse feature
-flags, and coarse Patrol, Assistant, and external-agent usage counters are
-allowed, while hostnames, credentials, infrastructure identifiers, prompts,
-chat messages, command text, action output, token values, and personal
+with `security-privacy`: coarse deployment and lifecycle buckets, aggregate
+resource and outcome counts, coarse feature flags, and content-free Patrol,
+Assistant, and capability-API usage counters are allowed, while hostnames,
+credentials, infrastructure identifiers, URLs, paths, locale, browser events,
+prompts, chat messages, command text, action output, token values, and personal
 information are not.
 That same docs-link boundary also governs local legal docs surfaced from the
 settings shell: shared settings surfaces such as

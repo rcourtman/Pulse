@@ -257,6 +257,18 @@ without destination, record, resource, or evidence labels. Delivery state
 remains notification truth only and cannot resolve or reopen the alert
 lifecycle.
 
+The queue owner may expose a read-only, content-free telemetry aggregate over
+its retained per-attempt audit rows: total delivery attempts plus successful
+and failed attempt counts since a caller-supplied cutoff. The aggregate must
+be computed in storage,
+must not return or copy notification IDs, alert links, destinations,
+recipients, endpoint URLs, titles, bodies, error text, or timestamps, and must
+not mutate queue or alert state. The install-wide monitoring owner may sum that
+aggregate across provisioned tenants for the outbound seven-day notification
+outcome counters. Because completed queue rows are retention-bounded, this is a
+seven-day delivery signal only and must not be presented as lifetime delivery
+history or as proof that an alert was resolved.
+
 ### Occurrence-bound delivery receipts
 
 The notification owner records successful firing delivery by exact alert ID,

@@ -501,6 +501,25 @@ func TestRootInstallShowsBootstrapTokenCommandInsteadOfEncryptedFile(t *testing.
 	}
 }
 
+func TestCanonicalServerDeploymentMethodsAreStampedForTelemetry(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	required := map[string]string{
+		"Dockerfile":         "ENV PULSE_DEPLOYMENT_METHOD=container_other",
+		"docker-compose.yml": "PULSE_DEPLOYMENT_METHOD=docker_compose",
+		"install.sh":         `Environment="PULSE_DEPLOYMENT_METHOD=systemd"`,
+		"README.md":          "PULSE_DEPLOYMENT_METHOD=docker_run",
+	}
+	for relativePath, marker := range required {
+		content, err := os.ReadFile(filepath.Join(repoRoot, relativePath))
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		if !strings.Contains(string(content), marker) {
+			t.Errorf("%s must stamp coarse deployment method %q", relativePath, marker)
+		}
+	}
+}
+
 func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 	rootInstall, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {

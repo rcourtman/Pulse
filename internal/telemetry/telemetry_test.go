@@ -609,18 +609,15 @@ func TestApplyUpdateTelemetrySnapshotDoesNotExposeRawFailureText(t *testing.T) {
 	}
 }
 
-func TestPulseIntelligenceTelemetryFieldsAreDisclosed(t *testing.T) {
+func TestAllTelemetryFieldsAreDisclosed(t *testing.T) {
 	pingType := reflect.TypeOf(Ping{})
 	fieldLabels := make([]string, 0)
 	for i := 0; i < pingType.NumField(); i++ {
 		jsonName := strings.Split(pingType.Field(i).Tag.Get("json"), ",")[0]
-		if !strings.HasPrefix(jsonName, "pulse_intelligence_") {
-			continue
-		}
 		fieldLabels = append(fieldLabels, normalizedTelemetryDisclosureLabel(jsonName))
 	}
 	if len(fieldLabels) == 0 {
-		t.Fatal("expected Pulse Intelligence telemetry fields on Ping")
+		t.Fatal("expected telemetry fields on Ping")
 	}
 
 	for _, relativePath := range []string{
@@ -634,7 +631,7 @@ func TestPulseIntelligenceTelemetryFieldsAreDisclosed(t *testing.T) {
 		doc := normalizedTelemetryDisclosureTableText(string(raw))
 		for _, label := range fieldLabels {
 			if !strings.Contains(doc, label) {
-				t.Errorf("%s must disclose Pulse Intelligence telemetry field %q", relativePath, label)
+				t.Errorf("%s must disclose telemetry field %q", relativePath, label)
 			}
 		}
 	}
@@ -656,6 +653,8 @@ func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testin
 			"outbound usage telemetry",
 			"enabled by default",
 			"rotating pseudonymous install ID",
+			"Pulse does not send browser events or an event-level clickstream",
+			"Lifecycle and outcome signals are deliberately limited to closed buckets, booleans, and aggregate counts",
 			"PULSE_TELEMETRY=false",
 			"The license server uses request IP addresses transiently for abuse/rate limiting",
 		} {
@@ -683,8 +682,11 @@ func normalizedTelemetryDisclosureTableText(value string) string {
 }
 
 func normalizedTelemetryDisclosureLabel(jsonName string) string {
-	label := strings.TrimPrefix(jsonName, "pulse_intelligence_")
-	return normalizedTelemetryDisclosureText("Pulse Intelligence " + strings.ReplaceAll(label, "_", " "))
+	if strings.HasPrefix(jsonName, "pulse_intelligence_") {
+		label := strings.TrimPrefix(jsonName, "pulse_intelligence_")
+		return normalizedTelemetryDisclosureText("Pulse Intelligence " + strings.ReplaceAll(label, "_", " "))
+	}
+	return normalizedTelemetryDisclosureText(strings.ReplaceAll(jsonName, "_", " "))
 }
 
 func normalizedTelemetryDisclosureText(value string) string {
@@ -770,10 +772,125 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 	if preview.InstallID == "" {
 		t.Fatal("expected preview install ID")
 	}
+	if preview.SchemaVersion != TelemetrySchemaVersion || preview.SentAt == "" {
+		t.Fatalf("preview schema identity = version %d sent_at %q", preview.SchemaVersion, preview.SentAt)
+	}
+	if preview.DeploymentMethod != "container_other" {
+		t.Fatalf("preview deployment method = %q, want container_other", preview.DeploymentMethod)
+	}
+	if preview.ActivationStage != "outcome_observed" || !preview.MonitoringActive {
+		t.Fatalf("preview lifecycle = stage %q active %v, want outcome_observed/true", preview.ActivationStage, preview.MonitoringActive)
+	}
+	if preview.EstateSizeBucket != "11_50" {
+		t.Fatalf("preview estate bucket = %q, want 11_50", preview.EstateSizeBucket)
+	}
+	if preview.TimeToFirstMonitoredResourceBucket != "present_at_first_observation" {
+		t.Fatalf("preview time-to-monitoring bucket = %q, want present_at_first_observation", preview.TimeToFirstMonitoredResourceBucket)
+	}
 
 	record := decodeInstallIDRecordFile(t, filepath.Join(dir, installIDFile))
 	if record.InstallID != preview.InstallID {
 		t.Fatalf("persisted install ID = %q, want %q", record.InstallID, preview.InstallID)
+	}
+}
+
+func TestBuildPingAt_RotatesIdentifierDuringLongRunningSession(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := Config{DataDir: dir}
+
+	first, err := buildPingAt(cfg, "startup", start)
+	if err != nil {
+		t.Fatalf("build first ping: %v", err)
+	}
+	second, err := buildPingAt(cfg, "heartbeat", start.Add(installIDRotationWindow+time.Hour))
+	if err != nil {
+		t.Fatalf("build second ping: %v", err)
+	}
+	if first.InstallID == second.InstallID {
+		t.Fatalf("expected per-event install ID rotation, got %q twice", first.InstallID)
+	}
+}
+
+func TestDeploymentMethodRejectsFreeFormValues(t *testing.T) {
+	t.Setenv("PULSE_DEPLOYMENT_METHOD", "/home/alice/private-install")
+	if got := deploymentMethod(Config{IsDocker: true}); got != "container_other" {
+		t.Fatalf("docker invalid deployment value = %q, want container_other", got)
+	}
+	if got := deploymentMethod(Config{}); got != "binary_other" {
+		t.Fatalf("binary invalid deployment value = %q, want binary_other", got)
+	}
+
+	t.Setenv("PULSE_DEPLOYMENT_METHOD", "systemd")
+	if got := deploymentMethod(Config{}); got != "systemd" {
+		t.Fatalf("closed deployment value = %q, want systemd", got)
+	}
+}
+
+func TestBuildPingAt_PersistsOnlyCoarseLifecycleMilestones(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	snapshot := Snapshot{AuthConfigured: true}
+	cfg := Config{
+		DataDir: dir,
+		GetSnapshot: func() Snapshot {
+			return snapshot
+		},
+	}
+
+	first, err := buildPingAt(cfg, "heartbeat", start)
+	if err != nil {
+		t.Fatalf("build first ping: %v", err)
+	}
+	if first.ActivationStage != "secured" || first.TimeToFirstMonitoredResourceBucket != "not_observed" {
+		t.Fatalf("first lifecycle = %#v", first)
+	}
+
+	snapshot = Snapshot{
+		AuthConfigured:        true,
+		ConfiguredConnections: 1,
+		PVENodes:              1,
+		VMs:                   4,
+		AlertsFired30d:        1,
+		AlertsResolved30d:     1,
+	}
+	second, err := buildPingAt(cfg, "heartbeat", start.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("build second ping: %v", err)
+	}
+	if second.ActivationStage != "outcome_observed" || !second.MonitoringActive || !second.OutcomeObserved30d {
+		t.Fatalf("second lifecycle = %#v", second)
+	}
+	if second.TimeToFirstMonitoredResourceBucket != "1_6h" {
+		t.Fatalf("time-to-monitoring bucket = %q, want 1_6h", second.TimeToFirstMonitoredResourceBucket)
+	}
+
+	snapshot = Snapshot{}
+	third, err := buildPingAt(cfg, "heartbeat", start.Add(8*24*time.Hour))
+	if err != nil {
+		t.Fatalf("build third ping: %v", err)
+	}
+	if third.ActivationStage != "outcome_observed" || third.MonitoringActive {
+		t.Fatalf("historical/current lifecycle split = stage %q active %v", third.ActivationStage, third.MonitoringActive)
+	}
+	if third.KnownInstallAgeBucket != "8_30d" {
+		t.Fatalf("known install age bucket = %q, want 8_30d", third.KnownInstallAgeBucket)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, lifecycleStateFile))
+	if err != nil {
+		t.Fatalf("read lifecycle state: %v", err)
+	}
+	var stored map[string]any
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatalf("decode lifecycle state: %v", err)
+	}
+	for key := range stored {
+		switch key {
+		case "first_observed_at", "first_monitored_resource_at", "highest_observed_activation":
+		default:
+			t.Fatalf("unexpected lifecycle state field %q", key)
+		}
 	}
 }
 
@@ -879,6 +996,22 @@ func TestSend_UsesReducedCommercialSignals(t *testing.T) {
 	}
 }
 
+func TestSend_ReturnsNonSuccessStatus(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "rejected", http.StatusUnprocessableEntity)
+	}))
+	defer ts.Close()
+
+	origEndpoint := pingEndpoint
+	pingEndpoint = ts.URL
+	defer func() { pingEndpoint = origEndpoint }()
+
+	err := send(context.Background(), Ping{InstallID: uuid.New().String()})
+	if err == nil || !strings.Contains(err.Error(), "HTTP 422") {
+		t.Fatalf("send error = %v, want HTTP 422", err)
+	}
+}
+
 func TestJitteredHeartbeat_WithinBounds(t *testing.T) {
 	min := heartbeatInterval - maxHeartbeatJitter
 	max := heartbeatInterval + maxHeartbeatJitter
@@ -915,8 +1048,9 @@ func TestSendEvent_SuppressedWhileMockModeEnabled(t *testing.T) {
 
 	testutil.SetMockMode(t, true)
 
-	sendEvent(context.Background(), Ping{InstallID: uuid.New().String()}, nil, "startup")
-	sendEvent(context.Background(), Ping{InstallID: uuid.New().String()}, nil, "heartbeat")
+	cfg := Config{DataDir: t.TempDir()}
+	sendEvent(context.Background(), cfg, "startup")
+	sendEvent(context.Background(), cfg, "heartbeat")
 
 	if got := received.Load(); got != 0 {
 		t.Fatalf("expected no telemetry pings while mock mode is enabled, got %d", got)
@@ -940,7 +1074,7 @@ func TestSendEvent_SendsWhenMockModeDisabled(t *testing.T) {
 
 	testutil.SetMockMode(t, false)
 
-	sendEvent(context.Background(), Ping{InstallID: uuid.New().String()}, nil, "heartbeat")
+	sendEvent(context.Background(), Config{DataDir: t.TempDir()}, "heartbeat")
 
 	if got := received.Load(); got != 1 {
 		t.Fatalf("expected 1 telemetry ping with mock mode disabled, got %d", got)

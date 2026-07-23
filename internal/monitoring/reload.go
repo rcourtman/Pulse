@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -16,30 +18,36 @@ import (
 // InstallSnapshotCounts holds install-wide resource and alert counts aggregated
 // across tenant monitors.
 type InstallSnapshotCounts struct {
-	PVENodes              int
-	PBSInstances          int
-	PMGInstances          int
-	VMs                   int
-	Containers            int
-	AgentHosts            int
-	DockerHosts           int
-	DockerContainers      int
-	KubernetesClusters    int
-	KubernetesNodes       int
-	KubernetesPods        int
-	KubernetesDeployments int
-	StoragePools          int
-	PhysicalDisks         int
-	CephClusters          int
-	NetworkShares         int
-	TrueNASSystems        int
-	TrueNASVMs            int
-	TrueNASApps           int
-	VMwareHosts           int
-	VMwareVMs             int
-	VMwareDatastores      int
-	AvailabilityTargets   int
-	ActiveAlerts          int
+	PVENodes                 int
+	PBSInstances             int
+	PMGInstances             int
+	VMs                      int
+	Containers               int
+	AgentHosts               int
+	DockerHosts              int
+	DockerContainers         int
+	KubernetesClusters       int
+	KubernetesNodes          int
+	KubernetesPods           int
+	KubernetesDeployments    int
+	StoragePools             int
+	PhysicalDisks            int
+	CephClusters             int
+	NetworkShares            int
+	TrueNASSystems           int
+	TrueNASVMs               int
+	TrueNASApps              int
+	VMwareHosts              int
+	VMwareVMs                int
+	VMwareDatastores         int
+	AvailabilityTargets      int
+	ActiveAlerts             int
+	AlertsFired30d           int
+	AlertsAcknowledged30d    int
+	AlertsResolved30d        int
+	NotificationAttempts7d   int
+	NotificationDeliveries7d int
+	NotificationFailures7d   int
 }
 
 // ReloadableMonitor wraps a Monitor with reload capability
@@ -248,6 +256,7 @@ func (rm *ReloadableMonitor) AggregateInstallSnapshotCounts() InstallSnapshotCou
 	}
 
 	var counts InstallSnapshotCounts
+	now := time.Now().UTC()
 	for _, orgID := range orgIDs {
 		monitor, err := mtMonitor.GetMonitor(orgID)
 		if err != nil || monitor == nil {
@@ -255,8 +264,47 @@ func (rm *ReloadableMonitor) AggregateInstallSnapshotCounts() InstallSnapshotCou
 			continue
 		}
 		accumulateInstallSnapshotCounts(&counts, monitor)
+		accumulateInstallOutcomeCounts(&counts, monitor, now)
 	}
 	return counts
+}
+
+func accumulateInstallOutcomeCounts(counts *InstallSnapshotCounts, monitor *Monitor, now time.Time) {
+	if counts == nil || monitor == nil {
+		return
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	alertCutoff := now.Add(-30 * 24 * time.Hour)
+	if alertManager := monitor.GetAlertManager(); alertManager != nil {
+		accumulateAlertOutcomeCounts(counts, alertManager.GetAlertHistorySince(alertCutoff, 0), alertCutoff)
+	}
+	if notificationManager := monitor.GetNotificationManager(); notificationManager != nil {
+		stats, err := notificationManager.GetTelemetryStats(now.Add(-7 * 24 * time.Hour))
+		if err != nil {
+			log.Debug().Err(err).Msg("Telemetry snapshot could not read notification delivery aggregates")
+			return
+		}
+		counts.NotificationAttempts7d += stats.Attempts
+		counts.NotificationDeliveries7d += stats.Deliveries
+		counts.NotificationFailures7d += stats.Failures
+	}
+}
+
+func accumulateAlertOutcomeCounts(counts *InstallSnapshotCounts, history []alerts.Alert, cutoff time.Time) {
+	if counts == nil {
+		return
+	}
+	for _, alert := range history {
+		counts.AlertsFired30d++
+		if alert.AckTime != nil && !alert.AckTime.Before(cutoff) {
+			counts.AlertsAcknowledged30d++
+		}
+		if alert.OperationalRecord != nil && alert.OperationalRecord.State == operationaltrust.OperationalResolved {
+			counts.AlertsResolved30d++
+		}
+	}
 }
 
 func accumulateInstallSnapshotCounts(counts *InstallSnapshotCounts, monitor *Monitor) {

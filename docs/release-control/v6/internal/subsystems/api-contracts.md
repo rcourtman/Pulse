@@ -4451,6 +4451,20 @@ normalized version identity fields (`version`, `version_raw`, `version_channel`,
 `version_build`, `version_is_development`, and
 `version_is_published_release`) instead of leaving browser callers to infer
 published-release truth from raw build strings.
+Telemetry schema v2 also requires the preview type to expose
+`schema_version`, `sent_at`, closed deployment/lifecycle/estate buckets,
+authentication and current-monitoring posture, configured-connection count,
+and aggregate alert and notification outcomes from the governed 30-day and
+seven-day windows. These fields are pseudonymous aggregate install signals,
+not a user or browser journey: the payload must not add user/account identity,
+locale, URLs, paths, exact lifecycle event timestamps, recipients, endpoints,
+resource identifiers, alert/notification content, or clickstream events.
+An install that already has monitoring data when schema v2 is first observed
+must use `present_at_first_observation` instead of an invented elapsed-time
+bucket.
+`scripts/check_telemetry_schema_parity.py` must prove that this TypeScript
+preview interface, `internal/telemetry.Ping`, and the Pulse Pro receiver have
+matching public fields and primitive types.
 That same preview contract now includes the complete outbound usage telemetry
 payload shape, including aggregate self-hosted adoption counters for monitored
 platforms, workloads, storage, and availability targets plus coarse feature
@@ -4475,7 +4489,7 @@ may display or copy the exact payload, but they must not derive hostnames,
 infrastructure identifiers, prompt/chat content, command text, action output,
 license tiers, token values, token counts, resource IDs, finding IDs, or
 approval identities from it.
-Approved action decision telemetry is part of that same anonymous API
+Approved action decision telemetry is part of that same pseudonymous API
 contract: `pulse_intelligence_approved_action_decisions_30d` must count
 distinct action IDs with approved-decision lifecycle evidence in the telemetry
 window, or approval records whose approved decision timestamp is inside the
@@ -4484,7 +4498,7 @@ operations-loop proof, but it must not be conflated with approved execution
 attempts or approved action successes, and it must never expose action IDs,
 actors, reasons, resource IDs, command text, action output, or verification
 detail.
-Approved execution attempt telemetry is part of that same anonymous API
+Approved execution attempt telemetry is part of that same pseudonymous API
 contract: `pulse_intelligence_approved_action_attempts_30d` must be counted as
 distinct action IDs with execution-attempt lifecycle evidence (`executing`,
 `completed`, or `failed`) resolved back to an approved action audit, with final

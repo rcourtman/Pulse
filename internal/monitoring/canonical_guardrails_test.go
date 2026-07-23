@@ -701,12 +701,12 @@ func TestInstallTelemetrySnapshotCountsStayOnMonitoringBoundary(t *testing.T) {
 	source := string(data)
 
 	for _, snippet := range []string{
-		"AgentHosts            int",
-		"DockerContainers      int",
-		"KubernetesPods        int",
-		"TrueNASSystems        int",
-		"VMwareDatastores      int",
-		"AvailabilityTargets   int",
+		"AgentHosts",
+		"DockerContainers",
+		"KubernetesPods",
+		"TrueNASSystems",
+		"VMwareDatastores",
+		"AvailabilityTargets",
 		"resources, _ := monitor.UnifiedResourceSnapshot()",
 		"accumulateInstallSnapshotUnifiedResourceCounts(counts, resources)",
 		"case unifiedresources.ResourceTypeNetworkShare:",

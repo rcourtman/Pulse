@@ -1372,6 +1372,17 @@ func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 	}
 }
 
+func TestDockerfileStampsTelemetryDeploymentMethod(t *testing.T) {
+	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+
+	if !strings.Contains(string(dockerfileBytes), `ENV PULSE_DEPLOYMENT_METHOD=container_other`) {
+		t.Fatal("Dockerfile must stamp the closed fallback deployment method for container images")
+	}
+}
+
 func TestReleaseUpdateKeyFingerprintUsesCanonicalRawPublicKeyHash(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

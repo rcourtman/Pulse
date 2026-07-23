@@ -426,6 +426,14 @@ TLS floor in the dynamic config.
    `scripts/validate-release.sh` at build time and re-verified by
    `install-sh-smoke.yml` against the served asset.
 3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
+   Canonical server deployment paths also stamp the privacy-bounded outbound
+   telemetry deployment label without changing runtime behavior: the image
+   defaults to `container_other`, repo-root Compose overrides it to
+   `docker_compose`, documented direct Docker commands set `docker_run`, and
+   the root server installer writes `systemd` into its generated unit. The
+   runtime accepts only the fixed labels documented in `docs/PRIVACY.md` and
+   must collapse an arbitrary operator value to its container/binary fallback
+   rather than exporting an image name, path, command, URL, or free-form text.
    The root `install.sh` server installer owns its fresh-host dependency
    bootstrap for supported Debian, Ubuntu, and Proxmox targets. It must install
    `curl`, `wget`, `ca-certificates`, and `openssh-client` before installing

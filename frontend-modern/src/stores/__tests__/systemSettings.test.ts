@@ -62,9 +62,12 @@ describe('systemSettings store', () => {
   it('keeps the telemetry disclosure in user-facing product language', () => {
     const telemetryDescription = EN_MESSAGES['settings.general.telemetry.description'];
 
+    expect(telemetryDescription).toContain('coarse deployment and lifecycle buckets');
+    expect(telemetryDescription).toContain('aggregate resource and outcome counts');
     expect(telemetryDescription).toContain(
-      'coarse Patrol, Assistant, and external-agent usage counters',
+      'content-free Patrol, Assistant, and capability-API usage counters',
     );
+    expect(telemetryDescription).toContain('URLs, paths, locale, browser events');
     expect(telemetryDescription).not.toContain('Pulse Intelligence loop adoption');
     expect(telemetryDescription).not.toContain('activation loop');
     expect(telemetryDescription).not.toContain('operations loop');

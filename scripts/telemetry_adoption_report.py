@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize Pulse anonymous telemetry for operator-facing adoption reads.
+"""Summarize Pulse pseudonymous telemetry for operator-facing adoption reads.
 
 This script intentionally normalizes version strings before aggregation so
 manual builds, dev builds, and accidental `v` prefixes do not pollute
@@ -12,6 +12,7 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import gzip
 import json
 import re
 import sqlite3
@@ -65,6 +66,27 @@ FEATURE_BOOL_FIELDS = (
     ("multi_tenant", "Multi-tenant"),
     ("paid_license", "Paid license"),
     ("has_api_tokens", "Has API tokens"),
+)
+USER_BASE_CATEGORY_FIELDS = (
+    ("deployment_method", "Deployment method"),
+    ("known_install_age_bucket", "Known install age"),
+    ("activation_stage", "Highest observed activation stage"),
+    ("time_to_first_monitored_resource_bucket", "Time to first monitored resource"),
+    ("estate_size_bucket", "Estate size"),
+)
+USER_BASE_BOOL_FIELDS = (
+    ("auth_configured", "Authentication configured"),
+    ("monitoring_active", "Monitoring currently active"),
+    ("outcome_observed_30d", "Operational outcome observed"),
+)
+USER_BASE_COUNT_FIELDS = (
+    ("configured_connections", "Configured connections"),
+    ("alerts_fired_30d", "Alerts fired (30d)"),
+    ("alerts_acknowledged_30d", "Alerts acknowledged (30d)"),
+    ("alerts_resolved_30d", "Alerts resolved (30d)"),
+    ("notification_attempts_7d", "Notification attempts (7d)"),
+    ("notification_deliveries_7d", "Notification deliveries (7d)"),
+    ("notification_failures_7d", "Notification failures (7d)"),
 )
 PULSE_INTELLIGENCE_ASSISTANT_LOOP_BOOL_FIELDS = (
     "pulse_intelligence_assistant_operations_loop_30d",
@@ -157,18 +179,18 @@ PULSE_INTELLIGENCE_BOOL_FIELDS = (
         "pulse_intelligence_assistant_resolved_operations_loop_30d",
         "Assistant resolved operations loop 30d",
     ),
-    ("pulse_intelligence_external_agent_operations_loop_30d", "External-agent operations loop 30d"),
+    ("pulse_intelligence_external_agent_operations_loop_30d", "Token-authenticated capability API operations loop 30d"),
     (
         "pulse_intelligence_external_agent_approved_execution_loop_30d",
-        "External-agent approved execution loop 30d",
+        "Token-authenticated capability API approved execution loop 30d",
     ),
     (
         "pulse_intelligence_external_agent_approved_action_success_loop_30d",
-        "External-agent approved action success loop 30d",
+        "Token-authenticated capability API approved action success loop 30d",
     ),
     (
         "pulse_intelligence_external_agent_resolved_operations_loop_30d",
-        "External-agent resolved operations loop 30d",
+        "Token-authenticated capability API resolved operations loop 30d",
     ),
     ("pulse_intelligence_mcp_adapter_operations_loop_30d", "Pulse MCP adapter operations loop 30d"),
     (
@@ -183,34 +205,34 @@ PULSE_INTELLIGENCE_BOOL_FIELDS = (
         "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
         "Pulse MCP adapter resolved operations loop 30d",
     ),
-    ("pulse_intelligence_external_agent_enabled", "External agent enabled"),
-    ("pulse_intelligence_external_agent_used_30d", "External agent used 30d"),
+    ("pulse_intelligence_external_agent_enabled", "Capability API operations-loop token configured"),
+    ("pulse_intelligence_external_agent_used_30d", "Token-authenticated capability API used 30d"),
     ("pulse_intelligence_mcp_adapter_used_30d", "Pulse MCP adapter used 30d"),
 )
 PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELDS = (
     (
         "pulse_intelligence_external_agent_context_requests_30d",
-        "External agent context requests 30d",
+        "Token-authenticated capability API context requests 30d",
     ),
     (
         "pulse_intelligence_external_agent_event_stream_requests_30d",
-        "External agent event-stream requests 30d",
+        "Token-authenticated capability API event-stream requests 30d",
     ),
     (
         "pulse_intelligence_external_agent_provisioning_requests_30d",
-        "External agent provisioning requests 30d",
+        "Token-authenticated capability API provisioning requests 30d",
     ),
     (
         "pulse_intelligence_external_agent_operator_state_requests_30d",
-        "External agent operator-state requests 30d",
+        "Token-authenticated capability API operator-state requests 30d",
     ),
     (
         "pulse_intelligence_external_agent_finding_requests_30d",
-        "External agent finding requests 30d",
+        "Token-authenticated capability API finding requests 30d",
     ),
     (
         "pulse_intelligence_external_agent_action_requests_30d",
-        "External agent action requests 30d",
+        "Token-authenticated capability API action requests 30d",
     ),
 )
 PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELD_NAMES = tuple(
@@ -359,7 +381,7 @@ PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     ),
     (
         "external_agent_operations_loop_30d",
-        "External-agent operations loop 30d",
+        "Capability API/MCP adapter operations loop 30d",
         (
             "pulse_intelligence_external_agent_operations_loop_30d",
             "pulse_intelligence_mcp_adapter_operations_loop_30d",
@@ -368,7 +390,7 @@ PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     ),
     (
         "external_agent_approved_execution_loop_30d",
-        "External-agent approved execution loop 30d",
+        "Capability API/MCP adapter approved execution loop 30d",
         (
             "pulse_intelligence_external_agent_approved_execution_loop_30d",
             "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
@@ -377,7 +399,7 @@ PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     ),
     (
         "external_agent_approved_action_success_loop_30d",
-        "External-agent approved action success loop 30d",
+        "Capability API/MCP adapter approved action success loop 30d",
         (
             "pulse_intelligence_external_agent_approved_action_success_loop_30d",
             "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",
@@ -386,7 +408,7 @@ PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     ),
     (
         "external_agent_resolved_operations_loop_30d",
-        "External-agent resolved operations loop 30d",
+        "Capability API/MCP adapter resolved operations loop 30d",
         (
             "pulse_intelligence_external_agent_resolved_operations_loop_30d",
             "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
@@ -492,7 +514,7 @@ PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     ),
     (
         "external_agent_used_30d",
-        "External agent/MCP used 30d",
+        "Capability API/MCP adapter used 30d",
         PULSE_INTELLIGENCE_EXTERNAL_AGENT_ACTIVITY_BOOL_FIELD_NAMES,
         PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELD_NAMES,
     ),
@@ -797,22 +819,22 @@ PULSE_INTELLIGENCE_OPERATIONS_FUNNEL_STAGES = (
     ),
     (
         "external_agent_operations_loop",
-        "External-agent operations loop",
+        "Capability API/MCP adapter operations loop",
         ("external_agent_operations_loop",),
     ),
     (
         "external_agent_approved_execution_loop",
-        "External-agent approved execution loop",
+        "Capability API/MCP adapter approved execution loop",
         ("external_agent_approved_execution_loop",),
     ),
     (
         "external_agent_approved_success_loop",
-        "External-agent approved action success loop",
+        "Capability API/MCP adapter approved action success loop",
         ("external_agent_approved_success_loop",),
     ),
     (
         "external_agent_resolved_operations_loop",
-        "External-agent resolved operations loop",
+        "Capability API/MCP adapter resolved operations loop",
         ("external_agent_resolved_operations_loop",),
     ),
     (
@@ -1142,10 +1164,10 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
                 """
                 SELECT *
                 FROM telemetry_pings
-                WHERE julianday(received_at) >= julianday('now') - ?
+                WHERE received_at >= datetime('now', ?)
                 ORDER BY received_at DESC
                 """,
-                (since_days,),
+                (f"-{since_days} days",),
             ).fetchall()
         ]
         return {"db_stats": db_stats, "rows": rows}
@@ -1157,6 +1179,7 @@ def fetch_rows_remote(ssh_host: str, db_path: str, since_days: int) -> dict[str,
     # Streams JSON-lines (db_stats header, then one row per line) so the remote
     # process never holds the full result set — the license droplet has 1GB RAM.
     remote_script = """
+import gzip
 import json
 import sqlite3
 import sys
@@ -1174,25 +1197,34 @@ db_stats_sql = (
 rows_sql = (
     "SELECT * "
     "FROM telemetry_pings "
-    "WHERE julianday(received_at) >= julianday('now') - ? "
+    "WHERE received_at >= datetime('now', ?) "
     "ORDER BY received_at DESC"
 )
+output = gzip.GzipFile(fileobj=sys.stdout.buffer, mode="wb", compresslevel=6)
+
+def emit(value):
+    output.write(json.dumps(value, separators=(",", ":")).encode("utf-8") + b"\n")
+
 try:
     db_stats = dict(conn.execute(db_stats_sql).fetchone())
-    print(json.dumps({"db_stats": db_stats}))
-    for row in conn.execute(rows_sql, (since_days,)):
-        print(json.dumps(dict(row)))
+    emit({"db_stats": db_stats})
+    for row in conn.execute(rows_sql, (f"-{since_days} days",)):
+        emit(dict(row))
 finally:
     conn.close()
+    output.close()
 """
     result = subprocess.run(
         ["ssh", ssh_host, "python3", "-", db_path, str(since_days)],
-        input=remote_script,
-        text=True,
+        input=remote_script.encode("utf-8"),
         capture_output=True,
         check=True,
     )
-    lines = (line for line in result.stdout.splitlines() if line.strip())
+    lines = (
+        line
+        for line in gzip.decompress(result.stdout).decode("utf-8").splitlines()
+        if line.strip()
+    )
     try:
         header = json.loads(next(lines))
     except StopIteration:
@@ -1761,6 +1793,64 @@ def telemetry_signal_specs() -> list[dict[str, str]]:
     return specs
 
 
+def summarize_user_base_signals(
+    latest_by_install: dict[str, dict[str, Any]],
+    *,
+    now: datetime | None = None,
+    window: timedelta = timedelta(days=7),
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    active_rows = [
+        row
+        for row in latest_by_install.values()
+        if current_time - parse_received_at(str(row["received_at"])) <= window
+    ]
+
+    schema_versions: Counter[str] = Counter()
+    categories: dict[str, Counter[str]] = {
+        field: Counter() for field, _ in USER_BASE_CATEGORY_FIELDS
+    }
+    boolean_signals = {
+        field: {"field": field, "label": label, "installs": 0}
+        for field, label in USER_BASE_BOOL_FIELDS
+    }
+    count_signals = {
+        field: {"field": field, "label": label, "installs": 0, "total": 0}
+        for field, label in USER_BASE_COUNT_FIELDS
+    }
+
+    for row in active_rows:
+        schema_version = parse_optional_nonnegative_int(row.get("schema_version"))
+        schema_versions[str(schema_version or "legacy")] += 1
+        for field, _ in USER_BASE_CATEGORY_FIELDS:
+            value = str(row.get(field) or "legacy_unknown").strip() or "legacy_unknown"
+            categories[field][value] += 1
+        for field, _ in USER_BASE_BOOL_FIELDS:
+            if parse_optional_bool(row.get(field)):
+                boolean_signals[field]["installs"] += 1
+        for field, _ in USER_BASE_COUNT_FIELDS:
+            value = parse_optional_nonnegative_int(row.get(field))
+            if value > 0:
+                count_signals[field]["installs"] += 1
+                count_signals[field]["total"] += value
+
+    return {
+        "window": "7d",
+        "active_installs": len(active_rows),
+        "schema_versions": counter_entries(schema_versions, "version"),
+        "category_signals": [
+            {
+                "field": field,
+                "label": label,
+                "buckets": counter_entries(categories[field], "bucket"),
+            }
+            for field, label in USER_BASE_CATEGORY_FIELDS
+        ],
+        "boolean_signals": list(boolean_signals.values()),
+        "count_signals": list(count_signals.values()),
+    }
+
+
 def summarize_target_version_coverage(
     latest_by_install: dict[str, dict[str, Any]],
     published_versions: set[str],
@@ -1850,6 +1940,10 @@ def summarize_rows(
             "installs": len(mock_fleet_installs),
         },
         "latest_install_windows": latest_install_windows,
+        "user_base_signals_7d": summarize_user_base_signals(
+            latest_by_install,
+            now=current_time,
+        ),
         "deep_signal_sources_7d": summarize_deep_signal_sources(
             latest_by_install,
             published_versions,
@@ -1993,6 +2087,40 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             lines.extend(f"  - {entry['label']}: {entry['installs']}" for entry in feature_counts)
         else:
             lines.append("  - none")
+
+    user_base = summary.get("user_base_signals_7d")
+    if user_base:
+        lines.extend(
+            [
+                "",
+                "User-base lifecycle and outcomes (7d):",
+                f"- active installs: {user_base['active_installs']}",
+                "- payload schema coverage:",
+            ]
+        )
+        lines.extend(
+            f"  - {entry['version']}: {entry['installs']}"
+            for entry in user_base.get("schema_versions", [])
+        )
+        lines.append("- lifecycle and audience buckets:")
+        for signal in user_base.get("category_signals", []):
+            buckets = ", ".join(
+                f"{entry['bucket']} {entry['installs']}"
+                for entry in signal.get("buckets", [])
+            )
+            lines.append(f"  - {signal['label']}: {buckets or 'none'}")
+        lines.append("- current/observed posture:")
+        for signal in user_base.get("boolean_signals", []):
+            lines.append(f"  - {signal['label']}: {signal['installs']} installs")
+        lines.append("- aggregate outcomes:")
+        for signal in user_base.get("count_signals", []):
+            lines.append(
+                f"  - {signal['label']}: {signal['total']} across {signal['installs']} installs"
+            )
+        lines.append(
+            "- interpretation: known install age begins when schema v2 lifecycle tracking is first initialized; "
+            "older upgraded installs are therefore lower bounds"
+        )
 
     pulse_loop = summary.get("pulse_intelligence_value_loop_7d")
     if pulse_loop:

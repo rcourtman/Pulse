@@ -80,6 +80,7 @@ You can pre-configure Pulse by setting environment variables. Plain text credent
 ```bash
 # Docker Example
 docker run -d \
+  -e PULSE_DEPLOYMENT_METHOD=docker_run \
   -e PULSE_AUTH_USER=admin \
   -e PULSE_AUTH_PASS=secret123 \
   rcourtman/pulse:latest
@@ -308,6 +309,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY` | Allow Proxmox-side minimal LXC Docker inventory collection with `pct exec`; collects Docker host/container summary, not inspect/env/mount/process data | `false` |
 | `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker inventory; empty means all running Docker-enabled LXCs are eligible when inventory is enabled | *(unset)* |
 | `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
+| `PULSE_DEPLOYMENT_METHOD` | Optional closed telemetry label: `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other`; invalid values are reported only as the safe runtime fallback | Inferred as `container_other` or `binary_other` |
 
 ### Logging Overrides
 

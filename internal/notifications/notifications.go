@@ -3426,6 +3426,19 @@ func (n *NotificationManager) GetQueueStats() (map[string]int, error) {
 	return queue.GetQueueStats()
 }
 
+// GetTelemetryStats returns only aggregate delivery outcomes from the
+// persistent queue. It never exposes destinations, alert content, or IDs.
+func (n *NotificationManager) GetTelemetryStats(since time.Time) (TelemetryStats, error) {
+	n.mu.RLock()
+	queue := n.queue
+	n.mu.RUnlock()
+
+	if queue == nil {
+		return TelemetryStats{}, nil
+	}
+	return queue.GetTelemetryStats(since)
+}
+
 // SendTestNotification sends a test notification
 func (n *NotificationManager) SendTestNotification(method string) error {
 	testAlert := buildNotificationTestAlert()

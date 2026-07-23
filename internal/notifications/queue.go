@@ -1238,6 +1238,43 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 	return stats, nil
 }
 
+// TelemetryStats is a content-free delivery outcome aggregate. It deliberately
+// excludes notification, destination, tenant, alert, and resource identities.
+type TelemetryStats struct {
+	Attempts   int
+	Deliveries int
+	Failures   int
+}
+
+// GetTelemetryStats returns aggregate delivery outcomes from locally retained
+// per-attempt audit rows recorded on or after since. Callers must not interpret
+// a window longer than the queue's completed-row retention as complete.
+func (nq *NotificationQueue) GetTelemetryStats(since time.Time) (TelemetryStats, error) {
+	if nq == nil {
+		return TelemetryStats{}, nil
+	}
+	if since.IsZero() {
+		since = time.Now().Add(-7 * 24 * time.Hour)
+	}
+
+	nq.mu.RLock()
+	defer nq.mu.RUnlock()
+
+	var stats TelemetryStats
+	err := nq.db.QueryRow(`
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0)
+		FROM notification_audit
+		WHERE timestamp >= ?
+	`, since.UTC().Unix()).Scan(&stats.Attempts, &stats.Deliveries, &stats.Failures)
+	if err != nil {
+		return TelemetryStats{}, fmt.Errorf("read notification telemetry aggregates: %w", err)
+	}
+	return stats, nil
+}
+
 // processQueue runs in background to process pending notifications
 func (nq *NotificationQueue) processQueue() {
 	defer nq.wg.Done()
