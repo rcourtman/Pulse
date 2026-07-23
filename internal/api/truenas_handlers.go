@@ -28,8 +28,9 @@ type TrueNASHandlers struct {
 
 type trueNASConnectionResponse struct {
 	config.TrueNASInstance
-	Poll     *monitoring.TrueNASConnectionPollStatus      `json:"poll,omitempty"`
-	Observed *monitoring.TrueNASConnectionObservedSummary `json:"observed,omitempty"`
+	Poll      *monitoring.TrueNASConnectionPollStatus      `json:"poll,omitempty"`
+	Observed  *monitoring.TrueNASConnectionObservedSummary `json:"observed,omitempty"`
+	Transport *truenas.TransportStatus                     `json:"transport,omitempty"`
 }
 
 type trueNASClient interface {
@@ -126,6 +127,7 @@ func (h *TrueNASHandlers) HandleList(w http.ResponseWriter, r *http.Request) {
 		if summary, ok := summaries[strings.TrimSpace(item.ID)]; ok {
 			response.Poll = summary.Poll
 			response.Observed = summary.Observed
+			response.Transport = summary.Transport
 		}
 		redacted = append(redacted, response)
 	}

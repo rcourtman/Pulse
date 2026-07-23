@@ -21,6 +21,7 @@ type RawTrueNASConnection = Partial<TrueNASConnection>;
 type RawTrueNASConnectionPollError = Partial<TrueNASConnectionPollError>;
 type RawTrueNASConnectionPoll = Partial<TrueNASConnectionPollStatus>;
 type RawTrueNASConnectionObservedSummary = Partial<TrueNASConnectionObservedSummary>;
+type RawTrueNASConnectionTransportStatus = Partial<TrueNASConnectionTransportStatus>;
 
 export interface TrueNASConnectionPollError {
   at?: string;
@@ -50,6 +51,19 @@ export interface TrueNASConnectionObservedSummary {
   recoveryArtifacts: number;
 }
 
+export interface TrueNASConnectionTransportStatus {
+  mode: 'negotiating' | 'jsonrpc-websocket' | 'legacy-rest';
+  endpoint?: string;
+  tls: boolean;
+  connected: boolean;
+  authMechanism?: string;
+  applianceVersion?: string;
+  legacyReason?: string;
+  reconnects?: number;
+  lastError?: string;
+  lastConnectedAt?: string;
+}
+
 export interface TrueNASConnection {
   id: string;
   name: string;
@@ -68,6 +82,7 @@ export interface TrueNASConnection {
   monitorReplication: boolean;
   poll?: TrueNASConnectionPollStatus;
   observed?: TrueNASConnectionObservedSummary;
+  transport?: TrueNASConnectionTransportStatus;
 }
 
 export interface TrueNASConnectionInput {
@@ -134,6 +149,27 @@ const normalizeTrueNASConnectionObservedSummary = (
   };
 };
 
+const normalizeTrueNASConnectionTransportStatus = (
+  transport: RawTrueNASConnectionTransportStatus | undefined,
+): TrueNASConnectionTransportStatus | undefined => {
+  if (!transport || typeof transport !== 'object') return undefined;
+  const rawMode = optionalTrimmedString(transport.mode);
+  const mode =
+    rawMode === 'jsonrpc-websocket' || rawMode === 'legacy-rest' ? rawMode : 'negotiating';
+  return {
+    mode,
+    endpoint: optionalTrimmedString(transport.endpoint),
+    tls: strictBoolean(transport.tls),
+    connected: strictBoolean(transport.connected),
+    authMechanism: optionalTrimmedString(transport.authMechanism),
+    applianceVersion: optionalTrimmedString(transport.applianceVersion),
+    legacyReason: optionalTrimmedString(transport.legacyReason),
+    reconnects: finiteNumberOrUndefined(transport.reconnects),
+    lastError: optionalTrimmedString(transport.lastError),
+    lastConnectedAt: optionalTrimmedString(transport.lastConnectedAt),
+  };
+};
+
 const normalizeTrueNASConnection = (connection: RawTrueNASConnection): TrueNASConnection => ({
   id: trimmedString(connection.id),
   name: optionalTrimmedString(connection.name) ?? '',
@@ -152,6 +188,7 @@ const normalizeTrueNASConnection = (connection: RawTrueNASConnection): TrueNASCo
   monitorReplication: strictBoolean(connection.monitorReplication),
   poll: normalizeTrueNASConnectionPoll(connection.poll),
   observed: normalizeTrueNASConnectionObservedSummary(connection.observed),
+  transport: normalizeTrueNASConnectionTransportStatus(connection.transport),
 });
 
 const serializeTrueNASConnectionInput = (input: TrueNASConnectionInput) => ({

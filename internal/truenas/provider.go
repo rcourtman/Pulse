@@ -72,6 +72,10 @@ type systemMetricHistoryFetcher interface {
 	SystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error)
 }
 
+type transportStatusFetcher interface {
+	TransportStatus() TransportStatus
+}
+
 // APIFetcher loads snapshots from the live TrueNAS API client.
 type APIFetcher struct {
 	Client *Client
@@ -126,6 +130,15 @@ func (f *APIFetcher) SystemMetricHistory(ctx context.Context, duration time.Dura
 		return nil, fmt.Errorf("truenas api fetcher client is nil")
 	}
 	return f.Client.GetSystemMetricHistory(ctx, duration)
+}
+
+// TransportStatus returns the underlying client's non-secret connection-local
+// transport diagnostics.
+func (f *APIFetcher) TransportStatus() TransportStatus {
+	if f == nil || f.Client == nil {
+		return TransportStatus{Mode: TransportUnknown}
+	}
+	return f.Client.TransportStatus()
 }
 
 // FixtureFetcher loads snapshots from static fixture data.
@@ -208,6 +221,18 @@ func (p *Provider) Refresh(ctx context.Context) error {
 	p.lastSnapshot = copyFixtureSnapshot(snapshot)
 	p.mu.Unlock()
 	return nil
+}
+
+// TransportStatus returns non-secret diagnostics when the provider is backed
+// by the live API client. Fixture providers remain in the negotiating state.
+func (p *Provider) TransportStatus() TransportStatus {
+	if p == nil {
+		return TransportStatus{Mode: TransportUnknown}
+	}
+	if source, ok := p.fetcher.(transportStatusFetcher); ok {
+		return source.TransportStatus()
+	}
+	return TransportStatus{Mode: TransportUnknown}
 }
 
 // ControlApp executes a native start/stop action against a TrueNAS app and

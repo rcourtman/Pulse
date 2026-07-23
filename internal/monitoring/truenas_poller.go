@@ -62,8 +62,9 @@ type TrueNASConnectionObservedSummary struct {
 // TrueNASConnectionSummary merges poll health with the most recent discovered
 // platform contribution for one configured TrueNAS connection.
 type TrueNASConnectionSummary struct {
-	Poll     *TrueNASConnectionPollStatus      `json:"poll,omitempty"`
-	Observed *TrueNASConnectionObservedSummary `json:"observed,omitempty"`
+	Poll      *TrueNASConnectionPollStatus      `json:"poll,omitempty"`
+	Observed  *TrueNASConnectionObservedSummary `json:"observed,omitempty"`
+	Transport *truenas.TransportStatus          `json:"transport,omitempty"`
 }
 
 type trueNASConnectionRuntimeStatus struct {
@@ -390,6 +391,10 @@ func (p *TrueNASPoller) ConnectionSummaries(orgID string, instances []config.Tru
 		if p != nil {
 			p.mu.Lock()
 			status := p.cloneRuntimeStatusLocked(orgID, connID)
+			var provider *truenas.Provider
+			if byConnection := p.providersByOrg[orgID]; byConnection != nil {
+				provider = byConnection[connID]
+			}
 			p.mu.Unlock()
 			if status != nil {
 				summary.Poll.LastAttemptAt = cloneTimePointer(status.LastAttemptAt)
@@ -397,6 +402,10 @@ func (p *TrueNASPoller) ConnectionSummaries(orgID string, instances []config.Tru
 				summary.Poll.ConsecutiveFailures = status.ConsecutiveFailures
 				summary.Poll.LastError = cloneTrueNASConnectionPollError(status.LastError)
 				summary.Observed = cloneTrueNASObservedSummary(status.Observed)
+			}
+			if provider != nil {
+				transport := provider.TransportStatus()
+				summary.Transport = &transport
 			}
 		}
 
@@ -1484,6 +1493,29 @@ func classifyTrueNASError(err error, connectionID string) *internalerrors.Monito
 			errType = internalerrors.ErrorTypeAPI
 		}
 	} else {
+		var authErr *truenas.RPCAuthError
+		if errors.As(err, &authErr) {
+			errType = internalerrors.ErrorTypeAuth
+			retryable = false
+		}
+		var handshakeErr *truenas.RPCHandshakeError
+		if errors.As(err, &handshakeErr) &&
+			(handshakeErr.StatusCode == http.StatusUnauthorized || handshakeErr.StatusCode == http.StatusForbidden) {
+			errType = internalerrors.ErrorTypeAuth
+			retryable = false
+		}
+		var rpcErr *truenas.RPCError
+		if errors.As(err, &rpcErr) {
+			message := strings.ToLower(rpcErr.Message + " " + rpcErr.Reason)
+			if strings.HasPrefix(rpcErr.Method, "auth.") ||
+				strings.EqualFold(rpcErr.Errname, "EACCES") ||
+				strings.EqualFold(rpcErr.Errname, "EPERM") ||
+				strings.Contains(message, "not authorized") ||
+				strings.Contains(message, "permission") {
+				errType = internalerrors.ErrorTypeAuth
+				retryable = false
+			}
+		}
 		// Transport-level errors: timeout takes precedence over generic connection failures.
 		var urlErr *url.Error
 		if (errors.As(err, &urlErr) && urlErr.Timeout()) || errors.Is(err, context.DeadlineExceeded) {

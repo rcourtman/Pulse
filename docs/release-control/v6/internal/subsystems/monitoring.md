@@ -222,6 +222,7 @@ node-local Agent evidence.
 45. `pkg/agents/kubernetes/report.go`
 46. `internal/monitoring/temperature.go`
 47. `internal/truenas/client.go`
+47a. `internal/truenas/transport.go`
 48. `internal/truenas/disk_health.go`
 49. `internal/truenas/provider.go`
 50. `internal/models/ceph_cluster_identity.go`
@@ -434,8 +435,9 @@ node-local Agent evidence.
     hard-coded cluster name.
 16. Add or change TrueNAS supplemental inventory only through the native
     TrueNAS provider path and unified-resource projection. TrueNAS apps are
-    API-owned application records: `app.query` is the preferred live inventory
-    source, with legacy REST allowed only as a compatibility fallback. The
+    API-owned application records: `app.query` is the live inventory source on
+    the negotiated current transport, with legacy REST allowed only for a
+    connection proven to run a release that predates the versioned API. The
     provider may preserve Docker-compatible runtime metadata for shared
     container tooling, but it must also publish the native app identity, state,
     version, update availability, workload containers, ports, images, volumes,
@@ -463,10 +465,31 @@ node-local Agent evidence.
     `internal/truenas/contract_test.go`. The canonical-ID migration semantics
     for rows minted under the retired hostname-keyed derivation live in the
     unified-resources contract (record-declared succession, item 27).
-    TrueNAS storage and alert inventory follow native query methods first:
+    Every live TrueNAS client owns one explicit, immutable transport decision.
+    SCALE 25.04 and later must use JSON-RPC 2.0 over a TLS WebSocket at
+    `/api/current`; authentication, authorization, TLS, protocol, or method
+    failures on that endpoint are authoritative and must never wake the
+    deprecated REST bridge. Only an unsupported-endpoint WebSocket handshake
+    may trigger a REST `/system/info` version probe, and REST may then be
+    selected only for recognized SCALE releases before 25.04 or TrueNAS
+    CORE/FreeNAS. Unknown or current versions fail closed. The decision and
+    persistent socket belong to one configured client, so reconnects or
+    legacy negotiation for one appliance cannot alter another appliance.
+    Current API-key authentication uses `auth.login_ex` with the key owner's
+    username and `API_KEY_PLAIN`; password authentication uses
+    `PASSWORD_PLAIN`. Username-less stored API keys may use the deprecated
+    login method only as an upgrade bridge, with explicit remediation when a
+    release removes that method. Read calls may reconnect with bounded backoff
+    and replay once after a transport failure. Mutating app calls must never
+    replay after dispatch because their outcome is ambiguous. Event reads must
+    retain the `core.subscribe` ID, call `core.unsubscribe` before reusing the
+    session, and discard a socket after a terminal stream read deadline.
+    Connection summaries expose only secret-free transport mode, endpoint,
+    TLS, authentication mechanism, appliance version, reconnect count, and
+    last-error timing diagnostics.
+    TrueNAS storage and alert inventory follow the negotiated transport:
     pools use `pool.query`, datasets use `pool.dataset.query`, disks use
-    `disk.query`, and alerts use `alert.list`, with legacy REST allowed only
-    as compatibility fallback. Inventory readers must only consume fields the
+    `disk.query`, and alerts use `alert.list`. Inventory readers must only consume fields the
     API actually serves on every supported TrueNAS line (CORE 13 REST-only
     included): `pool.dataset.query` carries no `mounted` field, so a listed
     dataset counts as mounted unless `locked` or an explicit value says
@@ -474,8 +497,9 @@ node-local Agent evidence.
     `extra.pools` join cannot cross the REST bridge, so per-disk pool
     membership and ZFS member state derive from the vdev topology that
     `pool.query` attaches unconditionally; and `disk.temperatures` is a
-    parameterized method the REST bridge only serves as POST, tried after
-    native JSON-RPC reporting. Missing disk telemetry is reported as
+    parameterized method the legacy REST bridge only serves as POST, while
+    current releases use native JSON-RPC reporting without per-method REST
+    fallback. Missing disk telemetry is reported as
     unknown, never as a failure signal. Regression coverage:
     `internal/truenas/client_api_shapes_test.go`. Unhealthy pool state
     from `pool.query` must emit a provider-native `zfs_pool_state` incident on
@@ -501,9 +525,11 @@ node-local Agent evidence.
     `sharing.nfs.query` publishes native `TrueNASData.Share` on canonical
     `network-share` resources parented to the owning dataset or pool when the
     API/path supplies that evidence. TrueNAS protection inventory follows the
-    same native-query rule: ZFS snapshots prefer `zfs.resource.snapshot.query`
-    with older `pool.snapshot.query`/REST compatibility fallback, and
-    replication tasks prefer `replication.query`.
+    same native-query rule: current connections prefer
+    `zfs.resource.snapshot.query`, with `pool.snapshot.query` allowed only as a
+    same-transport method-name compatibility path; version-gated legacy
+    connections use REST. Replication tasks use `replication.query` on current
+    connections.
     TrueNAS system services are also native appliance inventory: `service.query`
     is the preferred source for service name, boot enablement, runtime state,
     and process IDs. Pulse must publish that data through `TrueNASData.Services`
@@ -1682,9 +1708,9 @@ machine ID, capacity, and poll-health path instead of failing connection tests
 or background refreshes during JSON decoding.
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
-`disk.temperatures` from the TrueNAS API, fall back to modern
-`reporting.get_data` `disktemp` when the dedicated endpoint is unavailable, and
-project those readings into the canonical physical-disk model and risk path
+legacy `disk.temperatures` from the REST API or `reporting.get_data` `disktemp`
+from the current JSON-RPC transport, and project those readings into the
+canonical physical-disk model and risk path
 instead of leaving temperature telemetry agent-only or adding a TrueNAS-local
 presentation shim.
 That same monitoring boundary also owns SMART-backed TrueNAS disk risk
@@ -1701,10 +1727,11 @@ null, empty, missing, unknown, or unavailable SMART telemetry to canonical
 native failure states such as `FAULTED`, `FAILED`, `OFFLINE`, `REMOVED`, and
 `UNAVAIL` must continue to produce canonical disk-health risk.
 That same boundary owns boot-pool and replication-target storage posture.
-`internal/truenas/client.go` must collect `boot.get_state` with the legacy REST
-bridge as compatibility fallback, merge it only within the current configured
-connection, and use its vdev leaves to enrich boot-disk pool membership and
-native ZFS state. `internal/monitoring/truenas_poller.go` must correlate
+`internal/truenas/client.go` must collect `boot.get_state` through the
+connection's negotiated transport, use REST only on a version-gated legacy
+connection, merge it only within the current configured connection, and use
+its vdev leaves to enrich boot-disk pool membership and native ZFS state.
+`internal/monitoring/truenas_poller.go` must correlate
 `replication.query` intent across providers within the same organization using
 local/PULL ownership or a unique configured/observed target-host match for
 remote PUSH tasks. The resulting `SET`/`REQUIRE` receive-side read-only posture

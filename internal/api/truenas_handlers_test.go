@@ -439,6 +439,12 @@ func TestTrueNASHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.
 	if listed[0].Observed == nil || listed[0].Observed.Systems != 1 || listed[0].Observed.StoragePools == 0 {
 		t.Fatalf("expected populated mock observed summary, got %+v", listed[0].Observed)
 	}
+	if listed[0].Transport == nil ||
+		listed[0].Transport.Mode != truenas.TransportJSONRPC ||
+		!listed[0].Transport.Connected ||
+		!listed[0].Transport.TLS {
+		t.Fatalf("expected current mock transport diagnostics, got %+v", listed[0].Transport)
+	}
 }
 
 func TestTrueNASHandlers_HandleList_IncludesPollAndObservedSummary(t *testing.T) {
@@ -519,6 +525,18 @@ func TestTrueNASHandlers_HandleList_IncludesPollAndObservedSummary(t *testing.T)
 	}
 	if listed[0].Observed.StoragePools != 1 || listed[0].Observed.Datasets != 1 || listed[0].Observed.Disks != 1 {
 		t.Fatalf("unexpected observed counts: %+v", listed[0].Observed)
+	}
+	if listed[0].Transport == nil ||
+		listed[0].Transport.Mode != truenas.TransportLegacyREST ||
+		listed[0].Transport.ApplianceVersion != "TrueNAS-SCALE-24.10.2" {
+		t.Fatalf("unexpected transport diagnostics: %+v", listed[0].Transport)
+	}
+	encodedTransport, err := json.Marshal(listed[0].Transport)
+	if err != nil {
+		t.Fatalf("encode transport diagnostics: %v", err)
+	}
+	if strings.Contains(string(encodedTransport), connection.APIKey) {
+		t.Fatalf("transport diagnostics exposed API key: %s", encodedTransport)
 	}
 }
 

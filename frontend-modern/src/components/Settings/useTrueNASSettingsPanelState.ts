@@ -73,7 +73,7 @@ const buildFormStateFromConnection = (
     pollIntervalSeconds: String(connection.pollIntervalSeconds ?? 60),
     authMode,
     apiKey: '',
-    username: authMode === 'userpass' ? connection.username || '' : '',
+    username: connection.username || '',
     password: '',
     useHttps: connection.useHttps,
     insecureSkipVerify: connection.insecureSkipVerify,
@@ -163,7 +163,7 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
 
   if (form.authMode === 'apiKey') {
     input.apiKey = form.apiKey.trim() || (form.hasStoredApiKey ? REDACTED_SECRET : '');
-    input.username = '';
+    input.username = form.username.trim();
     input.password = '';
   } else {
     input.apiKey = '';

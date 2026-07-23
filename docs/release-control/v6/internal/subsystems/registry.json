@@ -5255,6 +5255,7 @@
               "internal/truenas/disk_health.go",
               "internal/truenas/fixtures.go",
               "internal/truenas/provider.go",
+              "internal/truenas/transport.go",
               "internal/truenas/types.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -5264,7 +5265,8 @@
               "internal/monitoring/monitor_polling_test.go",
               "internal/truenas/client_test.go",
               "internal/truenas/contract_test.go",
-              "internal/truenas/provider_test.go"
+              "internal/truenas/provider_test.go",
+              "internal/truenas/transport_test.go"
             ]
           },
           {

@@ -28,6 +28,22 @@ export interface TrueNASCredentialSlotProps {
   deleteError?: string | null;
 }
 
+const describeTransport = (transport: NonNullable<TrueNASConnection['transport']>): string => {
+  let description: string;
+  if (transport.mode === 'jsonrpc-websocket') {
+    description = `Transport: JSON-RPC WebSocket${transport.tls ? ' over TLS' : ''}; authentication: ${transport.authMechanism || 'session'}.`;
+  } else if (transport.mode === 'legacy-rest') {
+    description =
+      `Transport: legacy REST (${transport.applianceVersion || 'legacy TrueNAS'}). ${transport.legacyReason || ''}`.trim();
+  } else {
+    description = 'Transport negotiation has not completed yet.';
+  }
+  if (transport.lastError) {
+    description += ` Last error: ${transport.lastError}`;
+  }
+  return description;
+};
+
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
   let primed = false;
 
@@ -132,21 +148,36 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         </div>
 
         <Show when={props.state.form().authMode === 'apiKey'}>
-          <label class={formField}>
-            <span class={formLabel}>API key</span>
-            <input
-              class={formControl}
-              type="password"
-              value={props.state.form().apiKey}
-              onInput={(event) => props.state.updateForm({ apiKey: event.currentTarget.value })}
-              placeholder={
-                props.state.form().hasStoredApiKey ? 'Saved API key retained unless replaced' : ''
-              }
-            />
-            <Show when={props.state.form().hasStoredApiKey}>
-              <span class={formHelpText}>Leave this blank to keep the saved API key.</span>
-            </Show>
-          </label>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class={formField}>
+              <span class={formLabel}>API key owner username</span>
+              <input
+                class={formControl}
+                value={props.state.form().username}
+                onInput={(event) => props.state.updateForm({ username: event.currentTarget.value })}
+                placeholder="pulse-monitor"
+              />
+              <span class={formHelpText}>
+                Use the TrueNAS user that owns this key. Required by the supported login flow on
+                current and future releases.
+              </span>
+            </label>
+            <label class={formField}>
+              <span class={formLabel}>API key</span>
+              <input
+                class={formControl}
+                type="password"
+                value={props.state.form().apiKey}
+                onInput={(event) => props.state.updateForm({ apiKey: event.currentTarget.value })}
+                placeholder={
+                  props.state.form().hasStoredApiKey ? 'Saved API key retained unless replaced' : ''
+                }
+              />
+              <Show when={props.state.form().hasStoredApiKey}>
+                <span class={formHelpText}>Leave this blank to keep the saved API key.</span>
+              </Show>
+            </label>
+          </div>
         </Show>
 
         <Show when={props.state.form().authMode === 'userpass'}>
@@ -235,6 +266,17 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             </label>
           </div>
         </div>
+
+        <Show when={props.editingConnection?.transport}>
+          {(transport) => (
+            <CalloutCard
+              tone={transport().mode === 'legacy-rest' ? 'warning' : 'info'}
+              scale="compact"
+              padding="sm"
+              description={describeTransport(transport())}
+            />
+          )}
+        </Show>
 
         <div class="space-y-3 rounded-md border border-border bg-surface p-4">
           <div>

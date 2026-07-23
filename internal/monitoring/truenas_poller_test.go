@@ -310,6 +310,11 @@ func TestTrueNASPollerConnectionSummariesExposeObservedCounts(t *testing.T) {
 	if summary.Observed.Systems != 1 || summary.Observed.StoragePools != 1 || summary.Observed.Datasets != 1 || summary.Observed.Disks != 1 {
 		t.Fatalf("unexpected observed counts: %+v", summary.Observed)
 	}
+	if summary.Transport == nil ||
+		summary.Transport.Mode != truenas.TransportLegacyREST ||
+		!summary.Transport.Connected {
+		t.Fatalf("unexpected connection-local transport summary: %+v", summary.Transport)
+	}
 }
 
 func TestTrueNASObservedSummaryIncludesNativeRuntimeAndSharingFacets(t *testing.T) {
@@ -1675,6 +1680,33 @@ func TestClassifyTrueNASError(t *testing.T) {
 		{
 			name:          "wrapped APIError 401 classifies as auth",
 			err:           fmt.Errorf("fetch truenas system info: %w", &truenas.APIError{StatusCode: 401, Method: "GET", Path: "/system/info", Body: "Unauthorized"}),
+			expectedType:  "auth",
+			expectedRetry: false,
+		},
+		{
+			name:          "websocket handshake 403 classifies as auth",
+			err:           &truenas.RPCHandshakeError{StatusCode: 403, Err: fmt.Errorf("forbidden")},
+			expectedType:  "auth",
+			expectedRetry: false,
+		},
+		{
+			name: "JSON-RPC login response classifies as auth",
+			err: &truenas.RPCAuthError{
+				Mechanism:    "api-key-plain",
+				ResponseType: "AUTH_ERR",
+			},
+			expectedType:  "auth",
+			expectedRetry: false,
+		},
+		{
+			name: "JSON-RPC permission error classifies as auth",
+			err: &truenas.RPCError{
+				Code:    -32001,
+				Method:  "pool.query",
+				Message: "Method call error",
+				Reason:  "Not authorized",
+				Errname: "EACCES",
+			},
 			expectedType:  "auth",
 			expectedRetry: false,
 		},

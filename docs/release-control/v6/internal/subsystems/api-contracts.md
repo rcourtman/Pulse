@@ -5359,7 +5359,13 @@ workspace can render real API-backed status and handoff context without
 inventing a settings-local shadow fetch path. `frontend-modern/src/api/truenas.ts`
 owns the browser normalizer for that observed summary and must preserve those
 native inventory facets instead of collapsing them into a generic app or
-storage count. Zero-value legacy
+storage count. The same redacted list payload carries an optional secret-free
+`transport` object with `mode`, `endpoint`, `tls`, `connected`,
+`authMechanism`, `applianceVersion`, `legacyReason`, `reconnects`,
+`lastError`, and `lastConnectedAt`. Settings must identify current
+`jsonrpc-websocket`, version-gated `legacy-rest`, and not-yet-negotiated states
+without exposing a credential or rebuilding transport state in the browser.
+Zero-value legacy
 `pollIntervalSeconds` config must normalize back to the canonical 60-second
 default at this same boundary instead of leaking ambiguous `0` values to the
 frontend.

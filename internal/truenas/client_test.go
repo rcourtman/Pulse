@@ -152,8 +152,11 @@ func TestClientGetters(t *testing.T) {
 
 func TestClientAuthHeaderAPIKey(t *testing.T) {
 	server := newMockServer(t, map[string]apiResponse{
-		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"v","buildtime":"b","uptime_seconds":1}`},
+		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"TrueNAS-SCALE-24.10.2","buildtime":"b","uptime_seconds":1}`},
 	}, func(t *testing.T, request *http.Request) {
+		if request.URL.Path == "/api/current" {
+			return
+		}
 		if got := request.Header.Get("Authorization"); got != "Bearer test-key" {
 			t.Fatalf("expected bearer auth header, got %q", got)
 		}
@@ -168,8 +171,11 @@ func TestClientAuthHeaderAPIKey(t *testing.T) {
 
 func TestClientAuthHeaderBasic(t *testing.T) {
 	server := newMockServer(t, map[string]apiResponse{
-		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"v","buildtime":"b","uptime_seconds":1}`},
+		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"TrueNAS-SCALE-24.10.2","buildtime":"b","uptime_seconds":1}`},
 	}, func(t *testing.T, request *http.Request) {
+		if request.URL.Path == "/api/current" {
+			return
+		}
 		username, password, ok := request.BasicAuth()
 		if !ok {
 			t.Fatalf("expected basic auth")
@@ -187,36 +193,22 @@ func TestClientAuthHeaderBasic(t *testing.T) {
 }
 
 func TestGetSystemInfoAcceptsStructuredBuildTime(t *testing.T) {
-	server := newMockServer(t, map[string]apiResponse{
-		"/api/v2.0/system/info": {
-			body: `{"hostname":"nas","version":"TrueNAS-SCALE-25.10.3.1","buildtime":{"$date":"2026-05-14T18:24:01+02:00"},"uptime_seconds":1}`,
-		},
-	}, nil)
-	t.Cleanup(server.Close)
-
-	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "test-key"})
-	system, err := client.GetSystemInfo(context.Background())
-	if err != nil {
-		t.Fatalf("GetSystemInfo() error = %v", err)
+	var response systemInfoResponse
+	if err := json.Unmarshal([]byte(`{"hostname":"nas","version":"TrueNAS-SCALE-25.10.3.1","buildtime":{"$date":"2026-05-14T18:24:01+02:00"},"uptime_seconds":1}`), &response); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
 	}
+	system := systemInfoFromResponse(response)
 	if system.Build != "2026-05-14T18:24:01+02:00" {
 		t.Fatalf("Build = %q, want structured buildtime date", system.Build)
 	}
 }
 
 func TestGetSystemInfoAcceptsFractionalUptimeSeconds(t *testing.T) {
-	server := newMockServer(t, map[string]apiResponse{
-		"/api/v2.0/system/info": {
-			body: `{"hostname":"nas","version":"TrueNAS-SCALE-25.10.3.1","buildtime":{"$date":"2026-05-14T18:24:01+02:00"},"uptime_seconds":360144.629139547}`,
-		},
-	}, nil)
-	t.Cleanup(server.Close)
-
-	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "test-key"})
-	system, err := client.GetSystemInfo(context.Background())
-	if err != nil {
-		t.Fatalf("GetSystemInfo() error = %v", err)
+	var response systemInfoResponse
+	if err := json.Unmarshal([]byte(`{"hostname":"nas","version":"TrueNAS-SCALE-25.10.3.1","buildtime":{"$date":"2026-05-14T18:24:01+02:00"},"uptime_seconds":360144.629139547}`), &response); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
 	}
+	system := systemInfoFromResponse(response)
 	if system.UptimeSeconds != 360144 {
 		t.Fatalf("UptimeSeconds = %d, want truncated fractional uptime", system.UptimeSeconds)
 	}
@@ -224,7 +216,7 @@ func TestGetSystemInfoAcceptsFractionalUptimeSeconds(t *testing.T) {
 
 func TestTestConnectionSuccessAndFailure(t *testing.T) {
 	successServer := newMockServer(t, map[string]apiResponse{
-		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"v","buildtime":"b","uptime_seconds":1}`},
+		"/api/v2.0/system/info": {body: `{"hostname":"nas","version":"TrueNAS-SCALE-24.10.2","buildtime":"b","uptime_seconds":1}`},
 	}, nil)
 	t.Cleanup(successServer.Close)
 
@@ -667,6 +659,7 @@ func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
 				},
 			},
 		})
+		expectRPCUnsubscribe(t, conn, "sub-1")
 	})
 	t.Cleanup(server.Close)
 
@@ -813,24 +806,22 @@ func TestGetReplicationTasksUsesNativeReplicationQueryShape(t *testing.T) {
 }
 
 func TestStartAndStopAppUseRPCMethods(t *testing.T) {
-	var rpcCalls int
+	var rpcSessions int
 	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
-		rpcCalls++
+		rpcSessions++
 		authReq := readRPCRequest(t, conn)
 		if authReq.Method != "auth.login_with_api_key" {
 			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
 		}
 		writeRPCResult(t, conn, authReq.ID, true)
 
-		actionReq := readRPCRequest(t, conn)
-		expectedMethod := "app.start"
-		if rpcCalls == 2 {
-			expectedMethod = "app.stop"
+		for _, expectedMethod := range []string{"app.start", "app.stop"} {
+			actionReq := readRPCRequest(t, conn)
+			if actionReq.Method != expectedMethod {
+				t.Fatalf("expected %s, got %q", expectedMethod, actionReq.Method)
+			}
+			writeRPCResult(t, conn, actionReq.ID, true)
 		}
-		if actionReq.Method != expectedMethod {
-			t.Fatalf("expected %s, got %q", expectedMethod, actionReq.Method)
-		}
-		writeRPCResult(t, conn, actionReq.ID, true)
 	})
 	t.Cleanup(server.Close)
 
@@ -841,8 +832,8 @@ func TestStartAndStopAppUseRPCMethods(t *testing.T) {
 	if err := client.StopApp(context.Background(), "nextcloud"); err != nil {
 		t.Fatalf("StopApp() error = %v", err)
 	}
-	if rpcCalls != 2 {
-		t.Fatalf("expected two RPC app-action sessions, got %d", rpcCalls)
+	if rpcSessions != 1 {
+		t.Fatalf("expected one persistent RPC app-action session, got %d", rpcSessions)
 	}
 }
 
@@ -884,6 +875,7 @@ func TestGetAppLogsUsesRPCSubscription(t *testing.T) {
 				"timestamp": "2026-03-29T18:01:00Z",
 			},
 		})
+		expectRPCUnsubscribe(t, conn, "sub-logs")
 		time.Sleep(defaultAppLogIdleWait + 100*time.Millisecond)
 	})
 	t.Cleanup(server.Close)
@@ -967,6 +959,7 @@ func TestGetSystemTelemetryFromRPC(t *testing.T) {
 				},
 			},
 		})
+		expectRPCUnsubscribe(t, conn, "sub-1")
 	})
 	t.Cleanup(server.Close)
 
@@ -1130,6 +1123,7 @@ func TestGetSystemTelemetryIgnoresUnavailableTemperatureRPC(t *testing.T) {
 				"cpu": map[string]any{"usage": 41},
 			},
 		})
+		expectRPCUnsubscribe(t, conn, "sub-1")
 	})
 	t.Cleanup(server.Close)
 
@@ -1199,6 +1193,7 @@ func TestGetDisksToleratesUnavailableTemperatureEndpoint(t *testing.T) {
 }
 
 func TestGetDiskTemperaturesFallsBackToReportingRPC(t *testing.T) {
+	connectionCount := 0
 	server := newMockServerWithRPC(t, map[string]apiResponse{
 		"/api/v2.0/disk": {
 			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
@@ -1214,7 +1209,15 @@ func TestGetDiskTemperaturesFallsBackToReportingRPC(t *testing.T) {
 		}
 		writeRPCResult(t, conn, authReq.ID, true)
 
+		connectionCount++
 		temperatureReq := readRPCRequest(t, conn)
+		if connectionCount == 1 {
+			if temperatureReq.Method != "disk.query" {
+				t.Fatalf("expected disk.query, got %q", temperatureReq.Method)
+			}
+			writeRPCResult(t, conn, temperatureReq.ID, defaultRoutePayloadMaps(t, "/api/v2.0/disk")[:1])
+			return
+		}
 		if temperatureReq.Method != "reporting.get_data" {
 			t.Fatalf("expected reporting.get_data, got %q", temperatureReq.Method)
 		}
@@ -1613,7 +1616,7 @@ func TestClientTLSFingerprintPinning(t *testing.T) {
 			return
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"hostname":"nas","version":"v","buildtime":"b","uptime_seconds":1}`))
+		_, _ = writer.Write([]byte(`{"hostname":"nas","version":"TrueNAS-SCALE-24.10.2","buildtime":"b","uptime_seconds":1}`))
 	})
 
 	tlsServer := httptest.NewTLSServer(handler)
@@ -1741,6 +1744,11 @@ func newMockServer(t *testing.T, responses map[string]apiResponse, assertRequest
 
 		response, ok := responses[request.URL.Path]
 		if !ok {
+			if request.URL.Path == "/api/v2.0/system/info" {
+				writer.Header().Set("Content-Type", "application/json")
+				_, _ = writer.Write([]byte(`{"hostname":"legacy-test","version":"TrueNAS-SCALE-24.10.2","buildtime":"24.10.2","uptime_seconds":1}`))
+				return
+			}
 			http.NotFound(writer, request)
 			return
 		}
@@ -1857,6 +1865,20 @@ func writeRPCNotification(t *testing.T, conn *websocket.Conn, method string, par
 	}
 }
 
+func expectRPCUnsubscribe(t *testing.T, conn *websocket.Conn, subscriptionID string) {
+	t.Helper()
+
+	request := readRPCRequest(t, conn)
+	if request.Method != "core.unsubscribe" {
+		t.Fatalf("expected core.unsubscribe, got %q", request.Method)
+	}
+	params, ok := request.Params.([]any)
+	if !ok || len(params) != 1 || params[0] != subscriptionID {
+		t.Fatalf("core.unsubscribe params = %#v, want [%q]", request.Params, subscriptionID)
+	}
+	writeRPCResult(t, conn, request.ID, nil)
+}
+
 func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *Client {
 	t.Helper()
 
@@ -1877,6 +1899,7 @@ func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *C
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
+	client.allowInsecureRPC = true
 	return client
 }
 

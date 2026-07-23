@@ -80,6 +80,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        username: 'pulse-readonly',
         pollIntervalSeconds: 90,
         useHttps: true,
         insecureSkipVerify: false,
@@ -91,6 +92,7 @@ describe('useTrueNASSettingsPanelState', () => {
       name: 'tower',
       host: 'truenas.local',
       apiKey: '********',
+      username: 'pulse-readonly',
       pollIntervalSeconds: 90,
       useHttps: true,
       insecureSkipVerify: false,
@@ -105,6 +107,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        username: 'pulse-readonly',
         pollIntervalSeconds: 90,
         useHttps: true,
         insecureSkipVerify: false,
@@ -128,6 +131,7 @@ describe('useTrueNASSettingsPanelState', () => {
         host: 'truenas.local',
         apiKey: '********',
         pollIntervalSeconds: 90,
+        username: 'pulse-readonly',
       }),
     );
     expect(TrueNASAPI.updateConnection).toHaveBeenCalledWith(
@@ -136,7 +140,7 @@ describe('useTrueNASSettingsPanelState', () => {
         host: 'truenas.local',
         apiKey: '********',
         pollIntervalSeconds: 90,
-        username: '',
+        username: 'pulse-readonly',
         password: '',
       }),
     );

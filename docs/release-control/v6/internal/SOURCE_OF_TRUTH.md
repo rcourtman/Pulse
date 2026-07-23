@@ -615,8 +615,13 @@ claim, broad same-shape TrueNAS iteration is not default work above this
 declared floor.
 
 1. Architecture boundary:
-   TrueNAS is API-first. The unified agent may augment a TrueNAS system later,
-   but it is not required for bootstrap or baseline support. TrueNAS must
+   TrueNAS is API-first. SCALE 25.04 and later uses the supported versioned
+   JSON-RPC 2.0 WebSocket API at `/api/current`; REST is a connection-local,
+   version-gated compatibility boundary only for SCALE releases before 25.04
+   and TrueNAS CORE/FreeNAS. Authentication, permission, TLS, protocol, and
+   method errors on the current endpoint fail closed and never downgrade to
+   REST. The unified agent may augment a TrueNAS system later, but it is not
+   required for bootstrap or baseline support. TrueNAS must
    project into the canonical `agent`, `vm`, `app-container`, `storage`,
    `physical-disk`, and recovery contracts. TrueNAS app rows may carry a
    TrueNAS-native app facet sourced from `app.query` / `active_workloads`, and
@@ -627,7 +632,10 @@ declared floor.
    Supported now through the shared platform-connections flow and
    `/api/truenas/connections`. Operators can add, test, edit, retest, and
    delete stored TrueNAS connections without re-entering masked secrets on
-   ordinary edits. `truenas_disabled` is only an explicit server opt-out, not
+   ordinary edits. Current API-key setup includes the key owner's username for
+   the supported `auth.login_ex` flow; username-less stored keys remain an
+   upgrade bridge only while the appliance still exposes its deprecated login
+   method. `truenas_disabled` is only an explicit server opt-out, not
    the baseline state. Out of scope for this floor: a separate TrueNAS-first
    wizard, agent-required bootstrap, or disabled-by-default launch posture.
 3. Infrastructure visibility:

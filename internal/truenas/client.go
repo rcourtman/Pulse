@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -37,7 +38,7 @@ const defaultAppLogIdleWait = 250 * time.Millisecond
 
 const maxAppLogTailLines = 500
 
-// ClientConfig configures the TrueNAS REST API client.
+// ClientConfig configures the TrueNAS API client.
 type ClientConfig struct {
 	Host               string
 	Port               int
@@ -50,15 +51,30 @@ type ClientConfig struct {
 	Timeout            time.Duration
 }
 
-// Client is a thin HTTP wrapper around the TrueNAS REST API v2.0.
+// Client owns one connection-local TrueNAS transport decision. Supported
+// current SCALE releases use JSON-RPC 2.0 over WebSocket; REST is retained
+// only as a version-gated boundary for legacy SCALE and CORE appliances.
 type Client struct {
 	config     ClientConfig
 	httpClient *http.Client
 	baseURL    string
 	rpcURL     string
+
+	rpcMu     sync.Mutex
+	rpc       *trueNASRPCClient
+	mode      TransportMode
+	closed    bool
+	reconnect int
+
+	statusMu sync.RWMutex
+	status   TransportStatus
+
+	// Tests exercise protocol behavior with httptest's plaintext websocket.
+	// Production clients never set this escape hatch.
+	allowInsecureRPC bool
 }
 
-// APIError represents an HTTP-level error from the TrueNAS REST API.
+// APIError represents an HTTP-level error from the legacy TrueNAS REST API.
 type APIError struct {
 	StatusCode int
 	Method     string
@@ -70,7 +86,7 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("truenas request %s %s failed: status=%d body=%q", e.Method, e.Path, e.StatusCode, e.Body)
 }
 
-// NewClient creates a new TrueNAS REST API client.
+// NewClient creates a new TrueNAS API client.
 func NewClient(config ClientConfig) (*Client, error) {
 	host := strings.TrimSpace(config.Host)
 	if host == "" {
@@ -117,7 +133,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 		wsScheme = "wss"
 	}
 
-	return &Client{
+	client := &Client{
 		config: config,
 		httpClient: &http.Client{
 			Timeout:   timeout,
@@ -125,7 +141,14 @@ func NewClient(config ClientConfig) (*Client, error) {
 		},
 		baseURL: fmt.Sprintf("%s://%s/api/v2.0", scheme, hostPort),
 		rpcURL:  fmt.Sprintf("%s://%s/api/current", wsScheme, hostPort),
-	}, nil
+		mode:    TransportUnknown,
+	}
+	client.status = TransportStatus{
+		Mode:     TransportUnknown,
+		Endpoint: client.rpcURL,
+		TLS:      useHTTPS,
+	}
+	return client, nil
 }
 
 // TestConnection validates that the endpoint is reachable and authenticated.
@@ -136,23 +159,48 @@ func (c *Client) TestConnection(ctx context.Context) error {
 	return nil
 }
 
-// Close releases idle HTTP transport connections held by the client.
+// Close releases the persistent websocket session and idle HTTP transport
+// connections held by the client.
 func (c *Client) Close() {
-	if c == nil || c.httpClient == nil || c.httpClient.Transport == nil {
+	if c == nil {
 		return
 	}
-	if transport, ok := c.httpClient.Transport.(interface{ CloseIdleConnections() }); ok {
-		transport.CloseIdleConnections()
+	c.rpcMu.Lock()
+	c.closed = true
+	c.closeRPCLocked()
+	c.rpcMu.Unlock()
+	c.updateTransportStatus(func(status *TransportStatus) {
+		status.Connected = false
+	})
+	if c.httpClient != nil && c.httpClient.Transport != nil {
+		if transport, ok := c.httpClient.Transport.(interface{ CloseIdleConnections() }); ok {
+			transport.CloseIdleConnections()
+		}
 	}
 }
 
 // GetSystemInfo returns high-level system metadata.
 func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 	var response systemInfoResponse
-	if err := c.getJSON(ctx, http.MethodGet, "/system/info", &response); err != nil {
+	mode, err := c.ensureTransport(ctx)
+	if err != nil {
 		return nil, err
 	}
+	if mode == TransportLegacyREST {
+		err = c.getJSON(ctx, http.MethodGet, "/system/info", &response)
+	} else {
+		err = c.callRPC(ctx, "system.info", []any{}, &response)
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.updateTransportStatus(func(status *TransportStatus) {
+		status.ApplianceVersion = strings.TrimSpace(response.Version)
+	})
+	return systemInfoFromResponse(response), nil
+}
 
+func systemInfoFromResponse(response systemInfoResponse) *SystemInfo {
 	// MachineID is the raw DMI serial only. It must never fall back to the
 	// reported hostname: hostname is not a machine identity, and the old
 	// fallback gave two serial-less systems that report the same hostname
@@ -178,7 +226,7 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		MachineID:        machineID,
 		CPUCount:         cpuCount,
 		MemoryTotalBytes: response.Physmem,
-	}, nil
+	}
 }
 
 // GetSystemTelemetry retrieves live system telemetry from the modern TrueNAS
@@ -186,31 +234,21 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 // transport or endpoint failure as "telemetry unavailable" rather than a
 // system identity failure.
 func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
-	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-
-	temperatures, err := rpc.getSystemTemperatures(ctx)
-	if err != nil {
-		temperatures = nil
-	}
-
-	subscriptionName := fmt.Sprintf("reporting.realtime:{\"interval\":%d}", defaultRealtimeIntervalSeconds)
-	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
-		return nil, err
-	}
-
-	telemetry, err := rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
+	var telemetry *SystemInfo
+	var temperatures map[string]float64
+	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		temperatures, _ = rpc.getSystemTemperatures(ctx)
+		subscriptionName := fmt.Sprintf("reporting.realtime:{\"interval\":%d}", defaultRealtimeIntervalSeconds)
+		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
+		if err != nil {
+			return err
+		}
+		telemetry, err = rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
+		if err != nil {
+			return discardRPCSessionForStreamError(err)
+		}
+		return rpc.unsubscribe(ctx, subscriptionID)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -223,34 +261,25 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 // GetSystemMetricHistory retrieves historical system metrics from the native
 // TrueNAS reporting API for the canonical host-chart fallback path.
 func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
-	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-
-	return rpc.getSystemMetricHistory(ctx, duration)
+	var history *SystemMetricHistory
+	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		var err error
+		history, err = rpc.getSystemMetricHistory(ctx, duration)
+		return err
+	})
+	return history, err
 }
 
 // GetPools returns storage pools.
 func (c *Client) GetPools(ctx context.Context) ([]Pool, error) {
-	pools, err := c.getPoolsRPC(ctx)
-	if err == nil {
-		return pools, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restPools, restErr := c.getPoolsREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas pools via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getPoolsREST(ctx)
 	}
-	return restPools, nil
+	return c.getPoolsRPC(ctx)
 }
 
 func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
@@ -283,17 +312,23 @@ func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
 // separate from pool.query on supported CORE and SCALE releases.
 func (c *Client) GetBootPool(ctx context.Context) (*Pool, error) {
 	var response map[string]any
-	rpcErr := c.callRPC(ctx, "boot.get_state", []any{}, &response)
-	if rpcErr == nil {
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !legacy {
+		if err := c.callRPC(ctx, "boot.get_state", []any{}, &response); err != nil {
+			return nil, err
+		}
 		if pool, ok := parseBootPoolState(response); ok {
 			return &pool, nil
 		}
-		rpcErr = fmt.Errorf("boot.get_state returned no boot pool identity")
+		return nil, fmt.Errorf("boot.get_state returned no boot pool identity")
 	}
 
 	response = nil
-	if restErr := c.getJSON(ctx, http.MethodGet, "/boot/get_state", &response); restErr != nil {
-		return nil, fmt.Errorf("fetch truenas boot pool via rpc and rest: rpc=%w rest=%v", rpcErr, restErr)
+	if err := c.getJSON(ctx, http.MethodGet, "/boot/get_state", &response); err != nil {
+		return nil, err
 	}
 	if pool, ok := parseBootPoolState(response); ok {
 		return &pool, nil
@@ -520,15 +555,14 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 
 // GetDatasets returns datasets and normalized capacity/read-only fields.
 func (c *Client) GetDatasets(ctx context.Context) ([]Dataset, error) {
-	datasets, err := c.getDatasetsRPC(ctx)
-	if err == nil {
-		return datasets, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restDatasets, restErr := c.getDatasetsREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas datasets via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getDatasetsREST(ctx)
 	}
-	return restDatasets, nil
+	return c.getDatasetsRPC(ctx)
 }
 
 func (c *Client) getDatasetsRPC(ctx context.Context) ([]Dataset, error) {
@@ -630,15 +664,14 @@ func (c *Client) getDatasetsREST(ctx context.Context) ([]Dataset, error) {
 
 // GetDisks returns the system disk inventory.
 func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
-	disks, err := c.getDisksRPC(ctx)
-	if err == nil {
-		return disks, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restDisks, restErr := c.getDisksREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas disks via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getDisksREST(ctx)
 	}
-	return restDisks, nil
+	return c.getDisksRPC(ctx)
 }
 
 func (c *Client) getDisksRPC(ctx context.Context) ([]Disk, error) {
@@ -655,6 +688,9 @@ func (c *Client) getDisksREST(ctx context.Context) ([]Disk, error) {
 	var response []diskResponse
 	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
+	}
+	if len(response) == 0 {
+		return nil, nil
 	}
 	identifiers := diskReportingIdentifiers(response)
 	temperatures, err := c.getDiskTemperaturesWithFallback(ctx, identifiers)
@@ -706,6 +742,9 @@ func (c *Client) getDisksREST(ctx context.Context) ([]Disk, error) {
 }
 
 func (c *Client) disksFromMaps(ctx context.Context, response []map[string]any) ([]Disk, error) {
+	if len(response) == 0 {
+		return nil, nil
+	}
 	identifiers := diskReportingIdentifiersFromMaps(response)
 	temperatures, err := c.getDiskTemperaturesWithFallback(ctx, identifiers)
 	if err != nil {
@@ -819,20 +858,20 @@ func (c *Client) GetDiskTemperatureHistory(ctx context.Context, identifiers []st
 		return nil, fmt.Errorf("truenas disk temperature history requires disk identifiers")
 	}
 
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-	return rpc.getDiskTemperatureHistory(ctx, identifiers, duration)
+	var history map[string][]TimeSeriesPoint
+	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		var err error
+		history, err = rpc.getDiskTemperatureHistory(ctx, identifiers, duration)
+		return err
+	})
+	return history, err
 }
 
 func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifiers []string) (map[string]int, error) {
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if len(identifiers) == 0 {
 		reportingIdentifiers, err := c.listDiskReportingIdentifiers(ctx)
 		if err == nil {
@@ -840,11 +879,11 @@ func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifier
 		}
 	}
 
-	// Native JSON-RPC reporting first: it is the supported surface on
-	// SCALE 25.04+ and avoids waking the deprecated REST bridge (#1550).
-	reportingTemperatures, reportingErr := c.getDiskTemperaturesFromReporting(ctx, identifiers)
-	if reportingErr == nil && len(reportingTemperatures) > 0 {
-		return reportingTemperatures, nil
+	if !legacy {
+		// Native JSON-RPC reporting is the only supported path on SCALE
+		// 25.04+. An unavailable reporting method is best-effort telemetry;
+		// it must never wake the deprecated REST bridge.
+		return c.getDiskTemperaturesFromReporting(ctx, identifiers)
 	}
 
 	// disk.temperatures takes parameters, so REST v2.0 serves it as POST
@@ -862,9 +901,6 @@ func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifier
 	}
 
 	if restErr != nil {
-		if reportingErr != nil {
-			return nil, fmt.Errorf("fetch truenas disk temperatures via reporting and rest: reporting=%w rest=%v", reportingErr, restErr)
-		}
 		return nil, restErr
 	}
 
@@ -872,6 +908,17 @@ func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifier
 }
 
 func (c *Client) listDiskReportingIdentifiers(ctx context.Context) ([]string, error) {
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !legacy {
+		var response []map[string]any
+		if err := c.callRPC(ctx, "disk.query", []any{[]any{}, map[string]any{}}, &response); err != nil {
+			return nil, err
+		}
+		return diskReportingIdentifiersFromMaps(response), nil
+	}
 	var response []diskResponse
 	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
@@ -913,17 +960,13 @@ func (c *Client) getDiskTemperaturesFromReporting(ctx context.Context, identifie
 		return nil, fmt.Errorf("truenas reporting disk temperature fallback requires disk identifiers")
 	}
 
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-	return rpc.getDiskTemperatures(ctx, identifiers)
+	var temperatures map[string]int
+	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		var err error
+		temperatures, err = rpc.getDiskTemperatures(ctx, identifiers)
+		return err
+	})
+	return temperatures, err
 }
 
 func (c *Client) getDiskTemperatureAggregates(ctx context.Context, identifiers []string, windowDays int) (map[string]DiskTemperatureAggregate, error) {
@@ -932,30 +975,25 @@ func (c *Client) getDiskTemperatureAggregates(ctx context.Context, identifiers [
 		return nil, fmt.Errorf("truenas disk temperature aggregates require disk identifiers")
 	}
 
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-	return rpc.getDiskTemperatureAggregates(ctx, identifiers, windowDays)
+	var aggregates map[string]DiskTemperatureAggregate
+	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		var err error
+		aggregates, err = rpc.getDiskTemperatureAggregates(ctx, identifiers, windowDays)
+		return err
+	})
+	return aggregates, err
 }
 
 // GetAlerts returns active and dismissed TrueNAS alerts.
 func (c *Client) GetAlerts(ctx context.Context) ([]Alert, error) {
-	alerts, err := c.getAlertsRPC(ctx)
-	if err == nil {
-		return alerts, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restAlerts, restErr := c.getAlertsREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas alerts via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getAlertsREST(ctx)
 	}
-	return restAlerts, nil
+	return c.getAlertsRPC(ctx)
 }
 
 func (c *Client) getAlertsRPC(ctx context.Context) ([]Alert, error) {
@@ -1019,15 +1057,14 @@ func (c *Client) getAlertsREST(ctx context.Context) ([]Alert, error) {
 
 // GetServices returns the native TrueNAS system service inventory.
 func (c *Client) GetServices(ctx context.Context) ([]Service, error) {
-	services, err := c.getServicesRPC(ctx)
-	if err == nil {
-		return services, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restServices, restErr := c.getServicesREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas services via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getServicesREST(ctx)
 	}
-	return restServices, nil
+	return c.getServicesRPC(ctx)
 }
 
 func (c *Client) getServicesRPC(ctx context.Context) ([]Service, error) {
@@ -1068,37 +1105,22 @@ func parseServices(response []map[string]any) []Service {
 }
 
 // GetVMs returns the best-effort native TrueNAS VM inventory. TrueNAS 25.04+
-// documents vm.query on the JSON-RPC API, with the legacy REST endpoint kept
-// as a compatibility fallback for existing client tests and older deployments.
+// uses vm.query on JSON-RPC; recognized pre-25.04 SCALE and CORE releases use
+// the connection's negotiated legacy REST transport.
 func (c *Client) GetVMs(ctx context.Context) ([]VirtualMachine, error) {
-	vms, err := c.getVMsRPC(ctx)
-	if err == nil {
-		return vms, nil
-	}
-	restVMs, restErr := c.getVMsREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas vms via rpc and rest: rpc=%w rest=%v", err, restErr)
-	}
-	return restVMs, nil
-}
-
-func (c *Client) getVMsRPC(ctx context.Context) ([]VirtualMachine, error) {
-	conn, err := c.dialRPC(ctx)
+	legacy, err := c.useLegacyREST(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
+	if legacy {
+		return c.getVMsREST(ctx)
 	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
+	return c.getVMsRPC(ctx)
+}
 
+func (c *Client) getVMsRPC(ctx context.Context) ([]VirtualMachine, error) {
 	var response []map[string]any
-	if err := rpc.call(ctx, "vm.query", []any{[]any{}, map[string]any{}}, &response); err != nil {
+	if err := c.queryRPC(ctx, "vm.query", &response); err != nil {
 		return nil, err
 	}
 	return parseVirtualMachines(response), nil
@@ -1113,16 +1135,21 @@ func (c *Client) getVMsREST(ctx context.Context) ([]VirtualMachine, error) {
 }
 
 // GetNetworkShares returns the best-effort native TrueNAS SMB/NFS sharing
-// inventory. TrueNAS exposes the modern API as JSON-RPC query methods; the
-// legacy REST endpoints are kept as compatibility fallbacks for older SCALE
-// deployments and tests.
+// inventory. Modern connections use JSON-RPC query methods; recognized legacy
+// connections remain on REST for the lifetime of that client.
 func (c *Client) GetNetworkShares(ctx context.Context) ([]NetworkShare, error) {
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var shares []NetworkShare
 	var errors []error
 
-	smb, err := c.getNetworkSharesRPC(ctx, "sharing.smb.query", "SMB")
-	if err != nil {
+	var smb []NetworkShare
+	if legacy {
 		smb, err = c.getNetworkSharesREST(ctx, "/sharing/smb", "SMB")
+	} else {
+		smb, err = c.getNetworkSharesRPC(ctx, "sharing.smb.query", "SMB")
 	}
 	if err != nil {
 		errors = append(errors, fmt.Errorf("smb: %w", err))
@@ -1130,9 +1157,11 @@ func (c *Client) GetNetworkShares(ctx context.Context) ([]NetworkShare, error) {
 		shares = append(shares, smb...)
 	}
 
-	nfs, err := c.getNetworkSharesRPC(ctx, "sharing.nfs.query", "NFS")
-	if err != nil {
+	var nfs []NetworkShare
+	if legacy {
 		nfs, err = c.getNetworkSharesREST(ctx, "/sharing/nfs", "NFS")
+	} else {
+		nfs, err = c.getNetworkSharesRPC(ctx, "sharing.nfs.query", "NFS")
 	}
 	if err != nil {
 		errors = append(errors, fmt.Errorf("nfs: %w", err))
@@ -1166,37 +1195,18 @@ func (c *Client) queryRPC(ctx context.Context, method string, result any) error 
 	return c.callRPC(ctx, method, []any{[]any{}, map[string]any{}}, result)
 }
 
-func (c *Client) callRPC(ctx context.Context, method string, params any, result any) error {
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
-	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return err
-	}
-	return rpc.call(ctx, method, params, result)
-}
-
 // GetApps returns the best-effort TrueNAS app inventory as canonical workload
-// candidates. TrueNAS 25.04+ documents app.query on the JSON-RPC API, with
-// the legacy REST endpoint kept as a compatibility fallback for older
-// deployments and existing tests.
+// candidates. TrueNAS 25.04+ uses app.query on JSON-RPC; recognized legacy
+// connections remain on their negotiated REST transport.
 func (c *Client) GetApps(ctx context.Context) ([]App, error) {
-	apps, err := c.getAppsRPC(ctx)
-	if err == nil {
-		return apps, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restApps, restErr := c.getAppsREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas apps via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getAppsREST(ctx)
 	}
-	return restApps, nil
+	return c.getAppsRPC(ctx)
 }
 
 func (c *Client) getAppsRPC(ctx context.Context) ([]App, error) {
@@ -1277,26 +1287,20 @@ func (c *Client) parseAppsWithStats(ctx context.Context, response []map[string]a
 // transport or endpoint failure as "stats unavailable" rather than inventory
 // failure.
 func (c *Client) GetAppStats(ctx context.Context) (map[string]AppStats, error) {
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
-	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-
-	subscriptionName := fmt.Sprintf("app.stats:{\"interval\":%d}", defaultAppStatsIntervalSeconds)
-	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
-		return nil, err
-	}
-
-	return rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds)
+	var stats map[string]AppStats
+	err := c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		subscriptionName := fmt.Sprintf("app.stats:{\"interval\":%d}", defaultAppStatsIntervalSeconds)
+		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
+		if err != nil {
+			return err
+		}
+		stats, err = rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds)
+		if err != nil {
+			return discardRPCSessionForStreamError(err)
+		}
+		return rpc.unsubscribe(ctx, subscriptionID)
+	})
+	return stats, err
 }
 
 // StartApp requests that TrueNAS start the named app through the canonical
@@ -1329,20 +1333,6 @@ func (c *Client) GetAppLogs(ctx context.Context, appName, containerID string, ta
 		tailLines = maxAppLogTailLines
 	}
 
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
-	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return nil, err
-	}
-
 	subscriptionArgs := map[string]any{
 		"app_name":     appName,
 		"container_id": containerID,
@@ -1353,11 +1343,23 @@ func (c *Client) GetAppLogs(ctx context.Context, appName, containerID string, ta
 		return nil, fmt.Errorf("marshal truenas app log subscription: %w", err)
 	}
 	subscriptionName := fmt.Sprintf("app.container_log_follow:%s", string(subscriptionJSON))
-	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
-		return nil, err
-	}
-
-	return rpc.readAppLogEvents(ctx, tailLines)
+	var lines []AppLogLine
+	err = c.withRPC(ctx, func(rpc *trueNASRPCClient) error {
+		subscriptionID, err := rpc.subscribe(ctx, subscriptionName)
+		if err != nil {
+			return err
+		}
+		var reusable bool
+		lines, reusable, err = rpc.readAppLogEvents(ctx, tailLines)
+		if err != nil {
+			return discardRPCSessionForStreamError(err)
+		}
+		if !reusable {
+			return errRPCStreamSessionConsumed
+		}
+		return rpc.unsubscribe(ctx, subscriptionID)
+	})
+	return lines, err
 }
 
 func (c *Client) executeAppAction(ctx context.Context, method, appID string) error {
@@ -1366,48 +1368,37 @@ func (c *Client) executeAppAction(ctx context.Context, method, appID string) err
 		return fmt.Errorf("truenas app id is required")
 	}
 
-	conn, err := c.dialRPC(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = conn.Close() }()
-
-	rpc := trueNASRPCClient{
-		conn:   conn,
-		nextID: 1,
-	}
-	if err := rpc.authenticate(ctx, c.config); err != nil {
-		return err
-	}
-	if err := rpc.call(ctx, method, []any{appID}, nil); err != nil {
+	if err := c.callRPCAction(ctx, method, []any{appID}, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
 // GetZFSSnapshots returns a best-effort list of ZFS snapshots. Modern TrueNAS
-// exposes snapshots through JSON-RPC; legacy REST remains a compatibility
-// fallback for older deployments.
+// uses JSON-RPC; recognized legacy connections remain on REST.
 func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
-	snapshots, err := c.getZFSSnapshotsRPC(ctx)
-	if err == nil {
-		return snapshots, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restSnapshots, restErr := c.getZFSSnapshotsREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas zfs snapshots via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getZFSSnapshotsREST(ctx)
 	}
-	return restSnapshots, nil
+	return c.getZFSSnapshotsRPC(ctx)
 }
 
 func (c *Client) getZFSSnapshotsRPC(ctx context.Context) ([]ZFSSnapshot, error) {
 	var response []map[string]any
-	if err := c.callRPC(ctx, "zfs.resource.snapshot.query", []any{map[string]any{
+	err := c.callRPC(ctx, "zfs.resource.snapshot.query", []any{map[string]any{
 		"paths":      []string{},
 		"recursive":  true,
 		"properties": []string{"creation", "used", "referenced"},
-	}}, &response); err == nil {
+	}}, &response)
+	if err == nil {
 		return parseZFSSnapshots(response), nil
+	}
+	if !isMethodUnavailable(err) {
+		return nil, err
 	}
 
 	if err := c.queryRPC(ctx, "pool.snapshot.query", &response); err != nil {
@@ -1489,15 +1480,14 @@ func parseZFSSnapshots(response []map[string]any) []ZFSSnapshot {
 
 // GetReplicationTasks returns a best-effort list of replication tasks including last-run state.
 func (c *Client) GetReplicationTasks(ctx context.Context) ([]ReplicationTask, error) {
-	tasks, err := c.getReplicationTasksRPC(ctx)
-	if err == nil {
-		return tasks, nil
+	legacy, err := c.useLegacyREST(ctx)
+	if err != nil {
+		return nil, err
 	}
-	restTasks, restErr := c.getReplicationTasksREST(ctx)
-	if restErr != nil {
-		return nil, fmt.Errorf("fetch truenas replication tasks via rpc and rest: rpc=%w rest=%v", err, restErr)
+	if legacy {
+		return c.getReplicationTasksREST(ctx)
 	}
-	return restTasks, nil
+	return c.getReplicationTasksRPC(ctx)
 }
 
 func (c *Client) getReplicationTasksRPC(ctx context.Context) ([]ReplicationTask, error) {
@@ -1819,6 +1809,29 @@ type trueNASRPCClient struct {
 	nextID int64
 }
 
+func (c *trueNASRPCClient) subscribe(ctx context.Context, event string) (string, error) {
+	var subscriptionID string
+	if err := c.call(ctx, "core.subscribe", []any{event}, &subscriptionID); err != nil {
+		return "", err
+	}
+	subscriptionID = strings.TrimSpace(subscriptionID)
+	if subscriptionID == "" {
+		return "", &discardRPCSessionError{err: fmt.Errorf("truenas rpc core.subscribe returned an empty subscription id")}
+	}
+	return subscriptionID, nil
+}
+
+func (c *trueNASRPCClient) unsubscribe(ctx context.Context, subscriptionID string) error {
+	subscriptionID = strings.TrimSpace(subscriptionID)
+	if subscriptionID == "" {
+		return fmt.Errorf("truenas rpc subscription id is required")
+	}
+	if err := c.call(ctx, "core.unsubscribe", []any{subscriptionID}, nil); err != nil {
+		return &discardRPCSessionError{err: fmt.Errorf("unsubscribe %q: %w", subscriptionID, err)}
+	}
+	return nil
+}
+
 type trueNASRPCRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int64  `json:"id"`
@@ -1836,8 +1849,9 @@ type trueNASRPCResponse struct {
 }
 
 type trueNASRPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 type trueNASCollectionUpdate struct {
@@ -1894,7 +1908,6 @@ func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
 	if c == nil {
 		return nil, fmt.Errorf("truenas client is nil")
 	}
-
 	dialer := websocket.Dialer{
 		Proxy: http.ProxyFromEnvironment,
 	}
@@ -1914,28 +1927,88 @@ func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
 
 	conn, response, err := dialer.DialContext(ctx, c.rpcURL, nil)
 	if err != nil {
+		statusCode := 0
 		if response != nil {
-			return nil, fmt.Errorf("dial truenas rpc websocket: status=%d: %w", response.StatusCode, err)
+			statusCode = response.StatusCode
 		}
-		return nil, fmt.Errorf("dial truenas rpc websocket: %w", err)
+		return nil, &RPCHandshakeError{StatusCode: statusCode, Err: err}
 	}
 	return conn, nil
 }
 
-func (c *trueNASRPCClient) authenticate(ctx context.Context, config ClientConfig) error {
+func (c *trueNASRPCClient) authenticate(ctx context.Context, config ClientConfig) (string, error) {
 	if apiKey := strings.TrimSpace(config.APIKey); apiKey != "" {
-		return c.call(ctx, "auth.login_with_api_key", []any{apiKey}, nil)
+		if username := strings.TrimSpace(config.Username); username != "" {
+			var response struct {
+				ResponseType string `json:"response_type"`
+			}
+			err := c.call(ctx, "auth.login_ex", []any{map[string]any{
+				"mechanism": "API_KEY_PLAIN",
+				"username":  username,
+				"api_key":   apiKey,
+				"login_options": map[string]any{
+					"user_info": false,
+				},
+			}}, &response)
+			if err != nil {
+				return "", err
+			}
+			if !strings.EqualFold(strings.TrimSpace(response.ResponseType), "SUCCESS") {
+				return "", &RPCAuthError{
+					Mechanism:    "api-key-plain",
+					ResponseType: strings.TrimSpace(response.ResponseType),
+				}
+			}
+			return "api-key-plain", nil
+		}
+
+		var authenticated bool
+		if err := c.call(ctx, "auth.login_with_api_key", []any{apiKey}, &authenticated); err != nil {
+			if isMethodUnavailable(err) {
+				return "", fmt.Errorf("truenas rpc API-key authentication on this release requires the API key owner username; edit this connection and add it: %w", err)
+			}
+			return "", err
+		}
+		if !authenticated {
+			return "", &RPCAuthError{Mechanism: "legacy-api-key"}
+		}
+		return "legacy-api-key", nil
 	}
 	if config.Username != "" || config.Password != "" {
-		return c.call(ctx, "auth.login", []any{config.Username, config.Password}, nil)
+		var response struct {
+			ResponseType string `json:"response_type"`
+		}
+		err := c.call(ctx, "auth.login_ex", []any{map[string]any{
+			"mechanism": "PASSWORD_PLAIN",
+			"username":  config.Username,
+			"password":  config.Password,
+			"login_options": map[string]any{
+				"user_info": false,
+			},
+		}}, &response)
+		if err != nil {
+			return "", err
+		}
+		if !strings.EqualFold(strings.TrimSpace(response.ResponseType), "SUCCESS") {
+			return "", &RPCAuthError{
+				Mechanism:    "password-plain",
+				ResponseType: strings.TrimSpace(response.ResponseType),
+			}
+		}
+		return "password-plain", nil
 	}
-	return fmt.Errorf("truenas rpc authentication requires api key or username/password")
+	return "", &RPCAuthError{
+		Mechanism:    "configuration",
+		ResponseType: "credentials required",
+	}
 }
 
 func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, result any) error {
 	if c == nil || c.conn == nil {
 		return fmt.Errorf("truenas rpc connection is nil")
 	}
+	stopContext := c.armContext(ctx)
+	defer stopContext()
 
 	request := trueNASRPCRequest{
 		JSONRPC: "2.0",
@@ -1949,7 +2022,7 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 		_ = c.conn.SetWriteDeadline(deadline)
 	}
 	if err := c.conn.WriteJSON(request); err != nil {
-		return fmt.Errorf("write truenas rpc %s request: %w", method, err)
+		return &RPCTransportError{Method: method, Phase: "write", Err: err}
 	}
 
 	for {
@@ -1959,7 +2032,7 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
-			return fmt.Errorf("read truenas rpc %s response: %w", method, err)
+			return &RPCTransportError{Method: method, Phase: "read", Err: err}
 		}
 		if message.Method != "" {
 			continue
@@ -1968,7 +2041,7 @@ func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, 
 			continue
 		}
 		if message.Error != nil {
-			return fmt.Errorf("truenas rpc %s failed: code=%d message=%q", method, message.Error.Code, strings.TrimSpace(message.Error.Message))
+			return rpcErrorFromWire(method, message.Error)
 		}
 		if result == nil || len(message.Result) == 0 || string(message.Result) == "null" {
 			return nil
@@ -1984,6 +2057,8 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
+	stopContext := c.armContext(ctx)
+	defer stopContext()
 
 	for {
 		if deadline, ok := ctx.Deadline(); ok {
@@ -1992,11 +2067,11 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
-			return nil, fmt.Errorf("read truenas rpc app.stats notification: %w", err)
+			return nil, &RPCTransportError{Method: "app.stats", Phase: "read", Err: err}
 		}
 		if message.Method == "" {
 			if message.Error != nil {
-				return nil, fmt.Errorf("truenas rpc app.stats failed: code=%d message=%q", message.Error.Code, strings.TrimSpace(message.Error.Message))
+				return nil, rpcErrorFromWire("app.stats", message.Error)
 			}
 			continue
 		}
@@ -2046,10 +2121,12 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 	}
 }
 
-func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) ([]AppLogLine, error) {
+func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) ([]AppLogLine, bool, error) {
 	if c == nil || c.conn == nil {
-		return nil, fmt.Errorf("truenas rpc connection is nil")
+		return nil, false, fmt.Errorf("truenas rpc connection is nil")
 	}
+	stopContext := c.armContext(ctx)
+	defer stopContext()
 	if tailLines <= 0 {
 		tailLines = 100
 	}
@@ -2074,13 +2151,16 @@ func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
 			if isTimeoutError(err) {
-				return trimAppLogLines(lines, tailLines), nil
+				// Gorilla WebSocket documents a timed-out read as terminal for
+				// the connection. Preserve the collected log data, then make
+				// the caller discard this stream session instead of reusing it.
+				return trimAppLogLines(lines, tailLines), false, nil
 			}
-			return nil, fmt.Errorf("read truenas rpc app.container_log_follow notification: %w", err)
+			return nil, false, &RPCTransportError{Method: "app.container_log_follow", Phase: "read", Err: err}
 		}
 		if message.Method == "" {
 			if message.Error != nil {
-				return nil, fmt.Errorf("truenas rpc app.container_log_follow failed: code=%d message=%q", message.Error.Code, strings.TrimSpace(message.Error.Message))
+				return nil, false, rpcErrorFromWire("app.container_log_follow", message.Error)
 			}
 			continue
 		}
@@ -2097,7 +2177,7 @@ func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) 
 			if len(appended) > len(lines) {
 				lines = appended
 				if len(lines) >= tailLines {
-					return trimAppLogLines(lines, tailLines), nil
+					return trimAppLogLines(lines, tailLines), true, nil
 				}
 				idleDeadline = time.Now().Add(defaultAppLogIdleWait)
 			}
@@ -2106,13 +2186,13 @@ func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) 
 
 		var raw any
 		if err := json.Unmarshal(message.Params, &raw); err != nil {
-			return nil, fmt.Errorf("decode truenas app.container_log_follow notification: %w", err)
+			return nil, false, fmt.Errorf("decode truenas app.container_log_follow notification: %w", err)
 		}
 		appended := appendAppLogLines(lines, raw)
 		if len(appended) > len(lines) {
 			lines = appended
 			if len(lines) >= tailLines {
-				return trimAppLogLines(lines, tailLines), nil
+				return trimAppLogLines(lines, tailLines), true, nil
 			}
 			idleDeadline = time.Now().Add(defaultAppLogIdleWait)
 		}
@@ -2178,6 +2258,53 @@ func trimAppLogLines(lines []AppLogLine, tailLines int) []AppLogLine {
 func isTimeoutError(err error) bool {
 	var netErr net.Error
 	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+// armContext makes websocket I/O observe cancellation even when a caller
+// supplies a cancellable context without a deadline. The cleanup waits for the
+// cancellation watcher before clearing deadlines, preventing a completed call
+// from poisoning the next serialized exchange on this connection.
+func (c *trueNASRPCClient) armContext(ctx context.Context) func() {
+	if c == nil || c.conn == nil {
+		return func() {}
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.conn.SetReadDeadline(deadline)
+		_ = c.conn.SetWriteDeadline(deadline)
+	} else {
+		_ = c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetWriteDeadline(time.Time{})
+	}
+
+	cancelled := ctx.Done()
+	if cancelled == nil {
+		return func() {
+			_ = c.conn.SetReadDeadline(time.Time{})
+			_ = c.conn.SetWriteDeadline(time.Time{})
+		}
+	}
+
+	stop := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		select {
+		case <-cancelled:
+			now := time.Now()
+			_ = c.conn.SetReadDeadline(now)
+			_ = c.conn.SetWriteDeadline(now)
+		case <-stop:
+		}
+	}()
+	return func() {
+		close(stop)
+		<-stopped
+		_ = c.conn.SetReadDeadline(time.Time{})
+		_ = c.conn.SetWriteDeadline(time.Time{})
+	}
 }
 
 func (c *trueNASRPCClient) getSystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
@@ -2354,6 +2481,8 @@ func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, interva
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
+	stopContext := c.armContext(ctx)
+	defer stopContext()
 
 	for {
 		if deadline, ok := ctx.Deadline(); ok {
@@ -2362,11 +2491,11 @@ func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, interva
 
 		var message trueNASRPCResponse
 		if err := c.conn.ReadJSON(&message); err != nil {
-			return nil, fmt.Errorf("read truenas rpc reporting.realtime notification: %w", err)
+			return nil, &RPCTransportError{Method: "reporting.realtime", Phase: "read", Err: err}
 		}
 		if message.Method == "" {
 			if message.Error != nil {
-				return nil, fmt.Errorf("truenas rpc reporting.realtime failed: code=%d message=%q", message.Error.Code, strings.TrimSpace(message.Error.Message))
+				return nil, rpcErrorFromWire("reporting.realtime", message.Error)
 			}
 			continue
 		}

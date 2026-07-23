@@ -6,6 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 )
 
 func mockTrueNASConnectionResponses() []trueNASConnectionResponse {
@@ -43,6 +44,15 @@ func mockTrueNASConnectionResponses() []trueNASConnectionResponse {
 			LastSuccessAt:   mockPlatformTimePointer(fixture.CollectedAt),
 		},
 		Observed: observed,
+		Transport: &truenas.TransportStatus{
+			Mode:             truenas.TransportJSONRPC,
+			Endpoint:         "wss://truenas-main/api/current",
+			TLS:              true,
+			Connected:        true,
+			AuthMechanism:    "api-key-plain",
+			ApplianceVersion: "TrueNAS-SCALE-25.10.4",
+			LastConnectedAt:  mockPlatformTimePointer(fixture.CollectedAt),
+		},
 	}}
 }
 
@@ -105,8 +115,9 @@ func mockTrueNASLedgerInputs() ([]config.TrueNASInstance, map[string]monitoring.
 	for _, response := range responses {
 		instances = append(instances, response.TrueNASInstance)
 		summaries[response.TrueNASInstance.ID] = monitoring.TrueNASConnectionSummary{
-			Poll:     response.Poll,
-			Observed: response.Observed,
+			Poll:      response.Poll,
+			Observed:  response.Observed,
+			Transport: response.Transport,
 		}
 	}
 	return instances, summaries
