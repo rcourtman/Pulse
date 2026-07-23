@@ -705,6 +705,12 @@ func (rr *ResourceRegistry) seedSourceMappingsFromResourceLocked(resource *Resou
 
 	for _, source := range sources {
 		if source == SourceAvailability {
+			// Availability facets projected onto a monitored resource do not
+			// own the provider identity. Only the source-owned endpoint may
+			// restore targetID -> resourceID mappings during rehydration.
+			if !isAvailabilityOwnedResource(*resource) {
+				continue
+			}
 			if _, ok := rr.bySource[source]; !ok {
 				rr.bySource[source] = make(map[string]string)
 			}
@@ -2420,6 +2426,13 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
 
+	// An availability target is always a first-class, source-owned resource.
+	// Correlation may additionally project its facet onto a monitored machine
+	// or service, but it must never replace the configured check row.
+	if source == SourceAvailability && resource.Type == ResourceTypeNetworkEndpoint {
+		return rr.ingestAvailabilityCheckLocked(sourceID, resource, identity)
+	}
+
 	// Rehydrated registries seed exact source mappings from the persisted
 	// unified snapshot. Honor that durable mapping before attempting weaker
 	// identity correlation, but fail closed if a colliding source key belongs
@@ -2446,33 +2459,6 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
-	// Agentless availability probes attach as a facet on the known resource
-	// they monitor instead of minting a parallel network-endpoint. An explicit
-	// linkedResourceId wins; otherwise an exact, unique normalized IP or full
-	// hostname may attach. Ambiguous or invalid correlations remain explicit
-	// on the fallback endpoint and are never guessed.
-	var availabilityResolution availabilityLinkResolution
-	if source == SourceAvailability && resource.Type == ResourceTypeNetworkEndpoint {
-		availabilityResolution = rr.resolveAvailabilityLink(resource)
-		operationaltrust.GetMetrics().ObserveIdentityCorrelation(string(availabilityResolution.State))
-		applyAvailabilityResolution(resource.Availability, availabilityResolution)
-		if linked := availabilityResolution.ResourceID; linked != "" {
-			if existing := rr.resources[linked]; existing != nil {
-				bindAvailabilityEvidence(resource.Availability, existing.ID, availabilityResolution)
-				existing.Relationships = upsertAvailabilityCheckRelationship(
-					existing.Relationships,
-					candidateID,
-					existing.ID,
-					resource.Availability,
-					availabilityResolution,
-				)
-				rr.mergeInto(existing, resource, source)
-				rr.bySource[source][sourceID] = existing.ID
-				return existing.ID
-			}
-		}
-	}
-
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
 		if match, excluded := rr.findMatch(resource, candidateID); match != nil {
 			existing := rr.resources[match.ResourceB]
@@ -2491,10 +2477,6 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	}
 
 	resource.ID = rr.chooseNewID(resource.Type, identity, source, sourceID)
-	if source == SourceAvailability && resource.Availability != nil {
-		bindAvailabilityEvidence(resource.Availability, resource.ID, availabilityResolution)
-		normalizeResourceAvailability(&resource)
-	}
 	normalizeResourceRelationships(&resource)
 	if existing := rr.resources[resource.ID]; existing != nil {
 		rr.mergeInto(existing, resource, source)
@@ -2507,6 +2489,149 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	rr.matcher.Add(resource.ID, identity)
 
 	return resource.ID
+}
+
+func (rr *ResourceRegistry) ingestAvailabilityCheckLocked(
+	sourceID string,
+	resource Resource,
+	identity ResourceIdentity,
+) string {
+	checkResourceID := rr.sourceSpecificID(resource.Type, SourceAvailability, sourceID)
+	if mappedID := CanonicalResourceID(rr.bySource[SourceAvailability][sourceID]); mappedID != "" {
+		if existing := rr.resources[mappedID]; existing != nil &&
+			existing.Type == ResourceTypeNetworkEndpoint &&
+			isAvailabilityOwnedResource(*existing) {
+			checkResourceID = mappedID
+		}
+	}
+
+	// Incremental edits can change an explicit link or endpoint identity.
+	// Remove only this check's prior projection before resolving its new
+	// target; other checks attached to the same resource remain intact.
+	rr.removeAvailabilityProjectionLocked(sourceID, checkResourceID)
+
+	resolution := rr.resolveAvailabilityLink(resource)
+	operationaltrust.GetMetrics().ObserveIdentityCorrelation(string(resolution.State))
+	applyAvailabilityResolution(resource.Availability, resolution)
+
+	resource.ID = checkResourceID
+	resource.Identity = identity
+	bindAvailabilityEvidence(resource.Availability, checkResourceID, resolution)
+	normalizeResourceAvailability(&resource)
+
+	if targetResourceID := resolution.ResourceID; targetResourceID != "" {
+		if target := rr.resources[targetResourceID]; target != nil {
+			resource.Relationships = upsertAvailabilityCheckRelationship(
+				resource.Relationships,
+				checkResourceID,
+				targetResourceID,
+				resource.Availability,
+				resolution,
+			)
+			rr.projectAvailabilityCheckLocked(target, resource, resolution)
+		}
+	}
+	normalizeResourceRelationships(&resource)
+
+	// Availability records are authoritative snapshots for one configured
+	// target. Replacing the source-owned row clears recovered incidents and
+	// removes stale endpoint identity after edits.
+	rr.resources[checkResourceID] = &resource
+	rr.bySource[SourceAvailability][sourceID] = checkResourceID
+	rr.matcher.Add(checkResourceID, identity)
+	return checkResourceID
+}
+
+func (rr *ResourceRegistry) projectAvailabilityCheckLocked(
+	target *Resource,
+	checkResource Resource,
+	resolution availabilityLinkResolution,
+) {
+	if target == nil || checkResource.Availability == nil {
+		return
+	}
+
+	projected := cloneAvailabilityData(checkResource.Availability)
+	if projected == nil {
+		return
+	}
+	bindAvailabilityEvidence(projected, target.ID, resolution)
+	target.AvailabilityChecks = mergeAvailabilityChecks(
+		target.AvailabilityChecks,
+		target.Availability,
+		nil,
+		projected,
+	)
+	target.Availability = primaryAvailabilityCheck(target.AvailabilityChecks)
+	target.Sources = addSource(target.Sources, SourceAvailability)
+	if target.SourceStatus == nil {
+		target.SourceStatus = make(map[DataSource]SourceStatus)
+	}
+	target.SourceStatus[SourceAvailability] = SourceStatus{
+		Status:   sourceSightingStatus(checkResource.LastSeen),
+		LastSeen: checkResource.LastSeen,
+	}
+}
+
+func (rr *ResourceRegistry) removeAvailabilityProjectionLocked(
+	targetID string,
+	checkResourceID string,
+) {
+	targetID = strings.TrimSpace(targetID)
+	checkResourceID = CanonicalResourceID(checkResourceID)
+	if targetID == "" {
+		return
+	}
+
+	for _, resource := range rr.resources {
+		if resource == nil || isAvailabilityOwnedResource(*resource) {
+			continue
+		}
+
+		checks := AvailabilityChecksForResource(*resource)
+		filteredChecks := make([]AvailabilityData, 0, len(checks))
+		removed := false
+		for _, check := range checks {
+			if strings.TrimSpace(check.TargetID) == targetID {
+				removed = true
+				continue
+			}
+			filteredChecks = append(filteredChecks, check)
+		}
+		if removed {
+			resource.AvailabilityChecks = filteredChecks
+			resource.Availability = primaryAvailabilityCheck(filteredChecks)
+			if len(filteredChecks) == 0 {
+				resource.Sources = removeDataSource(resource.Sources, SourceAvailability)
+				delete(resource.SourceStatus, SourceAvailability)
+			}
+		}
+
+		filteredRelationships := resource.Relationships[:0]
+		for _, relationship := range resource.Relationships {
+			relationshipTargetID, _ := relationship.Metadata["targetId"].(string)
+			if relationship.Type == RelChecks &&
+				(CanonicalResourceID(relationship.SourceID) == checkResourceID ||
+					strings.TrimSpace(relationshipTargetID) == targetID) {
+				continue
+			}
+			filteredRelationships = append(filteredRelationships, relationship)
+		}
+		resource.Relationships = filteredRelationships
+
+		// Builds before the source-owned check contract merged availability
+		// incidents into the correlated host. Remove that legacy copy while
+		// retaining incidents from all other checks and providers.
+		filteredIncidents := resource.Incidents[:0]
+		for _, incident := range resource.Incidents {
+			if strings.EqualFold(strings.TrimSpace(incident.Provider), string(SourceAvailability)) &&
+				strings.TrimSpace(incident.NativeID) == targetID {
+				continue
+			}
+			filteredIncidents = append(filteredIncidents, incident)
+		}
+		resource.Incidents = filteredIncidents
+	}
 }
 
 func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
@@ -3705,6 +3830,12 @@ func (rr *ResourceRegistry) applyManualLinks(thresholds map[DataSource]time.Dura
 		if other == nil || otherID == primaryID {
 			continue
 		}
+		// Availability checks retain their source-owned identity even when an
+		// operator links them to another resource. Correlation is represented
+		// by RelChecks plus the additive facet projection.
+		if isAvailabilityOwnedResource(*primary) || isAvailabilityOwnedResource(*other) {
+			continue
+		}
 
 		// A manual link records operator intent to unify identities, but its
 		// direction must not change the semantic resource shape. In particular,
@@ -4729,6 +4860,16 @@ func addSources(sources []DataSource, more []DataSource) []DataSource {
 	out := sources
 	for _, source := range more {
 		out = addSource(out, source)
+	}
+	return out
+}
+
+func removeDataSource(sources []DataSource, source DataSource) []DataSource {
+	out := make([]DataSource, 0, len(sources))
+	for _, existing := range sources {
+		if existing != source {
+			out = append(out, existing)
+		}
 	}
 	return out
 }

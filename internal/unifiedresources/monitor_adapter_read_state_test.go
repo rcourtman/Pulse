@@ -414,6 +414,117 @@ func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterAvailabilityChecksSurviveRebuildAndRecordDeletionByCheckID(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	now := time.Date(2026, 7, 23, 20, 0, 0, 0, time.UTC)
+	hostID := MachineIdentityCanonicalID(ResourceTypeAgent, "machine-core2026")
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{{
+			ID:        "agent-core2026",
+			Hostname:  "core2026",
+			MachineID: "machine-core2026",
+			Status:    "online",
+			LastSeen:  now,
+		}},
+		LastUpdate: now,
+	}
+	records := map[DataSource][]IngestRecord{
+		SourceAvailability: {
+			availabilityProbeRecord("stats-pv", "192.0.2.70", &AvailabilityData{
+				LinkedResourceID: hostID,
+				Address:          "192.0.2.70",
+				Protocol:         "https",
+				Enabled:          true,
+				Available:        true,
+			}),
+		},
+	}
+
+	adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+	checks := adapter.currentRegistry().ListByType(ResourceTypeNetworkEndpoint)
+	if len(checks) != 1 {
+		t.Fatalf("check count after rebuild = %d, want 1", len(checks))
+	}
+	checkID := checks[0].ID
+	host, ok := adapter.currentRegistry().Get(hostID)
+	if !ok || len(AvailabilityChecksForResource(*host)) != 1 {
+		t.Fatalf("host projection after rebuild = %+v", host)
+	}
+
+	// A reload/restart rebuild must preserve the canonical check row instead
+	// of seeding the provider mapping from the host projection.
+	snapshot.LastUpdate = now.Add(time.Minute)
+	adapter.PopulateSnapshotAndSupplemental(snapshot, records)
+	checks = adapter.currentRegistry().ListByType(ResourceTypeNetworkEndpoint)
+	if len(checks) != 1 || checks[0].ID != checkID {
+		t.Fatalf("check after restart = %+v, want stable ID %q", checks, checkID)
+	}
+
+	// Deleting the configured check means the next atomic replacement carries
+	// no availability records. Both the row and its host projection disappear.
+	snapshot.LastUpdate = now.Add(2 * time.Minute)
+	adapter.PopulateSnapshotAndSupplemental(snapshot, nil)
+	if got := adapter.currentRegistry().ListByType(ResourceTypeNetworkEndpoint); len(got) != 0 {
+		t.Fatalf("check count after deletion = %d, want 0", len(got))
+	}
+	host, ok = adapter.currentRegistry().Get(hostID)
+	if !ok || len(AvailabilityChecksForResource(*host)) != 0 {
+		t.Fatalf("host retained deleted projection: %+v", host)
+	}
+
+	changes, err := store.GetRecentChanges(checkID, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges(%q): %v", checkID, err)
+	}
+	changeTypes := map[string]bool{}
+	for _, change := range changes {
+		if change.Metadata != nil {
+			if changeType, _ := change.Metadata["changeType"].(string); changeType != "" {
+				changeTypes[changeType] = true
+			}
+		}
+	}
+	if !changeTypes["resource_created"] || !changeTypes["resource_removed"] {
+		t.Fatalf("check history change types = %+v, want create and remove", changeTypes)
+	}
+}
+
+func TestMonitorAdapterIngestsAvailabilityAfterCorrelatableSupplementalSources(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	now := time.Date(2026, 7, 23, 21, 0, 0, 0, time.UTC)
+	host := models.Host{
+		ID:        "agent-supplemental",
+		Hostname:  "supplemental-host",
+		MachineID: "supplemental-machine",
+		Status:    "online",
+		LastSeen:  now,
+	}
+	hostID := MachineIdentityCanonicalID(ResourceTypeAgent, host.MachineID)
+
+	adapter.PopulateSnapshotAndSupplemental(models.StateSnapshot{LastUpdate: now}, map[DataSource][]IngestRecord{
+		SourceAvailability: {
+			availabilityProbeRecord("supplemental-check", "192.0.2.75", &AvailabilityData{
+				LinkedResourceID: hostID,
+				Address:          "192.0.2.75",
+				Protocol:         "tcp",
+				Enabled:          true,
+				Available:        true,
+			}),
+		},
+		SourceAgent: {HostIngestRecord(host)},
+	})
+
+	check := availabilityEndpointByTarget(t, adapter.currentRegistry(), "supplemental-check")
+	if len(check.Relationships) != 1 || check.Relationships[0].TargetID != hostID {
+		t.Fatalf("availability was ingested before its supplemental target: %+v", check.Relationships)
+	}
+	projectedHost, ok := adapter.currentRegistry().Get(hostID)
+	if !ok || len(AvailabilityChecksForResource(*projectedHost)) != 1 {
+		t.Fatalf("supplemental host projection = %+v", projectedHost)
+	}
+}
+
 func TestMonitorAdapterRecordChangeForwardsToStore(t *testing.T) {
 	store := NewMemoryStore()
 	adapter := NewMonitorAdapter(NewRegistry(store))

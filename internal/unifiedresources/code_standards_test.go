@@ -629,7 +629,8 @@ func TestAPIResourcesKeepsOwnedSupplementalGapFillAndVMwareAlias(t *testing.T) {
 
 	requiredSnippets := []string{
 		"seedSources := unifiedSeedSources(seed.resources)",
-		"!sourceOwnedBySupplementalProvider(source, ownedSources) || unifiedSeedIncludesSource(seedSources, source)",
+		"!sourceOwnedBySupplementalProvider(source, ownedSources)",
+		"(source != unified.SourceAvailability && unifiedSeedIncludesSource(seedSources, source))",
 		`case "vmware", "vmware-vsphere":`,
 	}
 	for _, snippet := range requiredSnippets {

@@ -80,9 +80,12 @@ request per row.
 An availability check attaches to an existing unified resource only when an
 explicit link resolves or identity correlation yields exactly one candidate.
 The relationship carries a stable relationship ID and the evidence ID that
-supports it. Ambiguous checks remain standalone. An attached check appears on
-the owning platform row and detail; it is not duplicated as another inventory
-resource.
+supports it. Every configured check remains a source-owned inventory resource,
+including an attached check. Correlation additionally projects its bounded
+facet onto the matched platform row and detail; it never replaces the check
+identity or copies the check's incident and service identity into the machine.
+Ambiguous and unresolved checks remain visible with their typed correlation
+state.
 
 Availability success is time-bounded. A stale successful observation is
 `stale`, not healthy. A failure enters the same alert lifecycle and Patrol

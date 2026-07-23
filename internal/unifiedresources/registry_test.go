@@ -130,8 +130,8 @@ func TestResourceRegistryAvailabilityLinkedResourceResolvesSourceReference(t *te
 		}),
 	})
 
-	if got := rr.ListByType(ResourceTypeNetworkEndpoint); len(got) != 0 {
-		t.Fatalf("expected source-referenced probe to attach (0 endpoints), got %d", len(got))
+	if got := rr.ListByType(ResourceTypeNetworkEndpoint); len(got) != 1 {
+		t.Fatalf("expected source-referenced probe to retain its endpoint row, got %d", len(got))
 	}
 	services := rr.ListByType(ResourceTypeDockerService)
 	if len(services) != 1 {
@@ -5200,8 +5200,8 @@ func TestRegistryAvailabilityLinkAttachesFacetToKnownResource(t *testing.T) {
 		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.10"}},
 	}})
 
-	if got := rr.ListByType(ResourceTypeNetworkEndpoint); len(got) != 0 {
-		t.Fatalf("expected 0 standalone network endpoints, got %d", len(got))
+	if got := rr.ListByType(ResourceTypeNetworkEndpoint); len(got) != 1 {
+		t.Fatalf("expected attached availability check to retain its endpoint row, got %d", len(got))
 	}
 	host, ok := rr.Get(hostID)
 	if !ok || host.Availability == nil || host.Availability.TargetID != "probe-1" {

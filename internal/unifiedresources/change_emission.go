@@ -183,6 +183,10 @@ func resourceChangedFields(before, after Resource) []string {
 	if !reflect.DeepEqual(before.Identity, after.Identity) {
 		changed = append(changed, "identity")
 	}
+	if (isAvailabilityOwnedResource(before) || isAvailabilityOwnedResource(after)) &&
+		availabilityConfigurationChanged(before.Availability, after.Availability) {
+		changed = append(changed, "availability.configuration")
+	}
 	if resourceIncidentChanged(before, after) {
 		changed = append(changed, "incidents")
 	}
@@ -203,6 +207,45 @@ func resourceChangedFields(before, after Resource) []string {
 	}
 
 	return changed
+}
+
+func availabilityConfigurationChanged(before, after *AvailabilityData) bool {
+	type availabilityConfiguration struct {
+		TargetID            string
+		LinkedResourceID    string
+		Name                string
+		TargetKind          string
+		Address             string
+		Protocol            string
+		UDPMode             string
+		Port                int
+		Path                string
+		Enabled             bool
+		FailureThreshold    int
+		PollIntervalSeconds int
+		TimeoutMillis       int
+	}
+	project := func(data *AvailabilityData) availabilityConfiguration {
+		if data == nil {
+			return availabilityConfiguration{}
+		}
+		return availabilityConfiguration{
+			TargetID:            strings.TrimSpace(data.TargetID),
+			LinkedResourceID:    strings.TrimSpace(data.LinkedResourceID),
+			Name:                strings.TrimSpace(data.Name),
+			TargetKind:          strings.TrimSpace(data.TargetKind),
+			Address:             strings.TrimSpace(data.Address),
+			Protocol:            strings.TrimSpace(data.Protocol),
+			UDPMode:             strings.TrimSpace(data.UDPMode),
+			Port:                data.Port,
+			Path:                strings.TrimSpace(data.Path),
+			Enabled:             data.Enabled,
+			FailureThreshold:    data.FailureThreshold,
+			PollIntervalSeconds: data.PollIntervalSeconds,
+			TimeoutMillis:       data.TimeoutMillis,
+		}
+	}
+	return project(before) != project(after)
 }
 
 // relationshipsEquivalent reports whether two relationship sets describe the

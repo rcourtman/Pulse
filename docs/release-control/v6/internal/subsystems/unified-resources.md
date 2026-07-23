@@ -1848,19 +1848,31 @@ normalized IP address or one exact normalized hostname matches exactly one
 non-availability-owned canonical resource. Zero matches are `standalone`;
 multiple matches are `ambiguous`; neither may be guessed. A genuinely
 standalone target keeps its `network-endpoint`. An attached target does not
-mint a duplicate endpoint.
+collapse into the matched resource: it keeps the same source-owned
+`network-endpoint` row and projects an additive facet onto the matched
+resource.
 
-The attached resource carries every check in the canonical
+The source-owned endpoint is the canonical identity for each configured check.
+It owns probe status, incidents, history, evidence, and the outgoing `checks`
+relationship. The matched resource carries every correlated check in the canonical
 `availabilityChecks` facet, keyed by saved target id, while `availability`
 remains an additive singular compatibility summary selected from that set.
 Adding a second explicit or unambiguously correlated check must retain both
-checks on the same resource, emit one `checks` relationship per target, and
-must not force the later check into duplicate standalone inventory. Each
-attached check's evidence subject is rebound to the owning canonical resource
-and includes the exact correlation rule and matched field. Ambiguous and
-unresolved standalone evidence carries a typed reason instead.
+source-owned endpoint rows, project both facets onto the same resource, and
+emit one `checks` relationship per target from the check to that resource.
+The check evidence subject is bound to the source-owned endpoint; the projected
+facet carries a cloned envelope rebound to the matched resource. Both include
+the exact correlation rule and matched field. Ambiguous and unresolved check
+evidence carries a typed reason instead.
+Availability projection is deliberately narrower than identity merge: it must
+not copy the checked service address, name, status, incident, tags, metrics, or
+last-seen value into the matched machine or service. Rehydration may seed
+`SourceAvailability` identity only from availability-owned endpoints, never
+from a host projection, and manual identity links must not erase a configured
+check row.
 Frontend resource adapters must preserve that same availability identity on
-both REST and realtime paths: a thin `network-endpoint` update with
+both REST and realtime paths, including plural `availabilityChecks` on matched
+resources: a thin `network-endpoint` update with
 availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
 Infrastructure row presentation must also consume that availability payload as
@@ -1880,8 +1892,9 @@ Frontend primitives owns Machines as the operational presentation for those
 same agentless checks; unified resources owns the projection contract consumed
 there. `StandalonePageSurface.tsx` must fetch both `agent` and
 `network-endpoint` resources, keep standalone machines and availability checks
-as separate buckets in `standalonePageModel.ts`, exclude every resource whose
-availability correlation state is `attached`, and let
+as separate buckets in `standalonePageModel.ts`, include every source-owned
+`network-endpoint` regardless of correlation state, exclude matched machine or
+service projections from the check inventory by resource type, and let
 `AvailabilityChecksTable.tsx` render saved probe method, target, latest result,
 check age, failure count, and cadence from the canonical availability payload.
 Recent check timing and fuller failure context may stay in tooltip or drawer

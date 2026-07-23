@@ -75,7 +75,7 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
-func TestSyncUnifiedResourceIncidentsRoutesAttachedAvailabilityEvidenceThroughLifecycle(t *testing.T) {
+func TestSyncUnifiedResourceIncidentsRoutesAttachedCheckThroughSourceOwnedLifecycle(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
@@ -84,25 +84,56 @@ func TestSyncUnifiedResourceIncidentsRoutesAttachedAvailabilityEvidenceThroughLi
 		Provider:  "availability",
 		Collector: "availability-poller",
 	}
-	subject := operationaltrust.EvidenceSubject{ResourceID: "docker-service:api"}
+	subject := operationaltrust.EvidenceSubject{ResourceID: "availability:energy-meter"}
 	evidenceID, err := operationaltrust.NewEvidenceID(source, subject, observedAt, "energy-meter")
 	if err != nil {
 		t.Fatalf("NewEvidenceID() error = %v", err)
 	}
 	validUntil := observedAt.Add(2 * time.Minute)
-	resource := unifiedresources.Resource{
+	host := unifiedresources.Resource{
 		ID:      "docker-service:api",
 		Type:    unifiedresources.ResourceTypeDockerService,
 		Name:    "API",
 		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker, unifiedresources.SourceAvailability},
 		Availability: &unifiedresources.AvailabilityData{
-			TargetID:         "api-health",
-			Address:          "192.0.2.45",
-			Protocol:         "http",
-			Port:             8080,
-			Enabled:          true,
-			Available:        true,
-			CorrelationState: unifiedresources.AvailabilityCorrelationAttached,
+			TargetID:            "energy-meter",
+			Address:             "192.0.2.44",
+			Protocol:            "icmp",
+			Enabled:             true,
+			Available:           false,
+			ConsecutiveFailures: 2,
+			CorrelationState:    unifiedresources.AvailabilityCorrelationAttached,
+		},
+	}
+	check := unifiedresources.Resource{
+		ID:      "availability:energy-meter",
+		Type:    unifiedresources.ResourceTypeNetworkEndpoint,
+		Name:    "Energy meter",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceAvailability},
+		Availability: &unifiedresources.AvailabilityData{
+			TargetID:            "energy-meter",
+			Address:             "192.0.2.44",
+			Protocol:            "icmp",
+			Enabled:             true,
+			Available:           false,
+			ConsecutiveFailures: 2,
+			FailureThreshold:    2,
+			CorrelationState:    unifiedresources.AvailabilityCorrelationAttached,
+			Evidence: &operationaltrust.EvidenceEnvelope{
+				ID:           evidenceID,
+				Source:       source,
+				Subject:      subject,
+				ObservedAt:   observedAt,
+				IngestedAt:   observedAt,
+				ValidUntil:   &validUntil,
+				Completeness: operationaltrust.EvidenceComplete,
+				Confidence:   operationaltrust.EvidenceConfirmed,
+				Permissions:  operationaltrust.EvidencePermissionsSufficient,
+				PayloadRef: &operationaltrust.EvidencePayloadRef{
+					Kind: "availability-target",
+					ID:   "energy-meter",
+				},
+			},
 		},
 		AvailabilityChecks: []unifiedresources.AvailabilityData{{
 			TargetID:            "energy-meter",
@@ -139,9 +170,9 @@ func TestSyncUnifiedResourceIncidentsRoutesAttachedAvailabilityEvidenceThroughLi
 		}},
 	}
 
-	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{host, check})
 
-	alertID := unifiedIncidentAlertID(resource, resource.Incidents[0])
+	alertID := unifiedIncidentAlertID(check, check.Incidents[0])
 	assertAlertPresent(t, m, alertID)
 
 	m.mu.RLock()
@@ -151,8 +182,8 @@ func TestSyncUnifiedResourceIncidentsRoutesAttachedAvailabilityEvidenceThroughLi
 	if alert.Type != "resource-incident" {
 		t.Fatalf("alert type = %q, want resource-incident", alert.Type)
 	}
-	if alert.ResourceID != resource.ID {
-		t.Fatalf("resource id = %q, want %q", alert.ResourceID, resource.ID)
+	if alert.ResourceID != check.ID {
+		t.Fatalf("resource id = %q, want source-owned check %q", alert.ResourceID, check.ID)
 	}
 	if alert.Instance != "Availability" {
 		t.Fatalf("instance = %q, want Availability", alert.Instance)

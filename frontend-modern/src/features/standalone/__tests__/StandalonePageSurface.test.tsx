@@ -264,6 +264,71 @@ describe('StandalonePageSurface', () => {
     );
   });
 
+  it('counts every configured check when two attached services share one monitored host', () => {
+    mocks.pathname = '/standalone/availability';
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({
+          id: 'agent-core2026',
+          type: 'agent',
+          platformType: 'agent',
+          sources: ['agent', 'availability'],
+          availability: freshAvailability({
+            targetId: 'stats-pv',
+            correlationState: 'attached',
+          }),
+        }),
+        resource({
+          id: 'availability:stats-pv',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          availability: freshAvailability({
+            targetId: 'stats-pv',
+            correlationState: 'attached',
+          }),
+        }),
+        resource({
+          id: 'availability:grafana',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          availability: freshAvailability({
+            targetId: 'grafana',
+            correlationState: 'attached',
+          }),
+        }),
+        resource({
+          id: 'availability:public-api',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          availability: freshAvailability({ targetId: 'public-api' }),
+        }),
+        resource({
+          id: 'availability:router',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          availability: freshAvailability({ targetId: 'router' }),
+        }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
+      'data-resource-count',
+      '4',
+    );
+    expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
+      'All 4 checks reporting normally',
+    );
+  });
+
   it('makes failed availability posture visible before the table', () => {
     mocks.pathname = '/standalone/availability';
     mocks.useUnifiedResources.mockReturnValue({

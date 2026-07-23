@@ -1174,6 +1174,7 @@ type ResourceConvertInput struct {
 	TrueNAS               json.RawMessage
 	VMware                json.RawMessage
 	Availability          json.RawMessage
+	AvailabilityChecks    json.RawMessage
 	PlatformData          json.RawMessage
 }
 
@@ -1254,6 +1255,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		TrueNAS:               input.TrueNAS,
 		VMware:                input.VMware,
 		Availability:          input.Availability,
+		AvailabilityChecks:    input.AvailabilityChecks,
 		PlatformData:          input.PlatformData,
 	}
 

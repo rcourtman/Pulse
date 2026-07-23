@@ -5072,8 +5072,11 @@ Plural attached checks render as repeated bounded cards from
 `availabilityChecks`, while the row keeps one compatibility summary. Expired
 successful evidence must render an amber `Stale` state with no green
 `Responding normally` copy, and a never-observed check must render
-`Not checked`. A resource whose correlation state is `attached` must not also
-appear as a primary row in the Machines `Availability checks` tab.
+`Not checked`. A matched machine or service carrying an attached projection
+must not appear as a primary row in the Machines `Availability checks` tab;
+the distinct source-owned `network-endpoint` for that configured check must
+appear there regardless of whether its correlation state is `attached`,
+`standalone`, `ambiguous`, or `unresolved`.
 Operational navigation for those agentless endpoints belongs to the
 frontend-primitives-owned Machines surface as a focused Availability checks tab
 rather than a new primary nav item. The page may show availability checks beside

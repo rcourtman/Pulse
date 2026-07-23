@@ -1026,11 +1026,19 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 
 	registry := unified.NewRegistry(store)
 	ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
+	supplementalSources := sortedSupplementalSources(supplementalProviders)
 	if seed.unifiedSource {
 		registry.IngestResources(seed.resources)
 		seedSources := unifiedSeedSources(seed.resources)
-		for source, provider := range supplementalProviders {
-			if provider == nil || !sourceOwnedBySupplementalProvider(source, ownedSources) || unifiedSeedIncludesSource(seedSources, source) {
+		for _, source := range supplementalSources {
+			provider := supplementalProviders[source]
+			// Availability records are safe authoritative replacements and
+			// must replay even when an older unified seed contains standalone
+			// endpoints. Pre-fix seeds could otherwise hide attached targets
+			// while falsely looking source-complete.
+			if provider == nil ||
+				!sourceOwnedBySupplementalProvider(source, ownedSources) ||
+				(source != unified.SourceAvailability && unifiedSeedIncludesSource(seedSources, source)) {
 				continue
 			}
 			records := supplementalRecordsForOrg(provider, orgID)
@@ -1042,7 +1050,8 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	} else {
 		registry.IngestSnapshot(unified.SnapshotWithoutSources(seed.snapshot, ownedSources))
 
-		for source, provider := range supplementalProviders {
+		for _, source := range supplementalSources {
+			provider := supplementalProviders[source]
 			if provider == nil {
 				continue
 			}
@@ -1059,6 +1068,25 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	h.cacheMu.Unlock()
 
 	return registry, nil
+}
+
+func sortedSupplementalSources(
+	providers map[unified.DataSource]SupplementalRecordsProvider,
+) []unified.DataSource {
+	sources := make([]unified.DataSource, 0, len(providers))
+	for source := range providers {
+		sources = append(sources, source)
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		if sources[i] == unified.SourceAvailability {
+			return false
+		}
+		if sources[j] == unified.SourceAvailability {
+			return true
+		}
+		return string(sources[i]) < string(sources[j])
+	})
+	return sources
 }
 
 func (h *ResourceHandlers) registrySeed(orgID string) (registrySeed, error) {
@@ -1163,13 +1191,20 @@ func unifiedSeedSources(resources []unified.Resource) map[unified.DataSource]str
 
 	sources := make(map[unified.DataSource]struct{})
 	for _, resource := range resources {
+		availabilityOwned := unified.CanonicalResourceType(resource.Type) == unified.ResourceTypeNetworkEndpoint
 		for _, source := range resource.Sources {
 			if normalized := normalizeDataSourceAlias(source); normalized != "" {
+				if normalized == unified.SourceAvailability && !availabilityOwned {
+					continue
+				}
 				sources[normalized] = struct{}{}
 			}
 		}
 		for source := range resource.SourceStatus {
 			if normalized := normalizeDataSourceAlias(source); normalized != "" {
+				if normalized == unified.SourceAvailability && !availabilityOwned {
+					continue
+				}
 				sources[normalized] = struct{}{}
 			}
 		}
@@ -1178,7 +1213,8 @@ func unifiedSeedSources(resources []unified.Resource) map[unified.DataSource]str
 			sources[unified.SourceTrueNAS] = struct{}{}
 		case resource.VMware != nil:
 			sources[unified.SourceVMware] = struct{}{}
-		case len(unified.AvailabilityChecksForResource(resource)) > 0:
+		case availabilityOwned &&
+			len(unified.AvailabilityChecksForResource(resource)) > 0:
 			sources[unified.SourceAvailability] = struct{}{}
 		}
 	}

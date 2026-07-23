@@ -32,6 +32,11 @@ state must be explicitly true. Exit code 137 alone is only SIGKILL evidence;
 explicit false and unavailable/legacy OOM state both fail closed without an OOM
 alert. Recovery clears an existing OOM alert when the authoritative predicate
 is no longer true.
+Availability incident and alert identity belongs to the source-owned
+`network-endpoint` check. Correlation may project probe evidence onto a matched
+machine, but it must not copy the check incident onto that machine or create a
+second alert lifecycle. Failure, recovery, history, acknowledgement, and
+notification routing therefore remain stable under relinking and restart.
 
 ## Canonical Files
 

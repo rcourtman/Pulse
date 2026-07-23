@@ -23,8 +23,7 @@ export const isStandaloneMachineResource = (resource: Resource): boolean =>
   isPulseAgentPlatformResource(resource);
 
 export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
-  resource.availability?.correlationState !== 'attached' &&
-  (resource.type === 'network-endpoint' || resource.platformType === 'availability');
+  resource.type === 'network-endpoint' || resource.platformType === 'availability';
 
 const AGENT_REPORT_STALE_AFTER_MS = 5 * 60 * 1000;
 

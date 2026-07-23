@@ -28,6 +28,10 @@ smartctl retry modes merge rather than replace evidence, and partial NVMe JSON
 must preserve field presence so omitted health counters are not fabricated as
 zero. Direct SATA, SAS, NVMe, and controller-member inventory must all survive
 one compressed unified-agent report without a collector-side suffix cap.
+`internal/monitoring/monitor.go` also serializes shared unified-resource
+websocket payloads. Carrying plural availability facets through that serializer
+is an adjacent monitoring/API projection and does not change agent enrollment,
+report admission, removal, update, profile, or command authority.
 
 ## Canonical Files
 

@@ -145,7 +145,8 @@ This specification does not authorize:
 6. a universal recoverability score that hides missing evidence
 7. automatic merging of ambiguous resources
 8. a second alert engine inside Patrol
-9. availability checks as duplicate resources when a canonical target is known
+9. replacing a configured availability check's source-owned identity with a
+   correlated target or creating more than one check row for one saved target
 10. platform-specific lifecycle states in primary APIs
 11. hiding stale, partial-permission, or collection-error states
 12. MSP multi-tenancy, fleet-wide delegation, or policy inheritance beyond
@@ -780,7 +781,8 @@ exposure, but they must not create two writable sources of truth.
 6. recovery evidence changes protection posture and the related attention item
 7. notification audit links to the exact transition
 8. an action executes once and only closes after verified recovery evidence
-9. an attached availability check does not create a duplicate resource
+9. an attached availability target keeps exactly one source-owned check
+   resource and one additive facet projection without duplicate incidents
 10. authorization and tenant boundaries hold across evidence and actions
 
 ### Browser proof

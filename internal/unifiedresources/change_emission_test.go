@@ -317,6 +317,51 @@ func TestBuildResourceChange_IgnoresUpdateStatusLastCheckedOnly(t *testing.T) {
 	}
 }
 
+func TestBuildResourceChange_TracksAvailabilityEditsWithoutRecordingPollChurn(t *testing.T) {
+	checkedAt := time.Date(2026, 7, 23, 20, 0, 0, 0, time.UTC)
+	before := Resource{
+		ID:      "availability:stats-pv",
+		Type:    ResourceTypeNetworkEndpoint,
+		Name:    "stats_pv",
+		Status:  StatusOnline,
+		Sources: []DataSource{SourceAvailability},
+		Availability: &AvailabilityData{
+			TargetID:            "stats-pv",
+			Address:             "192.0.2.70",
+			Protocol:            "https",
+			Port:                443,
+			Enabled:             true,
+			Available:           true,
+			LastChecked:         &checkedAt,
+			LatencyMillis:       12,
+			PollIntervalSeconds: 60,
+		},
+	}
+	polled := before
+	polledAvailability := *before.Availability
+	nextCheckedAt := checkedAt.Add(time.Minute)
+	polledAvailability.LastChecked = &nextCheckedAt
+	polledAvailability.LatencyMillis = 18
+	polled.Availability = &polledAvailability
+	if change := buildResourceChange(before, true, polled, true, nextCheckedAt, nil, SourcePulseDiff, ""); change != nil {
+		t.Fatalf("poll-only observation emitted history churn: %+v", change)
+	}
+
+	edited := polled
+	editedAvailability := polledAvailability
+	editedAvailability.Address = "192.0.2.71"
+	editedAvailability.Protocol = "http"
+	editedAvailability.Port = 8080
+	edited.Availability = &editedAvailability
+	change := buildResourceChange(before, true, edited, true, nextCheckedAt, nil, SourcePulseDiff, "")
+	if change == nil || change.Kind != ChangeConfigUpdate {
+		t.Fatalf("availability edit change = %+v, want config update", change)
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"availability.configuration"}) {
+		t.Fatalf("changedFields = %+v, want availability.configuration", mustChangedFields(t, change))
+	}
+}
+
 func TestBuildResourceChange_ClassifiesKubernetesRestartChange(t *testing.T) {
 	before := Resource{
 		ID:     "pod:1",

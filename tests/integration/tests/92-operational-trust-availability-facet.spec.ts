@@ -40,10 +40,12 @@ const DOCKER_HOST_ID = "docker-host:operational-trust";
 const DOCKER_HOST_NAME = "Operational Trust Docker Host";
 const ATTACHED_TCP_TARGET_ID = "ops-api";
 const ATTACHED_HTTPS_TARGET_ID = "ops-web";
+const ATTACHED_TCP_RESOURCE_ID = "network-endpoint:ops-api";
+const ATTACHED_HTTPS_RESOURCE_ID = "network-endpoint:ops-web";
 const CANONICAL_AVAILABILITY_SPEC_ID =
   "alertspec:provider-incident:22f0f1f19599cd71";
 const AVAILABILITY_EVIDENCE_ID = "evidence_2825048c9470f82ba5490f8f8496813a";
-const ATTENTION_ID = `${DOCKER_HOST_ID}::${CANONICAL_AVAILABILITY_SPEC_ID}`;
+const ATTENTION_ID = `${ATTACHED_TCP_RESOURCE_ID}::${CANONICAL_AVAILABILITY_SPEC_ID}`;
 
 type RouteResource = Record<string, unknown>;
 
@@ -85,6 +87,7 @@ const evidenceEnvelope = ({
   validUntil,
   completeness = "complete",
   confidence = "confirmed",
+  matchedResourceId = resourceId,
 }: {
   id: string;
   resourceId: string;
@@ -93,6 +96,7 @@ const evidenceEnvelope = ({
   validUntil?: string;
   completeness?: "complete" | "partial" | "unavailable";
   confidence?: "confirmed" | "inferred" | "unknown";
+  matchedResourceId?: string;
 }) => ({
   id,
   source: {
@@ -101,8 +105,6 @@ const evidenceEnvelope = ({
   },
   subject: {
     resourceId,
-    providerRef: targetId,
-    providerScope: "availability-target",
   },
   observedAt,
   ingestedAt: observedAt,
@@ -115,9 +117,9 @@ const evidenceEnvelope = ({
     id: targetId,
   },
   correlation: {
-    rule: "explicit-linked-resource",
+    rule: "explicit_resource_link",
     matchedFields: {
-      linkedResourceId: resourceId,
+      linkedResourceId: matchedResourceId,
     },
     candidateCount: 1,
   },
@@ -160,7 +162,7 @@ const availabilityCheck = ({
   pollIntervalSeconds: 60,
   timeoutMillis: 5_000,
   correlationState: "attached",
-  correlationRule: "explicit-linked-resource",
+  correlationRule: "explicit_resource_link",
   correlationCandidates: 1,
   evidence: evidenceEnvelope({
     id: `evidence_${targetId}`,
@@ -169,6 +171,34 @@ const availabilityCheck = ({
     observedAt,
     validUntil,
   }),
+});
+
+const attachedCheckResource = ({
+  id,
+  name,
+  check,
+}: {
+  id: string;
+  name: string;
+  check: ReturnType<typeof availabilityCheck>;
+}) => ({
+  id,
+  type: "network-endpoint",
+  name,
+  status: check.available ? "online" : "offline",
+  lastSeen: check.lastChecked,
+  sources: ["availability"],
+  availability: {
+    ...check,
+    evidence: evidenceEnvelope({
+      id: `evidence_${check.targetId}_resource`,
+      resourceId: id,
+      targetId: check.targetId,
+      observedAt: check.lastChecked,
+      validUntil: check.evidence.validUntil,
+      matchedResourceId: DOCKER_HOST_ID,
+    }),
+  },
 });
 
 test.describe("Operational trust availability resource facet", () => {
@@ -265,7 +295,7 @@ test.describe("Operational trust availability resource facet", () => {
     await expect(httpsCard).toContainText("Checked");
   });
 
-  test("keeps attached checks out of standalone inventory and does not infer health from stale or missing observations", async ({
+  test("keeps every attached check in inventory and does not infer health from stale or missing observations", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -278,6 +308,24 @@ test.describe("Operational trust availability resource facet", () => {
     const staleValidUntil = new Date(now - 10 * 60_000).toISOString();
     const freshObservedAt = new Date(now - 30_000).toISOString();
     const freshValidUntil = new Date(now + 2 * 60_000).toISOString();
+    const attachedTCP = availabilityCheck({
+      targetId: ATTACHED_TCP_TARGET_ID,
+      address: "192.0.2.18",
+      protocol: "tcp",
+      port: 8007,
+      observedAt: freshObservedAt,
+      validUntil: freshValidUntil,
+      latencyMillis: 12,
+    });
+    const attachedHTTPS = availabilityCheck({
+      targetId: ATTACHED_HTTPS_TARGET_ID,
+      address: "ops.example.test",
+      protocol: "https",
+      path: "/health",
+      observedAt: freshObservedAt,
+      validUntil: freshValidUntil,
+      latencyMillis: 23,
+    });
 
     await routeResources(page, [
       {
@@ -287,27 +335,19 @@ test.describe("Operational trust availability resource facet", () => {
         status: "online",
         lastSeen: freshObservedAt,
         sources: ["docker", "availability"],
-        availability: {
-          targetId: ATTACHED_TCP_TARGET_ID,
-          linkedResourceId: DOCKER_HOST_ID,
-          address: "192.0.2.18",
-          protocol: "tcp",
-          port: 8007,
-          enabled: true,
-          available: true,
-          lastChecked: freshObservedAt,
-          latencyMillis: 12,
-          pollIntervalSeconds: 60,
-          correlationState: "attached",
-          evidence: evidenceEnvelope({
-            id: "evidence_attached_tcp",
-            resourceId: DOCKER_HOST_ID,
-            targetId: ATTACHED_TCP_TARGET_ID,
-            observedAt: freshObservedAt,
-            validUntil: freshValidUntil,
-          }),
-        },
+        availability: attachedTCP,
+        availabilityChecks: [attachedTCP, attachedHTTPS],
       },
+      attachedCheckResource({
+        id: ATTACHED_TCP_RESOURCE_ID,
+        name: "Operations API",
+        check: attachedTCP,
+      }),
+      attachedCheckResource({
+        id: ATTACHED_HTTPS_RESOURCE_ID,
+        name: "Operations Web",
+        check: attachedHTTPS,
+      }),
       {
         id: "network-endpoint:standalone-switch",
         type: "network-endpoint",
@@ -397,6 +437,18 @@ test.describe("Operational trust availability resource facet", () => {
     const standalonePage = page.getByTestId("standalone-page");
     await expect(standalonePage).toBeVisible({ timeout: 30_000 });
     await expect(standalonePage.getByText(DOCKER_HOST_NAME)).toHaveCount(0);
+    await expect(standalonePage.getByText("Operations API")).toBeVisible();
+    await expect(standalonePage.getByText("Operations Web")).toBeVisible();
+    await expect(
+      standalonePage.locator(
+        `[data-availability-check-row="${ATTACHED_TCP_RESOURCE_ID}"]`,
+      ),
+    ).toBeVisible();
+    await expect(
+      standalonePage.locator(
+        `[data-availability-check-row="${ATTACHED_HTTPS_RESOURCE_ID}"]`,
+      ),
+    ).toBeVisible();
     await expect(
       standalonePage.getByText("Standalone lab switch"),
     ).toBeVisible();
@@ -422,9 +474,9 @@ test.describe("Operational trust availability resource facet", () => {
     await expect(unobservedRow).not.toContainText("Healthy");
 
     const posture = standalonePage.getByTestId("standalone-posture-summary");
-    await expect(posture).toContainText("1 healthy");
+    await expect(posture).toContainText("3 healthy");
     await expect(posture).toContainText("2 need attention");
-    await expect(posture).not.toContainText("All 3 checks reporting normally");
+    await expect(posture).not.toContainText("All 5 checks reporting normally");
   });
 
   test("routes an attached availability failure into Patrol with canonical lifecycle evidence", async ({
@@ -441,10 +493,10 @@ test.describe("Operational trust availability resource facet", () => {
     const item = {
       id: ATTENTION_ID,
       operationalRecordId: ATTENTION_ID,
-      subjectResourceId: DOCKER_HOST_ID,
-      subjectResourceName: DOCKER_HOST_NAME,
-      subjectResourceType: "docker-host",
-      title: `Availability check failed for ${DOCKER_HOST_NAME}`,
+      subjectResourceId: ATTACHED_TCP_RESOURCE_ID,
+      subjectResourceName: "Operations API",
+      subjectResourceType: "network-endpoint",
+      title: "Availability check failed for Operations API",
       plainLanguageSummary:
         "The attached TCP availability check failed twice and reached its alert threshold.",
       severity: "critical",
@@ -479,9 +531,7 @@ test.describe("Operational trust availability resource facet", () => {
         collector: "availability-poller",
       },
       subject: {
-        resourceId: DOCKER_HOST_ID,
-        providerRef: ATTACHED_TCP_TARGET_ID,
-        providerScope: "availability-target",
+        resourceId: ATTACHED_TCP_RESOURCE_ID,
       },
       observedAt,
       ingestedAt,
@@ -503,7 +553,7 @@ test.describe("Operational trust availability resource facet", () => {
       operationalRecord: {
         id: ATTENTION_ID,
         canonicalSpecId: CANONICAL_AVAILABILITY_SPEC_ID,
-        subjectResourceId: DOCKER_HOST_ID,
+        subjectResourceId: ATTACHED_TCP_RESOURCE_ID,
         state: "open",
         severity: "critical",
         firstObservedAt: observedAt,

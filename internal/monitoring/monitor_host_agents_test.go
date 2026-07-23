@@ -20,6 +20,33 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
+func TestMonitoringBroadcastCarriesEveryAvailabilityProjection(t *testing.T) {
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:     "agent-core2026",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Name:   "core2026",
+		Status: unifiedresources.StatusOnline,
+		Sources: []unifiedresources.DataSource{
+			unifiedresources.SourceAgent,
+			unifiedresources.SourceAvailability,
+		},
+		AvailabilityChecks: []unifiedresources.AvailabilityData{
+			{TargetID: "stats-pv", CorrelationState: unifiedresources.AvailabilityCorrelationAttached},
+			{TargetID: "grafana", CorrelationState: unifiedresources.AvailabilityCorrelationAttached},
+		},
+	})
+
+	payload := string(input.AvailabilityChecks)
+	if !strings.Contains(payload, `"targetId":"stats-pv"`) ||
+		!strings.Contains(payload, `"targetId":"grafana"`) {
+		t.Fatalf("AvailabilityChecks = %s, want both projected checks", payload)
+	}
+	frontend := models.ConvertResourceToFrontend(input)
+	if string(frontend.AvailabilityChecks) != payload {
+		t.Fatalf("frontend availabilityChecks = %s, want %s", frontend.AvailabilityChecks, payload)
+	}
+}
+
 func TestApplyHostReportOperationReceiptProtocolReplacesCapabilityAuthority(t *testing.T) {
 	now := time.Now().UTC()
 	baseReport := func(version int) agentshost.Report {

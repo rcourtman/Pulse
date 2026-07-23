@@ -30,6 +30,11 @@ disk behind a client-side page ceiling. Search includes vendor, WWN, transport,
 instance, controller, and member target. Explicit `0%` life remaining is a
 known critical value for SSD/NVMe media; absent or negative wearout remains the
 neutral unknown state.
+The shared `internal/api/resources.go` registry builder may repair
+availability-check identity by replaying authoritative supplemental records.
+That availability composition remains owned by API contracts and unified
+resources; it does not make availability rows recovery points, storage health,
+backup evidence, or restore authority.
 
 ## Canonical Files
 

@@ -720,17 +720,21 @@ the default low-overhead check, while TCP and HTTP are canonical fallbacks for
 devices or runtimes where ICMP is unavailable or the useful signal is a port or
 web interface.
 Supplemental records carry the saved target's optional `LinkedResourceID`
-forward into `AvailabilityData` so the unified-resource registry can attach
-the probe facet onto the referenced resource. Monitoring does not perform the
-attach decision itself; it only forwards the link hint for the registry to
-resolve. Every completed probe also authors an operational-trust
+forward into `AvailabilityData` so the unified-resource registry can correlate
+and project the probe facet onto the referenced resource. Every saved target
+continues to emit its own `network-endpoint` supplemental record regardless of
+that correlation outcome; monitoring never substitutes a matched host or
+service identity for the configured check. Monitoring does not perform the
+correlation decision itself; it only forwards the link hint for the registry
+to resolve. Every completed probe also authors an operational-trust
 `EvidenceEnvelope` with provider `availability`, collector
 `availability-poller`, the saved target as its provider reference, the exact
 observation/ingest times, and a validity window of twice the effective polling
 interval. Before the first completed probe, evidence is explicitly partial and
 unknown with reason `availability_not_observed`; monitoring must never encode
 that state as a confirmed failure or a healthy observation. The registry owns
-rebinding the envelope subject to a canonical resource after correlation.
+binding the source envelope to the check resource and cloning a separately
+bound envelope for any matched-resource facet projection after correlation.
 Availability target kind is monitoring-owned runtime metadata, not a frontend
 guess. Saved targets carry the bounded `targetKind` values `machine`, `service`,
 and `device`; monitoring must preserve that value in probe status, supplemental

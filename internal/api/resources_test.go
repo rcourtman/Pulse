@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,124 @@ func (p *mutableResourceUnifiedSeedProvider) UnifiedResourceSnapshot() ([]unifie
 type mockSupplementalRecordsProvider struct {
 	records      []unified.IngestRecord
 	ownedSources []unified.DataSource
+}
+
+func TestResourceListRepairsPreFixAvailabilitySnapshotFromConfiguredTargets(t *testing.T) {
+	now := time.Date(2026, 7, 23, 22, 0, 0, 0, time.UTC)
+	hostID := "agent-core2026"
+	host := unified.Resource{
+		ID:       hostID,
+		Type:     unified.ResourceTypeAgent,
+		Name:     "core2026",
+		Status:   unified.StatusOnline,
+		LastSeen: now,
+		Sources:  []unified.DataSource{unified.SourceAgent, unified.SourceAvailability},
+		Availability: &unified.AvailabilityData{
+			TargetID:         "stats-pv",
+			LinkedResourceID: hostID,
+			Address:          "192.0.2.70",
+			Protocol:         "https",
+			Enabled:          true,
+			Available:        true,
+			CorrelationState: unified.AvailabilityCorrelationAttached,
+		},
+	}
+	seed := []unified.Resource{host}
+	for _, targetID := range []string{"public-api", "router", "switch"} {
+		seed = append(seed, unified.Resource{
+			ID:       "network-endpoint:" + targetID,
+			Type:     unified.ResourceTypeNetworkEndpoint,
+			Name:     targetID,
+			Status:   unified.StatusOnline,
+			LastSeen: now,
+			Sources:  []unified.DataSource{unified.SourceAvailability},
+			Availability: &unified.AvailabilityData{
+				TargetID:         targetID,
+				Address:          targetID + ".example.test",
+				Protocol:         "https",
+				Enabled:          true,
+				Available:        true,
+				CorrelationState: unified.AvailabilityCorrelationStandalone,
+			},
+		})
+	}
+	record := func(targetID, linkedResourceID string) unified.IngestRecord {
+		availability := &unified.AvailabilityData{
+			TargetID:         targetID,
+			LinkedResourceID: linkedResourceID,
+			Address:          targetID + ".example.test",
+			Protocol:         "https",
+			Enabled:          true,
+			Available:        true,
+		}
+		return unified.IngestRecord{
+			SourceID: targetID,
+			Resource: unified.Resource{
+				Type:         unified.ResourceTypeNetworkEndpoint,
+				Name:         targetID,
+				Status:       unified.StatusOnline,
+				LastSeen:     now,
+				Sources:      []unified.DataSource{unified.SourceAvailability},
+				Availability: availability,
+			},
+			Identity: unified.ResourceIdentity{Hostnames: []string{availability.Address}},
+		}
+	}
+
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(&mutableResourceUnifiedSeedProvider{
+		resources: seed,
+		freshness: now,
+	})
+	h.SetSupplementalRecordsProvider(unified.SourceAvailability, mockSupplementalRecordsProvider{
+		records: []unified.IngestRecord{
+			record("stats-pv", hostID),
+			record("public-api", ""),
+			record("router", ""),
+			record("switch", ""),
+		},
+		ownedSources: []unified.DataSource{unified.SourceAvailability},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=network-endpoint&page=1&limit=100", nil)
+	h.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var response ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) != 4 || response.Meta.Total != 4 {
+		t.Fatalf("repaired availability count = data:%d total:%d, want 4", len(response.Data), response.Meta.Total)
+	}
+	foundAttached := false
+	for _, resource := range response.Data {
+		if resource.Availability != nil && resource.Availability.TargetID == "stats-pv" {
+			foundAttached = resource.Availability.CorrelationState == unified.AvailabilityCorrelationAttached
+		}
+	}
+	if !foundAttached {
+		t.Fatal("pre-fix attached target was not restored as a source-owned endpoint")
+	}
+}
+
+func TestSortedSupplementalSourcesIngestsAvailabilityLast(t *testing.T) {
+	provider := mockSupplementalRecordsProvider{}
+	sources := sortedSupplementalSources(map[unified.DataSource]SupplementalRecordsProvider{
+		unified.SourceAvailability: provider,
+		unified.SourceTrueNAS:      provider,
+		unified.SourceAgent:        provider,
+	})
+	want := []unified.DataSource{
+		unified.SourceAgent,
+		unified.SourceTrueNAS,
+		unified.SourceAvailability,
+	}
+	if !reflect.DeepEqual(sources, want) {
+		t.Fatalf("supplemental source order = %v, want %v", sources, want)
+	}
 }
 
 func (m mockSupplementalRecordsProvider) GetCurrentRecords() []unified.IngestRecord {

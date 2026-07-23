@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -150,7 +151,21 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 	rebuilt := NewRegistry(registry.store)
 	staleThresholds := a.currentStaleThresholds()
 	rebuilt.IngestSnapshotWithStaleThresholds(snapshot, staleThresholds)
-	for source, records := range recordsBySource {
+	sources := make([]DataSource, 0, len(recordsBySource))
+	for source := range recordsBySource {
+		sources = append(sources, source)
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		if sources[i] == SourceAvailability {
+			return false
+		}
+		if sources[j] == SourceAvailability {
+			return true
+		}
+		return string(sources[i]) < string(sources[j])
+	})
+	for _, source := range sources {
+		records := recordsBySource[source]
 		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 			continue
 		}

@@ -263,17 +263,33 @@ type resourceContractSnapshot struct {
 	Type string
 }
 
-func TestContract_UnifiedSeedSourcesIncludesPluralAvailabilityFacets(t *testing.T) {
-	sources := unifiedSeedSources([]unifiedresources.Resource{{
-		ID:   "docker-host:ops",
-		Type: unifiedresources.ResourceTypeAgent,
+func TestContract_UnifiedSeedSourcesUsesSourceOwnedAvailabilityEndpoint(t *testing.T) {
+	hostProjection := unifiedresources.Resource{
+		ID:      "docker-host:ops",
+		Type:    unifiedresources.ResourceTypeAgent,
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker, unifiedresources.SourceAvailability},
+		SourceStatus: map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+			unifiedresources.SourceAvailability: {},
+		},
 		AvailabilityChecks: []unifiedresources.AvailabilityData{{
 			TargetID: "ops-api",
 		}},
-	}})
+	}
+	sources := unifiedSeedSources([]unifiedresources.Resource{hostProjection})
+	if _, ok := sources[unifiedresources.SourceAvailability]; ok {
+		t.Fatalf("seed sources = %v, host projection must not claim provider ownership", sources)
+	}
 
+	check := unifiedresources.Resource{
+		ID:   "network-endpoint:ops-api",
+		Type: unifiedresources.ResourceTypeNetworkEndpoint,
+		AvailabilityChecks: []unifiedresources.AvailabilityData{{
+			TargetID: "ops-api",
+		}},
+	}
+	sources = unifiedSeedSources([]unifiedresources.Resource{hostProjection, check})
 	if _, ok := sources[unifiedresources.SourceAvailability]; !ok {
-		t.Fatalf("seed sources = %v, want availability from plural resource facet", sources)
+		t.Fatalf("seed sources = %v, want availability from source-owned endpoint", sources)
 	}
 }
 
@@ -12941,6 +12957,66 @@ func TestContract_ResourceListAcceptsBrowserEncodedTypeCSV(t *testing.T) {
 	}
 	if gotTypes[unifiedresources.ResourceTypeVM] != 0 {
 		t.Fatalf("encoded type filter leaked VM resources: %v", gotTypes)
+	}
+}
+
+func TestContract_ResourceListCountsEveryConfiguredAvailabilityCheck(t *testing.T) {
+	now := time.Date(2026, 7, 23, 21, 30, 0, 0, time.UTC)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	resources := []unifiedresources.Resource{{
+		ID:       "agent-core2026",
+		Type:     unifiedresources.ResourceTypeAgent,
+		Name:     "core2026",
+		Status:   unifiedresources.StatusOnline,
+		LastSeen: now,
+		Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent, unifiedresources.SourceAvailability},
+		AvailabilityChecks: []unifiedresources.AvailabilityData{
+			{TargetID: "stats-pv", CorrelationState: unifiedresources.AvailabilityCorrelationAttached},
+			{TargetID: "grafana", CorrelationState: unifiedresources.AvailabilityCorrelationAttached},
+		},
+	}}
+	for _, targetID := range []string{"stats-pv", "grafana", "public-api", "router"} {
+		correlation := unifiedresources.AvailabilityCorrelationStandalone
+		if targetID == "stats-pv" || targetID == "grafana" {
+			correlation = unifiedresources.AvailabilityCorrelationAttached
+		}
+		resources = append(resources, unifiedresources.Resource{
+			ID:       "network-endpoint:" + targetID,
+			Type:     unifiedresources.ResourceTypeNetworkEndpoint,
+			Name:     targetID,
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: now,
+			Sources:  []unifiedresources.DataSource{unifiedresources.SourceAvailability},
+			Availability: &unifiedresources.AvailabilityData{
+				TargetID:         targetID,
+				Enabled:          true,
+				Available:        true,
+				CorrelationState: correlation,
+			},
+		})
+	}
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: resources,
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=network-endpoint&page=1&limit=100", nil)
+	h.HandleListResources(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var response ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) != 4 || response.Meta.Total != 4 {
+		t.Fatalf("availability response count = data:%d total:%d, want 4", len(response.Data), response.Meta.Total)
+	}
+	for _, resource := range response.Data {
+		if resource.Type != unifiedresources.ResourceTypeNetworkEndpoint {
+			t.Fatalf("availability filter leaked %q resource %q", resource.Type, resource.ID)
+		}
 	}
 }
 

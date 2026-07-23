@@ -5606,6 +5606,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		TrueNAS:               monitorRawJSON(resource.TrueNAS),
 		VMware:                monitorRawJSON(resource.VMware),
 		Availability:          monitorRawJSON(resource.Availability),
+		AvailabilityChecks:    monitorRawJSON(resource.AvailabilityChecks),
 		PlatformData:          monitorPlatformData(resource, resourceType, platformID),
 	}
 

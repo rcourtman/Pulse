@@ -171,6 +171,22 @@ func TestAvailabilityPollProviderListsOnlyEnabledTargets(t *testing.T) {
 	if len(got) != 1 || got[0] != "enabled" {
 		t.Fatalf("ListInstances() = %+v, want [enabled]", got)
 	}
+	records := availabilityPollProvider{}.SupplementalRecords(monitor, "org-a")
+	if len(records) != 2 {
+		t.Fatalf("SupplementalRecords() length = %d, want every configured target", len(records))
+	}
+	foundPaused := false
+	for _, record := range records {
+		if record.SourceID == "paused" {
+			foundPaused = true
+			if record.Resource.Availability == nil || record.Resource.Availability.Enabled {
+				t.Fatalf("paused target projection = %+v, want disabled check row", record.Resource.Availability)
+			}
+		}
+	}
+	if !foundPaused {
+		t.Fatal("disabled configured target is missing from supplemental records")
+	}
 }
 
 func TestAvailabilityResourceFromTargetOmitsUnsetProbeTimes(t *testing.T) {

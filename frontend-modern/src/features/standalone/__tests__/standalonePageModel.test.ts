@@ -148,7 +148,7 @@ describe('standalonePageModel', () => {
     expect(model.resources.map((item) => item.id)).toEqual(['mac-mini']);
   });
 
-  it('does not duplicate an attached resource in the availability-check inventory', () => {
+  it('shows every source-owned check while keeping attached host facets out of the inventory', () => {
     const model = buildStandalonePageModel([
       resource({
         id: 'agent:docker-trust',
@@ -162,19 +162,58 @@ describe('standalonePageModel', () => {
         },
       }),
       resource({
-        id: 'availability:orphan',
+        id: 'availability:tower-api',
         platformType: 'availability',
         type: 'network-endpoint',
         sources: ['availability'],
         availability: {
-          targetId: 'orphan',
+          targetId: 'tower-api',
+          correlationState: 'attached',
+          available: true,
+        },
+      }),
+      resource({
+        id: 'availability:tower-grafana',
+        platformType: 'availability',
+        type: 'network-endpoint',
+        sources: ['availability'],
+        availability: {
+          targetId: 'tower-grafana',
+          correlationState: 'attached',
+          available: true,
+        },
+      }),
+      resource({
+        id: 'availability:public-api',
+        platformType: 'availability',
+        type: 'network-endpoint',
+        sources: ['availability'],
+        availability: {
+          targetId: 'public-api',
+          correlationState: 'standalone',
+          available: true,
+        },
+      }),
+      resource({
+        id: 'availability:router',
+        platformType: 'availability',
+        type: 'network-endpoint',
+        sources: ['availability'],
+        availability: {
+          targetId: 'router',
           correlationState: 'standalone',
           available: true,
         },
       }),
     ]);
 
-    expect(model.availabilityChecks.map((item) => item.id)).toEqual(['availability:orphan']);
+    expect(model.availabilityChecks.map((item) => item.id)).toEqual([
+      'availability:tower-api',
+      'availability:tower-grafana',
+      'availability:public-api',
+      'availability:router',
+    ]);
+    expect(model.machines.map((item) => item.id)).toEqual(['agent:docker-trust']);
   });
 
   it('treats stale or unobserved availability evidence as attention', () => {

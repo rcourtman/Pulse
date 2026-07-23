@@ -307,6 +307,111 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('keeps an attached availability check distinct from its host across REST and websocket updates', async () => {
+    const host = createWsResource({
+      id: 'agent-core2026',
+      name: 'core2026',
+      displayName: 'core2026',
+      availability: {
+        targetId: 'stats-pv',
+        correlationState: 'attached',
+        available: true,
+      },
+      availabilityChecks: [
+        {
+          targetId: 'stats-pv',
+          correlationState: 'attached',
+          available: true,
+        },
+      ],
+    });
+    const check = createWsResource({
+      id: 'network-endpoint-stats-pv',
+      type: 'network-endpoint',
+      name: 'stats_pv',
+      displayName: 'stats_pv',
+      platformId: 'stats_pv',
+      platformType: 'availability',
+      sourceType: 'api',
+      sources: ['availability'],
+      availability: {
+        targetId: 'stats-pv',
+        correlationState: 'attached',
+        available: true,
+      },
+    });
+    setWsState('resources', reconcile([host, check]));
+    apiFetchMock.mockResolvedValueOnce(
+      resourceResponse([
+        {
+          ...v2Resource,
+          id: host.id,
+          name: host.name,
+          availability: host.availability,
+          availabilityChecks: host.availabilityChecks,
+        },
+        {
+          ...v2Resource,
+          id: check.id,
+          type: 'network-endpoint',
+          name: check.name,
+          sources: ['availability'],
+          availability: check.availability,
+        },
+      ]),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await waitForResourceCount(() => result!.resources().length, 2);
+    expect(
+      result!
+        .resources()
+        .map((resource) => resource.id)
+        .sort(),
+    ).toEqual(['agent-core2026', 'network-endpoint-stats-pv']);
+
+    batch(() => {
+      setWsState(
+        'resources',
+        reconcile([
+          host,
+          {
+            ...check,
+            status: 'offline',
+            availability: {
+              ...check.availability,
+              available: false,
+              consecutiveFailures: 2,
+            },
+          },
+        ]),
+      );
+      setWsState('lastUpdate', 1);
+    });
+    await flushAsync();
+
+    expect(result!.resources()).toHaveLength(2);
+    expect(
+      result!.resources().find((resource) => resource.id === 'network-endpoint-stats-pv'),
+    ).toEqual(
+      expect.objectContaining({
+        status: 'offline',
+        availability: expect.objectContaining({ available: false }),
+      }),
+    );
+    expect(
+      result!.resources().find((resource) => resource.id === 'agent-core2026')?.availabilityChecks,
+    ).toHaveLength(1);
+
+    dispose();
+  });
+
   it('keeps comma-separated type filters in the browser-encoded resource query shape', async () => {
     let dispose = () => {};
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;

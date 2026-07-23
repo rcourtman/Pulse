@@ -1368,9 +1368,14 @@ Target payload fields:
 - `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
 
 An explicit `linkedResourceId` is authoritative and fails closed when it
-cannot resolve. Without it, Pulse attaches only on one exact normalized IP or
-hostname match. Zero matches remain standalone and multiple matches remain
-ambiguous; Pulse does not guess.
+cannot resolve. Without it, Pulse correlates only on one exact normalized IP
+or hostname match. Zero matches remain standalone and multiple matches remain
+ambiguous; Pulse does not guess. Every configured target remains a distinct
+`network-endpoint` in `/api/resources`, including correlated targets. A
+correlated target also projects an additive `availability` /
+`availabilityChecks` facet onto the matched resource and exposes an outgoing
+`checks` relationship from the check resource. The check row remains the owner
+of probe status, incidents, evidence, and history.
 
 Example ping-only target:
 

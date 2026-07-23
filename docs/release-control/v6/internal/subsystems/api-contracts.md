@@ -30,6 +30,13 @@ pages until the response's declared `totalPages` is exhausted; no client-side
 page ceiling may silently truncate a wide fleet. Disk history lookup resolves
 an exact canonical resource ID first and accepts a metrics target, serial, or
 WWN only when the match is unique and the hardware identifier is usable.
+Unified availability responses preserve one source-owned `network-endpoint`
+resource per configured target, including checks correlated to an existing
+machine. A correlated machine may carry the same check as an additive
+availability facet, but that projection is not availability-source ownership
+and must not suppress the endpoint from type filters, totals, REST reloads, or
+websocket snapshots. Plural machine projections use `availabilityChecks`; the
+singular `availability` field remains only a compatibility projection.
 
 ## Canonical Files
 

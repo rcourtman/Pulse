@@ -2,6 +2,12 @@
 
 Date: 2026-07-19
 
+Status: Superseded on 2026-07-23 by
+`operational-trust-availability-check-identity-correction-2026-07-23.md`.
+This record is retained as historical evidence for the original facet
+decision and its browser proof; its rule that attached checks disappear from
+primary inventory is not the current contract.
+
 ## Decision
 
 Availability is evidence about a canonical resource, not a parallel inventory
