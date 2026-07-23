@@ -63,6 +63,9 @@ jobs:
           cache: true
           cache-dependency-path: repos/pulse/go.sum
 
+      - name: Stub embedded frontend assets for Go tests
+        run: bash scripts/ensure_test_assets.sh
+
       - name: Check Pulse Mobile compatibility contract
         run: |
           python3 scripts/release_control/generate_mobile_compatibility_test.py
