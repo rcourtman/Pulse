@@ -458,7 +458,7 @@ func Run(ctx context.Context, version string) error {
 	// Wire alert-triggered AI analysis
 	router.WireAlertTriggeredAI()
 
-	// Start anonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false or Settings toggle).
+	// Start pseudonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false or Settings toggle).
 	// Persistence is created once here (outside the closure) to avoid NewConfigPersistence's
 	// fatal-on-error path running inside the telemetry goroutine.
 	isDocker := os.Getenv("PULSE_DOCKER") == "true"

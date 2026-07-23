@@ -16143,7 +16143,7 @@ func TestContract_AgentEventsStreamPublishesOnActionCompleted(t *testing.T) {
 }
 
 // TestContract_ExternalAgentActivityUsesRouteSpecificMarkers pins the
-// anonymous usage signal behind Pulse Intelligence external-agent telemetry:
+// pseudonymous usage signal behind Pulse Intelligence external-agent telemetry:
 // configured/readiness may come from token capability posture, but recent-use
 // must come from authenticated calls into a manifest-backed agent/MCP
 // capability route. Generic API-token LastUsedAt is too broad because the same

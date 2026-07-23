@@ -3,7 +3,7 @@
 ## Slice
 
 - Claimed governed slice: `candidate-lane:localized-product-surfaces`.
-- Migrated journey: Settings -> System -> General language preference, including the Settings shell/header/navigation copy already on the catalog path, Appearance language selection, anonymous telemetry controls, Docker / Podman update-action controls, and monitoring cadence copy.
+- Migrated journey: Settings -> System -> General language preference, including the Settings shell/header/navigation copy already on the catalog path, Appearance language selection, pseudonymous telemetry controls, Docker / Podman update-action controls, and monitoring cadence copy.
 - First-wave locales: German (`de`) and Spanish (`es`).
 
 ## Evidence

@@ -2570,7 +2570,7 @@ also remain system-settings, API-contract, and security/privacy ownership:
 lifecycle-adjacent surfaces may observe that action-plan, approval,
 approved-action-decision, rejected-action-decision, first-party workflow
 starter, Pro activation starter, and external-agent usage is summarized, but
-they must not reinterpret those anonymous counters as agent enrollment, install
+they must not reinterpret those pseudonymous install-level counters as agent enrollment, install
 success, recovery scope, or lifecycle state.
 External-agent activity may be counted when a narrow API token satisfies the
 specific manifest capability scope being called, including read-only
@@ -2631,11 +2631,11 @@ Agent lifecycle surfaces must not read those step counts as host-agent
 heartbeat, command-agent install state, or fleet-control authority.
 Approved action decision telemetry may use action lifecycle events or approved
 approval records as its API-owned proof source, but the exported value remains
-an anonymous approve/reject journey counter. Agent-lifecycle surfaces must not
+a pseudonymous approve/reject journey counter. Agent-lifecycle surfaces must not
 read that rollup as command dispatch, command-agent reachability, profile
 convergence, install success, or fleet lifecycle state.
 Approved execution attempt telemetry may use action lifecycle events as its
-API-owned proof source, but the exported value remains an anonymous operations
+API-owned proof source, but the exported value remains a pseudonymous operations
 loop counter. Agent-lifecycle surfaces must not treat that rollup as command
 agent heartbeat, installation proof, profile convergence, or fleet lifecycle
 state.

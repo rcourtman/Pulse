@@ -1566,7 +1566,7 @@ recovery scope, or a storage/recovery-owned secret source.
    Content-free Pulse Intelligence telemetry rollups under shared
    `internal/api/` are also adjacent-only. Storage and recovery may consume
    underlying recovery artifacts, action outcomes, or Patrol context through
-   their owned surfaces, but anonymous action-plan, approval,
+   their owned surfaces, but pseudonymous action-plan, approval,
    approved-action-decision, rejected-action-decision, external-agent,
    Assistant, or Patrol usage counters are not backup inventory, restore
    capability, recovery freshness, or storage ownership evidence.
@@ -1589,13 +1589,13 @@ recovery scope, or a storage/recovery-owned secret source.
    the resulting counter as evidence that a backup, restore, dataset, or
    storage endpoint was read or mutated.
    Approved action decision telemetry may use shared action lifecycle evidence
-   or approved approval records, but the exported rollup remains an anonymous
+   or approved approval records, but the exported rollup remains a pseudonymous
    approve/reject journey counter. Storage and recovery must not reinterpret
    that counter as proof that a backup, restore, dataset, storage appliance, or
    recovery endpoint was approved, changed, inspected, or verified.
    Approved execution attempt telemetry may be backed by shared action
    lifecycle events, including refused-before-dispatch failures, but the
-   exported rollup remains an anonymous operations-loop counter. Storage and
+   exported rollup remains a pseudonymous operations-loop counter. Storage and
    recovery must not reinterpret that counter as proof that a backup, restore,
    dataset, storage appliance, or recovery endpoint was changed or verified.
    Approved action success telemetry may use the same governed audit stream

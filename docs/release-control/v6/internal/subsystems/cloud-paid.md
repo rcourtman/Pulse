@@ -469,7 +469,7 @@ active, including the stricter resolved operations loop split by first-party
 Assistant collaboration, external-agent collaboration, and Pulse MCP adapter
 use.
 The same aggregate may expose an `operations_funnel` object that keeps the
-loop proof readable as a staged anonymous cohort sequence: loop configured,
+loop proof readable as a staged pseudonymous install cohort sequence: loop configured,
 Patrol activity, Assistant or external-agent collaboration, governed action,
 approved execution, approved action success, Patrol resolution, resolved
 operations loop, Assistant resolved loop, external-agent resolved loop, active
@@ -478,7 +478,7 @@ proof, paid Patrol-control cohorts, and full-loop free-to-paid conversion compar
 Assistant-only chat. That funnel is a projection over the same coarse telemetry
 counters and value cohorts; it must not introduce per-install drilldowns or raw
 commercial account links. Source-specific guided starter cohorts may split the
-same anonymous operations-loop starter count into Assistant, Patrol, primary
+same content-free pseudonymous operations-loop starter count into Assistant, Patrol, primary
 Patrol-control, legacy Pro activation entry-point, and Pulse MCP sources so
 conversion reporting can tell which entry point led to loop entry, but those cohorts
 remain starter evidence only and must not be counted as completed
@@ -553,7 +553,7 @@ When that action has become a completed-loop review, it must not write another
 Patrol control starter marker; starter telemetry remains for start/continue
 entry into the guided journey rather than for post-completion review clicks.
 The value report may also expose a `value_driver_evidence` summary derived only
-from those same anonymous cohort deltas. That summary may state whether the
+from those same pseudonymous install cohort deltas. That summary may state whether the
 available evidence is insufficient, positive on paid conversion, positive on
 activation or retention, or has no positive delta against the generic
 Assistant-only baseline; it must not claim causality, store per-install

@@ -943,6 +943,11 @@ pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an
 active installation window, but it may not preserve one stable install
 identifier indefinitely or echo that identifier back into routine logs.
+Customer-facing legal pages, shipped privacy documentation, in-product copy,
+runtime comments, operational notes, and governed contracts must therefore
+describe this telemetry as pseudonymous. The stronger anonymity claim is
+prohibited; disclosures must instead state the concrete direct identifiers and
+content that the allowlisted payload excludes.
 The identifier must be resolved at each outbound event, not frozen when the
 process starts, so a continuously running installation still rotates after the
 30-day window. Each payload also carries a schema version and one UTC build

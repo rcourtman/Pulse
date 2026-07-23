@@ -3,11 +3,13 @@ package telemetry
 import (
 	"encoding/json"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -638,6 +640,7 @@ func TestAllTelemetryFieldsAreDisclosed(t *testing.T) {
 }
 
 func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testing.T) {
+	anonymousTelemetryClaimPattern := regexp.MustCompile(`(?i)\banonymous\b[^\n]{0,120}\btelemetry\b|\btelemetry\b[^\n]{0,120}\banonymous\b`)
 	for _, relativePath := range []string{
 		filepath.Join("..", "..", "docs", "PRIVACY.md"),
 		filepath.Join("..", "..", "frontend-modern", "public", "docs", "PRIVACY.md"),
@@ -665,9 +668,70 @@ func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testin
 		if !strings.Contains(normalized, "does not store ip addresses in telemetry rows") {
 			t.Errorf("%s must disclose that telemetry rows do not store IP addresses", relativePath)
 		}
-		if strings.Contains(normalized, "anonymous telemetry") {
+		if anonymousTelemetryClaimPattern.MatchString(content) {
 			t.Errorf("%s must not describe outbound usage telemetry as anonymous", relativePath)
 		}
+	}
+}
+
+func TestRepositoryDoesNotClaimTelemetryIsAnonymous(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	anonymousTelemetryClaimPattern := regexp.MustCompile(`(?i)\banonymous\b[^\n]{0,120}\btelemetry\b|\btelemetry\b[^\n]{0,120}\banonymous\b`)
+	scannableExtensions := map[string]bool{
+		".go":   true,
+		".html": true,
+		".json": true,
+		".md":   true,
+		".py":   true,
+		".sh":   true,
+		".ts":   true,
+		".tsx":  true,
+		".yaml": true,
+		".yml":  true,
+	}
+
+	err := filepath.WalkDir(repoRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			switch entry.Name() {
+			case ".claude", ".git", "build", "dist", "node_modules", "tmp", "vendor":
+				return fs.SkipDir
+			default:
+				return nil
+			}
+		}
+
+		relativePath, err := filepath.Rel(repoRoot, path)
+		if err != nil {
+			return err
+		}
+		normalizedPath := filepath.ToSlash(relativePath)
+		baseName := entry.Name()
+		if normalizedPath == "docs/release-control/v6/internal/status.json" ||
+			strings.Contains(normalizedPath, "/__tests__/") ||
+			strings.Contains(normalizedPath, "/tests/") ||
+			strings.HasSuffix(baseName, "_test.go") ||
+			strings.HasSuffix(baseName, "_test.py") ||
+			strings.Contains(baseName, ".test.") {
+			return nil
+		}
+		if !scannableExtensions[strings.ToLower(filepath.Ext(baseName))] {
+			return nil
+		}
+
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if match := anonymousTelemetryClaimPattern.Find(raw); match != nil {
+			t.Errorf("%s must describe telemetry as pseudonymous, not %q", normalizedPath, match)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan repository telemetry language: %v", err)
 	}
 }
 
