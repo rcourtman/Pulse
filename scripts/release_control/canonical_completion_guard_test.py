@@ -2268,6 +2268,7 @@ None yet.
                         "frontend-modern/src/features/alerts/__tests__/alertsConfigurationModel.test.ts",
                         "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/__tests__/useAlertDestinationsTabState.test.tsx",
+                        "frontend-modern/src/features/alerts/__tests__/useAlertOverridesState.test.tsx",
                         "frontend-modern/src/features/alerts/identity.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",
