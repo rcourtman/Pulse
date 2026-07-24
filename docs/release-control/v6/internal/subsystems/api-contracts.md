@@ -7154,6 +7154,16 @@ The thin agent, docker, and guest metadata TypeScript models remain aliases
 over `ResourceMetadataRecord`; they must not grow empty local interface shells
 or imply a resource-specific wire shape until the backend payload actually
 adds one.
+Metadata `PUT` routes are partial-update contracts, not record replacement.
+`internal/api/metadata_handlers_shared.go` must decode a bounded object and
+retain field-presence information so changing or clearing `customUrl` cannot
+erase descriptions, tags, notes, commands-enabled state, display names, or
+last-known resource identity. Guest, host, Docker host, and Docker container
+handlers must merge into the active organization monitor's live store; an
+identical metadata ID in another tenant is a separate record. Authored
+web-interface URLs must accept only absolute HTTP(S) values. Empty or null
+request bodies fail closed, and unsafe schemes must never be projected as
+executable browser links.
 AI investigation and chat stream clients must now also route through one shared
 SSE JSON event consumer in `frontend-modern/src/api/streaming.ts` rather than
 duplicating reader lifecycle, timeout, chunk parsing, and event decoding logic

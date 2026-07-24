@@ -148,6 +148,121 @@ func TestHostMetadataHandler(t *testing.T) {
 	}
 }
 
+func TestMetadataURLPatchesPreserveUnrelatedFields(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	persistence, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("get persistence: %v", err)
+	}
+
+	t.Run("guest", func(t *testing.T) {
+		store := persistence.GetGuestMetadataStore()
+		if err := store.Set("guest-1", &config.GuestMetadata{
+			Description:   "critical workload",
+			Tags:          []string{"production"},
+			Notes:         []string{"owned by operations"},
+			LastKnownName: "web",
+			LastKnownType: "qemu",
+		}); err != nil {
+			t.Fatalf("seed guest metadata: %v", err)
+		}
+
+		handler := NewGuestMetadataHandler(mtp)
+		req := httptest.NewRequest(
+			http.MethodPut,
+			"/api/guests/metadata/guest-1",
+			strings.NewReader(`{"customUrl":"https://guest.internal"}`),
+		)
+		resp := httptest.NewRecorder()
+		handler.HandleUpdateMetadata(resp, req)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+		}
+
+		got := store.Get("guest-1")
+		if got == nil ||
+			got.CustomURL != "https://guest.internal" ||
+			got.Description != "critical workload" ||
+			len(got.Tags) != 1 || got.Tags[0] != "production" ||
+			len(got.Notes) != 1 || got.Notes[0] != "owned by operations" ||
+			got.LastKnownName != "web" ||
+			got.LastKnownType != "qemu" {
+			t.Fatalf("guest metadata after URL patch = %#v", got)
+		}
+	})
+
+	t.Run("host", func(t *testing.T) {
+		commandsEnabled := true
+		store := persistence.GetHostMetadataStore()
+		if err := store.Set("host-1", &config.HostMetadata{
+			Description:     "edge host",
+			Tags:            []string{"edge"},
+			Notes:           []string{"maintenance Sunday"},
+			CommandsEnabled: &commandsEnabled,
+		}); err != nil {
+			t.Fatalf("seed host metadata: %v", err)
+		}
+
+		handler := NewHostMetadataHandler(mtp)
+		req := httptest.NewRequest(
+			http.MethodPut,
+			"/api/agents/metadata/host-1",
+			strings.NewReader(`{"customUrl":"https://host.internal"}`),
+		)
+		resp := httptest.NewRecorder()
+		handler.HandleUpdateMetadata(resp, req)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+		}
+
+		got := store.Get("host-1")
+		if got == nil ||
+			got.CustomURL != "https://host.internal" ||
+			got.Description != "edge host" ||
+			len(got.Tags) != 1 || got.Tags[0] != "edge" ||
+			len(got.Notes) != 1 || got.Notes[0] != "maintenance Sunday" ||
+			got.CommandsEnabled == nil || !*got.CommandsEnabled {
+			t.Fatalf("host metadata after URL patch = %#v", got)
+		}
+	})
+}
+
+func TestHostWebInterfaceMetadataIsTenantIsolated(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	handler := NewHostMetadataHandler(mtp)
+
+	update := func(orgID, customURL string) {
+		t.Helper()
+		req := httptest.NewRequest(
+			http.MethodPut,
+			"/api/agents/metadata/shared-host-id",
+			strings.NewReader(`{"customUrl":"`+customURL+`"}`),
+		)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		resp := httptest.NewRecorder()
+		handler.HandleUpdateMetadata(resp, req)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("tenant %s update status = %d, body = %s", orgID, resp.Code, resp.Body.String())
+		}
+	}
+	update("tenant-a", "https://tenant-a.internal")
+	update("tenant-b", "https://tenant-b.internal")
+
+	for orgID, want := range map[string]string{
+		"tenant-a": "https://tenant-a.internal",
+		"tenant-b": "https://tenant-b.internal",
+	} {
+		persistence, err := mtp.GetPersistence(orgID)
+		if err != nil {
+			t.Fatalf("get persistence for %s: %v", orgID, err)
+		}
+		got := persistence.GetHostMetadataStore().Get("shared-host-id")
+		if got == nil || got.CustomURL != want {
+			t.Fatalf("tenant %s metadata = %#v, want URL %q", orgID, got, want)
+		}
+	}
+}
+
 func TestMetadataHandlersUseLiveMonitorStoresForImmediateRoundTrips(t *testing.T) {
 	fallbackPersistence := config.NewMultiTenantPersistence(t.TempDir())
 	defaultPersistence, err := fallbackPersistence.GetPersistence("default")

@@ -20,7 +20,10 @@ import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFa
 import { FormSelect } from '@/components/shared/FormSelect';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
-import { WEB_INTERFACE_LINK_COLOR_CLASS } from '@/components/shared/WebInterfaceNameLink';
+import {
+  WEB_INTERFACE_LINK_COLOR_CLASS,
+  WebInterfaceLink,
+} from '@/components/shared/WebInterfaceLink';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
@@ -235,17 +238,18 @@ const AccessDisclosure: Component<{
       headerExtra={
         <Show when={customUrl()}>
           {(href) => (
-            <a
-              href={href()}
-              target="_blank"
-              rel="noopener noreferrer"
+            <WebInterfaceLink
+              url={href()}
+              ariaLabel={`Open web interface for ${props.resource.name}`}
+              invalidAriaLabel={`Web interface URL for ${props.resource.name} is invalid`}
               class={`inline-flex min-w-0 max-w-[260px] items-center gap-1 text-[11px] font-medium ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
               title={`Open ${href()}`}
-              data-testid="resource-access-open-url"
             >
-              <span class="truncate">{href()}</span>
-              <ExternalLinkIcon class="h-3 w-3 shrink-0" />
-            </a>
+              <span class="truncate" data-testid="resource-access-open-url">
+                {href()}
+              </span>
+              <ExternalLinkIcon class="h-3 w-3 shrink-0" aria-hidden="true" />
+            </WebInterfaceLink>
           )}
         </Show>
       }
@@ -277,6 +281,7 @@ const AccessDisclosure: Component<{
               metadataId={config().metadataId}
               targetLabel={config().targetLabel}
               title="Web interface"
+              customUrl={props.resource.customUrl}
               discoveryLoading={props.drawer.discoveryLoading()}
               suggestedUrl={props.drawer.discoveryIdentifiedSummary()?.suggestedUrl}
               suggestedUrlReasonText={

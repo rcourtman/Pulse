@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, within } from '@solidjs/testing-library';
+import { fireEvent, render, screen, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 
@@ -59,6 +59,7 @@ describe('UnifiedResourceTable workloads links', () => {
             displayName: 'Tower',
             platformType: 'docker',
             sourceType: 'agent',
+            customUrl: 'https://tower.internal:9443',
             metricsTarget: {
               resourceType: 'docker-host',
               resourceId: 'docker-host-1',
@@ -86,6 +87,11 @@ describe('UnifiedResourceTable workloads links', () => {
         ([props]) => (props as { resourceId?: string }).resourceId === 'dockerHost:docker-host-1',
       ),
     ).toBe(true);
+    expect(screen.getByText('Tower').tagName).toBe('SPAN');
+    expect(screen.getByRole('link', { name: 'Open web interface for Tower' })).toHaveAttribute(
+      'href',
+      'https://tower.internal:9443',
+    );
   });
 
   it('no longer renders host-row workloads cross-jump links in the platform-first layout', () => {
@@ -138,6 +144,7 @@ describe('UnifiedResourceTable workloads links', () => {
         type: 'pbs',
         name: 'pbs-main',
         displayName: 'pbs-main',
+        customUrl: 'https://pbs-main.internal:8007',
         platformType: 'proxmox-pbs',
         sourceType: 'api',
         platformData: {
@@ -197,6 +204,7 @@ describe('UnifiedResourceTable workloads links', () => {
         type: 'pmg',
         name: 'pmg-main',
         displayName: 'pmg-main',
+        customUrl: 'https://pmg-main.internal:8006',
         platformType: 'proxmox-pmg',
         sourceType: 'api',
         platformData: {
@@ -241,6 +249,16 @@ describe('UnifiedResourceTable workloads links', () => {
     expect(getByText('Def')).toBeInTheDocument();
     expect(getByText('Hold')).toBeInTheDocument();
     expect(getByText('Nodes')).toBeInTheDocument();
+    expect(getByText('pbs-main').tagName).toBe('SPAN');
+    expect(getByText('pmg-main').tagName).toBe('SPAN');
+    expect(getByRole('link', { name: 'Open web interface for pbs-main' })).toHaveAttribute(
+      'href',
+      'https://pbs-main.internal:8007',
+    );
+    expect(getByRole('link', { name: 'Open web interface for pmg-main' })).toHaveAttribute(
+      'href',
+      'https://pmg-main.internal:8006',
+    );
 
     const pbsRow = getByText('pbs-main').closest('tr');
     expect(pbsRow).toBeTruthy();

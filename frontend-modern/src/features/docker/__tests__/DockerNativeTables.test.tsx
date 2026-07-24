@@ -478,7 +478,7 @@ describe('Docker native tables', () => {
     expect(container.querySelector('[data-docker-host-group]')).toBeNull();
   });
 
-  it('links the container name to its custom web interface URL', () => {
+  it('renders a distinct container launch control without linking the name', () => {
     renderInRouter(() => (
       <DockerContainersTable
         resources={[
@@ -498,8 +498,9 @@ describe('Docker native tables', () => {
       />
     ));
 
-    const nameLink = screen.getByRole('link', { name: 'Open web interface for edge-web' });
-    expect(nameLink).toHaveAttribute('href', 'http://edge-01.example:8080');
+    const launchLink = screen.getByRole('link', { name: 'Open web interface for edge-web' });
+    expect(launchLink).toHaveAttribute('href', 'http://edge-01.example:8080');
+    expect(screen.getByText('edge-web').closest('a')).toBeNull();
   });
 
   it('applies the URL search filter, including -term exclusions, to container rows', () => {

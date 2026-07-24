@@ -24,15 +24,17 @@ const HTTP_URL_PATTERN = /^https?:\/\//i;
 /**
  * Resolve the external management URL for a PVE node. `guestURL` carries the
  * operator-set link override (and, via the resource adapters, the PVE API
- * connection URL). `host` is only honored when it is URL-shaped: on the
- * unified-resource node shape it holds a bare hostname label for the drawer,
- * which must not become a relative link target.
+ * connection URL). Return an authored `guestURL` unchanged so the canonical
+ * web-interface control can communicate malformed or unsafe persisted values
+ * instead of silently replacing them with a hostname fallback. `host` is only
+ * honored when it is URL-shaped: on the unified-resource node shape it holds a
+ * bare hostname label for the drawer, which must not become a relative target.
  */
 export function getNodeExternalUrl<
   T extends Pick<Node, 'name'> & Partial<Pick<Node, 'guestURL' | 'host'>>,
 >(node: T): string {
   const guestUrl = typeof node.guestURL === 'string' ? node.guestURL.trim() : '';
-  if (HTTP_URL_PATTERN.test(guestUrl)) return guestUrl;
+  if (guestUrl) return guestUrl;
   const host = typeof node.host === 'string' ? node.host.trim() : '';
   if (HTTP_URL_PATTERN.test(host)) return host;
   const name = typeof node.name === 'string' ? node.name.trim() : '';

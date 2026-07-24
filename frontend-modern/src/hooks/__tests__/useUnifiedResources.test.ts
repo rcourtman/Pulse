@@ -5,6 +5,7 @@ import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
 import stringUtilsSource from '@/utils/stringUtils.ts?raw';
+import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 
 type UseUnifiedResourcesModule = typeof import('@/hooks/useUnifiedResources');
 
@@ -304,6 +305,41 @@ describe('useUnifiedResources', () => {
       'Unraid array is running without parity protection',
     );
 
+    dispose();
+  });
+
+  it('refetches the canonical tenant snapshot after same-tab metadata changes', async () => {
+    apiFetchMock.mockResolvedValueOnce(resourceResponse([v2Resource])).mockResolvedValueOnce(
+      resourceResponse([
+        {
+          ...v2Resource,
+          customUrl: 'https://node-1.internal',
+        },
+      ]),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(
+      new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT, {
+        detail: {
+          metadataKind: 'agent',
+          metadataId: 'host-1',
+          customUrl: 'https://node-1.internal',
+        },
+      }),
+    );
+    await waitForValue(() => result!.resources()[0]?.customUrl, 'https://node-1.internal');
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
     dispose();
   });
 
@@ -812,6 +848,7 @@ describe('useUnifiedResources', () => {
             ...v2Resource,
             type: 'vm',
             proxmox: {
+              sourceId: 'site-a:pve1',
               nodeName: 'pve1',
               clusterName: 'cluster-b',
               instance: 'site-a',
@@ -837,6 +874,7 @@ describe('useUnifiedResources', () => {
 
     expect(result!.resources()[0]?.clusterId).toBe('cluster-b');
     expect(result!.resources()[0]?.proxmox).toMatchObject({
+      sourceId: 'site-a:pve1',
       node: 'pve1',
       nodeName: 'pve1',
       clusterName: 'cluster-b',

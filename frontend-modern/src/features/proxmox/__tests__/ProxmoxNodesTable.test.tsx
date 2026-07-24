@@ -122,7 +122,8 @@ describe('ProxmoxNodesTable', () => {
     const link = screen.getByRole('link', { name: 'Open web interface for pve-node-1' });
     expect(link).toHaveAttribute('href', 'https://pve.example.com:8006');
     expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveTextContent('pve-node-1');
+    expect(link).toHaveTextContent('');
+    expect(screen.getByText('pve-node-1').closest('a')).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Web' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('proxmox-host-web-link')).not.toBeInTheDocument();
     expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();

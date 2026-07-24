@@ -5427,11 +5427,8 @@ func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedre
 	copy(out, resources)
 	for i := range out {
 		resource := &out[i]
-		if strings.TrimSpace(resource.CustomURL) != "" {
-			continue
-		}
 
-		switch unifiedresources.CanonicalResourceType(resource.Type) {
+		switch unifiedresources.ContractResourceType(*resource) {
 		case unifiedresources.ResourceTypeAppContainer:
 			if resource.Docker == nil {
 				continue
@@ -5442,17 +5439,135 @@ func (m *Monitor) applyPersistedMetadataToUnifiedResources(resources []unifiedre
 				continue
 			}
 			if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
-				resource.CustomURL = customURL
+				// The metadata record is authoritative even when empty: an
+				// explicit clear must remove a stale URL still carried by an
+				// older unified-resource snapshot.
+				resource.CustomURL = strings.TrimSpace(customURL)
 			}
 		case unifiedresources.ResourceTypePod,
 			unifiedresources.ResourceTypeK8sDeployment,
 			unifiedresources.ResourceTypeK8sService:
 			if customURL, ok := m.kubernetesWorkloadCustomURL(*resource); ok {
+				resource.CustomURL = strings.TrimSpace(customURL)
+			}
+		case unifiedresources.ResourceTypeAgent,
+			unifiedresources.ResourceType("docker-host"),
+			unifiedresources.ResourceTypePBS,
+			unifiedresources.ResourceTypePMG,
+			unifiedresources.ResourceTypeK8sCluster,
+			unifiedresources.ResourceTypeK8sNode:
+			if customURL, ok := m.hostResourceCustomURL(*resource); ok {
 				resource.CustomURL = customURL
 			}
 		}
 	}
 	return out
+}
+
+func appendUniqueMetadataCandidate(candidates []string, seen map[string]struct{}, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return candidates
+	}
+	if _, exists := seen[value]; exists {
+		return candidates
+	}
+	seen[value] = struct{}{}
+	return append(candidates, value)
+}
+
+func hostResourceMetadataCandidates(resource unifiedresources.Resource) []string {
+	candidates := make([]string, 0, 20)
+	seen := make(map[string]struct{}, 20)
+	add := func(value string) {
+		candidates = appendUniqueMetadataCandidate(candidates, seen, value)
+	}
+
+	if resource.Docker != nil {
+		add(resource.Docker.HostSourceID)
+		add(resource.Docker.AgentID)
+	}
+	if resource.Agent != nil {
+		add(resource.Agent.AgentID)
+	}
+	if resource.PBS != nil {
+		add(resource.PBS.InstanceID)
+	}
+	if resource.PMG != nil {
+		add(resource.PMG.InstanceID)
+	}
+	if resource.Kubernetes != nil {
+		if unifiedresources.ContractResourceType(resource) == unifiedresources.ResourceTypeK8sNode {
+			clusterID := strings.TrimSpace(resource.Kubernetes.ClusterID)
+			nodeName := strings.TrimSpace(resource.Kubernetes.NodeName)
+			if nodeName == "" {
+				nodeName = strings.TrimSpace(resource.Name)
+			}
+			if clusterID != "" && nodeName != "" {
+				add(clusterID + ":node:" + nodeName)
+			}
+			add(resource.Kubernetes.NodeUID)
+		}
+		add(resource.Kubernetes.ClusterID)
+		add(resource.Kubernetes.AgentID)
+	}
+	if resource.Proxmox != nil {
+		add(resource.Proxmox.SourceID)
+		add(resource.Proxmox.NodeName)
+	}
+	if resource.DiscoveryTarget != nil {
+		add(resource.DiscoveryTarget.AgentID)
+		add(resource.DiscoveryTarget.ResourceID)
+	}
+	if resource.MetricsTarget != nil {
+		add(resource.MetricsTarget.ResourceID)
+	}
+	if resource.Canonical != nil {
+		add(resource.Canonical.PrimaryID)
+		if prefixAt := strings.IndexByte(resource.Canonical.PrimaryID, ':'); prefixAt >= 0 {
+			add(resource.Canonical.PrimaryID[prefixAt+1:])
+		}
+		for _, alias := range resource.Canonical.Aliases {
+			add(alias)
+		}
+		for _, supersededID := range resource.Canonical.SupersededIDs {
+			add(supersededID)
+		}
+	}
+	add(resource.Identity.MachineID)
+	add(resource.ID)
+	add(resource.Name)
+	return candidates
+}
+
+func (m *Monitor) hostResourceCustomURL(resource unifiedresources.Resource) (string, bool) {
+	if m == nil {
+		return "", false
+	}
+
+	candidates := hostResourceMetadataCandidates(resource)
+	if unifiedresources.ContractResourceType(resource) == unifiedresources.ResourceType("docker-host") &&
+		m.dockerMetadataStore != nil {
+		for _, candidate := range candidates {
+			if meta := m.dockerMetadataStore.GetHostMetadata(candidate); meta != nil {
+				if customURL := strings.TrimSpace(meta.CustomURL); customURL != "" {
+					return customURL, true
+				}
+			}
+		}
+		return "", false
+	}
+
+	if m.hostMetadataStore != nil {
+		for _, candidate := range candidates {
+			if meta := m.hostMetadataStore.Get(candidate); meta != nil {
+				if customURL := strings.TrimSpace(meta.CustomURL); customURL != "" {
+					return customURL, true
+				}
+			}
+		}
+	}
+	return "", false
 }
 
 func (m *Monitor) dockerAppContainerCustomURL(

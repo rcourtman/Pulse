@@ -77,9 +77,9 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
 // Column order follows the canonical recommended ordering documented in
 // columnAlignment.ts: identity → context → bars (CPU/Memory/Disk
 // contiguous) → diagnostic (Temp) → time (Uptime) → inventory counts
-// → source context at end. Web-interface launches live on the node name so
-// every runtime table uses the canonical shared name-link affordance instead
-// of adding a separate action column.
+// → source context at end. Web-interface launches live beside the inert node
+// name so every runtime table uses the canonical shared adjacent control
+// instead of adding a separate action column.
 export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
   { id: 'node', label: 'Node', kind: 'name' },
   { id: 'version', label: 'Version', kind: 'text' },

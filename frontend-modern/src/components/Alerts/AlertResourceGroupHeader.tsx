@@ -1,10 +1,7 @@
 import { Show } from 'solid-js';
 
 import { GROUPED_TABLE_ROW_BADGE_CLASS } from '@/components/shared/groupedTableRowPresentation';
-import {
-  WEB_INTERFACE_LINK_COLOR_CLASS,
-  WebInterfaceNameLink,
-} from '@/components/shared/WebInterfaceNameLink';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { GroupHeaderMeta } from '@/features/alerts/thresholds/tableTypes';
 
 interface AlertResourceGroupHeaderProps {
@@ -18,11 +15,9 @@ export function AlertResourceGroupHeader(props: AlertResourceGroupHeaderProps) {
   return (
     <Show when={props.meta?.type === 'agent'} fallback={<span>{groupLabel()}</span>}>
       <div class="flex flex-wrap items-center gap-3">
-        <WebInterfaceNameLink
+        <ResourceNameWithWebInterfaceLink
           name={groupLabel()}
           url={props.meta?.host}
-          class={WEB_INTERFACE_LINK_COLOR_CLASS}
-          fallbackClass=""
           title={`Open ${groupLabel()} web interface`}
         />
         <Show when={props.meta?.clusterName}>

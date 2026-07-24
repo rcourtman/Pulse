@@ -33,6 +33,7 @@ describe('KubernetesPodsTable', () => {
         resources={[
           makeResource({
             id: 'checkout-api-6c746d5bcf-c7z2p',
+            customUrl: 'https://checkout-pod.internal',
             kubernetes: {
               clusterId: 'prod-euw1',
               namespace: 'services',
@@ -94,6 +95,12 @@ describe('KubernetesPodsTable', () => {
     expect(
       document.querySelector('[data-kubernetes-pod-row="checkout-api-6c746d5bcf-c7z2p"]'),
     ).not.toBeNull();
+    expect(
+      screen.getByRole('link', {
+        name: 'Open web interface for checkout-api-6c746d5bcf-c7z2p',
+      }),
+    ).toHaveAttribute('href', 'https://checkout-pod.internal');
+    expect(screen.getByText('checkout-api-6c746d5bcf-c7z2p').closest('a')).toBeNull();
   });
 
   it('renders pod rows with status mapped from podPhase + container readiness, attention rows first', () => {

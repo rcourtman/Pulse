@@ -909,7 +909,7 @@ func TestApplyDockerMetadataToUnifiedResourcesAddsContainerCustomURL(t *testing.
 	}
 }
 
-func TestApplyDockerMetadataToUnifiedResourcesKeepsResourceCustomURL(t *testing.T) {
+func TestApplyDockerMetadataToUnifiedResourcesPrefersCanonicalMetadataOverStaleResourceURL(t *testing.T) {
 	monitor := newTestMonitor(t)
 	if err := monitor.dockerMetadataStore.Set("docker-host-1:container:container-new", &config.DockerMetadata{
 		CustomURL: "https://metadata.internal",
@@ -930,8 +930,8 @@ func TestApplyDockerMetadataToUnifiedResourcesKeepsResourceCustomURL(t *testing.
 	}
 
 	got := monitor.applyPersistedMetadataToUnifiedResources(resources)
-	if got[0].CustomURL != "https://resource.internal" {
-		t.Fatalf("CustomURL = %q, want existing resource URL to win", got[0].CustomURL)
+	if got[0].CustomURL != "https://metadata.internal" {
+		t.Fatalf("CustomURL = %q, want canonical metadata URL to win", got[0].CustomURL)
 	}
 }
 

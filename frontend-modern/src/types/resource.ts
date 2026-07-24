@@ -669,6 +669,8 @@ export interface ResourceAgentMeta {
 }
 
 export interface ResourceProxmoxMeta {
+  /** Raw provider identity used for stable metadata lookup. */
+  sourceId?: string;
   /** Proxmox-authored VM/LXC power state, kept separate from collection freshness. */
   runtimeStatus?: string;
   vmid?: number;

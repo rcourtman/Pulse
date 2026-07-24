@@ -7,6 +7,11 @@ describe('getNodeExternalUrl', () => {
     expect(getNodeExternalUrl(node)).toBe('https://pve.example.com:8006');
   });
 
+  it('preserves an unsafe authored URL so the rendering boundary can reject it honestly', () => {
+    const node = { name: 'pve1', guestURL: 'javascript:alert(document.domain)', host: 'pve1' };
+    expect(getNodeExternalUrl(node)).toBe('javascript:alert(document.domain)');
+  });
+
   it('falls back to a URL-shaped host for legacy node payloads', () => {
     const node = { name: 'pve1', guestURL: '', host: 'https://192.168.0.5:8006' };
     expect(getNodeExternalUrl(node)).toBe('https://192.168.0.5:8006');

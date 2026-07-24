@@ -2,11 +2,13 @@ import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
+import { DockerHostMetadataAPI } from '@/api/dockerHostMetadata';
 import { copyToClipboard } from '@/utils/clipboard';
 import { dispatchResourceMetadataChanged } from '@/utils/resourceMetadataEvents';
 import {
   getWebInterfaceSuggestedUrlFallback,
   getWebInterfaceTargetLabel,
+  classifyWebInterfaceUrl,
   normalizeWebInterfaceUrl,
   shouldShowWebInterfaceSuggestedDiagnostic,
   shouldShowWebInterfaceSuggestedUrl,
@@ -16,7 +18,7 @@ import {
 
 export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
   const [urlValue, setUrlValue] = createSignal(props.customUrl ?? '');
-  const [fetchedCustomUrl, setFetchedCustomUrl] = createSignal('');
+  const [fetchedCustomUrl, setFetchedCustomUrl] = createSignal(props.customUrl ?? '');
   const [urlSaving, setUrlSaving] = createSignal(false);
   const [urlError, setUrlError] = createSignal<string | null>(null);
   const [urlSuccess, setUrlSuccess] = createSignal<string | null>(null);
@@ -28,9 +30,13 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
   const targetLabel = createMemo(() =>
     getWebInterfaceTargetLabel(props.metadataKind, props.targetLabel),
   );
-  const currentCustomUrl = createMemo(() => props.customUrl ?? fetchedCustomUrl());
+  const currentCustomUrl = createMemo(() => fetchedCustomUrl());
   const normalizedCurrentUrl = createMemo(() => normalizeWebInterfaceUrl(currentCustomUrl()));
   const normalizedSuggestedUrl = createMemo(() => normalizeWebInterfaceUrl(props.suggestedUrl));
+  const invalidSuggestedUrlError = createMemo(() => {
+    const result = classifyWebInterfaceUrl(props.suggestedUrl);
+    return result.status === 'invalid' ? result.error : null;
+  });
   const showSuggestedDiagnostic = createMemo(() =>
     shouldShowWebInterfaceSuggestedDiagnostic({
       currentUrl: currentCustomUrl(),
@@ -84,6 +90,10 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
       const metadata = await DockerMetadataAPI.getMetadata(id);
       return metadata?.customUrl ?? '';
     }
+    if (props.metadataKind === 'docker-host') {
+      const metadata = await DockerHostMetadataAPI.getMetadata(id);
+      return metadata?.customUrl ?? '';
+    }
     const metadata = await GuestMetadataAPI.getMetadata(id);
     return metadata?.customUrl ?? '';
   };
@@ -95,6 +105,10 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     }
     if (props.metadataKind === 'docker') {
       await DockerMetadataAPI.updateMetadata(id, { customUrl: value });
+      return;
+    }
+    if (props.metadataKind === 'docker-host') {
+      await DockerHostMetadataAPI.updateMetadata(id, { customUrl: value });
       return;
     }
     await GuestMetadataAPI.updateMetadata(id, { customUrl: value });
@@ -121,6 +135,12 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     onCleanup(() => {
       cancelled = true;
     });
+  });
+
+  createEffect(() => {
+    if (props.customUrl !== undefined) {
+      setFetchedCustomUrl(props.customUrl);
+    }
   });
 
   createEffect(() => {
@@ -206,6 +226,7 @@ export function useWebInterfaceUrlFieldState(props: WebInterfaceUrlFieldProps) {
     handleCopyUrl,
     handleDeleteUrl,
     handleSaveUrl,
+    invalidSuggestedUrlError,
     metadataId,
     normalizedCurrentUrl,
     normalizedSuggestedUrl,

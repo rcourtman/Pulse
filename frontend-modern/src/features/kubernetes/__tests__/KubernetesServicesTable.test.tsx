@@ -34,6 +34,7 @@ describe('KubernetesServicesTable', () => {
           makeResource({
             id: 'checkout-public',
             type: 'k8s-service',
+            customUrl: 'https://checkout-service.internal',
             kubernetes: {
               clusterId: 'cluster-1',
               namespace: 'apps',
@@ -74,5 +75,9 @@ describe('KubernetesServicesTable', () => {
     expect(screen.getByText('203.0.113.24')).toBeInTheDocument();
     expect(screen.getByText('443:8443/tcp node:30443')).toBeInTheDocument();
     expect(screen.getByText('app=checkout-web, tier=frontend')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Open web interface for checkout-public' }),
+    ).toHaveAttribute('href', 'https://checkout-service.internal');
+    expect(screen.getByText('checkout-public').closest('a')).toBeNull();
   });
 });

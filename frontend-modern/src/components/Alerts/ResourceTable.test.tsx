@@ -324,14 +324,14 @@ describe('ResourceTable', () => {
       expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
       expect(alertResourceTableMobileSource).not.toContain(rawSvgTag);
       expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
-      expect(alertResourceGroupHeaderSource).toContain('WebInterfaceNameLink');
+      expect(alertResourceGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
       expect(alertResourceGroupHeaderSource).not.toContain('target="_blank"');
       expect(alertResourceGroupHeaderSource).not.toContain('rel="noopener noreferrer"');
       expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
       expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
       expect(alertResourceTableRowSource).toContain('FormTextarea');
       expect(alertResourceTableRowSource).toContain('ActionIconButton');
-      expect(alertResourceTableRowSource).toContain('WebInterfaceNameLink');
+      expect(alertResourceTableRowSource).toContain('ResourceNameWithWebInterfaceLink');
       expect(alertResourceTableRowSource).not.toContain(['<', 'textarea'].join(''));
       expect(alertResourceTableRowSource).not.toContain('target="_blank"');
       expect(alertResourceTableRowSource).not.toContain('rel="noopener noreferrer"');
@@ -810,8 +810,10 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const link = screen.getByText('PVE Node 1');
-      expect(link.tagName).toBe('A');
+      expect(screen.getByText('PVE Node 1').tagName).toBe('SPAN');
+      const link = screen.getByRole('link', {
+        name: 'Open web interface for PVE Node 1',
+      });
       expect(link).toHaveAttribute('href', 'https://pve1.example.com:8006');
       expect(link).toHaveAttribute('target', '_blank');
     });
@@ -1063,8 +1065,10 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const link = screen.getByText('PVE Node 1');
-      expect(link.tagName).toBe('A');
+      expect(screen.getByText('PVE Node 1').tagName).toBe('SPAN');
+      const link = screen.getByRole('link', {
+        name: 'Open web interface for PVE Node 1',
+      });
       expect(link).toHaveAttribute('href', 'https://192.168.0.10:8006');
       expect(screen.getByLabelText('Edit thresholds for PVE Node 1')).toBeInTheDocument();
     });
@@ -1082,8 +1086,10 @@ describe('ResourceTable', () => {
       });
       render(() => <ResourceTable {...props} />);
 
-      const link = screen.getByText('pve-node-1');
-      expect(link.tagName).toBe('A');
+      expect(screen.getByText('pve-node-1').tagName).toBe('SPAN');
+      const link = screen.getByRole('link', {
+        name: 'Open web interface for pve-node-1',
+      });
       expect(link).toHaveAttribute('href', 'https://192.168.0.10:8006');
     });
 

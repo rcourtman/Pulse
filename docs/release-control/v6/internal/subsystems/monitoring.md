@@ -1632,6 +1632,18 @@ observed. Runtime UIDs remain discovery and metrics coordinates. Every scope
 component is required so a URL cannot cross cluster, namespace, or kind
 boundaries, and an existing empty stable record is an intentional clear that
 must block legacy fallback.
+Unified resource projection must also hydrate saved host-level web-interface
+URLs from the tenant monitor's canonical metadata stores for standalone
+agents, Proxmox nodes, Docker/Podman runtimes, PBS and PMG instances, and
+Kubernetes clusters and nodes. Stable provider/source identities take
+precedence over display names, runtime registry IDs, or host labels; canonical
+and superseded identity aliases may be consulted for migration continuity but
+must not broaden tenant scope. A non-empty operator metadata value overrides a
+configured source URL; absent or cleared host metadata preserves or reveals a
+configured source fallback. Stable workload metadata is authoritative even
+when empty so an explicit workload clear cannot revive a stale runtime-key or
+projected URL. Projection must copy the resource snapshot rather than mutating
+the ingest input.
 The monitor-owned guest, Docker, and host metadata stores are the live
 in-memory authority for projection and migration. API, config export/import,
 tenant usage, Assistant URL discovery, and reload paths must share those exact

@@ -5,6 +5,7 @@ import { DiscoveryProvenanceMarker } from './DiscoveryProvenanceMarker';
 import { getInfoCardFrameClass } from './InfoCardFrame';
 import { useWebInterfaceUrlFieldState } from './useWebInterfaceUrlFieldState';
 import type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
+import { WebInterfaceLink } from './WebInterfaceLink';
 
 export type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
 
@@ -43,16 +44,15 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
             Save
           </Button>
           <Show when={state.normalizedCurrentUrl()}>
-            <a
-              href={state.normalizedCurrentUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
+            <WebInterfaceLink
+              url={state.normalizedCurrentUrl()}
+              ariaLabel="Open saved web interface URL"
               class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900"
-              title="Open URL"
-              aria-label="Open URL"
+              title="Open saved web interface URL"
+              invalidAriaLabel="Saved web interface URL is invalid"
             >
-              <ExternalLinkIcon class="h-3.5 w-3.5" />
-            </a>
+              <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+            </WebInterfaceLink>
           </Show>
           <Show when={state.normalizedCurrentUrl()}>
             <CopyValueButton
@@ -96,6 +96,18 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           </p>
         </Show>
 
+        <Show when={state.invalidSuggestedUrlError()}>
+          {(error) => (
+            <div
+              role="alert"
+              class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200"
+            >
+              <div class="font-medium">Suggested URL rejected</div>
+              <p class="mt-0.5">{error()}</p>
+            </div>
+          )}
+        </Show>
+
         <Show when={state.showSuggestedDiagnostic()}>
           <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
             <div class="flex items-center gap-1.5 font-medium">
@@ -127,16 +139,14 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
               >
                 {state.normalizedSuggestedUrl()}
               </code>
-              <a
-                href={state.normalizedSuggestedUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
+              <WebInterfaceLink
+                url={state.normalizedSuggestedUrl()}
+                ariaLabel="Open suggested URL"
                 class="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950"
                 title="Open suggested URL"
-                aria-label="Open suggested URL"
               >
-                <ExternalLinkIcon class="h-3.5 w-3.5" />
-              </a>
+                <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              </WebInterfaceLink>
               <CopyValueButton
                 value={state.normalizedSuggestedUrl()}
                 copied={state.copiedUrlValue() === state.normalizedSuggestedUrl()}

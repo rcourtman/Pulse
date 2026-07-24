@@ -3,6 +3,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -346,9 +347,12 @@ export const KubernetesNodesTable: Component<{
                                 title={indicator().label}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <ResourceNameWithWebInterfaceLink
+                                name={name()}
+                                url={node.customUrl}
+                                class="min-w-0"
+                                nameClass="truncate font-semibold text-base-content"
+                              />
                             </div>
                           </TableCell>
                           <TableCell

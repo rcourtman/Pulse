@@ -983,13 +983,13 @@ func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName strin
 
 	customName = strings.TrimSpace(customName)
 
-	// Persist to Docker metadata store first
-	var hostMeta *config.DockerHostMetadata
-	if customName != "" {
-		hostMeta = &config.DockerHostMetadata{
-			CustomDisplayName: customName,
-		}
+	// Persist to Docker metadata store first without discarding independently
+	// authored URL or notes metadata.
+	hostMeta := m.dockerMetadataStore.GetHostMetadata(hostID)
+	if hostMeta == nil {
+		hostMeta = &config.DockerHostMetadata{}
 	}
+	hostMeta.CustomDisplayName = customName
 	if err := m.dockerMetadataStore.SetHostMetadata(hostID, hostMeta); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("failed to persist Docker host metadata")
 		return models.DockerHost{}, fmt.Errorf("failed to persist custom display name: %w", err)

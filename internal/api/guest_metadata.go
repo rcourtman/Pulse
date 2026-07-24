@@ -2,12 +2,47 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
+
+func mergeGuestMetadataPatch(
+	id string,
+	existing,
+	incoming *config.GuestMetadata,
+	fields map[string]json.RawMessage,
+) *config.GuestMetadata {
+	result := &config.GuestMetadata{ID: id}
+	if existing != nil {
+		*result = *existing
+		result.Tags = cloneStringSlice(existing.Tags)
+		result.Notes = cloneStringSlice(existing.Notes)
+	}
+	result.ID = id
+	if metadataPatchHasField(fields, "customUrl") {
+		result.CustomURL = incoming.CustomURL
+	}
+	if metadataPatchHasField(fields, "description") {
+		result.Description = incoming.Description
+	}
+	if metadataPatchHasField(fields, "tags") {
+		result.Tags = cloneStringSlice(incoming.Tags)
+	}
+	if metadataPatchHasField(fields, "notes") {
+		result.Notes = cloneStringSlice(incoming.Notes)
+	}
+	if metadataPatchHasField(fields, "lastKnownName") {
+		result.LastKnownName = incoming.LastKnownName
+	}
+	if metadataPatchHasField(fields, "lastKnownType") {
+		result.LastKnownType = incoming.LastKnownType
+	}
+	return result
+}
 
 // GuestMetadataHandler handles guest metadata operations
 type GuestMetadataHandler struct {
@@ -77,6 +112,10 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 		"Failed to save guest metadata",
 		"Updated guest metadata",
 		func(meta *config.GuestMetadata) string { return meta.CustomURL },
+		func(ctx context.Context, id string) *config.GuestMetadata {
+			return h.getStore(ctx).Get(id)
+		},
+		mergeGuestMetadataPatch,
 		func(ctx context.Context, id string, meta *config.GuestMetadata) error {
 			return h.getStore(ctx).Set(id, meta)
 		},

@@ -569,7 +569,7 @@ describe('AgentsMachinesTable', () => {
     });
   });
 
-  it('opens saved agent web interface URLs from the machine name', async () => {
+  it('opens saved agent web interface URLs beside the machine name', async () => {
     getAllAgentMetadataMock.mockResolvedValueOnce({
       'web-host': { id: 'web-host', customUrl: 'https://web-host.local:9443' },
     });
@@ -591,7 +591,8 @@ describe('AgentsMachinesTable', () => {
 
     const link = await screen.findByRole('link', { name: 'Open web interface for Web Host' });
     expect(link).toHaveAttribute('href', 'https://web-host.local:9443');
-    expect(link).toHaveTextContent('Web Host');
+    expect(link).toHaveTextContent('');
+    expect(screen.getByText('Web Host').closest('a')).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Web' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Add web interface URL for Web Host' }),

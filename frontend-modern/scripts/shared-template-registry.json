@@ -2,12 +2,12 @@
   "version": 1,
   "rules": [
     {
-      "id": "runtime-web-interface-name-link",
+      "id": "runtime-web-interface-inline-link",
       "category": "resource-launch",
-      "summary": "Runtime resource rows must launch saved or inferred web-interface URLs through the shared name-link template, not a page-local link or separate web column.",
+      "summary": "Runtime resource rows keep names available for row selection and expose saved or inferred web-interface URLs through the shared adjacent-link template, not a page-local link or separate web column.",
       "canonical": {
-        "path": "src/components/shared/WebInterfaceNameLink.tsx",
-        "export": "WebInterfaceNameLink"
+        "path": "src/components/shared/WebInterfaceLink.tsx",
+        "export": "ResourceNameWithWebInterfaceLink"
       },
       "requiredConsumers": [
         {
@@ -27,6 +27,36 @@
         },
         {
           "path": "src/components/Alerts/AlertResourceTableRow.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx"
+        },
+        {
+          "path": "src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerNativeTableShared.tsx"
+        },
+        {
+          "path": "src/features/docker/DockerContainersTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPodsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx"
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesServicesTable.tsx"
         }
       ],
       "forbiddenPatterns": [
@@ -74,7 +104,7 @@
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
-        "src/components/shared/WebInterfaceNameLink.test.tsx",
+        "src/components/shared/WebInterfaceLink.test.tsx",
         "src/components/shared/__tests__/NodeGroupHeader.test.tsx",
         "src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
         "src/components/Workloads/__tests__/GuestRow.test.tsx",

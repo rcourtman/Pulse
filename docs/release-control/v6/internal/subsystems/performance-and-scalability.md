@@ -255,11 +255,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    `docker.uptimeSeconds`, `kubernetes.uptimeSeconds`); platforms whose
    adapters only populate the canonical field — vSphere is the working
    example — would otherwise render blank uptime cells for every row.
-   Workload guest rows may compose the shared saved web-interface name-link
-   shell from `frontend-primitives`, but row rendering must receive any saved
-   URL from already-loaded row metadata and must not add per-row metadata
-   fetches, Discovery probes, or page-local external-link logic on the table
-   hot path.
+   Workload guest rows may compose the shared saved web-interface adjacent
+   launch control from `frontend-primitives`, but row rendering must receive
+   any saved URL from already-loaded row metadata and must not add per-row
+   metadata fetches, Discovery probes, URL validation copies, or page-local
+   external-link logic on the table hot path. The inert resource name and the
+   separate 24-by-24 CSS-pixel launch target must remain one bounded render
+   composition rather than a new column or secondary lookup.
    Workload status filters remain URL-canonical. Scoped local persistence may
    seed a missing `status` parameter when a platform page is revisited, but the
    restore path must write the URL once with `replace` and must not force row

@@ -28,12 +28,20 @@ vi.mock('@/api/dockerMetadata', () => ({
   },
 }));
 
+vi.mock('@/api/dockerHostMetadata', () => ({
+  DockerHostMetadataAPI: {
+    getMetadata: vi.fn(async () => ({ customUrl: '' })),
+    updateMetadata: vi.fn(async () => ({ customUrl: '' })),
+  },
+}));
+
 vi.mock('@/utils/clipboard', () => ({
   copyToClipboard: vi.fn(async () => true),
 }));
 
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
+import { DockerHostMetadataAPI } from '@/api/dockerHostMetadata';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
@@ -111,6 +119,26 @@ describe('WebInterfaceUrlField', () => {
     });
   });
 
+  it('removes a saved URL through the same canonical metadata record', async () => {
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="agent"
+        metadataId="host-1"
+        targetLabel="agent"
+        customUrl="https://pve1.local:8006"
+      />
+    ));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => {
+      expect(AgentMetadataAPI.updateMetadata).toHaveBeenCalledWith('host-1', {
+        customUrl: '',
+      });
+      expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+    });
+  });
+
   it('saves a Docker container URL through Docker metadata API', async () => {
     render(() => (
       <WebInterfaceUrlField
@@ -132,6 +160,27 @@ describe('WebInterfaceUrlField', () => {
           customUrl: 'https://app.internal:9443',
         },
       );
+    });
+  });
+
+  it('saves a Docker or Podman host URL through runtime metadata', async () => {
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="docker-host"
+        metadataId="runtime-stable"
+        targetLabel="host"
+        customUrl=""
+      />
+    ));
+
+    const input = await screen.findByPlaceholderText('https://198.51.100.100:8080');
+    fireEvent.input(input, { target: { value: 'https://portainer.internal:9443' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(DockerHostMetadataAPI.updateMetadata).toHaveBeenCalledWith('runtime-stable', {
+        customUrl: 'https://portainer.internal:9443',
+      });
     });
   });
 
@@ -235,5 +284,23 @@ describe('WebInterfaceUrlField', () => {
     expect(screen.getByPlaceholderText('https://198.51.100.100:8080')).toHaveValue(
       'http://192.0.2.10:8123',
     );
+  });
+
+  it('rejects an unsafe discovered URL without rendering navigation', async () => {
+    const unsafeUrl = ['javascript', 'alert(document.domain)'].join(':');
+    const unsafeSuggestion = { suggestedUrl: unsafeUrl };
+
+    render(() => (
+      <WebInterfaceUrlField
+        metadataKind="guest"
+        metadataId="guest-1"
+        customUrl=""
+        {...unsafeSuggestion}
+      />
+    ));
+
+    expect(await screen.findByText('Suggested URL rejected')).toBeInTheDocument();
+    expect(screen.getByText('URL must start with http:// or https://.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open suggested URL' })).toBeNull();
   });
 });

@@ -28,10 +28,7 @@ import {
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
-import {
-  WEB_INTERFACE_LINK_COLOR_CLASS,
-  WebInterfaceNameLink,
-} from '@/components/shared/WebInterfaceNameLink';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
 import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
@@ -204,11 +201,11 @@ export function GuestRow(props: GuestRowProps) {
                 size="xs"
               />
               <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <WebInterfaceNameLink
+                <ResourceNameWithWebInterfaceLink
                   name={props.guest.name}
                   url={customUrl()}
-                  class={`text-[11px] font-medium select-none truncate ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
-                  fallbackClass="text-[11px] font-medium text-base-content select-none truncate"
+                  class="min-w-0"
+                  nameClass="truncate text-[11px] font-medium text-base-content select-none"
                 />
                 {/* Show backup indicator in name cell only if backup column is hidden */}
                 <Show when={!isColVisible('backup') && supportsBackup()}>

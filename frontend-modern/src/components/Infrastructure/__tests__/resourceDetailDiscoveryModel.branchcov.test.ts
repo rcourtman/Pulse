@@ -387,17 +387,65 @@ describe('toDiscoveryConfig — main switch (no usable explicit target)', () => 
       const result = toDiscoveryConfig(resource);
       expect(result?.resourceType).toBe('agent');
       expect(result?.agentId).toBe('docker-1');
-      expect(result?.targetLabel).toBe('agent');
+      expect(result?.metadataKind).toBe('docker-host');
+      expect(result?.targetLabel).toBe('host');
     });
 
     it('maps a pbs resource through the shared agent case', () => {
-      const resource = baseResource({ type: 'pbs', name: 'pbs-1' });
-      expect(toDiscoveryConfig(resource)?.resourceType).toBe('agent');
+      const resource = baseResource({
+        type: 'pbs',
+        name: 'pbs-renamed',
+        pbs: { instanceId: 'pbs-stable' },
+      });
+      expect(toDiscoveryConfig(resource)).toMatchObject({
+        resourceType: 'agent',
+        metadataKind: 'agent',
+        metadataId: 'pbs-stable',
+      });
+    });
+
+    it('keys Proxmox node metadata by provider identity instead of the mutable node label', () => {
+      const resource = baseResource({
+        type: 'agent',
+        name: 'pve-renamed',
+        proxmox: {
+          sourceId: 'pve-provider-stable',
+          nodeName: 'pve-renamed',
+        },
+      });
+      expect(toDiscoveryConfig(resource)).toMatchObject({
+        metadataKind: 'agent',
+        metadataId: 'pve-provider-stable',
+      });
     });
 
     it('maps a k8s-cluster resource through the shared agent case', () => {
-      const resource = baseResource({ type: 'k8s-cluster', name: 'k8s-1' });
-      expect(toDiscoveryConfig(resource)?.resourceType).toBe('agent');
+      const resource = baseResource({
+        type: 'k8s-cluster',
+        name: 'k8s-renamed',
+        kubernetes: { clusterId: 'cluster-stable' },
+      });
+      expect(toDiscoveryConfig(resource)).toMatchObject({
+        resourceType: 'agent',
+        metadataKind: 'agent',
+        metadataId: 'cluster-stable',
+      });
+    });
+
+    it('scopes Kubernetes node metadata by stable cluster and node identity', () => {
+      const resource = baseResource({
+        id: 'node-runtime-id',
+        type: 'k8s-node',
+        name: 'worker-1',
+        kubernetes: {
+          clusterId: 'cluster-stable',
+          nodeName: 'worker-1',
+        },
+      });
+      expect(toDiscoveryConfig(resource)).toMatchObject({
+        metadataKind: 'agent',
+        metadataId: 'cluster-stable:node:worker-1',
+      });
     });
 
     it("returns null when the agent lookup id is 'redacted by policy'", () => {

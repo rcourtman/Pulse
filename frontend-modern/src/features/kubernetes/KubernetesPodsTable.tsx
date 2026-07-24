@@ -1,6 +1,7 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -312,9 +313,12 @@ export const KubernetesPodsTable: Component<{
                                 title={indicator().label}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <ResourceNameWithWebInterfaceLink
+                                name={name()}
+                                url={resource.customUrl}
+                                class="min-w-0"
+                                nameClass="truncate font-semibold text-base-content"
+                              />
                             </div>
                           </TableCell>
                           <TableCell

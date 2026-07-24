@@ -36,6 +36,7 @@ import {
 } from './useUnifiedResourceTableState';
 import { getPMGTableRow, isResourceOnline } from './unifiedResourceTableModel';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 
 interface UnifiedResourcePMGTableSectionProps {
   tableProps: UnifiedResourceTableProps;
@@ -203,12 +204,12 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                           ariaLabel={statusIndicator().label}
                           size="xs"
                         />
-                        <span
-                          class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
-                          title={displayName()}
-                        >
-                          {displayName()}
-                        </span>
+                        <ResourceNameWithWebInterfaceLink
+                          name={displayName()}
+                          url={resource.customUrl}
+                          class="min-w-0 flex-1"
+                          nameClass="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
+                        />
                         <Show when={shouldShowResourceAlternateName(resource)}>
                           <span class="hidden min-w-0 max-w-[35%] shrink truncate text-[9px] text-muted lg:inline">
                             ({resource.name})

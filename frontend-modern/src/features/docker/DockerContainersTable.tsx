@@ -13,10 +13,7 @@ import {
 } from '@/components/shared/groupedTableRowPresentation';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  WEB_INTERFACE_LINK_COLOR_CLASS,
-  WebInterfaceNameLink,
-} from '@/components/shared/WebInterfaceNameLink';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -666,11 +663,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                 />
               )}
             </Show>
-            <WebInterfaceNameLink
+            <ResourceNameWithWebInterfaceLink
               name={group.host}
               url={group.hostResource?.customUrl}
-              class={`truncate ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
-              fallbackClass="truncate"
+              class="min-w-0"
+              nameClass="truncate"
             />
             <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
               {group.rows.length} {group.rows.length === 1 ? 'container' : 'containers'}

@@ -52,6 +52,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
@@ -415,12 +416,12 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           />
                           <div class="flex min-w-0 flex-1 flex-col">
                             <div class="flex min-w-0 items-center gap-1">
-                              <span
-                                class="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
-                                title={displayName()}
-                              >
-                                {displayName()}
-                              </span>
+                              <ResourceNameWithWebInterfaceLink
+                                name={displayName()}
+                                url={resource.customUrl}
+                                class="min-w-0 flex-1"
+                                nameClass="block min-w-0 flex-1 truncate font-medium text-[11px] text-base-content select-text"
+                              />
                               <Show when={healthIssue()}>
                                 {(issue) => (
                                   <span

@@ -26,6 +26,31 @@ type DockerHostMetadata struct {
 	Notes             []string `json:"notes,omitempty"`             // User annotations for AI context
 }
 
+func cloneDockerMetadata(meta *DockerMetadata) *DockerMetadata {
+	if meta == nil {
+		return nil
+	}
+	clone := *meta
+	if meta.Tags != nil {
+		clone.Tags = append([]string{}, meta.Tags...)
+	}
+	if meta.Notes != nil {
+		clone.Notes = append([]string{}, meta.Notes...)
+	}
+	return &clone
+}
+
+func cloneDockerHostMetadata(meta *DockerHostMetadata) *DockerHostMetadata {
+	if meta == nil {
+		return nil
+	}
+	clone := *meta
+	if meta.Notes != nil {
+		clone.Notes = append([]string{}, meta.Notes...)
+	}
+	return &clone
+}
+
 // dockerMetadataFile represents the on-disk format for Docker metadata
 type dockerMetadataFile struct {
 	Containers map[string]*DockerMetadata     `json:"containers,omitempty"` // Container/service metadata (legacy: may be top-level)
@@ -164,7 +189,7 @@ func (s *DockerMetadataStore) Get(resourceID string) *DockerMetadata {
 	defer s.mu.RUnlock()
 
 	if meta, exists := s.metadata[resourceID]; exists {
-		return meta
+		return cloneDockerMetadata(meta)
 	}
 	return nil
 }
@@ -177,7 +202,7 @@ func (s *DockerMetadataStore) GetAll() map[string]*DockerMetadata {
 	// Return a copy to prevent external modifications
 	result := make(map[string]*DockerMetadata)
 	for k, v := range s.metadata {
-		result[k] = v
+		result[k] = cloneDockerMetadata(v)
 	}
 	return result
 }
@@ -188,7 +213,7 @@ func (s *DockerMetadataStore) GetHostMetadata(hostID string) *DockerHostMetadata
 	defer s.mu.RUnlock()
 
 	if meta, exists := s.hostMetadata[hostID]; exists {
-		return meta
+		return cloneDockerHostMetadata(meta)
 	}
 	return nil
 }
@@ -201,7 +226,7 @@ func (s *DockerMetadataStore) GetAllHostMetadata() map[string]*DockerHostMetadat
 	// Return a copy to prevent external modifications
 	result := make(map[string]*DockerHostMetadata)
 	for k, v := range s.hostMetadata {
-		result[k] = v
+		result[k] = cloneDockerHostMetadata(v)
 	}
 	return result
 }
@@ -215,7 +240,7 @@ func (s *DockerMetadataStore) SetHostMetadata(hostID string, meta *DockerHostMet
 	if meta == nil || (meta.CustomDisplayName == "" && meta.CustomURL == "" && len(meta.Notes) == 0) {
 		delete(s.hostMetadata, hostID)
 	} else {
-		s.hostMetadata[hostID] = meta
+		s.hostMetadata[hostID] = cloneDockerHostMetadata(meta)
 	}
 
 	// Save to disk
@@ -232,8 +257,9 @@ func (s *DockerMetadataStore) Set(resourceID string, meta *DockerMetadata) error
 		return fmt.Errorf("metadata cannot be nil")
 	}
 
-	meta.ID = resourceID
-	s.metadata[resourceID] = meta
+	clone := cloneDockerMetadata(meta)
+	clone.ID = resourceID
+	s.metadata[resourceID] = clone
 
 	// Save to disk
 	return s.save()
@@ -262,13 +288,13 @@ func (s *DockerMetadataStore) ReplaceAll(metadata map[string]*DockerMetadata) er
 			continue
 		}
 
-		clone := *meta
+		clone := cloneDockerMetadata(meta)
 		clone.ID = resourceID
 		// Ensure slice copy is not nil to allow JSON marshalling of empty tags
 		if clone.Tags == nil {
 			clone.Tags = []string{}
 		}
-		s.metadata[resourceID] = &clone
+		s.metadata[resourceID] = clone
 	}
 
 	return s.save()

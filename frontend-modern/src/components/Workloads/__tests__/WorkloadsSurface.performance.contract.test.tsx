@@ -1366,7 +1366,7 @@ describe('Workloads performance contract', () => {
       expect(guestRowSource).toContain('style={getGuestColumnStyle(');
       expect(guestRowSource).toContain('props.workloadTableLayoutMode');
       expect(guestRowSource).toContain('props.visibleColumnIds');
-      expect(guestRowSource).toContain('WebInterfaceNameLink');
+      expect(guestRowSource).toContain('ResourceNameWithWebInterfaceLink');
       expect(guestRowSource).not.toContain('target="_blank"');
       expect(guestRowSource).not.toContain('data-workload-col="link"');
       expect(guestRowSource).not.toContain('Open related infrastructure');

@@ -971,10 +971,12 @@ state, delay-row toggling, and inline metric-input focus live in
 `frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`. Shared
 web-interface launch affordances inside alert resource rows and grouped agent
 headers must compose
-`frontend-modern/src/components/shared/WebInterfaceNameLink.tsx`; alerts own
-only the alert/resource data and URL availability decision, not the external
-anchor shell, new-tab safety attributes, row-click containment, or accessible
-launch-label semantics.
+`frontend-modern/src/components/shared/WebInterfaceLink.tsx`; alerts own only
+the alert/resource data and URL availability decision, not URL safety
+classification, the adjacent launch-control shell, new-tab safety attributes,
+row-click containment, invalid-URL warnings, or accessible launch-label
+semantics. Alert resource names remain inert row identity so opening a saved
+web interface cannot also toggle selection or the thresholds editor.
 Resource-table empty states, badge labels, offline-state wording, note
 placeholders, and metric input titles now route through
 `frontend-modern/src/utils/alertResourceTablePresentation.ts` instead of

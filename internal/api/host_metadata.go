@@ -125,23 +125,39 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Limit request body to 16KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-
-	var meta config.HostMetadata
-	if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate URL if provided
-	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
-		http.Error(w, errMsg, http.StatusBadRequest)
+	var incoming config.HostMetadata
+	fields, decoded := decodeBoundedMetadataPatch(w, r, &incoming)
+	if !decoded {
 		return
 	}
 
 	store := h.getStore(r.Context())
-	if err := store.Set(hostID, &meta); err != nil {
+	meta := store.Get(hostID)
+	if meta == nil {
+		meta = &config.HostMetadata{ID: hostID}
+	}
+	meta.ID = hostID
+	if metadataPatchHasField(fields, "customUrl") {
+		if errMsg := validateCustomURL(incoming.CustomURL); errMsg != "" {
+			http.Error(w, errMsg, http.StatusBadRequest)
+			return
+		}
+		meta.CustomURL = incoming.CustomURL
+	}
+	if metadataPatchHasField(fields, "description") {
+		meta.Description = incoming.Description
+	}
+	if metadataPatchHasField(fields, "tags") {
+		meta.Tags = cloneStringSlice(incoming.Tags)
+	}
+	if metadataPatchHasField(fields, "notes") {
+		meta.Notes = cloneStringSlice(incoming.Notes)
+	}
+	if metadataPatchHasField(fields, "commandsEnabled") {
+		meta.CommandsEnabled = incoming.CommandsEnabled
+	}
+
+	if err := store.Set(hostID, meta); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save host metadata")
 		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
@@ -150,7 +166,7 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 	log.Info().Str("hostID", hostID).Str("url", meta.CustomURL).Msg("Updated host metadata")
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(&meta)
+	json.NewEncoder(w).Encode(meta)
 }
 
 // HandleDeleteMetadata removes metadata for an agent.

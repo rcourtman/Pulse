@@ -140,7 +140,11 @@ func TestDockerMetadataHandlers_RuntimeMetadata(t *testing.T) {
 	})
 
 	t.Run("merge-runtime-metadata", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPut, "/api/docker/runtimes/metadata/host-1", bytes.NewReader([]byte(`{}`)))
+		req := httptest.NewRequest(
+			http.MethodPut,
+			"/api/docker/runtimes/metadata/host-1",
+			bytes.NewReader([]byte(`{"customUrl":"https://replacement.internal"}`)),
+		)
 		rec := httptest.NewRecorder()
 
 		handler.HandleUpdateRuntimeMetadata(rec, req)
@@ -160,6 +164,12 @@ func TestDockerMetadataHandlers_RuntimeMetadata(t *testing.T) {
 		}
 		if got.CustomDisplayName != "Host A" {
 			t.Fatalf("expected merged display name, got %q", got.CustomDisplayName)
+		}
+		if got.CustomURL != "https://replacement.internal" {
+			t.Fatalf("expected patched URL, got %q", got.CustomURL)
+		}
+		if len(got.Notes) != 1 || got.Notes[0] != "note1" {
+			t.Fatalf("expected notes to survive URL patch, got %#v", got.Notes)
 		}
 	})
 

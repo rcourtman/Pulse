@@ -1,10 +1,7 @@
 import { type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
-import {
-  WEB_INTERFACE_LINK_COLOR_CLASS,
-  WebInterfaceNameLink,
-} from '@/components/shared/WebInterfaceNameLink';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
@@ -87,11 +84,11 @@ export const DockerResourceNameCell: Component<{
           title={resolvedIndicator().label}
           ariaHidden
         />
-        <WebInterfaceNameLink
+        <ResourceNameWithWebInterfaceLink
           name={name()}
           url={props.resource.customUrl}
-          class={`truncate font-semibold ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
-          fallbackClass="truncate font-semibold text-base-content"
+          class="min-w-0"
+          nameClass="truncate font-semibold text-base-content"
         />
       </div>
     </TableCell>

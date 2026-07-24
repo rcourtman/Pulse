@@ -119,7 +119,7 @@ import selectionCardGroupStateSource from '@/components/shared/useSelectionCardG
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
-import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
+import webInterfaceLinkSource from '@/components/shared/WebInterfaceLink.tsx?raw';
 import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow.tsx?raw';
 import toastSource from '@/components/Toast/Toast.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
@@ -1522,8 +1522,8 @@ describe('shared primitive guardrails', () => {
     expect(storageGroupRowSource).not.toContain('kind="scope"');
     expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
-    expect(nodeGroupHeaderSource).toContain('WebInterfaceNameLink');
-    expect(webInterfaceNameLinkSource).toContain('event.stopPropagation()');
+    expect(nodeGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(webInterfaceLinkSource).toContain('event.stopPropagation()');
   });
 
   it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {
@@ -5118,7 +5118,7 @@ describe('shared primitive guardrails', () => {
     expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
   });
 
-  it('keeps runtime web-interface launch on the shared resource-name template', () => {
+  it('keeps runtime web-interface launch on the shared inline-link template', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules: Array<{
         id: string;
@@ -5127,16 +5127,17 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules.find(
-      (rule) => rule.id === 'runtime-web-interface-name-link',
+      (rule) => rule.id === 'runtime-web-interface-inline-link',
     );
 
-    expect(registeredRule?.canonical?.path).toBe('src/components/shared/WebInterfaceNameLink.tsx');
-    expect(registeredRule?.canonical?.export).toBe('WebInterfaceNameLink');
-    expect(webInterfaceNameLinkSource).toContain('export const WebInterfaceNameLink');
-    expect(webInterfaceNameLinkSource).toContain('target="_blank"');
-    expect(webInterfaceNameLinkSource).toContain('rel="noopener noreferrer"');
-    expect(webInterfaceNameLinkSource).toContain('event.stopPropagation()');
-    expect(webInterfaceNameLinkSource).toContain('Open web interface for');
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/WebInterfaceLink.tsx');
+    expect(registeredRule?.canonical?.export).toBe('ResourceNameWithWebInterfaceLink');
+    expect(webInterfaceLinkSource).toContain('export const ResourceNameWithWebInterfaceLink');
+    expect(webInterfaceLinkSource).toContain('classifyWebInterfaceUrl');
+    expect(webInterfaceLinkSource).toContain('target="_blank"');
+    expect(webInterfaceLinkSource).toContain('rel="noopener noreferrer"');
+    expect(webInterfaceLinkSource).toContain('event.stopPropagation()');
+    expect(webInterfaceLinkSource).toContain('Open web interface for');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([
         'src/components/shared/NodeGroupHeader.tsx',
@@ -5145,15 +5146,28 @@ describe('shared primitive guardrails', () => {
         'src/features/proxmox/ProxmoxNodesTable.tsx',
         'src/components/Alerts/AlertResourceGroupHeader.tsx',
         'src/components/Alerts/AlertResourceTableRow.tsx',
+        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
+        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
+        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
+        'src/features/docker/DockerNativeTableShared.tsx',
+        'src/features/docker/DockerContainersTable.tsx',
+        'src/features/kubernetes/KubernetesClustersTable.tsx',
+        'src/features/kubernetes/KubernetesNodesTable.tsx',
+        'src/features/kubernetes/KubernetesPodsTable.tsx',
+        'src/features/kubernetes/KubernetesDeploymentsTable.tsx',
+        'src/features/kubernetes/KubernetesServicesTable.tsx',
       ]),
     );
 
-    expect(nodeGroupHeaderSource).toContain('WebInterfaceNameLink');
-    expect(guestRowSource).toContain('WebInterfaceNameLink');
-    expect(agentsMachinesTableSource).toContain('WebInterfaceNameLink');
-    expect(proxmoxNodesTableSource).toContain('WebInterfaceNameLink');
-    expect(alertResourceGroupHeaderSource).toContain('WebInterfaceNameLink');
-    expect(alertResourceTableRowSource).toContain('WebInterfaceNameLink');
+    expect(nodeGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(guestRowSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(agentsMachinesTableSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(proxmoxNodesTableSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(alertResourceGroupHeaderSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(alertResourceTableRowSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(unifiedResourceHostTableCardSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(unifiedResourcePBSTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
+    expect(unifiedResourcePMGTableSectionSource).toContain('ResourceNameWithWebInterfaceLink');
     expect(nodeGroupHeaderSource).not.toContain('target="_blank"');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');

@@ -777,7 +777,7 @@ describe('GuestRow', () => {
   });
 
   describe('custom URL on the name cell', () => {
-    it('renders the workload name as the external link when customUrl is set', () => {
+    it('renders an external link beside the workload name when customUrl is set', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         customUrl: 'https://example.com',
@@ -788,7 +788,9 @@ describe('GuestRow', () => {
       expect(link?.getAttribute('target')).toBe('_blank');
       expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
       expect(link?.getAttribute('aria-label')).toBe('Open web interface for test-vm');
-      expect(link?.textContent).toBe('test-vm');
+      expect(link?.textContent).toBe('');
+      expect(link?.closest('td')?.textContent).toContain('test-vm');
+      expect(screen.getByText('test-vm').closest('a')).toBeNull();
       expect(container.querySelector('td[data-workload-col="link"]')).toBeNull();
     });
 

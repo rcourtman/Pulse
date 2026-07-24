@@ -3326,14 +3326,20 @@ field must suppress "no suggested URL" warnings so Discovery does not make a
 valid manual endpoint look broken.
 Saved web-interface launch affordances must also stay on a shared primitive
 instead of page-local table columns or one-off external-link anchors.
-`frontend-modern/src/components/shared/WebInterfaceNameLink.tsx` owns the
-resource-name link shell, new-tab safety attributes, row-click/key propagation
-containment, fallback text, and accessible launch labels. Workload guest rows,
-grouped node headers, standalone machine rows, Proxmox node rows, and alert
-resource rows/group headers compose that primitive so a saved or inferred URL
-is opened by clicking the resource name on every comparable runtime table.
-Runtime/platform tables must not add separate `Web` columns, page-local
-external-link anchors, or duplicated new-tab safety handling for that launch
+`frontend-modern/src/components/shared/WebInterfaceLink.tsx` owns URL
+classification, the distinct adjacent launch control, new-tab safety
+attributes, row-click/key propagation containment, invalid-URL presentation,
+and accessible launch labels. The resource name remains inert identity text;
+the launch control is a separate keyboard-focusable target with at least a
+24-by-24 CSS-pixel hit area so activating it never doubles as row selection or
+drawer navigation. Workload guest rows, grouped node headers, standalone
+machine rows, Proxmox node rows, Docker/Podman rows, Kubernetes rows, unified
+host/PBS/PMG rows, and alert resource rows/group headers compose that primitive
+for every comparable overview surface. Missing URLs render no fake control.
+Malformed or non-HTTP(S) saved values render a non-interactive accessible
+warning rather than disappearing or becoming executable. Runtime/platform
+tables must not add separate `Web` columns, page-local external-link anchors,
+linked resource names, or duplicated new-tab safety handling for that launch
 affordance.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of

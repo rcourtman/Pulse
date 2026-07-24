@@ -9,10 +9,7 @@ import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ThresholdSlider } from '@/components/Workloads/ThresholdSlider';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import {
-  WEB_INTERFACE_LINK_COLOR_CLASS,
-  WebInterfaceNameLink,
-} from '@/components/shared/WebInterfaceNameLink';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getAlertResourceTableCustomBadgeLabel,
@@ -264,14 +261,12 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             }
           >
             <div class="flex items-center gap-3 min-w-0" title={props.resource.status || undefined}>
-              <WebInterfaceNameLink
+              <ResourceNameWithWebInterfaceLink
                 name={resourceLabel()}
                 url={props.resource.host as string | null | undefined}
-                class={`text-sm font-medium truncate flex-nowrap ${
-                  props.resource.disabled ? 'text-slate-500 ' : WEB_INTERFACE_LINK_COLOR_CLASS
-                }`}
-                fallbackClass={`text-sm font-medium truncate flex-nowrap ${
-                  props.resource.disabled ? 'text-slate-500 ' : 'text-base-content'
+                class="min-w-0"
+                nameClass={`truncate text-sm font-medium ${
+                  props.resource.disabled ? 'text-slate-500' : 'text-base-content'
                 }`}
                 title={`Open ${resourceLabel()} web interface`}
               />

@@ -37,6 +37,7 @@ describe('KubernetesDeploymentsTable', () => {
         resources={[
           makeResource({
             id: 'checkout-api',
+            customUrl: 'https://checkout.internal',
             kubernetes: {
               clusterId: 'prod-euw1',
               clusterName: 'Production EUW1',
@@ -82,6 +83,10 @@ describe('KubernetesDeploymentsTable', () => {
     expect(
       document.querySelector('[data-kubernetes-deployment-row="checkout-api"]'),
     ).not.toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'Open web interface for checkout-api' }),
+    ).toHaveAttribute('href', 'https://checkout.internal');
+    expect(screen.getByText('checkout-api').closest('a')).toBeNull();
   });
 
   it('maps Deployment status from replica progress and orders attention rows first', () => {

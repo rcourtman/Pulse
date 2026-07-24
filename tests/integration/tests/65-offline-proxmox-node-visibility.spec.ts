@@ -40,6 +40,23 @@ const offlineNode = {
   },
 };
 
+const unsafeUrlNode = {
+  ...offlineNode,
+  id: "proxmox:core-fabric:pve6",
+  name: "pve6",
+  customUrl: "javascript:alert(document.domain)",
+  canonicalIdentity: {
+    ...offlineNode.canonicalIdentity,
+    displayName: "Unsafe Link Node",
+    hostname: "pve6",
+  },
+  proxmox: {
+    ...offlineNode.proxmox,
+    nodeName: "pve6",
+    host: "https://pve6:8006",
+  },
+};
+
 async function routeOfflineProxmoxInventory(page: Page) {
   // The browser assertion owns presentation, while the Go lifecycle tests own
   // membership reconciliation. Suppress live websocket inventory here and
@@ -56,8 +73,8 @@ async function routeOfflineProxmoxInventory(page: Page) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        data: [offlineNode],
-        meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
+        data: [offlineNode, unsafeUrlNode],
+        meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
         links: { next: null },
       }),
     });
@@ -99,6 +116,13 @@ test.describe("Offline Proxmox node visibility", () => {
   test("keeps an offline Proxmox node visible on desktop and mobile surfaces", async ({
     page,
   }) => {
+    await page.context().route("https://pve5:8006/**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<title>Proxmox VE</title>",
+      });
+    });
     await routeOfflineProxmoxInventory(page);
     await page.goto("/proxmox", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("proxmox-page")).toBeVisible();
@@ -116,11 +140,59 @@ test.describe("Offline Proxmox node visibility", () => {
     await expect(offlineRow).toContainText("—");
     await expect(offlineRow).not.toContainText("71°C");
     await expect(offlineRow).not.toContainText("28d 0h");
+    const webInterfaceLink = offlineRow.getByRole("link", {
+      name: "Open web interface for Disaster Recovery B",
+    });
+    await expect(webInterfaceLink).toBeVisible();
+    await expect(webInterfaceLink).toHaveAttribute("href", "https://pve5:8006");
+    await expect(webInterfaceLink).toHaveAttribute("target", "_blank");
+    await expect(webInterfaceLink).toHaveAttribute(
+      "rel",
+      "noopener noreferrer",
+    );
+
+    const linkBox = await webInterfaceLink.boundingBox();
+    expect(
+      linkBox,
+      "Web-interface control should have a measurable hit target",
+    ).not.toBeNull();
+    expect(linkBox!.width).toBeGreaterThanOrEqual(24);
+    expect(linkBox!.height).toBeGreaterThanOrEqual(24);
+
+    // Opening the adjacent control must not bubble into the selectable row.
+    await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+    const popupPromise = page.context().waitForEvent("page");
+    await webInterfaceLink.click();
+    const popup = await popupPromise;
+    await popup.waitForLoadState("domcontentloaded");
+    expect(popup.url()).toBe("https://pve5:8006/");
+    await popup.close();
+    await expect(offlineRow).toHaveAttribute("aria-expanded", "false");
+
+    const viewportContainment = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(viewportContainment.scrollWidth).toBeLessThanOrEqual(
+      viewportContainment.clientWidth + 1,
+    );
+
+    const unsafeRow = page
+      .locator('[data-testid="proxmox-page"] tr')
+      .filter({ hasText: "Unsafe Link Node" })
+      .first();
+    await expect(unsafeRow).toBeVisible();
     await expect(
-      offlineRow.getByRole("link", {
-        name: "Open web interface for Disaster Recovery B",
+      unsafeRow.getByRole("img", {
+        name: "Web interface URL for Unsafe Link Node is invalid",
       }),
     ).toBeVisible();
+    await expect(
+      unsafeRow.getByRole("link", {
+        name: "Open web interface for Unsafe Link Node",
+      }),
+    ).toHaveCount(0);
+
     await expect(
       offlineRow.getByRole("button", {
         name: "Expand details for Disaster Recovery B",

@@ -20,6 +20,25 @@ type HostMetadata struct {
 	CommandsEnabled *bool    `json:"commandsEnabled"` // Remote override for AI command execution (nil = use agent default)
 }
 
+func cloneHostMetadata(meta *HostMetadata) *HostMetadata {
+	if meta == nil {
+		return nil
+	}
+
+	clone := *meta
+	if meta.Tags != nil {
+		clone.Tags = append([]string{}, meta.Tags...)
+	}
+	if meta.Notes != nil {
+		clone.Notes = append([]string{}, meta.Notes...)
+	}
+	if meta.CommandsEnabled != nil {
+		commandsEnabled := *meta.CommandsEnabled
+		clone.CommandsEnabled = &commandsEnabled
+	}
+	return &clone
+}
+
 // HostMetadataStore manages host metadata
 type HostMetadataStore struct {
 	mu       sync.RWMutex
@@ -107,7 +126,7 @@ func (s *HostMetadataStore) Get(hostID string) *HostMetadata {
 	defer s.mu.RUnlock()
 
 	if meta, exists := s.metadata[hostID]; exists {
-		return meta
+		return cloneHostMetadata(meta)
 	}
 	return nil
 }
@@ -120,7 +139,7 @@ func (s *HostMetadataStore) GetAll() map[string]*HostMetadata {
 	// Return a copy to prevent external modifications
 	result := make(map[string]*HostMetadata)
 	for k, v := range s.metadata {
-		result[k] = v
+		result[k] = cloneHostMetadata(v)
 	}
 	return result
 }
@@ -134,8 +153,9 @@ func (s *HostMetadataStore) Set(hostID string, meta *HostMetadata) error {
 		return fmt.Errorf("metadata cannot be nil")
 	}
 
-	meta.ID = hostID
-	s.metadata[hostID] = meta
+	clone := cloneHostMetadata(meta)
+	clone.ID = hostID
+	s.metadata[hostID] = clone
 
 	// Save to disk
 	return s.save()
@@ -164,13 +184,13 @@ func (s *HostMetadataStore) ReplaceAll(metadata map[string]*HostMetadata) error 
 			continue
 		}
 
-		clone := *meta
+		clone := cloneHostMetadata(meta)
 		clone.ID = hostID
 		// Ensure slice copy is not nil to allow JSON marshalling of empty tags
 		if clone.Tags == nil {
 			clone.Tags = []string{}
 		}
-		s.metadata[hostID] = &clone
+		s.metadata[hostID] = clone
 	}
 
 	return s.save()

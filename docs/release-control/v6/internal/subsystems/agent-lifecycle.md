@@ -5134,6 +5134,13 @@ That handoff is lifecycle continuity only: it prevents post-reload agent
 reports and resource projection from observing an orphaned metadata cache, and
 does not add a report shape, credential, command, or remote-configuration
 authority.
+Web-interface URL continuity shares that handoff but does not widen lifecycle
+ownership. Docker/Podman display-name updates must merge with the runtime host
+metadata record so they cannot discard its URL or notes, and monitoring
+projection may follow stable source identities across reconnect, rename,
+recreation, or canonical alias migration. None of those navigation-metadata
+operations may reverse a removal tombstone, re-enroll an agent, change report
+identity, or authorize commands.
 
 ### Proxmox install bootstrap and runtime-health authority
 

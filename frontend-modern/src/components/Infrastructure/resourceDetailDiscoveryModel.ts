@@ -25,12 +25,13 @@ export type DiscoveryConfig = {
   agentId: string;
   resourceId: string;
   hostname: string;
-  metadataKind: 'guest' | 'agent' | 'docker';
+  metadataKind: 'guest' | 'agent' | 'docker' | 'docker-host';
   metadataId: string;
   targetLabel: string;
 };
 
 type ProxmoxPlatformData = {
+  sourceId?: string;
   nodeName?: string;
   vmid?: number;
 };
@@ -171,6 +172,58 @@ const getMetadataTarget = (
   };
 };
 
+const getHostMetadataTarget = (
+  resource: Resource,
+  platformData: PlatformData | undefined,
+  fallbackId: string,
+): Pick<DiscoveryConfig, 'metadataKind' | 'metadataId'> => {
+  const canonicalResourceType = canonicalDiscoveryResourceType(resource.type) || resource.type;
+  const kubernetesPlatformData = platformData?.kubernetes;
+  const kubernetesClusterId =
+    asString(resource.kubernetes?.clusterId) || asString(kubernetesPlatformData?.clusterId);
+  const kubernetesNodeName =
+    asString(resource.kubernetes?.nodeName) ||
+    asString((kubernetesPlatformData as { nodeName?: unknown } | undefined)?.nodeName) ||
+    asString(resource.name);
+
+  if (canonicalResourceType === 'docker-host') {
+    return {
+      metadataKind: 'docker-host',
+      metadataId: getActionableDockerRuntimeIdFromResource(resource) || fallbackId,
+    };
+  }
+
+  if (canonicalResourceType === 'k8s-node' && kubernetesClusterId && kubernetesNodeName) {
+    return {
+      metadataKind: 'agent',
+      metadataId: `${kubernetesClusterId}:node:${kubernetesNodeName}`,
+    };
+  }
+
+  if (canonicalResourceType === 'k8s-cluster' && kubernetesClusterId) {
+    return { metadataKind: 'agent', metadataId: kubernetesClusterId };
+  }
+
+  if (canonicalResourceType === 'pbs' && asString(resource.pbs?.instanceId)) {
+    return { metadataKind: 'agent', metadataId: asString(resource.pbs?.instanceId)! };
+  }
+
+  if (canonicalResourceType === 'pmg' && asString(resource.pmg?.instanceId)) {
+    return { metadataKind: 'agent', metadataId: asString(resource.pmg?.instanceId)! };
+  }
+
+  const proxmoxSourceId =
+    asString(resource.proxmox?.sourceId) || asString(platformData?.proxmox?.sourceId);
+  if (canonicalResourceType === 'agent' && proxmoxSourceId) {
+    return { metadataKind: 'agent', metadataId: proxmoxSourceId };
+  }
+
+  return {
+    metadataKind: 'agent',
+    metadataId: fallbackId,
+  };
+};
+
 export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null => {
   const platformData = resource.platformData as PlatformData | undefined;
   const explicitDiscoveryTarget = resource.discoveryTarget;
@@ -208,7 +261,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       const hostname = explicitDiscoveryTarget.hostname || getPreferredHostLabel(resource);
       const isHostDiscovery = isAgentDiscoveryResourceType(resourceType);
       const metadataTarget = isHostDiscovery
-        ? { metadataKind: 'agent' as const, metadataId: explicitDiscoveryAgentId }
+        ? getHostMetadataTarget(resource, platformData, explicitDiscoveryAgentId)
         : getMetadataTarget(resource, resourceType, platformData);
       const targetLabel = isHostDiscovery
         ? 'agent'
@@ -265,6 +318,8 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     actionableDockerHostId ||
     actionableKubernetesId ||
     actionableAgentId ||
+    asString(resource.pbs?.instanceId) ||
+    asString(resource.pmg?.instanceId) ||
     proxmoxNodeName ||
     platformData?.agent?.hostname ||
     asString(dockerPlatformData?.hostname) ||
@@ -284,6 +339,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     resource.id;
   const hostname = getPreferredHostLabel(resource);
   const canonicalResourceType = canonicalDiscoveryResourceType(resource.type) || resource.type;
+  const hostMetadataTarget = getHostMetadataTarget(resource, platformData, agentLookupId);
 
   switch (canonicalResourceType) {
     case 'agent':
@@ -292,7 +348,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     case 'pmg':
     case 'k8s-cluster':
     case 'k8s-node':
-      if (!isDiscoveryLookupValue(agentLookupId)) {
+      if (!isDiscoveryLookupValue(hostMetadataTarget.metadataId)) {
         return null;
       }
       return {
@@ -300,9 +356,9 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         agentId: agentLookupId,
         resourceId: agentLookupId,
         hostname,
-        metadataKind: 'agent',
-        metadataId: agentLookupId,
-        targetLabel: 'agent',
+        metadataKind: hostMetadataTarget.metadataKind,
+        metadataId: hostMetadataTarget.metadataId,
+        targetLabel: canonicalResourceType === 'agent' ? 'agent' : 'host',
       };
     case 'vm':
       if (hasVMwareScope(resource, platformData) && !(proxmoxNodeName && vmidResourceId)) {

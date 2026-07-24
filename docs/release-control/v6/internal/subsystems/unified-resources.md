@@ -499,10 +499,15 @@ contract instead of a VMware-local row model or custom vSphere detail shell.
 The split also applies to web-interface launch affordances. Unified-resource
 tables own whether a row has a saved, inferred, or source-native web-interface
 URL and how that URL is derived, but the visible launch affordance belongs on
-the resource name through the shared `WebInterfaceNameLink` primitive. Proxmox
-host table columns are governed by `proxmoxHostTableModel.ts`; that model must
-not reintroduce a separate `Web` column or move the web-interface launch back
-into a page-local icon cell.
+an adjacent control through the shared `WebInterfaceLink` primitive. Resource
+names remain inert identity text, while the separate accessible launch target
+owns new-tab behavior and event containment. Proxmox host table columns are
+governed by `proxmoxHostTableModel.ts`; that model must not reintroduce a
+separate `Web` column, a linked row name, or a page-local launch implementation.
+The same presentation contract applies to Docker/Podman hosts and containers,
+standalone agents, PBS/PMG instances, Kubernetes clusters/nodes/workloads, and
+card or mobile variants. An absent URL is honestly absent, while an invalid or
+unsafe saved value remains visible as a non-interactive warning.
 Persisted workload URLs must also use the same stable identity in the workload
 and infrastructure drawers. Docker app containers use
 `app-container:<host>:name:<normalized-name>`; Kubernetes pods, Deployments,

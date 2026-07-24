@@ -37,6 +37,7 @@ import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
 import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
+import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents';
 import {
   normalizeSourcePlatformScopes,
   resolvePlatformTypeFromSources,
@@ -181,6 +182,7 @@ type APIResource = {
   type?: string;
   name?: string;
   status?: string;
+  customUrl?: string;
   uptime?: number;
   lastSeen?: string;
   parentName?: string;
@@ -205,6 +207,7 @@ type APIResource = {
   parentId?: string;
   tags?: string[];
   proxmox?: {
+    sourceId?: string;
     nodeName?: string;
     clusterName?: string;
     instance?: string;
@@ -801,6 +804,7 @@ const toResource = (v2: APIResource): Resource => {
     ceph: v2.ceph as ResourceCephMeta | undefined,
     proxmox: v2.proxmox
       ? {
+          sourceId: v2.proxmox.sourceId,
           vmid: v2.proxmox.vmid,
           node: v2.proxmox.nodeName,
           nodeName: v2.proxmox.nodeName,
@@ -855,6 +859,7 @@ const toResource = (v2: APIResource): Resource => {
       v2.docker?.temperature ??
       v2.kubernetes?.temperature ??
       v2.physicalDisk?.temperature,
+    customUrl: asTrimmedString(v2.customUrl),
     tags: v2.tags,
     lastSeen: Number.isFinite(lastSeen) ? lastSeen : Date.now(),
     identity: {
@@ -1571,8 +1576,31 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
   });
 
+  const handleResourceMetadataChanged = () => {
+    if (!enabled()) {
+      return;
+    }
+    const activeRequest = inFlightRefetch;
+    void (async () => {
+      // A save can land while the initial snapshot is still settling. Wait for
+      // that request before forcing the post-save snapshot so the metadata
+      // event cannot be swallowed by normal in-flight request coalescing.
+      if (activeRequest) {
+        await activeRequest.catch(() => undefined);
+      }
+      if (!enabled()) {
+        return;
+      }
+      await runRefetch({ force: true, source: 'manual', background: true });
+    })().catch((err) => {
+      logger.debug('[useUnifiedResources] Metadata-triggered refetch failed', err);
+    });
+  };
+  window.addEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleResourceMetadataChanged);
+
   onCleanup(() => {
     unsubscribeOrgSwitch();
+    window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, handleResourceMetadataChanged);
     clearInitialHydrationTimeout();
     clearCanonicalRevalidationTimeout();
     clearRefreshTimeout();

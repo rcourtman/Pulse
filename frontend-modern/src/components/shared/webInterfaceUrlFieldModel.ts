@@ -1,7 +1,7 @@
 import { getDiscoverySuggestedURLFallback } from '@/utils/discoveryPresentation';
 
 export interface WebInterfaceUrlFieldProps {
-  metadataKind: 'guest' | 'agent' | 'docker';
+  metadataKind: 'guest' | 'agent' | 'docker' | 'docker-host';
   metadataId?: string;
   targetLabel?: string;
   title?: string;
@@ -20,25 +20,50 @@ export function normalizeWebInterfaceUrl(value?: string | null): string {
   return (value || '').trim();
 }
 
-export function validateWebInterfaceCustomUrl(value: string): string | null {
-  if (!value) return null;
+export type WebInterfaceUrlClassification =
+  | { status: 'missing'; url: '' }
+  | { status: 'invalid'; url: string; error: string }
+  | { status: 'valid'; url: string };
+
+export function classifyWebInterfaceUrl(value?: string | null): WebInterfaceUrlClassification {
+  const url = normalizeWebInterfaceUrl(value);
+  if (!url) {
+    return { status: 'missing', url: '' };
+  }
 
   let parsed: URL;
   try {
-    parsed = new URL(value);
+    parsed = new URL(url);
   } catch {
-    return 'Enter a valid URL (for example: https://198.51.100.100:8080).';
+    return {
+      status: 'invalid',
+      url,
+      error: 'Enter a valid URL (for example: https://198.51.100.100:8080).',
+    };
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return 'URL must start with http:// or https://.';
+    return {
+      status: 'invalid',
+      url,
+      error: 'URL must start with http:// or https://.',
+    };
   }
 
   if (!parsed.hostname) {
-    return 'URL is missing a hostname or IP address.';
+    return {
+      status: 'invalid',
+      url,
+      error: 'URL is missing a hostname or IP address.',
+    };
   }
 
-  return null;
+  return { status: 'valid', url };
+}
+
+export function validateWebInterfaceCustomUrl(value: string): string | null {
+  const result = classifyWebInterfaceUrl(value);
+  return result.status === 'invalid' ? result.error : null;
 }
 
 export function getWebInterfaceTargetLabel(
@@ -69,7 +94,7 @@ export function shouldShowWebInterfaceSuggestedUrl(options: {
   suggestedUrl?: string;
 }): boolean {
   const suggested = normalizeWebInterfaceUrl(options.suggestedUrl);
-  if (!suggested) return false;
+  if (classifyWebInterfaceUrl(suggested).status !== 'valid') return false;
   return suggested !== normalizeWebInterfaceUrl(options.currentUrl);
 }
 

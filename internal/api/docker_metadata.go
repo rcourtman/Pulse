@@ -15,6 +15,34 @@ const (
 	dockerRuntimeMetadataPathPrefix     = "/api/docker/runtimes/metadata/"
 )
 
+func mergeDockerMetadataPatch(
+	id string,
+	existing,
+	incoming *config.DockerMetadata,
+	fields map[string]json.RawMessage,
+) *config.DockerMetadata {
+	result := &config.DockerMetadata{ID: id}
+	if existing != nil {
+		*result = *existing
+		result.Tags = cloneStringSlice(existing.Tags)
+		result.Notes = cloneStringSlice(existing.Notes)
+	}
+	result.ID = id
+	if metadataPatchHasField(fields, "customUrl") {
+		result.CustomURL = incoming.CustomURL
+	}
+	if metadataPatchHasField(fields, "description") {
+		result.Description = incoming.Description
+	}
+	if metadataPatchHasField(fields, "tags") {
+		result.Tags = cloneStringSlice(incoming.Tags)
+	}
+	if metadataPatchHasField(fields, "notes") {
+		result.Notes = cloneStringSlice(incoming.Notes)
+	}
+	return result
+}
+
 // DockerMetadataHandler handles Docker resource metadata operations
 type DockerMetadataHandler struct {
 	mtPersistence *config.MultiTenantPersistence
@@ -74,6 +102,10 @@ func (h *DockerMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *h
 		"Failed to save Docker metadata",
 		"Updated Docker metadata",
 		func(meta *config.DockerMetadata) string { return meta.CustomURL },
+		func(ctx context.Context, id string) *config.DockerMetadata {
+			return h.getStore(ctx).Get(id)
+		},
+		mergeDockerMetadataPatch,
 		func(ctx context.Context, id string, meta *config.DockerMetadata) error {
 			return h.getStore(ctx).Set(id, meta)
 		},
@@ -162,38 +194,32 @@ func (h *DockerMetadataHandler) HandleUpdateRuntimeMetadata(w http.ResponseWrite
 		return
 	}
 
-	// Limit request body to 16KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-
-	var meta config.DockerHostMetadata
-	if err := json.NewDecoder(r.Body).Decode(&meta); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	var incoming config.DockerHostMetadata
+	fields, decoded := decodeBoundedMetadataPatch(w, r, &incoming)
+	if !decoded {
 		return
 	}
 
-	// Validate URL if provided
-	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
-		http.Error(w, errMsg, http.StatusBadRequest)
-		return
-	}
-
-	// Get existing metadata to merge with new data
 	store := h.getStore(r.Context())
-	existing := store.GetHostMetadata(runtimeID)
-	if existing != nil {
-		// Merge: only update fields that are provided
-		if meta.CustomDisplayName != "" || existing.CustomDisplayName != "" {
-			if meta.CustomDisplayName == "" {
-				meta.CustomDisplayName = existing.CustomDisplayName
-			}
+	meta := store.GetHostMetadata(runtimeID)
+	if meta == nil {
+		meta = &config.DockerHostMetadata{}
+	}
+	if metadataPatchHasField(fields, "customDisplayName") {
+		meta.CustomDisplayName = incoming.CustomDisplayName
+	}
+	if metadataPatchHasField(fields, "customUrl") {
+		if errMsg := validateCustomURL(incoming.CustomURL); errMsg != "" {
+			http.Error(w, errMsg, http.StatusBadRequest)
+			return
 		}
-		// CustomURL can be explicitly cleared, so we don't merge it unless updating
-		if meta.Notes == nil && existing.Notes != nil {
-			meta.Notes = existing.Notes
-		}
+		meta.CustomURL = incoming.CustomURL
+	}
+	if metadataPatchHasField(fields, "notes") {
+		meta.Notes = cloneStringSlice(incoming.Notes)
 	}
 
-	if err := store.SetHostMetadata(runtimeID, &meta); err != nil {
+	if err := store.SetHostMetadata(runtimeID, meta); err != nil {
 		log.Error().Err(err).Str("runtimeID", runtimeID).Msg("Failed to save Docker / Podman host metadata")
 		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
@@ -202,7 +228,7 @@ func (h *DockerMetadataHandler) HandleUpdateRuntimeMetadata(w http.ResponseWrite
 	log.Info().Str("runtimeID", runtimeID).Str("url", meta.CustomURL).Msg("Updated Docker / Podman host metadata")
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(&meta)
+	json.NewEncoder(w).Encode(meta)
 }
 
 // HandleDeleteRuntimeMetadata removes metadata for a Docker / Podman host.

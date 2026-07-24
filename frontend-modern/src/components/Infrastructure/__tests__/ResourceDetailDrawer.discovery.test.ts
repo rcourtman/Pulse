@@ -134,9 +134,9 @@ describe('toDiscoveryConfig', () => {
       agentId: 'docker-host-1',
       resourceId: 'docker-host-1',
       hostname: 'stale-hostname',
-      metadataKind: 'agent',
+      metadataKind: 'docker-host',
       metadataId: 'docker-host-1',
-      targetLabel: 'agent',
+      targetLabel: 'host',
     });
   });
 

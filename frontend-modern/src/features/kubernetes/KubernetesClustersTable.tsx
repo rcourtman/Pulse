@@ -3,6 +3,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -287,9 +288,12 @@ export const KubernetesClustersTable: Component<{
                                 title={cluster.status || 'unknown'}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <ResourceNameWithWebInterfaceLink
+                                name={name()}
+                                url={cluster.customUrl}
+                                class="min-w-0"
+                                nameClass="truncate font-semibold text-base-content"
+                              />
                               <Show when={cluster.kubernetes?.pendingUninstall === true}>
                                 <span class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                                   Pending uninstall

@@ -3836,7 +3836,7 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/shared/WebInterfaceNameLink.tsx",
+          "path": "frontend-modern/src/components/shared/WebInterfaceLink.tsx",
           "kind": "file"
         },
         {

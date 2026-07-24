@@ -41,7 +41,7 @@ afterEach(() => {
 
 describe('KubernetesClustersTable', () => {
   it('renders canonical CPU and memory metric primitives for cluster rows', () => {
-    const cluster = makeClusterResource();
+    const cluster = makeClusterResource({ customUrl: 'https://kubernetes.internal' });
 
     render(() => (
       <KubernetesClustersTable
@@ -71,6 +71,11 @@ describe('KubernetesClustersTable', () => {
     expect(screen.getByTestId('responsive-metric-cell')).toBeInTheDocument();
     expect(screen.getByTestId('stacked-memory-bar')).toBeInTheDocument();
     expect(screen.queryByText('Pending uninstall')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open web interface for prod-west' })).toHaveAttribute(
+      'href',
+      'https://kubernetes.internal',
+    );
+    expect(screen.getByText('prod-west').closest('a')).toBeNull();
   });
 
   it('renders child counts through the shared count-ratio primitive', () => {

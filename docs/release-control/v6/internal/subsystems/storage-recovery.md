@@ -2396,6 +2396,12 @@ storage/recovery authority. Guest metadata import must reload the active
 tenant monitor's live store so recovery and resource projections observe one
 post-import state; it must not leave a parallel persistence cache or reload the
 default tenant on behalf of another organization.
+Saved web-interface metadata is likewise adjacent navigation state, not
+storage or recovery evidence. Storage/recovery consumers may inherit a safe
+canonical resource URL after the tenant-scoped unified-resource projection
+refreshes, but save/remove change events, metadata reloads, and browser launch
+controls do not prove backup freshness, restore readiness, protection posture,
+or provider reachability and must not create a storage-local URL authority.
 
 Host-agent removal tombstones in `internal/config/host_continuity.go` are an
 adjacent agent-lifecycle security journal, not storage or recovery inventory.

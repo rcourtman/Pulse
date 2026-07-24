@@ -11,10 +11,7 @@ import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  WEB_INTERFACE_LINK_COLOR_CLASS,
-  WebInterfaceNameLink,
-} from '@/components/shared/WebInterfaceNameLink';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
@@ -372,21 +369,21 @@ export const ProxmoxNodesTable: Component<{
                             title={node.status || 'unknown'}
                             ariaHidden
                           />
-                          <WebInterfaceNameLink
+                          <ResourceNameWithWebInterfaceLink
                             name={name()}
                             url={externalUrl()}
-                            class={`truncate font-semibold ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
-                            fallbackClass="truncate font-semibold text-base-content"
+                            class="min-w-0"
+                            nameClass="truncate font-semibold text-base-content"
                             title={`Open ${name()} web interface`}
                           />
                           <Show when={!isOnline()}>
-                            <span class="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                            <span class="hidden rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
                               {availabilityLabel()}
                             </span>
                           </Show>
                           <Show when={isOnline() && pendingUpdates() > 0}>
                             <span
-                              class={`rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap ${
+                              class={`hidden rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap sm:inline-flex ${
                                 pendingUpdates() >= 10
                                   ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
                                   : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
