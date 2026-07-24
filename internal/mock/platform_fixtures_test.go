@@ -260,24 +260,42 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 	graph := buildFixtureGraph(DefaultConfig, now)
 	resources, _ := graph.UnifiedResourceSnapshot()
 
+	// A configured check does not collapse into the resource it matches. It
+	// keeps its own source-owned network-endpoint row, which owns probe status,
+	// incidents and history, and additively projects a facet onto the matched
+	// resource. Both therefore carry the same TargetID, so the matched service
+	// has to be selected by resource type rather than by target alone.
 	var dockerService *unifiedresources.Resource
 	var kubernetesService *unifiedresources.Resource
+	var dockerEndpoint *unifiedresources.Resource
+	var kubernetesEndpoint *unifiedresources.Resource
 	for i := range resources {
 		availability := resources[i].Availability
 		if availability == nil {
 			continue
 		}
+		isEndpoint := resources[i].Type == unifiedresources.ResourceTypeNetworkEndpoint
 		switch availability.TargetID {
 		case "mock-availability-docker-frontend-service":
-			dockerService = &resources[i]
+			if isEndpoint {
+				dockerEndpoint = &resources[i]
+			} else {
+				dockerService = &resources[i]
+			}
 		case "mock-availability-k8s-checkout-api":
-			kubernetesService = &resources[i]
+			if isEndpoint {
+				kubernetesEndpoint = &resources[i]
+			} else {
+				kubernetesService = &resources[i]
+			}
 		}
-		if resources[i].Type == unifiedresources.ResourceTypeNetworkEndpoint &&
-			(availability.TargetID == "mock-availability-docker-frontend-service" ||
-				availability.TargetID == "mock-availability-k8s-checkout-api") {
-			t.Fatalf("service availability target %q stayed as standalone network endpoint", availability.TargetID)
-		}
+	}
+
+	if dockerEndpoint == nil {
+		t.Fatal("Docker service check lost its source-owned network-endpoint row")
+	}
+	if kubernetesEndpoint == nil {
+		t.Fatal("Kubernetes service check lost its source-owned network-endpoint row")
 	}
 
 	if dockerService == nil {
@@ -303,15 +321,8 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 		dockerService.Availability.Evidence.Subject.ResourceID != dockerService.ID {
 		t.Fatalf("Docker service availability trust contract = %+v", dockerService.Availability)
 	}
-	hasChecksRelationship := false
-	for _, relationship := range dockerService.Relationships {
-		if relationship.Type == unifiedresources.RelChecks &&
-			relationship.TargetID == dockerService.ID {
-			hasChecksRelationship = true
-		}
-	}
-	if !hasChecksRelationship {
-		t.Fatalf("Docker service relationships = %+v, want checks edge", dockerService.Relationships)
+	if !hasChecksEdgeTo(dockerEndpoint, dockerService.ID) {
+		t.Fatalf("Docker check relationships = %+v, want outgoing checks edge to %s", dockerEndpoint.Relationships, dockerService.ID)
 	}
 
 	if kubernetesService == nil {
@@ -332,6 +343,24 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 	if !slices.Contains(kubernetesService.Sources, unifiedresources.SourceAvailability) {
 		t.Fatalf("expected Kubernetes service sources to include availability, got %+v", kubernetesService.Sources)
 	}
+	if !hasChecksEdgeTo(kubernetesEndpoint, kubernetesService.ID) {
+		t.Fatalf("Kubernetes check relationships = %+v, want outgoing checks edge to %s", kubernetesEndpoint.Relationships, kubernetesService.ID)
+	}
+}
+
+// hasChecksEdgeTo reports whether the source-owned check row carries the
+// outgoing checks relationship to the resource it matched. The check row owns
+// that edge; the matched resource carries only the projected facet.
+func hasChecksEdgeTo(check *unifiedresources.Resource, matchedID string) bool {
+	if check == nil {
+		return false
+	}
+	for _, relationship := range check.Relationships {
+		if relationship.Type == unifiedresources.RelChecks && relationship.TargetID == matchedID {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuildFixtureGraphRebasesPlatformFixtureTimestampsForDemoRuntime(t *testing.T) {
