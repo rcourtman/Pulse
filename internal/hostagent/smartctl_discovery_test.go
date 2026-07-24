@@ -23,9 +23,20 @@ const scanOpenPVENVMeOnly = `/dev/nvme0 -d nvme # /dev/nvme0, NVMe device
 /dev/nvme1 -d nvme # /dev/nvme1, NVMe device
 `
 
-// scanOpenPVESATA is verbatim `smartctl --scan` output from a PVE 9.1.9
-// host with a single SATA SSD (minipc, 2026-06-10).
-const scanOpenPVESATA = `/dev/sda -d sat # /dev/sda [SAT], ATA device
+// scanSATA is the shape `smartctl --scan` really returns for a libata disk.
+//
+// Captured from Unraid (tower, smartctl 7.5 2025-04-30 r5714, 2026-07-24):
+// the non-opening scan cannot interrogate the device, so every SATA disk is
+// reported as a generic SCSI device, never as `-d sat`:
+//
+//	/dev/sdb -d scsi # /dev/sdb, SCSI device
+//
+// The previous value here carried `-d sat # /dev/sda [SAT], ATA device`, which
+// is `--scan-open` output relabelled when discovery moved to `--scan`. Probe
+// selection discards this mismatched hint via smartctlDeviceTypeMatchesTransport
+// and falls back to untyped plus the inferred `-d sat`, which is what makes the
+// real scan usable. See TestScanReportedSCSITypeStillProbesSATADisksAsSAT.
+const scanSATA = `/dev/sda -d scsi # /dev/sda, SCSI device
 `
 
 // smartctlSATAProbeJSON carries the key fields of a real
@@ -51,15 +62,17 @@ const smartctlNVMeProbeJSON = `{
 	"temperature": {"current": 37}
 }`
 
-func TestParseSmartctlScanOpenTargetsRealPVEOutput(t *testing.T) {
-	targets := parseSmartctlScanTargets([]byte(scanOpenPVENVMeOnly+scanOpenPVESATA), nil)
+func TestParseSmartctlScanTargetsRealScanOutput(t *testing.T) {
+	targets := parseSmartctlScanTargets([]byte(scanOpenPVENVMeOnly+scanSATA), nil)
 	if len(targets) != 3 {
 		t.Fatalf("expected 3 targets, got %#v", targets)
 	}
 	if targets[0].Path != "/dev/nvme0" || targets[0].DeviceType != "nvme" {
 		t.Errorf("unexpected first target: %#v", targets[0])
 	}
-	if targets[2].Path != "/dev/sda" || targets[2].DeviceType != "sat" {
+	// Real `--scan` cannot open the device, so a libata disk arrives typed as
+	// a generic SCSI device. Probe selection is what recovers from that.
+	if targets[2].Path != "/dev/sda" || targets[2].DeviceType != "scsi" {
 		t.Errorf("unexpected SATA target: %#v", targets[2])
 	}
 }
@@ -294,6 +307,9 @@ func TestCollectSMARTLocalEmitsIdentityOnlyEntryWhenSMARTUnavailable(t *testing.
 		map[string]string{
 			"/sys/block/sda/size":         "1000215216\n", // 512110190592 bytes
 			"/sys/block/sda/device/model": "N900-512        \n",
+			// A real libata host exposes vendor ATA; without it the scan's
+			// generic "scsi" type would be the only evidence available.
+			"/sys/block/sda/device/vendor": "ATA     \n",
 		},
 	)
 
@@ -307,7 +323,7 @@ func TestCollectSMARTLocalEmitsIdentityOnlyEntryWhenSMARTUnavailable(t *testing.
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if len(args) == 1 && args[0] == "--scan" {
-			return []byte(scanOpenPVESATA), nil
+			return []byte(scanSATA), nil
 		}
 		return []byte(smartctlNoDataJSON), nil
 	}
@@ -378,7 +394,7 @@ func TestCollectSMARTLocalSkipsIdentityOnlyEntries(t *testing.T) {
 
 		smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			if len(args) == 1 && args[0] == "--scan" {
-				return []byte(scanOpenPVESATA), nil
+				return []byte(scanSATA), nil
 			}
 			return []byte(smartctlNoDataJSON), nil
 		}

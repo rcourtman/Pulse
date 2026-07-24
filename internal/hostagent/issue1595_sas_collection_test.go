@@ -348,3 +348,73 @@ func TestSATABehindSASControllerClassifiesAsSATA(t *testing.T) {
 		t.Fatalf("inferred device types = %v, want the sat hint first", types)
 	}
 }
+
+// TestScanReportedSCSITypeStillProbesSATADisksAsSAT drives the real Unraid
+// discovery shape end to end.
+//
+// Captured from tower (Unraid 6.18.33, smartctl 7.5 2025-04-30 r5714,
+// 2026-07-24). The non-opening `smartctl --scan` cannot interrogate a device,
+// so every libata disk is reported as a generic SCSI device:
+//
+//	/dev/sdb -d scsi # /dev/sdb, SCSI device
+//	/dev/nvme0 -d nvme # /dev/nvme0, NVMe device
+//
+// and sysfs on the same host carries no protocol/transport/sas_address for
+// those disks, only vendor "ATA" under an /ataN/ path. Discovery must therefore
+// treat the scan's "scsi" as the hint it is and still reach "-d sat", otherwise
+// every SATA disk on an Unraid array gets probed as SCSI, which is exactly what
+// the #1612 work set out to stop.
+func TestScanReportedSCSITypeStillProbesSATADisksAsSAT(t *testing.T) {
+	origRead := smartctlReadFile
+	origEval := smartctlEvalSymlinks
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		smartctlReadFile = origRead
+		smartctlEvalSymlinks = origEval
+		runtimeGOOS = origGOOS
+	})
+	runtimeGOOS = "linux"
+
+	// Exactly what tower reports for an array member.
+	smartctlReadFile = func(path string) ([]byte, error) {
+		if filepath.ToSlash(path) == "/sys/block/sdb/device/vendor" {
+			return []byte("ATA     "), nil
+		}
+		return nil, fs.ErrNotExist
+	}
+	smartctlEvalSymlinks = func(string) (string, error) {
+		return "/sys/devices/pci0000:00/0000:00:11.0/ata1/host0/target0:0:0/0:0:0:0", nil
+	}
+
+	target := smartctlTarget{Path: "/dev/sdb", DeviceType: "scsi"}
+
+	if got := linuxSMARTTargetTransport(target); got != "sata" {
+		t.Fatalf("transport = %q, want %q", got, "sata")
+	}
+	if smartctlDeviceTypeMatchesTransport(target.DeviceType, "sata") {
+		t.Fatal("the scan's generic scsi type must not be accepted for a SATA transport")
+	}
+
+	attempts := smartctlProbeAttempts(target)
+	if len(attempts) == 0 {
+		t.Fatal("no probe attempts for a scan-discovered SATA disk")
+	}
+
+	var sawSAT bool
+	for _, attempt := range attempts {
+		for i, arg := range attempt {
+			if arg != "-d" || i+1 >= len(attempt) {
+				continue
+			}
+			if attempt[i+1] == "scsi" {
+				t.Fatalf("SATA disk probed as scsi: %v", attempt)
+			}
+			if attempt[i+1] == "sat" {
+				sawSAT = true
+			}
+		}
+	}
+	if !sawSAT {
+		t.Fatalf("no -d sat probe attempted for a SATA disk: %v", attempts)
+	}
+}

@@ -2185,6 +2185,20 @@ Agent` secondary handoff against the live setup wizard instead of relying
     coverage: `TestSATABehindSASControllerClassifiesAsSATA` in
     `internal/hostagent/issue1595_sas_collection_test.go`.
 
+24. `smartctl --scan` device types are hints, not ground truth, and discovery
+    fixtures must come from the command actually being run. The non-opening
+    scan cannot interrogate a device, so on a real host every libata disk is
+    reported as `-d scsi` (captured from Unraid, smartctl 7.5, 2026-07-24),
+    never `-d sat`. Probe selection therefore has to reject a scan type that
+    contradicts the sysfs transport evidence and still reach `-d sat`, or every
+    SATA array member is probed as SCSI. Fixtures relabelled from `--scan-open`
+    to `--scan` describe a scan shape that never occurs and cannot prove this.
+    Regression coverage:
+    `TestScanReportedSCSITypeStillProbesSATADisksAsSAT` in
+    `internal/hostagent/issue1595_sas_collection_test.go` and
+    `TestParseSmartctlScanTargetsRealScanOutput` in
+    `internal/hostagent/smartctl_discovery_test.go`.
+
 ## Current State
 
 ### PBS connection health does not create agent lifecycle evidence
