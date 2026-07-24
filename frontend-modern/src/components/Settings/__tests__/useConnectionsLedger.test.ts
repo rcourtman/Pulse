@@ -199,6 +199,69 @@ describe('useConnectionsLedger', () => {
     expect(result.rows()[119]).toBe(firstRows[119]);
   });
 
+  it('invalidates a cached cluster row when immutable or native member identity changes', async () => {
+    const connection: Connection = {
+      id: 'pve:cluster',
+      type: 'pve',
+      name: 'cluster',
+      address: 'https://pve1:8006',
+      state: 'active',
+      stateReason: '',
+      enabled: true,
+      surfaces: ['nodes'],
+      scope: { nodes: true },
+      lastSeen: null,
+      lastError: null,
+      source: 'manual',
+      capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+    };
+    const system = (nodeIdentity: string, nativeName: string): ConnectionSystem => ({
+      id: connection.id,
+      type: 'pve',
+      clusterName: 'production',
+      components: [{ connectionId: connection.id, type: 'pve', role: 'primary' }],
+      members: [
+        {
+          id: 'node',
+          nodeIdentity,
+          name: 'Render East',
+          nativeName,
+          state: 'active',
+        },
+      ],
+    });
+    const listSpy = vi
+      .spyOn(ConnectionsAPI, 'list')
+      .mockResolvedValueOnce({
+        connections: [connection],
+        systems: [system('production-pve-old', 'pve-old')],
+      })
+      .mockResolvedValueOnce({
+        connections: [connection],
+        systems: [system('production-pve-new', 'pve-new')],
+      });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    const firstRow = result.rows()[0];
+    expect(firstRow.members[0]).toMatchObject({
+      name: 'Render East',
+      nodeIdentity: 'production-pve-old',
+      nativeName: 'pve-old',
+    });
+
+    result.reload();
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(result.rows()[0].members[0]).toMatchObject({
+        name: 'Render East',
+        nodeIdentity: 'production-pve-new',
+        nativeName: 'pve-new',
+      }),
+    );
+    expect(result.rows()[0]).not.toBe(firstRow);
+  });
+
   it('retains the fulfilled ledger while a reload is in flight', async () => {
     const firstConnection: Connection = {
       id: 'agent:tower',

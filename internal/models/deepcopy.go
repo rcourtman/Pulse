@@ -143,6 +143,7 @@ func cloneGuestNetworkInterfaces(src []GuestNetworkInterface) []GuestNetworkInte
 func cloneNode(src Node) Node {
 	dest := src
 	dest.LoadAverage = append([]float64(nil), src.LoadAverage...)
+	dest.NativeNameAliases = append([]string(nil), src.NativeNameAliases...)
 	dest.Temperature = cloneTemperature(src.Temperature)
 	dest.TemperatureMonitoringEnabled = cloneBoolPtr(src.TemperatureMonitoringEnabled)
 	return dest.NormalizeCollections()

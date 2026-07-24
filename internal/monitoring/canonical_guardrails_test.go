@@ -1295,7 +1295,7 @@ func TestStoragePollingKeepsSharedStorageClusterStatusCanonical(t *testing.T) {
 	}
 }
 
-func TestMonitoringProxmoxClusterNodeDisplayNamesStayClusterQualified(t *testing.T) {
+func TestMonitoringProxmoxClusterNodeDisplayNamesUsePersistedPresentationIdentity(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {
 		t.Fatalf("failed to read monitor.go: %v", err)
@@ -1304,9 +1304,7 @@ func TestMonitoringProxmoxClusterNodeDisplayNamesStayClusterQualified(t *testing
 
 	for _, snippet := range []string{
 		"func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {",
-		"clusterLabel := friendly",
-		"clusterLabel = strings.TrimSpace(instance.ClusterName)",
-		`return fmt.Sprintf("%s (%s)", clusterLabel, baseName)`,
+		"config.PVEClusterNodePresentation(instance, baseName)",
 		"return baseName",
 	} {
 		if !strings.Contains(source, snippet) {

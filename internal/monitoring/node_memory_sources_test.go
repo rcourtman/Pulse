@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -137,6 +138,17 @@ func TestPollPVENodePrefersLinkedHostDiskOverRootFS(t *testing.T) {
 	mon := newTestPVEMonitor("test")
 	defer mon.alertManager.Stop()
 	defer mon.notificationMgr.Stop()
+	mon.config.PVEInstances[0].IsCluster = true
+	mon.config.PVEInstances[0].ClusterName = "production"
+	mon.config.PVEInstances[0].ClusterEndpoints = []config.ClusterEndpoint{{
+		NodeIdentity: "production-ebringa",
+		NodeName:     "ebringa",
+	}}
+	mon.config.PVEInstances[0].ClusterNodeIdentities = []config.PVEClusterNodeIdentity{{
+		ID:          "production-ebringa",
+		NativeName:  "ebringa",
+		DisplayName: "Render East",
+	}}
 
 	mon.state.UpsertHost(models.Host{
 		ID:       "host-1",
@@ -148,8 +160,10 @@ func TestPollPVENodePrefersLinkedHostDiskOverRootFS(t *testing.T) {
 	})
 	mon.state.UpdateNodesForInstance("test", []models.Node{
 		{
-			ID:            "test-ebringa",
+			ID:            "production-ebringa",
+			NodeIdentity:  "production-ebringa",
 			Name:          "ebringa",
+			DisplayName:   "Render East",
 			Instance:      "test",
 			LinkedAgentID: "host-1",
 		},
@@ -189,6 +203,11 @@ func TestPollPVENodePrefersLinkedHostDiskOverRootFS(t *testing.T) {
 	}
 	if modelNode.Disk.Usage < 42 || modelNode.Disk.Usage > 42.1 {
 		t.Fatalf("node disk usage = %.2f, want linked host usage around 42.05", modelNode.Disk.Usage)
+	}
+	if modelNode.NodeIdentity != "production-ebringa" ||
+		modelNode.Name != "ebringa" ||
+		modelNode.DisplayName != "Render East" {
+		t.Fatalf("cluster presentation identity corrupted linked-agent lifecycle fields: %+v", modelNode)
 	}
 }
 

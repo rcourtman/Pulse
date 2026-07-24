@@ -152,6 +152,7 @@ func cloneProxmoxData(in *ProxmoxData) *ProxmoxData {
 	out.TemperatureDetails = cloneTemperature(in.TemperatureDetails)
 	out.CPUInfo = cloneCPUInfo(in.CPUInfo)
 	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
+	out.NodeAliases = cloneStringSlice(in.NodeAliases)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.DockerCheckedAt = cloneTimePtr(in.DockerCheckedAt)
 	out.TemperatureMonitoringEnabled = cloneBoolPtr(in.TemperatureMonitoringEnabled)

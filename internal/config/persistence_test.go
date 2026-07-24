@@ -619,6 +619,14 @@ func TestImportConfigTransactionalSuccess(t *testing.T) {
 			User:           "root@pam",
 			MonitorVMs:     true,
 			MonitorStorage: true,
+			IsCluster:      true,
+			ClusterName:    "production",
+			ClusterEndpoints: []config.ClusterEndpoint{{
+				NodeID: "node/pve-new", NodeIdentity: "production-pve-new", NativeNodeID: 4, NodeName: "pve-new",
+			}},
+			ClusterNodeIdentities: []config.PVEClusterNodeIdentity{{
+				ID: "production-pve-new", NativeNodeID: 4, NativeName: "pve-new", DisplayName: "Render East",
+			}},
 		},
 	}
 	newPBS := []config.PBSInstance{

@@ -96,7 +96,8 @@ func clusterEndpointsFromStatus(
 	for _, clusterNode := range members {
 		lastSeen := time.Time{}
 		for _, endpoint := range existing {
-			if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(clusterNode.Name)) {
+			if (clusterNode.Nodeid != 0 && endpoint.NativeNodeID == clusterNode.Nodeid) ||
+				strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(clusterNode.Name)) {
 				lastSeen = endpoint.LastSeen
 				break
 			}
@@ -105,15 +106,16 @@ func clusterEndpointsFromStatus(
 			lastSeen = time.Now()
 		}
 		endpoints = append(endpoints, config.ClusterEndpoint{
-			NodeID:      clusterNode.ID,
-			NodeName:    clusterNode.Name,
-			Host:        monitorBuildClusterEndpointHost(scheme, clusterNode.Name, port),
-			IP:          strings.TrimSpace(clusterNode.IP),
-			GuestURL:    monitorExistingClusterGuestURL(clusterNode.Name, existing),
-			IPOverride:  monitorExistingClusterIPOverride(clusterNode.Name, existing),
-			Fingerprint: monitorExistingClusterFingerprint(clusterNode.Name, existing),
-			Online:      clusterNode.Online == 1,
-			LastSeen:    lastSeen,
+			NodeID:       clusterNode.ID,
+			NativeNodeID: clusterNode.Nodeid,
+			NodeName:     clusterNode.Name,
+			Host:         monitorBuildClusterEndpointHost(scheme, clusterNode.Name, port),
+			IP:           strings.TrimSpace(clusterNode.IP),
+			GuestURL:     monitorExistingClusterGuestURL(clusterNode.Name, existing),
+			IPOverride:   monitorExistingClusterIPOverride(clusterNode.Name, existing),
+			Fingerprint:  monitorExistingClusterFingerprint(clusterNode.Name, existing),
+			Online:       clusterNode.Online == 1,
+			LastSeen:     lastSeen,
 		})
 	}
 	sort.Slice(endpoints, func(i, j int) bool {
@@ -557,11 +559,11 @@ func (m *Monitor) refreshClusterEndpoints(instanceName string, instanceCfg *conf
 // would present stale reachability evidence after a cluster network move.
 func mergeRefreshedClusterEndpoints(existing, discovered []config.ClusterEndpoint, verifySSL bool) []config.ClusterEndpoint {
 	merged := make([]config.ClusterEndpoint, 0, len(discovered))
+	used := make(map[int]struct{}, len(existing))
 	for _, ep := range discovered {
-		for _, old := range existing {
-			if !strings.EqualFold(strings.TrimSpace(old.NodeName), strings.TrimSpace(ep.NodeName)) {
-				continue
-			}
+		if oldIdx := refreshedClusterEndpointMatch(existing, ep, used); oldIdx >= 0 {
+			old := existing[oldIdx]
+			used[oldIdx] = struct{}{}
 			oldEffectiveURL := clusterEndpointEffectiveURL(old, verifySSL, false)
 			if strings.TrimSpace(ep.IP) == "" {
 				ep.IP = old.IP
@@ -572,16 +574,72 @@ func mergeRefreshedClusterEndpoints(existing, discovered []config.ClusterEndpoin
 			if strings.TrimSpace(ep.NodeID) == "" {
 				ep.NodeID = old.NodeID
 			}
+			if ep.NativeNodeID == 0 {
+				ep.NativeNodeID = old.NativeNodeID
+			}
+			ep.NodeIdentity = old.NodeIdentity
+			if strings.TrimSpace(ep.GuestURL) == "" {
+				ep.GuestURL = old.GuestURL
+			}
+			if strings.TrimSpace(ep.IPOverride) == "" {
+				ep.IPOverride = old.IPOverride
+			}
+			if strings.TrimSpace(ep.Fingerprint) == "" {
+				ep.Fingerprint = old.Fingerprint
+			}
 			if clusterEndpointEffectiveURL(ep, verifySSL, false) == oldEffectiveURL {
 				ep.PulseReachable = old.PulseReachable
 				ep.LastPulseCheck = old.LastPulseCheck
 				ep.PulseError = old.PulseError
 			}
-			break
 		}
 		merged = append(merged, ep)
 	}
 	return merged
+}
+
+func refreshedClusterEndpointMatch(existing []config.ClusterEndpoint, discovered config.ClusterEndpoint, used map[int]struct{}) int {
+	matchUnique := func(predicate func(config.ClusterEndpoint) bool) int {
+		match := -1
+		for idx, candidate := range existing {
+			if _, alreadyUsed := used[idx]; alreadyUsed || !predicate(candidate) {
+				continue
+			}
+			if match >= 0 {
+				return -1
+			}
+			match = idx
+		}
+		return match
+	}
+
+	if discovered.NodeIdentity != "" {
+		if match := matchUnique(func(candidate config.ClusterEndpoint) bool {
+			return candidate.NodeIdentity == discovered.NodeIdentity
+		}); match >= 0 {
+			return match
+		}
+	}
+	if discovered.NativeNodeID != 0 {
+		if match := matchUnique(func(candidate config.ClusterEndpoint) bool {
+			return candidate.NativeNodeID != 0 && candidate.NativeNodeID == discovered.NativeNodeID
+		}); match >= 0 {
+			return match
+		}
+	}
+	if discovered.NodeName != "" {
+		if match := matchUnique(func(candidate config.ClusterEndpoint) bool {
+			return strings.EqualFold(strings.TrimSpace(candidate.NodeName), strings.TrimSpace(discovered.NodeName))
+		}); match >= 0 {
+			return match
+		}
+	}
+	return matchUnique(func(candidate config.ClusterEndpoint) bool {
+		if discovered.IP != "" && strings.TrimSpace(candidate.IP) == strings.TrimSpace(discovered.IP) {
+			return true
+		}
+		return discovered.Host != "" && strings.EqualFold(strings.TrimSpace(candidate.Host), strings.TrimSpace(discovered.Host))
+	})
 }
 
 // clusterEndpointIdentityChanged reports whether the set of nodes or any
@@ -592,18 +650,28 @@ func clusterEndpointIdentityChanged(existing, refreshed []config.ClusterEndpoint
 	if len(existing) != len(refreshed) {
 		return true
 	}
-	byName := make(map[string]config.ClusterEndpoint, len(existing))
+	byIdentity := make(map[string]config.ClusterEndpoint, len(existing))
 	for _, ep := range existing {
-		byName[strings.ToLower(strings.TrimSpace(ep.NodeName))] = ep
+		key := strings.TrimSpace(ep.NodeIdentity)
+		if key == "" {
+			key = strings.ToLower(strings.TrimSpace(ep.NodeName))
+		}
+		byIdentity[key] = ep
 	}
 	for _, ep := range refreshed {
-		old, ok := byName[strings.ToLower(strings.TrimSpace(ep.NodeName))]
+		key := strings.TrimSpace(ep.NodeIdentity)
+		if key == "" {
+			key = strings.ToLower(strings.TrimSpace(ep.NodeName))
+		}
+		old, ok := byIdentity[key]
 		if !ok {
 			return true
 		}
 		if strings.TrimSpace(old.IP) != strings.TrimSpace(ep.IP) ||
 			strings.TrimSpace(old.Host) != strings.TrimSpace(ep.Host) ||
-			strings.TrimSpace(old.NodeID) != strings.TrimSpace(ep.NodeID) {
+			strings.TrimSpace(old.NodeID) != strings.TrimSpace(ep.NodeID) ||
+			old.NativeNodeID != ep.NativeNodeID ||
+			!strings.EqualFold(strings.TrimSpace(old.NodeName), strings.TrimSpace(ep.NodeName)) {
 			return true
 		}
 	}

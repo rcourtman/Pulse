@@ -21,6 +21,7 @@ describe('nodeModalPresentation', () => {
       verifySSL: true,
       monitorPhysicalDisks: false,
       clusterEndpointOverrides: {},
+      clusterNodeDisplayNames: {},
     });
     expect(getNodeModalDefaultFormData('pbs')).toMatchObject({
       authType: 'token',

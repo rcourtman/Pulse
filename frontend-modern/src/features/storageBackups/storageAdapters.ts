@@ -76,16 +76,32 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     platformData,
     isBackupRepository ? 'backup' : '',
   );
-  const proxmoxNode =
+  const proxmoxPlatform = platformData.proxmox as Record<string, unknown> | undefined;
+  const proxmoxNativeNode =
+    resource.proxmox?.nodeName ||
     resource.proxmox?.node ||
-    ((platformData.proxmox as Record<string, unknown> | undefined)?.nodeName as string | undefined);
+    (proxmoxPlatform?.nodeName as string | undefined);
+  const proxmoxNodeDisplay =
+    resource.proxmox?.nodeDisplayName ||
+    (proxmoxPlatform?.nodeDisplayName as string | undefined) ||
+    resource.parentName ||
+    proxmoxNativeNode;
+  const proxmoxNodeAliases = [
+    ...(resource.proxmox?.nodeAliases ?? []),
+    ...getStringArray(proxmoxPlatform?.nodeAliases),
+  ];
+  const proxmoxNodeIdentity =
+    resource.proxmox?.nodeIdentity || (proxmoxPlatform?.nodeIdentity as string | undefined);
   const storageNodes = getStringArray(
     (resource.storage as Record<string, unknown> | undefined)?.nodes,
   );
   const nodeHints = dedupe(
     [
       resource.parentName,
-      proxmoxNode,
+      proxmoxNodeDisplay,
+      proxmoxNativeNode,
+      ...proxmoxNodeAliases,
+      proxmoxNodeIdentity,
       platformData.node as string | undefined,
       ...storageNodes,
       resource.parentId,
@@ -95,14 +111,14 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const locationLabel = isBackupRepository
     ? resource.parentName ||
       (platformData.pbsInstanceName as string | undefined) ||
-      proxmoxNode ||
+      proxmoxNodeDisplay ||
       (platformData.node as string | undefined) ||
       storageNodes[0] ||
       resource.parentId ||
       resource.platformId ||
       'Unknown'
     : resource.parentName ||
-      proxmoxNode ||
+      proxmoxNodeDisplay ||
       (platformData.node as string | undefined) ||
       storageNodes[0] ||
       resource.parentId ||
@@ -192,7 +208,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       status: statusLabel,
       parentId: resource.parentId,
       parentName: resource.parentName,
-      node: proxmoxNode || (platformData.node as string | undefined) || storageNodes[0],
+      node: proxmoxNativeNode || (platformData.node as string | undefined) || storageNodes[0],
       nodeHints,
       hostLabel,
       platformLabel,

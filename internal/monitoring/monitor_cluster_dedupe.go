@@ -33,7 +33,7 @@ func (m *Monitor) consolidateDuplicateClusters() {
 }
 
 func (m *Monitor) normalizePVEConfigState() bool {
-	if m == nil || m.config == nil || len(m.config.PVEInstances) < 2 {
+	if m == nil || m.config == nil {
 		return false
 	}
 
@@ -44,11 +44,15 @@ func (m *Monitor) normalizePVEConfigState() bool {
 		}
 	}
 
-	instances, changed := config.ConsolidatePVEInstances(m.config.PVEInstances)
-	if !changed {
+	instances, consolidated := config.ConsolidatePVEInstances(m.config.PVEInstances)
+	if consolidated {
+		m.config.PVEInstances = instances
+	}
+	identityChanged := config.EnsurePVEClusterNodeIdentities(m.config.PVEInstances)
+	if !consolidated && !identityChanged {
 		return false
 	}
-	m.config.PVEInstances = instances
+	instances = m.config.PVEInstances
 
 	remainingNames := make(map[string]struct{}, len(instances))
 	for _, instance := range instances {

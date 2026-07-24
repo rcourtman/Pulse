@@ -13,7 +13,14 @@ type RawClusterEndpoint = Partial<ClusterEndpoint>;
 
 const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint => ({
   nodeId: trimmedString(endpoint.nodeId),
+  nodeIdentity: trimmedString(endpoint.nodeIdentity),
+  nativeNodeId: finiteNumberOrUndefined(endpoint.nativeNodeId),
   nodeName: trimmedString(endpoint.nodeName),
+  nativeName: optionalTrimmedString(endpoint.nativeName),
+  nativeAliases: arrayOrUndefined<string>(endpoint.nativeAliases)
+    ?.map((alias) => trimmedString(alias))
+    .filter(Boolean),
+  displayName: optionalTrimmedString(endpoint.displayName),
   host: trimmedString(endpoint.host),
   guestURL: optionalTrimmedString(endpoint.guestURL),
   ip: trimmedString(endpoint.ip),

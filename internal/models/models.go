@@ -94,7 +94,9 @@ type ResolvedAlert struct {
 // Node represents a Proxmox VE node
 type Node struct {
 	ID                           string       `json:"id"`
+	NodeIdentity                 string       `json:"nodeIdentity,omitempty"`
 	Name                         string       `json:"name"`
+	NativeNameAliases            []string     `json:"nativeNameAliases,omitempty"`
 	DisplayName                  string       `json:"displayName,omitempty"`
 	Instance                     string       `json:"instance"`
 	Host                         string       `json:"host"`     // Full host URL from config
@@ -115,6 +117,7 @@ type Node struct {
 	ConnectionHealth             string       `json:"connectionHealth"`
 	IsClusterMember              bool         `json:"isClusterMember"` // True if part of a cluster
 	ClusterName                  string       `json:"clusterName"`     // Name of cluster (empty if standalone)
+	ProviderScopedIdentity       bool         `json:"providerScopedIdentity,omitempty"`
 
 	// Package updates - polled less frequently (every 30 mins)
 	PendingUpdates          int       `json:"pendingUpdates"`                    // Number of pending apt updates
@@ -3368,6 +3371,9 @@ func nodeEndpointMergeAliases(node Node) []string {
 }
 
 func nodeLogicalKey(node Node) string {
+	if identity := normalizeNodeIdentityPart(node.NodeIdentity); identity != "" {
+		return "node-identity:" + identity
+	}
 	name := normalizeNodeIdentityPart(node.Name)
 	if name == "" {
 		return ""

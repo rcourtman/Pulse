@@ -1849,6 +1849,9 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 		config.PVEInstances = consolidated
 		migrationApplied = true
 	}
+	if EnsurePVEClusterNodeIdentities(config.PVEInstances) {
+		migrationApplied = true
+	}
 
 	// Fix for bug where TokenName was incorrectly set when using password auth
 	// If a PBS instance has both Password and TokenName, clear the TokenName
@@ -1928,8 +1931,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	// between unlock and relock, causing migrated data to be lost
 	if migrationApplied {
 		// Make copies while still holding read lock to ensure consistency
-		pveCopy := make([]PVEInstance, len(config.PVEInstances))
-		copy(pveCopy, config.PVEInstances)
+		pveCopy := clonePVEInstances(config.PVEInstances)
 		pbsCopy := make([]PBSInstance, len(config.PBSInstances))
 		copy(pbsCopy, config.PBSInstances)
 		pmgCopy := make([]PMGInstance, len(config.PMGInstances))

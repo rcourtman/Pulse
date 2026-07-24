@@ -1006,8 +1006,10 @@ type ResourceFrontend struct {
 	Sources      []string `json:"sources,omitempty"`
 
 	// Hierarchy
-	ParentID  string `json:"parentId,omitempty"`
-	ClusterID string `json:"clusterId,omitempty"`
+	ParentID   string `json:"parentId,omitempty"`
+	ParentName string `json:"parentName,omitempty"`
+	ChildCount int    `json:"childCount,omitempty"`
+	ClusterID  string `json:"clusterId,omitempty"`
 
 	// Universal Metrics
 	Status      string                   `json:"status"`

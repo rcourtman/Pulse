@@ -41,6 +41,14 @@ recovery consumers may use the resulting provider-scoped node/instance
 identity to keep same-named cluster storage distinct, but member retention or
 confirmed retirement does not fabricate backup evidence, restore points, or
 storage protection state.
+Storage and recovery presentation may consume the Proxmox connection's
+cluster-node display override for host, location, parent, backup-task, and
+filter labels. Matching remains on immutable node identity plus current or
+prior native Proxmox names: a display value must never become a datastore,
+archive, backup task, recovery-point, restore, PBS, routing, or credential key.
+Search includes both presentation and native diagnostics, duplicate display
+values are allowed, and clearing an override deterministically restores the
+current native node name.
 
 ## Canonical Files
 

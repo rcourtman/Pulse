@@ -976,7 +976,9 @@ export interface InfrastructureRowProblem {
 
 export interface InfrastructureSystemMemberRow {
   id: string;
+  nodeIdentity?: string;
   name: string;
+  nativeName?: string;
   subtitle: string;
   source: InfrastructureSourceKind;
   host?: string;

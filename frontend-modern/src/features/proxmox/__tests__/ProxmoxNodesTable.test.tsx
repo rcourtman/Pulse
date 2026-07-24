@@ -146,6 +146,35 @@ describe('ProxmoxNodesTable', () => {
     );
   });
 
+  it('shows the configured display name without using it as the native web target', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            id: 'production-pve1',
+            name: 'Render East',
+            displayName: 'Render East',
+            proxmox: {
+              clusterName: 'production',
+              nodeIdentity: 'production-pve1',
+              nodeName: 'pve1',
+              nodeAliases: ['pve-old'],
+              nodeDisplayName: 'Render East',
+            },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const link = screen.getByRole('link', { name: 'Open web interface for Render East' });
+    expect(screen.getByText('Render East')).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', 'https://pve1:8006');
+  });
+
   it('passes alert-backed temperature thresholds into the node temperature gauge', () => {
     render(() => (
       <ProxmoxNodesTable

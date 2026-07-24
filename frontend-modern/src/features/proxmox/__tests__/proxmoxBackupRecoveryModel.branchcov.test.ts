@@ -144,6 +144,27 @@ describe('canonical protection posture ownership', () => {
 // ---------------------------------------------------------------------------
 
 describe('matchWorkloadByHints branches (via vzdump tasks)', () => {
+  it('matches prior native node aliases while presenting the current display name', () => {
+    const model = buildModel({
+      workloads: [
+        workload({
+          id: 'vm-419a',
+          proxmox: {
+            vmid: 419,
+            nodeName: 'pve-new',
+            nodeAliases: ['pve-old'],
+            nodeDisplayName: 'Render East',
+          },
+        }),
+        workload({ id: 'vm-419b', proxmox: { vmid: 419, nodeName: 'pve-other' } }),
+      ],
+      tasks: [task({ id: 't-419', type: 'vzdump', vmid: 419, node: 'pve-old', instance: '' })],
+    });
+    const renamed = model.coverageRows.find((row) => row.workload.node === 'Render East');
+    expect(renamed?.latestTask?.label).toBe('OK');
+    expect(renamed?.workload.nativeNode).toBe('pve-new');
+  });
+
   it('returns the hint-matched candidate among several same-vmid workloads', () => {
     const model = buildModel({
       workloads: [

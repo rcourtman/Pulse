@@ -43,18 +43,22 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 
 func TestResourceFromProxmoxNodeUsesDisplayNameWithoutChangingRawNodeIdentity(t *testing.T) {
 	node := models.Node{
-		ID:          "pve-cluster-node01",
-		Name:        "node01",
-		DisplayName: "PVE Cluster (node01)",
-		ClusterName: "PVE Cluster",
-		Status:      "online",
+		ID:              "pve-cluster-node01",
+		NodeIdentity:    "pve-cluster-node01",
+		Name:            "node01",
+		DisplayName:     "Compute East",
+		ClusterName:     "PVE Cluster",
+		IsClusterMember: true,
+		Status:          "online",
 	}
 
 	resource, identity := resourceFromProxmoxNode(node, nil)
-	if resource.Name != "PVE Cluster (node01)" {
-		t.Fatalf("resource.Name = %q, want cluster-qualified display label", resource.Name)
+	if resource.Name != "Compute East" {
+		t.Fatalf("resource.Name = %q, want custom display label", resource.Name)
 	}
-	if resource.Proxmox == nil || resource.Proxmox.NodeName != "node01" {
+	if resource.Proxmox == nil || resource.Proxmox.NodeName != "node01" ||
+		resource.Proxmox.NodeIdentity != "pve-cluster-node01" ||
+		resource.Proxmox.NodeDisplayName != "Compute East" {
 		t.Fatalf("Proxmox.NodeName = %+v, want raw node identity node01", resource.Proxmox)
 	}
 	foundClusterIdentity := false
@@ -66,6 +70,23 @@ func TestResourceFromProxmoxNodeUsesDisplayNameWithoutChangingRawNodeIdentity(t 
 	}
 	if !foundClusterIdentity {
 		t.Fatalf("identity hostnames = %v, want cluster-qualified raw hostname identity", identity.Hostnames)
+	}
+}
+
+func TestResourceFromRenamedNodeKeepsSameNameClustersProviderScoped(t *testing.T) {
+	node := models.Node{
+		ID: "site-a-pve-old", NodeIdentity: "site-a-pve-old",
+		Name: "pve-new", DisplayName: "Render East",
+		Instance: "site-a", ClusterName: "production", IsClusterMember: true,
+		ProviderScopedIdentity: true, Status: "online",
+	}
+	resource, identity := resourceFromProxmoxNode(node, nil)
+	if identity.ClusterName != "" {
+		t.Fatalf("same-name cluster identity became globally cluster scoped after native rename: %+v", identity)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.SourceID != "site-a-pve-old" ||
+		resource.Proxmox.NodeName != "pve-new" {
+		t.Fatalf("stable source ID/native name separation failed: %+v", resource.Proxmox)
 	}
 }
 

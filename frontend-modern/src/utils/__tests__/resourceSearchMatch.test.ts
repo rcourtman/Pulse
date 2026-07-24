@@ -59,6 +59,21 @@ describe('resourceMatchesSearch', () => {
     });
   });
 
+  it('matches both custom and provider-native Proxmox node names', () => {
+    const resource = makeResource({
+      proxmox: {
+        nodeIdentity: 'cluster-pve1',
+        nodeName: 'pve1',
+        nodeAliases: ['pve-old'],
+        nodeDisplayName: 'Render East',
+      },
+    });
+    expect(resourceMatchesSearch(resource, 'render east')).toBe(true);
+    expect(resourceMatchesSearch(resource, 'pve1')).toBe(true);
+    expect(resourceMatchesSearch(resource, 'cluster-pve1')).toBe(true);
+    expect(resourceMatchesSearch(resource, 'pve-old')).toBe(true);
+  });
+
   describe('canonicalIdentity fields', () => {
     it.each([
       ['displayName', { canonicalIdentity: { displayName: 'Canonical Box' } }, 'canonical'],

@@ -15,6 +15,7 @@ import {
 
 import {
   buildClusterEndpointOverridesPayload,
+  buildClusterNodeDisplayNameOverridesPayload,
   deriveNameFromHost,
   type NodeModalProps,
 } from './nodeModalModel';
@@ -323,6 +324,14 @@ export const useNodeModalState = (props: NodeModalProps) => {
               ]),
             )
           : {},
+      clusterNodeDisplayNames:
+        node.type === 'pve' && 'clusterEndpoints' in node
+          ? Object.fromEntries(
+              (node.clusterEndpoints ?? [])
+                .filter((endpoint) => endpoint.nodeIdentity)
+                .map((endpoint) => [endpoint.nodeIdentity, endpoint.displayName ?? '']),
+            )
+          : {},
     };
 
     const formSourceSignature = JSON.stringify(formSource);
@@ -396,6 +405,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (overrides) {
         Object.assign(nodeData, { clusterEndpointOverrides: overrides });
       }
+      const displayNameOverrides = buildClusterNodeDisplayNameOverridesPayload(
+        endpoints,
+        data.clusterNodeDisplayNames,
+      );
+      if (displayNameOverrides) {
+        Object.assign(nodeData, { clusterNodeDisplayNameOverrides: displayNameOverrides });
+      }
     }
 
     props.onSave(nodeData);
@@ -433,6 +449,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setFormData((prev) => ({
       ...prev,
       clusterEndpointOverrides: { ...prev.clusterEndpointOverrides, [nodeName]: value },
+    }));
+  };
+
+  const updateClusterNodeDisplayName = (nodeIdentity: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      clusterNodeDisplayNames: { ...prev.clusterNodeDisplayNames, [nodeIdentity]: value },
     }));
   };
 
@@ -555,6 +578,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     testResult,
     testResultPresentation,
     updateClusterEndpointOverride,
+    updateClusterNodeDisplayName,
     updateField,
   };
 };

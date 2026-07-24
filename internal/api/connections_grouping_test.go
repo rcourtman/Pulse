@@ -337,6 +337,36 @@ func TestMergeConnectionSystemMembersKeepsMostSevereState(t *testing.T) {
 	}
 }
 
+func TestConnectionSystemMemberUsesDisplayNameWithoutChangingMemberKey(t *testing.T) {
+	resource := unified.Resource{
+		ID:     "resource-node",
+		Type:   unified.ResourceTypeAgent,
+		Name:   "Render East",
+		Status: unified.StatusOnline,
+		Proxmox: &unified.ProxmoxData{
+			SourceID: "production-pve1", NodeIdentity: "production-pve1",
+			NodeName: "pve1", NodeDisplayName: "Render East",
+			Instance: "cluster", IsClusterMember: true,
+		},
+	}
+	connections := map[string]Connection{
+		"pve:cluster": {ID: "pve:cluster", Type: ConnectionTypePVE},
+	}
+	member, primaryID, ok := connectionSystemMemberFromResource(resource, connections, nil)
+	if !ok || primaryID != "pve:cluster" {
+		t.Fatalf("member projection failed: primary=%q member=%+v", primaryID, member)
+	}
+	if member.Name != "Render East" || member.NativeName != "pve1" ||
+		member.NodeIdentity != "production-pve1" {
+		t.Fatalf("member presentation/native fields were not separated: %+v", member)
+	}
+	beforeKey := connectionSystemMemberKey(member)
+	member.Name = "Another label"
+	if afterKey := connectionSystemMemberKey(member); afterKey != beforeKey {
+		t.Fatalf("cosmetic rename changed member key: before=%q after=%q", beforeKey, afterKey)
+	}
+}
+
 func TestBuildConnectionSystems_GuestAgentStaysStandaloneWhenOnlyClusterInstanceMatches(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)

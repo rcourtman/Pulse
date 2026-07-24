@@ -36,6 +36,9 @@ export interface NodeModalFormData {
   // PVE clusters: per-member connection address overrides keyed by node name.
   // Empty string means "use the discovered address".
   clusterEndpointOverrides: Record<string, string>;
+  // PVE clusters: optional labels keyed by immutable node identity.
+  // Empty string means "use the native Proxmox node name".
+  clusterNodeDisplayNames: Record<string, string>;
 }
 
 export interface NodeModalTestResultPresentation {
@@ -75,6 +78,7 @@ export function getNodeModalDefaultFormData(nodeType: NodeModalNodeType): NodeMo
     monitorQuarantine: true,
     monitorDomainStats: false,
     clusterEndpointOverrides: {},
+    clusterNodeDisplayNames: {},
   };
 }
 

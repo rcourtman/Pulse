@@ -299,8 +299,7 @@ func (c *Config) DeepCopy() *Config {
 
 	// Deep copy PVEInstances slice
 	if len(c.PVEInstances) > 0 {
-		clone.PVEInstances = make([]PVEInstance, len(c.PVEInstances))
-		copy(clone.PVEInstances, c.PVEInstances)
+		clone.PVEInstances = clonePVEInstances(c.PVEInstances)
 	}
 
 	// Deep copy PBSInstances slice
@@ -571,9 +570,10 @@ type PVEInstance struct {
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
 
 	// Cluster support
-	IsCluster        bool              // True if this is a cluster
-	ClusterName      string            // Cluster name if applicable
-	ClusterEndpoints []ClusterEndpoint // All discovered cluster nodes
+	IsCluster             bool                     // True if this is a cluster
+	ClusterName           string                   // Cluster name if applicable
+	ClusterEndpoints      []ClusterEndpoint        // All discovered cluster nodes
+	ClusterNodeIdentities []PVEClusterNodeIdentity // Durable presentation identities for cluster members
 
 	// Agent tracking
 	Source      string // "agent" or "script" - how this node was registered (empty = legacy/manual)
@@ -587,7 +587,9 @@ type PVEInstance struct {
 
 // ClusterEndpoint represents a single node in a cluster
 type ClusterEndpoint struct {
-	NodeID         string     // Node ID in cluster
+	NodeID         string     // Provider-reported cluster status ID (diagnostic only)
+	NodeIdentity   string     // Pulse-owned immutable identity scoped to this connection
+	NativeNodeID   int        // Provider-reported numeric node ID when available
 	NodeName       string     // Node name
 	Host           string     // Full URL (e.g., https://node1.lan:8006)
 	GuestURL       string     // Optional guest-accessible URL (for navigation)
@@ -599,6 +601,17 @@ type ClusterEndpoint struct {
 	PulseReachable *bool      // Pulse's view: can Pulse reach this endpoint? nil = not yet checked
 	LastPulseCheck *time.Time // Last time Pulse checked connectivity
 	PulseError     string     // Last error Pulse encountered connecting to this endpoint
+}
+
+// PVEClusterNodeIdentity keeps presentation metadata separate from endpoint
+// routing. ID is created once per connection and remains stable across native
+// node renames, address changes, and temporary cluster-membership removal.
+type PVEClusterNodeIdentity struct {
+	ID            string   `json:"id"`
+	NativeNodeID  int      `json:"nativeNodeId,omitempty"`
+	NativeName    string   `json:"nativeName"`
+	NativeAliases []string `json:"nativeAliases,omitempty"`
+	DisplayName   string   `json:"displayName,omitempty"`
 }
 
 // EffectiveIP returns the IP to use for this endpoint, preferring IPOverride if set
@@ -1770,6 +1783,11 @@ func (c *Config) Validate() error {
 		// Must have either password or token
 		if pve.Password == "" && (pve.TokenName == "" || pve.TokenValue == "") {
 			return fmt.Errorf("PVE instance %d: either password or token authentication is required", i+1)
+		}
+		for _, identity := range pve.ClusterNodeIdentities {
+			if _, err := NormalizePVEClusterNodeDisplayName(identity.DisplayName); err != nil {
+				return fmt.Errorf("PVE instance %d cluster node %q display name %s", i+1, identity.ID, err)
+			}
 		}
 	}
 

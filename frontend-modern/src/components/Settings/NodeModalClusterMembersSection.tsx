@@ -18,10 +18,9 @@ const discoveredAddress = (endpoint: ClusterEndpoint): string => {
   return host || endpoint.ip || '';
 };
 
-// Per-member connection addresses for an existing PVE cluster. The discovered
-// host and IP are rebuilt from cluster status on every re-discovery, so the
-// only durable user edit is the override (ClusterEndpoint.ipOverride), which
-// wins at poll time via EffectiveIP.
+// Per-member presentation and connection settings for an existing PVE
+// cluster. Display names are keyed by Pulse's immutable node identity while
+// connection overrides remain keyed by the provider's native node name.
 export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSectionProps> = (
   props,
 ) => {
@@ -43,17 +42,16 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
           titleClass="text-base-content"
         />
         <p class="mb-3 text-xs text-muted">
-          Pulse found these nodes in the cluster and connects to each one directly. If a node's
-          discovered address isn't reachable from Pulse (for example when the cluster reports an
-          internal network IP), enter the address Pulse should use instead.
+          Give each node an optional display name for Pulse. This never changes its Proxmox name,
+          identity, credentials, or connection address.
         </p>
         <div class="rounded-md border border-border">
           <For each={endpoints()}>
             {(endpoint) => (
-              <div class="flex flex-col gap-2 border-b border-border-subtle p-3 last:border-b-0 sm:flex-row sm:items-center">
-                <div class="min-w-0 sm:w-1/2">
+              <div class="grid gap-3 border-b border-border-subtle p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div class="min-w-0">
                   <div class="flex items-center gap-1.5 text-sm text-base-content">
-                    <span class="truncate">{endpoint.nodeName}</span>
+                    <span class="truncate">{endpoint.displayName || endpoint.nodeName}</span>
                     <Show when={endpoint.pulseReachable === false}>
                       <span
                         class="inline-flex flex-shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
@@ -63,11 +61,42 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       </span>
                     </Show>
                   </div>
+                  <Show when={endpoint.displayName}>
+                    <div class="truncate text-xs text-muted" title={endpoint.nodeName}>
+                      Proxmox node: {endpoint.nodeName}
+                    </div>
+                  </Show>
                   <div class="truncate text-xs text-muted" title={discoveredAddress(endpoint)}>
                     Discovered: {discoveredAddress(endpoint)}
                   </div>
                 </div>
-                <div class="sm:w-1/2">
+                <div class="grid gap-2">
+                  <label class="grid gap-1 text-xs text-muted">
+                    Display name
+                    <input
+                      type="text"
+                      maxlength={128}
+                      value={
+                        endpoint.nodeIdentity
+                          ? (state.formData().clusterNodeDisplayNames[endpoint.nodeIdentity] ?? '')
+                          : ''
+                      }
+                      onInput={(event) => {
+                        if (endpoint.nodeIdentity) {
+                          state.updateClusterNodeDisplayName(
+                            endpoint.nodeIdentity,
+                            event.currentTarget.value,
+                          );
+                        }
+                      }}
+                      disabled={!endpoint.nodeIdentity}
+                      placeholder={endpoint.nodeName}
+                      aria-label={`Display name for ${endpoint.nodeName}`}
+                      class={controlClass()}
+                    />
+                  </label>
+                  <label class="grid gap-1 text-xs text-muted">
+                    Connection address override
                   <input
                     type="text"
                     value={state.formData().clusterEndpointOverrides[endpoint.nodeName] ?? ''}
@@ -81,14 +110,16 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                     aria-label={`Connection address for ${endpoint.nodeName}`}
                     class={controlClass()}
                   />
+                  </label>
                 </div>
               </div>
             )}
           </For>
         </div>
         <p class={formHelpText}>
-          Optional. IP or hostname, with a port if it isn't 8006. Leave blank to use the discovered
-          address.
+          Leave a display name blank to use the native Proxmox name. Connection addresses are also
+          optional; enter an IP or hostname, with a port if it isn't 8006, only when Pulse cannot
+          reach the discovered address.
         </p>
       </div>
     </Show>

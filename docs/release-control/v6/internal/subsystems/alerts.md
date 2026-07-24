@@ -376,9 +376,16 @@ active alerts, resolved history, or later UI projections.
 That same alerts runtime also owns instance-scoped node display-name
 resolution. Raw node names are not globally unique across configured
 infrastructure instances, so cached node display names must key on instance +
-node identity whenever the alert carries instance context. Alert updates,
-incident rebuilds, and guest-metric migrations may fall back to the legacy
-name-only cache only for instance-less resources like standalone host agents.
+immutable node identity whenever the alert carries instance context. Current
+and prior native Proxmox node names may resolve that same entry so an override
+or native rename updates active alerts, resolved alerts, and history
+presentation without changing the stored diagnostic native resource name or
+alert identity. Read-model presentation must snapshot resolved state before
+acquiring the active-alert lock to preserve the established lock hierarchy.
+Alert updates, incident rebuilds, and guest-metric migrations may fall back to
+the legacy name-only cache only for instance-less resources like standalone
+host agents. Display names never become acknowledgement, suppression,
+rate-limit, flapping, escalation, or notification routing identity.
 That same host-alert boundary also owns vendor-managed NAS RAID suppression as
 an alert-lifecycle concern. Shared storagehealth rules decide which Synology
 or QNAP md arrays are vendor-managed system volumes rather than customer-facing

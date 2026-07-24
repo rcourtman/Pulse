@@ -47,7 +47,12 @@ describe('NodesAPI', () => {
           clusterEndpoints: [
             {
               nodeId: ' node-1 ',
+              nodeIdentity: ' production-pve-1 ',
+              nativeNodeId: 7,
               nodeName: ' pve-1 ',
+              nativeName: ' pve-1 ',
+              nativeAliases: [' pve-old ', ''],
+              displayName: ' Render East ',
               host: ' https://pve-1.local:8006 ',
               guestURL: ' https://guest.local ',
               ip: ' 10.0.0.1 ',
@@ -71,7 +76,12 @@ describe('NodesAPI', () => {
 
       expect(endpoint).toMatchObject({
         nodeId: 'node-1',
+        nodeIdentity: 'production-pve-1',
+        nativeNodeId: 7,
         nodeName: 'pve-1',
+        nativeName: 'pve-1',
+        nativeAliases: ['pve-old'],
+        displayName: 'Render East',
         host: 'https://pve-1.local:8006',
         guestURL: 'https://guest.local',
         ip: '10.0.0.1',
@@ -199,6 +209,25 @@ describe('NodesAPI', () => {
       expect(body.clusterEndpointOverrides).toEqual([
         { nodeName: 'pve2', ipOverride: '10.0.0.2' },
         { nodeName: 'pve3', ipOverride: '' },
+      ]);
+    });
+
+    it('sends presentation-only cluster node display names by immutable identity', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+      await NodesAPI.updateNode(
+        'pve-1',
+        makePveNode({
+          clusterNodeDisplayNameOverrides: [
+            { nodeIdentity: 'production-pve2', displayName: 'Render East' },
+            { nodeIdentity: 'production-pve3', displayName: '' },
+          ],
+        }) as NodeConfig,
+      );
+
+      const body = JSON.parse(vi.mocked(apiFetchJSON).mock.calls[0][1]!.body as string);
+      expect(body.clusterNodeDisplayNameOverrides).toEqual([
+        { nodeIdentity: 'production-pve2', displayName: 'Render East' },
+        { nodeIdentity: 'production-pve3', displayName: '' },
       ]);
     });
   });

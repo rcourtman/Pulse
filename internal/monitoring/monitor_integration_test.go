@@ -454,8 +454,8 @@ func TestGetNodeDisplayName_FriendlyName(t *testing.T) {
 func TestGetNodeDisplayName_ClusterUsesNodeName(t *testing.T) {
 	inst := &config.PVEInstance{Name: "cluster1", IsCluster: true}
 	got := getNodeDisplayName(inst, "node1")
-	if got != "cluster1 (node1)" {
-		t.Errorf("cluster mode should include configured cluster label, got %q", got)
+	if got != "node1" {
+		t.Errorf("cluster mode should fall back to the native node name, got %q", got)
 	}
 }
 
@@ -464,11 +464,14 @@ func TestGetNodeDisplayName_ClusterWithEndpointLabel(t *testing.T) {
 		Name:      "cluster1",
 		IsCluster: true,
 		ClusterEndpoints: []config.ClusterEndpoint{
-			{NodeName: "node1", NodeID: "node/node1"},
+			{NodeName: "node1", NodeID: "node/node1", NodeIdentity: "cluster1-node1"},
 		},
+		ClusterNodeIdentities: []config.PVEClusterNodeIdentity{{
+			ID: "cluster1-node1", NativeName: "node1", DisplayName: "Compute one",
+		}},
 	}
 	got := getNodeDisplayName(inst, "node1")
-	if got != "cluster1 (node1)" {
-		t.Errorf("expected cluster-qualified node display name, got %q", got)
+	if got != "Compute one" {
+		t.Errorf("expected persisted cluster-node display name, got %q", got)
 	}
 }

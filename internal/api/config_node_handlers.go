@@ -1302,6 +1302,41 @@ func applyClusterEndpointOverrides(endpoints []config.ClusterEndpoint, overrides
 	return result, nil
 }
 
+func applyClusterNodeDisplayNameOverrides(instance config.PVEInstance, overrides []ClusterNodeDisplayNameOverrideRequest) (config.PVEInstance, error) {
+	instance.ClusterEndpoints = append([]config.ClusterEndpoint(nil), instance.ClusterEndpoints...)
+	instance.ClusterNodeIdentities = append([]config.PVEClusterNodeIdentity(nil), instance.ClusterNodeIdentities...)
+	seen := make(map[string]struct{}, len(overrides))
+	for _, override := range overrides {
+		identityID := strings.TrimSpace(override.NodeIdentity)
+		if identityID == "" {
+			return instance, fmt.Errorf("cluster node identity is required")
+		}
+		if _, duplicate := seen[identityID]; duplicate {
+			return instance, fmt.Errorf("cluster node identity %q was provided more than once", identityID)
+		}
+		seen[identityID] = struct{}{}
+
+		displayName, err := config.NormalizePVEClusterNodeDisplayName(override.DisplayName)
+		if err != nil {
+			return instance, fmt.Errorf("display name for cluster node %q %w", identityID, err)
+		}
+
+		found := false
+		for idx := range instance.ClusterNodeIdentities {
+			if instance.ClusterNodeIdentities[idx].ID != identityID {
+				continue
+			}
+			instance.ClusterNodeIdentities[idx].DisplayName = displayName
+			found = true
+			break
+		}
+		if !found {
+			return instance, fmt.Errorf("unknown cluster node identity %q", identityID)
+		}
+	}
+	return instance, nil
+}
+
 func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
 	if mock.IsMockEnabled() {
@@ -1344,7 +1379,10 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	// Update the node
 	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
 		pve := &h.getConfig(r.Context()).PVEInstances[index]
-		current := *pve
+		current := pve.DeepCopy()
+		normalizedCurrent := []config.PVEInstance{current}
+		config.EnsurePVEClusterNodeIdentities(normalizedCurrent)
+		current = normalizedCurrent[0]
 		updated := current
 
 		// Only update name if provided
@@ -1372,6 +1410,13 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				return
 			}
 			updated.ClusterEndpoints = endpoints
+		}
+		if len(req.ClusterNodeDisplayNameOverrides) > 0 {
+			updated, err = applyClusterNodeDisplayNameOverrides(updated, req.ClusterNodeDisplayNameOverrides)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 
 		if err := applyPVEAuthUpdate(&updated, req); err != nil {
@@ -1620,6 +1665,66 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+func mergeDiscoveredClusterEndpointConfiguration(existing, discovered []config.ClusterEndpoint) []config.ClusterEndpoint {
+	merged := append([]config.ClusterEndpoint(nil), discovered...)
+	used := make(map[int]struct{}, len(existing))
+	for idx := range merged {
+		matchUnique := func(predicate func(config.ClusterEndpoint) bool) int {
+			match := -1
+			for existingIdx, candidate := range existing {
+				if _, alreadyUsed := used[existingIdx]; alreadyUsed || !predicate(candidate) {
+					continue
+				}
+				if match >= 0 {
+					return -1
+				}
+				match = existingIdx
+			}
+			return match
+		}
+		match := -1
+		if merged[idx].NativeNodeID != 0 {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return candidate.NativeNodeID != 0 && candidate.NativeNodeID == merged[idx].NativeNodeID
+			})
+		}
+		if match < 0 && merged[idx].NodeName != "" {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return strings.EqualFold(strings.TrimSpace(candidate.NodeName), strings.TrimSpace(merged[idx].NodeName))
+			})
+		}
+		if match < 0 && merged[idx].IP != "" {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return strings.TrimSpace(candidate.IP) == strings.TrimSpace(merged[idx].IP)
+			})
+		}
+		if match < 0 && merged[idx].Host != "" {
+			match = matchUnique(func(candidate config.ClusterEndpoint) bool {
+				return strings.EqualFold(strings.TrimSpace(candidate.Host), strings.TrimSpace(merged[idx].Host))
+			})
+		}
+		if match < 0 {
+			continue
+		}
+		used[match] = struct{}{}
+		old := existing[match]
+		merged[idx].NodeIdentity = old.NodeIdentity
+		if merged[idx].NativeNodeID == 0 {
+			merged[idx].NativeNodeID = old.NativeNodeID
+		}
+		if merged[idx].IPOverride == "" {
+			merged[idx].IPOverride = old.IPOverride
+		}
+		if merged[idx].GuestURL == "" {
+			merged[idx].GuestURL = old.GuestURL
+		}
+		if merged[idx].Fingerprint == "" {
+			merged[idx].Fingerprint = old.Fingerprint
+		}
+	}
+	return merged
+}
+
 // HandleDeleteNode deletes a node
 
 func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
@@ -1809,7 +1914,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	if clusterName != "" && !strings.EqualFold(clusterName, "unknown cluster") {
 		pve.ClusterName = clusterName
 	}
-	pve.ClusterEndpoints = clusterEndpoints
+	pve.ClusterEndpoints = mergeDiscoveredClusterEndpointConfiguration(pve.ClusterEndpoints, clusterEndpoints)
 
 	// Save configuration
 	h.normalizePVEConfigState(r.Context())
@@ -1853,7 +1958,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		"oldNodeCount": oldEndpointCount,
 		"newNodeCount": newEndpointCount,
 		"nodesAdded":   newEndpointCount - oldEndpointCount,
-		"clusterNodes": toClusterEndpointResponses(clusterEndpoints),
+		"clusterNodes": toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
 	})
 }
 

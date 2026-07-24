@@ -296,6 +296,45 @@ func TestHostAgentRemovalLifecycleDoesNotPoisonDuplicateActiveIdentity(t *testin
 	}
 }
 
+func TestHostAgentRemovalLifecycleDoesNotUseProxmoxDisplayNameAsIdentity(t *testing.T) {
+	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
+	monitor.state.UpdateNodesForInstance("production-api", []models.Node{{
+		ID:              "production-pve1",
+		NodeIdentity:    "production-pve1",
+		Name:            "pve1",
+		DisplayName:     "Render East",
+		Instance:        "production-api",
+		IsClusterMember: true,
+		LinkedAgentID:   "agent-machine",
+	}})
+
+	now := time.Now().UTC()
+	report := hostRemovalLifecycleReport(
+		"agent-machine",
+		"agent-machine",
+		"agent-state",
+		"pve1",
+		"linux",
+		now,
+	)
+	token := &config.APITokenRecord{ID: "agent-token", CreatedAt: now.Add(-time.Hour)}
+	host, err := monitor.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if _, err := monitor.RemoveHostAgent(host.ID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	nodes := monitor.state.GetSnapshot().Nodes
+	if len(nodes) != 1 ||
+		nodes[0].NodeIdentity != "production-pve1" ||
+		nodes[0].Name != "pve1" ||
+		nodes[0].DisplayName != "Render East" {
+		t.Fatalf("agent removal changed provider-owned node presentation identity: %+v", nodes)
+	}
+}
+
 func TestHostAgentRemovalLifecycleFailsClosedWhenTombstoneCannotPersist(t *testing.T) {
 	dataPath := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(dataPath, []byte("fixture"), 0o600); err != nil {

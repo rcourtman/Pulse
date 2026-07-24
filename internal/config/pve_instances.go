@@ -43,8 +43,23 @@ func clonePVEInstances(instances []PVEInstance) []PVEInstance {
 			out[i].ClusterEndpoints = make([]ClusterEndpoint, len(instances[i].ClusterEndpoints))
 			copy(out[i].ClusterEndpoints, instances[i].ClusterEndpoints)
 		}
+		if len(instances[i].ClusterNodeIdentities) > 0 {
+			out[i].ClusterNodeIdentities = append([]PVEClusterNodeIdentity(nil), instances[i].ClusterNodeIdentities...)
+			for identityIdx := range out[i].ClusterNodeIdentities {
+				out[i].ClusterNodeIdentities[identityIdx].NativeAliases = append(
+					[]string(nil),
+					instances[i].ClusterNodeIdentities[identityIdx].NativeAliases...,
+				)
+			}
+		}
 	}
 	return out
+}
+
+// DeepCopy returns an independently mutable copy of one PVE instance,
+// including endpoint and retained cluster-node identity metadata.
+func (instance PVEInstance) DeepCopy() PVEInstance {
+	return clonePVEInstances([]PVEInstance{instance})[0]
 }
 
 func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, bool) {
@@ -87,6 +102,7 @@ func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, boo
 				Msg("Merging duplicate cluster instance")
 
 			mergePVEInstanceData(primary, duplicate)
+			mergePVEClusterNodeIdentities(primary, duplicate)
 
 			for _, ep := range duplicate.ClusterEndpoints {
 				nodeKey := strings.TrimSpace(strings.ToLower(ep.NodeName))
@@ -125,6 +141,12 @@ func mergeClusterEndpointData(dst *ClusterEndpoint, src ClusterEndpoint) {
 	if dst.Host == "" && strings.TrimSpace(src.Host) != "" {
 		dst.Host = strings.TrimSpace(src.Host)
 	}
+	if dst.NodeIdentity == "" && strings.TrimSpace(src.NodeIdentity) != "" {
+		dst.NodeIdentity = strings.TrimSpace(src.NodeIdentity)
+	}
+	if dst.NativeNodeID == 0 && src.NativeNodeID != 0 {
+		dst.NativeNodeID = src.NativeNodeID
+	}
 	if dst.GuestURL == "" && strings.TrimSpace(src.GuestURL) != "" {
 		dst.GuestURL = strings.TrimSpace(src.GuestURL)
 	}
@@ -154,6 +176,56 @@ func mergeClusterEndpointData(dst *ClusterEndpoint, src ClusterEndpoint) {
 	if dst.PulseError == "" && strings.TrimSpace(src.PulseError) != "" {
 		dst.PulseError = strings.TrimSpace(src.PulseError)
 	}
+}
+
+func mergePVEClusterNodeIdentities(dst *PVEInstance, src PVEInstance) {
+	if dst == nil {
+		return
+	}
+	for _, identity := range src.ClusterNodeIdentities {
+		found := false
+		for idx := range dst.ClusterNodeIdentities {
+			current := &dst.ClusterNodeIdentities[idx]
+			if current.ID != identity.ID {
+				continue
+			}
+			if current.NativeNodeID == 0 {
+				current.NativeNodeID = identity.NativeNodeID
+			}
+			if current.NativeName == "" {
+				current.NativeName = identity.NativeName
+			}
+			if current.DisplayName == "" {
+				current.DisplayName = identity.DisplayName
+			}
+			current.NativeAliases = appendUniquePVEIdentityAliases(current.NativeAliases, identity.NativeAliases...)
+			found = true
+			break
+		}
+		if !found {
+			dst.ClusterNodeIdentities = append(dst.ClusterNodeIdentities, identity)
+		}
+	}
+}
+
+func appendUniquePVEIdentityAliases(existing []string, values ...string) []string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		found := false
+		for _, current := range existing {
+			if current == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			existing = append(existing, value)
+		}
+	}
+	return existing
 }
 
 func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {

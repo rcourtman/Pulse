@@ -251,7 +251,9 @@ const systemRowSignature = (
     components: system.components,
     members: (system.members ?? []).map((member) => ({
       id: member.id,
+      nodeIdentity: member.nodeIdentity,
       name: member.name,
+      nativeName: member.nativeName,
       endpoint: member.endpoint,
       hostAliases: member.hostAliases,
       state: member.state,
@@ -308,7 +310,9 @@ const buildMemberRow = (
     primaryRowProblem(fleetHighlights);
   return {
     id: member.id,
+    nodeIdentity: member.nodeIdentity?.trim() || undefined,
     name,
+    nativeName: member.nativeName?.trim() || undefined,
     subtitle: memberSubtitleFor(member, systemType),
     source,
     host: member.endpoint?.trim() || undefined,

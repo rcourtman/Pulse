@@ -333,7 +333,10 @@ type MetricValue struct {
 type ProxmoxData struct {
 	SourceID                     string              `json:"sourceId,omitempty"`      // raw model ID from source snapshot
 	RuntimeStatus                string              `json:"runtimeStatus,omitempty"` // source-authored VM/LXC power state, independent of collection freshness
+	NodeIdentity                 string              `json:"nodeIdentity,omitempty"`
 	NodeName                     string              `json:"nodeName,omitempty"`
+	NodeAliases                  []string            `json:"nodeAliases,omitempty"`
+	NodeDisplayName              string              `json:"nodeDisplayName,omitempty"`
 	Pool                         string              `json:"pool,omitempty"`
 	ClusterName                  string              `json:"clusterName,omitempty"`
 	IsClusterMember              bool                `json:"isClusterMember,omitempty"`

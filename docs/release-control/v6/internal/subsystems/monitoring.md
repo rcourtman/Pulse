@@ -85,11 +85,19 @@ does not discard independent recovery facts.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.
-Proxmox cluster node labels are monitoring-owned identity presentation:
-configured cluster labels must project into node display names as
-`cluster label (node name)` so duplicate node hostnames across clusters remain
-distinguishable, while `models.Node.Name` and `ProxmoxData.NodeName` keep the
-raw Proxmox node identity for linking, metrics, URLs, and actions.
+Proxmox cluster node identity is connection scoped and immutable after first
+assignment. Configuration owns one retained identity ledger per PVE instance,
+correlating current endpoint membership by the stored identity first, numeric
+Proxmox node ID second, then unambiguous native-name or address evidence.
+Native rename, re-IP, temporary absence, confirmed removal and later
+reappearance must not regenerate an established identity or lose its optional
+display-name override. Ambiguous case-folded names or address matches fail
+closed instead of transferring identity. Monitoring publishes the configured
+override when present and otherwise the current native node name; it also
+retains current and prior native names for diagnostics, history lookup, and
+search. Presentation must never alter polling addresses, credentials,
+fingerprints, external URLs, action routing, source-native guest IDs, or
+same-name-cluster provider scoping.
 Node state aggregation is cluster-identity-scoped beyond presentation: a
 hostname match alone must never bind a node to a host agent, and neither a
 shared linked-agent identity nor an endpoint merge alias may fold two node

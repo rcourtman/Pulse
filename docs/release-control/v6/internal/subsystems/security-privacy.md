@@ -23,6 +23,12 @@ and the security-facing settings surfaces that expose authentication posture,
 token-management visibility, and privacy controls to operators. Customer-facing
 privacy and Settings surfaces must not present maintainer commercial-event
 controls as normal product settings.
+Configuration-level validation also keeps Proxmox cluster-node display
+overrides presentation-only: valid Unicode is bounded to 128 code points,
+control characters are rejected, and tenant deep copies must isolate the
+retained identity ledger and aliases. Those labels never become authentication
+principals, API-token ownership, credential lookup, TLS identity, routing
+authority, audit actor identity, or organization scope.
 
 ## Canonical Files
 

@@ -7,11 +7,15 @@ import { getPreferredConfiguredNodeLabel } from '@/utils/resourceIdentity';
 import type { Temperature } from '@/types/api';
 import type {
   ClusterEndpointOverridePayload,
+  ClusterNodeDisplayNameOverridePayload,
   NodeConfig,
   NodeConfigWithStatus,
 } from '@/types/nodes';
 import { settingsAgentNodeLabel } from './settingsRouting';
-import { applyClusterEndpointOverridesLocally } from './nodeModalModel';
+import {
+  applyClusterEndpointOverridesLocally,
+  applyClusterNodeDisplayNamesLocally,
+} from './nodeModalModel';
 import { matchConfiguredNodeToResource, type NodeType } from './infrastructureSettingsModel';
 import {
   getNodeDeleteErrorMessage,
@@ -291,18 +295,27 @@ export const useInfrastructureConfiguredNodesState = ({
         await NodesAPI.updateNode(existingNode.id, nodeData as NodeConfig);
         // clusterEndpointOverrides is a write-only payload field: mirror it
         // onto the cached endpoints instead of spreading it onto the node.
-        const { clusterEndpointOverrides, ...nodePatch } = nodeData as Partial<NodeConfig> & {
+        const {
+          clusterEndpointOverrides,
+          clusterNodeDisplayNameOverrides,
+          ...nodePatch
+        } = nodeData as Partial<NodeConfig> & {
           clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
+          clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[];
         };
         setNodes(
           nodes().map((node) => {
             if (node.id !== existingNode.id) return node;
             const endpointPatch =
-              clusterEndpointOverrides?.length && 'clusterEndpoints' in node
+              (clusterEndpointOverrides?.length || clusterNodeDisplayNameOverrides?.length) &&
+              'clusterEndpoints' in node
                 ? {
-                    clusterEndpoints: applyClusterEndpointOverridesLocally(
-                      node.clusterEndpoints,
-                      clusterEndpointOverrides,
+                    clusterEndpoints: applyClusterNodeDisplayNamesLocally(
+                      applyClusterEndpointOverridesLocally(
+                        node.clusterEndpoints,
+                        clusterEndpointOverrides,
+                      ),
+                      clusterNodeDisplayNameOverrides,
                     ),
                   }
                 : undefined;

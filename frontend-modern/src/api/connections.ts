@@ -174,7 +174,9 @@ export interface ConnectionSystemComponent {
 
 export interface ConnectionSystemMember {
   id: string;
+  nodeIdentity?: string;
   name: string;
+  nativeName?: string;
   endpoint?: string;
   hostAliases?: string[];
   state: ConnectionState;

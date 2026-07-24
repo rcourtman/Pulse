@@ -343,6 +343,21 @@ func TestCloneProxmoxData_Nil(t *testing.T) {
 	}
 }
 
+func TestCloneProxmoxData_NodeAliasesIsolation(t *testing.T) {
+	original := &ProxmoxData{
+		NodeIdentity: "production-pve1",
+		NodeName:     "pve1",
+		NodeAliases:  []string{"pve-old"},
+	}
+
+	cloned := cloneProxmoxData(original)
+	cloned.NodeAliases[0] = "changed"
+
+	if original.NodeAliases[0] != "pve-old" {
+		t.Fatalf("Proxmox resource clone shared node aliases: %+v", original)
+	}
+}
+
 func TestCloneProxmoxData_TemperatureIsolation(t *testing.T) {
 	temp := 45.5
 	original := &ProxmoxData{

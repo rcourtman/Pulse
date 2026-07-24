@@ -337,14 +337,20 @@ describe('infrastructure operations model', () => {
   });
 
   it('mirrors saved cluster member overrides onto cached node config', () => {
-    // clusterEndpointOverrides is a write-only PUT payload field. The nodes
-    // cache must apply it to clusterEndpoints (matching the optimistic host
-    // patch) instead of spreading the raw payload key onto config state.
+    // Both cluster override collections are write-only PUT fields. The nodes
+    // cache must apply them to clusterEndpoints instead of spreading either
+    // raw payload key onto config state.
     expect(useInfrastructureConfiguredNodesStateSource).toContain(
-      'const { clusterEndpointOverrides, ...nodePatch }',
+      'clusterNodeDisplayNameOverrides,',
     );
     expect(useInfrastructureConfiguredNodesStateSource).toContain(
       'applyClusterEndpointOverridesLocally(',
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      'applyClusterNodeDisplayNamesLocally(',
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      'clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[]',
     );
     expect(useInfrastructureConfiguredNodesStateSource).not.toContain('...nodeData,');
   });

@@ -3357,8 +3357,17 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	if incoming.SourceID != "" {
 		merged.SourceID = incoming.SourceID
 	}
+	if incoming.NodeIdentity != "" {
+		merged.NodeIdentity = incoming.NodeIdentity
+	}
 	if incoming.NodeName != "" {
 		merged.NodeName = incoming.NodeName
+	}
+	if len(incoming.NodeAliases) > 0 {
+		merged.NodeAliases = uniqueStrings(append(merged.NodeAliases, incoming.NodeAliases...))
+	}
+	if incoming.NodeDisplayName != "" {
+		merged.NodeDisplayName = incoming.NodeDisplayName
 	}
 	if incoming.ClusterName != "" {
 		merged.ClusterName = incoming.ClusterName
@@ -4248,6 +4257,10 @@ func (rr *ResourceRegistry) buildChildCounts() {
 	// ChildCount and ParentName are derived fields. Clear prior values before
 	// recomputing to prevent stale state after re-parenting or parent removal.
 	for _, r := range rr.resources {
+		if CanonicalResourceType(r.Type) == ResourceTypeAgent && r.Proxmox != nil &&
+			strings.TrimSpace(r.Proxmox.NodeDisplayName) != "" {
+			r.Name = r.Proxmox.NodeDisplayName
+		}
 		r.ParentID = rr.resolveCanonicalParentID(r)
 		rr.refreshLinkedAgentIDFromParentLocked(r)
 		r.ChildCount = 0
@@ -4270,6 +4283,11 @@ func (rr *ResourceRegistry) buildChildCounts() {
 		if r.ParentID != nil {
 			if parent, ok := rr.resources[*r.ParentID]; ok {
 				r.ParentName = parent.Name
+				if r.Proxmox != nil && parent.Proxmox != nil {
+					r.Proxmox.NodeIdentity = parent.Proxmox.NodeIdentity
+					r.Proxmox.NodeDisplayName = parent.Proxmox.NodeDisplayName
+					r.Proxmox.NodeAliases = append([]string(nil), parent.Proxmox.NodeAliases...)
+				}
 			}
 		}
 	}

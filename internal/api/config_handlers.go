@@ -408,6 +408,7 @@ func (h *ConfigHandlers) normalizePVEConfigState(ctx context.Context) {
 	if normalized, changed := config.ConsolidatePVEInstances(cfg.PVEInstances); changed {
 		cfg.PVEInstances = normalized
 	}
+	config.EnsurePVEClusterNodeIdentities(cfg.PVEInstances)
 }
 
 // cleanupExpiredSetupTokens removes expired or used setup tokens periodically.
@@ -730,9 +731,10 @@ type NodeConfigRequest struct {
 	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
 	// PVE only: per-cluster-member connection address overrides. Only the
 	// members named here are touched; an empty ipOverride clears the override.
-	ClusterEndpointOverrides []ClusterEndpointOverrideRequest `json:"clusterEndpointOverrides,omitempty"`
-	guestURLSet              bool                             `json:"-"`
-	fingerprintSet           bool                             `json:"-"`
+	ClusterEndpointOverrides        []ClusterEndpointOverrideRequest        `json:"clusterEndpointOverrides,omitempty"`
+	ClusterNodeDisplayNameOverrides []ClusterNodeDisplayNameOverrideRequest `json:"clusterNodeDisplayNameOverrides,omitempty"`
+	guestURLSet                     bool                                    `json:"-"`
+	fingerprintSet                  bool                                    `json:"-"`
 }
 
 // ClusterEndpointOverrideRequest sets or clears the connection address Pulse
@@ -742,6 +744,13 @@ type NodeConfigRequest struct {
 type ClusterEndpointOverrideRequest struct {
 	NodeName   string `json:"nodeName"`
 	IPOverride string `json:"ipOverride"`
+}
+
+// ClusterNodeDisplayNameOverrideRequest sets or clears a presentation-only
+// name using the immutable, connection-scoped node identity.
+type ClusterNodeDisplayNameOverrideRequest struct {
+	NodeIdentity string `json:"nodeIdentity"`
+	DisplayName  string `json:"displayName"`
 }
 
 func (r *NodeConfigRequest) UnmarshalJSON(data []byte) error {
@@ -864,7 +873,12 @@ func (r NodeResponse) NormalizeCollections() NodeResponse {
 // It keeps config storage structs internal while returning canonical JSON keys.
 type ClusterEndpointResponse struct {
 	NodeID         string     `json:"nodeId,omitempty"`
+	NodeIdentity   string     `json:"nodeIdentity"`
+	NativeNodeID   int        `json:"nativeNodeId,omitempty"`
 	NodeName       string     `json:"nodeName,omitempty"`
+	NativeName     string     `json:"nativeName,omitempty"`
+	NativeAliases  []string   `json:"nativeAliases,omitempty"`
+	DisplayName    string     `json:"displayName,omitempty"`
 	Host           string     `json:"host,omitempty"`
 	GuestURL       string     `json:"guestURL,omitempty"`
 	IP             string     `json:"ip,omitempty"`
@@ -877,10 +891,31 @@ type ClusterEndpointResponse struct {
 	PulseError     string     `json:"pulseError,omitempty"`
 }
 
-func toClusterEndpointResponse(endpoint config.ClusterEndpoint) ClusterEndpointResponse {
+func toClusterEndpointResponse(endpoint config.ClusterEndpoint, identitySets ...[]config.PVEClusterNodeIdentity) ClusterEndpointResponse {
+	displayName := ""
+	nativeName := endpoint.NodeName
+	var nativeAliases []string
+	for _, identities := range identitySets {
+		for _, identity := range identities {
+			if identity.ID != endpoint.NodeIdentity {
+				continue
+			}
+			displayName = identity.DisplayName
+			nativeAliases = append([]string(nil), identity.NativeAliases...)
+			if identity.NativeName != "" {
+				nativeName = identity.NativeName
+			}
+			break
+		}
+	}
 	return ClusterEndpointResponse{
 		NodeID:         endpoint.NodeID,
+		NodeIdentity:   endpoint.NodeIdentity,
+		NativeNodeID:   endpoint.NativeNodeID,
 		NodeName:       endpoint.NodeName,
+		NativeName:     nativeName,
+		NativeAliases:  nativeAliases,
+		DisplayName:    displayName,
 		Host:           endpoint.Host,
 		GuestURL:       endpoint.GuestURL,
 		IP:             endpoint.IP,
@@ -894,14 +929,14 @@ func toClusterEndpointResponse(endpoint config.ClusterEndpoint) ClusterEndpointR
 	}
 }
 
-func toClusterEndpointResponses(endpoints []config.ClusterEndpoint) []ClusterEndpointResponse {
+func toClusterEndpointResponses(endpoints []config.ClusterEndpoint, identitySets ...[]config.PVEClusterNodeIdentity) []ClusterEndpointResponse {
 	if len(endpoints) == 0 {
 		return []ClusterEndpointResponse{}
 	}
 
 	out := make([]ClusterEndpointResponse, 0, len(endpoints))
 	for _, endpoint := range endpoints {
-		out = append(out, toClusterEndpointResponse(endpoint))
+		out = append(out, toClusterEndpointResponse(endpoint, identitySets...))
 	}
 	return out
 }
@@ -1340,6 +1375,7 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 			pulseReachable := isValid
 			endpoint := config.ClusterEndpoint{
 				NodeID:         clusterNode.ID,
+				NativeNodeID:   clusterNode.Nodeid,
 				NodeName:       clusterNode.Name,
 				GuestURL:       findExistingGuestURL(clusterNode.Name, existingEndpoints),
 				IPOverride:     findExistingIPOverride(clusterNode.Name, existingEndpoints), // Preserve user override
@@ -1452,7 +1488,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
-			ClusterEndpoints:             toClusterEndpointResponses(pve.ClusterEndpoints),
+			ClusterEndpoints:             toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
 			Source:                       pve.Source,
 		}.NormalizeCollections()
 		nodes = append(nodes, node)

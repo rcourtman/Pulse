@@ -7113,6 +7113,23 @@ same-token-identity secret refresh and full token promotion onto a
 credential-less cluster instance; it must not replace working cluster
 credentials with the member's per-node token, and discovered member `Host`
 and `IP` stay re-discovery-owned on this path too.
+The node update payload also accepts a write-only
+`clusterNodeDisplayNameOverrides` collection of
+`{nodeIdentity, displayName}` entries. `nodeIdentity` must resolve exactly
+inside the selected PVE connection's retained cluster-node identity ledger;
+unknown or duplicate request identities fail with `400`. `displayName` is
+trimmed, limited to 128 Unicode code points, rejects invalid UTF-8 and control
+characters, and an empty value clears the override. Equal or case-equivalent
+display values are allowed because presentation is never an identity or
+routing key. `GET /api/config/nodes` exposes each endpoint's immutable
+`nodeIdentity`, current `nativeName`, prior `nativeAliases`, optional numeric
+`nativeNodeId`, and optional `displayName` override, while retaining provider status
+`nodeId`, node name, host, address override, credentials, and fingerprint as
+separate fields. Existing configuration is migrated deterministically on load
+and import; export/import preserves the ledger and stale retained entries.
+Tenant config copies must deep-copy the ledger and aliases. Clients may
+project the display value but must keep native names and IDs for diagnostics
+and must never send a display value as connection or action authority.
 The same frontend API contract now also governs Proxmox agent-install command
 transport in `frontend-modern/src/api/nodes.ts`: the canonical client request
 shape for `/api/agent-install-command` must support both `type:"pve"` and

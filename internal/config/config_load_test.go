@@ -44,6 +44,27 @@ func TestLoad_DefaultHostedCommercialBaseURLAvoidsRetiredTrialPath(t *testing.T)
 	}
 }
 
+func TestConfigValidateRejectsUnsafePVEClusterDisplayName(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	cfg, err := LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	cfg.PVEInstances = []PVEInstance{{
+		Host:       "https://pve.example.test:8006",
+		TokenName:  "root@pam!pulse",
+		TokenValue: "secret",
+		IsCluster:  true,
+		ClusterNodeIdentities: []PVEClusterNodeIdentity{{
+			ID:          "production-pve1",
+			NativeName:  "pve1",
+			DisplayName: "unsafe\nlabel",
+		}},
+	}}
+
+	err = cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "control characters")
+}
+
 func TestResolveRuntimeDataDir(t *testing.T) {
 	tmpDefault := t.TempDir()
 	prevDefault := defaultDataDir

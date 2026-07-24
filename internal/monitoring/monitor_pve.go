@@ -656,11 +656,13 @@ func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
 }
 
 func (m *Monitor) placeholderNodeForInstance(instanceName string, instanceCfg *config.PVEInstance, nodeName string) models.Node {
-	nodeID := m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + nodeName
+	nodeID := m.pveNodeID(instanceName, instanceCfg, nodeName)
 	connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, monitorDiscoveryConfig(m), nodeName)
 	return models.Node{
 		ID:                           nodeID,
+		NodeIdentity:                 nodeID,
 		Name:                         nodeName,
+		NativeNameAliases:            config.PVEClusterNodeNativeAliases(instanceCfg, nodeName),
 		DisplayName:                  getNodeDisplayName(instanceCfg, nodeName),
 		Instance:                     instanceName,
 		Host:                         connectionHost,
@@ -671,6 +673,7 @@ func (m *Monitor) placeholderNodeForInstance(instanceName string, instanceCfg *c
 		LoadAverage:                  []float64{},
 		IsClusterMember:              instanceCfg.IsCluster,
 		ClusterName:                  instanceCfg.ClusterName,
+		ProviderScopedIdentity:       m.pveNodeUsesProviderScopedIdentity(instanceName, instanceCfg),
 		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
 	}
 }
@@ -759,7 +762,10 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 func (m *Monitor) seedNodeDisplayNames(modelNodes []models.Node) {
 	for i := range modelNodes {
 		if modelNodes[i].DisplayName != "" {
-			m.alertManager.UpdateNodeDisplayName(modelNodes[i].Name, modelNodes[i].DisplayName)
+			m.alertManager.UpdateNodeDisplayName(modelNodes[i].Instance, modelNodes[i].Name, modelNodes[i].DisplayName)
+			for _, alias := range modelNodes[i].NativeNameAliases {
+				m.alertManager.UpdateNodeDisplayName(modelNodes[i].Instance, alias, modelNodes[i].DisplayName)
+			}
 		}
 	}
 }

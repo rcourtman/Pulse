@@ -2,18 +2,52 @@ import { describe, expect, it } from 'vitest';
 import type { ClusterEndpoint } from '@/types/nodes';
 import {
   applyClusterEndpointOverridesLocally,
+  applyClusterNodeDisplayNamesLocally,
   buildClusterEndpointOverridesPayload,
+  buildClusterNodeDisplayNameOverridesPayload,
   PVE_MANUAL_PERMISSION_COMMAND,
 } from '../nodeModalModel';
 
 const endpoint = (nodeName: string, ipOverride?: string): ClusterEndpoint => ({
   nodeId: `node/${nodeName}`,
+  nodeIdentity: `cluster-${nodeName}`,
   nodeName,
   host: `https://${nodeName}.local:8006`,
   ip: '10.0.0.1',
   ipOverride,
   online: true,
   lastSeen: '',
+});
+
+describe('cluster node display-name overrides', () => {
+  it('writes immutable identities, permits duplicate labels, and sends an empty clear', () => {
+    const endpoints = [
+      { ...endpoint('pve1'), displayName: 'Compute' },
+      endpoint('pve2'),
+    ];
+    expect(
+      buildClusterNodeDisplayNameOverridesPayload(endpoints, {
+        'cluster-pve1': '',
+        'cluster-pve2': 'Compute',
+      }),
+    ).toEqual([
+      { nodeIdentity: 'cluster-pve1', displayName: '' },
+      { nodeIdentity: 'cluster-pve2', displayName: 'Compute' },
+    ]);
+  });
+
+  it('patches the cached presentation without changing native names or addresses', () => {
+    const endpoints = [endpoint('pve1')];
+    const result = applyClusterNodeDisplayNamesLocally(endpoints, [
+      { nodeIdentity: 'cluster-pve1', displayName: 'Render East' },
+    ]);
+    expect(result?.[0]).toMatchObject({
+      nodeIdentity: 'cluster-pve1',
+      nodeName: 'pve1',
+      displayName: 'Render East',
+      ip: '10.0.0.1',
+    });
+  });
 });
 
 describe('nodeModalModel', () => {

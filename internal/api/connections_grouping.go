@@ -231,7 +231,9 @@ func connectionSystemMemberFromNode(
 
 	return ConnectionSystemMember{
 		ID:                strings.TrimSpace(node.ID),
+		NodeIdentity:      firstNonEmptyTrimmed(node.NodeIdentity, node.ID),
 		Name:              firstNonEmptyTrimmed(node.DisplayName, node.Name),
+		NativeName:        strings.TrimSpace(node.Name),
 		Endpoint:          strings.TrimSpace(node.Host),
 		HostAliases:       connectionSystemMemberHostAliasesFromNode(node),
 		State:             connectionSystemMemberStateFromNode(node),
@@ -275,7 +277,9 @@ func connectionSystemMemberFromResource(
 
 	return ConnectionSystemMember{
 		ID:                strings.TrimSpace(resource.ID),
-		Name:              firstNonEmptyTrimmed(resource.Name, nodeName),
+		NodeIdentity:      firstNonEmptyTrimmed(resource.Proxmox.NodeIdentity, resource.Proxmox.SourceID),
+		Name:              firstNonEmptyTrimmed(resource.Proxmox.NodeDisplayName, resource.Name, nodeName),
+		NativeName:        nodeName,
 		Endpoint:          strings.TrimSpace(resource.Proxmox.HostURL),
 		HostAliases:       connectionSystemMemberHostAliasesFromResource(resource),
 		State:             connectionSystemMemberStateFromResource(resource),
@@ -332,6 +336,12 @@ func mergeConnectionSystemMembers(
 	if strings.TrimSpace(existing.Name) == "" {
 		existing.Name = candidate.Name
 	}
+	if strings.TrimSpace(existing.NodeIdentity) == "" {
+		existing.NodeIdentity = candidate.NodeIdentity
+	}
+	if strings.TrimSpace(existing.NativeName) == "" {
+		existing.NativeName = candidate.NativeName
+	}
 	if strings.TrimSpace(existing.Endpoint) == "" {
 		existing.Endpoint = candidate.Endpoint
 	}
@@ -380,12 +390,13 @@ func connectionSystemMemberStateSeverity(state ConnectionState) int {
 }
 
 func connectionSystemMemberHostAliasesFromNode(node models.Node) []string {
-	return appendNormalizedHosts(
-		nil,
+	values := []string{
 		node.Name,
 		node.DisplayName,
 		node.Host,
-	)
+	}
+	values = append(values, node.NativeNameAliases...)
+	return appendNormalizedHosts(nil, values...)
 }
 
 func connectionSystemMemberHostAliasesFromResource(resource unified.Resource) []string {
@@ -394,7 +405,8 @@ func connectionSystemMemberHostAliasesFromResource(resource unified.Resource) []
 		canonicalResourceHostname(resource),
 	}
 	if resource.Proxmox != nil {
-		values = append(values, resource.Proxmox.NodeName, resource.Proxmox.HostURL)
+		values = append(values, resource.Proxmox.NodeName, resource.Proxmox.NodeDisplayName, resource.Proxmox.HostURL)
+		values = append(values, resource.Proxmox.NodeAliases...)
 	}
 	if resource.Agent != nil {
 		values = append(values, resource.Agent.Hostname)
@@ -406,9 +418,10 @@ func connectionSystemMemberHostAliasesFromResource(resource unified.Resource) []
 
 func connectionSystemMemberKey(member ConnectionSystemMember) string {
 	for _, candidate := range []string{
-		strings.TrimSpace(member.Name),
-		strings.TrimSpace(member.Endpoint),
+		strings.TrimSpace(member.NodeIdentity),
 		strings.TrimSpace(member.ID),
+		strings.TrimSpace(member.NativeName),
+		strings.TrimSpace(member.Endpoint),
 	} {
 		if normalized := normalizeHost(candidate); normalized != "" {
 			return normalized

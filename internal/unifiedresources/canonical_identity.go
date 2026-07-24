@@ -102,6 +102,15 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		strings.TrimSpace(resource.Identity.MachineID),
 		strings.TrimSpace(resource.ID),
 	)
+	values = append(values, resource.Identity.Hostnames...)
+	if resource.Proxmox != nil {
+		values = append(
+			values,
+			strings.TrimSpace(resource.Proxmox.NodeIdentity),
+			strings.TrimSpace(resource.Proxmox.NodeName),
+		)
+		values = append(values, resource.Proxmox.NodeAliases...)
+	}
 
 	return uniqueTrimmed(values...)
 }

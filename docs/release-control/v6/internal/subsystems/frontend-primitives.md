@@ -1227,6 +1227,16 @@ Agent`), with the plain-language source phrase available through accessible
    backend-authored cluster members, the table primitive must render those
    nodes as child composition beneath the cluster row rather than flattening
    them back into peer top-level systems or hiding them entirely.
+   The governed connection editor may assign an optional display name to each
+   PVE cluster member only through its backend-authored immutable
+   `nodeIdentity`. It must show the current native Proxmox name alongside an
+   override, explain that clearing restores the native name, and keep the
+   connection address as a separate control. Optimistic settings projection
+   may update the display field only; it must not rewrite native name, host,
+   IP override, credential, fingerprint, node identity, or provider node ID.
+   Duplicate display values are valid presentation, so row keys, expansion,
+   search ownership, edit targeting, and grouped-member joins must continue to
+   use backend identity rather than label text.
    The same table shell must keep fulfilled rows visible across polling and
    manual reloads by using a retained-value query boundary, not app-level
    Suspense or a blank loading replacement, so configured infrastructure does
@@ -1357,6 +1367,12 @@ Agent`), with the plain-language source phrase available through accessible
    than relying on an aria-hidden dot or opacity. Same-named cluster and member
    rows use Proxmox instance/platform scope for grouping, search ownership, and
    guest counts; a display label alone is not a cross-provider join key.
+   Shared resource search must match the preferred display label, current and
+   prior native Proxmox node names, and immutable node identity. Overview,
+   storage, backups, alerts/history, infrastructure settings, API/websocket,
+   and responsive/mobile rows must present the same preferred label while
+   retaining native diagnostics; page-local formatting such as
+   `cluster (node)` must not replace the backend-authored presentation.
 8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
 9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
 10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.

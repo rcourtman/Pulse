@@ -139,6 +139,13 @@ not change Unified Agent enrollment, token binding, report admission,
 tombstones, re-enrollment, or command authority. A linked agent remains
 supplemental evidence on the retained canonical Proxmox member; its presence
 does not decide provider membership or authorize removal.
+That separation also applies to configured cluster-node display overrides.
+Infrastructure lifecycle rows may present the connection-owned override and
+the current native Proxmox name together, but row identity, linked-agent
+attachment, update eligibility, uninstall targeting, enrollment continuity,
+and removal tombstones remain keyed by immutable member and agent identities.
+Clearing or changing a display override must not detach, re-enroll, remove, or
+retarget an agent.
 
 The same shared model file may carry monitoring-owned native storage-health
 evidence such as structured ZFS scans, vdev members, and Ceph health checks.

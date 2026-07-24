@@ -75,6 +75,44 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 	}
 }
 
+func TestRefreshCanonicalIdentityKeepsProxmoxPresentationSeparateFromNativeAliases(t *testing.T) {
+	resource := Resource{
+		ID:   "production-pve1",
+		Type: ResourceTypeAgent,
+		Name: "Render East",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"pve1", "pve-old"},
+		},
+		Proxmox: &ProxmoxData{
+			Instance:        "production-api",
+			NodeIdentity:    "production-pve1",
+			NodeName:        "pve1",
+			NodeAliases:     []string{"pve-old"},
+			NodeDisplayName: "Render East",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil ||
+		resource.Canonical.DisplayName != "Render East" ||
+		resource.Canonical.PrimaryID == "Render East" {
+		t.Fatalf("display override became canonical identity: %+v", resource.Canonical)
+	}
+	for _, want := range []string{"production-pve1", "pve1", "pve-old"} {
+		found := false
+		for _, alias := range resource.Canonical.Aliases {
+			if alias == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("canonical aliases %v missing native identity %q", resource.Canonical.Aliases, want)
+		}
+	}
+}
+
 func TestUnavailableMemoryFacetsDoNotChangeCanonicalIdentity(t *testing.T) {
 	total := int64(8 << 30)
 	resource := Resource{

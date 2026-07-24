@@ -41,7 +41,7 @@ func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *con
 	// but two unrelated clusters are allowed to share that display name. In
 	// that ambiguous case the instance name prevents cross-cluster resource
 	// collisions without churning IDs for established unambiguous clusters.
-	nodeID := m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + node.Node
+	nodeID := m.pveNodeID(instanceName, instanceCfg, node.Node)
 	effectiveStatus := node.Status
 	now := time.Now()
 	gracePeriod := m.pveNodeOfflineGracePeriod()
@@ -76,6 +76,25 @@ func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *con
 	m.mu.Unlock()
 
 	return nodeID, effectiveStatus
+}
+
+func (m *Monitor) pveNodeID(instanceName string, instanceCfg *config.PVEInstance, nativeName string) string {
+	if instanceCfg != nil && instanceCfg.IsCluster {
+		if identityID := config.PVEClusterNodeIdentityForName(instanceCfg, nativeName); identityID != "" {
+			return identityID
+		}
+	}
+	return m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + nativeName
+}
+
+func (m *Monitor) pveNodeUsesProviderScopedIdentity(instanceName string, instanceCfg *config.PVEInstance) bool {
+	if instanceCfg == nil || !instanceCfg.IsCluster || strings.TrimSpace(instanceCfg.ClusterName) == "" {
+		return false
+	}
+	return !strings.EqualFold(
+		strings.TrimSpace(m.pveNodeIdentityScope(instanceName, instanceCfg)),
+		strings.TrimSpace(instanceCfg.ClusterName),
+	)
 }
 
 func (m *Monitor) collectNodeTemperatureData(

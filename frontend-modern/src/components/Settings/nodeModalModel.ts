@@ -1,4 +1,9 @@
-import type { ClusterEndpoint, ClusterEndpointOverridePayload, NodeConfig } from '@/types/nodes';
+import type {
+  ClusterEndpoint,
+  ClusterEndpointOverridePayload,
+  ClusterNodeDisplayNameOverridePayload,
+  NodeConfig,
+} from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import type { NodeModalNodeType } from '@/utils/nodeModalPresentation';
 
@@ -55,6 +60,37 @@ export const applyClusterEndpointOverridesLocally = (
     const value = byNodeName.get(endpoint.nodeName);
     if (value === undefined) return endpoint;
     return { ...endpoint, ipOverride: value || undefined };
+  });
+};
+
+export const buildClusterNodeDisplayNameOverridesPayload = (
+  endpoints: ClusterEndpoint[] | undefined,
+  displayNames: Record<string, string>,
+): ClusterNodeDisplayNameOverridePayload[] | undefined => {
+  if (!endpoints?.length) return undefined;
+  const changed = endpoints.flatMap((endpoint) => {
+    const nodeIdentity = endpoint.nodeIdentity;
+    if (!nodeIdentity) return [];
+    const value = displayNames[nodeIdentity];
+    if (value === undefined || value.trim() === (endpoint.displayName ?? '')) return [];
+    return [{ nodeIdentity, displayName: value.trim() }];
+  });
+  return changed.length > 0 ? changed : undefined;
+};
+
+export const applyClusterNodeDisplayNamesLocally = (
+  endpoints: ClusterEndpoint[] | undefined,
+  overrides: ClusterNodeDisplayNameOverridePayload[] | undefined,
+): ClusterEndpoint[] | undefined => {
+  if (!endpoints?.length || !overrides?.length) return endpoints;
+  const byIdentity = new Map(
+    overrides.map((override) => [override.nodeIdentity, override.displayName]),
+  );
+  return endpoints.map((endpoint) => {
+    if (!endpoint.nodeIdentity) return endpoint;
+    const value = byIdentity.get(endpoint.nodeIdentity);
+    if (value === undefined) return endpoint;
+    return { ...endpoint, displayName: value || undefined };
   });
 };
 

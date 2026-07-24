@@ -264,25 +264,39 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 	}
 
 	m.resolvedMutex.RLock()
-	defer m.resolvedMutex.RUnlock()
-
-	resolved := make([]models.ResolvedAlert, 0, len(m.recentlyResolved))
+	resolvedSnapshot := make([]*ResolvedAlert, 0, len(m.recentlyResolved))
 	for _, alert := range m.recentlyResolved {
+		resolvedSnapshot = append(resolvedSnapshot, &ResolvedAlert{
+			Alert:        cloneAlertForOutput(alert.Alert),
+			ResolvedTime: alert.ResolvedTime,
+		})
+	}
+	m.resolvedMutex.RUnlock()
+
+	resolved := make([]models.ResolvedAlert, 0, len(resolvedSnapshot))
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, alert := range resolvedSnapshot {
 		exported := cloneAlertForOutput(alert.Alert)
+		nodeDisplayName := exported.NodeDisplayName
+		if current := m.resolveNodeDisplayName(exported.Instance, exported.Node); current != "" {
+			nodeDisplayName = current
+		}
 		resolved = append(resolved, models.ResolvedAlert{
 			Alert: models.Alert{
-				ID:           exported.ID,
-				Type:         exported.Type,
-				Level:        string(exported.Level),
-				ResourceID:   exported.ResourceID,
-				ResourceName: exported.ResourceName,
-				Node:         exported.Node,
-				Instance:     exported.Instance,
-				Message:      exported.Message,
-				Value:        exported.Value,
-				Threshold:    exported.Threshold,
-				StartTime:    exported.StartTime,
-				Acknowledged: exported.Acknowledged,
+				ID:              exported.ID,
+				Type:            exported.Type,
+				Level:           string(exported.Level),
+				ResourceID:      exported.ResourceID,
+				ResourceName:    exported.ResourceName,
+				Node:            exported.Node,
+				NodeDisplayName: nodeDisplayName,
+				Instance:        exported.Instance,
+				Message:         exported.Message,
+				Value:           exported.Value,
+				Threshold:       exported.Threshold,
+				StartTime:       exported.StartTime,
+				Acknowledged:    exported.Acknowledged,
 				// exported is a deep clone, so the map is already private.
 				Metadata: exported.Metadata,
 			},
@@ -298,22 +312,27 @@ func (m *Manager) GetResolvedAlert(alertID string) *ResolvedAlert {
 	// canonical-identity miss, so concurrent read-locked callers would race
 	// each other on that write.
 	m.resolvedMutex.Lock()
-	defer m.resolvedMutex.Unlock()
-
 	resolved, ok := m.getResolvedAlertNoLock(alertID)
 	if !ok || resolved == nil || resolved.Alert == nil {
+		m.resolvedMutex.Unlock()
 		return nil
 	}
-
-	return &ResolvedAlert{
+	result := &ResolvedAlert{
 		Alert:        cloneAlertForOutput(resolved.Alert),
 		ResolvedTime: resolved.ResolvedTime,
 	}
+	m.resolvedMutex.Unlock()
+	m.mu.RLock()
+	if current := m.resolveNodeDisplayName(result.Alert.Instance, result.Alert.Node); current != "" {
+		result.Alert.NodeDisplayName = current
+	}
+	m.mu.RUnlock()
+	return result
 }
 
 // GetAlertHistory returns alert history
 func (m *Manager) GetAlertHistory(limit int) []Alert {
-	return canonicalizeAlertHistoryForOutput(m.historyManager.GetAllHistory(limit))
+	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(m.historyManager.GetAllHistory(limit)))
 }
 
 // GetAlertHistorySince returns alert history entries created after the provided time.
@@ -322,7 +341,18 @@ func (m *Manager) GetAlertHistorySince(since time.Time, limit int) []Alert {
 		return m.GetAlertHistory(limit)
 	}
 
-	return canonicalizeAlertHistoryForOutput(m.historyManager.GetHistory(since, limit))
+	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(m.historyManager.GetHistory(since, limit)))
+}
+
+func (m *Manager) applyCurrentNodeDisplayNames(alerts []Alert) []Alert {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for idx := range alerts {
+		if displayName := m.resolveNodeDisplayName(alerts[idx].Instance, alerts[idx].Node); displayName != "" {
+			alerts[idx].NodeDisplayName = displayName
+		}
+	}
+	return alerts
 }
 
 // ClearAlertHistory clears all alert history

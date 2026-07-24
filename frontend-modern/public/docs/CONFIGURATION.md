@@ -272,6 +272,31 @@ PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
 
 Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report` and establish their command channel at `wss://agents.example.com:7656/api/agent/ws`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener. If command execution is enabled, both routes must traverse the same proxy/firewall path; a successful report does not prove that the WebSocket is admitted.
 
+### Proxmox Cluster Node Display Names
+
+Nodes discovered through one Proxmox VE cluster connection can have an
+optional Pulse display name. Open **Settings → Infrastructure**, edit the
+Proxmox VE connection, and set **Display name** beside a cluster member.
+
+- Display names are presentation only. They do not change the Proxmox node
+  name, API address, credentials, TLS fingerprint, routing, or action target.
+- An empty display name uses the current native Proxmox node name.
+- Names are trimmed, may contain Unicode, are limited to 128 characters, and
+  cannot contain control characters. Duplicate display names are allowed
+  because they are cosmetic; Pulse still uses a separate immutable identity.
+- The override is stored with that Proxmox connection and survives reloads,
+  restarts, member address changes, native node renames, and temporary cluster
+  membership loss. Confirmed removed members retain their identity metadata so
+  a later reappearance can recover the override.
+- Pulse keeps the native Proxmox node name, prior native names, numeric node ID
+  when available, and immutable Pulse identity for diagnostics and search.
+  These fields are also available to API and mobile clients.
+
+For legacy configuration first seen before Pulse records a Proxmox numeric node
+ID, changing both the native node name and every known member address at once
+is intentionally treated as a new member. Pulse does not guess across
+ambiguous evidence because that could transfer an override to the wrong node.
+
 ### Iframe Embedding (system.json)
 
 Embedding is controlled by `system.json` and the UI (**Settings → System → Network**):

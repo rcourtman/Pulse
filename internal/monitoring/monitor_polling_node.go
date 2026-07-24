@@ -57,7 +57,9 @@ func (m *Monitor) pollPVENode(
 
 	modelNode := models.Node{
 		ID:                           nodeID,
+		NodeIdentity:                 nodeID,
 		Name:                         node.Node,
+		NativeNameAliases:            config.PVEClusterNodeNativeAliases(instanceCfg, node.Node),
 		DisplayName:                  displayName,
 		Instance:                     instanceName,
 		Host:                         connectionHost,
@@ -72,6 +74,7 @@ func (m *Monitor) pollPVENode(
 		ConnectionHealth:             connectionHealthStr, // Use the determined health status
 		IsClusterMember:              instanceCfg.IsCluster,
 		ClusterName:                  instanceCfg.ClusterName,
+		ProviderScopedIdentity:       m.pveNodeUsesProviderScopedIdentity(instanceName, instanceCfg),
 		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
 	}
 	var nodeDiskSource string

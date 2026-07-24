@@ -118,6 +118,35 @@ describe('storageAdapters', () => {
     );
   });
 
+  it('presents a node override while retaining native storage routing hints', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'resource-storage-custom-node',
+          parentId: 'production-pve1',
+          parentName: 'Render East',
+          platformData: {
+            type: 'dir',
+            proxmox: {
+              nodeIdentity: 'production-pve1',
+              nodeName: 'pve1',
+              nodeAliases: ['pve-old'],
+              nodeDisplayName: 'Render East',
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].location.label).toBe('Render East');
+    expect(records[0].details?.node).toBe('pve1');
+    expect(records[0].details?.nodeHints).toEqual(
+      expect.arrayContaining(['Render East', 'pve1', 'pve-old', 'production-pve1']),
+    );
+  });
+
   it('collapses duplicate resource records by canonical identity and merges capabilities/details', () => {
     const resources: Resource[] = [
       makeResourceStorage({

@@ -1491,7 +1491,9 @@ func TestResourceRegistry_IngestSnapshotUnifiesLinkedProxmoxNodeViewsByHostIdent
 		Nodes: []models.Node{
 			{
 				ID:              "homelab-minipc",
+				NodeIdentity:    "homelab-minipc",
 				Name:            "minipc",
+				DisplayName:     "Render East",
 				Instance:        "homelab-entry",
 				ClusterName:     "homelab",
 				IsClusterMember: true,
@@ -1538,6 +1540,10 @@ func TestResourceRegistry_IngestSnapshotUnifiesLinkedProxmoxNodeViewsByHostIdent
 	}
 	if resource.Proxmox == nil || resource.Proxmox.NodeName != "minipc" {
 		t.Fatalf("expected proxmox node metadata for minipc, got %+v", resource.Proxmox)
+	}
+	if resource.Name != "Render East" || resource.Proxmox.NodeIdentity != "homelab-minipc" ||
+		resource.Proxmox.NodeDisplayName != "Render East" {
+		t.Fatalf("linked agent did not retain Proxmox presentation identity: %+v", resource)
 	}
 }
 
@@ -1998,6 +2004,7 @@ func TestResourceRegistry_IngestSnapshotDerivesProxmoxWorkloadParentWhenNodeSour
 		Nodes: []models.Node{
 			{
 				ID:              "mock-cluster-pve1",
+				NodeIdentity:    "mock-cluster-pve1",
 				Name:            "pve1",
 				DisplayName:     "West Production A",
 				Instance:        "Core Fabric",
@@ -2046,6 +2053,11 @@ func TestResourceRegistry_IngestSnapshotDerivesProxmoxWorkloadParentWhenNodeSour
 	}
 	if vms[0].ParentName != "West Production A" {
 		t.Fatalf("expected vm parent name West Production A, got %q", vms[0].ParentName)
+	}
+	if vms[0].Proxmox == nil || vms[0].Proxmox.NodeIdentity != "mock-cluster-pve1" ||
+		vms[0].Proxmox.NodeDisplayName != "West Production A" ||
+		vms[0].Proxmox.NodeName != "pve1" {
+		t.Fatalf("expected VM presentation metadata without changing native name, got %+v", vms[0].Proxmox)
 	}
 
 	containers := rr.ListByType(ResourceTypeSystemContainer)

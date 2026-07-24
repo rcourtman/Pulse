@@ -88,8 +88,15 @@ const rowSystemTitle = (row: InfrastructureSystemRow): string => {
   return detail ? `${row.name} · ${detail}` : row.name;
 };
 
-const memberSystemTitle = (member: InfrastructureSystemMemberRow): string =>
-  member.subtitle ? `${member.name} · ${member.subtitle}` : member.name;
+const memberSystemTitle = (member: InfrastructureSystemMemberRow): string => {
+  const details = [
+    member.subtitle,
+    member.nativeName && member.nativeName !== member.name
+      ? `Proxmox node ${member.nativeName}`
+      : undefined,
+  ].filter(Boolean);
+  return details.length > 0 ? `${member.name} · ${details.join(' · ')}` : member.name;
+};
 // The connected-systems table sets `min-w-[820px]`; switch to the card
 // layout whenever the measured container can't fit that, otherwise the
 // table renders but overflows horizontally inside the settings panel.

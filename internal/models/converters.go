@@ -1123,6 +1123,8 @@ type ResourceConvertInput struct {
 	SourceType            string
 	Sources               []string
 	ParentID              string
+	ParentName            string
+	ChildCount            int
 	ClusterID             string
 	Status                string
 	CPU                   *ResourceMetricInput
@@ -1215,6 +1217,8 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		SourceType:            input.SourceType,
 		Sources:               append([]string(nil), input.Sources...),
 		ParentID:              input.ParentID,
+		ParentName:            input.ParentName,
+		ChildCount:            input.ChildCount,
 		ClusterID:             input.ClusterID,
 		Status:                input.Status,
 		Temperature:           input.Temperature,

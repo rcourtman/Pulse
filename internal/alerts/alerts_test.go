@@ -327,6 +327,26 @@ func TestNodeDisplayNameCacheKeyTrimsParts(t *testing.T) {
 	}
 }
 
+func TestAlertHistoryUsesDisplayNameForPriorNativeAlias(t *testing.T) {
+	m := newTestManager(t)
+	node := models.Node{
+		ID: "production-pve-old", NodeIdentity: "production-pve-old",
+		Name: "pve-new", NativeNameAliases: []string{"pve-old"},
+		DisplayName: "Render East", Instance: "cluster-api",
+	}
+	m.CheckNode(node)
+
+	history := m.applyCurrentNodeDisplayNames([]Alert{{
+		Node: "pve-old", Instance: "cluster-api", NodeDisplayName: "Old label",
+	}})
+	if history[0].NodeDisplayName != "Render East" {
+		t.Fatalf("historical alias display name = %q, want Render East", history[0].NodeDisplayName)
+	}
+	if history[0].Node != "pve-old" {
+		t.Fatalf("history diagnostic native name changed: %+v", history[0])
+	}
+}
+
 func TestHostResourceIDTrimsID(t *testing.T) {
 	if got := hostResourceID(" host-1 "); got != "agent:host-1" {
 		t.Fatalf("hostResourceID() = %q, want %q", got, "agent:host-1")

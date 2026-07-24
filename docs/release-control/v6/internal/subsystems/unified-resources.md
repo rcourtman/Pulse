@@ -75,6 +75,18 @@ then leaves the top-level monitored-system projection exactly once so usage and
 licensing do not count a decommissioned member. Proxmox platform consumers must
 scope equal cluster labels and node names by provider instance when grouping,
 searching, and assigning guests or storage.
+The same boundary carries cluster-node presentation without weakening
+canonical identity. `ProxmoxData` preserves the immutable connection-scoped
+node identity, current native node name, prior native-name aliases, and
+optional display override as distinct fields. The resource `Name`,
+`ParentName`, and agent-linked cluster-node presentation may use the override,
+but registry IDs, merge keys, parent links, metrics targets, source-native
+guest IDs, external URLs, discovery targets, and actions must not. Children
+such as VMs, containers, and storage inherit the parent's presentation and
+native aliases so Overview, search, API/websocket/mobile, storage, backups,
+and filters agree. A linked agent may enrich the canonical node but cannot
+replace a configured override with its hostname; same-name cluster identity
+remains provider scoped even after a native rename.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART

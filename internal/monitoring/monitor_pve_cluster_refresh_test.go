@@ -289,6 +289,40 @@ func TestMergeRefreshedClusterEndpoints_ReachabilityFollowsEffectiveTarget(t *te
 	})
 }
 
+func TestMergeRefreshedClusterEndpoints_RenameAndReIPKeepImmutableIdentity(t *testing.T) {
+	existing := []config.ClusterEndpoint{{
+		NodeID:       "node/pve-old",
+		NodeIdentity: "cluster-pve-old",
+		NativeNodeID: 42,
+		NodeName:     "pve-old",
+		Host:         "https://pve-old:8006",
+		IP:           "10.0.0.42",
+		IPOverride:   "pulse-route.example.test",
+		GuestURL:     "https://console.example.test",
+		Fingerprint:  "AA:BB",
+	}}
+	discovered := []config.ClusterEndpoint{{
+		NodeID:       "node/pve-new",
+		NativeNodeID: 42,
+		NodeName:     "pve-new",
+		Host:         "https://pve-new:8006",
+		IP:           "10.20.0.42",
+	}}
+
+	merged := mergeRefreshedClusterEndpoints(existing, discovered, false)
+	if len(merged) != 1 || merged[0].NodeIdentity != "cluster-pve-old" {
+		t.Fatalf("immutable identity did not follow native numeric identity: %+v", merged)
+	}
+	if merged[0].IPOverride != "pulse-route.example.test" ||
+		merged[0].GuestURL != "https://console.example.test" ||
+		merged[0].Fingerprint != "AA:BB" {
+		t.Fatalf("user-managed member fields did not survive rename/re-IP: %+v", merged[0])
+	}
+	if !clusterEndpointIdentityChanged(existing, merged) {
+		t.Fatal("native rename and re-IP must trigger endpoint persistence without changing NodeIdentity")
+	}
+}
+
 func TestBuildClusterEndpoints_PreservesConfiguredAuthority(t *testing.T) {
 	monitor := &Monitor{config: &config.Config{}}
 	instance := config.PVEInstance{

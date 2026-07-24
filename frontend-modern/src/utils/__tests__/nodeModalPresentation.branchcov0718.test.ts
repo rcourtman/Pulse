@@ -245,6 +245,7 @@ describe('getNodeModalDefaultFormData branch coverage', () => {
       monitorQuarantine: true,
       monitorDomainStats: false,
       clusterEndpointOverrides: {},
+      clusterNodeDisplayNames: {},
     });
   });
 
@@ -280,6 +281,7 @@ describe('getNodeModalDefaultFormData branch coverage', () => {
       monitorQuarantine: true,
       monitorDomainStats: false,
       clusterEndpointOverrides: {},
+      clusterNodeDisplayNames: {},
     });
   });
 
@@ -315,6 +317,7 @@ describe('getNodeModalDefaultFormData branch coverage', () => {
       monitorQuarantine: true,
       monitorDomainStats: false,
       clusterEndpointOverrides: {},
+      clusterNodeDisplayNames: {},
     });
   });
 });

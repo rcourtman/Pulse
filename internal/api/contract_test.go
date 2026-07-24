@@ -15604,7 +15604,9 @@ func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T
 		Members: []ConnectionSystemMember{
 			{
 				ID:                "node-lab",
-				Name:              "lab",
+				NodeIdentity:      "homelab-lab",
+				Name:              "Render East",
+				NativeName:        "lab",
 				Endpoint:          "https://lab:8006",
 				HostAliases:       []string{"lab", "192.168.0.2"},
 				State:             ConnectionStateActive,
@@ -15628,7 +15630,7 @@ func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T
 		t.Fatalf("marshal ConnectionSystem with members: %v", err)
 	}
 
-	want := `{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"},{"connectionId":"agent:agent-lab","type":"agent","role":"attachment"}],"members":[{"id":"node-lab","name":"lab","endpoint":"https://lab:8006","hostAliases":["lab","192.168.0.2"],"state":"active","lastSeen":"2026-04-23T12:00:00Z","primary":true,"agentConnectionId":"agent:agent-lab"},{"id":"node-minipc","name":"minipc","endpoint":"https://minipc:8006","hostAliases":["minipc"],"state":"stale","lastSeen":"2026-04-23T11:55:00Z"}]}`
+	want := `{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"},{"connectionId":"agent:agent-lab","type":"agent","role":"attachment"}],"members":[{"id":"node-lab","nodeIdentity":"homelab-lab","name":"Render East","nativeName":"lab","endpoint":"https://lab:8006","hostAliases":["lab","192.168.0.2"],"state":"active","lastSeen":"2026-04-23T12:00:00Z","primary":true,"agentConnectionId":"agent:agent-lab"},{"id":"node-minipc","name":"minipc","endpoint":"https://minipc:8006","hostAliases":["minipc"],"state":"stale","lastSeen":"2026-04-23T11:55:00Z"}]}`
 	assertJSONSnapshot(t, body, want)
 }
 

@@ -15,6 +15,9 @@ import (
 func (m *Manager) CheckNode(node models.Node) {
 	// Cache display name so all alerts (including guest alerts on this node) can resolve it.
 	m.UpdateNodeDisplayName(node.Instance, node.Name, node.DisplayName)
+	for _, alias := range node.NativeNameAliases {
+		m.UpdateNodeDisplayName(node.Instance, alias, node.DisplayName)
+	}
 
 	m.mu.RLock()
 	if !m.config.Enabled {

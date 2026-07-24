@@ -185,35 +185,15 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 		return baseName
 	}
 
-	friendly := strings.TrimSpace(instance.Name)
-
 	if instance.IsCluster {
-		clusterLabel := friendly
-		if clusterLabel == "" {
-			clusterLabel = strings.TrimSpace(instance.ClusterName)
+		_, displayName := config.PVEClusterNodePresentation(instance, baseName)
+		if displayName != "" {
+			return displayName
 		}
-
-		if baseName != "" && baseName != "unknown-node" {
-			if clusterLabel != "" && !strings.EqualFold(clusterLabel, baseName) {
-				return fmt.Sprintf("%s (%s)", clusterLabel, baseName)
-			}
-			return baseName
-		}
-
-		if endpointLabel := lookupClusterEndpointLabel(instance, nodeName); endpointLabel != "" {
-			if clusterLabel != "" && !strings.EqualFold(clusterLabel, endpointLabel) {
-				return fmt.Sprintf("%s (%s)", clusterLabel, endpointLabel)
-			}
-			return endpointLabel
-		}
-
-		if clusterLabel != "" {
-			return clusterLabel
-		}
-
 		return baseName
 	}
 
+	friendly := strings.TrimSpace(instance.Name)
 	if friendly != "" {
 		return friendly
 	}
@@ -5743,6 +5723,8 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		SourceType:            monitorSourceType(resource.Sources),
 		Sources:               monitorSourceKeys(resource.Sources),
 		ParentID:              monitorStringValue(resource.ParentID),
+		ParentName:            resource.ParentName,
+		ChildCount:            resource.ChildCount,
 		ClusterID:             monitorClusterID(resource),
 		Status:                monitorFrontendStatus(resource, resourceType),
 		CPU:                   monitorMetricInput(monitorMetricValue(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.CPU })),

@@ -1194,7 +1194,9 @@ describe('InfrastructureWorkspace', () => {
         members: [
           {
             id: 'node-delly',
-            name: 'delly',
+            nodeIdentity: 'homelab-delly',
+            name: 'Render East',
+            nativeName: 'delly',
             subtitle: 'Primary node',
             source: 'agent',
             host: 'https://delly:8006',
@@ -1240,18 +1242,20 @@ describe('InfrastructureWorkspace', () => {
     // keep table rows single-line.
     expect(screen.getByTitle('homelab · Cluster · 2 nodes')).toBeInTheDocument();
     expect(screen.queryByText('Fleet OK')).toBeNull();
-    expect(screen.queryByTitle('delly · Primary node')).toBeNull();
+    expect(screen.queryByTitle('Render East · Primary node · Proxmox node delly')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for homelab' }));
-    expect(screen.getByTitle('delly · Primary node')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Render East · Primary node · Proxmox node delly'),
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
-    expect(screen.getByText('delly')).toBeInTheDocument();
+    expect(screen.getByText('Render East')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();
     expect(screen.queryByText('Remote control disabled')).toBeNull();
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);
     expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
-    expect(screen.getAllByText('delly')).toHaveLength(1);
+    expect(screen.getAllByText('Render East')).toHaveLength(1);
     expect(screen.getAllByText('minipc')).toHaveLength(1);
   });
 

@@ -20,7 +20,11 @@ export interface WorkloadReference {
   vmid: string;
   label: string;
   name?: string;
+  /** Preferred presentation label for the hosting node. */
   node?: string;
+  /** Provider-native node name retained for matching and diagnostics. */
+  nativeNode?: string;
+  nativeNodeAliases?: string[];
   instance?: string;
 }
 
@@ -209,6 +213,10 @@ function resourceNode(resource: Resource): string | undefined {
   return resource.proxmox?.nodeName || resource.proxmox?.node || resource.parentName || undefined;
 }
 
+function resourceNodeDisplayName(resource: Resource): string | undefined {
+  return resource.proxmox?.nodeDisplayName || resource.parentName || resourceNode(resource);
+}
+
 function resourceInstance(resource: Resource): string | undefined {
   const fromMeta = resource.proxmox?.instance;
   if (fromMeta) return fromMeta;
@@ -236,7 +244,9 @@ function buildCandidateFromResource(resource: Resource): WorkloadCandidate | nul
   const type = resourceBackupType(resource);
   if (!vmid || isZeroWorkloadId(vmid) || type === 'unknown') return null;
   const name = resource.displayName || resource.name || undefined;
-  const node = resourceNode(resource);
+  const nativeNode = resourceNode(resource);
+  const node = resourceNodeDisplayName(resource);
+  const nativeNodeAliases = resource.proxmox?.nodeAliases ?? [];
   const instance = resourceInstance(resource);
   return {
     key: `resource:${resource.id}`,
@@ -247,8 +257,10 @@ function buildCandidateFromResource(resource: Resource): WorkloadCandidate | nul
     label: buildWorkloadLabel(name, type, vmid),
     name,
     node,
+    nativeNode,
+    nativeNodeAliases,
     instance,
-    nodeKey: normalizeKey(node),
+    nodeKey: normalizeKey(nativeNode),
     instanceKey: normalizeKey(instance),
   };
 }
@@ -268,6 +280,7 @@ function fallbackWorkload(
     vmid: id,
     label: workloadFallbackLabel(type, id),
     node: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
+    nativeNode: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
   };
 }
 
@@ -295,6 +308,8 @@ function resolveWorkload(
           hint === candidate.nodeKey ||
           hint === candidate.instanceKey ||
           normalizeKey(candidate.node).includes(hint) ||
+          normalizeKey(candidate.nativeNode).includes(hint) ||
+          candidate.nativeNodeAliases?.some((alias) => normalizeKey(alias).includes(hint)) ||
           normalizeKey(candidate.instance).includes(hint),
       ),
     );
@@ -314,8 +329,11 @@ function matchWorkloadByHints<T extends WorkloadReference>(
       normalizedHints.some(
         (hint) =>
           hint === normalizeKey(workload.node) ||
+          hint === normalizeKey(workload.nativeNode) ||
           hint === normalizeKey(workload.instance) ||
           normalizeKey(workload.node).includes(hint) ||
+          normalizeKey(workload.nativeNode).includes(hint) ||
+          workload.nativeNodeAliases?.some((alias) => normalizeKey(alias).includes(hint)) ||
           normalizeKey(workload.instance).includes(hint),
       ),
     );
@@ -596,6 +614,8 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.workload.typeLabel,
     row.workload.vmid,
     row.workload.node,
+    row.workload.nativeNode,
+    ...(row.workload.nativeNodeAliases ?? []),
     row.workload.instance,
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
@@ -622,6 +642,8 @@ export function recoverableArtifactMatchesSearch(
     artifact.workload.typeLabel,
     artifact.workload.vmid,
     artifact.workload.node,
+    artifact.workload.nativeNode,
+    ...(artifact.workload.nativeNodeAliases ?? []),
     artifact.workload.instance,
     artifact.sourceLabel,
     artifact.sourceTitle,

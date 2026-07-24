@@ -7,7 +7,12 @@ export type TemperatureTransport =
 
 export interface ClusterEndpoint {
   nodeId: string;
+  nodeIdentity?: string;
+  nativeNodeId?: number;
   nodeName: string;
+  nativeName?: string;
+  nativeAliases?: string[];
+  displayName?: string;
   host: string;
   guestURL?: string;
   ip: string;
@@ -27,6 +32,13 @@ export interface ClusterEndpoint {
 export interface ClusterEndpointOverridePayload {
   nodeName: string;
   ipOverride: string;
+}
+
+// Write-only PUT payload entry. The empty displayName clears the override and
+// restores the provider's native node name.
+export interface ClusterNodeDisplayNameOverridePayload {
+  nodeIdentity: string;
+  displayName: string;
 }
 
 export interface PVENodeConfig {
@@ -55,6 +67,8 @@ export interface PVENodeConfig {
   // Write-only: per-member connection address overrides included in PUT
   // payloads; never returned by the API.
   clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
+  // Write-only presentation overrides keyed by immutable node identity.
+  clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[];
 }
 
 export interface PBSNodeConfig {

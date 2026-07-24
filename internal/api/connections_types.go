@@ -208,7 +208,9 @@ type ConnectionSystemComponent struct {
 // owning cluster source instead of reopening standalone host rows.
 type ConnectionSystemMember struct {
 	ID                string          `json:"id"`
+	NodeIdentity      string          `json:"nodeIdentity,omitempty"`
 	Name              string          `json:"name"`
+	NativeName        string          `json:"nativeName,omitempty"`
 	Endpoint          string          `json:"endpoint,omitempty"`
 	HostAliases       []string        `json:"hostAliases,omitempty"`
 	State             ConnectionState `json:"state"`

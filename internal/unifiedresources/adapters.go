@@ -23,7 +23,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 
 	endpointHost := extractHostname(node.Host)
 	identity := ResourceIdentity{
-		Hostnames:   uniqueStrings([]string{node.Name}),
+		Hostnames:   uniqueStrings(append([]string{node.Name}, node.NativeNameAliases...)),
 		ClusterName: proxmoxNodeIdentityClusterName(node),
 	}
 	if endpointHost != "" {
@@ -45,10 +45,17 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 	if linkedAgentID == "" && linkedHost != nil {
 		linkedAgentID = strings.TrimSpace(linkedHost.ID)
 	}
+	nodeDisplayName := ""
+	if node.IsClusterMember && !strings.EqualFold(strings.TrimSpace(node.DisplayName), strings.TrimSpace(node.Name)) {
+		nodeDisplayName = strings.TrimSpace(node.DisplayName)
+	}
 
 	proxmox := &ProxmoxData{
 		SourceID:                     node.ID,
+		NodeIdentity:                 node.NodeIdentity,
 		NodeName:                     node.Name,
+		NodeAliases:                  append([]string(nil), node.NativeNameAliases...),
+		NodeDisplayName:              nodeDisplayName,
 		ClusterName:                  node.ClusterName,
 		IsClusterMember:              node.IsClusterMember,
 		Instance:                     node.Instance,
@@ -99,6 +106,9 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 // contributes stronger machine identity.
 func proxmoxNodeIdentityClusterName(node models.Node) string {
 	clusterName := strings.TrimSpace(node.ClusterName)
+	if node.ProviderScopedIdentity {
+		return ""
+	}
 	instance := strings.TrimSpace(node.Instance)
 	nodeName := strings.TrimSpace(node.Name)
 	if instance == "" || nodeName == "" || strings.EqualFold(instance, clusterName) {
