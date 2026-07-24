@@ -9206,21 +9206,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "issue-1124-metrics-write-amplification-lane-l10",
-      "agent_id": "issue-1124-metrics-write-amplification",
-      "summary": "Measure and reduce metrics.db physical write amplification for issue #1124 without weakening durability or bounded runtime behavior.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-24T08:05:22Z",
-      "heartbeat_at": "2026-07-24T08:05:22Z",
-      "expires_at": "2026-07-24T16:05:22Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L10"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

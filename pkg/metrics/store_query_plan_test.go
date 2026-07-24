@@ -82,8 +82,8 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				AND timestamp >= ? AND timestamp <= ?
 				ORDER BY metric_type, timestamp ASC`,
 			args: []any{"vm", "vm-1", "raw", int64(0), farFuture},
-			// The planner uses an indexed SEARCH — it may pick idx_metrics_query_all,
-			// idx_metrics_unique, or idx_metrics_lookup depending on statistics.
+			// The planner uses an indexed SEARCH — it may pick idx_metrics_query_all
+			// or idx_metrics_lookup depending on statistics.
 			// All are valid; the key invariant is that it does a SEARCH, not a SCAN.
 		},
 		{
@@ -110,7 +110,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				ORDER BY resource_id, metric_type, timestamp ASC`,
 			args: []any{"vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
 			// QueryAllBatch is the anti-N+1 dashboard path. The planner may choose
-			// idx_metrics_query_all, idx_metrics_unique, or idx_metrics_lookup
+			// idx_metrics_query_all or idx_metrics_lookup
 			// depending on statistics; the invariant is an indexed SEARCH rather
 			// than a full table scan.
 		},
@@ -191,8 +191,8 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			args: []any{int64(60), int64(60), "minute", "raw", int64(0), farFuture},
 			// The SELECT filters on (tier, timestamp) without resource/metric
 			// columns. SQLite uses an index-ordered scan (SCAN USING INDEX)
-			// on idx_metrics_unique. A TEMP B-TREE may still be used for
-			// GROUP BY. The INSERT side uses idx_metrics_unique for ON CONFLICT.
+			// on idx_metrics_lookup. A TEMP B-TREE may still be used for
+			// GROUP BY. The INSERT side uses the same unique index for ON CONFLICT.
 			allowIndexScan: true,
 		},
 		{
@@ -324,7 +324,7 @@ func containsCoveringIndexScan(plan string) bool {
 }
 
 // containsIndexScan returns true if any plan line shows an index-ordered scan
-// on the metrics table (e.g., "SCAN metrics USING INDEX idx_metrics_unique").
+// on the metrics table (e.g., "SCAN metrics USING INDEX idx_metrics_lookup").
 // This differs from a covering-index scan in that it reads table rows via the
 // index, but still avoids a full table scan.
 func containsIndexScan(plan string) bool {
@@ -370,7 +370,7 @@ func newPlanTestDB(t *testing.T) *sql.DB {
 			tier TEXT NOT NULL DEFAULT 'raw'
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_metrics_lookup
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_lookup
 		ON metrics(resource_type, resource_id, metric_type, tier, timestamp);
 
 		CREATE INDEX IF NOT EXISTS idx_metrics_tier_time
@@ -378,9 +378,6 @@ func newPlanTestDB(t *testing.T) *sql.DB {
 
 		CREATE INDEX IF NOT EXISTS idx_metrics_query_all
 		ON metrics(resource_type, resource_id, tier, timestamp, metric_type);
-
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_unique
-		ON metrics(resource_type, resource_id, metric_type, timestamp, tier);
 
 		CREATE TABLE IF NOT EXISTS metrics_meta (
 			key TEXT PRIMARY KEY,

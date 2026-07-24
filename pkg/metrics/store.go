@@ -183,7 +183,10 @@ type maintenanceRequest struct {
 	done chan struct{}
 }
 
-var startupMaintenanceHook func()
+var (
+	startupMaintenanceHook       func()
+	metricsIdentityMigrationHook func()
+)
 
 // Store provides persistent metrics storage
 type Store struct {
@@ -201,6 +204,7 @@ type Store struct {
 	doneCh                     chan struct{}
 	stopOnce                   sync.Once
 	stopping                   atomic.Bool
+	identityMigrationPending   atomic.Bool
 	commercialRetentionSeconds atomic.Int64
 	commercialPurgeEligibleAt  atomic.Int64
 }
@@ -337,10 +341,6 @@ func (s *Store) initSchema() error {
 			tier TEXT NOT NULL DEFAULT 'raw'
 		);
 
-		-- Index for efficient queries by resource and time
-		CREATE INDEX IF NOT EXISTS idx_metrics_lookup 
-		ON metrics(resource_type, resource_id, metric_type, tier, timestamp);
-
 		-- Index for retention pruning
 		CREATE INDEX IF NOT EXISTS idx_metrics_tier_time 
 		ON metrics(tier, timestamp);
@@ -361,7 +361,7 @@ func (s *Store) initSchema() error {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
-	if err := s.ensureMetricsUniqueIndex(); err != nil {
+	if err := s.ensureMetricsIdentityIndex(); err != nil {
 		return err
 	}
 
@@ -369,54 +369,205 @@ func (s *Store) initSchema() error {
 	return nil
 }
 
-func (s *Store) ensureMetricsUniqueIndex() error {
-	const createUniqueIndex = `
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_unique
-		ON metrics(resource_type, resource_id, metric_type, timestamp, tier);
-	`
+var metricsIdentityColumns = []string{"resource_type", "resource_id", "metric_type", "tier", "timestamp"}
 
-	_, err := s.db.Exec(createUniqueIndex)
-	if err == nil {
+// ensureMetricsIdentityIndex keeps one B-tree for both metric identity and
+// single-series range queries. Older databases have two indexes containing the
+// same five columns in different orders: idx_metrics_lookup serves reads while
+// idx_metrics_unique enforces identity. Every insert dirties both trees, which
+// materially amplifies WAL and checkpoint writes.
+func (s *Store) ensureMetricsIdentityIndex() error {
+	lookupCurrent, err := s.metricsIndexMatches("idx_metrics_lookup", true, metricsIdentityColumns)
+	if err != nil {
+		return fmt.Errorf("inspect metrics identity index: %w", err)
+	}
+	legacyUniqueExists, err := s.metricsIndexExists("idx_metrics_unique")
+	if err != nil {
+		return fmt.Errorf("inspect legacy metrics unique index: %w", err)
+	}
+
+	if legacyUniqueExists {
+		// v6.1.1 and earlier already have an authoritative unique index. Keep
+		// serving with that crash-safe schema and defer the O(rows) rebuild to
+		// the startup-maintenance worker so NewStore latency stays bounded.
+		s.identityMigrationPending.Store(true)
+		log.Info().Msg("Scheduled metrics identity index consolidation")
+		return nil
+	}
+	if lookupCurrent {
 		return nil
 	}
 
-	// If the DB already contains duplicates (from older versions), creating the unique index
-	// will fail. Deduplicate and retry once.
-	lower := strings.ToLower(err.Error())
-	if !strings.Contains(lower, "unique") && !strings.Contains(lower, "constraint") && !strings.Contains(lower, "duplicate") {
-		return fmt.Errorf("failed to create unique index for metrics rollups: %w", err)
+	return s.migrateMetricsIdentityIndex()
+}
+
+func (s *Store) migrateMetricsIdentityIndex() error {
+	if err := s.replaceMetricsIdentityIndex(); err == nil {
+		log.Info().Msg("Consolidated metrics lookup and identity indexes")
+		return nil
+	} else if !isUniqueConstraintError(err) {
+		return fmt.Errorf("consolidate metrics identity index: %w", err)
 	}
 
-	log.Warn().Err(err).Msg("Duplicate metrics detected; deduplicating before creating unique index")
+	log.Warn().Msg("Duplicate metrics detected; deduplicating before consolidating identity index")
+	if err := s.deduplicateMetrics(); err != nil {
+		return err
+	}
+	if err := s.replaceMetricsIdentityIndex(); err != nil {
+		return fmt.Errorf("consolidate metrics identity index after dedupe: %w", err)
+	}
 
-	tx, txErr := s.db.Begin()
-	if txErr != nil {
-		return fmt.Errorf("begin dedupe transaction: %w", txErr)
+	log.Info().Msg("Metrics deduplicated and identity index consolidated")
+	return nil
+}
+
+func (s *Store) replaceMetricsIdentityIndex() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin identity index migration: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, txErr = tx.Exec(`
-		DELETE FROM metrics
-		WHERE id NOT IN (
-			SELECT MIN(id)
-			FROM metrics
-			GROUP BY resource_type, resource_id, metric_type, timestamp, tier
-		)
-	`)
-	if txErr != nil {
-		return fmt.Errorf("dedupe metrics: %w", txErr)
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_metrics_lookup`); err != nil {
+		return fmt.Errorf("drop old lookup index: %w", err)
 	}
-
-	if txErr := tx.Commit(); txErr != nil {
-		return fmt.Errorf("commit dedupe: %w", txErr)
+	if metricsIdentityMigrationHook != nil {
+		metricsIdentityMigrationHook()
 	}
-
-	if _, err := s.db.Exec(createUniqueIndex); err != nil {
-		return fmt.Errorf("failed to create unique index after dedupe: %w", err)
+	if _, err := tx.Exec(`
+		CREATE UNIQUE INDEX idx_metrics_lookup
+		ON metrics(resource_type, resource_id, metric_type, tier, timestamp)
+	`); err != nil {
+		return fmt.Errorf("create consolidated lookup index: %w", err)
 	}
-
-	log.Info().Msg("Metrics deduplicated and unique index created")
+	if _, err := tx.Exec(`DROP INDEX IF EXISTS idx_metrics_unique`); err != nil {
+		return fmt.Errorf("drop old unique index: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit identity index migration: %w", err)
+	}
 	return nil
+}
+
+func (s *Store) deduplicateMetrics() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin metrics dedupe transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`
+		DELETE FROM metrics
+		WHERE rowid NOT IN (
+			SELECT MIN(rowid)
+			FROM metrics
+			GROUP BY resource_type, resource_id, metric_type, tier, timestamp
+		)
+	`); err != nil {
+		return fmt.Errorf("dedupe metrics: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit metrics dedupe: %w", err)
+	}
+	return nil
+}
+
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "unique") ||
+		strings.Contains(lower, "constraint") ||
+		strings.Contains(lower, "duplicate")
+}
+
+func (s *Store) metricsIndexExists(name string) (bool, error) {
+	rows, err := s.db.Query(`PRAGMA index_list(metrics)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			sequence int
+			index    string
+			unique   int
+			origin   string
+			partial  int
+		)
+		if err := rows.Scan(&sequence, &index, &unique, &origin, &partial); err != nil {
+			return false, err
+		}
+		if index == name {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
+func (s *Store) metricsIndexMatches(name string, wantUnique bool, wantColumns []string) (bool, error) {
+	rows, err := s.db.Query(`PRAGMA index_list(metrics)`)
+	if err != nil {
+		return false, err
+	}
+
+	found := false
+	for rows.Next() {
+		var (
+			sequence int
+			index    string
+			unique   int
+			origin   string
+			partial  int
+		)
+		if err := rows.Scan(&sequence, &index, &unique, &origin, &partial); err != nil {
+			_ = rows.Close()
+			return false, err
+		}
+		if index == name {
+			found = (unique == 1) == wantUnique && partial == 0
+			break
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+
+	columnRows, err := s.db.Query(`
+		SELECT name
+		FROM pragma_index_info(?)
+		ORDER BY seqno
+	`, name)
+	if err != nil {
+		return false, err
+	}
+	defer columnRows.Close()
+
+	columns := make([]string, 0, len(wantColumns))
+	for columnRows.Next() {
+		var columnName string
+		if err := columnRows.Scan(&columnName); err != nil {
+			return false, err
+		}
+		columns = append(columns, columnName)
+	}
+	if err := columnRows.Err(); err != nil {
+		return false, err
+	}
+	if len(columns) != len(wantColumns) {
+		return false, nil
+	}
+	for i := range columns {
+		if columns[i] != wantColumns[i] {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // migrateAutoVacuum ensures the database uses incremental auto-vacuum.
@@ -700,8 +851,15 @@ func (s *Store) runStartupMaintenance() {
 		startupMaintenanceHook()
 	}
 
-	// Run retention before any deferred vacuum work so restart cleanup trims
-	// stale rows before SQLite potentially rewrites the file.
+	if s.identityMigrationPending.Swap(false) {
+		if err := s.migrateMetricsIdentityIndex(); err != nil {
+			log.Error().Err(err).Msg("Deferred metrics identity index consolidation failed")
+		}
+	}
+
+	// Run retention before the deferred auto-vacuum conversion so restart
+	// cleanup trims stale rows and redundant-index pages before SQLite
+	// potentially rewrites the file.
 	s.runRetention()
 	s.migrateAutoVacuum()
 
@@ -834,7 +992,7 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	stmt, err := tx.Prepare(`
 		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier)
 		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(resource_type, resource_id, metric_type, timestamp, tier)
+		ON CONFLICT(resource_type, resource_id, metric_type, tier, timestamp)
 		DO UPDATE SET
 			value = excluded.value,
 			min_value = excluded.min_value,

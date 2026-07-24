@@ -60,3 +60,49 @@ The metrics write-amplification path reported in `#1124` has a v6 runtime fix,
 operator-facing controls, documentation, and subsystem-contract coverage. The
 `known-rc-issue-closure-for-ga` gate remains satisfied for the current v6
 release candidate.
+
+## 2026-07-24 Physical-Write Revalidation
+
+The earlier proof established rollup controls and bounded retention, but it did
+not attribute physical writes by SQLite object or quantify WAL/checkpoint
+amplification. Issue `#1124` therefore remained open after a v6.1.1 operator
+reported continued writes. A deterministic 2,197-resource estate
+(Docker containers, Proxmox guests, agents, Kubernetes pods, storage targets,
+and physical disks) now persists 393,630 samples over 30 simulated 10-second
+polls and reports logical payload, per-object `dbstat`, page-cache, WAL,
+checkpoint, process-write, restart, integrity, and retention counters.
+
+The v6.1.1 and pre-fix `main` store implementations were byte-identical. Their
+four-index schema wrote 279,063 WAL frames (1,149,739,592 bytes) for
+21,214,200 logical payload bytes. The retained main database was 106,991,616
+bytes, of which the overlapping `idx_metrics_lookup` and
+`idx_metrics_unique` trees each occupied 24,014,848 bytes. This identifies the
+amplification source directly: each metric insert maintained the table,
+`sqlite_sequence`, and four indexes before checkpointing the dirty pages back
+to the main file.
+
+The revalidated schema makes the lookup index unique and orders its columns as
+the metric identity, eliminating the second overlapping tree without changing
+query order or durability settings. On the same workload it wrote 187,616 WAL
+frames (772,977,952 bytes), a 32.8% frame/byte reduction, and retained
+82,948,096 bytes. Linux process I/O accounting measured WAL-phase writes
+falling from 1,155,710,976 to 774,930,432 bytes and explicit checkpoint writes
+from 106,983,424 to 82,939,904 bytes (32.1% fewer total bytes). With the
+production 4,000-page auto-checkpoint enabled, a traced 157,452-sample run
+reduced total process write bytes from 392,445,952 to 257,208,320 and `fsync`
+calls from 42 to 32.
+
+The migration keeps the legacy unique index authoritative until deferred
+startup maintenance transactionally swaps the indexes. Tests cover legacy
+duplicates, close/restart, a process exit between index drop and replacement,
+backup/restore from both schema generations, writes racing the migration, and
+reads remaining available on the four-connection WAL pool. Query-plan checks
+still require indexed searches. Concurrent read/write p95 remained 0.88 ms
+against a 5 ms SLO, and the 500-node/10-reader dashboard p95 remained 2.37 ms
+against a 30 ms SLO. Retention removed all 393,630 expired rows and incremental
+vacuum reduced the 82,948,096-byte database to 36,864 bytes with zero freelist
+pages in 2.57 seconds.
+
+The durable store remains in WAL mode with `synchronous=NORMAL`; no
+authoritative history moved to volatile memory. The fix is on `main` for the
+next release and is not part of v6.1.1.

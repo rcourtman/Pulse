@@ -1201,6 +1201,23 @@ WAL checkpoints more aggressive again, reopens duplicate-write failures,
 removes the bounded rollup-window checkpointing, or removes the metrics DB
 path/cadence controls must re-prove the metrics-store hot path with the owned
 store tests rather than assuming the earlier vacuum fixes are sufficient.
+The metrics identity and single-series lookup must also share one unique
+`idx_metrics_lookup(resource_type, resource_id, metric_type, tier, timestamp)`
+B-tree. Reintroducing a second full-width identity index is a write-amplification
+regression even when retained `metrics.db` size looks small: every sample would
+dirty both trees in the WAL and every checkpoint would copy both sets of pages
+back into the main file. Legacy databases may keep their existing unique index
+authoritative while the replacement index is built, but that O(rows) migration
+must run on deferred startup maintenance and swap indexes in one SQLite
+transaction so constructor latency, concurrent reads, uniqueness, and crash
+recovery remain intact. The deterministic issue-1124 profile must continue to
+attribute writes by logical payload, table/index `dbstat` pages, page-cache
+writes/spills, WAL frames, checkpoint frames, process write bytes where the
+host exposes them, and traced sync calls rather than treating final file size
+as a proxy. Its checked invariant persists 157,452 samples across 2,197 mixed
+provider resources and caps the no-auto-checkpoint workload at 40,000 WAL
+frames; the former four-index schema produces 50,516 frames while the
+consolidated schema produces 35,030.
 Retention must also return freed SQLite pages to the OS
 proportionally to the current freelist, bounded per cycle, and on every
 retention cycle rather than only when that cycle deleted rows: a fixed small
