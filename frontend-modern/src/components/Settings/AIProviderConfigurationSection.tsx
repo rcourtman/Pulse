@@ -84,8 +84,8 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
           </button>
         </div>
         <p class="text-xs text-muted mt-1">
-          Configure API keys for each provider you want to use. Models from all configured providers
-          will appear in the model selectors.
+          Configure API keys, subscription logins, or local/custom endpoints. Models returned by
+          every configured provider will appear in the model selectors.
         </p>
         <Show when={props.preflightLastCheckedAt()}>
           <p class="text-[11px] text-muted">
@@ -200,6 +200,9 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                         <HelpIcon contentId="ai.ollama.baseUrl" size="xs" />
                       </label>
                     </Show>
+                    <Show when={config.inputLabel}>
+                      <label class="text-xs text-muted">{config.inputLabel}</label>
+                    </Show>
                     <Show
                       when={config.inputType === 'toggle'}
                       fallback={
@@ -312,7 +315,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                             class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                             title={config.clearTitle}
                           >
-                            Clear
+                            Remove
                           </button>
                         </div>
                       </Show>

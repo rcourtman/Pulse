@@ -34,6 +34,7 @@ export type AIProviderConfig = {
   configuredLabel?: string;
   inputType: 'password' | 'url' | 'toggle';
   inputField: keyof AIProviderCredentialsFormState;
+  inputLabel?: string;
   placeholder: string;
   configuredPlaceholder?: string;
   actionLinkLabel: string;
@@ -118,11 +119,12 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     configuredLabel: 'Configured',
     inputType: 'password',
     inputField: 'openaiApiKey',
+    inputLabel: 'API key (optional for a custom endpoint)',
     placeholder: 'sk-...',
     configuredPlaceholder: '••••••••••• (configured)',
     actionLinkLabel: 'Get API key →',
     actionLinkHref: 'https://platform.openai.com/api-keys',
-    clearTitle: 'Clear API key',
+    clearTitle: 'Remove OpenAI provider',
     extraFields: [
       {
         label: 'Custom Base URL',
@@ -130,6 +132,8 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
         inputField: 'openaiBaseUrl',
         placeholder: 'https://api.together.xyz/v1 (optional)',
         type: 'url',
+        helperText:
+          'Use llama.cpp, LocalAI, LM Studio, or another OpenAI-compatible endpoint. Leave the API key blank when the endpoint does not require one.',
       },
     ],
   },

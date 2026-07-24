@@ -36,6 +36,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -1866,6 +1867,7 @@ func aiSettingsUpdateTouchesProviderConfig(req AISettingsUpdateRequest) bool {
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
 		req.ClearOllamaPassword != nil ||
+		len(req.RemoveProviders) > 0 ||
 		req.CodexSubscriptionEnabled != nil ||
 		req.ClaudeSubscriptionEnabled != nil
 }
@@ -2464,23 +2466,24 @@ type AISettingsResponse struct {
 
 // AIProviderDefinitionResponse exposes provider metadata without credentials.
 type AIProviderDefinitionResponse struct {
-	ID                  string   `json:"id"`
-	DisplayName         string   `json:"display_name"`
-	Description         string   `json:"description"`
-	Protocol            string   `json:"protocol"`
-	DefaultModel        string   `json:"default_model,omitempty"`
-	DefaultBaseURL      string   `json:"default_base_url,omitempty"`
-	APIKeyField         string   `json:"api_key_field,omitempty"`
-	ConfiguredField     string   `json:"configured_field,omitempty"`
-	ClearKeyField       string   `json:"clear_key_field,omitempty"`
-	BaseURLField        string   `json:"base_url_field,omitempty"`
-	RequiresAPIKey      bool     `json:"requires_api_key"`
-	UserConfigurable    bool     `json:"user_configurable"`
-	Gateway             bool     `json:"gateway"`
-	Configured          bool     `json:"configured"`
-	ModelsDevProviderID string   `json:"models_dev_provider_id,omitempty"`
-	EnvVars             []string `json:"env_vars"`
-	DocsURL             string   `json:"docs_url,omitempty"`
+	ID                              string   `json:"id"`
+	DisplayName                     string   `json:"display_name"`
+	Description                     string   `json:"description"`
+	Protocol                        string   `json:"protocol"`
+	DefaultModel                    string   `json:"default_model,omitempty"`
+	DefaultBaseURL                  string   `json:"default_base_url,omitempty"`
+	APIKeyField                     string   `json:"api_key_field,omitempty"`
+	ConfiguredField                 string   `json:"configured_field,omitempty"`
+	ClearKeyField                   string   `json:"clear_key_field,omitempty"`
+	BaseURLField                    string   `json:"base_url_field,omitempty"`
+	RequiresAPIKey                  bool     `json:"requires_api_key"`
+	APIKeyOptionalWithCustomBaseURL bool     `json:"api_key_optional_with_custom_base_url,omitempty"`
+	UserConfigurable                bool     `json:"user_configurable"`
+	Gateway                         bool     `json:"gateway"`
+	Configured                      bool     `json:"configured"`
+	ModelsDevProviderID             string   `json:"models_dev_provider_id,omitempty"`
+	EnvVars                         []string `json:"env_vars"`
+	DocsURL                         string   `json:"docs_url,omitempty"`
 	// Patrol-blessed quickstart model for providers where users must pick a
 	// model themselves (Ollama). Empty for curated-catalog providers.
 	SuggestedModel            string   `json:"suggested_model,omitempty"`
@@ -2544,25 +2547,26 @@ func aiProviderDefinitionResponses(settings *config.AIConfig) []AIProviderDefini
 			continue
 		}
 		responses = append(responses, AIProviderDefinitionResponse{
-			ID:                  def.ID,
-			DisplayName:         def.DisplayName,
-			Description:         def.Description,
-			Protocol:            string(def.Protocol),
-			DefaultModel:        config.DefaultModelForProvider(def.ID),
-			DefaultBaseURL:      def.DefaultBaseURL,
-			APIKeyField:         def.APIKeyField,
-			ConfiguredField:     def.ConfiguredField,
-			ClearKeyField:       def.ClearKeyField,
-			BaseURLField:        def.BaseURLField,
-			RequiresAPIKey:      def.RequiresAPIKey,
-			UserConfigurable:    def.UserConfigurable,
-			Gateway:             def.Gateway,
-			Configured:          settings != nil && settings.HasProvider(def.ID),
-			ModelsDevProviderID: def.ModelsDevProviderID,
-			EnvVars:             append([]string(nil), def.EnvVars...),
-			DocsURL:             def.DocsURL,
-			SuggestedModel:      def.SuggestedModel,
-			SuggestedModelNote:  def.SuggestedModelNote,
+			ID:                              def.ID,
+			DisplayName:                     def.DisplayName,
+			Description:                     def.Description,
+			Protocol:                        string(def.Protocol),
+			DefaultModel:                    config.DefaultModelForProvider(def.ID),
+			DefaultBaseURL:                  def.DefaultBaseURL,
+			APIKeyField:                     def.APIKeyField,
+			ConfiguredField:                 def.ConfiguredField,
+			ClearKeyField:                   def.ClearKeyField,
+			BaseURLField:                    def.BaseURLField,
+			RequiresAPIKey:                  def.RequiresAPIKey,
+			APIKeyOptionalWithCustomBaseURL: def.APIKeyOptionalWithCustomBaseURL,
+			UserConfigurable:                def.UserConfigurable,
+			Gateway:                         def.Gateway,
+			Configured:                      settings != nil && settings.HasProvider(def.ID),
+			ModelsDevProviderID:             def.ModelsDevProviderID,
+			EnvVars:                         append([]string(nil), def.EnvVars...),
+			DocsURL:                         def.DocsURL,
+			SuggestedModel:                  def.SuggestedModel,
+			SuggestedModelNote:              def.SuggestedModelNote,
 			SuggestedModelEquivalents: append(
 				[]string(nil), def.SuggestedModelEquivalents...),
 		})
@@ -2629,6 +2633,10 @@ type AISettingsUpdateRequest struct {
 	ClearOllamaURL      *bool `json:"clear_ollama_url,omitempty"`      // Clear Ollama URL
 	ClearOllamaUsername *bool `json:"clear_ollama_username,omitempty"` // Clear Ollama Basic Auth username
 	ClearOllamaPassword *bool `json:"clear_ollama_password,omitempty"` // Clear Ollama Basic Auth password
+	// RemoveProviders deletes provider-owned credentials, endpoints, runtime
+	// options, and model selections. Legacy clear_* fields remain
+	// credential-specific for backwards compatibility.
+	RemoveProviders []string `json:"remove_providers,omitempty"`
 	// Cost controls
 	CostBudgetUSD30d *float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -2938,7 +2946,17 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if req.ClearOllamaURL != nil && *req.ClearOllamaURL {
 		settings.OllamaBaseURL = ""
 	} else if req.OllamaBaseURL != nil {
-		settings.OllamaBaseURL = strings.TrimSpace(*req.OllamaBaseURL)
+		raw := strings.TrimSpace(*req.OllamaBaseURL)
+		if raw == "" {
+			settings.OllamaBaseURL = ""
+		} else {
+			normalized, err := securityutil.NormalizeHTTPBaseURL(raw, "")
+			if err != nil {
+				http.Error(w, "ollama_base_url "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			settings.OllamaBaseURL = strings.TrimRight(normalized.String(), "/")
+		}
 	}
 	if req.ClearOllamaUsername != nil && *req.ClearOllamaUsername {
 		settings.OllamaUsername = ""
@@ -2959,7 +2977,17 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OllamaKeepAlive = keepAlive
 	}
 	if req.OpenAIBaseURL != nil {
-		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
+		raw := strings.TrimSpace(*req.OpenAIBaseURL)
+		if raw == "" {
+			settings.OpenAIBaseURL = ""
+		} else {
+			normalized, err := securityutil.NormalizeHTTPBaseURL(raw, "")
+			if err != nil {
+				http.Error(w, "openai_base_url "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			settings.OpenAIBaseURL = strings.TrimRight(normalized.String(), "/")
+		}
 	}
 	if req.ZaiBaseURL != nil {
 		settings.ZaiBaseURL = strings.TrimSpace(*req.ZaiBaseURL)
@@ -2969,6 +2997,22 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 	if req.ClaudeSubscriptionEnabled != nil {
 		settings.ClaudeSubscriptionEnabled = *req.ClaudeSubscriptionEnabled
+	}
+	if len(req.RemoveProviders) > len(config.AIConfigurableProviderDefinitions()) {
+		http.Error(w, "too many providers requested for removal", http.StatusBadRequest)
+		return
+	}
+	removedProviders := make(map[string]struct{}, len(req.RemoveProviders))
+	for _, providerName := range req.RemoveProviders {
+		providerName = strings.ToLower(strings.TrimSpace(providerName))
+		if _, duplicate := removedProviders[providerName]; duplicate {
+			continue
+		}
+		if err := settings.RemoveProvider(providerName); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		removedProviders[providerName] = struct{}{}
 	}
 
 	if req.Enabled != nil {
@@ -3351,6 +3395,24 @@ func cachedPatrolModelReadinessSnapshot(aiService *ai.Service) *PatrolModelReadi
 	return patrolModelReadinessSnapshot(result, recordedAt)
 }
 
+func aiProviderOperationTimeout(cfg *config.AIConfig, providersToCheck ...string) time.Duration {
+	timeout := 30 * time.Second
+	if cfg == nil || cfg.GetRequestTimeout() <= timeout {
+		return timeout
+	}
+	for _, providerName := range providersToCheck {
+		switch strings.TrimSpace(providerName) {
+		case config.AIProviderOllama:
+			return cfg.GetRequestTimeout()
+		case config.AIProviderOpenAI:
+			if config.IsCustomOpenAICompatibleEndpoint(cfg.OpenAIBaseURL) {
+				return cfg.GetRequestTimeout()
+			}
+		}
+	}
+	return timeout
+}
+
 // HandleTestAIConnection tests the AI provider connection (POST /api/ai/test)
 // Auth is enforced by RequirePermission middleware at route registration; with
 // default authorizer, non-admin proxy users are hard-denied (with RBAC, deferred
@@ -3367,7 +3429,12 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	cfg := h.GetAIService(r.Context()).GetConfig()
+	selectedProvider := ""
+	if cfg != nil {
+		selectedProvider, _ = config.ParseModelString(cfg.GetModel())
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), aiProviderOperationTimeout(cfg, selectedProvider))
 	defer cancel()
 
 	var testResult struct {
@@ -3380,7 +3447,6 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 		Action         string `json:"action,omitempty"`
 	}
 
-	cfg := h.GetAIService(r.Context()).GetConfig()
 	err := h.GetAIService(r.Context()).TestConnection(ctx)
 	if err != nil {
 		diagnostic := ai.ClassifyProviderConnectionFailure(err)
@@ -3502,9 +3568,6 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-
 	testResult := newAIProviderTestResponse(provider)
 
 	// Load config and create provider for testing
@@ -3517,6 +3580,8 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 		}
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), aiProviderOperationTimeout(cfg, provider))
+	defer cancel()
 
 	// Check if provider is configured
 	if !cfg.HasProvider(provider) {
@@ -3587,7 +3652,12 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 
 	// Auth is enforced by RequireAuth + RequireScope middleware at the route level.
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	cfg := h.GetAIService(r.Context()).GetConfig()
+	configuredProviders := []string(nil)
+	if cfg != nil {
+		configuredProviders = cfg.GetConfiguredProviders()
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), aiProviderOperationTimeout(cfg, configuredProviders...))
 	defer cancel()
 
 	type ModelInfo struct {

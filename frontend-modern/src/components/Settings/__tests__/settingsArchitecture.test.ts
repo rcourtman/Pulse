@@ -770,7 +770,6 @@ describe('settings architecture guardrails', () => {
     for (const provider of ['zai', 'groq', 'mistral', 'cerebras', 'together', 'fireworks']) {
       expect(aiSettingsModelSource).toContain(`provider: '${provider}'`);
       expect(aiSettingsStateSource).toContain(`${provider}_api_key`);
-      expect(aiSettingsStateSource).toContain(`clear_${provider}_key`);
       expect(aiSettingsStateSource).toContain(`${provider}_configured`);
     }
     expect(aiSettingsModelSource).toContain('extraFields: [');
@@ -809,6 +808,16 @@ describe('settings architecture guardrails', () => {
     expect(aiProviderConfigurationSectionSource).toContain('suggested_model_equivalents');
     expect(aiProviderConfigurationSectionSource).not.toContain('qwen');
     expect(aiSettingsModelSource).not.toContain('qwen');
+  });
+
+  it('keeps local provider inheritance and removal on explicit lifecycle contracts', () => {
+    expect(aiSettingsStateSource).toContain("data.ollama_keep_alive ?? ''");
+    expect(aiSettingsStateSource).toContain('remove_providers: [provider]');
+    expect(aiSettingsStateSource).not.toContain('clearPayload.clear_openai_key');
+    expect(aiSettingsModelSource).toContain('API key (optional for a custom endpoint)');
+    expect(aiSettingsModelSource).toContain(
+      'Leave the API key blank when the endpoint does not require one.',
+    );
   });
 
   it('keeps Assistant session maintenance limited to Pulse-owned session actions', () => {

@@ -27,23 +27,27 @@ type AIProviderModelDefinition struct {
 // AIProviderDefinition is the canonical internal registry record for provider
 // metadata and runtime capability selection.
 type AIProviderDefinition struct {
-	ID                  string
-	DisplayName         string
-	Description         string
-	Protocol            AIProviderProtocol
-	DefaultModel        string
-	DefaultBaseURL      string
-	APIKeyField         string
-	ConfiguredField     string
-	ClearKeyField       string
-	BaseURLField        string
-	RequiresAPIKey      bool
-	UserConfigurable    bool
-	Gateway             bool
-	ModelsDevProviderID string
-	EnvVars             []string
-	DocsURL             string
-	FallbackModels      []AIProviderModelDefinition
+	ID              string
+	DisplayName     string
+	Description     string
+	Protocol        AIProviderProtocol
+	DefaultModel    string
+	DefaultBaseURL  string
+	APIKeyField     string
+	ConfiguredField string
+	ClearKeyField   string
+	BaseURLField    string
+	RequiresAPIKey  bool
+	// APIKeyOptionalWithCustomBaseURL marks providers whose official route
+	// requires a key but whose operator-supplied compatible endpoint may be
+	// intentionally keyless.
+	APIKeyOptionalWithCustomBaseURL bool
+	UserConfigurable                bool
+	Gateway                         bool
+	ModelsDevProviderID             string
+	EnvVars                         []string
+	DocsURL                         string
+	FallbackModels                  []AIProviderModelDefinition
 	// SuggestedModel is a model verified to pass Patrol's tool-call
 	// preflight, surfaced as a guided quickstart on the provider's setup
 	// row. Only set for providers where users must choose a model without
@@ -85,19 +89,20 @@ func aiProviderDefinitions() []AIProviderDefinition {
 			DocsURL:          "https://docs.anthropic.com/en/api/getting-started",
 		},
 		{
-			ID:               AIProviderOpenAI,
-			DisplayName:      "OpenAI",
-			Description:      "GPT and reasoning models from OpenAI, or a custom OpenAI-compatible endpoint",
-			Protocol:         AIProviderProtocolOpenAICompatible,
-			DefaultModel:     "gpt-4o",
-			APIKeyField:      "openai_api_key",
-			ConfiguredField:  "openai_configured",
-			ClearKeyField:    "clear_openai_key",
-			BaseURLField:     "openai_base_url",
-			RequiresAPIKey:   true,
-			UserConfigurable: true,
-			EnvVars:          []string{"OPENAI_API_KEY"},
-			DocsURL:          "https://platform.openai.com/docs/api-reference/chat",
+			ID:                              AIProviderOpenAI,
+			DisplayName:                     "OpenAI",
+			Description:                     "GPT and reasoning models from OpenAI, or a custom OpenAI-compatible endpoint",
+			Protocol:                        AIProviderProtocolOpenAICompatible,
+			DefaultModel:                    "gpt-4o",
+			APIKeyField:                     "openai_api_key",
+			ConfiguredField:                 "openai_configured",
+			ClearKeyField:                   "clear_openai_key",
+			BaseURLField:                    "openai_base_url",
+			RequiresAPIKey:                  true,
+			APIKeyOptionalWithCustomBaseURL: true,
+			UserConfigurable:                true,
+			EnvVars:                         []string{"OPENAI_API_KEY"},
+			DocsURL:                         "https://platform.openai.com/docs/api-reference/chat",
 		},
 		{
 			ID:                  AIProviderOpenRouter,

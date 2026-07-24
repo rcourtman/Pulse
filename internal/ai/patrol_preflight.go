@@ -44,13 +44,21 @@ const patrolPreflightToolName = "verify_pulse_patrol"
 
 const defaultPatrolPreflightTimeout = 30 * time.Second
 
-func patrolPreflightTimeout(provider string) time.Duration {
+func patrolPreflightTimeout(provider string, cfg *config.AIConfig) time.Duration {
 	switch strings.TrimSpace(provider) {
 	case config.AIProviderCodexSubscription, config.AIProviderClaudeSubscription:
 		return providers.SubscriptionAgentMinimumRequestTimeout
+	case config.AIProviderOllama:
+		if cfg != nil && cfg.GetRequestTimeout() > defaultPatrolPreflightTimeout {
+			return cfg.GetRequestTimeout()
+		}
+	case config.AIProviderOpenAI:
+		if cfg != nil && config.IsCustomOpenAICompatibleEndpoint(cfg.OpenAIBaseURL) && cfg.GetRequestTimeout() > defaultPatrolPreflightTimeout {
+			return cfg.GetRequestTimeout()
+		}
 	default:
-		return defaultPatrolPreflightTimeout
 	}
+	return defaultPatrolPreflightTimeout
 }
 
 // patrolPreflightCache holds the most recent PatrolPreflightResult plus
@@ -184,7 +192,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	parsedProvider, parsedModel := config.ParseModelString(modelStr)
 	result.Provider = parsedProvider
 	result.Model = parsedModel
-	preflightCtx, cancel := context.WithTimeout(ctx, patrolPreflightTimeout(parsedProvider))
+	preflightCtx, cancel := context.WithTimeout(ctx, patrolPreflightTimeout(parsedProvider, cfg))
 	defer cancel()
 
 	provider, err := providers.NewForModel(cfg, modelStr)

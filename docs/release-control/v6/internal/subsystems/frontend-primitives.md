@@ -1568,6 +1568,16 @@ Agent`), with the plain-language source phrase available through accessible
     arrays/maps and the backend registry projection instead of introducing
     provider-specific JSX branches, local configured-state inference, or
     browser-owned default endpoint facts.
+    The OpenAI card must present its API key as optional for a custom compatible
+    endpoint and treat a saved base URL as configured provider state without
+    inventing model-family prefixes in the browser. Readiness presentation
+    consumes `transport_healthy` and `patrol_capable`: a reachable provider
+    whose model did not emit Patrol tools is amber and explicitly remains
+    usable for ordinary Assistant chat. Provider removal sends the complete
+    `remove_providers` lifecycle mutation and rehydrates endpoint, credential,
+    model, enabled state, and catalog from the response instead of clearing
+    only the visible credential input. A blank Ollama keep-alive control means
+    inherit the server default and must round-trip as blank.
     Local subscription-agent providers are the deliberate exception to
     credential inputs: their setup rows and first-run options render an
     explicit boolean opt-in, explain that Pulse uses an already authenticated

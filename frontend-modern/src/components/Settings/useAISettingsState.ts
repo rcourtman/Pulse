@@ -307,7 +307,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     fireworksApiKey: '',
     geminiApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
-    ollamaKeepAlive: '30s',
+    ollamaKeepAlive: '',
     openaiBaseUrl: '',
     zaiBaseUrl: '',
     codexSubscriptionEnabled: false,
@@ -405,7 +405,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         fireworksApiKey: '',
         geminiApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
-        ollamaKeepAlive: '30s',
+        ollamaKeepAlive: '',
         openaiBaseUrl: '',
         zaiBaseUrl: '',
         codexSubscriptionEnabled: false,
@@ -453,7 +453,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       fireworksApiKey: '',
       geminiApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
-      ollamaKeepAlive: data.ollama_keep_alive ?? '30s',
+      ollamaKeepAlive: data.ollama_keep_alive ?? '',
       openaiBaseUrl: data.openai_base_url || '',
       zaiBaseUrl: data.zai_base_url || '',
       codexSubscriptionEnabled: Boolean(data.codex_subscription_enabled),
@@ -694,9 +694,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setPatrolModelReadinessResult(result);
     } catch (error) {
       const errorName =
-        typeof error === 'object' && error !== null && 'name' in error
-          ? String(error.name)
-          : '';
+        typeof error === 'object' && error !== null && 'name' in error ? String(error.name) : '';
       if (errorName === 'AbortError') {
         notificationStore.info('Patrol model evaluation cancelled.');
         return;
@@ -934,7 +932,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (!isAIProviderConfigured(modelProvider, settings())) {
         const isAddingCredential =
           (modelProvider === 'anthropic' && form.anthropicApiKey.trim()) ||
-          (modelProvider === 'openai' && form.openaiApiKey.trim()) ||
+          (modelProvider === 'openai' && (form.openaiApiKey.trim() || form.openaiBaseUrl.trim())) ||
           (modelProvider === 'openrouter' && form.openrouterApiKey.trim()) ||
           (modelProvider === 'deepseek' && form.deepseekApiKey.trim()) ||
           (modelProvider === 'zai' && form.zaiApiKey.trim()) ||
@@ -1057,7 +1055,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       ) {
         payload.ollama_base_url = form.ollamaBaseUrl.trim();
       }
-      if (form.ollamaKeepAlive.trim() !== (settings()?.ollama_keep_alive ?? '30s')) {
+      if (form.ollamaKeepAlive.trim() !== (settings()?.ollama_keep_alive ?? '')) {
         payload.ollama_keep_alive = form.ollamaKeepAlive.trim();
       }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
@@ -1231,14 +1229,14 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     const currentModel = form.model.trim();
     const modelUsesProvider = currentModel && getProviderFromModelId(currentModel) === provider;
 
-    let confirmMessage = `Clear ${getAIProviderDisplayName(provider) || provider} credentials?`;
+    let confirmMessage = `Remove ${getAIProviderDisplayName(provider) || provider} and its saved settings?`;
     if (isLastProvider) {
       confirmMessage =
-        'Warning: this is your only configured provider. Clearing it will disable Pulse Assistant until you configure another provider. Continue?';
+        'Warning: this is your only configured provider. Removing it will disable Pulse Assistant and clear its selected models until you configure another provider. Continue?';
     } else if (modelUsesProvider) {
-      confirmMessage = `Your current model uses ${getAIProviderDisplayName(provider) || provider}. Clearing this will require selecting a different model. Continue?`;
+      confirmMessage = `Your current model uses ${getAIProviderDisplayName(provider) || provider}. Removing it will clear provider-owned model selections. Continue?`;
     } else {
-      confirmMessage += " You'll need to re-enter credentials to use this provider.";
+      confirmMessage += " You'll need to configure it again to use this provider.";
     }
 
     if (!confirm(confirmMessage)) {
@@ -1247,48 +1245,18 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
 
     setSaving(true);
     try {
-      const clearPayload: Record<string, boolean> = {};
-      if (provider === 'anthropic') clearPayload.clear_anthropic_key = true;
-      if (provider === 'openai') clearPayload.clear_openai_key = true;
-      if (provider === 'openrouter') clearPayload.clear_openrouter_key = true;
-      if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
-      if (provider === 'zai') clearPayload.clear_zai_key = true;
-      if (provider === 'groq') clearPayload.clear_groq_key = true;
-      if (provider === 'mistral') clearPayload.clear_mistral_key = true;
-      if (provider === 'cerebras') clearPayload.clear_cerebras_key = true;
-      if (provider === 'together') clearPayload.clear_together_key = true;
-      if (provider === 'fireworks') clearPayload.clear_fireworks_key = true;
-      if (provider === 'gemini') clearPayload.clear_gemini_key = true;
-      if (provider === 'ollama') clearPayload.clear_ollama_url = true;
-      if (provider === 'codex-subscription') clearPayload.codex_subscription_enabled = false;
-      if (provider === 'claude-subscription') clearPayload.claude_subscription_enabled = false;
-
-      await AIAPI.updateSettings(clearPayload);
-      const newSettings = await AIAPI.getSettings();
+      const newSettings = await AIAPI.updateSettings({ remove_providers: [provider] });
       setSettings(newSettings);
+      resetForm(newSettings);
       syncModelCatalogForSettings(newSettings);
       void runProviderPreflight(newSettings);
 
-      if (provider === 'anthropic') setForm('anthropicApiKey', '');
-      if (provider === 'openai') setForm('openaiApiKey', '');
-      if (provider === 'openrouter') setForm('openrouterApiKey', '');
-      if (provider === 'deepseek') setForm('deepseekApiKey', '');
-      if (provider === 'zai') setForm('zaiApiKey', '');
-      if (provider === 'groq') setForm('groqApiKey', '');
-      if (provider === 'mistral') setForm('mistralApiKey', '');
-      if (provider === 'cerebras') setForm('cerebrasApiKey', '');
-      if (provider === 'together') setForm('togetherApiKey', '');
-      if (provider === 'fireworks') setForm('fireworksApiKey', '');
-      if (provider === 'gemini') setForm('geminiApiKey', '');
-      if (provider === 'ollama') setForm('ollamaBaseUrl', '');
-      if (provider === 'codex-subscription') setForm('codexSubscriptionEnabled', false);
-      if (provider === 'claude-subscription') setForm('claudeSubscriptionEnabled', false);
-
-      notificationStore.success(`${provider} credentials cleared`);
+      notificationStore.success(`${getAIProviderDisplayName(provider) || provider} removed`);
     } catch (error) {
-      logger.error(`[AISettings] Clear ${provider} failed:`, error);
+      logger.error(`[AISettings] Remove ${provider} failed:`, error);
+      const detail = error instanceof Error ? error.message.trim() : '';
       notificationStore.error(
-        getAICredentialsClearErrorMessage(error instanceof Error ? error.message : ''),
+        detail ? getAICredentialsClearErrorMessage(detail) : 'Unable to remove provider.',
       );
     } finally {
       setSaving(false);

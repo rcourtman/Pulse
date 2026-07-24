@@ -435,6 +435,18 @@ func TestAIProviderDefinitions_CanonicalDirectProviderRegistry(t *testing.T) {
 			t.Fatalf("%s must declare API settings fields: %#v", provider, def)
 		}
 	}
+	openAI, ok := LookupAIProviderDefinition(AIProviderOpenAI)
+	if !ok {
+		t.Fatal("missing OpenAI provider definition")
+	}
+	if !openAI.RequiresAPIKey || !openAI.APIKeyOptionalWithCustomBaseURL || openAI.BaseURLField != "openai_base_url" {
+		t.Fatalf("OpenAI custom-endpoint auth contract is incomplete: %#v", openAI)
+	}
+	for _, def := range defs {
+		if def.ID != AIProviderOpenAI && def.APIKeyOptionalWithCustomBaseURL {
+			t.Fatalf("%s must not inherit OpenAI custom-endpoint keyless auth", def.ID)
+		}
+	}
 
 	if _, ok := LookupAIProviderDefinition(AIProviderQuickstart); !ok {
 		t.Fatalf("retired quickstart marker should remain known for migration cleanup")

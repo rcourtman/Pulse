@@ -79,6 +79,7 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
     if (!r) return 'idle';
     if (isStaleAgainstFormSelection()) return 'warning';
     if (r.status === 'pass') return 'success';
+    if (r.transport_healthy && !r.patrol_capable) return 'warning';
     if (r.status === 'warning') return 'warning';
     return 'error';
   };
@@ -104,6 +105,8 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
     }
     if (r.max_verified_mode === 'approval') return 'Verified for Watch only and Ask first';
     if (r.max_verified_mode === 'monitor') return 'Verified for Watch only';
+    if (r.transport_healthy && !r.patrol_capable)
+      return 'Provider connected; Patrol capability not verified';
     if (r.status === 'warning') return 'Patrol model needs attention';
     return 'Patrol model not verified';
   };

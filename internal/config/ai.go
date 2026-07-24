@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -189,7 +190,10 @@ const (
 	// Pulse-hosted model aliases from pre-GA config.
 	DefaultAIModelQuickstart = "pulse-hosted"
 	DefaultOllamaBaseURL     = "http://localhost:11434"
-	DefaultOllamaKeepAlive   = "30s"
+	// DefaultOllamaKeepAlive is intentionally empty. Omitting keep_alive lets
+	// each Ollama server apply its own operator-configured default. Pulse only
+	// overrides that policy when the operator saves an explicit value.
+	DefaultOllamaKeepAlive   = ""
 	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
 	DefaultDeepSeekBaseURL   = "https://api.deepseek.com"
 	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
@@ -244,8 +248,7 @@ func NewDefaultAIConfig() *AIConfig {
 		Enabled:    false,
 		Model:      "",
 		AuthMethod: AuthMethodAPIKey,
-		// Pulse keeps the v6 cost-control default explicit. Operators can
-		// clear this value to let the Ollama server's own default apply.
+		// Empty inherits the Ollama server's keep_alive policy.
 		OllamaKeepAlive: DefaultOllamaKeepAlive,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
@@ -394,9 +397,9 @@ func NormalizeOllamaKeepAlive(value string) (string, error) {
 	return "", fmt.Errorf("must be a duration such as 30s, 5m, or 24h; seconds such as 3600; -1 to keep loaded; 0 to unload; or empty to use the Ollama server default")
 }
 
-// GetOllamaKeepAlive returns the configured keep_alive value. A nil config
-// keeps the Pulse default; an explicitly empty config value is preserved so
-// callers can omit keep_alive and defer to the Ollama server.
+// GetOllamaKeepAlive returns the configured keep_alive value. Empty, including
+// the default for a nil config, means callers omit keep_alive and defer to the
+// Ollama server.
 func (c *AIConfig) GetOllamaKeepAlive() string {
 	if c == nil {
 		return DefaultOllamaKeepAlive
@@ -422,7 +425,10 @@ func (c *AIConfig) HasProvider(provider string) bool {
 	case AIProviderAnthropic:
 		return c.AnthropicAPIKey != ""
 	case AIProviderOpenAI:
-		return c.OpenAIAPIKey != ""
+		// A custom OpenAI-compatible endpoint may be intentionally keyless
+		// (for example llama.cpp, LocalAI, or LM Studio). The official OpenAI
+		// endpoint still requires a key.
+		return strings.TrimSpace(c.OpenAIAPIKey) != "" || IsCustomOpenAICompatibleEndpoint(c.OpenAIBaseURL)
 	case AIProviderOpenRouter:
 		return c.OpenRouterAPIKey != ""
 	case AIProviderDeepSeek:
@@ -451,6 +457,108 @@ func (c *AIConfig) HasProvider(provider string) bool {
 	default:
 		return false
 	}
+}
+
+// ProviderRequiresAPIKey reports whether the selected provider route requires
+// an API key. OpenAI-compatible custom endpoints may be keyless; every hosted
+// provider route keeps the registry's credential requirement.
+func (c *AIConfig) ProviderRequiresAPIKey(provider string) bool {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	def, ok := LookupAIProviderDefinition(provider)
+	if !ok || !def.RequiresAPIKey {
+		return false
+	}
+	if provider == AIProviderOpenAI && c != nil && IsCustomOpenAICompatibleEndpoint(c.OpenAIBaseURL) {
+		return false
+	}
+	return true
+}
+
+// IsCustomOpenAICompatibleEndpoint distinguishes an operator-supplied
+// compatible server from an explicitly saved official OpenAI URL. Saving the
+// official host must never turn OpenAI into a keyless provider.
+func IsCustomOpenAICompatibleEndpoint(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Hostname() == "" {
+		return false
+	}
+	host := strings.TrimSuffix(parsed.Hostname(), ".")
+	return !strings.EqualFold(host, "api.openai.com")
+}
+
+// RemoveProvider deletes all provider-owned configuration and any model
+// selections routed through that provider. It is deliberately distinct from
+// the legacy clear-key fields, which only rotate one credential.
+func (c *AIConfig) RemoveProvider(provider string) error {
+	if c == nil {
+		return fmt.Errorf("Pulse Assistant config is nil")
+	}
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	def, ok := LookupAIProviderDefinition(provider)
+	if !ok || !def.UserConfigurable {
+		return fmt.Errorf("unknown provider %q", provider)
+	}
+
+	switch provider {
+	case AIProviderAnthropic:
+		c.AnthropicAPIKey = ""
+		c.ClearOAuthTokens()
+	case AIProviderOpenAI:
+		c.OpenAIAPIKey = ""
+		c.OpenAIBaseURL = ""
+	case AIProviderOpenRouter:
+		c.OpenRouterAPIKey = ""
+	case AIProviderDeepSeek:
+		c.DeepSeekAPIKey = ""
+	case AIProviderGemini:
+		c.GeminiAPIKey = ""
+	case AIProviderZai:
+		c.ZaiAPIKey = ""
+		c.ZaiBaseURL = ""
+	case AIProviderGroq:
+		c.GroqAPIKey = ""
+	case AIProviderMistral:
+		c.MistralAPIKey = ""
+	case AIProviderCerebras:
+		c.CerebrasAPIKey = ""
+	case AIProviderTogether:
+		c.TogetherAPIKey = ""
+	case AIProviderFireworks:
+		c.FireworksAPIKey = ""
+	case AIProviderOllama:
+		c.OllamaBaseURL = ""
+		c.OllamaUsername = ""
+		c.OllamaPassword = ""
+		c.OllamaKeepAlive = DefaultOllamaKeepAlive
+	case AIProviderCodexSubscription:
+		c.CodexSubscriptionEnabled = false
+	case AIProviderClaudeSubscription:
+		c.ClaudeSubscriptionEnabled = false
+	}
+
+	clearModel := func(model *string) {
+		if strings.TrimSpace(*model) == "" {
+			return
+		}
+		modelProvider, _ := ParseModelString(*model)
+		if modelProvider == provider {
+			*model = ""
+		}
+	}
+	clearModel(&c.Model)
+	clearModel(&c.ChatModel)
+	clearModel(&c.PatrolModel)
+	clearModel(&c.DiscoveryModel)
+	clearModel(&c.AutoFixModel)
+
+	if len(c.GetConfiguredProviders()) == 0 {
+		c.Enabled = false
+	}
+	return nil
 }
 
 // GetConfiguredProviders returns a list of all providers with credentials configured

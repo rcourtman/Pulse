@@ -381,7 +381,9 @@ Configure providers in the UI: **Settings → Pulse Intelligence → Provider & 
   ChatGPT; no OpenAI API key is required or forwarded
 - **Claude subscription (local)** — uses an installed Claude CLI signed in
   with a Claude plan; no Anthropic API key is required or forwarded
-- **OpenAI-compatible base URL** (for providers that implement the OpenAI API shape)
+- **OpenAI-compatible base URL** (llama.cpp, LocalAI, LM Studio, and other
+  compatible servers; the API key is optional when the custom endpoint is
+  intentionally keyless)
 
 Legacy Anthropic OAuth fields may still appear in stored settings so existing
 installs can disconnect and clear old tokens, but Anthropic OAuth is not a
@@ -470,6 +472,21 @@ quality. The standard Z.ai `/api/paas/` endpoint remains a `metered_api` route.
 
 Pulse uses model identifiers in the form: `provider:model-name`
 
+Custom OpenAI-compatible model catalogs are authoritative. Pulse lists every
+non-empty model ID returned by the endpoint, including IDs without a known
+vendor prefix, and binds them to the configured `openai` provider instead of
+guessing from the ID. Pulse omits empty Authorization headers, uses the
+portable `max_tokens` request field, and omits optional OpenAI stream extensions
+on custom endpoints. If an endpoint explicitly supports only buffered
+completions, Pulse validates the complete response before projecting it through
+the streaming runtime. Partial or malformed tool responses never become
+executable calls.
+
+Ollama `keep_alive` is an optional provider setting. Blank is the default and
+means Pulse omits the field so the Ollama server's own policy applies; explicit
+duration, seconds, `-1`, and `0` values persist across restart and apply to both
+streaming and non-streaming requests.
+
 You can set separate models for:
 - Chat (`chat_model`)
 - Patrol (`patrol_model`)
@@ -491,6 +508,19 @@ modes remain `not_assessed` until an extended governed canary is available.
 Changing the selected model, provider credentials or endpoint, or relevant
 timeout settings invalidates the cached result. Slow evaluations can be
 cancelled from the UI without replacing the last completed evidence.
+
+Provider transport health is reported independently from Patrol capability. A
+local endpoint can remain healthy and usable for ordinary Assistant chat while
+the selected model receives an amber Patrol warning because it did not
+demonstrate typed tool calls, context selection, continuation, or the required
+latency envelope. That warning does not mislabel the provider as disconnected,
+and it does not weaken Patrol's fail-closed tool/action admission.
+
+Removing a provider is a complete lifecycle action: Pulse deletes that
+provider's stored credential, custom endpoint and provider-owned runtime
+options, clears model selections routed through it, invalidates its model
+catalog, and disables Pulse Intelligence when no provider remains. Credential
+rotation through the legacy clear-key fields remains credential-specific.
 
 ### Storage
 

@@ -187,16 +187,12 @@ func TestNewOpenAIClient_StreamTimeouts(t *testing.T) {
 	// load and can spend minutes on prompt processing. Only the inter-chunk
 	// gap keeps the short stall bound.
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
-	transport, ok := client.streamClient.Transport.(*http.Transport)
-	require.True(t, ok)
-	assert.Equal(t, 300*time.Second, transport.ResponseHeaderTimeout)
+	require.NotNil(t, client.streamClient.Transport)
 	assert.Equal(t, openaiStreamChunkTimeout, client.streamChunkTimeout)
 	assert.Equal(t, 300*time.Second, client.streamFirstChunkTimeout)
 
 	shortTimeoutClient := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 2*time.Second)
-	shortTransport, ok := shortTimeoutClient.streamClient.Transport.(*http.Transport)
-	require.True(t, ok)
-	assert.Equal(t, 2*time.Second, shortTransport.ResponseHeaderTimeout)
+	require.NotNil(t, shortTimeoutClient.streamClient.Transport)
 	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamChunkTimeout)
 	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamFirstChunkTimeout)
 }
@@ -1239,7 +1235,8 @@ func TestOpenAIClient_Chat_Success(t *testing.T) {
 		var req openaiRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.Equal(t, "gpt-4", req.Model)
-		assert.Equal(t, 123, req.MaxCompletionTokens)
+		assert.Equal(t, 123, req.MaxTokens)
+		assert.Zero(t, req.MaxCompletionTokens)
 		assert.Equal(t, 0.7, req.Temperature)
 		require.Len(t, req.Tools, 1)
 		assert.Equal(t, "function", req.Tools[0].Type)

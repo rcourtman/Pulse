@@ -237,6 +237,23 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("`patrol_readiness` usage category", normalized_content)
         self.assertNotIn("Patrol model ready", content)
 
+    def test_public_ai_overview_defines_local_compatible_provider_lifecycle(self) -> None:
+        content = read_repo_text("docs/AI.md")
+        normalized_content = " ".join(content.split())
+
+        self.assertIn("llama.cpp, LocalAI, LM Studio", normalized_content)
+        self.assertIn(
+            "API key is optional when the custom endpoint is intentionally keyless",
+            normalized_content,
+        )
+        self.assertIn("Custom OpenAI-compatible model catalogs are authoritative", normalized_content)
+        self.assertIn("Pulse lists every non-empty model ID returned by the endpoint", normalized_content)
+        self.assertIn("Pulse omits empty Authorization headers", normalized_content)
+        self.assertIn("Blank is the default", normalized_content)
+        self.assertIn("the Ollama server's own policy applies", normalized_content)
+        self.assertIn("Provider transport health is reported independently from Patrol capability", normalized_content)
+        self.assertIn("does not weaken Patrol's fail-closed tool/action admission", normalized_content)
+
     def test_public_ai_docs_use_current_surface_naming(self) -> None:
         for doc_path in PUBLIC_AI_DOC_PATHS:
             with self.subTest(doc_path=doc_path):

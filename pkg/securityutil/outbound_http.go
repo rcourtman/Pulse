@@ -18,8 +18,11 @@ type RestrictedOutboundHTTPOptions struct {
 	AllowedSchemes  []string
 	AllowPrivateIPs bool
 	AllowLoopback   bool
-	TLSConfig       *tls.Config
-	ResolveIPAddrs  func(ctx context.Context, host string) ([]net.IPAddr, error)
+	// ResponseHeaderTimeout bounds the wait for response headers without
+	// imposing an overall deadline on a streaming response body.
+	ResponseHeaderTimeout time.Duration
+	TLSConfig             *tls.Config
+	ResolveIPAddrs        func(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
 var resolveOutboundFetchIPs = net.DefaultResolver.LookupIPAddr
@@ -202,7 +205,7 @@ func sameOriginRedirectPolicy(opts RestrictedOutboundHTTPOptions) func(req *http
 	}
 }
 
-func cloneRestrictedTransport(tlsConfig *tls.Config) *http.Transport {
+func cloneRestrictedTransport(opts RestrictedOutboundHTTPOptions) *http.Transport {
 	transport, ok := http.DefaultTransport.(*http.Transport)
 	var clone *http.Transport
 	if ok && transport != nil {
@@ -212,8 +215,8 @@ func cloneRestrictedTransport(tlsConfig *tls.Config) *http.Transport {
 	}
 
 	switch {
-	case tlsConfig != nil:
-		clone.TLSClientConfig = tlsConfig.Clone()
+	case opts.TLSConfig != nil:
+		clone.TLSClientConfig = opts.TLSConfig.Clone()
 	case clone.TLSClientConfig != nil:
 		clone.TLSClientConfig = clone.TLSClientConfig.Clone()
 	default:
@@ -222,6 +225,9 @@ func cloneRestrictedTransport(tlsConfig *tls.Config) *http.Transport {
 
 	if clone.TLSClientConfig.MinVersion < tls.VersionTLS12 {
 		clone.TLSClientConfig.MinVersion = tls.VersionTLS12
+	}
+	if opts.ResponseHeaderTimeout > 0 {
+		clone.ResponseHeaderTimeout = opts.ResponseHeaderTimeout
 	}
 
 	return clone
@@ -252,7 +258,7 @@ func (r *restrictedRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 // NewRestrictedOutboundHTTPClient returns an HTTP client that validates redirects and pins direct outbound dials
 // to the permitted resolved IPs for the requested host, trying each in resolution order until one connects.
 func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutboundHTTPOptions) *http.Client {
-	transport := cloneRestrictedTransport(opts.TLSConfig)
+	transport := cloneRestrictedTransport(opts)
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {

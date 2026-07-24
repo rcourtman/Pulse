@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -124,7 +126,7 @@ func TestRunPatrolModelReadinessWithProvider_VerifiesMonitorAndApproval(t *testi
 		context.Background(), readinessTestConfig(), config.AIProviderOllama, "test-model", "ollama:test-model", provider,
 	)
 
-	if !result.Success || result.Status != PatrolModelReadinessPass {
+	if !result.Success || result.Status != PatrolModelReadinessPass || !result.TransportHealthy || !result.PatrolCapable {
 		t.Fatalf("expected successful readiness evaluation, got %+v", result)
 	}
 	if result.MaxVerifiedMode != config.PatrolAutonomyApproval {
@@ -182,7 +184,7 @@ func TestRunPatrolModelReadinessWithProvider_SeparatesProtocolFromContextQuality
 	}
 }
 
-func TestRunPatrolModelReadinessWithProvider_ProtocolFailureIsHardFailure(t *testing.T) {
+func TestRunPatrolModelReadinessWithProvider_ProtocolFailureIsCapabilityWarning(t *testing.T) {
 	provider := &scriptedReadinessProvider{contextWindow: 32768, wrongProtocol: true}
 	result := runPatrolModelReadinessWithProvider(
 		context.Background(), readinessTestConfig(), config.AIProviderOllama, "test-model", "ollama:test-model", provider,
@@ -191,8 +193,64 @@ func TestRunPatrolModelReadinessWithProvider_ProtocolFailureIsHardFailure(t *tes
 	if result.Dimensions.ToolProtocol.Passed != 0 || result.Success {
 		t.Fatalf("expected hard protocol failure, got %+v", result)
 	}
+	if !result.TransportHealthy || result.PatrolCapable || result.Status != PatrolModelReadinessWarning {
+		t.Fatalf("provider health must remain distinct from Patrol capability, got %+v", result)
+	}
 	if result.Modes.Monitor.Status != PatrolModeNotSuitable {
 		t.Fatalf("Watch only should be unsuitable, got %+v", result.Modes.Monitor)
+	}
+}
+
+func TestRunPatrolModelReadinessWithProvider_ReproducesHealthyAssistantButMissingPatrolTools(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			_, _ = w.Write([]byte(`{"data":[{"id":"opaque-local-model"}]}`))
+		case "/v1/chat/completions":
+			var request map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode request: %v", err)
+				return
+			}
+			if request["stream"] == true {
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"plain text only\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"model":"opaque-local-model","choices":[{"message":{"role":"assistant","content":"Assistant works"},"finish_reason":"stop"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.AIConfig{
+		Enabled:               true,
+		Model:                 "openai:opaque-local-model",
+		PatrolModel:           "openai:opaque-local-model",
+		OpenAIBaseURL:         server.URL,
+		RequestTimeoutSeconds: 2,
+	}
+	provider := providers.NewOpenAICompatibleClient("openai", "", "opaque-local-model", server.URL, 2*time.Second)
+	assistantResponse, err := provider.Chat(context.Background(), providers.ChatRequest{
+		Messages: []providers.Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil || assistantResponse.Content != "Assistant works" {
+		t.Fatalf("ordinary Assistant chat failed: response=%+v err=%v", assistantResponse, err)
+	}
+
+	result := runPatrolModelReadinessWithProvider(
+		context.Background(), cfg, config.AIProviderOpenAI, "opaque-local-model", "openai:opaque-local-model", provider,
+	)
+	if !result.TransportHealthy || result.PatrolCapable || result.Success {
+		t.Fatalf("transport and Patrol capability were not separated: %+v", result)
+	}
+	if result.Status != PatrolModelReadinessWarning || result.Dimensions.Connectivity.Status != PatrolModelReadinessPass {
+		t.Fatalf("healthy provider should remain a warning, not a connection failure: %+v", result)
+	}
+	if result.Dimensions.ToolProtocol.Passed != 0 || result.Cause != PatrolFailureCauseModelToolSupportUnverified {
+		t.Fatalf("missing tool calls should be reported as an unverified Patrol capability: %+v", result)
 	}
 }
 

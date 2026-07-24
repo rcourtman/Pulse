@@ -88,20 +88,13 @@ func normalizeOllamaBaseURL(raw string) (string, error) {
 
 func newOllamaHTTPClient(timeout time.Duration, streaming bool) *http.Client {
 	clientTimeout := timeout
+	options := ollamaOutboundHTTPOptions
 	if streaming {
 		clientTimeout = 0
+		options.ResponseHeaderTimeout = timeout
 	}
 
-	client := securityutil.NewRestrictedOutboundHTTPClient(clientTimeout, ollamaOutboundHTTPOptions)
-	if streaming {
-		if transport, ok := client.Transport.(*http.Transport); ok {
-			// Streaming relies on context cancellation instead of a full client timeout,
-			// but it should still fail if the server never starts responding.
-			transport.ResponseHeaderTimeout = timeout
-		}
-	}
-
-	return client
+	return securityutil.NewRestrictedOutboundHTTPClient(clientTimeout, options)
 }
 
 func (c *OllamaClient) applyAuth(req *http.Request) {

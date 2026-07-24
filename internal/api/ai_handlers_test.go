@@ -849,6 +849,89 @@ func TestAISettingsHandler_UpdateSettings_OllamaKeepAlive(t *testing.T) {
 	require.Equal(t, "24h", saved.OllamaKeepAlive)
 }
 
+func TestAISettingsHandler_RemoveProviderPersistsCompleteLifecycle(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	appConfig := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	aiConfig := config.NewDefaultAIConfig()
+	aiConfig.Enabled = true
+	aiConfig.Model = "openai:opaque-local-model"
+	aiConfig.ChatModel = "openai:opaque-local-model"
+	aiConfig.PatrolModel = "openai:opaque-local-model"
+	aiConfig.OpenAIAPIKey = "secret"
+	aiConfig.OpenAIBaseURL = "http://127.0.0.1:8080/v1"
+	require.NoError(t, persistence.SaveAIConfig(*aiConfig))
+
+	handler := newTestAISettingsHandler(appConfig, persistence, nil)
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		RemoveProviders: []string{config.AIProviderOpenAI},
+	})
+	require.NoError(t, err)
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var response AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.False(t, response.Enabled)
+	require.False(t, response.OpenAIConfigured)
+	require.Empty(t, response.Model)
+	require.Empty(t, response.ChatModel)
+	require.Empty(t, response.PatrolModel)
+	require.Empty(t, response.ConfiguredProviders)
+
+	reopened, err := config.NewConfigPersistence(tmp).LoadAIConfig()
+	require.NoError(t, err)
+	require.Empty(t, reopened.OpenAIAPIKey)
+	require.Empty(t, reopened.OpenAIBaseURL)
+	require.Empty(t, reopened.Model)
+	require.Empty(t, reopened.ChatModel)
+	require.Empty(t, reopened.PatrolModel)
+	require.False(t, reopened.Enabled)
+}
+
+func TestAISettingsHandler_KeylessOpenAICompatibleSetupIsConfiguredAndValidated(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	appConfig := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(appConfig, persistence, nil)
+
+	body, err := json.Marshal(AISettingsUpdateRequest{
+		OpenAIBaseURL: ptr("http://127.0.0.1:8080/v1/"),
+	})
+	require.NoError(t, err)
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var response AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.True(t, response.OpenAIConfigured)
+	require.Contains(t, response.ConfiguredProviders, config.AIProviderOpenAI)
+	require.Equal(t, "http://127.0.0.1:8080/v1", response.OpenAIBaseURL)
+
+	reopened, err := config.NewConfigPersistence(tmp).LoadAIConfig()
+	require.NoError(t, err)
+	require.Empty(t, reopened.OpenAIAPIKey)
+	require.Equal(t, "http://127.0.0.1:8080/v1", reopened.OpenAIBaseURL)
+
+	body, err = json.Marshal(AISettingsUpdateRequest{
+		OpenAIBaseURL: ptr("http://127.0.0.1:8080/v1?token=secret"),
+	})
+	require.NoError(t, err)
+	req = newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "openai_base_url")
+}
+
 func TestAISettingsHandler_UpdateSettingsRejectsInvalidOllamaKeepAlive(t *testing.T) {
 	t.Parallel()
 

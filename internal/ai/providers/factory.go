@@ -40,7 +40,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 
 	if config.IsOpenAICompatibleProvider(provider) {
 		apiKey := cfg.GetAPIKeyForProvider(provider)
-		if apiKey == "" {
+		if apiKey == "" && cfg.ProviderRequiresAPIKey(provider) {
 			return nil, fmt.Errorf("%s API key not configured", config.AIProviderDisplayName(provider))
 		}
 		baseURL := cfg.GetBaseURLForProvider(provider)

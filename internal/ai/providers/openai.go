@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -59,6 +60,12 @@ type OpenAIClient struct {
 	streamFirstChunkTimeout time.Duration
 }
 
+var openAICompatibleOutboundHTTPOptions = securityutil.RestrictedOutboundHTTPOptions{
+	AllowedSchemes:  []string{"http", "https"},
+	AllowPrivateIPs: true,
+	AllowLoopback:   true,
+}
+
 // NewOpenAIClient creates a new OpenAI API client
 // timeout is optional - pass 0 to use the default 5 minute timeout
 func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *OpenAIClient {
@@ -85,11 +92,21 @@ func NewOpenAICompatibleClient(providerName, apiKey, model, baseURL string, time
 		apiKey:                  apiKey,
 		model:                   model,
 		baseURL:                 baseURL,
-		client:                  &http.Client{Timeout: timeout},
+		client:                  newOpenAICompatibleHTTPClient(timeout, false),
 		streamClient:            newOpenAIStreamHTTPClient(timeout),
 		streamChunkTimeout:      boundedOpenAIStreamChunkTimeout(timeout),
 		streamFirstChunkTimeout: timeout,
 	}
+}
+
+func newOpenAICompatibleHTTPClient(timeout time.Duration, streaming bool) *http.Client {
+	options := openAICompatibleOutboundHTTPOptions
+	clientTimeout := timeout
+	if streaming {
+		clientTimeout = 0
+		options.ResponseHeaderTimeout = timeout
+	}
+	return securityutil.NewRestrictedOutboundHTTPClient(clientTimeout, options)
 }
 
 func normalizeOpenAICompatibleChatURL(baseURL string) string {
@@ -147,17 +164,9 @@ func stripOpenAICompatibleProviderPrefix(providerName, model string) string {
 }
 
 func newOpenAIStreamHTTPClient(timeout time.Duration) *http.Client {
-	client := &http.Client{}
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		transport = transport.Clone()
-		// Local backends can hold the response headers while the model loads
-		// (Ollama does exactly this on a cold model), so the header wait
-		// honors the configured request timeout like the first-chunk wait
-		// does, rather than a short fixed bound.
-		transport.ResponseHeaderTimeout = timeout
-		client.Transport = transport
-	}
-	return client
+	// Local backends can hold response headers while the model loads. Bound
+	// that startup wait, but do not impose an overall timeout on a live stream.
+	return newOpenAICompatibleHTTPClient(timeout, true)
 }
 
 func boundedOpenAIStreamChunkTimeout(timeout time.Duration) time.Duration {
@@ -314,6 +323,84 @@ type openaiErrorDetail struct {
 	Code    string `json:"code"`
 }
 
+func convertOpenAIResponse(openaiResp openaiResponse) (*ChatResponse, error) {
+	if len(openaiResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response choices returned")
+	}
+
+	choice := openaiResp.Choices[0]
+	reasoning := choice.Message.ReasoningContent
+	if reasoning == "" {
+		reasoning = choice.Message.Reasoning
+	}
+	result := &ChatResponse{
+		Content:          choice.Message.Content,
+		ReasoningContent: reasoning,
+		Model:            openaiResp.Model,
+		StopReason:       choice.FinishReason,
+		InputTokens:      openaiResp.Usage.PromptTokens,
+		OutputTokens:     openaiResp.Usage.CompletionTokens,
+	}
+	if len(choice.Message.ToolCalls) > 0 {
+		result.StopReason = "tool_use"
+		for _, tc := range choice.Message.ToolCalls {
+			if strings.TrimSpace(tc.ID) == "" || strings.TrimSpace(tc.Function.Name) == "" {
+				return nil, fmt.Errorf("tool call is missing an id or function name")
+			}
+			input, ok := agentcapabilities.ParseProviderToolInput(tc.Function.Arguments)
+			if !ok {
+				return nil, fmt.Errorf("tool call %q returned invalid arguments", tc.Function.Name)
+			}
+			result.ToolCalls = append(result.ToolCalls, ToolCall{
+				ID:    tc.ID,
+				Name:  tc.Function.Name,
+				Input: input,
+			})
+		}
+	}
+	return result, nil
+}
+
+func emitBufferedOpenAIResponse(callback StreamCallback, response *ChatResponse) error {
+	if response == nil {
+		return fmt.Errorf("empty non-streaming response")
+	}
+	if response.ReasoningContent != "" {
+		callback(StreamEvent{Type: "thinking", Data: ThinkingEvent{Text: response.ReasoningContent}})
+	}
+	if response.Content != "" {
+		callback(StreamEvent{Type: "content", Data: ContentEvent{Text: response.Content}})
+	}
+	for _, call := range response.ToolCalls {
+		callback(StreamEvent{
+			Type: "tool_start",
+			Data: ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}.NormalizeCollections(),
+		})
+	}
+	callback(StreamEvent{
+		Type: "done",
+		Data: DoneEvent{
+			StopReason:   normalizeOpenAIStreamStopReason(response.StopReason, response.ToolCalls),
+			ToolCalls:    response.ToolCalls,
+			InputTokens:  response.InputTokens,
+			OutputTokens: response.OutputTokens,
+		},
+	})
+	return nil
+}
+
+func openAIStreamingExplicitlyUnsupported(statusCode int, message string) bool {
+	if statusCode != http.StatusBadRequest && statusCode != http.StatusUnprocessableEntity && statusCode != http.StatusNotImplemented {
+		return false
+	}
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "streaming is not supported") ||
+		strings.Contains(lower, "stream is not supported") ||
+		strings.Contains(lower, "streaming unsupported") ||
+		strings.Contains(lower, "stream must be false") ||
+		strings.Contains(lower, "unsupported stream")
+}
+
 // isDeepSeek returns true if this client is configured for DeepSeek
 func (c *OpenAIClient) isDeepSeek() bool {
 	return c.Name() == "deepseek" || strings.Contains(c.baseURL, "deepseek.com")
@@ -351,6 +438,12 @@ func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
 	req.Header.Set("X-Title", openrouterAppTitle)
 }
 
+func (c *OpenAIClient) applyAuthorization(req *http.Request) {
+	if strings.TrimSpace(c.apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+}
+
 func (c *OpenAIClient) requestMaxTokens(req ChatRequest) int {
 	if req.MaxTokens > 0 {
 		return req.MaxTokens
@@ -364,7 +457,19 @@ func (c *OpenAIClient) requestMaxTokens(req ChatRequest) int {
 // requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
 // Per OpenAI docs, o1/o3/o4 reasoning models require max_completion_tokens; max_tokens will error.
 func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
+	if c.isOpenRouter() {
+		return true
+	}
+	if !c.usesOfficialOpenAIEndpoint() {
+		return false
+	}
 	return strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
+}
+
+func (c *OpenAIClient) supportsStreamOptions() bool {
+	// stream_options is an OpenAI extension, not part of the minimum compatible
+	// protocol implemented by llama.cpp, LocalAI, and some LM Studio releases.
+	return c.Name() != "openai" || c.usesOfficialOpenAIEndpoint()
 }
 
 // convertToolChoiceToOpenAI converts our ToolChoice to OpenAI's format.
@@ -466,13 +571,13 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		Messages: messages,
 	}
 
-	// Use max_completion_tokens for all OpenAI models (newer API, backward compatible)
-	// DeepSeek still uses max_tokens
+	// max_completion_tokens is required by official OpenAI reasoning models.
+	// The portable OpenAI-compatible field is max_tokens.
 	if maxTokens := c.requestMaxTokens(req); maxTokens > 0 {
-		if c.isDeepSeek() {
-			openaiReq.MaxTokens = maxTokens
-		} else {
+		if c.requiresMaxCompletionTokens(model) {
 			openaiReq.MaxCompletionTokens = maxTokens
+		} else {
+			openaiReq.MaxTokens = maxTokens
 		}
 	}
 
@@ -551,7 +656,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		}
 
 		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		c.applyAuthorization(httpReq)
 		c.applyProviderHeaders(httpReq)
 
 		resp, err := c.client.Do(httpReq)
@@ -612,41 +717,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	if len(openaiResp.Choices) == 0 {
-		return nil, fmt.Errorf("no response choices returned")
-	}
-
-	choice := openaiResp.Choices[0]
-
-	// Reasoning models expose chain-of-thought separately: DeepSeek's direct API
-	// in "reasoning_content", OpenRouter and other gateways in "reasoning".
-	reasoning := choice.Message.ReasoningContent
-	if reasoning == "" {
-		reasoning = choice.Message.Reasoning
-	}
-
-	result := &ChatResponse{
-		Content:          choice.Message.Content,
-		ReasoningContent: reasoning, // surfaced as the turn's thinking
-		Model:            openaiResp.Model,
-		StopReason:       choice.FinishReason,
-		InputTokens:      openaiResp.Usage.PromptTokens,
-		OutputTokens:     openaiResp.Usage.CompletionTokens,
-	}
-
-	// Convert tool calls from OpenAI format to our format
-	if len(choice.Message.ToolCalls) > 0 {
-		result.StopReason = "tool_use" // Normalize to match Anthropic's format
-		for _, tc := range choice.Message.ToolCalls {
-			result.ToolCalls = append(result.ToolCalls, ToolCall{
-				ID:    tc.ID,
-				Name:  tc.Function.Name,
-				Input: agentcapabilities.ProviderToolInputOrRaw(tc.Function.Arguments),
-			})
-		}
-	}
-
-	return result, nil
+	return convertOpenAIResponse(openaiResp)
 }
 
 // TestConnection validates the API key by listing models
@@ -669,7 +740,7 @@ func (c *OpenAIClient) testOpenRouterKey(ctx context.Context) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.applyAuthorization(req)
 	req.Header.Set("Accept", "application/json")
 	c.applyProviderHeaders(req)
 
@@ -870,16 +941,16 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Model:    model,
 		Messages: messages,
 		Stream:   true,
-		StreamOptions: &streamOptions{
-			IncludeUsage: true,
-		},
+	}
+	if c.supportsStreamOptions() {
+		openaiReq.StreamOptions = &streamOptions{IncludeUsage: true}
 	}
 
 	if maxTokens := c.requestMaxTokens(req); maxTokens > 0 {
-		if c.isDeepSeek() {
-			openaiReq.MaxTokens = maxTokens
-		} else {
+		if c.requiresMaxCompletionTokens(model) {
 			openaiReq.MaxCompletionTokens = maxTokens
+		} else {
+			openaiReq.MaxTokens = maxTokens
 		}
 	}
 
@@ -959,7 +1030,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 
 		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		c.applyAuthorization(httpReq)
 		httpReq.Header.Set("Accept", "text/event-stream")
 		c.applyProviderHeaders(httpReq)
 
@@ -989,6 +1060,16 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		if isRetryableOpenAIStreamStatus(resp.StatusCode) {
 			continue
 		}
+		if openAIStreamingExplicitlyUnsupported(resp.StatusCode, errMsg) {
+			// Some otherwise compatible endpoints only implement buffered chat
+			// completions. Retry exactly once without stream=true, then emit the
+			// complete validated response through the canonical stream callback.
+			buffered, fallbackErr := c.Chat(ctx, req)
+			if fallbackErr != nil {
+				return fmt.Errorf("streaming unsupported and buffered fallback failed: %w", fallbackErr)
+			}
+			return emitBufferedOpenAIResponse(callback, buffered)
+		}
 		return lastErr
 	}
 
@@ -996,6 +1077,21 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		return fmt.Errorf("request failed after %d stream retries: %w", maxRetries, lastErr)
 	}
 	defer resp.Body.Close()
+
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "application/json") {
+		// A few compatible servers accept stream=true but return one ordinary
+		// JSON completion. Buffer and validate it before emitting any tool call,
+		// preserving fail-closed action semantics.
+		var bufferedResponse openaiResponse
+		if err := json.NewDecoder(resp.Body).Decode(&bufferedResponse); err != nil {
+			return fmt.Errorf("failed to parse buffered stream response: %w", err)
+		}
+		buffered, err := convertOpenAIResponse(bufferedResponse)
+		if err != nil {
+			return err
+		}
+		return emitBufferedOpenAIResponse(callback, buffered)
+	}
 
 	// Parse SSE stream
 	reader := resp.Body
@@ -1208,7 +1304,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.applyAuthorization(req)
 	c.applyProviderHeaders(req)
 
 	resp, err := c.client.Do(req)

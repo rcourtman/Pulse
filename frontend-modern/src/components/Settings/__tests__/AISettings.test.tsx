@@ -121,7 +121,7 @@ const baseSettings = (): AISettingsType => ({
   gemini_configured: false,
   ollama_configured: false,
   ollama_base_url: 'http://localhost:11434',
-  ollama_keep_alive: '30s',
+  ollama_keep_alive: '',
   configured_providers: [],
 });
 
@@ -941,6 +941,77 @@ describe('AISettings Ollama provider options', () => {
         }),
       );
     });
+  });
+});
+
+describe('AISettings OpenAI-compatible provider lifecycle', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('saves a keyless custom endpoint as provider configuration', async () => {
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      openai_configured: true,
+      configured: false,
+      openai_base_url: payload.openai_base_url as string,
+      configured_providers: ['openai'],
+    }));
+
+    renderComponent();
+    fireEvent.click(await screen.findByRole('button', { name: /openai/i }));
+    fireEvent.input(await screen.findByLabelText('OpenAI Custom Base URL'), {
+      target: { value: 'http://127.0.0.1:8080/v1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          openai_base_url: 'http://127.0.0.1:8080/v1',
+        }),
+      );
+    });
+    expect(updateSettingsMock.mock.calls[0]?.[0]).not.toHaveProperty('openai_api_key');
+  });
+
+  it('removes endpoint, credentials, and selected models through the lifecycle API', async () => {
+    const configured = {
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'openai:opaque-local-model',
+      chat_model: 'openai:opaque-local-model',
+      patrol_model: 'openai:opaque-local-model',
+      openai_configured: true,
+      openai_base_url: 'http://127.0.0.1:8080/v1',
+      configured_providers: ['openai' as const],
+    };
+    getSettingsMock.mockResolvedValue(configured);
+    updateSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: false,
+      model: '',
+      openai_base_url: '',
+    });
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderComponent();
+    fireEvent.click(await screen.findByRole('button', { name: /openai/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith({
+        remove_providers: ['openai'],
+      });
+    });
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('only configured provider'));
+    confirmSpy.mockRestore();
   });
 });
 

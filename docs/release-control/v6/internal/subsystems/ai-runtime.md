@@ -3517,6 +3517,16 @@ resolve canonical/source IDs and unique aliases before collection, reject
     accept providers that omit `[DONE]` only after a terminal `finish_reason`,
     but it must not emit `done` or executable tool calls from partial tool-call
     builders when the stream closes before that terminal provider state.
+    Custom compatible endpoints use portable `max_tokens`, omit the optional
+    `stream_options` extension, and omit Authorization when no key was saved.
+    A server that explicitly rejects streaming, or returns a complete
+    `application/json` completion for `stream=true`, may use the buffered
+    compatibility path only after the entire response and tool arguments have
+    validated; generic request failures, mid-stream failures, incomplete
+    responses, and malformed tools must not trigger or survive that fallback.
+    Restricted outbound transport must preserve metadata-service blocking,
+    DNS validation, and same-origin redirects while allowing operator-selected
+    private and loopback model servers.
 16. Keep Patrol investigations product-facing through the shared
     `aicontracts.InvestigationRecord` contract. Patrol may keep
     `InvestigationSession` as execution detail, but Assistant handoff,
@@ -6228,6 +6238,15 @@ alias-retirement posture and a recommendation to select the current V4 model
 IDs; unknown direct DeepSeek model IDs must be not-ready with
 `model_unavailable`; and known reasoning-only families must continue to fail
 closed before Patrol work is admitted.
+The explicit Patrol model advisor must keep provider/model transport health
+separate from Patrol capability evidence. Successful model-list connectivity
+sets `transport_healthy`; only the typed streaming/buffered tool protocol,
+context fixtures, continuation and latency checks set `patrol_capable`.
+Ordinary Assistant success plus missing Patrol tools is a warning and
+`not_suitable` Patrol mode, not a provider connection failure. Patrol action
+admission remains fail closed. Local Ollama and custom OpenAI-compatible health,
+catalog and preflight operations honor the configured request timeout so cold
+model loads are not truncated by the hosted-provider 30-second check budget.
 That same browser-owned chat read model must keep target normalization helper-
 driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and

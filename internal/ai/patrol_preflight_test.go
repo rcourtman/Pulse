@@ -50,9 +50,12 @@ func newPatrolPreflightTestService(t *testing.T, model string, handler http.Hand
 func TestPatrolPreflightTimeoutIsRouteAware(t *testing.T) {
 	tests := []struct {
 		provider string
+		cfg      *config.AIConfig
 		want     time.Duration
 	}{
-		{provider: config.AIProviderOpenAI, want: 30 * time.Second},
+		{provider: config.AIProviderOpenAI, cfg: &config.AIConfig{OpenAIBaseURL: "http://localhost:8080/v1", RequestTimeoutSeconds: 180}, want: 3 * time.Minute},
+		{provider: config.AIProviderOpenAI, cfg: &config.AIConfig{RequestTimeoutSeconds: 180}, want: 30 * time.Second},
+		{provider: config.AIProviderOllama, cfg: &config.AIConfig{RequestTimeoutSeconds: 180}, want: 3 * time.Minute},
 		{provider: config.AIProviderAnthropic, want: 30 * time.Second},
 		{provider: config.AIProviderCodexSubscription, want: 2 * time.Minute},
 		{provider: config.AIProviderClaudeSubscription, want: 2 * time.Minute},
@@ -61,7 +64,7 @@ func TestPatrolPreflightTimeoutIsRouteAware(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.provider, func(t *testing.T) {
-			if got := patrolPreflightTimeout(tt.provider); got != tt.want {
+			if got := patrolPreflightTimeout(tt.provider, tt.cfg); got != tt.want {
 				t.Fatalf("patrolPreflightTimeout(%q) = %s, want %s", tt.provider, got, tt.want)
 			}
 		})

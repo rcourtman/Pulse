@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,10 +36,8 @@ func TestOllamaClient_ChatStream_Success(t *testing.T) {
 		assert.True(t, req.Stream)
 		assert.Equal(t, "llama3", req.Model)
 		assert.NotEmpty(t, req.Messages)
-		// #1425: Pulse must pass keep_alive so the model unloads shortly
-		// after the request burst ends instead of refreshing Ollama's
-		// 5-minute default TTL on every call.
-		assert.Equal(t, config.DefaultOllamaKeepAlive, req.KeepAlive)
+		// The default inherits the server policy, so keep_alive is omitted.
+		assert.Nil(t, req.KeepAlive)
 
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		w.WriteHeader(http.StatusOK)
@@ -227,8 +224,7 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.False(t, req.Stream)
 		assert.Equal(t, "llama3", req.Model)
-		// #1425: keep_alive must be set on non-streaming Chat too.
-		assert.Equal(t, config.DefaultOllamaKeepAlive, req.KeepAlive)
+		assert.Nil(t, req.KeepAlive)
 		require.Len(t, req.Tools, 1)
 		assert.Equal(t, "function", req.Tools[0].Type)
 		assert.Equal(t, "get_time", req.Tools[0].Function.Name)
@@ -294,6 +290,31 @@ func TestOllamaClient_Chat_UsesConfiguredKeepAlive(t *testing.T) {
 	_, err = client.Chat(context.Background(), ChatRequest{
 		Messages: []Message{{Role: "user", Content: "Hi"}},
 	})
+	require.NoError(t, err)
+}
+
+func TestOllamaClient_ChatStream_UsesConfiguredKeepAlive(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req ollamaRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.True(t, req.Stream)
+		assert.Equal(t, "24h", req.KeepAlive)
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_ = json.NewEncoder(w).Encode(ollamaResponse{
+			Model:   "llama3",
+			Message: ollamaMessageResp{Role: "assistant", Content: "Hello"},
+			Done:    true,
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewOllamaClientWithKeepAlive("llama3", server.URL, "", "", "24h", 0)
+	require.NoError(t, err)
+
+	err = client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(StreamEvent) {})
 	require.NoError(t, err)
 }
 

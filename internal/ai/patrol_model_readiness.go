@@ -91,23 +91,28 @@ type PatrolModelReadinessMetadata struct {
 // operator-triggered advisor run. CacheKey is local-only invalidation state and
 // is intentionally excluded from every API response.
 type PatrolModelReadinessResult struct {
-	ProbeVersion    string                         `json:"probe_version"`
-	Success         bool                           `json:"success"`
-	Status          string                         `json:"status"`
-	Provider        string                         `json:"provider,omitempty"`
-	Model           string                         `json:"model,omitempty"`
-	DurationMs      int64                          `json:"duration_ms"`
-	MaxVerifiedMode string                         `json:"max_verified_mode,omitempty"`
-	Cause           PatrolFailureCause             `json:"cause,omitempty"`
-	Summary         string                         `json:"summary"`
-	Recommendation  string                         `json:"recommendation,omitempty"`
-	Metadata        *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
-	Dimensions      PatrolModelReadinessDimensions `json:"dimensions"`
-	Modes           PatrolModelReadinessModes      `json:"modes"`
-	CacheKey        string                         `json:"-"`
-	inputTokens     int
-	outputTokens    int
-	providerCalls   int
+	ProbeVersion string `json:"probe_version"`
+	Success      bool   `json:"success"`
+	// TransportHealthy records provider/model reachability independently from
+	// PatrolCapable. A model can serve ordinary Assistant chat while failing
+	// Patrol's stricter streaming tool protocol.
+	TransportHealthy bool                           `json:"transport_healthy"`
+	PatrolCapable    bool                           `json:"patrol_capable"`
+	Status           string                         `json:"status"`
+	Provider         string                         `json:"provider,omitempty"`
+	Model            string                         `json:"model,omitempty"`
+	DurationMs       int64                          `json:"duration_ms"`
+	MaxVerifiedMode  string                         `json:"max_verified_mode,omitempty"`
+	Cause            PatrolFailureCause             `json:"cause,omitempty"`
+	Summary          string                         `json:"summary"`
+	Recommendation   string                         `json:"recommendation,omitempty"`
+	Metadata         *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
+	Dimensions       PatrolModelReadinessDimensions `json:"dimensions"`
+	Modes            PatrolModelReadinessModes      `json:"modes"`
+	CacheKey         string                         `json:"-"`
+	inputTokens      int
+	outputTokens     int
+	providerCalls    int
 }
 
 type patrolModelReadinessCache struct {
@@ -373,6 +378,8 @@ func (s *Service) RunPatrolModelReadiness(ctx context.Context, providerName, mod
 		result.Provider = DemoPatrolProvider
 		result.Model = DemoPatrolModel
 		result.Success = true
+		result.TransportHealthy = true
+		result.PatrolCapable = true
 		result.Status = PatrolModelReadinessPass
 		result.MaxVerifiedMode = config.PatrolAutonomyApproval
 		result.Summary = "Demo mode simulated a successful Patrol readiness evaluation."
@@ -476,13 +483,14 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		Summary:    connectionSummary,
 		DurationMs: time.Since(connectionStarted).Milliseconds(),
 	}
+	result.TransportHealthy = true
 
 	streamingProvider, ok := provider.(providers.StreamingProvider)
 	if !ok {
 		result.Cause = PatrolFailureCauseModelUnsupportedTools
-		result.Status = PatrolModelReadinessFail
-		result.Summary = "The selected provider does not expose Patrol's streaming transport."
-		result.Recommendation = "Choose a provider and model that support streaming tool calls."
+		result.Status = PatrolModelReadinessWarning
+		result.Summary = "The provider is healthy for ordinary chat, but this route does not expose Patrol's streaming transport."
+		result.Recommendation = "Use this provider for ordinary Assistant chat, or choose a Patrol route with streaming tool-call support."
 		result.Dimensions.ToolProtocol = PatrolModelReadinessDimension{Status: PatrolModelReadinessFail, Summary: result.Summary}
 		result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeNotSuitable, Summary: result.Summary}
 		result.Modes.Approval = PatrolModeSuitability{Status: PatrolModeNotSuitable, Summary: result.Summary}
@@ -665,10 +673,11 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	}
 
 	result.Success = watchVerified
-	result.Status = PatrolModelReadinessFail
+	result.PatrolCapable = watchVerified
+	result.Status = PatrolModelReadinessWarning
 	result.Cause = PatrolFailureCauseModelToolSupportUnverified
-	result.Summary = "The selected model did not pass Patrol's tool protocol evaluation."
-	result.Recommendation = "Choose a model with reliable streaming tool use, or lower the model's workload and retry."
+	result.Summary = "The provider is healthy for ordinary chat, but the selected model did not demonstrate Patrol's streaming tool protocol."
+	result.Recommendation = "Keep using this route for ordinary Assistant chat, or choose a Patrol model with reliable streaming tool use."
 	if contextStatus == PatrolModelReadinessFail && toolStatus == PatrolModelReadinessPass {
 		result.Cause = PatrolFailureCauseContextQualityFailed
 		result.Summary = "The selected model did not pass Patrol's context-quality evaluation."
@@ -683,6 +692,7 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	if watchVerified {
 		result.Status = PatrolModelReadinessPass
 		result.Cause = PatrolFailureCauseNone
+		result.PatrolCapable = true
 		result.MaxVerifiedMode = config.PatrolAutonomyMonitor
 		result.Summary = "Verified for Watch only on this install."
 		result.Recommendation = "Keep Safe auto-fix and Autopilot disabled until an extended governed canary has passed."

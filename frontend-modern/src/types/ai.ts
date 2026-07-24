@@ -30,6 +30,7 @@ export interface AIProviderDefinition {
   clear_key_field?: string;
   base_url_field?: string;
   requires_api_key: boolean;
+  api_key_optional_with_custom_base_url?: boolean;
   user_configurable: boolean;
   gateway: boolean;
   configured: boolean;
@@ -99,7 +100,7 @@ export interface AISettings {
   patrol_auto_fix?: boolean; // true if Patrol can remediate without approval
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key is set
-  openai_configured: boolean; // true if OpenAI API key is set
+  openai_configured: boolean; // true if an OpenAI key or custom compatible endpoint is set
   openrouter_configured: boolean; // true if OpenRouter API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
   gemini_configured: boolean; // true if Gemini API key is set
@@ -182,6 +183,8 @@ export interface PatrolModeSuitability {
 export interface PatrolModelReadinessSnapshot {
   probe_version: string;
   success: boolean;
+  transport_healthy?: boolean;
+  patrol_capable?: boolean;
   status: PatrolModelReadinessStatus;
   provider?: string;
   model?: string;
@@ -265,6 +268,7 @@ export interface AISettingsUpdateRequest {
   clear_together_key?: boolean; // Clear Together AI API key
   clear_fireworks_key?: boolean; // Clear Fireworks AI API key
   clear_ollama_url?: boolean; // Clear Ollama URL
+  remove_providers?: AIProvider[]; // Remove provider-owned credentials, endpoint, options, and model selections
 
   // Cost controls
   cost_budget_usd_30d?: number;

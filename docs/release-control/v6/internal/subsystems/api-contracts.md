@@ -3459,8 +3459,20 @@ successful targeted check from a queued response alone.
     The Ollama provider payload also owns `ollama_keep_alive` as the canonical
     request keep-alive field: GET and update responses must expose the
     normalized configured value, update requests must reject malformed values,
-    an empty string means omit Ollama `keep_alive`, and stored provider secrets
-    remain masked independently of that runtime option.
+    an empty string is the install default and means omit Ollama `keep_alive`
+    so the server policy is inherited, and stored provider secrets remain
+    masked independently of that runtime option. The shared provider registry
+    marks OpenAI as key-optional only when `openai_base_url` selects a custom
+    compatible endpoint; the official OpenAI route and other hosted providers
+    remain key-required. `configured_providers`, provider tests, and model
+    listing must accept that keyless custom route without emitting an empty
+    Authorization header. Custom model-list results retain every non-empty
+    opaque ID and carry server-authored `provider: "openai"` identity.
+    `remove_providers` is the complete provider lifecycle mutation: it removes
+    provider-owned secrets, endpoints and runtime options, clears selected
+    models for that provider, invalidates model inventory, and disables Pulse
+    Intelligence if the final provider is removed. Legacy `clear_*` fields
+    remain single-credential mutations.
     Discovery scheduling is part of that same AI settings payload contract:
     settings saves from `frontend-modern/src/components/Settings/useAISettingsState.ts`
     must send `discovery_enabled` and `discovery_interval_hours` together as
