@@ -64,14 +64,17 @@ controls as normal product settings.
 36. `pkg/audit/audit.go`
 37. `pkg/audit/async_logger.go`
 38. `pkg/audit/sqlite_logger.go`
-39. `scripts/telemetry_adoption_report.py`
-40. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-41. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-42. `internal/api/agent_exec_token_binding.go`
-43. `internal/logging/logging.go`
-44. `pkg/auth/rbac.go`
-45. `pkg/auth/sqlite_manager.go`
-46. `pkg/server/server.go`
+39. `pkg/audit/signer.go`
+40. `pkg/audit/sqlite_factory.go`
+41. `pkg/extensions/audit_admin.go`
+42. `scripts/telemetry_adoption_report.py`
+43. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+44. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+45. `internal/api/agent_exec_token_binding.go`
+46. `internal/logging/logging.go`
+47. `pkg/auth/rbac.go`
+48. `pkg/auth/sqlite_manager.go`
+49. `pkg/server/server.go`
 
 ## Shared Boundaries
 
@@ -166,6 +169,8 @@ with missing, unknown, or unrelated scopes fail closed.
     storing a brand setting never becomes a free branding bypass.
 16. `internal/cloudcp/auth/magiclink.go` shared with `cloud-paid`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
+18. `pkg/extensions/audit_admin.go` shared with `api-contracts`: the enterprise audit endpoint and canonical store configuration seam is both a security persistence trust boundary and a canonical API extension contract.
+
 ## Extension Points
 
 Catalog edits in `frontend-modern/src/i18n/` that add or promote Patrol-trigger
@@ -755,6 +760,25 @@ were previously written into `audit_events.timestamp`, including Unix seconds,
 SQLite datetime values, and Go wall-clock strings carrying a monotonic
 `m=+...` suffix, so valid historical audit rows cannot make `/api/audit`
 return `query_failed`.
+The runtime now has one canonical persistent audit owner across Community and
+Pro. Enterprise startup may provide directory, signing-key, and explicit
+retention settings through `ResolveAuditStoreConfig`, but it must not open a
+second database, create a competing signing key, replace the canonical list or
+verify handlers, or make storage behavior depend on install history. Store
+startup must transactionally normalize legacy `DATETIME`, textual, and mixed
+timestamp rows into the schema-v2 integer contract before serving reads. A
+malformed legacy row must roll the migration back and surface a sanitized
+`audit_store_unavailable` diagnostic rather than deleting, skipping, or
+silently returning an empty history.
+Canonical reads use stable `(timestamp DESC, id DESC)` ordering, and a paged
+read must derive rows plus total from one SQLite snapshot. Async wrapping must
+retain persistent-reader and signature-verification capabilities. Retention
+`0` is an explicit keep-forever setting, persisted retention is restored at
+startup, the configured cleanup cadence is preserved across the enterprise
+configuration seam, and cleanup must tolerate concurrent writers without
+exposing partial results. Existing core and Pro signing keys remain valid through upgrade, and
+legacy Pro signature encodings remain verifiable while all new writes use the
+canonical signed event representation.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path

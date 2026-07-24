@@ -58,6 +58,10 @@ type BusinessHooks struct {
 	// audit admin endpoints without importing internal API packages.
 	BindAuditAdminEndpoints extensions.BindAuditAdminEndpointsFunc
 
+	// ResolveAuditStoreConfig allows enterprise runtimes to configure the
+	// canonical audit store without opening a competing database connection.
+	ResolveAuditStoreConfig extensions.ResolveAuditStoreConfigFunc
+
 	// BindSSOAdminEndpoints allows enterprise modules to replace or decorate
 	// SSO admin endpoints without importing internal API packages.
 	BindSSOAdminEndpoints extensions.BindSSOAdminEndpointsFunc
@@ -117,6 +121,7 @@ func SetBusinessHooks(h BusinessHooks) {
 
 func runtimeIdentityForBusinessHooks(h BusinessHooks) pkglicensing.RuntimeIdentity {
 	if h.BindAuditAdminEndpoints != nil ||
+		h.ResolveAuditStoreConfig != nil ||
 		h.BindRBACAdminEndpoints != nil ||
 		h.BindSSOAdminEndpoints != nil ||
 		h.BindReportingAdminEndpoints != nil ||
@@ -214,19 +219,31 @@ func Run(ctx context.Context, version string) error {
 
 	// Always capture audit events to SQLite (defense in depth). Read/export endpoints are license-gated.
 	// For the default org, TenantLoggerManager routes to the global logger, so initialize it as SQLite too.
+	globalHooksMu.Lock()
+	resolveAuditStoreConfig := globalHooks.ResolveAuditStoreConfig
+	globalHooksMu.Unlock()
+	resolvedAuditStore := extensions.AuditStoreConfig{}
+	if resolveAuditStoreConfig != nil {
+		resolvedAuditStore = resolveAuditStoreConfig(baseDataDir)
+	}
 	var globalCrypto audit.CryptoEncryptor
 	if cm, err := crypto.NewCryptoManagerAt(baseDataDir); err != nil {
 		log.Warn().Err(err).Str("data_dir", baseDataDir).Msg("Failed to initialize crypto manager for audit signing; signatures will be disabled")
 	} else {
 		globalCrypto = cm
-		if sqliteLogger, err := audit.NewSQLiteLogger(audit.SQLiteLoggerConfig{
-			DataDir:   baseDataDir,
-			CryptoMgr: cm,
-		}); err != nil {
-			log.Warn().Err(err).Str("data_dir", baseDataDir).Msg("Failed to initialize global SQLite audit logger; falling back to console logger")
-		} else {
-			audit.SetLogger(sqliteLogger)
-		}
+	}
+	if sqliteLogger, err := audit.NewSQLiteLogger(audit.SQLiteLoggerConfig{
+		DataDir:             baseDataDir,
+		AuditDir:            resolvedAuditStore.Directory,
+		CryptoMgr:           globalCrypto,
+		SigningKey:          resolvedAuditStore.SigningKey,
+		RetentionDays:       resolvedAuditStore.RetentionDays,
+		RetentionConfigured: resolvedAuditStore.RetentionConfigured,
+		CleanupInterval:     resolvedAuditStore.CleanupInterval,
+	}); err != nil {
+		log.Warn().Err(err).Str("data_dir", baseDataDir).Msg("Failed to initialize global SQLite audit logger; falling back to console logger")
+	} else {
+		audit.SetLogger(sqliteLogger)
 	}
 
 	// Initialize tenant audit manager for per-tenant audit logging
@@ -236,7 +253,10 @@ func Run(ctx context.Context, version string) error {
 			return crypto.NewCryptoManagerAt(dataDir)
 		},
 		// Fallback for environments where per-tenant crypto initialization fails.
-		CryptoMgr: globalCrypto,
+		CryptoMgr:           globalCrypto,
+		RetentionDays:       resolvedAuditStore.RetentionDays,
+		RetentionConfigured: resolvedAuditStore.RetentionConfigured,
+		CleanupInterval:     resolvedAuditStore.CleanupInterval,
 	})
 	api.SetTenantAuditManager(tenantAuditManager)
 	log.Info().Msg("Tenant audit manager initialized")

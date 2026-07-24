@@ -71,6 +71,11 @@ func (l *AsyncLogger) Count(filter QueryFilter) (int, error) {
 	return l.backend.Count(filter)
 }
 
+// QueryPage preserves snapshot-consistent pagination when the backend supports it.
+func (l *AsyncLogger) QueryPage(filter QueryFilter) ([]Event, int, error) {
+	return QueryPage(l.backend, filter)
+}
+
 // GetWebhookURLs delegates to the backend logger.
 func (l *AsyncLogger) GetWebhookURLs() []string {
 	return l.backend.GetWebhookURLs()
@@ -87,6 +92,17 @@ func (l *AsyncLogger) IsPersistentAuditLogger() bool {
 		return false
 	}
 	return IsPersistentLogger(l.backend)
+}
+
+// VerifySignature delegates verification to persistent backends.
+func (l *AsyncLogger) VerifySignature(event Event) bool {
+	if l == nil {
+		return false
+	}
+	verifier, ok := l.backend.(interface {
+		VerifySignature(Event) bool
+	})
+	return ok && verifier.VerifySignature(event)
 }
 
 // Close drains queued events, stops the worker, and closes the backend logger.

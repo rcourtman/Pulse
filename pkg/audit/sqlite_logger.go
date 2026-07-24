@@ -18,9 +18,13 @@ import (
 
 // SQLiteLoggerConfig configures the SQLite audit logger.
 type SQLiteLoggerConfig struct {
-	DataDir       string          // Directory for audit.db
-	CryptoMgr     CryptoEncryptor // For encrypting the signing key (optional)
-	RetentionDays int             // Days to keep events (default: 90, 0 = forever)
+	DataDir             string          // Base data directory; audit data is stored in <DataDir>/audit.
+	AuditDir            string          // Optional exact audit directory, overriding DataDir.
+	CryptoMgr           CryptoEncryptor // For encrypting the signing key (optional).
+	SigningKey          []byte          // Optional externally managed HMAC key.
+	RetentionDays       int             // Days to keep events.
+	RetentionConfigured bool            // Treat RetentionDays=0 as an explicit forever setting.
+	CleanupInterval     time.Duration   // Retention cleanup cadence (default: 24 hours).
 }
 
 // SQLiteLogger implements Logger with persistent SQLite storage and HMAC signing.
@@ -31,6 +35,7 @@ type SQLiteLogger struct {
 	signer          *Signer
 	webhookDelivery *WebhookDelivery
 	retentionDays   int
+	cleanupInterval time.Duration
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
 	closeOnce       sync.Once
@@ -59,6 +64,20 @@ const (
 
 var auditSQLiteRetryDelays = []time.Duration{25 * time.Millisecond, 75 * time.Millisecond}
 var auditSQLiteRetrySleep = time.Sleep
+
+const (
+	auditSchemaVersion               = 2
+	auditTimestampMigrationBatchSize = 512
+	defaultAuditCleanupInterval      = 24 * time.Hour
+)
+
+type auditStoreDataError struct {
+	field string
+}
+
+func (e *auditStoreDataError) Error() string {
+	return "audit store contains an invalid " + e.field + " encoding"
+}
 
 // IsStoreBusyError reports whether an audit store error is a transient SQLite lock.
 func IsStoreBusyError(err error) bool {
@@ -95,6 +114,10 @@ func IsStoreUnavailableError(err error) bool {
 	}
 	if IsStoreBusyError(err) {
 		return false
+	}
+	var dataErr *auditStoreDataError
+	if errors.As(err, &dataErr) {
+		return true
 	}
 
 	var sqliteErr *sqlite.Error
@@ -135,12 +158,15 @@ func withSQLiteRetry(operation string, run func() error) error {
 
 // NewSQLiteLogger creates a new SQLite-backed audit logger.
 func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
-	if cfg.DataDir == "" {
+	if cfg.DataDir == "" && cfg.AuditDir == "" {
 		return nil, fmt.Errorf("data directory is required")
 	}
 
 	// Ensure directory exists
-	auditDir := filepath.Join(cfg.DataDir, "audit")
+	auditDir := cfg.AuditDir
+	if auditDir == "" {
+		auditDir = filepath.Join(cfg.DataDir, "audit")
+	}
 	if err := os.MkdirAll(auditDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create audit directory: %w", err)
 	}
@@ -168,29 +194,45 @@ func NewSQLiteLogger(cfg SQLiteLoggerConfig) (*SQLiteLogger, error) {
 	db.SetConnMaxLifetime(0)
 
 	// Initialize signer
-	signer, err := NewSigner(auditDir, cfg.CryptoMgr)
+	var signer *Signer
+	if len(cfg.SigningKey) > 0 {
+		signer, err = NewSignerWithKey(cfg.SigningKey)
+	} else {
+		signer, err = NewSigner(auditDir, cfg.CryptoMgr)
+	}
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize audit signer: %w", err)
 	}
 
 	retentionDays := cfg.RetentionDays
-	if retentionDays == 0 {
+	if retentionDays == 0 && !cfg.RetentionConfigured {
 		retentionDays = 90 // Default
+	}
+	cleanupInterval := cfg.CleanupInterval
+	if cleanupInterval <= 0 {
+		cleanupInterval = defaultAuditCleanupInterval
 	}
 
 	l := &SQLiteLogger{
-		db:            db,
-		dbPath:        dbPath,
-		signer:        signer,
-		retentionDays: retentionDays,
-		stopChan:      make(chan struct{}),
+		db:              db,
+		dbPath:          dbPath,
+		signer:          signer,
+		retentionDays:   retentionDays,
+		cleanupInterval: cleanupInterval,
+		stopChan:        make(chan struct{}),
 	}
 
 	// Initialize schema
 	if err := l.initSchema(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	}
+	if cfg.RetentionDays == 0 && !cfg.RetentionConfigured {
+		if persisted, ok := l.loadRetentionDays(); ok {
+			l.retentionDays = persisted
+			retentionDays = persisted
+		}
 	}
 
 	l.migrateAutoVacuum()
@@ -238,6 +280,7 @@ func (l *SQLiteLogger) initSchema() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_audit_timestamp_id ON audit_events(timestamp DESC, id DESC);
 	CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_events(event_type);
 	CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_events(user) WHERE user != '';
 	CREATE INDEX IF NOT EXISTS idx_audit_success ON audit_events(success);
@@ -269,7 +312,235 @@ func (l *SQLiteLogger) initSchema() error {
 			time.Now().Unix())
 		return err
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	return l.migrateLegacyTimestamps()
+}
+
+type canonicalAuditRow struct {
+	rowID     int64
+	id        string
+	timestamp int64
+	eventType string
+	user      sql.NullString
+	ip        sql.NullString
+	path      sql.NullString
+	success   int
+	details   sql.NullString
+	signature sql.NullString
+}
+
+func (l *SQLiteLogger) migrateLegacyTimestamps() error {
+	var migrated int
+	err := withSQLiteRetry("migrate_audit_timestamps", func() error {
+		tx, err := l.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		needsRebuild, err := auditEventsNeedRebuild(tx)
+		if err != nil {
+			return err
+		}
+		if !needsRebuild {
+			if _, err := tx.Exec(
+				`INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)`,
+				auditSchemaVersion,
+				time.Now().Unix(),
+			); err != nil {
+				return err
+			}
+			return tx.Commit()
+		}
+
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM audit_events WHERE typeof(timestamp) != 'integer'`,
+		).Scan(&migrated); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DROP TABLE IF EXISTS audit_events_v2`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`
+			CREATE TABLE audit_events_v2 (
+				id TEXT PRIMARY KEY,
+				timestamp INTEGER NOT NULL,
+				event_type TEXT NOT NULL,
+				user TEXT,
+				ip TEXT,
+				path TEXT,
+				success INTEGER NOT NULL,
+				details TEXT,
+				signature TEXT NOT NULL
+			)`); err != nil {
+			return err
+		}
+
+		lastRowID := int64(-1 << 63)
+		for {
+			rows, err := tx.Query(`
+				SELECT rowid, id, timestamp, event_type, user, ip, path, success, details, signature
+				FROM audit_events
+				WHERE rowid > ?
+				ORDER BY rowid
+				LIMIT ?`, lastRowID, auditTimestampMigrationBatchSize)
+			if err != nil {
+				return err
+			}
+
+			batch := make([]canonicalAuditRow, 0, auditTimestampMigrationBatchSize)
+			for rows.Next() {
+				var item canonicalAuditRow
+				var value any
+				if err := rows.Scan(
+					&item.rowID,
+					&item.id,
+					&value,
+					&item.eventType,
+					&item.user,
+					&item.ip,
+					&item.path,
+					&item.success,
+					&item.details,
+					&item.signature,
+				); err != nil {
+					rows.Close()
+					return &auditStoreDataError{field: "row"}
+				}
+				timestamp, err := parseAuditTimestamp(value)
+				if err != nil {
+					rows.Close()
+					return &auditStoreDataError{field: "timestamp"}
+				}
+				if item.id == "" || item.eventType == "" || (item.success != 0 && item.success != 1) {
+					rows.Close()
+					return &auditStoreDataError{field: "row"}
+				}
+				item.timestamp = timestamp.Unix()
+				batch = append(batch, item)
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return err
+			}
+			if err := rows.Close(); err != nil {
+				return err
+			}
+			if len(batch) == 0 {
+				break
+			}
+
+			for _, item := range batch {
+				if _, err := tx.Exec(
+					`INSERT INTO audit_events_v2
+						(id, timestamp, event_type, user, ip, path, success, details, signature)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					item.id,
+					item.timestamp,
+					item.eventType,
+					item.user,
+					item.ip,
+					item.path,
+					item.success,
+					item.details,
+					item.signature.String,
+				); err != nil {
+					return err
+				}
+			}
+			lastRowID = batch[len(batch)-1].rowID
+		}
+
+		if _, err := tx.Exec(`DROP TABLE audit_events`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`ALTER TABLE audit_events_v2 RENAME TO audit_events`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`
+			CREATE INDEX idx_audit_timestamp ON audit_events(timestamp);
+			CREATE INDEX idx_audit_timestamp_id ON audit_events(timestamp DESC, id DESC);
+			CREATE INDEX idx_audit_event_type ON audit_events(event_type);
+			CREATE INDEX idx_audit_user ON audit_events(user) WHERE user != '';
+			CREATE INDEX idx_audit_success ON audit_events(success);
+		`); err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(
+			`INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, ?)`,
+			auditSchemaVersion,
+			time.Now().Unix(),
+		); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return fmt.Errorf("normalize audit timestamp storage: %w", err)
+	}
+	if migrated > 0 {
+		log.Info().
+			Int("rows", migrated).
+			Msg("Normalized legacy audit timestamp storage")
+	}
+	return nil
+}
+
+func auditEventsNeedRebuild(tx *sql.Tx) (bool, error) {
+	rows, err := tx.Query(`PRAGMA table_info(audit_events)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	columns := make(map[string]struct {
+		columnType string
+		notNull    bool
+	})
+	for rows.Next() {
+		var position int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(
+			&position,
+			&name,
+			&columnType,
+			&notNull,
+			&defaultValue,
+			&primaryKey,
+		); err != nil {
+			return false, &auditStoreDataError{field: "schema"}
+		}
+		columns[name] = struct {
+			columnType string
+			notNull    bool
+		}{columnType: strings.ToUpper(columnType), notNull: notNull != 0}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	timestamp, timestampOK := columns["timestamp"]
+	signature, signatureOK := columns["signature"]
+	if !timestampOK || !signatureOK {
+		return false, &auditStoreDataError{field: "schema"}
+	}
+	if timestamp.columnType != "INTEGER" || !timestamp.notNull || !signature.notNull {
+		return true, nil
+	}
+
+	var hasNonInteger int
+	if err := tx.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM audit_events WHERE typeof(timestamp) != 'integer')`,
+	).Scan(&hasNonInteger); err != nil {
+		return false, err
+	}
+	return hasNonInteger != 0, nil
 }
 
 // Log records an audit event with HMAC signature.
@@ -351,6 +622,15 @@ func (l *SQLiteLogger) Query(filter QueryFilter) ([]Event, error) {
 }
 
 func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
+	return queryAuditEvents(l.db, filter)
+}
+
+type auditSQLReader interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func queryAuditEvents(reader auditSQLReader, filter QueryFilter) ([]Event, error) {
 	query := "SELECT id, timestamp, event_type, user, ip, path, success, details, signature FROM audit_events WHERE 1=1"
 	args := []interface{}{}
 
@@ -383,7 +663,7 @@ func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
 		args = append(args, success)
 	}
 
-	query += " ORDER BY timestamp DESC"
+	query += " ORDER BY timestamp DESC, id DESC"
 
 	if filter.Limit > 0 {
 		query += " LIMIT ?"
@@ -398,13 +678,13 @@ func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
 		args = append(args, filter.Offset)
 	}
 
-	rows, err := l.db.Query(query, args...)
+	rows, err := reader.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit events: %w", err)
 	}
 	defer rows.Close()
 
-	var events []Event
+	events := make([]Event, 0)
 	for rows.Next() {
 		var e Event
 		var timestampValue any
@@ -432,6 +712,39 @@ func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
 	}
 
 	return events, rows.Err()
+}
+
+// QueryPage reads events and their matching count from one SQLite snapshot.
+func (l *SQLiteLogger) QueryPage(filter QueryFilter) ([]Event, int, error) {
+	var events []Event
+	var total int
+	err := withSQLiteRetry("query_audit_page", func() error {
+		l.mu.RLock()
+		defer l.mu.RUnlock()
+
+		tx, err := l.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		events, err = queryAuditEvents(tx, filter)
+		if err != nil {
+			return err
+		}
+		countFilter := filter
+		countFilter.Limit = 0
+		countFilter.Offset = 0
+		total, err = countAuditEvents(tx, countFilter)
+		if err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return events, total, nil
 }
 
 func parseAuditTimestamp(value any) (time.Time, error) {
@@ -493,7 +806,7 @@ func parseAuditTimestampString(raw string) (time.Time, error) {
 			return timestamp, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("unsupported timestamp value %q", raw)
+	return time.Time{}, errors.New("unsupported timestamp encoding")
 }
 
 // Count returns the number of events matching the filter.
@@ -517,6 +830,10 @@ func (l *SQLiteLogger) Count(filter QueryFilter) (int, error) {
 }
 
 func (l *SQLiteLogger) countLocked(filter QueryFilter) (int, error) {
+	return countAuditEvents(l.db, filter)
+}
+
+func countAuditEvents(reader auditSQLReader, filter QueryFilter) (int, error) {
 	query := "SELECT COUNT(*) FROM audit_events WHERE 1=1"
 	args := []interface{}{}
 
@@ -550,7 +867,7 @@ func (l *SQLiteLogger) countLocked(filter QueryFilter) (int, error) {
 	}
 
 	var count int
-	err := l.db.QueryRow(query, args...).Scan(&count)
+	err := reader.QueryRow(query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count audit events: %w", err)
 	}
@@ -638,12 +955,26 @@ func (l *SQLiteLogger) loadWebhookURLs() []string {
 	return strings.Split(value, ",")
 }
 
+func (l *SQLiteLogger) loadRetentionDays() (int, bool) {
+	var value string
+	if err := l.db.QueryRow(
+		`SELECT value FROM audit_config WHERE key = 'retention_days'`,
+	).Scan(&value); err != nil {
+		return 0, false
+	}
+	days, err := strconv.Atoi(value)
+	if err != nil || days < 0 {
+		return 0, false
+	}
+	return days, true
+}
+
 // retentionWorker runs periodically to clean up old events.
 func (l *SQLiteLogger) retentionWorker() {
 	defer l.wg.Done()
 
 	// Run at 3 AM daily
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(l.cleanupInterval)
 	defer ticker.Stop()
 
 	// Also run once at startup after a short delay. Keep timer stoppable
@@ -734,43 +1065,79 @@ func (l *SQLiteLogger) reclaimFreePages() {
 
 // cleanupOldEvents deletes events older than the retention period.
 func (l *SQLiteLogger) cleanupOldEvents() {
-	if l.retentionDays <= 0 {
-		return
-	}
+	var deleted int64
+	var retentionDays int
+	err := withSQLiteRetry("cleanup_audit_events", func() error {
+		l.mu.Lock()
+		defer l.mu.Unlock()
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
+		retentionDays = l.retentionDays
+		if retentionDays <= 0 {
+			return nil
+		}
+		cutoff := time.Now().AddDate(0, 0, -retentionDays).Unix()
+		tx, err := l.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
 
-	cutoff := time.Now().AddDate(0, 0, -l.retentionDays).Unix()
-
-	result, err := l.db.Exec(`DELETE FROM audit_events WHERE timestamp < ?`, cutoff)
+		result, err := tx.Exec(`DELETE FROM audit_events WHERE timestamp < ?`, cutoff)
+		if err != nil {
+			return err
+		}
+		deleted, err = result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if deleted > 0 {
+			now := time.Now().UTC().Truncate(time.Second)
+			event := Event{
+				ID:        fmt.Sprintf("cleanup-%d", now.UnixNano()),
+				Timestamp: now,
+				EventType: "audit_cleanup",
+				User:      "system",
+				Success:   true,
+				Details:   fmt.Sprintf("Deleted %d events older than %d days", deleted, retentionDays),
+			}
+			event.Signature = l.signer.Sign(event)
+			if _, err := tx.Exec(`
+				INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
+				VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+				event.ID,
+				event.Timestamp.Unix(),
+				event.EventType,
+				event.User,
+				event.IP,
+				event.Path,
+				event.Details,
+				event.Signature,
+			); err != nil {
+				return err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		l.reclaimFreePages()
+		return nil
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to cleanup old audit events")
 		return
 	}
-
-	deleted, _ := result.RowsAffected()
 	if deleted > 0 {
 		log.Info().
 			Int64("deleted", deleted).
-			Int("retentionDays", l.retentionDays).
+			Int("retentionDays", retentionDays).
 			Msg("Cleaned up old audit events")
-
-		// Log the cleanup as an audit event (without recursion - direct insert)
-		_, _ = l.db.Exec(`
-			INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
-			VALUES (?, ?, 'audit_cleanup', 'system', '', '', 1, ?, '')`,
-			fmt.Sprintf("cleanup-%d", time.Now().Unix()),
-			time.Now().Unix(),
-			fmt.Sprintf("Deleted %d events older than %d days", deleted, l.retentionDays),
-		)
 	}
-
-	l.reclaimFreePages()
 }
 
 // GetRetentionDays returns the current retention period.
 func (l *SQLiteLogger) GetRetentionDays() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	return l.retentionDays
 }
 

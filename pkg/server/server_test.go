@@ -99,6 +99,15 @@ func TestRuntimeIdentityForBusinessHooks(t *testing.T) {
 	}
 
 	got = runtimeIdentityForBusinessHooks(BusinessHooks{
+		ResolveAuditStoreConfig: func(string) extensions.AuditStoreConfig {
+			return extensions.AuditStoreConfig{}
+		},
+	})
+	if got.Build != pkglicensing.RuntimeBuildPro {
+		t.Fatalf("audit store config hook runtime build=%q, want pro", got.Build)
+	}
+
+	got = runtimeIdentityForBusinessHooks(BusinessHooks{
 		ResolveMonitoredSystemAdmissionPolicy: func(context.Context, extensions.MonitoredSystemAdmissionInput) extensions.MonitoredSystemAdmissionDecision {
 			return extensions.MonitoredSystemAdmissionDecision{}
 		},

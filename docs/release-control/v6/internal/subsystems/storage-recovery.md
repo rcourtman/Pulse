@@ -2192,6 +2192,17 @@ request context, while invalid credentials fail before any action audit write.
 It does not add recovery storage, alter `ActionAuditRecord`, or let response
 headers participate in approval identity.
 
+The security audit database remains owned by `security-privacy`, but its
+upgrade and recovery behavior is a shared storage boundary. Startup must
+transactionally rebuild legacy v5 and early-v6 `audit_events` schemas into the
+canonical integer-timestamp schema without partial commits, and malformed or
+corrupt storage must fail closed without replacing history with an empty
+result. Offline backup and restore must preserve both `audit.db` and its
+signing key, while a restored store must retain ordering, tenant filtering,
+signature verification, and explicit retention behavior. Concurrent writes
+and SQLite busy conditions may be retried within bounded limits, but they must
+never weaken snapshot consistency or cause destructive migration fallback.
+
 The Patrol finding lifecycle endpoints advertised in the agent
 capabilities manifest (`acknowledge_finding`, `snooze_finding`,
 `dismiss_finding`, `resolve_finding`) follow the same storage boundary:

@@ -105,9 +105,29 @@ test.describe.serial(
       ).toBeTruthy();
 
       const body = await res.json();
-      expect(body).toHaveProperty('events');
+      expect(Array.isArray(body.events)).toBe(true);
       expect(body).toHaveProperty('total');
       expect(body).toHaveProperty('persistentLogging');
+      expect(typeof body.total).toBe('number');
+      expect(typeof body.persistentLogging).toBe('boolean');
+
+      if (body.persistentLogging && body.events.length > 0) {
+        const signed = body.events.find(
+          (event: { signature?: string }) => event.signature,
+        );
+        expect(signed, 'Persistent audit rows should be signed').toBeTruthy();
+        const verifyRes = await apiRequest(
+          page,
+          `/api/audit/${signed.id}/verify`,
+        );
+        expect(
+          verifyRes.ok(),
+          `Audit signature verification failed: ${verifyRes.status()}`,
+        ).toBeTruthy();
+        const verification = await verifyRes.json();
+        expect(verification.available).toBe(true);
+        expect(verification.verified).toBe(true);
+      }
     });
 
     test('audit export endpoint returns a file', async ({ page }, testInfo) => {
@@ -117,12 +137,6 @@ test.describe.serial(
       await ensureJourneyReady(page);
 
       const res = await apiRequest(page, '/api/audit/export?format=json');
-
-      // 501 = licensed but no persistent logger (OSS backend).
-      if (res.status() === 501) {
-        // This is expected on community/dev instances.
-        return;
-      }
 
       expect(
         res.ok(),
@@ -146,11 +160,6 @@ test.describe.serial(
       await ensureJourneyReady(page);
 
       const res = await apiRequest(page, '/api/audit/summary');
-
-      // 501 = licensed but no persistent logger.
-      if (res.status() === 501) {
-        return;
-      }
 
       expect(
         res.ok(),

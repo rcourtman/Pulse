@@ -39,10 +39,10 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			query: `SELECT id, timestamp, event_type, user, ip, path, success, details, signature
 				FROM audit_events WHERE 1=1
 				AND timestamp >= ? AND timestamp <= ?
-				ORDER BY timestamp DESC
+				ORDER BY timestamp DESC, id DESC
 				LIMIT ?`,
 			args:      []any{int64(0), int64(9999999999), 100},
-			wantIndex: "idx_audit_timestamp",
+			wantIndex: "idx_audit_timestamp_id",
 		},
 		{
 			name: "query by event_type + timestamp",
@@ -50,7 +50,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				FROM audit_events WHERE 1=1
 				AND timestamp >= ? AND timestamp <= ?
 				AND event_type = ?
-				ORDER BY timestamp DESC
+				ORDER BY timestamp DESC, id DESC
 				LIMIT ?`,
 			args: []any{int64(0), int64(9999999999), "auth_login", 100},
 			// Planner may use idx_audit_event_type or idx_audit_timestamp —
@@ -62,7 +62,7 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 				FROM audit_events WHERE 1=1
 				AND timestamp >= ? AND timestamp <= ?
 				AND user = ?
-				ORDER BY timestamp DESC
+				ORDER BY timestamp DESC, id DESC
 				LIMIT ?`,
 			args: []any{int64(0), int64(9999999999), "admin", 100},
 			// Planner may use idx_audit_user or idx_audit_timestamp.
@@ -160,6 +160,7 @@ func newAuditPlanTestDB(t *testing.T) *sql.DB {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_audit_timestamp_id ON audit_events(timestamp DESC, id DESC);
 		CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_events(event_type);
 		CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_events(user) WHERE user != '';
 		CREATE INDEX IF NOT EXISTS idx_audit_success ON audit_events(success);

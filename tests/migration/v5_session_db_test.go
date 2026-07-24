@@ -449,7 +449,7 @@ func TestV5DataDir_AuditDBSchemaAutoMigration(t *testing.T) {
 	assert.Equal(t, "admin", events[0].User)
 	assert.True(t, events[0].Success)
 
-	// Verify the schema_version table exists and has version 1
+	// Verify the schema_version table records canonical timestamp storage.
 	dbPath := filepath.Join(dataDir, "audit", "audit.db")
 	dsn := dbPath + "?" + url.Values{
 		"_pragma": []string{"busy_timeout(5000)"},
@@ -460,7 +460,7 @@ func TestV5DataDir_AuditDBSchemaAutoMigration(t *testing.T) {
 
 	var version int
 	require.NoError(t, db.QueryRow("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1").Scan(&version))
-	assert.Equal(t, 1, version, "schema_version should be 1")
+	assert.Equal(t, 2, version, "schema_version should be 2")
 }
 
 // TestV5DataDir_AuditDBPreExistingData verifies that the v6 audit logger
@@ -484,14 +484,15 @@ func TestV5DataDir_AuditDBPreExistingData(t *testing.T) {
 	_, err = rawDB.Exec(`
 		CREATE TABLE IF NOT EXISTS audit_events (
 			id TEXT PRIMARY KEY,
-			timestamp INTEGER NOT NULL,
+			timestamp DATETIME NOT NULL,
 			event_type TEXT NOT NULL,
 			user TEXT,
 			ip TEXT,
 			path TEXT,
 			success INTEGER NOT NULL,
 			details TEXT,
-			signature TEXT NOT NULL
+			signature TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS audit_config (
 			key TEXT PRIMARY KEY,
@@ -502,14 +503,22 @@ func TestV5DataDir_AuditDBPreExistingData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert v5 audit events
-	ts := time.Now().Unix()
+	ts := time.Now().UTC().Truncate(time.Second)
 	_, err = rawDB.Exec(`INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"v5-event-001", ts, "login", "admin", "192.168.1.1", "/api/auth/login", 1, "successful login", "v5-sig-placeholder")
 	require.NoError(t, err)
 	_, err = rawDB.Exec(`INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		"v5-event-002", ts-3600, "config_change", "admin", "10.0.0.1", "/api/settings", 1, "changed polling interval", "v5-sig-placeholder-2")
+		"v5-event-002",
+		ts.Add(-time.Hour).Format("2006-01-02 15:04:05 -0700 MST")+" m=+0.009025344",
+		"config_change",
+		"admin",
+		"10.0.0.1",
+		"/api/settings",
+		1,
+		"changed polling interval",
+		nil)
 	require.NoError(t, err)
 	rawDB.Close()
 
@@ -533,6 +542,7 @@ func TestV5DataDir_AuditDBPreExistingData(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, events2, 1)
 	assert.Equal(t, "config_change", events2[0].EventType)
+	assert.True(t, events2[0].Timestamp.Equal(ts.Add(-time.Hour)))
 
 	// Verify v6 can write new events alongside v5 data
 	newEvent := audit.Event{
@@ -550,4 +560,13 @@ func TestV5DataDir_AuditDBPreExistingData(t *testing.T) {
 	allEvents, err := logger.Query(audit.QueryFilter{Limit: 100})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(allEvents), 3, "v5 + v6 events must coexist")
+
+	schemaDB, err := sql.Open("sqlite", dsn)
+	require.NoError(t, err)
+	defer schemaDB.Close()
+	var timestampType string
+	require.NoError(t, schemaDB.QueryRow(`
+		SELECT type FROM pragma_table_info('audit_events') WHERE name = 'timestamp'
+	`).Scan(&timestampType))
+	assert.Equal(t, "INTEGER", timestampType)
 }

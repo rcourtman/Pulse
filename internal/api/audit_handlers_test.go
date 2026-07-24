@@ -306,11 +306,11 @@ func TestHandleListAuditEvents(t *testing.T) {
 		t.Errorf("expected total 2, got %v", resp["total"])
 	}
 
-	// Test parse error for startTime/endTime
+	// Invalid time filters fail closed instead of silently widening the query.
 	req = httptest.NewRequest(http.MethodGet, "/api/audit?startTime=invalid&endTime=invalid", nil)
 	rec = httptest.NewRecorder()
 	handler.HandleListAuditEvents(rec, req)
-	assert.Equal(t, http.StatusOK, rec.Code) // It just ignores invalid times
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	// Test method not allowed
 	req = httptest.NewRequest(http.MethodPost, "/api/audit", nil)
@@ -532,7 +532,7 @@ func TestHandleListAuditEvents_PaginationDefaults(t *testing.T) {
 	setAuditLogger(t, logger)
 	handler := NewAuditHandlers()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/audit?limit=0&offset=-4", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleListAuditEvents(rec, req)
 
@@ -544,6 +544,15 @@ func TestHandleListAuditEvents_PaginationDefaults(t *testing.T) {
 	}
 	if logger.lastQuery.Offset != 0 {
 		t.Fatalf("offset = %d, want 0", logger.lastQuery.Offset)
+	}
+
+	for _, query := range []string{"?limit=0", "?offset=-4"} {
+		req = httptest.NewRequest(http.MethodGet, "/api/audit"+query, nil)
+		rec = httptest.NewRecorder()
+		handler.HandleListAuditEvents(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("query %q status = %d, want 400", query, rec.Code)
+		}
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/audit?limit=5000&offset=10", nil)
@@ -561,6 +570,103 @@ func TestHandleListAuditEvents_PaginationDefaults(t *testing.T) {
 	}
 	if logger.lastCount.Limit != 0 || logger.lastCount.Offset != 0 {
 		t.Fatalf("count filter must clear pagination, got limit=%d offset=%d", logger.lastCount.Limit, logger.lastCount.Offset)
+	}
+}
+
+func TestHandleListAuditEvents_RejectsMalformedFilters(t *testing.T) {
+	setAuditLogger(t, &testAuditLogger{})
+	handler := NewAuditHandlers()
+	tests := []struct {
+		query string
+		code  string
+	}{
+		{query: "limit=abc", code: "invalid_limit"},
+		{query: "limit=0", code: "invalid_limit"},
+		{query: "offset=-1", code: "invalid_offset"},
+		{query: "startTime=not-a-time", code: "invalid_start_time"},
+		{query: "endTime=not-a-time", code: "invalid_end_time"},
+		{
+			query: "startTime=2026-07-05T12%3A00%3A00Z&endTime=2026-07-05T11%3A00%3A00Z",
+			code:  "invalid_time_range",
+		},
+		{query: "success=maybe", code: "invalid_success"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/audit?"+tt.query, nil)
+			rec := httptest.NewRecorder()
+			handler.HandleListAuditEvents(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", rec.Code)
+			}
+			var payload struct {
+				Code string `json:"code"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode error: %v", err)
+			}
+			if payload.Code != tt.code {
+				t.Fatalf("code = %q, want %q", payload.Code, tt.code)
+			}
+		})
+	}
+}
+
+func TestHandleListAuditEvents_EmptyEventsIsArray(t *testing.T) {
+	setAuditLogger(t, &testAuditLogger{events: nil})
+	req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+	rec := httptest.NewRecorder()
+	NewAuditHandlers().HandleListAuditEvents(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var payload struct {
+		Events json.RawMessage `json:"events"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if string(payload.Events) != "[]" {
+		t.Fatalf("events = %s, want []", payload.Events)
+	}
+}
+
+func TestHandleListAuditEvents_TenantDataIsolation(t *testing.T) {
+	previousManager := GetTenantAuditManager()
+	manager := audit.NewTenantLoggerManager(t.TempDir(), &audit.SQLiteLoggerFactory{
+		RetentionDays:       0,
+		RetentionConfigured: true,
+	})
+	SetTenantAuditManager(manager)
+	t.Cleanup(func() {
+		manager.Close()
+		SetTenantAuditManager(previousManager)
+	})
+
+	for orgID, eventID := range map[string]string{"org-a": "event-a", "org-b": "event-b"} {
+		if err := manager.Log(orgID, "login", orgID, "127.0.0.1", "/api/auth", true, eventID); err != nil {
+			t.Fatalf("log %s event: %v", orgID, err)
+		}
+	}
+
+	handler := NewAuditHandlers()
+	for orgID, wantID := range map[string]string{"org-a": "event-a", "org-b": "event-b"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/audit", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		rec := httptest.NewRecorder()
+		handler.HandleListAuditEvents(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want 200", orgID, rec.Code)
+		}
+		var payload struct {
+			Events []audit.Event `json:"events"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode %s response: %v", orgID, err)
+		}
+		if len(payload.Events) != 1 || payload.Events[0].Details != wantID {
+			t.Fatalf("%s events = %#v, want only %q", orgID, payload.Events, wantID)
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package audit
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 )
 
 // SQLiteLoggerFactory creates SQLite-backed audit loggers for tenant databases.
@@ -24,6 +25,12 @@ type SQLiteLoggerFactory struct {
 
 	// RetentionDays controls how long audit events are retained (0 uses SQLiteLogger defaults).
 	RetentionDays int
+
+	// RetentionConfigured treats RetentionDays=0 as an explicit forever setting.
+	RetentionConfigured bool
+
+	// CleanupInterval controls the retention cleanup cadence.
+	CleanupInterval time.Duration
 }
 
 func (f *SQLiteLoggerFactory) CreateLogger(dbPath string) (Logger, error) {
@@ -34,8 +41,10 @@ func (f *SQLiteLoggerFactory) CreateLogger(dbPath string) (Logger, error) {
 	dataDir := filepath.Dir(dbPath)
 
 	cfg := SQLiteLoggerConfig{
-		DataDir:       dataDir,
-		RetentionDays: f.RetentionDays,
+		DataDir:             dataDir,
+		RetentionDays:       f.RetentionDays,
+		RetentionConfigured: f.RetentionConfigured,
+		CleanupInterval:     f.CleanupInterval,
 	}
 
 	if f.CryptoMgrForDataDir != nil {

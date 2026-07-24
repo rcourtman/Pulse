@@ -67,64 +67,20 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	query := r.URL.Query()
-
-	filter := audit.QueryFilter{
-		EventType: query.Get("event"),
-		User:      query.Get("user"),
+	filter, validationErr := auditEventListFilterFromRequest(r)
+	if validationErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message, nil)
+		return
 	}
 
-	filter.Limit = defaultAuditEventListLimit
-	if limitStr := query.Get("limit"); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
-			filter.Limit = min(limit, maxAuditEventListLimit)
-		}
-	}
-
-	// Parse offset
-	if offsetStr := query.Get("offset"); offsetStr != "" {
-		if offset, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
-			filter.Offset = offset
-		}
-	}
-
-	// Parse startTime
-	if startStr := query.Get("startTime"); startStr != "" {
-		if t, err := time.Parse(time.RFC3339, startStr); err == nil {
-			filter.StartTime = &t
-		}
-	}
-
-	// Parse endTime
-	if endStr := query.Get("endTime"); endStr != "" {
-		if t, err := time.Parse(time.RFC3339, endStr); err == nil {
-			filter.EndTime = &t
-		}
-	}
-
-	// Parse success
-	if successStr := query.Get("success"); successStr != "" {
-		success := successStr == "true"
-		filter.Success = &success
-	}
-
-	// Query events from the current logger
-	events, err := logger.Query(filter)
+	events, totalCount, err := audit.QueryPage(logger, filter)
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Msg("audit list: query failed")
 		writeAuditReadErrorResponse(w, err, "Failed to query audit events")
 		return
 	}
-
-	countFilter := filter
-	countFilter.Limit = 0
-	countFilter.Offset = 0
-
-	totalCount, err := logger.Count(countFilter)
-	if err != nil {
-		log.Error().Err(err).Str("org_id", orgID).Msg("audit list: count failed")
-		writeAuditReadErrorResponse(w, err, "Failed to count audit events")
-		return
+	if events == nil {
+		events = make([]audit.Event, 0)
 	}
 
 	response := map[string]interface{}{
@@ -135,6 +91,80 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+type auditQueryValidationError struct {
+	code    string
+	message string
+}
+
+func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *auditQueryValidationError) {
+	query := r.URL.Query()
+	filter := audit.QueryFilter{
+		EventType: query.Get("event"),
+		User:      query.Get("user"),
+		Limit:     defaultAuditEventListLimit,
+	}
+
+	if query.Has("limit") {
+		limit, err := strconv.Atoi(query.Get("limit"))
+		if err != nil || limit <= 0 {
+			return audit.QueryFilter{}, &auditQueryValidationError{
+				code:    "invalid_limit",
+				message: "Invalid limit; expected a positive integer",
+			}
+		}
+		filter.Limit = min(limit, maxAuditEventListLimit)
+	}
+	if query.Has("offset") {
+		offset, err := strconv.Atoi(query.Get("offset"))
+		if err != nil || offset < 0 {
+			return audit.QueryFilter{}, &auditQueryValidationError{
+				code:    "invalid_offset",
+				message: "Invalid offset; expected a non-negative integer",
+			}
+		}
+		filter.Offset = offset
+	}
+	if query.Has("startTime") {
+		start, err := time.Parse(time.RFC3339, query.Get("startTime"))
+		if err != nil {
+			return audit.QueryFilter{}, &auditQueryValidationError{
+				code:    "invalid_start_time",
+				message: "Invalid startTime; expected an RFC3339 timestamp",
+			}
+		}
+		filter.StartTime = &start
+	}
+	if query.Has("endTime") {
+		end, err := time.Parse(time.RFC3339, query.Get("endTime"))
+		if err != nil {
+			return audit.QueryFilter{}, &auditQueryValidationError{
+				code:    "invalid_end_time",
+				message: "Invalid endTime; expected an RFC3339 timestamp",
+			}
+		}
+		filter.EndTime = &end
+	}
+	if filter.StartTime != nil && filter.EndTime != nil && !filter.StartTime.Before(*filter.EndTime) {
+		return audit.QueryFilter{}, &auditQueryValidationError{
+			code:    "invalid_time_range",
+			message: "startTime must be before endTime",
+		}
+	}
+	if query.Has("success") {
+		rawSuccess := query.Get("success")
+		if rawSuccess != "true" && rawSuccess != "false" {
+			return audit.QueryFilter{}, &auditQueryValidationError{
+				code:    "invalid_success",
+				message: "Invalid success; expected a boolean",
+			}
+		}
+		success := rawSuccess == "true"
+		filter.Success = &success
+	}
+
+	return filter, nil
 }
 
 // HandleVerifyAuditEvent handles GET /api/audit/{id}/verify

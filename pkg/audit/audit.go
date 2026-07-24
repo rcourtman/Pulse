@@ -65,6 +65,31 @@ type Logger interface {
 	Close() error
 }
 
+type pageLogger interface {
+	QueryPage(filter QueryFilter) ([]Event, int, error)
+}
+
+// QueryPage returns a page and matching count from one storage snapshot when
+// the logger supports it. Other logger implementations retain the legacy
+// Query-then-Count contract.
+func QueryPage(logger Logger, filter QueryFilter) ([]Event, int, error) {
+	if pager, ok := logger.(pageLogger); ok {
+		return pager.QueryPage(filter)
+	}
+	events, err := logger.Query(filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	countFilter := filter
+	countFilter.Limit = 0
+	countFilter.Offset = 0
+	total, err := logger.Count(countFilter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return events, total, nil
+}
+
 type persistentAuditLogger interface {
 	IsPersistentAuditLogger() bool
 }

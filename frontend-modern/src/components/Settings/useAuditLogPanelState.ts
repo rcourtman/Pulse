@@ -128,7 +128,11 @@ export const useAuditLogPanelState = () => {
   );
   const pageSize = () => normalizeAuditPageSize(storedPageSize());
   const setPageSize = (value: number): void => {
-    setStoredPageSize(normalizeAuditPageSize(value));
+    const normalized = normalizeAuditPageSize(value);
+    setStoredPageSize(normalized);
+    setPageOffset(0);
+    setPageInput('');
+    void fetchAuditEvents({ limit: normalized, offset: 0 });
   };
   const [pageOffset, setPageOffset] = createLocalStorageNumberSignal(
     STORAGE_KEYS.AUDIT_PAGE_OFFSET,
@@ -154,6 +158,8 @@ export const useAuditLogPanelState = () => {
   const [verifyControllers, setVerifyControllers] = createSignal<Record<string, AbortController>>(
     {},
   );
+  let auditRequestController: AbortController | null = null;
+  let auditRequestGeneration = 0;
 
   const auditLoggingEnabled = createMemo(
     () => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'),
@@ -176,6 +182,10 @@ export const useAuditLogPanelState = () => {
   const upgradeActionLabel = () => (paidRuntimeRequired() ? 'Download Pulse Pro' : 'View plans');
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
+    auditRequestController?.abort();
+    auditRequestController = null;
+    const requestGeneration = ++auditRequestGeneration;
+
     if (!auditLoggingEnabled()) {
       setEvents([]);
       setTotalEvents(0);
@@ -187,6 +197,8 @@ export const useAuditLogPanelState = () => {
 
     const limit = options?.limit ?? pageSize();
     const offset = options?.offset ?? pageOffset();
+    const controller = new AbortController();
+    auditRequestController = controller;
 
     setLoading(true);
     setError(null);
@@ -204,7 +216,10 @@ export const useAuditLogPanelState = () => {
       if (successFilter() === 'success') params.set('success', 'true');
       if (successFilter() === 'failed') params.set('success', 'false');
 
-      const response = await apiFetch(`/api/audit?${params.toString()}`);
+      const response = await apiFetch(`/api/audit?${params.toString()}`, {
+        signal: controller.signal,
+      });
+      if (requestGeneration !== auditRequestGeneration) return;
       if (response.status === 402) {
         setEvents([]);
         setTotalEvents(0);
@@ -220,28 +235,43 @@ export const useAuditLogPanelState = () => {
       }
 
       const data: AuditResponse = await response.json();
-      setEvents(data.events || []);
-      setIsPersistent(data.persistentLogging);
-      setTotalEvents(data.total ?? 0);
+      if (requestGeneration !== auditRequestGeneration) return;
+      if (
+        !Array.isArray(data.events) ||
+        typeof data.total !== 'number' ||
+        typeof data.persistentLogging !== 'boolean'
+      ) {
+        throw new Error('Audit log returned an invalid response');
+      }
 
       if (data.total && offset >= data.total) {
         const maxOffset = Math.max(0, Math.floor((data.total - 1) / limit) * limit);
         if (maxOffset !== offset) {
           setPageOffset(maxOffset);
-          void fetchAuditEvents({ limit, offset: maxOffset });
+          await fetchAuditEvents({ limit, offset: maxOffset });
           return;
         }
       }
+
+      setEvents(data.events);
+      setIsPersistent(data.persistentLogging);
+      setTotalEvents(data.total);
 
       if (data.persistentLogging && autoVerifyEnabled()) {
         const verificationLimit = autoVerifyLimit();
         if (verificationLimit <= 0) return;
         setTimeout(() => {
-          if (!isMounted()) return;
+          if (!isMounted() || requestGeneration !== auditRequestGeneration) return;
           void verifyAllEvents({ limit: verificationLimit, showToast: false });
         }, 0);
       }
     } catch (err) {
+      if (
+        requestGeneration !== auditRequestGeneration ||
+        (err as { name?: string })?.name === 'AbortError'
+      ) {
+        return;
+      }
       const message = getAuditLogFetchErrorMessage(err);
       if (typeof message === 'string' && /feature not included in license/i.test(message)) {
         setEvents([]);
@@ -250,10 +280,16 @@ export const useAuditLogPanelState = () => {
         setError(null);
         return;
       }
+      setEvents([]);
+      setTotalEvents(0);
+      setIsPersistent(false);
       setError(message);
       showWarning('Audit Log Error', message);
     } finally {
-      setLoading(false);
+      if (requestGeneration === auditRequestGeneration) {
+        auditRequestController = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -509,10 +545,12 @@ export const useAuditLogPanelState = () => {
 
   const clearFilters = () => {
     const hadFilters = activeFilterCount() > 0;
-    setEventFilter('');
-    setUserFilter('');
-    setSuccessFilter('all');
-    setVerificationFilter('all');
+    updateSearchParam((params) => {
+      params.delete('event');
+      params.delete('user');
+      params.delete('success');
+      params.delete('verification');
+    });
     if (hadFilters) {
       showSuccess('Audit filters cleared');
     }
@@ -610,6 +648,9 @@ export const useAuditLogPanelState = () => {
       return;
     }
     if (!hasFeature('audit_logging')) {
+      auditRequestController?.abort();
+      auditRequestController = null;
+      auditRequestGeneration += 1;
       setEvents([]);
       setTotalEvents(0);
       setIsPersistent(false);
@@ -672,6 +713,9 @@ export const useAuditLogPanelState = () => {
   onCleanup(() => {
     setIsMounted(false);
     setCancelVerifyAll(true);
+    auditRequestController?.abort();
+    auditRequestController = null;
+    auditRequestGeneration += 1;
     if (userFilterDebounceHandle !== null) {
       window.clearTimeout(userFilterDebounceHandle);
       userFilterDebounceHandle = null;

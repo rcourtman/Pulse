@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -45,8 +47,8 @@ func NewSigner(dataDir string, cryptoMgr CryptoEncryptor) (*Signer, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(key) != 32 {
-			return nil, fmt.Errorf("invalid audit signing key length: got %d, want 32", len(key))
+		if len(key) < 32 {
+			return nil, fmt.Errorf("invalid audit signing key length: got %d, want at least 32", len(key))
 		}
 		if migratedPlaintext {
 			rewritten, err := cryptoMgr.Encrypt(key)
@@ -85,13 +87,29 @@ func NewSigner(dataDir string, cryptoMgr CryptoEncryptor) (*Signer, error) {
 	return &Signer{key: key}, nil
 }
 
+// NewSignerWithKey creates a signer backed by externally managed key material.
+func NewSignerWithKey(key []byte) (*Signer, error) {
+	if len(key) < 32 {
+		return nil, fmt.Errorf("invalid audit signing key length: got %d, want at least 32", len(key))
+	}
+	return &Signer{key: append([]byte(nil), key...)}, nil
+}
+
 func loadAuditSigningKey(cryptoMgr CryptoEncryptor, data []byte) ([]byte, bool, error) {
 	key, err := cryptoMgr.Decrypt(data)
 	if err == nil {
 		return key, false, nil
 	}
-	if len(data) == 32 {
-		return append([]byte(nil), data...), true, nil
+	plaintext := bytes.TrimSpace(data)
+	if len(plaintext) == 32 {
+		return append([]byte(nil), plaintext...), true, nil
+	}
+	if len(plaintext) == 64 {
+		if _, decodeErr := hex.DecodeString(string(plaintext)); decodeErr == nil {
+			// The former Pro store used the printable hex value itself as the
+			// HMAC key. Preserve those bytes while encrypting the file in place.
+			return append([]byte(nil), plaintext...), true, nil
+		}
 	}
 	return nil, false, fmt.Errorf("failed to decrypt audit signing key: %w", err)
 }
@@ -116,8 +134,23 @@ func (s *Signer) Verify(event Event) bool {
 		return false
 	}
 
-	expected := s.Sign(event)
-	return hmac.Equal([]byte(expected), []byte(event.Signature))
+	for _, canonical := range []string{
+		s.canonicalForm(event),
+		s.legacyUnixCanonicalForm(event),
+		s.legacyTimeCanonicalForm(event),
+	} {
+		expected := s.signCanonical(canonical)
+		if hmac.Equal([]byte(expected), []byte(event.Signature)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Signer) signCanonical(canonical string) string {
+	mac := hmac.New(sha256.New, s.key)
+	mac.Write([]byte(canonical))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // canonicalForm creates a deterministic string representation of an event for signing.
@@ -135,6 +168,28 @@ func (s *Signer) canonicalForm(event Event) string {
 		event.IP + "|" +
 		event.Path + "|" +
 		success + "|" +
+		event.Details
+}
+
+func (s *Signer) legacyUnixCanonicalForm(event Event) string {
+	return event.ID + "|" +
+		strconv.FormatInt(event.Timestamp.Unix(), 10) + "|" +
+		event.EventType + "|" +
+		event.User + "|" +
+		event.IP + "|" +
+		event.Path + "|" +
+		strconv.FormatBool(event.Success) + "|" +
+		event.Details
+}
+
+func (s *Signer) legacyTimeCanonicalForm(event Event) string {
+	return event.ID + "|" +
+		event.Timestamp.UTC().Format(time.RFC3339Nano) + "|" +
+		event.EventType + "|" +
+		event.User + "|" +
+		event.IP + "|" +
+		event.Path + "|" +
+		strconv.FormatBool(event.Success) + "|" +
 		event.Details
 }
 

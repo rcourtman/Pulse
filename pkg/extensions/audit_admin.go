@@ -3,6 +3,7 @@ package extensions
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 )
@@ -28,6 +29,20 @@ type AuditAdminRuntime struct {
 	ValidateWebhookURL func(rawURL string) error
 	WriteError         WriteAuditErrorFunc
 }
+
+// AuditStoreConfig customizes the canonical SQLite audit store for a runtime.
+// SigningKey is externally managed key material and must never be logged.
+type AuditStoreConfig struct {
+	Directory           string
+	SigningKey          []byte
+	RetentionDays       int
+	RetentionConfigured bool
+	CleanupInterval     time.Duration
+}
+
+// ResolveAuditStoreConfigFunc resolves runtime-specific audit persistence
+// settings after the server has established its canonical base data directory.
+type ResolveAuditStoreConfigFunc func(baseDataDir string) AuditStoreConfig
 
 // BindAuditAdminEndpointsFunc allows enterprise modules to bind replacement
 // audit admin endpoints while retaining access to default handlers.

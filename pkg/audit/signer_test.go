@@ -136,6 +136,41 @@ func TestNewSigner_MigratesPlaintextKeyFile(t *testing.T) {
 	}
 }
 
+func TestNewSigner_MigratesLegacyProHexKeyFile(t *testing.T) {
+	tempDir := t.TempDir()
+	crypto := taggedMockCryptoManager{}
+	legacyKey := []byte("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	keyPath := filepath.Join(tempDir, ".audit-signing.key")
+	if err := os.WriteFile(keyPath, append(append([]byte(nil), legacyKey...), '\n'), 0o600); err != nil {
+		t.Fatalf("write legacy Pro key: %v", err)
+	}
+
+	signer, err := NewSigner(tempDir, crypto)
+	if err != nil {
+		t.Fatalf("migrate legacy Pro key: %v", err)
+	}
+	expected, err := NewSignerWithKey(legacyKey)
+	if err != nil {
+		t.Fatalf("create expected signer: %v", err)
+	}
+	event := Event{
+		ID:        "legacy-key",
+		Timestamp: time.Date(2026, 7, 5, 10, 30, 0, 0, time.UTC),
+		EventType: "startup",
+		Success:   true,
+	}
+	if signer.Sign(event) != expected.Sign(event) {
+		t.Fatal("legacy Pro key bytes changed during migration")
+	}
+	reloaded, err := NewSigner(tempDir, crypto)
+	if err != nil {
+		t.Fatalf("reload migrated legacy Pro key: %v", err)
+	}
+	if signer.Sign(event) != reloaded.Sign(event) {
+		t.Fatal("migrated legacy Pro key did not survive restart")
+	}
+}
+
 func TestNewSignerWithoutCrypto(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -250,6 +285,32 @@ func TestSignerVerify(t *testing.T) {
 	noSigEvent.Signature = ""
 	if signer.Verify(noSigEvent) {
 		t.Error("Verify should return false for empty signature")
+	}
+}
+
+func TestSignerVerifyAcceptsLegacyProCanonicalForms(t *testing.T) {
+	signer, err := NewSignerWithKey([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("NewSignerWithKey: %v", err)
+	}
+	event := Event{
+		ID:        "legacy-event",
+		Timestamp: time.Date(2026, 7, 5, 10, 30, 0, 123456789, time.UTC),
+		EventType: "startup",
+		User:      "admin",
+		IP:        "127.0.0.1",
+		Path:      "/api/audit",
+		Success:   true,
+		Details:   "legacy",
+	}
+
+	event.Signature = signer.signCanonical(signer.legacyUnixCanonicalForm(event))
+	if !signer.Verify(event) {
+		t.Fatal("current Pro Unix/boolean signature did not verify")
+	}
+	event.Signature = signer.signCanonical(signer.legacyTimeCanonicalForm(event))
+	if !signer.Verify(event) {
+		t.Fatal("v5 Pro RFC3339/boolean signature did not verify")
 	}
 }
 

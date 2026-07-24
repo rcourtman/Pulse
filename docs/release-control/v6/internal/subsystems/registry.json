@@ -1102,6 +1102,14 @@
       ]
     },
     {
+      "path": "pkg/extensions/audit_admin.go",
+      "rationale": "the enterprise audit endpoint and canonical store configuration seam is both a security persistence trust boundary and a canonical API extension contract",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
       "path": "pulse-mobile:config/mobile-api-surface.json",
       "rationale": "the Pulse Mobile consumer minimum and released-line probe inventory are both API compatibility and relay runtime boundaries",
       "subsystems": [
@@ -2485,6 +2493,7 @@
         "pkg/aicontracts/investigation.go",
         "pkg/aicontracts/orchestrator_deps.go",
         "pkg/extensions/ai_autofix.go",
+        "pkg/extensions/audit_admin.go",
         "pkg/pulsecli/actions.go",
         "pkg/pulsecli/api_client.go",
         "pkg/pulsecli/fleet.go",
@@ -2844,7 +2853,9 @@
             "match_prefixes": [
               "internal/api/"
             ],
-            "match_files": [],
+            "match_files": [
+              "pkg/extensions/audit_admin.go"
+            ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [
               "frontend-modern/src/api/__tests__/"
@@ -2853,11 +2864,13 @@
               "frontend-modern/src/types/api.ts",
               "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
+              "internal/api/audit_handlers_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
               "internal/api/host_agent_removal_lifecycle_integration_test.go",
               "internal/api/metadata_handlers_test.go",
-              "internal/api/patrol_autopilot_test.go"
+              "internal/api/patrol_autopilot_test.go",
+              "pulse-enterprise:test/extensions_contract_test.go"
             ]
           },
           {
@@ -4779,7 +4792,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx"
             ]
           },
           {
@@ -6552,6 +6566,7 @@
         "pkg/audit/sqlite_logger.go",
         "pkg/auth/rbac.go",
         "pkg/auth/sqlite_manager.go",
+        "pkg/extensions/audit_admin.go",
         "pkg/server/server.go",
         "pkg/server/telemetry_pulse_intelligence.go",
         "pkg/tlsutil/fingerprint.go",
@@ -6677,7 +6692,9 @@
             "match_prefixes": [
               "pkg/audit/"
             ],
-            "match_files": [],
+            "match_files": [
+              "pkg/extensions/audit_admin.go"
+            ],
             "allow_same_subsystem_tests": true,
             "test_prefixes": [],
             "exact_files": [
@@ -6690,7 +6707,9 @@
               "pkg/audit/sqlite_logger_test.go",
               "pkg/audit/tenant_logger_manager_test.go",
               "pkg/audit/webhook_delivery_test.go",
-              "pkg/audit/webhook_validation_test.go"
+              "pkg/audit/webhook_validation_test.go",
+              "pulse-enterprise:internal/enterpriseruntime/runtime_test.go",
+              "pulse-enterprise:test/extensions_contract_test.go"
             ]
           },
           {
@@ -6779,7 +6798,8 @@
               "internal/api/rbac_tenant_provider_test.go",
               "internal/api/security_regression_test.go",
               "pkg/auth/rbac_manager_test.go",
-              "pkg/auth/sqlite_manager_test.go"
+              "pkg/auth/sqlite_manager_test.go",
+              "pkg/server/server_test.go"
             ]
           }
         ],

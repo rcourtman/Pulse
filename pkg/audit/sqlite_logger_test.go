@@ -46,6 +46,39 @@ func TestNewSQLiteLoggerDefaultRetention(t *testing.T) {
 	}
 }
 
+func TestNewSQLiteLoggerExplicitForeverRetention(t *testing.T) {
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:             t.TempDir(),
+		CryptoMgr:           newMockCryptoManager(),
+		RetentionDays:       0,
+		RetentionConfigured: true,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+	defer logger.Close()
+	if logger.GetRetentionDays() != 0 {
+		t.Fatalf("retention days = %d, want forever (0)", logger.GetRetentionDays())
+	}
+}
+
+func TestNewSQLiteLoggerPreservesConfiguredCleanupInterval(t *testing.T) {
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:             t.TempDir(),
+		RetentionDays:       30,
+		RetentionConfigured: true,
+		CleanupInterval:     6 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+	defer logger.Close()
+
+	if logger.cleanupInterval != 6*time.Hour {
+		t.Fatalf("cleanup interval = %s, want 6h", logger.cleanupInterval)
+	}
+}
+
 func TestIsPersistentLoggerUnwrapsAsyncConsoleBackend(t *testing.T) {
 	console := NewConsoleLogger()
 	if IsPersistentLogger(console) {
@@ -563,6 +596,33 @@ func TestSQLiteLoggerSetRetentionDays(t *testing.T) {
 	logger.SetRetentionDays(60)
 	if logger.GetRetentionDays() != 60 {
 		t.Errorf("Expected retention days 60, got %d", logger.GetRetentionDays())
+	}
+}
+
+func TestSQLiteLoggerLoadsPersistedRetentionDays(t *testing.T) {
+	dataDir := t.TempDir()
+	first, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:   dataDir,
+		CryptoMgr: newMockCryptoManager(),
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+	first.SetRetentionDays(45)
+	if err := first.Close(); err != nil {
+		t.Fatalf("close first logger: %v", err)
+	}
+
+	restarted, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:   dataDir,
+		CryptoMgr: newMockCryptoManager(),
+	})
+	if err != nil {
+		t.Fatalf("restart logger: %v", err)
+	}
+	defer restarted.Close()
+	if restarted.GetRetentionDays() != 45 {
+		t.Fatalf("persisted retention days = %d, want 45", restarted.GetRetentionDays())
 	}
 }
 

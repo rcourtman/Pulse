@@ -49,6 +49,7 @@ singular `availability` field remains only a compatibility projection.
 4. `internal/api/alerts.go`
    4a. `internal/api/attention_handlers.go`
 5. `internal/api/activity_audit_handlers.go`
+   5a. `pkg/extensions/audit_admin.go`
 6. `internal/api/actions.go`
    5a. `internal/api/action_executor.go`
    5b. `internal/api/docker_container_action_executor.go`
@@ -1757,9 +1758,10 @@ payload shape change when the portal presents compact client rows.
 88. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 89. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
 90. `pkg/extensions/ai_autofix.go` shared with `ai-runtime`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
-91. `pulse-mobile:config/mobile-api-surface.json` shared with `relay-runtime`: the Pulse Mobile consumer minimum and released-line probe inventory are both API compatibility and relay runtime boundaries.
-92. `pulse-mobile:src/generated/coreCompatibility.ts` shared with `relay-runtime`: the generated mobile route, pairing, and push projection is both an API consumer contract and relay runtime boundary.
-91. `scripts/generate-pulse-intelligence-docs.go` shared with `ai-runtime`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
+91. `pkg/extensions/audit_admin.go` shared with `security-privacy`: the enterprise audit endpoint and canonical store configuration seam is both a security persistence trust boundary and a canonical API extension contract.
+92. `pulse-mobile:config/mobile-api-surface.json` shared with `relay-runtime`: the Pulse Mobile consumer minimum and released-line probe inventory are both API compatibility and relay runtime boundaries.
+93. `pulse-mobile:src/generated/coreCompatibility.ts` shared with `relay-runtime`: the generated mobile route, pairing, and push projection is both an API consumer contract and relay runtime boundary.
+94. `scripts/generate-pulse-intelligence-docs.go` shared with `ai-runtime`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
     Update-plan responses own the structured readiness verdict for server
     updater capability, rollback support, agent continuity, v5 agent migration
     transport security, and agent reporting token scope. That verdict is part
@@ -1988,8 +1990,17 @@ a new API state machine, queue contract, or verification-accounting field.
    semantics from `pkg/audit`: transient store pressure returns `503`
    `audit_store_busy` with `Retry-After`, unavailable or corrupt audit storage
    returns `503` `audit_store_unavailable`, and unrelated query failures remain
-   `query_failed`. List pagination must stay bounded so audit history reads
-   cannot become unbounded table scans through API parameters.
+   `query_failed`. List response sizes must stay bounded while valid
+   non-negative offsets remain able to traverse the retained audit history.
+   Invalid
+   booleans, timestamps, limits, and offsets fail with a stable `400`
+   validation response instead of being ignored. Successful list responses
+   always encode `events` as an array, including an empty history, and obtain
+   `events` plus `total` from one storage snapshot with stable
+   `(timestamp, id)` ordering. Enterprise endpoint binders may extend export,
+   summary, and webhook behavior, but list and verification replacements must
+   delegate these canonical handlers so Pro cannot discard or remap the
+   storage contract.
    Unified action planning is part of that same API-first action
    contract: `POST /api/actions/plan` must route through
    `internal/api/actions.go`, `internal/actionlifecycle/service.go`,

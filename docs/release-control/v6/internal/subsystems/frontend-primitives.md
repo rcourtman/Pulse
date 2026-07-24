@@ -3834,6 +3834,12 @@ through `apiErrorFromResponse` and render customer-facing copy from
 `frontend-modern/src/utils/auditLogPresentation.ts`; the settings shell may
 own refresh and pagination state, but it must not show raw `Internal Server
 Error` strings or unbounded page sizes as local hook behavior.
+Audit-log page loads are latest-request-wins. Changing the page size atomically
+resets the offset and starts one replacement request, and any superseded
+request is aborted or ignored so an older response cannot overwrite the new
+page. A failed load clears previously rendered events and totals, and a
+successful payload must contain an event array rather than treating `null` or
+an absent list as an empty audit history.
 That shared filter-option primitive is also the canonical owner for default
 `All <scope>` option wording wherever a product surface exposes filter selects
 or segmented filter choices. Workloads filters, storage source
