@@ -2642,7 +2642,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 	// Still in window, check if we've exceeded the limit
 	if limit.sentCount >= WebhookRateLimitMax {
 		log.Warn().
-			Str("webhookURL", webhookURL).
+			Str("webhookURL", RedactWebhookURLSecrets(webhookURL)).
 			Int("sentCount", limit.sentCount).
 			Dur("window", WebhookRateLimitWindow).
 			Msg("webhook rate limit exceeded, dropping request")

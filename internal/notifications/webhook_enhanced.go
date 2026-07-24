@@ -210,7 +210,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 	if !n.checkWebhookRateLimit(webhook.URL) {
 		log.Warn().
 			Str("webhook", webhook.Name).
-			Str("url", webhook.URL).
+			Str("url", RedactWebhookURLSecrets(webhook.URL)).
 			Msg("webhook request dropped due to rate limiting")
 		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}

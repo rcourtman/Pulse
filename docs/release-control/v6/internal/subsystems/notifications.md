@@ -65,6 +65,19 @@ the resolved alerts, while retry, failure, cancellation, and dead-letter state
 remain inspectable in the queue and audit records. Destination identities are
 stable opaque routing identities and must not expose credentials.
 
+4. Webhook URLs are credential-bearing (Gotify, ntfy and Telegram all
+   carry tokens in the path or query), so every surface that emits one
+   must pass it through `RedactWebhookURLSecrets` first. This covers logs
+   and returned errors alike, including the rate-limit drop paths in
+   `checkWebhookRateLimit` and the enhanced sender, which are the sites
+   most likely to fire repeatedly for a misconfigured destination.
+   Redaction is proven by capturing log output rather than by reading the
+   call sites, because a missed site is invisible to a source scan.
+   Regression coverage: `TestWebhookRateLimitLogsRedactURLSecrets` and
+   `TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken` in
+   `internal/notifications/webhook_url_redaction_test.go`.
+
+
 ## Current State
 
 This subsystem now makes email, webhook, Apprise, queueing, and delivery

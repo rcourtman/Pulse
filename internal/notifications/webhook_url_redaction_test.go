@@ -1,10 +1,14 @@
 package notifications
 
 import (
+	"bytes"
 	"errors"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestRedactWebhookURLSecrets(t *testing.T) {
@@ -52,5 +56,41 @@ func TestRedactWebhookTransportErrorPreservesBehaviorWithoutToken(t *testing.T) 
 	}
 	if !errors.Is(redacted, cause) {
 		t.Fatal("redacted transport error no longer unwraps to its original cause")
+	}
+}
+
+// TestWebhookRateLimitLogsRedactURLSecrets captures the actual log output of
+// the rate-limit drop paths. Both of these logged the raw webhook URL until
+// this test existed: the redaction sweep converted five call sites but missed
+// checkWebhookRateLimit and the enhanced sender, and no test asserted log
+// content, so a token in the URL still reached the logs on the one event most
+// likely to fire repeatedly.
+func TestWebhookRateLimitLogsRedactURLSecrets(t *testing.T) {
+	const secret = "gotify-secret"
+	webhookURL := "https://gotify.example/message?token=" + secret
+
+	var captured bytes.Buffer
+	original := log.Logger
+	log.Logger = zerolog.New(&captured)
+	t.Cleanup(func() { log.Logger = original })
+
+	nm := &NotificationManager{
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+
+	// Exhaust the window so the drop path logs.
+	for range WebhookRateLimitMax + 2 {
+		nm.checkWebhookRateLimit(webhookURL)
+	}
+
+	out := captured.String()
+	if !strings.Contains(out, "rate limit exceeded") {
+		t.Fatalf("expected the rate-limit drop to be logged, got %q", out)
+	}
+	if strings.Contains(out, secret) {
+		t.Fatalf("webhook token leaked into logs: %q", out)
+	}
+	if !strings.Contains(out, "token=REDACTED") {
+		t.Fatalf("expected redacted url in logs, got %q", out)
 	}
 }
