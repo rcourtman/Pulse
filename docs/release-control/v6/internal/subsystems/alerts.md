@@ -61,6 +61,17 @@ own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
 worst reading a disk can publish, which let a spent SSD read critical on the
 Physical Disks surface while raising no alert at all.
 
+Threshold sections are keyed by override identity, not by resource type. The
+Virtualization Hosts section reads and writes overrides on the bare resource id,
+while the Machines section resolves through the agent-derived identity
+candidates. A resource that appears in both sections therefore has two different
+override keys, and a threshold saved from the wrong one is written where
+alerting never reads it, leaving the machine on the global default with nothing
+on screen to explain it. A resource must appear in exactly one threshold section,
+the one whose identity alerting honours. Standalone Pulse-agent machines belong
+to Machines, so the Virtualization Hosts section is fed by provider-owned
+virtualization nodes rather than by every resource of type `agent`.
+
 ## Canonical Files
 
 1. `internal/alerts/specs/types.go`

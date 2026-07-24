@@ -31,6 +31,14 @@ inlining the boundary at each call site. `isPhysicalDiskWearoutReported` mirrors
 helpers gate on it, so a wearout reading cannot be classified one way in a
 status label and another way in the cell beside it.
 
+Feature surfaces classify resources through the shared classifier that already
+owns the distinction rather than re-deriving it from a raw resource type.
+`isPulseAgentPlatformResource` is the single authority for whether a resource is
+a standalone Pulse-agent machine or a provider-owned node, and the standalone
+page, platform navigation, the resource drawer and the alerts threshold sections
+all read it. Selecting by bare `type === 'agent'` collapses that distinction and
+puts the same machine on two surfaces that do not share an identity.
+
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`
