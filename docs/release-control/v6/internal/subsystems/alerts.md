@@ -51,6 +51,16 @@ start, clear, or match a custom metric filter. Alert units remain MiB/s at the
 threshold boundary (`bytes/s / 1024 / 1024`); that display/threshold conversion
 must not be applied to the upstream cumulative-counter divisor.
 
+
+Disk wearout is an evidence boundary, not a plain threshold. The field carries
+two distinct absent states and one real zero: `-1` is the canonical unreported
+sentinel, and `0` is genuine evidence only from a device that reports endurance
+at all. Rotational disks never do, so a `0` from one is absence. Alert
+evaluation must gate on `storagehealth.WearoutReported` rather than carrying its
+own inline boundary. A wearout arm keyed on `> 0` silently exempts the single
+worst reading a disk can publish, which let a spent SSD read critical on the
+Physical Disks surface while raising no alert at all.
+
 ## Canonical Files
 
 1. `internal/alerts/specs/types.go`

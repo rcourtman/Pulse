@@ -2133,3 +2133,33 @@ func TestViews_HostsIncludesVMwareInfrastructureResources(t *testing.T) {
 		t.Fatalf("MachineID() = %q, want uuid-host-1", got)
 	}
 }
+
+// A view over a resource that carries no physical-disk facet has no endurance
+// evidence to publish. Returning the struct zero value here announced "0%
+// endurance remaining" for a disk that reported nothing, which the presentation
+// and alert layers then treated as a spent disk.
+func TestView_PhysicalDiskViewWearoutIsUnreportedWithoutFacet(t *testing.T) {
+	nilView := NewPhysicalDiskView(nil)
+	if got := nilView.Wearout(); got != WearoutUnreported {
+		t.Errorf("nil resource wearout = %d, want %d", got, WearoutUnreported)
+	}
+
+	facetlessView := NewPhysicalDiskView(&Resource{Type: ResourceTypePhysicalDisk})
+	if got := facetlessView.Wearout(); got != WearoutUnreported {
+		t.Errorf("resource without a physical-disk facet wearout = %d, want %d", got, WearoutUnreported)
+	}
+}
+
+// A real reading still passes through untouched, including a genuine 0 from a
+// device that does report endurance.
+func TestView_PhysicalDiskViewWearoutPassesThroughRealReadings(t *testing.T) {
+	for _, wearout := range []int{0, 1, 42, 100} {
+		v := NewPhysicalDiskView(&Resource{
+			Type:         ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{DiskType: "ssd", Wearout: wearout},
+		})
+		if got := v.Wearout(); got != wearout {
+			t.Errorf("wearout = %d, want %d", got, wearout)
+		}
+	}
+}

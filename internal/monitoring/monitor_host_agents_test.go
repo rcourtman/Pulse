@@ -4206,3 +4206,14 @@ func TestRemoveHostAgentRetainsLastKnownPlatform(t *testing.T) {
 		t.Fatalf("removed record platform = %q, want OS-name fallback when Platform was never reported", got["removed-osname-host"])
 	}
 }
+
+// Wearout 0 means no endurance remaining, so the absent case has to carry the
+// unreported sentinel rather than the struct zero value. The only production
+// call site filters nil views, but a zero-valued disk escaping this helper
+// would publish a spent disk that never existed.
+func TestPhysicalDiskFromReadStateView_AbsentViewReportsUnknownWearout(t *testing.T) {
+	disk := physicalDiskFromReadStateView(nil)
+	if disk.Wearout != unifiedresources.WearoutUnreported {
+		t.Fatalf("absent view wearout = %d, want %d", disk.Wearout, unifiedresources.WearoutUnreported)
+	}
+}

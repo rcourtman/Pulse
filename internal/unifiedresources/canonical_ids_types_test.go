@@ -501,3 +501,15 @@ func TestAgentMemoryMetaSerializesReclaimableCache(t *testing.T) {
 		t.Fatalf("cache should be omitted when unreported, got %s", empty)
 	}
 }
+
+// WearoutUnreported is the one sentinel every layer agrees on. models.PhysicalDisk
+// and PhysicalDiskMeta both document wearout as "0-100, -1 unavailable", so the
+// constant must stay pinned to -1 rather than drifting onto a real percentage.
+func TestWearoutUnreportedSentinelIsNegativeOne(t *testing.T) {
+	if WearoutUnreported != -1 {
+		t.Fatalf("WearoutUnreported = %d, want -1", WearoutUnreported)
+	}
+	if WearoutUnreported >= 0 {
+		t.Fatal("the unreported sentinel must not fall inside the real 0-100 reporting range")
+	}
+}

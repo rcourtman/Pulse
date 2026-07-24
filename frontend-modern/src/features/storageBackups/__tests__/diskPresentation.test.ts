@@ -13,6 +13,7 @@ import {
   PHYSICAL_DISK_HEADER_DEVICE_CLASS,
   PHYSICAL_DISK_HEADER_DISK_CLASS,
   PHYSICAL_DISK_HEADER_LIFE_CLASS,
+  PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS,
   PHYSICAL_DISK_NAME_TEXT_CLASS,
   PHYSICAL_DISK_SOURCE_BADGE_CLASS,
   PHYSICAL_DISK_TABLE_CLASS,
@@ -34,6 +35,7 @@ import {
   getPhysicalDiskSourceBadgePresentation,
   hasUnraidPhysicalDiskFaultSignal,
   hasPhysicalDiskSmartWarning,
+  isPhysicalDiskWearoutReported,
   isUnraidPhysicalDisk,
   matchesPhysicalDiskSearch,
   normalizePhysicalDiskFacetFilter,
@@ -441,5 +443,40 @@ describe('diskPresentation', () => {
         matchesNode: () => true,
       }).map((disk) => disk.id),
     ).toEqual([]);
+  });
+});
+
+describe('wearout evidence boundary', () => {
+  // Mirrors storagehealth.WearoutReported on the server. The Physical Disks
+  // view and the alert path have to agree about the same disk, so both gate on
+  // this predicate rather than each picking their own boundary.
+  it('treats -1 as unreported and a real 0 as evidence only from endurance-reporting devices', () => {
+    expect(isPhysicalDiskWearoutReported(makeDiskData({ wearout: -1, type: 'ssd' }))).toBe(false);
+    expect(isPhysicalDiskWearoutReported(makeDiskData({ wearout: 0, type: 'ssd' }))).toBe(true);
+    expect(isPhysicalDiskWearoutReported(makeDiskData({ wearout: 0, type: 'NVMe' }))).toBe(true);
+    expect(isPhysicalDiskWearoutReported(makeDiskData({ wearout: 0, type: 'hdd' }))).toBe(false);
+    expect(isPhysicalDiskWearoutReported(makeDiskData({ wearout: 0, type: '' }))).toBe(false);
+    expect(isPhysicalDiskWearoutReported(makeDiskData({ wearout: 42, type: 'hdd' }))).toBe(true);
+  });
+
+  it('flags a spent SSD but leaves a rotational zero alone', () => {
+    expect(
+      getPhysicalDiskHealthStatus(makeDiskData({ health: 'PASSED', wearout: 0, type: 'ssd' })).label,
+    ).toBe('Needs Attention');
+    expect(
+      getPhysicalDiskHealthStatus(makeDiskData({ health: 'PASSED', wearout: 0, type: 'hdd' })).label,
+    ).toBe('Healthy');
+  });
+
+  it('mutes the life column when there is no endurance evidence', () => {
+    expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: -1, type: 'ssd' }))).toBe(
+      PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS,
+    );
+    expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 0, type: 'hdd' }))).toBe(
+      PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS,
+    );
+    expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 0, type: 'ssd' }))).toBe(
+      'text-red-600 dark:text-red-400',
+    );
   });
 });

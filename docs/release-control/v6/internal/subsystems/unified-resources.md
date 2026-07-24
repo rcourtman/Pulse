@@ -104,6 +104,16 @@ NVMe percentage-used conversion is shared with storage risk: negative values
 remain unknown, while values above 100 clamp to exhausted before remaining
 life is derived.
 
+
+`WearoutUnreported` is the canonical absent-value sentinel for
+`PhysicalDiskMeta.Wearout` and is pinned to `-1`. Views and adapters must return
+it whenever a resource carries no physical-disk facet; returning the Go zero
+value publishes "no endurance remaining" for a disk that reported nothing, and
+downstream risk, presentation, and alert consumers cannot recover the
+distinction afterwards. The unified risk projection gates wearout on
+`storagehealth.WearoutReported` so its verdict and the server-side alert verdict
+about the same disk cannot diverge.
+
 ## Canonical Files
 
 1. `internal/unifiedresources/types.go`

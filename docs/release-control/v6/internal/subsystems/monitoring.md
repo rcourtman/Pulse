@@ -226,6 +226,16 @@ Cluster display names are not global identity: config consolidation requires
 overlapping endpoint authority, and different provider instances with the same
 cluster/member names stay distinct in node and storage identity.
 
+
+Storage risk assessment owns the wearout evidence boundary for every consumer.
+`storagehealth.WearoutReported` is the single authority for whether a wearout
+reading is evidence: `-1` is unreported, a positive value is always evidence,
+and `0` is evidence only from a non-rotational device. Callers must not
+recompute that boundary inline. Read-state projection of physical disks must
+also preserve the unreported sentinel rather than collapsing an absent facet
+onto the struct zero value, because `0` is a real reading meaning no endurance
+remains.
+
 ## Canonical Files
 
 1. `internal/monitoring/monitor.go`

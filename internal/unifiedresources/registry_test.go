@@ -5783,3 +5783,41 @@ func TestResourceRegistryClampsExhaustedSMARTWearout(t *testing.T) {
 		t.Fatalf("exhausted media risk = %+v, want critical", risk)
 	}
 }
+
+// The unified-resource risk projection and the server-side alert path must
+// reach the same verdict about the same disk. Both now gate wearout on
+// storagehealth.WearoutReported instead of each carrying its own inline
+// boundary, which is how a spent SSD came to read critical in the UI while the
+// alert path stayed silent.
+func TestPhysicalDiskRiskProjectionUsesSharedWearoutPredicate(t *testing.T) {
+	tests := []struct {
+		name         string
+		diskType     string
+		wearout      int
+		wantCritical bool
+	}{
+		{"spent ssd", "ssd", 0, true},
+		{"spent nvme", "nvme", 0, true},
+		{"rotational zero reports no endurance", "hdd", 0, false},
+		{"untyped zero reports no endurance", "", 0, false},
+		{"unreported sentinel", "ssd", -1, false},
+		{"healthy ssd", "ssd", 90, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meta := &PhysicalDiskMeta{Health: "PASSED", DiskType: tt.diskType, Wearout: tt.wearout}
+
+			assessment := physicalDiskAssessmentFromMeta(meta)
+			gotCritical := assessment.Level == storagehealth.RiskCritical
+			if gotCritical != tt.wantCritical {
+				t.Fatalf("risk level = %q, want critical=%v", assessment.Level, tt.wantCritical)
+			}
+
+			// The projection must agree with the predicate the alert path uses.
+			if storagehealth.WearoutReported(meta.Wearout, meta.DiskType) != (tt.wearout >= 0 && (tt.wearout > 0 || tt.diskType == "ssd" || tt.diskType == "nvme")) {
+				t.Fatal("projection and shared predicate disagree about whether this reading is evidence")
+			}
+		})
+	}
+}

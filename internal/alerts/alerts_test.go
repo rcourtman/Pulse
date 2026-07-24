@@ -19474,3 +19474,68 @@ func TestRecentlyResolvedCapsNewestEntries(t *testing.T) {
 		t.Fatal("newest recently resolved entry was pruned")
 	}
 }
+
+// A disk reporting 0% endurance remaining is the worst reading the field can
+// carry, and it used to be the one reading that never alerted: the wearout arm
+// required Wearout > 0, so a spent SSD fell through as if it had reported
+// nothing while the Physical Disks view showed it critical. Alerting now gates
+// on the same storagehealth.WearoutReported predicate the risk projection uses.
+func TestCheckDiskHealthAlertsOnSpentSSD(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	disk := proxmox.Disk{
+		DevPath: "/dev/nvme0n1",
+		Model:   "Generic NVMe 1TB",
+		Serial:  "SPENT0000001",
+		Type:    "nvme",
+		Health:  "PASSED",
+		Wearout: 0,
+		Size:    1000204886016,
+	}
+
+	m.CheckDiskHealth("test-instance", "pve-node1", disk)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if !testHasActiveAlert(t, m, "disk-wearout-test-instance-pve-node1-/dev/nvme0n1") {
+		t.Fatal("an SSD reporting 0% life remaining must raise a wearout alert")
+	}
+}
+
+// -1 is the unreported sentinel and a rotational 0 means the device reports no
+// endurance at all. Neither is evidence, so neither may raise an alert.
+func TestCheckDiskHealthDoesNotAlertOnAbsentWearoutEvidence(t *testing.T) {
+	tests := []struct {
+		name     string
+		diskType string
+		wearout  int
+	}{
+		{"unreported sentinel on an nvme", "nvme", -1},
+		{"unreported sentinel on a rotational disk", "hdd", -1},
+		{"rotational disk reporting zero", "hdd", 0},
+		{"untyped disk reporting zero", "", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestManager(t)
+			m.ClearActiveAlerts()
+
+			m.CheckDiskHealth("test-instance", "pve-node1", proxmox.Disk{
+				DevPath: "/dev/sda",
+				Model:   "Generic Disk",
+				Serial:  "ABSENT000001",
+				Type:    tt.diskType,
+				Health:  "PASSED",
+				Wearout: tt.wearout,
+			})
+
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+			if testHasActiveAlert(t, m, "disk-wearout-test-instance-pve-node1-/dev/sda") {
+				t.Fatalf("absent wearout evidence (%s) must not raise a wearout alert", tt.name)
+			}
+		})
+	}
+}

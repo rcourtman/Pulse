@@ -23,6 +23,14 @@
 Own reusable frontend primitives and canonical page-shell patterns so feature
 work extends shared components instead of creating new local variants.
 
+
+Presentation helpers that mirror a server-side classification must name the
+predicate they mirror and expose it as a single exported function rather than
+inlining the boundary at each call site. `isPhysicalDiskWearoutReported` mirrors
+`storagehealth.WearoutReported`, and both the health-status and life-column
+helpers gate on it, so a wearout reading cannot be classified one way in a
+status label and another way in the cell beside it.
+
 ## Canonical Files
 
 1. `frontend-modern/src/components/shared/`

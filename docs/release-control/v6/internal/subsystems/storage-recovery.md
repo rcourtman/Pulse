@@ -50,6 +50,21 @@ Search includes both presentation and native diagnostics, duplicate display
 values are allowed, and clearing an override deterministically restores the
 current native node name.
 
+
+Physical-disk to node association is evidence-directional. A disk reported by a
+host agent carries no Proxmox scope, so its instance is empty and the matching
+node name is the only evidence available; that match must stand. A disk that
+does carry a Proxmox instance belongs only to a node in the same instance and
+must not attach to a node outside it, including a node with no instance at all.
+Requiring an instance on both sides drops every agent-reported disk off the
+Proxmox node it physically lives on, emptying the node filter, breaking per-node
+grouping, and stranding metric target resolution.
+
+The Physical Disks surface reads wearout through the same evidence boundary the
+server applies. `-1` is unreported and renders as a muted placeholder, a `0`
+from an endurance-reporting device is a spent disk and renders critical, and a
+`0` from a rotational or untyped disk is absence rather than a fault.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`

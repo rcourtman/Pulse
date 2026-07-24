@@ -436,3 +436,76 @@ func TestNormalizeHealth(t *testing.T) {
 		}
 	}
 }
+
+// --- WearoutReported ---
+
+// Wearout has two distinct absent states and one real zero. -1 is the
+// canonical unreported sentinel, and 0 is genuine evidence only from a device
+// that reports endurance at all. Rotational disks never do, so a 0 from one is
+// absence rather than a spent disk. Every consumer gates on this single
+// predicate so the UI and the alert path cannot disagree about the same disk.
+func TestWearoutReported(t *testing.T) {
+	tests := []struct {
+		name     string
+		wearout  int
+		diskType string
+		expected bool
+	}{
+		{"unreported sentinel on an ssd", -1, "ssd", false},
+		{"unreported sentinel on an nvme", -1, "nvme", false},
+		{"unreported sentinel with no type", -1, "", false},
+		{"spent ssd reports zero", 0, "ssd", true},
+		{"spent nvme reports zero", 0, "nvme", true},
+		{"spent nvme reports zero regardless of case", 0, "NVMe", true},
+		{"rotational zero is absence, not a spent disk", 0, "hdd", false},
+		{"untyped zero is absence, not a spent disk", 0, "", false},
+		{"positive reading is evidence whatever the type", 5, "hdd", true},
+		{"full life is evidence", 100, "ssd", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WearoutReported(tt.wearout, tt.diskType); got != tt.expected {
+				t.Errorf("WearoutReported(%d, %q) = %v, want %v", tt.wearout, tt.diskType, got, tt.expected)
+			}
+		})
+	}
+}
+
+// A spent SSD must reach the critical arm. Before the sentinel was unified,
+// WearoutKnown was computed inline and a 0 reading fell through as if the disk
+// had said nothing.
+func TestAssessPhysicalDisk_SpentSSDIsCritical(t *testing.T) {
+	assessment := AssessPhysicalDisk(models.PhysicalDisk{
+		Health:  "PASSED",
+		Type:    "ssd",
+		Wearout: 0,
+	})
+	if assessment.Level != RiskCritical {
+		t.Fatalf("spent SSD should assess critical, got %q", assessment.Level)
+	}
+}
+
+func TestAssessPhysicalDisk_UnreportedWearoutIsNotRisk(t *testing.T) {
+	for _, diskType := range []string{"ssd", "hdd", ""} {
+		assessment := AssessPhysicalDisk(models.PhysicalDisk{
+			Health:  "PASSED",
+			Type:    diskType,
+			Wearout: -1,
+		})
+		if assessment.Level == RiskCritical {
+			t.Errorf("unreported wearout on %q must not assess critical", diskType)
+		}
+	}
+}
+
+func TestAssessPhysicalDisk_RotationalZeroIsNotRisk(t *testing.T) {
+	assessment := AssessPhysicalDisk(models.PhysicalDisk{
+		Health:  "PASSED",
+		Type:    "hdd",
+		Wearout: 0,
+	})
+	if assessment.Level == RiskCritical {
+		t.Error("a rotational disk reporting 0 wearout reports no endurance at all and must not assess critical")
+	}
+}

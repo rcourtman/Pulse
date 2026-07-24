@@ -49,9 +49,9 @@ type Sample struct {
 
 func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 	sample := Sample{
-		Model:       disk.Model,
-		Health:      disk.Health,
-		Temperature: disk.Temperature,
+		Model:        disk.Model,
+		Health:       disk.Health,
+		Temperature:  disk.Temperature,
 		Wearout:      disk.Wearout,
 		WearoutKnown: WearoutReported(disk.Wearout, disk.Type),
 	}

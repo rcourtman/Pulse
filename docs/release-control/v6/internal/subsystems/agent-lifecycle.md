@@ -47,6 +47,13 @@ decoded JSON byte ceilings, derives the 80% early-warning boundaries, and
 generates the operator-facing limit description consumed by server ingress
 and every supported `pulse-agent` release target built from this source.
 
+
+Physical-disk evidence collected by a host agent must survive projection back
+into monitoring's models. Absent evidence has to carry its declared sentinel
+rather than a zero value that reads as a real measurement: an absent
+physical-disk view projects `Wearout` as `unifiedresources.WearoutUnreported`,
+never `0`, which would announce a spent disk the agent never reported.
+
 ## Canonical Files
 
 1. `internal/api/agent_install_command_shared.go`
