@@ -4098,6 +4098,31 @@ Shared infrastructure consumers such as the unified resource table and detail
 drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other
 incidental runtime hints.
+
+Canonical storage resources now carry a provider-neutral `PoolHealth` envelope
+alongside the complete provider-native report. The envelope owns scope,
+provider, native identity, canonical and native state, severity, summary,
+recommendation, source, evidence codes, and observation time. ZFS
+`StorageMeta.ZFSPool` remains the full native authority for scan progress,
+topology, per-device states, and read/write/checksum counters; scalar ZFS fields
+are compatibility summaries only. Clone and registry boundaries must retain
+both shapes without sharing mutable slices or pointers.
+
+The normalized state vocabulary is `ONLINE`, `DEGRADED`, `FAULTED`, `OFFLINE`,
+`UNAVAIL`, and `UNKNOWN`. Provider adapters may map equivalent native
+pool-health authority into that vocabulary, but may not infer a failed leaf,
+missing disk, replacement target, or recovery from a cluster-level or absent
+observation. Ceph therefore uses a cluster-scoped `PoolHealth` projection only
+when native Ceph health evidence exists and preserves native check codes
+separately.
+
+Resource incidents may declare activation and recovery confirmation counts.
+These fields describe shared alerts-owned lifecycle eligibility; they are not
+provider-local alert state.
+`internal/storagehealth/zfs_pool_health_contract_test.go`,
+`internal/unifiedresources/ceph_pool_health_contract_test.go`, and
+`internal/api/resources_pool_health_contract_test.go` pin the normalized and
+wire-level contract.
 That same shared-consumer boundary now also owns VMware phase-1 detail
 presentation. `frontend-modern/src/components/Infrastructure/`
 `resourceDetailDrawerVmwareModel.ts`,

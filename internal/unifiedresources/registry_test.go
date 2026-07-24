@@ -2991,7 +2991,7 @@ func TestResourceRegistry_IngestResourcesDerivesPrimaryIncidentRollups(t *testin
 	if !ok {
 		t.Fatal("expected storage resource")
 	}
-	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" || storage.IncidentCategory != IncidentCategoryProtection || storage.IncidentLabel != "Protection Reduced" || storage.IncidentPriority != 3400 || storage.IncidentImpactSummary != "" || storage.IncidentUrgency != IncidentUrgencyToday || storage.IncidentAction != "Investigate degraded protection and schedule maintenance to restore redundancy" {
+	if storage.IncidentCount != 2 || storage.IncidentCode != "zfs_pool_state" || storage.IncidentSeverity != storagehealth.RiskWarning || storage.IncidentSummary != "ZFS pool tank is DEGRADED" || storage.IncidentCategory != IncidentCategoryProtection || storage.IncidentLabel != "Protection Reduced" || storage.IncidentPriority != 3400 || storage.IncidentImpactSummary != "" || storage.IncidentUrgency != IncidentUrgencyToday || storage.IncidentAction != "Inspect native pool and vdev status and plan maintenance to restore ONLINE state" {
 		t.Fatalf("unexpected storage incident rollup %+v", storage)
 	}
 

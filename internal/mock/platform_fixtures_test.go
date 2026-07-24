@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -560,5 +561,34 @@ func TestBuildFixtureGraphRefreshesStateMetricsFromCanonicalModel(t *testing.T) 
 	}
 	if got, want := disk.Temperature, int(math.Round(SampleMetric("disk", resourceID, "smart_temp", now))); got != want {
 		t.Fatalf("expected refreshed physical disk temperature %d, got %d", want, got)
+	}
+}
+
+func TestCloneTrueNASFixtureSnapshotIsolatesPoolHealthEvidence(t *testing.T) {
+	original := truenas.FixtureSnapshot{Pools: []truenas.Pool{{
+		Name: "tank",
+		Scan: &truenas.PoolScan{
+			Function: "RESILVER",
+			State:    "SCANNING",
+		},
+		VDevs: []truenas.PoolVDev{{
+			GUID:   "leaf-guid",
+			Status: "UNAVAIL",
+		}},
+		DiskMembers: []truenas.PoolDiskMember{{
+			GUID:   "leaf-guid",
+			Status: "UNAVAIL",
+		}},
+	}}}
+
+	cloned := cloneTrueNASFixtureSnapshot(original)
+	cloned.Pools[0].Scan.State = "FINISHED"
+	cloned.Pools[0].VDevs[0].Status = "ONLINE"
+	cloned.Pools[0].DiskMembers[0].Status = "ONLINE"
+
+	if original.Pools[0].Scan.State != "SCANNING" ||
+		original.Pools[0].VDevs[0].Status != "UNAVAIL" ||
+		original.Pools[0].DiskMembers[0].Status != "UNAVAIL" {
+		t.Fatalf("clone mutated original pool evidence: %+v", original.Pools[0])
 	}
 }

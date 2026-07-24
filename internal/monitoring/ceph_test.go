@@ -220,6 +220,36 @@ func TestIsCephStorageType(t *testing.T) {
 	}
 }
 
+func TestBuildCephClusterModelPreservesNativeHealthCheckCodes(t *testing.T) {
+	status := &proxmox.CephStatus{
+		FSID: "fsid-native",
+		Health: proxmox.CephHealth{
+			Status: "HEALTH_WARN",
+			Checks: map[string]proxmox.CephHealthCheckRaw{
+				"OSD_DOWN": {
+					Severity: "HEALTH_WARN",
+					Summary:  json.RawMessage(`{"message":"1 osd down"}`),
+				},
+				"PG_DEGRADED": {
+					Severity: "HEALTH_WARN",
+					Detail:   []proxmox.CephCheckDetail{{Message: "42 pgs degraded"}},
+				},
+			},
+		},
+	}
+
+	cluster := buildCephClusterModel("pve-a", status, nil)
+	if len(cluster.HealthChecks) != 2 {
+		t.Fatalf("health checks = %+v", cluster.HealthChecks)
+	}
+	if cluster.HealthChecks[0].Code != "OSD_DOWN" || cluster.HealthChecks[0].Summary != "1 osd down" {
+		t.Fatalf("sorted native check 0 = %+v", cluster.HealthChecks[0])
+	}
+	if cluster.HealthChecks[1].Code != "PG_DEGRADED" || cluster.HealthChecks[1].Summary != "42 pgs degraded" {
+		t.Fatalf("sorted native check 1 = %+v", cluster.HealthChecks[1])
+	}
+}
+
 func TestCountServiceDaemons(t *testing.T) {
 	t.Parallel()
 

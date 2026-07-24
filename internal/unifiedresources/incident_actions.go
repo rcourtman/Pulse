@@ -11,6 +11,23 @@ const (
 
 func IncidentActionForResource(resource *Resource, incident ResourceIncident, category string) (string, string) {
 	baseType := resourceBaseType(resource)
+	switch incident.Code {
+	case "zfs_pool_state":
+		if incident.Severity == storagehealth.RiskCritical {
+			return IncidentUrgencyNow, "Inspect native pool and vdev status, preserve remaining redundancy, and restore the pool; replace hardware only when native evidence supports it"
+		}
+		return IncidentUrgencyToday, "Inspect native pool and vdev status and plan maintenance to restore ONLINE state"
+	case "zfs_device_state", "zfs_device_missing":
+		if incident.Severity == storagehealth.RiskCritical {
+			return IncidentUrgencyNow, "Confirm the affected member in native topology, reconnect or replace it when supported by device evidence, and verify resilver completion"
+		}
+		return IncidentUrgencyToday, "Inspect the affected member and path, preserve redundancy, and plan evidence-backed maintenance"
+	case "zfs_pool_errors", "zfs_device_errors", "zfs_scan_errors", "zfs_scan_failed":
+		if incident.Severity == storagehealth.RiskCritical {
+			return IncidentUrgencyNow, "Review the native scan and device evidence, inspect SMART and cabling, and replace hardware only when the evidence identifies it"
+		}
+		return IncidentUrgencyToday, "Inspect native error counters, SMART, and cabling, then run or review a scrub before deciding on replacement"
+	}
 	switch category {
 	case IncidentCategoryProtection:
 		if incident.Severity == storagehealth.RiskCritical {
@@ -48,6 +65,11 @@ func IncidentActionForResource(resource *Resource, incident ResourceIncident, ca
 			return IncidentUrgencyNow, "Restore storage availability immediately"
 		}
 		return IncidentUrgencyToday, "Investigate degraded storage availability"
+	case IncidentCategoryWorkloadHealth:
+		if incident.Severity == storagehealth.RiskCritical {
+			return IncidentUrgencyNow, "Review the app and container logs, restore the failed workload, and confirm it remains running"
+		}
+		return IncidentUrgencyToday, "Confirm whether the app should be running, then start it or suppress the alert for intentional downtime"
 	default:
 		if baseType == ResourceTypeAgent || baseType == ResourceTypeVM {
 			if incident.Severity == storagehealth.RiskCritical {

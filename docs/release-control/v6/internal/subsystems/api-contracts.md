@@ -8375,3 +8375,24 @@ membership or telemetry read as deletion.
 `internal/config/pve_instances_test.go` prove unreachable-member persistence,
 evidence preservation, duplicate consolidation, and same-name-cluster
 isolation.
+
+### Canonical pool-health resource transport
+
+`GET /api/resources` and `GET /api/resources/{id}` preserve the additive
+provider-neutral `storage.poolHealth` or `ceph.poolHealth` envelope and the
+complete native evidence beside it. TrueNAS storage payloads retain
+`storage.zfsPool.scanDetails`, vdev role/parent/GUID/disk/path/state/missing
+fields, and pool/device read/write/checksum counters. Ceph payloads retain the
+native health-check code, severity, and summary list. Resource incidents retain
+their stable provider/native identity plus activation and recovery confirmation
+requirements.
+
+List pruning, canonical metadata refresh, cloning, pagination, and frontend
+decoding must not flatten those fields back to one status string. Unknown or
+absent evidence stays explicit; the transport never synthesizes a failed disk,
+replacement recommendation, or healthy recovery. Existing clients remain
+compatible because the envelope, structured scan, topology fields, native
+checks, and lifecycle counts are additive.
+
+`internal/api/resources_pool_health_contract_test.go` and the frontend
+type-check are the focused wire compatibility proofs.

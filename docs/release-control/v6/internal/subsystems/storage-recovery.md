@@ -2369,6 +2369,24 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+### Evidence-bounded pool and dataset health
+
+Storage consumes the canonical `PoolHealth` envelope for normalized severity
+and recommendations while retaining the full native ZFS report for operator
+inspection. `ONLINE`, `DEGRADED`, `FAULTED`, `OFFLINE`, and `UNAVAIL`, active
+scrub or resilver work, terminal scan errors, pool/vdev counters, path-only
+leaves, spare/mirror/RAIDZ topology, and explicit missing members remain
+distinct evidence. Storage must not translate unknown telemetry or
+`disk.query` absence into failure, replacement, or recovery.
+
+Locked and unmounted datasets are availability conditions. Readonly is not
+itself a fault: receive-side replication targets classified by native
+replication intent remain healthy. This classification changes storage health
+only; it does not widen restore, mutation, replacement, or TrueNAS
+administration authority. Ceph may share the normalized pool-health envelope
+at cluster scope when native Ceph health evidence exists, but no ZFS leaf or
+disk semantics transfer by analogy.
+
 Unified Agent target cache prevention on the shared router is adjacent
 lifecycle/API transport. `/api/agent/version` no-store headers and non-secret
 request cache keys must not be interpreted as recovery freshness, retained

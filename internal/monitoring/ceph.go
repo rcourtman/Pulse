@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -157,6 +158,7 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 	}
 
 	healthMsg := summarizeCephHealth(status)
+	healthChecks := cephHealthChecks(status)
 	numMons := countCephMonitorDaemons(status)
 	numMgrs := countCephManagerDaemons(status)
 
@@ -168,6 +170,7 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 		FSID:           status.FSID,
 		Health:         status.Health.Status,
 		HealthMessage:  healthMsg,
+		HealthChecks:   healthChecks,
 		TotalBytes:     totalBytes,
 		UsedBytes:      usedBytes,
 		AvailableBytes: availBytes,
@@ -184,6 +187,36 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 	}
 
 	return cluster
+}
+
+func cephHealthChecks(status *proxmox.CephStatus) []models.CephHealthCheck {
+	if status == nil || len(status.Health.Checks) == 0 {
+		return nil
+	}
+	codes := make([]string, 0, len(status.Health.Checks))
+	for code := range status.Health.Checks {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	checks := make([]models.CephHealthCheck, 0, len(codes))
+	for _, code := range codes {
+		check := status.Health.Checks[code]
+		summary := extractCephCheckSummary(check.Summary)
+		if summary == "" {
+			for _, detail := range check.Detail {
+				if strings.TrimSpace(detail.Message) != "" {
+					summary = strings.TrimSpace(detail.Message)
+					break
+				}
+			}
+		}
+		checks = append(checks, models.CephHealthCheck{
+			Code:     strings.TrimSpace(code),
+			Severity: strings.TrimSpace(check.Severity),
+			Summary:  summary,
+		})
+	}
+	return checks
 }
 
 func countCephMonitorDaemons(status *proxmox.CephStatus) int {

@@ -1823,7 +1823,7 @@
     },
     {
       "id": "RA20",
-      "summary": "Pulse's TrueNAS support claim is bounded to the current API-first floor: onboarding is through platform connections without requiring unified-agent bootstrap, TrueNAS projects into the canonical resource model and shared infrastructure/workload/storage/recovery/alert surfaces, Assistant support is read-first with bounded app control, and broader TrueNAS administration is not part of the current floor.",
+      "summary": "Pulse's TrueNAS support claim is bounded to the current API-first floor: onboarding is through platform connections without requiring unified-agent bootstrap; native pool, vdev, dataset, disk, app, and recovery evidence projects into the canonical resource, health, alert-lifecycle, history, and recommendation contracts without inferring failure or recovery from unknown telemetry; Assistant support is read-first with bounded app control; broader TrueNAS administration is not part of the current floor.",
       "kind": "invariant",
       "blocking_level": "release-ready",
       "proof_type": "automated",
@@ -1855,6 +1855,22 @@
           ]
         },
         {
+          "id": "truenas-pool-health-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/alerts",
+            "./internal/api",
+            "./internal/monitoring",
+            "./internal/storagehealth",
+            "./internal/truenas",
+            "./internal/unifiedresources",
+            "-run",
+            "TestAssessZFSPool|TestCephBuildClusterPreservesNativeHealthChecks|TestCephUnknownHealthDoesNotInventIncident|TestCephUsesNativeClusterEvidenceThroughPoolHealthContract|TestNativeTrueNASPoolAlertSuppressesEquivalentSyntheticSignalsOnly|TestParsePoolStatePreservesScanTopologyErrorsAndNativeMissingEvidence|TestProviderProjectsFullZFSHealthAndActionableDatasetAppIncidents|TestResourceListPreservesCanonicalPoolHealthEvidence|TestTrueNASPollerKeepsPoolHealthConnectionLocalAcrossMatchingAppliances|TestUnifiedProviderIncident",
+            "-count=1"
+          ]
+        },
+        {
           "id": "truenas-runtime-floor-tests",
           "run": [
             "go",
@@ -1869,6 +1885,11 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-truenas-pool-health-2026-07-24.md",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",

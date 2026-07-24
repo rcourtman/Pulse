@@ -490,6 +490,10 @@ func unifiedAlertResourceType(resource unifiedresources.Resource) (string, bool)
 		if resource.VMware != nil || resourceHasSource(resource, unifiedresources.SourceVMware) {
 			return "vmware-vm", true
 		}
+	case unifiedresources.ResourceTypeAppContainer:
+		if resource.TrueNAS != nil || resourceHasSource(resource, unifiedresources.SourceTrueNAS) {
+			return "truenas-app", true
+		}
 	case unifiedresources.ResourceTypeStorage:
 		if isTrueNASStorageResource(resource) {
 			switch strings.ToLower(strings.TrimSpace(resource.Storage.Topology)) {

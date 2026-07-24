@@ -112,6 +112,9 @@ func supplementCephCluster(primary, supplemental CephCluster) CephCluster {
 	if primary.HealthMessage == "" {
 		primary.HealthMessage = supplemental.HealthMessage
 	}
+	if len(primary.HealthChecks) == 0 && len(supplemental.HealthChecks) > 0 {
+		primary.HealthChecks = append([]CephHealthCheck(nil), supplemental.HealthChecks...)
+	}
 	if primary.TotalBytes == 0 && supplemental.TotalBytes != 0 {
 		primary.TotalBytes = supplemental.TotalBytes
 		primary.UsedBytes = supplemental.UsedBytes

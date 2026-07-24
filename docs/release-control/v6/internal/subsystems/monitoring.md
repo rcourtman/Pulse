@@ -2242,3 +2242,30 @@ allowance is the only path that clears that lineage. Focused proofs are
 `internal/monitoring/monitor_host_agents_test.go`, and
 `internal/api/host_agent_removal_lifecycle_integration_test.go`; the concurrency
 proof must also pass under the Go race detector.
+
+### Native pool-health collection and appliance isolation
+
+TrueNAS monitoring preserves the complete native `pool.query` observation
+needed by the shared storage-health contract: pool GUID and status detail,
+structured scrub or resilver state, pool and vdev read/write/checksum counters,
+mirror/RAIDZ/spare topology, path-only leaves, and explicit native
+missing/unavailable members. `disk.query` absence alone is not missing-disk
+evidence. Unknown fields remain unknown and may not be converted into a failed
+device, a recovered pool, or a zero-error observation.
+
+The poller keys system and child source identity by configured connection.
+Appliances with matching hostnames, restored pool GUIDs, or matching pool names
+remain separate through refresh, cache rebuild, restart, and registry ingest.
+Replication-target readonly classification remains a separate native-evidence
+step and cannot hide locked or unmounted dataset state.
+
+Ceph monitoring may enter the provider-neutral pool-health envelope only from
+the native cluster health state and native health-check map. It preserves check
+codes, severity, and summaries in deterministic order. A cluster-level
+`HEALTH_WARN` or `HEALTH_ERR` does not identify a failed OSD or disk unless the
+provider supplies that more specific evidence.
+
+`internal/truenas/client_api_shapes_test.go`,
+`internal/monitoring/truenas_poller_test.go`, and
+`internal/monitoring/ceph_test.go` are the focused collection and identity
+proofs.

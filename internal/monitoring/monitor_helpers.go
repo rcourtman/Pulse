@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -887,10 +888,21 @@ func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hos
 
 	// Build health message from checks
 	var healthMessages []string
-	for _, check := range ceph.Health.Checks {
+	checkCodes := make([]string, 0, len(ceph.Health.Checks))
+	for code := range ceph.Health.Checks {
+		checkCodes = append(checkCodes, code)
+	}
+	sort.Strings(checkCodes)
+	for _, code := range checkCodes {
+		check := ceph.Health.Checks[code]
 		if check.Message != "" {
 			healthMessages = append(healthMessages, check.Message)
 		}
+		cluster.HealthChecks = append(cluster.HealthChecks, models.CephHealthCheck{
+			Code:     strings.TrimSpace(code),
+			Severity: strings.TrimSpace(check.Severity),
+			Summary:  strings.TrimSpace(check.Message),
+		})
 	}
 	if len(healthMessages) > 0 {
 		cluster.HealthMessage = strings.Join(healthMessages, "; ")

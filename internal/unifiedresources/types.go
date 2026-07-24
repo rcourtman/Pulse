@@ -403,6 +403,7 @@ type StorageMeta struct {
 	ProtectionSummary     string                `json:"protectionSummary,omitempty"`
 	RebuildInProgress     bool                  `json:"rebuildInProgress,omitempty"`
 	RebuildSummary        string                `json:"rebuildSummary,omitempty"`
+	PoolHealth            *PoolHealth           `json:"poolHealth,omitempty"`
 
 	// Accessibility metadata.
 	Nodes []string `json:"nodes,omitempty"` // PVE nodes where this storage is accessible
@@ -437,13 +438,32 @@ type StorageConsumerMeta struct {
 }
 
 type ResourceIncident struct {
-	Provider  string                  `json:"provider,omitempty"`
-	NativeID  string                  `json:"nativeId,omitempty"`
-	Code      string                  `json:"code"`
-	Severity  storagehealth.RiskLevel `json:"severity"`
-	Source    string                  `json:"source,omitempty"`
-	Summary   string                  `json:"summary"`
-	StartedAt time.Time               `json:"startedAt,omitempty"`
+	Provider                      string                  `json:"provider,omitempty"`
+	NativeID                      string                  `json:"nativeId,omitempty"`
+	Code                          string                  `json:"code"`
+	Severity                      storagehealth.RiskLevel `json:"severity"`
+	Source                        string                  `json:"source,omitempty"`
+	Summary                       string                  `json:"summary"`
+	StartedAt                     time.Time               `json:"startedAt,omitempty"`
+	ConfirmationsRequired         int                     `json:"confirmationsRequired,omitempty"`
+	RecoveryConfirmationsRequired int                     `json:"recoveryConfirmationsRequired,omitempty"`
+}
+
+// PoolHealth is the provider-neutral health envelope shared by storage pools
+// and pool-like cluster authorities. Native state and evidence are preserved;
+// CanonicalState is the only normalized cross-provider claim.
+type PoolHealth struct {
+	Scope          string                  `json:"scope"`
+	Provider       string                  `json:"provider"`
+	NativeID       string                  `json:"nativeId,omitempty"`
+	CanonicalState string                  `json:"canonicalState"`
+	NativeState    string                  `json:"nativeState,omitempty"`
+	Severity       storagehealth.RiskLevel `json:"severity"`
+	Summary        string                  `json:"summary,omitempty"`
+	Recommendation string                  `json:"recommendation,omitempty"`
+	Source         string                  `json:"source,omitempty"`
+	EvidenceCodes  []string                `json:"evidenceCodes,omitempty"`
+	ObservedAt     time.Time               `json:"observedAt,omitempty"`
 }
 
 // PhysicalDiskMeta contains physical disk-specific metadata.
@@ -522,17 +542,25 @@ type PhysicalDiskRiskReason struct {
 
 // CephMeta contains Ceph cluster-specific metadata.
 type CephMeta struct {
-	FSID          string            `json:"fsid,omitempty"`
-	HealthStatus  string            `json:"healthStatus"`
-	HealthMessage string            `json:"healthMessage,omitempty"`
-	NumMons       int               `json:"numMons"`
-	NumMgrs       int               `json:"numMgrs"`
-	NumOSDs       int               `json:"numOsds"`
-	NumOSDsUp     int               `json:"numOsdsUp"`
-	NumOSDsIn     int               `json:"numOsdsIn"`
-	NumPGs        int               `json:"numPGs"`
-	Pools         []CephPoolMeta    `json:"pools,omitempty"`
-	Services      []CephServiceMeta `json:"services,omitempty"`
+	FSID          string                `json:"fsid,omitempty"`
+	HealthStatus  string                `json:"healthStatus"`
+	HealthMessage string                `json:"healthMessage,omitempty"`
+	HealthChecks  []CephHealthCheckMeta `json:"healthChecks,omitempty"`
+	PoolHealth    *PoolHealth           `json:"poolHealth,omitempty"`
+	NumMons       int                   `json:"numMons"`
+	NumMgrs       int                   `json:"numMgrs"`
+	NumOSDs       int                   `json:"numOsds"`
+	NumOSDsUp     int                   `json:"numOsdsUp"`
+	NumOSDsIn     int                   `json:"numOsdsIn"`
+	NumPGs        int                   `json:"numPGs"`
+	Pools         []CephPoolMeta        `json:"pools,omitempty"`
+	Services      []CephServiceMeta     `json:"services,omitempty"`
+}
+
+type CephHealthCheckMeta struct {
+	Code     string `json:"code"`
+	Severity string `json:"severity,omitempty"`
+	Summary  string `json:"summary,omitempty"`
 }
 
 // CephPoolMeta describes a Ceph storage pool.

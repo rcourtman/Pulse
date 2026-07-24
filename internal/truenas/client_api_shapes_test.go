@@ -312,3 +312,102 @@ func TestEnrichDisksFromPoolTopology(t *testing.T) {
 		t.Fatalf("explicit disk fields must not be overwritten, got %+v", disks[3])
 	}
 }
+
+func TestParsePoolStatePreservesScanTopologyErrorsAndNativeMissingEvidence(t *testing.T) {
+	item := map[string]any{
+		"id":            float64(7),
+		"guid":          "pool-guid-7",
+		"name":          "tank",
+		"status":        "DEGRADED",
+		"status_code":   "FEAT_DISABLED",
+		"status_detail": "One or more devices is unavailable",
+		"scan": map[string]any{
+			"function":         "RESILVER",
+			"state":            "SCANNING",
+			"percentage":       42.5,
+			"errors":           float64(0),
+			"bytes_examined":   float64(1024),
+			"bytes_to_process": float64(4096),
+			"total_secs_left":  float64(120),
+			"start_time":       "2026-07-24T09:00:00Z",
+		},
+		"topology": map[string]any{
+			"data": []any{
+				map[string]any{
+					"guid":   "mirror-guid",
+					"name":   "mirror-0",
+					"type":   "MIRROR",
+					"status": "DEGRADED",
+					"stats": map[string]any{
+						"read_errors":     float64(1),
+						"write_errors":    float64(2),
+						"checksum_errors": float64(3),
+					},
+					"children": []any{
+						map[string]any{
+							"guid":   "disk-guid-0",
+							"type":   "DISK",
+							"disk":   "sda",
+							"path":   "/dev/sda2",
+							"status": "ONLINE",
+						},
+						map[string]any{
+							"guid":   "disk-guid-1",
+							"type":   "UNAVAIL_DISK",
+							"path":   "/dev/disk/by-partuuid/missing-member",
+							"status": "UNAVAIL",
+							"unavail_disk": map[string]any{
+								"devname": "sdb",
+							},
+						},
+					},
+				},
+			},
+			"spare": []any{
+				map[string]any{
+					"guid":   "spare-guid",
+					"type":   "DISK",
+					"disk":   "sdc",
+					"path":   "/dev/sdc",
+					"status": "AVAIL",
+				},
+			},
+		},
+	}
+
+	pool, ok := parsePoolState(item, false)
+	if !ok {
+		t.Fatal("expected pool")
+	}
+	if pool.GUID != "pool-guid-7" || pool.StatusCode != "FEAT_DISABLED" || pool.StatusDetail == "" {
+		t.Fatalf("native pool identity/status evidence lost: %+v", pool)
+	}
+	if pool.Scan == nil || pool.Scan.Function != "RESILVER" || pool.Scan.State != "SCANNING" || pool.Scan.Percentage != 42.5 || pool.Scan.TotalSecondsRemaining != 120 {
+		t.Fatalf("structured scan evidence = %+v", pool.Scan)
+	}
+	if pool.ReadErrors != 1 || pool.WriteErrors != 2 || pool.ChecksumErrors != 3 {
+		t.Fatalf("pool error totals = read %d write %d checksum %d", pool.ReadErrors, pool.WriteErrors, pool.ChecksumErrors)
+	}
+	if len(pool.VDevs) != 4 {
+		t.Fatalf("vdevs = %+v", pool.VDevs)
+	}
+	if len(pool.DiskMembers) != 3 {
+		t.Fatalf("disk members = %+v", pool.DiskMembers)
+	}
+	missing := pool.DiskMembers[1]
+	if missing.Disk != "sdb" || !missing.Missing || missing.Role != "data" || missing.Path != "/dev/disk/by-partuuid/missing-member" {
+		t.Fatalf("missing member evidence = %+v", missing)
+	}
+	spare := pool.DiskMembers[2]
+	if spare.Disk != "sdc" || spare.Status != "AVAIL" || spare.Role != "spare" {
+		t.Fatalf("spare member evidence = %+v", spare)
+	}
+
+	disks := enrichDisksFromPoolTopology([]Pool{pool}, []Disk{{ID: "sda", Name: "sda"}})
+	if len(disks) != 2 {
+		t.Fatalf("expected only explicit unavailable member to synthesize, got %+v", disks)
+	}
+	if disks[1].Name != "sdb" || disks[1].Pool != "tank" || disks[1].Status != "UNAVAIL" {
+		t.Fatalf("synthetic unavailable disk = %+v", disks[1])
+	}
+}

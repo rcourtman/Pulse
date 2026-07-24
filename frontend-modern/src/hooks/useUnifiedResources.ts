@@ -8,6 +8,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type {
   Resource,
+  ResourceCephHealthCheckMeta,
   ResourceAgentUnraidMeta,
   ResourceCephMeta,
   ResourceChange,
@@ -20,6 +21,7 @@ import type {
   ResourcePBSMeta,
   ResourcePolicyPostureSummary,
   ResourcePhysicalDiskMeta,
+  ResourcePoolHealth,
   ResourceStatus,
   ResourceStorageMeta,
   ResourceStorageRisk,
@@ -259,6 +261,7 @@ type APIResource = {
     protectionSummary?: string;
     rebuildInProgress?: boolean;
     rebuildSummary?: string;
+    poolHealth?: ResourcePoolHealth;
     commandsEnabled?: boolean;
     tokenId?: string;
     tokenName?: string;
@@ -414,6 +417,8 @@ type APIResource = {
     fsid?: string;
     healthStatus?: string;
     healthMessage?: string;
+    healthChecks?: ResourceCephHealthCheckMeta[];
+    poolHealth?: ResourcePoolHealth;
     numMons?: number;
     numMgrs?: number;
     numOsds?: number;
@@ -468,6 +473,8 @@ type APIResource = {
     source?: string;
     summary?: string;
     startedAt?: string;
+    confirmationsRequired?: number;
+    recoveryConfirmationsRequired?: number;
   }>;
   incidentCount?: number;
   incidentCode?: string;
@@ -767,6 +774,8 @@ const toResource = (v2: APIResource): Resource => {
         source: incident.source,
         summary: incident.summary || '',
         startedAt: incident.startedAt,
+        confirmationsRequired: incident.confirmationsRequired,
+        recoveryConfirmationsRequired: incident.recoveryConfirmationsRequired,
       }))
       .filter((incident) => incident.code.trim() || incident.summary.trim()),
     incidentCount: v2.incidentCount,

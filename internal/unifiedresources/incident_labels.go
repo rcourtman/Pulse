@@ -12,6 +12,8 @@ func IncidentLabelForResource(resource *Resource, incident ResourceIncident, cat
 		return "Backup Coverage At Risk"
 	case IncidentCategoryDiskHealth:
 		return "Disk Health Risk"
+	case IncidentCategoryWorkloadHealth:
+		return "Workload Health Issue"
 	case IncidentCategoryAvailability:
 		switch resourceBaseType(resource) {
 		case ResourceTypeAgent:

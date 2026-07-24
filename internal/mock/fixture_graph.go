@@ -136,13 +136,31 @@ func clonePlatformFixtures(in PlatformFixtures) PlatformFixtures {
 func cloneTrueNASFixtureSnapshot(in truenas.FixtureSnapshot) truenas.FixtureSnapshot {
 	out := in
 	out.System = cloneTrueNASSystemInfo(in.System)
-	out.Pools = append([]truenas.Pool(nil), in.Pools...)
+	out.Pools = cloneTrueNASPools(in.Pools)
 	out.Datasets = append([]truenas.Dataset(nil), in.Datasets...)
 	out.Disks = append([]truenas.Disk(nil), in.Disks...)
 	out.Alerts = append([]truenas.Alert(nil), in.Alerts...)
 	out.Apps = cloneTrueNASApps(in.Apps)
 	out.ZFSSnapshots = cloneTrueNASZFSSnapshots(in.ZFSSnapshots)
 	out.ReplicationTasks = cloneTrueNASReplicationTasks(in.ReplicationTasks)
+	return out
+}
+
+func cloneTrueNASPools(in []truenas.Pool) []truenas.Pool {
+	if in == nil {
+		return nil
+	}
+
+	out := make([]truenas.Pool, len(in))
+	for i := range in {
+		out[i] = in[i]
+		if in[i].Scan != nil {
+			scan := *in[i].Scan
+			out[i].Scan = &scan
+		}
+		out[i].VDevs = append([]truenas.PoolVDev(nil), in[i].VDevs...)
+		out[i].DiskMembers = append([]truenas.PoolDiskMember(nil), in[i].DiskMembers...)
+	}
 	return out
 }
 

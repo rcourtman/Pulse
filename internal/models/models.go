@@ -2330,6 +2330,7 @@ type ZFSPool struct {
 	State          string      `json:"state"`  // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
 	Status         string      `json:"status"` // Healthy, Degraded, Faulted, etc.
 	Scan           string      `json:"scan"`   // Current scan status (scrub, resilver, none)
+	ScanDetails    *ZFSScan    `json:"scanDetails,omitempty"`
 	ReadErrors     int64       `json:"readErrors"`
 	WriteErrors    int64       `json:"writeErrors"`
 	ChecksumErrors int64       `json:"checksumErrors"`
@@ -2343,14 +2344,35 @@ func (p ZFSPool) NormalizeCollections() ZFSPool {
 	return p
 }
 
+// ZFSScan is the provider-native scrub or resilver observation for a pool.
+// The legacy Scan string remains for compact consumers, while this shape keeps
+// progress, terminal errors, and lifecycle timestamps machine-readable.
+type ZFSScan struct {
+	Function              string     `json:"function,omitempty"`
+	State                 string     `json:"state,omitempty"`
+	Percentage            float64    `json:"percentage,omitempty"`
+	Errors                int64      `json:"errors,omitempty"`
+	BytesExamined         int64      `json:"bytesExamined,omitempty"`
+	BytesToProcess        int64      `json:"bytesToProcess,omitempty"`
+	TotalSecondsRemaining int64      `json:"totalSecondsRemaining,omitempty"`
+	StartedAt             *time.Time `json:"startedAt,omitempty"`
+	EndedAt               *time.Time `json:"endedAt,omitempty"`
+}
+
 // ZFSDevice represents a device in a ZFS pool
 type ZFSDevice struct {
 	Name           string `json:"name"`
-	Type           string `json:"type"`  // disk, mirror, raidz, raidz2, raidz3, spare, log, cache, special, special-group
+	Type           string `json:"type"` // disk, mirror, raidz, raidz2, raidz3, spare, log, cache, special, special-group
+	Role           string `json:"role,omitempty"`
+	Parent         string `json:"parent,omitempty"`
+	GUID           string `json:"guid,omitempty"`
+	Disk           string `json:"disk,omitempty"`
+	Path           string `json:"path,omitempty"`
 	State          string `json:"state"` // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
 	ReadErrors     int64  `json:"readErrors"`
 	WriteErrors    int64  `json:"writeErrors"`
 	ChecksumErrors int64  `json:"checksumErrors"`
+	Missing        bool   `json:"missing,omitempty"`
 	Message        string `json:"message,omitempty"` // Additional message provided by Proxmox (if any)
 }
 
@@ -2364,6 +2386,7 @@ type CephCluster struct {
 	FSID            string              `json:"fsid,omitempty"`
 	Health          string              `json:"health"`
 	HealthMessage   string              `json:"healthMessage,omitempty"`
+	HealthChecks    []CephHealthCheck   `json:"healthChecks,omitempty"`
 	TotalBytes      int64               `json:"totalBytes"`
 	UsedBytes       int64               `json:"usedBytes"`
 	AvailableBytes  int64               `json:"availableBytes"`
@@ -2386,10 +2409,21 @@ func (c CephCluster) NormalizeCollections() CephCluster {
 	if c.Pools == nil {
 		c.Pools = []CephPool{}
 	}
+	if c.HealthChecks == nil {
+		c.HealthChecks = []CephHealthCheck{}
+	}
 	if c.Services == nil {
 		c.Services = []CephServiceStatus{}
 	}
 	return c
+}
+
+// CephHealthCheck preserves one native Ceph health-check code and its
+// operator-facing evidence without inferring a ZFS device or pool fault.
+type CephHealthCheck struct {
+	Code     string `json:"code"`
+	Severity string `json:"severity,omitempty"`
+	Summary  string `json:"summary,omitempty"`
 }
 
 // CephPool represents usage statistics for a Ceph pool

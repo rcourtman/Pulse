@@ -117,13 +117,13 @@ func StorageRiskSemantics(risk *StorageRisk) ([]string, bool, bool, string, stri
 			codes = append(codes, code)
 		}
 		switch code {
-		case "raid_degraded", "raid_unavailable", "unraid_invalid_disks", "unraid_disabled_disks", "unraid_missing_disks", "unraid_parity_unavailable", "unraid_no_parity", "zfs_pool_state":
+		case "raid_degraded", "raid_unavailable", "unraid_invalid_disks", "unraid_disabled_disks", "unraid_missing_disks", "unraid_parity_unavailable", "unraid_no_parity", "zfs_pool_state", "zfs_device_state", "zfs_device_missing":
 			protectionReduced = true
 			if priority := protectionSummaryPriority(code); protectionSummary == "" || priority > protectionPriority {
 				protectionSummary = strings.TrimSpace(reason.Summary)
 				protectionPriority = priority
 			}
-		case "raid_rebuilding", "unraid_sync_active":
+		case "raid_rebuilding", "unraid_sync_active", "zfs_resilver_active":
 			rebuildInProgress = true
 			if rebuildSummary == "" {
 				rebuildSummary = strings.TrimSpace(reason.Summary)

@@ -834,19 +834,38 @@ export interface ZFSPool {
   state: string; // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
   status: string; // Healthy, Degraded, Faulted, etc.
   scan: string; // Current scan status (scrub, resilver, none)
+  scanDetails?: ZFSScan;
   readErrors: number;
   writeErrors: number;
   checksumErrors: number;
   devices: ZFSDevice[];
 }
 
+export interface ZFSScan {
+  function?: string;
+  state?: string;
+  percentage?: number;
+  errors?: number;
+  bytesExamined?: number;
+  bytesToProcess?: number;
+  totalSecondsRemaining?: number;
+  startedAt?: string;
+  endedAt?: string;
+}
+
 export interface ZFSDevice {
   name: string;
   type: string; // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
+  role?: string;
+  parent?: string;
+  guid?: string;
+  disk?: string;
+  path?: string;
   state: string; // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
   readErrors: number;
   writeErrors: number;
   checksumErrors: number;
+  missing?: boolean;
   message?: string;
 }
 

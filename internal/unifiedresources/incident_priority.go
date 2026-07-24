@@ -16,6 +16,8 @@ func IncidentPriorityForResource(resource *Resource, incident ResourceIncident, 
 		priority += 150
 	case IncidentCategoryDiskHealth:
 		priority += 100
+	case IncidentCategoryWorkloadHealth:
+		priority += 125
 	default:
 		priority += 50
 	}

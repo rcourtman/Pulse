@@ -995,12 +995,34 @@ const buildRollupIncidentRow = (resource: Resource): TrueNASIncidentRow => {
 
 export function buildTrueNASIncidentRows(resources: Resource[]): TrueNASIncidentRow[] {
   const rows: TrueNASIncidentRow[] = [];
+  const rowByNativeSignal = new Map<string, number>();
+  const specificity = (resource: Resource): number => {
+    if (resource.type === 'physical_disk') return 4;
+    if (resource.type === 'app-container') return 3;
+    if (resource.type === 'storage') return 2;
+    return 1;
+  };
   for (const resource of resources) {
     const incidents = (resource.incidents ?? []).filter(hasIncidentSignal);
     if (incidents.length > 0) {
-      incidents.forEach((incident, index) =>
-        rows.push(buildIncidentRow(resource, incident, index)),
-      );
+      incidents.forEach((incident, index) => {
+        const row = buildIncidentRow(resource, incident, index);
+        const nativeId = asTrimmedString(incident.nativeId);
+        const provider = asTrimmedString(incident.provider);
+        const signalKey =
+          nativeId && provider
+            ? `${provider.toLowerCase()}|${nativeId}|${row.code.toLowerCase()}`
+            : '';
+        const existingIndex = signalKey ? rowByNativeSignal.get(signalKey) : undefined;
+        if (existingIndex === undefined) {
+          if (signalKey) rowByNativeSignal.set(signalKey, rows.length);
+          rows.push(row);
+          return;
+        }
+        if (specificity(resource) > specificity(rows[existingIndex]!.resource)) {
+          rows[existingIndex] = row;
+        }
+      });
       continue;
     }
     if (hasIncidentRollup(resource)) {

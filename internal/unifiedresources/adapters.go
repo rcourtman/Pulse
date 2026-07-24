@@ -1968,10 +1968,25 @@ func resourceFromCephCluster(cluster models.CephCluster) (Resource, ResourceIden
 		name = cluster.ID
 	}
 
+	healthChecks := make([]CephHealthCheckMeta, 0, len(cluster.HealthChecks))
+	evidenceCodes := make([]string, 0, len(cluster.HealthChecks))
+	for _, check := range cluster.HealthChecks {
+		healthChecks = append(healthChecks, CephHealthCheckMeta{
+			Code:     strings.TrimSpace(check.Code),
+			Severity: strings.TrimSpace(check.Severity),
+			Summary:  strings.TrimSpace(check.Summary),
+		})
+		if code := strings.TrimSpace(check.Code); code != "" {
+			evidenceCodes = append(evidenceCodes, code)
+		}
+	}
+	poolHealth := cephPoolHealth(cluster, evidenceCodes)
 	cephMeta := &CephMeta{
 		FSID:          cluster.FSID,
 		HealthStatus:  cluster.Health,
 		HealthMessage: cluster.HealthMessage,
+		HealthChecks:  healthChecks,
+		PoolHealth:    poolHealth,
 		NumMons:       cluster.NumMons,
 		NumMgrs:       cluster.NumMgrs,
 		NumOSDs:       cluster.NumOSDs,
@@ -1992,6 +2007,9 @@ func resourceFromCephCluster(cluster models.CephCluster) (Resource, ResourceIden
 		Ceph:      cephMeta,
 		Tags:      cephClusterTags(cluster),
 	}
+	if incident, ok := cephHealthIncident(cluster); ok {
+		resource.Incidents = []ResourceIncident{incident}
+	}
 
 	identity := ResourceIdentity{}
 	if cluster.FSID != "" {
@@ -2000,6 +2018,71 @@ func resourceFromCephCluster(cluster models.CephCluster) (Resource, ResourceIden
 	identity.Hostnames = uniqueStrings([]string{cluster.Name, cluster.Instance})
 
 	return resource, identity
+}
+
+func cephPoolHealth(cluster models.CephCluster, evidenceCodes []string) *PoolHealth {
+	nativeState := strings.ToUpper(strings.TrimSpace(cluster.Health))
+	normalized := strings.TrimPrefix(nativeState, "HEALTH_")
+	canonicalState := "UNKNOWN"
+	severity := storagehealth.RiskHealthy
+	recommendation := ""
+	switch normalized {
+	case "OK":
+		canonicalState = "ONLINE"
+	case "WARN":
+		canonicalState = "DEGRADED"
+		severity = storagehealth.RiskWarning
+		recommendation = "Review the native Ceph health checks, avoid high-risk cluster changes, and restore HEALTH_OK."
+	case "ERR":
+		canonicalState = "FAULTED"
+		severity = storagehealth.RiskCritical
+		recommendation = "Review the native Ceph health checks immediately and restore HEALTH_OK; Pulse does not infer a failed OSD or disk without native evidence."
+	}
+	summary := strings.TrimSpace(cluster.HealthMessage)
+	if summary == "" && normalized != "" {
+		summary = "Ceph cluster health is HEALTH_" + normalized
+	}
+	return &PoolHealth{
+		Scope:          "cluster",
+		Provider:       "ceph",
+		NativeID:       firstNonEmpty(cluster.FSID, cluster.ID),
+		CanonicalState: canonicalState,
+		NativeState:    nativeState,
+		Severity:       severity,
+		Summary:        summary,
+		Recommendation: recommendation,
+		Source:         strings.TrimSpace(cluster.Source),
+		EvidenceCodes:  uniqueStrings(evidenceCodes),
+		ObservedAt:     cluster.LastUpdated,
+	}
+}
+
+func cephHealthIncident(cluster models.CephCluster) (ResourceIncident, bool) {
+	nativeState := strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(cluster.Health)), "HEALTH_")
+	severity := storagehealth.RiskHealthy
+	switch nativeState {
+	case "WARN":
+		severity = storagehealth.RiskWarning
+	case "ERR":
+		severity = storagehealth.RiskCritical
+	default:
+		return ResourceIncident{}, false
+	}
+	summary := strings.TrimSpace(cluster.HealthMessage)
+	if summary == "" {
+		summary = "Ceph cluster health is HEALTH_" + nativeState
+	}
+	return ResourceIncident{
+		Provider:                      "ceph",
+		NativeID:                      firstNonEmpty(cluster.FSID, cluster.ID),
+		Code:                          "ceph_cluster_health",
+		Severity:                      severity,
+		Source:                        strings.TrimSpace(cluster.Source),
+		Summary:                       summary,
+		StartedAt:                     cluster.LastUpdated,
+		ConfirmationsRequired:         2,
+		RecoveryConfirmationsRequired: 2,
+	}, true
 }
 
 func convertCephPools(pools []models.CephPool) []CephPoolMeta {

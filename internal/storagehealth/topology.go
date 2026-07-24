@@ -160,19 +160,96 @@ func AssessZFSPool(pool models.ZFSPool) Assessment {
 		)
 	}
 
+	if scan := pool.ScanDetails; scan != nil {
+		function := strings.ToUpper(strings.TrimSpace(scan.Function))
+		state := strings.ToUpper(strings.TrimSpace(scan.State))
+		switch {
+		case scan.Errors > 0:
+			addReason(
+				"zfs_scan_errors",
+				RiskCritical,
+				fmt.Sprintf("ZFS pool %s %s reports %d error(s)", pool.Name, strings.ToLower(firstNonEmpty(function, "scan")), scan.Errors),
+			)
+		case state == "FAILED":
+			addReason("zfs_scan_failed", RiskCritical, fmt.Sprintf("ZFS pool %s %s failed", pool.Name, strings.ToLower(firstNonEmpty(function, "scan"))))
+		case function == "RESILVER" && zfsScanActive(state):
+			summary := fmt.Sprintf("ZFS pool %s is resilvering", pool.Name)
+			if scan.Percentage > 0 {
+				summary = fmt.Sprintf("ZFS pool %s is resilvering (%.1f%%)", pool.Name, scan.Percentage)
+			}
+			addReason("zfs_resilver_active", RiskWarning, summary)
+		case function == "SCRUB" && zfsScanActive(state):
+			summary := fmt.Sprintf("ZFS pool %s scrub is running", pool.Name)
+			if scan.Percentage > 0 {
+				summary = fmt.Sprintf("ZFS pool %s scrub is running (%.1f%%)", pool.Name, scan.Percentage)
+			}
+			addReason("zfs_scrub_active", RiskMonitor, summary)
+		}
+	} else {
+		scan := strings.ToLower(strings.TrimSpace(pool.Scan))
+		switch {
+		case strings.Contains(scan, "resilver") && (strings.Contains(scan, "progress") || strings.Contains(scan, "scanning")):
+			addReason("zfs_resilver_active", RiskWarning, fmt.Sprintf("ZFS pool %s is resilvering", pool.Name))
+		case strings.Contains(scan, "scrub") && (strings.Contains(scan, "progress") || strings.Contains(scan, "scanning")):
+			addReason("zfs_scrub_active", RiskMonitor, fmt.Sprintf("ZFS pool %s scrub is running", pool.Name))
+		}
+	}
+
 	for _, device := range pool.Devices {
 		deviceState := strings.ToUpper(strings.TrimSpace(device.State))
+		deviceName := strings.TrimSpace(device.Name)
+		if deviceName == "" {
+			deviceName = strings.TrimSpace(device.Path)
+		}
+		if deviceName == "" {
+			deviceName = "unknown"
+		}
+		if device.Missing {
+			addReason("zfs_device_missing", RiskCritical, fmt.Sprintf("ZFS device %s is reported missing by pool topology", deviceName))
+		}
+		if device.ReadErrors > 0 || device.WriteErrors > 0 || device.ChecksumErrors > 0 {
+			addReason(
+				"zfs_device_errors",
+				RiskWarning,
+				fmt.Sprintf("ZFS device %s reports read=%d write=%d checksum=%d errors", deviceName, device.ReadErrors, device.WriteErrors, device.ChecksumErrors),
+			)
+		}
+		if device.Missing {
+			continue
+		}
 		switch deviceState {
-		case "", "ONLINE":
+		case "", "ONLINE", "AVAIL", "INUSE":
 		case "DEGRADED":
-			addReason("zfs_device_state", RiskWarning, fmt.Sprintf("ZFS device %s is DEGRADED", device.Name))
+			addReason("zfs_device_state", RiskWarning, fmt.Sprintf("ZFS device %s is DEGRADED", deviceName))
+		case "FAULTED", "FAILED", "OFFLINE", "REMOVED", "UNAVAIL":
+			addReason("zfs_device_state", RiskCritical, fmt.Sprintf("ZFS device %s is %s", deviceName, deviceState))
 		default:
-			addReason("zfs_device_state", RiskCritical, fmt.Sprintf("ZFS device %s is %s", device.Name, deviceState))
+			// New or provider-specific states remain visible in the full ZFS
+			// report but do not become failure claims without a canonical
+			// mapping.
 		}
 	}
 
 	sortReasons(&assessment)
 	return assessment
+}
+
+func zfsScanActive(state string) bool {
+	switch strings.ToUpper(strings.TrimSpace(state)) {
+	case "SCANNING", "RUNNING", "IN_PROGRESS", "INPROGRESS":
+		return true
+	default:
+		return false
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {

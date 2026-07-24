@@ -145,6 +145,8 @@ export interface ResourceIncident {
   source?: string;
   summary: string;
   startedAt?: string;
+  confirmationsRequired?: number;
+  recoveryConfirmationsRequired?: number;
 }
 
 // Identity information for deduplication
@@ -365,6 +367,20 @@ export interface ResourceStorageRisk {
   reasons?: ResourceStorageRiskReason[];
 }
 
+export interface ResourcePoolHealth {
+  scope: string;
+  provider: string;
+  nativeId?: string;
+  canonicalState: string;
+  nativeState?: string;
+  severity: string;
+  summary?: string;
+  recommendation?: string;
+  source?: string;
+  evidenceCodes?: string[];
+  observedAt?: string;
+}
+
 export interface ResourceStorageMeta {
   type?: string;
   content?: string;
@@ -386,6 +402,7 @@ export interface ResourceStorageMeta {
   protectionSummary?: string;
   rebuildInProgress?: boolean;
   rebuildSummary?: string;
+  poolHealth?: ResourcePoolHealth;
   nodes?: string[];
   pool?: string;
   path?: string;
@@ -493,10 +510,18 @@ export interface ResourceCephServiceMeta {
   total: number;
 }
 
+export interface ResourceCephHealthCheckMeta {
+  code: string;
+  severity?: string;
+  summary?: string;
+}
+
 export interface ResourceCephMeta {
   fsid?: string;
   healthStatus: string;
   healthMessage?: string;
+  healthChecks?: ResourceCephHealthCheckMeta[];
+  poolHealth?: ResourcePoolHealth;
   numMons: number;
   numMgrs: number;
   numOsds: number;

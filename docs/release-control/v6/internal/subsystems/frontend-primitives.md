@@ -5297,3 +5297,26 @@ The focused proofs are
 `frontend-modern/src/components/Settings/ConnectionEditor/__tests__/AvailabilityTargetSlot.test.tsx`,
 and
 `frontend-modern/src/utils/__tests__/availabilityProbePresentation.test.ts`.
+
+### Pool-health evidence presentation
+
+TrueNAS storage detail composition presents canonical and native pool state,
+structured scrub or resilver progress, pool error totals, affected vdev role
+and topology, recommendation, evidence codes, and evidence source from the
+canonical resource payload. It does not derive failed-disk claims from a
+missing disk row or replace native path-only leaf identity with a guessed
+device name.
+
+TrueNAS alert presentation deduplicates a native provider signal projected onto
+system, pool, and disk rows by provider, native ID, and code, preferring the
+most specific canonical resource. Distinct evidence codes remain distinct
+rows. All acknowledgement, suppression, history, and action handoffs continue
+through shared alert primitives; no provider-only alert shell or email action
+is introduced.
+
+`frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts`
+and
+`frontend-modern/src/features/truenas/__tests__/truenasPageModel.test.ts`
+are the focused presentation proofs. The governed browser proof must open the
+shared resource detail surface and verify the same evidence labels in rendered
+UI.

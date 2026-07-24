@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -167,6 +168,24 @@ func TestIncidentCategoryForResource_TrimmedCodeMatches(t *testing.T) {
 	got := IncidentCategoryForResource(resource, ResourceIncident{Code: " raid_degraded "})
 	if got != IncidentCategoryProtection {
 		t.Errorf("whitespace-padded code should still match, got %q", got)
+	}
+}
+
+func TestZFSIncidentActionsRequireNativeEvidenceBeforeReplacement(t *testing.T) {
+	resource := &Resource{ID: "pool:tank", Type: ResourceTypeStorage}
+	for _, incident := range []ResourceIncident{
+		{Code: "zfs_pool_state", Severity: storagehealth.RiskCritical},
+		{Code: "zfs_scan_errors", Severity: storagehealth.RiskCritical},
+		{Code: "zfs_pool_errors", Severity: storagehealth.RiskWarning},
+	} {
+		category := IncidentCategoryForResource(resource, incident)
+		_, action := IncidentActionForResource(resource, incident, category)
+		if !strings.Contains(action, "native") && !strings.Contains(action, "SMART") {
+			t.Fatalf("%s action lacks native evidence gate: %q", incident.Code, action)
+		}
+		if strings.Contains(action, "Replace the affected disk") {
+			t.Fatalf("%s action inferred a failed disk: %q", incident.Code, action)
+		}
 	}
 }
 

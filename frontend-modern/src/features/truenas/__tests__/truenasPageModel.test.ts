@@ -951,4 +951,42 @@ describe('truenasPageModel', () => {
       'older-snapshot',
     ]);
   });
+
+  it('deduplicates a native alert projected onto multiple resources and keeps the most specific subject', () => {
+    const nativeIncident = {
+      provider: 'truenas',
+      nativeId: 'native-volume-status',
+      code: 'truenas_volume_status',
+      severity: 'critical',
+      source: 'VolumeStatus',
+      summary: 'Pool tank is DEGRADED',
+    };
+    const rows = buildTrueNASPageModel([
+      makeResource({
+        id: 'nas-a',
+        type: 'agent',
+        incidents: [nativeIncident],
+      }),
+      makeResource({
+        id: 'tank',
+        type: 'storage',
+        incidents: [nativeIncident],
+      }),
+      makeResource({
+        id: 'sdb',
+        type: 'physical_disk',
+        displayName: 'sdb',
+        incidents: [nativeIncident],
+      }),
+    ]).incidents;
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        resourceId: 'sdb',
+        resourceName: 'sdb',
+        code: 'truenas_volume_status',
+      }),
+    );
+  });
 });

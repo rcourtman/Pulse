@@ -1318,3 +1318,34 @@ precedence, normalization, exact zero/positive duration boundaries, VM/LXC
 coverage, duplicate and delayed reports, wall-clock changes, suppression
 reset, migration/restart continuity, backup hard-cap behavior, preview
 immutability, and first-match lifecycle identity.
+
+### Provider-observed storage and workload incident lifecycle
+
+Provider observations use one stable alert identity composed from provider,
+connection-local resource identity, native signal identity, and canonical
+incident code. Synthetic TrueNAS pool, vdev, dataset, disk, app, and container
+conditions require two consecutive observations before activation and two
+consecutive healthy observations before recovery. A transient poll therefore
+does not fire or clear an alert. Active state, acknowledgement, suppression,
+severity changes, recovery, and history remain owned by the shared alerts
+runtime and survive restart; an absent resource or unknown collection result is
+not recovery evidence.
+
+Native TrueNAS alerts remain authoritative for their equivalent condition.
+Their stable native ID suppresses only the duplicate synthetic pool/vdev state,
+missing-member, or scan condition; distinct read/write/checksum evidence
+continues to participate. Pulse does not send a second TrueNAS email stream.
+Intentional stopped apps and other stable conditions remain suppressible
+through the canonical per-resource or global alert configuration, and readonly
+replication targets do not produce incidents when native replication evidence
+classifies them as healthy.
+
+Ceph contributes one cluster-scoped provider incident only for native
+`HEALTH_WARN` or `HEALTH_ERR` evidence. It shares the same confirmation,
+recovery, history, and suppression machinery but cannot manufacture a disk
+incident from cluster health.
+
+`internal/alerts/unified_incident_confirmation_test.go`,
+`internal/truenas/provider_pool_health_contract_test.go`, and
+`internal/unifiedresources/ceph_pool_health_contract_test.go` prove the
+lifecycle and deduplication matrix.

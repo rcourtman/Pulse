@@ -64,6 +64,9 @@ type Manager struct {
 	connectionDegradedCount      map[string]int                  // Track consecutive degraded counts for platform connections (pve/pbs/pmg/vmware/truenas)
 	offlineConfirmations         map[string]int                  // Track consecutive offline counts for all resources
 	offlineRecoveryConfirmations map[string]int                  // Track consecutive healthy confirmations before clearing poll-driven offline alerts
+	unifiedIncidentConfirmations map[string]int                  // Track consecutive provider-incident observations before activation
+	unifiedIncidentFirstSeen     map[string]time.Time            // Preserve the first confirmed observation as lifecycle start
+	unifiedIncidentRecoveries    map[string]int                  // Track consecutive healthy observations before provider-incident recovery
 	dockerOfflineCount           map[string]int                  // Track consecutive offline counts for Docker hosts
 	dockerStateConfirm           map[string]int                  // Track consecutive state confirmations for Docker containers
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
@@ -146,6 +149,9 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		connectionDegradedCount:         make(map[string]int),
 		offlineConfirmations:            make(map[string]int),
 		offlineRecoveryConfirmations:    make(map[string]int),
+		unifiedIncidentConfirmations:    make(map[string]int),
+		unifiedIncidentFirstSeen:        make(map[string]time.Time),
+		unifiedIncidentRecoveries:       make(map[string]int),
 		dockerOfflineCount:              make(map[string]int),
 		dockerStateConfirm:              make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),

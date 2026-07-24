@@ -240,6 +240,55 @@ const storageProtectionLabel = (value?: string): string | null => {
   return normalizeDelimitedLabel(protection);
 };
 
+const zfsScanLabel = (storage: ResourceStorageMeta): string | null => {
+  const scan = storage.zfsPool?.scanDetails;
+  if (!scan) return asString(storage.zfsPool?.scan);
+  const operation = normalizeDelimitedLabel(scan.function) ?? 'Scan';
+  const state = normalizeDelimitedLabel(scan.state);
+  const progress =
+    typeof scan.percentage === 'number' && Number.isFinite(scan.percentage) && scan.percentage > 0
+      ? ` (${scan.percentage.toFixed(1)}%)`
+      : '';
+  const errors =
+    typeof scan.errors === 'number' && scan.errors > 0 ? ` · ${scan.errors} errors` : '';
+  return `${operation}${state ? ` ${state}` : ''}${progress}${errors}`;
+};
+
+const zfsErrorLabel = (storage: ResourceStorageMeta): string | null => {
+  const read = storage.zfsReadErrors ?? storage.zfsPool?.readErrors ?? 0;
+  const write = storage.zfsWriteErrors ?? storage.zfsPool?.writeErrors ?? 0;
+  const checksum = storage.zfsChecksumErrors ?? storage.zfsPool?.checksumErrors ?? 0;
+  if (read <= 0 && write <= 0 && checksum <= 0) return null;
+  return `Read ${read} · Write ${write} · Checksum ${checksum}`;
+};
+
+const zfsDeviceEvidenceLabels = (storage: ResourceStorageMeta): string[] =>
+  (storage.zfsPool?.devices ?? [])
+    .filter((device) => {
+      const state = device.state?.trim().toUpperCase();
+      return (
+        device.missing === true ||
+        (state !== '' && !['ONLINE', 'AVAIL', 'INUSE'].includes(state)) ||
+        device.readErrors > 0 ||
+        device.writeErrors > 0 ||
+        device.checksumErrors > 0
+      );
+    })
+    .map((device) => {
+      const name =
+        asString(device.disk) ?? asString(device.path) ?? asString(device.name) ?? 'Vdev';
+      const role = normalizeDelimitedLabel(device.role);
+      const type = normalizeDelimitedLabel(device.type);
+      const state = device.missing ? 'Missing' : (asString(device.state) ?? 'Unknown');
+      const context = [role, type].filter(Boolean).join(' / ');
+      const errors = [device.readErrors, device.writeErrors, device.checksumErrors].some(
+        (value) => value > 0,
+      )
+        ? ` · R ${device.readErrors} W ${device.writeErrors} C ${device.checksumErrors}`
+        : '';
+      return `${name}${context ? ` (${context})` : ''}: ${state}${errors}`;
+    });
+
 const buildTrueNASStorageSections = (
   resource: Resource,
   storage: ResourceStorageMeta,
@@ -247,6 +296,7 @@ const buildTrueNASStorageSections = (
   const riskReasons = (storage.risk?.reasons ?? [])
     .map((reason) => asString(reason.summary))
     .filter((value): value is string => Boolean(value));
+  const zfsDeviceEvidence = zfsDeviceEvidenceLabels(storage);
   const storageRows = compactRows([
     row('Kind', storageKindLabel(storage)),
     row('State', storageStateLabel(resource, storage), {
@@ -268,6 +318,17 @@ const buildTrueNASStorageSections = (
   ]);
 
   const healthRows = compactRows([
+    row('Canonical state', asString(storage.poolHealth?.canonicalState), {
+      tone:
+        storage.poolHealth?.canonicalState === 'ONLINE'
+          ? 'success'
+          : ['DEGRADED', 'FAULTED', 'OFFLINE', 'UNAVAIL'].includes(
+                storage.poolHealth?.canonicalState ?? '',
+              )
+            ? 'warning'
+            : 'default',
+    }),
+    row('Native state', asString(storage.poolHealth?.nativeState)),
     row('Risk', normalizeDelimitedLabel(storage.risk?.level), {
       tone: storage.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
     }),
@@ -282,10 +343,25 @@ const buildTrueNASStorageSections = (
       tone: storage.protectionSummary ? 'warning' : 'default',
     }),
     row('Rebuild', asString(storage.rebuildSummary)),
+    row('Scan / resilver', zfsScanLabel(storage), {
+      tone: storage.zfsPool?.scanDetails?.errors ? 'warning' : 'default',
+    }),
+    row('ZFS errors', zfsErrorLabel(storage), { tone: 'warning' }),
+    row('Affected vdevs', summarizeList(zfsDeviceEvidence, 2), {
+      title: zfsDeviceEvidence.join(', '),
+      tone: 'warning',
+    }),
     row('Reasons', summarizeList(riskReasons, 2), {
       title: riskReasons.join(', '),
       tone: 'warning',
     }),
+    row('Recommended', asString(storage.poolHealth?.recommendation), {
+      title: asString(storage.poolHealth?.summary) ?? undefined,
+    }),
+    row('Evidence', summarizeList(storage.poolHealth?.evidenceCodes ?? [], 4), {
+      title: (storage.poolHealth?.evidenceCodes ?? []).join(', '),
+    }),
+    row('Evidence source', asString(storage.poolHealth?.source)),
   ]);
 
   return compactSections([

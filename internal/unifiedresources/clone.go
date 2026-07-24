@@ -169,6 +169,32 @@ func cloneStorageMeta(in *StorageMeta) *StorageMeta {
 	out.ConsumerTypes = cloneStringSlice(in.ConsumerTypes)
 	out.TopConsumers = cloneStorageConsumerMetaSlice(in.TopConsumers)
 	out.Risk = cloneStorageRisk(in.Risk)
+	out.PoolHealth = clonePoolHealth(in.PoolHealth)
+	out.ZFSPool = cloneZFSPool(in.ZFSPool)
+	return &out
+}
+
+func clonePoolHealth(in *PoolHealth) *PoolHealth {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.EvidenceCodes = cloneStringSlice(in.EvidenceCodes)
+	return &out
+}
+
+func cloneZFSPool(in *models.ZFSPool) *models.ZFSPool {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Devices = append([]models.ZFSDevice(nil), in.Devices...)
+	if in.ScanDetails != nil {
+		scan := *in.ScanDetails
+		scan.StartedAt = cloneTimePtr(in.ScanDetails.StartedAt)
+		scan.EndedAt = cloneTimePtr(in.ScanDetails.EndedAt)
+		out.ScanDetails = &scan
+	}
 	return &out
 }
 
@@ -611,6 +637,8 @@ func cloneCephMeta(in *CephMeta) *CephMeta {
 	out := *in
 	out.Pools = cloneCephPoolMetaSlice(in.Pools)
 	out.Services = cloneCephServiceMetaSlice(in.Services)
+	out.HealthChecks = append([]CephHealthCheckMeta(nil), in.HealthChecks...)
+	out.PoolHealth = clonePoolHealth(in.PoolHealth)
 	return &out
 }
 

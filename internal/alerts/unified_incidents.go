@@ -21,6 +21,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	}
 
 	desired := make(map[string]*Alert)
+	observedConditions := make(map[string]struct{})
 	resourcesByID := make(map[string]unifiedresources.Resource, len(resources))
 	for _, resource := range resources {
 		canonical := resource
@@ -55,7 +56,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 	m.mu.RUnlock()
 
 	if enabled {
-		now := time.Now()
+		now := m.now()
 		for _, spec := range canonicalSpecs {
 			if spec.Kind != alertspecs.AlertSpecKindProviderIncident {
 				continue
@@ -68,6 +69,20 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			if !resourceSupportsUnifiedIncidentAlerts(resource) {
 				continue
 			}
+
+			incident, ok := incidentForProviderSpec(resource, spec)
+			if !ok {
+				continue
+			}
+			level, ok := alertLevelFromCanonicalSeverity(spec.Severity)
+			if !ok {
+				continue
+			}
+			alert := unifiedIncidentAlert(resource, incident, level, now)
+			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
+			storageKey := canonicalTrackingKeyForSpec(spec, alert.ID)
+			observedConditions[storageKey] = struct{}{}
+
 			if alertType, ok := unifiedAlertResourceType(resource); ok {
 				if disableAllKubernetes && isUnifiedKubernetesAlertType(alertType) {
 					continue
@@ -89,24 +104,13 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 				continue
 			}
 
-			incident, ok := incidentForProviderSpec(resource, spec)
-			if !ok {
-				continue
-			}
-			level, ok := alertLevelFromCanonicalSeverity(spec.Severity)
-			if !ok {
-				continue
-			}
-
-			alert := unifiedIncidentAlert(resource, incident, level, now)
-			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
 			if len(spec.SuppressionKeys) > 0 {
 				if alert.Metadata == nil {
 					alert.Metadata = map[string]interface{}{}
 				}
 				alert.Metadata["canonicalSuppressionKeys"] = append([]string(nil), spec.SuppressionKeys...)
 			}
-			desired[canonicalTrackingKeyForSpec(spec, alert.ID)] = alert
+			desired[storageKey] = alert
 		}
 	}
 
@@ -160,13 +164,75 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.saveActiveAlertsAsync("availability intent state")
 	}
 
+	for storageKey, alert := range desired {
+		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && existing != nil {
+			delete(m.unifiedIncidentConfirmations, storageKey)
+			delete(m.unifiedIncidentFirstSeen, storageKey)
+			delete(m.unifiedIncidentRecoveries, storageKey)
+			continue
+		}
+		required := alertMetadataInt(alert, "confirmationsRequired")
+		if required <= 1 {
+			continue
+		}
+		if _, ok := m.unifiedIncidentFirstSeen[storageKey]; !ok {
+			m.unifiedIncidentFirstSeen[storageKey] = alert.StartTime
+		}
+		m.unifiedIncidentConfirmations[storageKey]++
+		if m.unifiedIncidentConfirmations[storageKey] < required {
+			delete(desired, storageKey)
+			continue
+		}
+		if firstSeen := m.unifiedIncidentFirstSeen[storageKey]; !firstSeen.IsZero() {
+			alert.StartTime = firstSeen
+		}
+		delete(m.unifiedIncidentConfirmations, storageKey)
+		delete(m.unifiedIncidentFirstSeen, storageKey)
+	}
+	for storageKey := range m.unifiedIncidentConfirmations {
+		if _, observed := observedConditions[storageKey]; observed {
+			continue
+		}
+		delete(m.unifiedIncidentConfirmations, storageKey)
+		delete(m.unifiedIncidentFirstSeen, storageKey)
+	}
+
 	for storageKey, alert := range m.activeAlerts {
 		if !strings.HasPrefix(storageKey, unifiedresources.CanonicalResourceID(alert.ResourceID)+canonicalStateSeparator+"alertspec:provider-incident:") {
 			continue
 		}
 		if _, keep := desired[storageKey]; keep {
+			delete(m.unifiedIncidentRecoveries, storageKey)
 			continue
 		}
+		if _, stillObserved := observedConditions[storageKey]; stillObserved {
+			// Explicit alert disable, resource override, or parent/child
+			// suppression changes eligibility without asserting recovery.
+			delete(m.unifiedIncidentRecoveries, storageKey)
+			m.clearAlertNoLock(storageKey)
+			continue
+		}
+		if !enabled {
+			// Turning provider-incident evaluation off is an explicit policy
+			// change, not a provider recovery observation.
+			delete(m.unifiedIncidentRecoveries, storageKey)
+			m.clearAlertNoLock(storageKey)
+			continue
+		}
+		resourceID := unifiedresources.CanonicalResourceID(alert.ResourceID)
+		required := alertMetadataInt(alert, "recoveryConfirmationsRequired")
+		if required > 1 {
+			if _, resourceObserved := resourcesByID[resourceID]; !resourceObserved {
+				// Missing provider/resource telemetry is unknown, not recovery
+				// for incidents that opt into confirmed recovery.
+				continue
+			}
+			m.unifiedIncidentRecoveries[storageKey]++
+			if m.unifiedIncidentRecoveries[storageKey] < required {
+				continue
+			}
+		}
+		delete(m.unifiedIncidentRecoveries, storageKey)
 		m.clearAlertNoLock(storageKey)
 	}
 
@@ -191,6 +257,22 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		m.recentAlerts[canonicalTrackingKeyForAlert(alert)] = alert
 		m.historyManager.AddAlert(*alert)
 		m.dispatchAlert(alert, false)
+	}
+}
+
+func alertMetadataInt(alert *Alert, key string) int {
+	if alert == nil || alert.Metadata == nil {
+		return 0
+	}
+	switch value := alert.Metadata[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
 	}
 }
 
@@ -302,6 +384,8 @@ func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) b
 	switch resource.Type {
 	case unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
 		return true
+	case unifiedresources.ResourceTypeCeph, unifiedresources.ResourceTypeAppContainer:
+		return len(resource.Incidents) > 0
 	case unifiedresources.ResourceTypeAgent:
 		return len(resource.Incidents) > 0
 	case unifiedresources.ResourceTypeVM:
@@ -627,6 +711,12 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		"incidentPriority": unifiedresources.IncidentPriorityForResource(&resource, incident, unifiedresources.IncidentCategoryForResource(&resource, incident)),
 		"incidentNativeID": incident.NativeID,
 		"incidentSource":   incident.Source,
+	}
+	if incident.ConfirmationsRequired > 1 {
+		metadata["confirmationsRequired"] = incident.ConfirmationsRequired
+	}
+	if incident.RecoveryConfirmationsRequired > 1 {
+		metadata["recoveryConfirmationsRequired"] = incident.RecoveryConfirmationsRequired
 	}
 	if urgency, action := unifiedresources.IncidentActionForResource(&resource, incident, unifiedresources.IncidentCategoryForResource(&resource, incident)); urgency != "" {
 		metadata["incidentUrgency"] = urgency

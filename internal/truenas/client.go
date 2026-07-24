@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -290,20 +291,10 @@ func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
 
 	pools := make([]Pool, 0, len(response))
 	for _, item := range response {
-		id := strings.TrimSpace(readStringAny(item, "id"))
-		name := strings.TrimSpace(readStringAny(item, "name"))
-		if id == "" || id == "0" {
-			id = name
+		pool, ok := parsePoolState(item, false)
+		if ok {
+			pools = append(pools, pool)
 		}
-		pools = append(pools, Pool{
-			ID:          id,
-			Name:        name,
-			Status:      strings.TrimSpace(readStringAny(item, "status")),
-			TotalBytes:  readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
-			UsedBytes:   readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
-			FreeBytes:   readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
-			DiskMembers: poolDiskMembersFromTopology(item["topology"]),
-		})
 	}
 	return pools, nil
 }
@@ -337,6 +328,10 @@ func (c *Client) GetBootPool(ctx context.Context) (*Pool, error) {
 }
 
 func parseBootPoolState(item map[string]any) (Pool, bool) {
+	return parsePoolState(item, true)
+}
+
+func parsePoolState(item map[string]any, isBoot bool) (Pool, bool) {
 	if len(item) == 0 {
 		return Pool{}, false
 	}
@@ -361,16 +356,26 @@ func parseBootPoolState(item map[string]any) (Pool, bool) {
 	if topology == nil {
 		topology = item["groups"]
 	}
+	vdevs, diskMembers := poolTopologyFromTopology(topology)
+	readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
 
 	pool := Pool{
-		ID:          id,
-		Name:        name,
-		Status:      status,
-		TotalBytes:  readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
-		UsedBytes:   readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
-		FreeBytes:   readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
-		IsBoot:      true,
-		DiskMembers: poolDiskMembersFromTopology(topology),
+		ID:             id,
+		GUID:           strings.TrimSpace(readStringAny(item, "guid")),
+		Name:           name,
+		Status:         status,
+		StatusCode:     strings.TrimSpace(readStringAny(item, "status_code", "statusCode")),
+		StatusDetail:   strings.TrimSpace(readStringAny(item, "status_detail", "statusDetail")),
+		TotalBytes:     readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
+		UsedBytes:      readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
+		FreeBytes:      readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+		ReadErrors:     readErrors,
+		WriteErrors:    writeErrors,
+		ChecksumErrors: checksumErrors,
+		Scan:           poolScanFromAny(item["scan"]),
+		VDevs:          vdevs,
+		IsBoot:         isBoot,
+		DiskMembers:    diskMembers,
 	}
 	if pool.TotalBytes == 0 {
 		pool.TotalBytes = readInt64Any(properties, "size", "total", "total_bytes", "totalBytes")
@@ -413,6 +418,25 @@ func mergeBootPool(pools []Pool, boot Pool) []Pool {
 		if len(boot.DiskMembers) > 0 {
 			pools[i].DiskMembers = append([]PoolDiskMember(nil), boot.DiskMembers...)
 		}
+		if len(boot.VDevs) > 0 {
+			pools[i].VDevs = append([]PoolVDev(nil), boot.VDevs...)
+		}
+		if boot.GUID != "" {
+			pools[i].GUID = boot.GUID
+		}
+		if boot.StatusCode != "" {
+			pools[i].StatusCode = boot.StatusCode
+		}
+		if boot.StatusDetail != "" {
+			pools[i].StatusDetail = boot.StatusDetail
+		}
+		if boot.Scan != nil {
+			scan := *boot.Scan
+			pools[i].Scan = &scan
+		}
+		pools[i].ReadErrors = boot.ReadErrors
+		pools[i].WriteErrors = boot.WriteErrors
+		pools[i].ChecksumErrors = boot.ChecksumErrors
 		return pools
 	}
 	return append(pools, boot)
@@ -422,42 +446,113 @@ func mergeBootPool(pools []Pool, boot Pool) []Pool {
 // topology object across every vdev group, including detached/unavailable
 // members that only appear through their unavail_disk datastore row.
 func poolDiskMembersFromTopology(topology any) []PoolDiskMember {
+	_, members := poolTopologyFromTopology(topology)
+	return members
+}
+
+// poolTopologyFromTopology flattens native vdev topology without discarding
+// group roles or parentage. It separately returns leaf membership for the
+// existing disk-enrichment path.
+func poolTopologyFromTopology(topology any) ([]PoolVDev, []PoolDiskMember) {
 	groups, ok := topology.(map[string]any)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
+	groupNames := make([]string, 0, len(groups))
+	for groupName := range groups {
+		groupNames = append(groupNames, groupName)
+	}
+	sort.Strings(groupNames)
+
+	var vdevs []PoolVDev
 	var members []PoolDiskMember
-	var walk func(node any)
-	walk = func(node any) {
+	var walk func(node any, role, parentID, position string)
+	walk = func(node any, role, parentID, position string) {
 		vdev, ok := node.(map[string]any)
 		if !ok {
 			return
 		}
-		if children, ok := vdev["children"].([]any); ok && len(children) > 0 {
-			for _, child := range children {
-				walk(child)
+
+		stats := readMapAny(vdev, "stats")
+		device := strings.TrimSpace(readStringAny(vdev, "device"))
+		path := strings.TrimSpace(readStringAny(vdev, "path"))
+		if device == "" {
+			device = strings.TrimPrefix(path, "/dev/")
+		}
+		disk := strings.TrimSpace(readStringAny(vdev, "disk"))
+		unavailableDisk, hasUnavailableDisk := vdev["unavail_disk"].(map[string]any)
+		if disk == "" && hasUnavailableDisk {
+			disk = strings.TrimSpace(readStringAny(unavailableDisk, "devname", "name"))
+		}
+		if disk == "" {
+			disk = wholeDiskFromDevice(device)
+		}
+		vdevType := strings.TrimSpace(readStringAny(vdev, "type"))
+		state := strings.TrimSpace(readStringAny(vdev, "status", "state"))
+		guid := strings.TrimSpace(readStringAny(vdev, "guid"))
+		name := strings.TrimSpace(readStringAny(vdev, "name"))
+		if name == "" {
+			name = firstNonEmptyString(disk, device, path, vdevType, role)
+		}
+		id := guid
+		if id == "" {
+			id = role + ":" + position + ":" + name
+		}
+		readErrors := readInt64Any(vdev, "read_errors", "readErrors")
+		writeErrors := readInt64Any(vdev, "write_errors", "writeErrors")
+		checksumErrors := readInt64Any(vdev, "checksum_errors", "checksumErrors")
+		if readErrors == 0 {
+			readErrors = readInt64Any(stats, "read_errors", "readErrors")
+		}
+		if writeErrors == 0 {
+			writeErrors = readInt64Any(stats, "write_errors", "writeErrors")
+		}
+		if checksumErrors == 0 {
+			checksumErrors = readInt64Any(stats, "checksum_errors", "checksumErrors")
+		}
+		message := strings.TrimSpace(readStringAny(vdev, "status_detail", "statusDetail", "message"))
+		missing := hasUnavailableDisk || strings.EqualFold(vdevType, "unavail_disk")
+
+		vdevs = append(vdevs, PoolVDev{
+			ID:             id,
+			ParentID:       parentID,
+			GUID:           guid,
+			Name:           name,
+			Type:           vdevType,
+			Role:           role,
+			Disk:           disk,
+			Device:         device,
+			Path:           path,
+			Status:         state,
+			ReadErrors:     readErrors,
+			WriteErrors:    writeErrors,
+			ChecksumErrors: checksumErrors,
+			Missing:        missing,
+			Message:        message,
+		})
+
+		children, hasChildren := vdev["children"].([]any)
+		if hasChildren && len(children) > 0 {
+			for index, child := range children {
+				walk(child, role, id, position+"."+strconv.Itoa(index))
 			}
 			return
 		}
 
 		member := PoolDiskMember{
-			Disk:   strings.TrimSpace(readStringAny(vdev, "disk")),
-			Device: strings.TrimSpace(readStringAny(vdev, "device")),
-			Status: strings.TrimSpace(readStringAny(vdev, "status")),
-		}
-		if member.Device == "" {
-			member.Device = strings.TrimPrefix(strings.TrimSpace(readStringAny(vdev, "path")), "/dev/")
-		}
-		if member.Disk == "" {
-			// A missing/faulted member's device path no longer resolves;
-			// middleware then attaches the disk's datastore row instead.
-			if unavail, ok := vdev["unavail_disk"].(map[string]any); ok {
-				member.Disk = strings.TrimSpace(readStringAny(unavail, "devname", "name"))
-			}
-		}
-		if member.Disk == "" {
-			member.Disk = wholeDiskFromDevice(member.Device)
+			Disk:           disk,
+			Device:         device,
+			Path:           path,
+			GUID:           guid,
+			Type:           vdevType,
+			Role:           role,
+			Status:         state,
+			Missing:        missing,
+			ReadErrors:     readErrors,
+			WriteErrors:    writeErrors,
+			ChecksumErrors: checksumErrors,
+			Message:        message,
 		}
 		if member.Disk == "" && member.Device == "" {
 			return
@@ -465,16 +560,87 @@ func poolDiskMembersFromTopology(topology any) []PoolDiskMember {
 		members = append(members, member)
 	}
 
+	for _, groupName := range groupNames {
+		group := groups[groupName]
+		nodes, ok := group.([]any)
+		if !ok {
+			continue
+		}
+		for index, node := range nodes {
+			walk(node, groupName, "", strconv.Itoa(index))
+		}
+	}
+	return vdevs, members
+}
+
+func poolErrorTotals(topology any) (int64, int64, int64) {
+	groups, ok := topology.(map[string]any)
+	if !ok {
+		return 0, 0, 0
+	}
+	var readErrors, writeErrors, checksumErrors int64
 	for _, group := range groups {
 		nodes, ok := group.([]any)
 		if !ok {
 			continue
 		}
 		for _, node := range nodes {
-			walk(node)
+			vdev, ok := node.(map[string]any)
+			if !ok {
+				continue
+			}
+			stats := readMapAny(vdev, "stats")
+			readValue := readInt64Any(vdev, "read_errors", "readErrors")
+			writeValue := readInt64Any(vdev, "write_errors", "writeErrors")
+			checksumValue := readInt64Any(vdev, "checksum_errors", "checksumErrors")
+			if readValue == 0 {
+				readValue = readInt64Any(stats, "read_errors", "readErrors")
+			}
+			if writeValue == 0 {
+				writeValue = readInt64Any(stats, "write_errors", "writeErrors")
+			}
+			if checksumValue == 0 {
+				checksumValue = readInt64Any(stats, "checksum_errors", "checksumErrors")
+			}
+			readErrors += readValue
+			writeErrors += writeValue
+			checksumErrors += checksumValue
 		}
 	}
-	return members
+	return readErrors, writeErrors, checksumErrors
+}
+
+func poolScanFromAny(raw any) *PoolScan {
+	scan, ok := raw.(map[string]any)
+	if !ok || len(scan) == 0 {
+		return nil
+	}
+	function := strings.TrimSpace(readStringAny(scan, "function"))
+	state := strings.TrimSpace(readStringAny(scan, "state"))
+	if function == "" && state == "" {
+		return nil
+	}
+	result := &PoolScan{
+		Function:              function,
+		State:                 state,
+		Percentage:            readFloatAny(scan, "percentage", "percent"),
+		Errors:                readInt64Any(scan, "errors"),
+		BytesExamined:         readInt64Any(scan, "bytes_examined", "bytesExamined", "processed_bytes", "processedBytes"),
+		BytesToProcess:        readInt64Any(scan, "bytes_to_process", "bytesToProcess", "total_bytes", "totalBytes"),
+		TotalSecondsRemaining: readInt64Any(scan, "total_secs_left", "totalSecondsRemaining"),
+		StartedAt:             readTimeAny(scan, "start_time", "startTime", "started_at", "startedAt"),
+		EndedAt:               readTimeAny(scan, "end_time", "endTime", "ended_at", "endedAt"),
+	}
+	return result
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func wholeDiskFromDevice(device string) string {
@@ -538,15 +704,31 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 				topology = nil
 			}
 		}
+		var scan any
+		if len(item.Scan) > 0 {
+			if err := json.Unmarshal(item.Scan, &scan); err != nil {
+				scan = nil
+			}
+		}
+		vdevs, diskMembers := poolTopologyFromTopology(topology)
+		readErrors, writeErrors, checksumErrors := poolErrorTotals(topology)
 
 		pools = append(pools, Pool{
-			ID:          id,
-			Name:        strings.TrimSpace(item.Name),
-			Status:      strings.TrimSpace(item.Status),
-			TotalBytes:  item.Size,
-			UsedBytes:   item.Allocated,
-			FreeBytes:   item.Free,
-			DiskMembers: poolDiskMembersFromTopology(topology),
+			ID:             id,
+			GUID:           strings.TrimSpace(item.GUID),
+			Name:           strings.TrimSpace(item.Name),
+			Status:         strings.TrimSpace(item.Status),
+			StatusCode:     strings.TrimSpace(item.StatusCode),
+			StatusDetail:   strings.TrimSpace(item.StatusDetail),
+			TotalBytes:     item.Size,
+			UsedBytes:      item.Allocated,
+			FreeBytes:      item.Free,
+			ReadErrors:     readErrors,
+			WriteErrors:    writeErrors,
+			ChecksumErrors: checksumErrors,
+			Scan:           poolScanFromAny(scan),
+			VDevs:          vdevs,
+			DiskMembers:    diskMembers,
 		})
 	}
 
@@ -804,12 +986,20 @@ func (c *Client) disksFromMaps(ctx context.Context, response []map[string]any) (
 // health/status field on any TrueNAS version and only names the pool behind
 // an extra option the REST bridge cannot pass, so without this every disk
 // rendered as an unparented "Unknown" (#1573).
-func enrichDisksFromPoolTopology(pools []Pool, disks []Disk) {
+func enrichDisksFromPoolTopology(pools []Pool, disks []Disk) []Disk {
 	type membership struct {
 		pool   string
 		status string
 	}
 	byDevice := make(map[string]membership)
+	knownDevices := make(map[string]struct{}, len(disks)*2)
+	for _, disk := range disks {
+		for _, identity := range []string{disk.Name, disk.ID} {
+			if identity = strings.TrimSpace(identity); identity != "" {
+				knownDevices[identity] = struct{}{}
+			}
+		}
+	}
 	for _, pool := range pools {
 		for _, member := range pool.DiskMembers {
 			for _, device := range []string{member.Disk, member.Device} {
@@ -821,10 +1011,31 @@ func enrichDisksFromPoolTopology(pools []Pool, disks []Disk) {
 					byDevice[device] = membership{pool: pool.Name, status: member.Status}
 				}
 			}
+			if !member.Missing {
+				continue
+			}
+			name := firstNonEmptyString(member.Disk, wholeDiskFromDevice(member.Device), member.Device)
+			if name == "" {
+				continue
+			}
+			if _, exists := knownDevices[name]; exists {
+				continue
+			}
+			// A synthetic disk resource is emitted only from explicit
+			// unavail_disk topology evidence. Missing disk.query rows alone are
+			// not enough to assert that a disk is absent.
+			disks = append(disks, Disk{
+				ID:     firstNonEmptyString(member.GUID, name),
+				Name:   name,
+				Pool:   pool.Name,
+				Status: member.Status,
+				Health: "UNKNOWN",
+			})
+			knownDevices[name] = struct{}{}
 		}
 	}
 	if len(byDevice) == 0 {
-		return
+		return disks
 	}
 
 	for i := range disks {
@@ -843,6 +1054,7 @@ func enrichDisksFromPoolTopology(pools []Pool, disks []Disk) {
 			disk.Status = member.status
 		}
 	}
+	return disks
 }
 
 // GetDiskTemperatures returns the current temperature by TrueNAS disk name.
@@ -1597,7 +1809,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch truenas disks: %w", err)
 	}
-	enrichDisksFromPoolTopology(pools, disks)
+	disks = enrichDisksFromPoolTopology(pools, disks)
 
 	alerts, err := c.GetAlerts(ctx)
 	if err != nil {
@@ -4143,13 +4355,17 @@ func (f *int64ResponseField) UnmarshalJSON(data []byte) error {
 }
 
 type poolResponse struct {
-	ID        int64           `json:"id"`
-	Name      string          `json:"name"`
-	Status    string          `json:"status"`
-	Size      int64           `json:"size"`
-	Allocated int64           `json:"allocated"`
-	Free      int64           `json:"free"`
-	Topology  json.RawMessage `json:"topology"`
+	ID           int64           `json:"id"`
+	GUID         string          `json:"guid"`
+	Name         string          `json:"name"`
+	Status       string          `json:"status"`
+	StatusCode   string          `json:"status_code"`
+	StatusDetail string          `json:"status_detail"`
+	Size         int64           `json:"size"`
+	Allocated    int64           `json:"allocated"`
+	Free         int64           `json:"free"`
+	Topology     json.RawMessage `json:"topology"`
+	Scan         json.RawMessage `json:"scan"`
 }
 
 type datasetResponse struct {

@@ -140,6 +140,13 @@ tombstones, re-enrollment, or command authority. A linked agent remains
 supplemental evidence on the retained canonical Proxmox member; its presence
 does not decide provider membership or authorize removal.
 
+The same shared model file may carry monitoring-owned native storage-health
+evidence such as structured ZFS scans, vdev members, and Ceph health checks.
+Those additive read-state fields do not change Unified Agent enrollment,
+transport admission, token binding, command authority, deletion tombstones, or
+re-enrollment continuity. Unknown or absent provider storage evidence must not
+be reinterpreted as an agent lifecycle transition.
+
 Docker / Podman report transport is shared with `api-contracts`.
 `internal/dockeragent/agent.go` measures the gzip-encoded HTTP entity and the
 decoded JSON before attempting any destination, while

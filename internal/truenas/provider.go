@@ -534,7 +534,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	systemAssessment := assessSystemStorage(snapshot)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
-	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot, collectedAt)
+	incidentAssignments := buildIncidentAssignments(snapshot, collectedAt)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Shares)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
@@ -545,7 +545,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 		Resource: unifiedresources.Resource{
 			Type:        unifiedresources.ResourceTypeAgent,
 			Name:        strings.TrimSpace(snapshot.System.Hostname),
-			Status:      systemStatus(snapshot.System, systemRisk, systemIncidents),
+			Status:      systemStatus(snapshot.System, systemRisk, incidentAssignments.System),
 			LastSeen:    collectedAt,
 			UpdatedAt:   collectedAt,
 			Metrics:     metricsFromTrueNASSystem(snapshot.System, totalCapacity, totalUsed),
@@ -570,7 +570,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				snapshot.System.Version,
 				"zfs",
 			},
-			Incidents: systemIncidents,
+			Incidents: incidentAssignments.System,
 		},
 		// The system's identity deliberately carries no machine key: the
 		// TrueNAS DMI serial is shared by DR clones and can be vendor
@@ -585,7 +585,8 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	for _, pool := range snapshot.Pools {
 		assessment := assessPool(pool)
 		risk := unifiedresources.StorageRiskFromAssessment(assessment)
-		incidents := poolIncidents[strings.TrimSpace(pool.Name)]
+		incidents := incidentAssignments.Pools[strings.TrimSpace(pool.Name)]
+		zfsPool := zfsPoolFromPool(pool)
 		poolSourceID := scopedPoolSourceID(systemSourceID, pool.Name)
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:               poolSourceID,
@@ -601,13 +602,19 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
 				},
 				Storage: &unifiedresources.StorageMeta{
-					Type:         "zfs-pool",
-					IsZFS:        true,
-					Platform:     "truenas",
-					Topology:     "pool",
-					Protection:   "zfs",
-					Risk:         risk,
-					ZFSPoolState: strings.ToUpper(strings.TrimSpace(pool.Status)),
+					Type:              "zfs-pool",
+					IsZFS:             true,
+					Platform:          "truenas",
+					Topology:          poolTopologyLabel(pool),
+					Protection:        "zfs",
+					Risk:              risk,
+					RiskSummary:       unifiedresources.StorageRiskSummary(risk),
+					PoolHealth:        poolHealthFromTrueNASPool(pool, assessment, collectedAt),
+					ZFSPool:           &zfsPool,
+					ZFSPoolState:      strings.ToUpper(strings.TrimSpace(pool.Status)),
+					ZFSReadErrors:     pool.ReadErrors,
+					ZFSWriteErrors:    pool.WriteErrors,
+					ZFSChecksumErrors: pool.ChecksumErrors,
 				},
 				Tags:      poolTags(pool),
 				Incidents: incidents,
@@ -627,6 +634,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 			parentPool = parentPoolFromDataset(dataset.Name)
 		}
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
+		incidents := incidentAssignments.Datasets[strings.TrimSpace(dataset.Name)]
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID:               scopedDatasetSourceID(systemSourceID, dataset.Name),
 			ParentSourceID:         scopedPoolSourceID(systemSourceID, parentPool),
@@ -634,7 +642,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      dataset.Name,
-				Status:    statusFromDataset(dataset),
+				Status:    unifiedresources.IncidentsStatus(statusFromDataset(dataset), incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				Metrics: &unifiedresources.ResourceMetrics{
@@ -653,6 +661,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 					"zfs",
 					datasetStateTag(dataset),
 				},
+				Incidents: incidents,
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: []string{
@@ -665,6 +674,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 
 	for _, app := range snapshot.Apps {
 		metrics := metricsFromTrueNASApp(app, snapshot.System.MemoryTotalBytes)
+		incidents := incidentAssignments.Apps[appIncidentKey(app)]
 		dockerMeta := &unifiedresources.DockerData{
 			ContainerID:    appCanonicalID(app),
 			Hostname:       strings.TrimSpace(snapshot.System.Hostname),
@@ -703,7 +713,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				Type:       unifiedresources.ResourceTypeAppContainer,
 				Technology: "docker",
 				Name:       appDisplayName(app),
-				Status:     statusFromApp(app),
+				Status:     unifiedresources.IncidentsStatus(statusFromApp(app), incidents),
 				LastSeen:   collectedAt,
 				UpdatedAt:  collectedAt,
 				Metrics:    metrics,
@@ -714,6 +724,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 				},
 				Capabilities: truenasAppCapabilities(),
 				Tags:         appTags(app),
+				Incidents:    incidents,
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: dedupeStrings([]string{appDisplayName(app)}),
@@ -782,7 +793,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 
 	for _, disk := range snapshot.Disks {
 		assessment := assessDisk(disk)
-		incidents := diskIncidents[strings.TrimSpace(disk.Name)]
+		incidents := incidentAssignments.Disks[strings.TrimSpace(disk.Name)]
 		diskIdentity := unifiedresources.ResourceIdentity{
 			Hostnames: []string{snapshot.System.Hostname},
 		}
@@ -821,6 +832,8 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 					TemperatureAggregate: temperatureAggregateMetaFromTrueNASDisk(disk),
 					Wearout:              -1,
 					RPM:                  rpmFromDisk(disk),
+					StorageGroup:         strings.TrimSpace(disk.Pool),
+					StorageState:         normalizedDiskStatus(disk),
 					Risk:                 unifiedresources.PhysicalDiskRiskFromAssessmentAndIncidents(assessment, incidents),
 				},
 				Tags:      []string{"truenas", "disk", disk.Transport},
@@ -1117,12 +1130,28 @@ func enrichAppStatsFromPreviousSnapshot(current *FixtureSnapshot, previous *Fixt
 	}
 }
 
-func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) ([]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident) {
-	systemIncidents := make([]unifiedresources.ResourceIncident, 0)
-	poolIncidents := make(map[string][]unifiedresources.ResourceIncident)
-	diskIncidents := make(map[string][]unifiedresources.ResourceIncident)
+type trueNASIncidentAssignments struct {
+	System   []unifiedresources.ResourceIncident
+	Pools    map[string][]unifiedresources.ResourceIncident
+	Datasets map[string][]unifiedresources.ResourceIncident
+	Disks    map[string][]unifiedresources.ResourceIncident
+	Apps     map[string][]unifiedresources.ResourceIncident
+}
+
+type poolIncidentProjection struct {
+	Incident unifiedresources.ResourceIncident
+	Disk     string
+}
+
+func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) trueNASIncidentAssignments {
+	assignments := trueNASIncidentAssignments{
+		Pools:    make(map[string][]unifiedresources.ResourceIncident),
+		Datasets: make(map[string][]unifiedresources.ResourceIncident),
+		Disks:    make(map[string][]unifiedresources.ResourceIncident),
+		Apps:     make(map[string][]unifiedresources.ResourceIncident),
+	}
 	if snapshot == nil {
-		return systemIncidents, poolIncidents, diskIncidents
+		return assignments
 	}
 
 	diskPools := make(map[string]string, len(snapshot.Disks))
@@ -1135,7 +1164,7 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) (
 		diskPools[diskName] = poolName
 	}
 
-	nativePoolAlertSeen := make(map[string]struct{}, len(snapshot.Alerts))
+	nativePoolSignals := make(map[string]map[string]struct{}, len(snapshot.Alerts))
 	for _, alert := range snapshot.Alerts {
 		if alert.Dismissed {
 			continue
@@ -1144,19 +1173,22 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) (
 		if !ok {
 			continue
 		}
-		systemIncidents = append(systemIncidents, incident)
+		assignments.System = append(assignments.System, incident)
 
 		if poolName := poolNameFromAlert(alert); poolName != "" {
-			poolIncidents[poolName] = append(poolIncidents[poolName], incident)
-			if incident.Severity == storagehealth.RiskWarning || incident.Severity == storagehealth.RiskCritical {
-				nativePoolAlertSeen[poolName] = struct{}{}
+			assignments.Pools[poolName] = append(assignments.Pools[poolName], incident)
+			if nativePoolSignals[poolName] == nil {
+				nativePoolSignals[poolName] = make(map[string]struct{})
+			}
+			for _, code := range canonicalSignalsCoveredByNativeAlert(incident.Code) {
+				nativePoolSignals[poolName][code] = struct{}{}
 			}
 		}
 
 		if diskName := diskNameFromAlert(alert); diskName != "" {
-			diskIncidents[diskName] = append(diskIncidents[diskName], incident)
+			assignments.Disks[diskName] = append(assignments.Disks[diskName], incident)
 			if poolName := diskPools[diskName]; poolName != "" {
-				poolIncidents[poolName] = append(poolIncidents[poolName], incident)
+				assignments.Pools[poolName] = append(assignments.Pools[poolName], incident)
 			}
 		}
 	}
@@ -1166,18 +1198,28 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) (
 		if poolName == "" {
 			continue
 		}
-		if _, exists := nativePoolAlertSeen[poolName]; exists {
-			continue
+		for _, projection := range incidentsFromPoolHealth(pool, observedAt) {
+			if _, covered := nativePoolSignals[poolName][projection.Incident.Code]; covered {
+				continue
+			}
+			assignments.System = append(assignments.System, projection.Incident)
+			assignments.Pools[poolName] = append(assignments.Pools[poolName], projection.Incident)
+			if projection.Disk != "" {
+				assignments.Disks[projection.Disk] = append(assignments.Disks[projection.Disk], projection.Incident)
+			}
 		}
-		incident, ok := incidentFromPoolStatus(pool, observedAt)
-		if !ok {
-			continue
-		}
-		systemIncidents = append(systemIncidents, incident)
-		poolIncidents[poolName] = append(poolIncidents[poolName], incident)
 	}
 
-	return systemIncidents, poolIncidents, diskIncidents
+	for _, dataset := range snapshot.Datasets {
+		if incident, ok := incidentFromDatasetState(dataset, observedAt); ok {
+			assignments.Datasets[strings.TrimSpace(dataset.Name)] = append(assignments.Datasets[strings.TrimSpace(dataset.Name)], incident)
+		}
+	}
+	for _, app := range snapshot.Apps {
+		assignments.Apps[appIncidentKey(app)] = append(assignments.Apps[appIncidentKey(app)], incidentsFromAppState(app, observedAt)...)
+	}
+
+	return assignments
 }
 
 func assessSystemStorage(snapshot *FixtureSnapshot) storagehealth.Assessment {
@@ -1201,52 +1243,250 @@ func incidentFromAlert(alert Alert) (unifiedresources.ResourceIncident, bool) {
 		return unifiedresources.ResourceIncident{}, false
 	}
 	return unifiedresources.ResourceIncident{
-		Provider:  "truenas",
-		NativeID:  strings.TrimSpace(alert.ID),
-		Code:      incidentCodeFromAlert(alert),
-		Severity:  severity,
-		Source:    strings.TrimSpace(alert.Source),
-		Summary:   strings.TrimSpace(alert.Message),
-		StartedAt: alert.Datetime,
+		Provider:                      "truenas",
+		NativeID:                      strings.TrimSpace(alert.ID),
+		Code:                          incidentCodeFromAlert(alert),
+		Severity:                      severity,
+		Source:                        strings.TrimSpace(alert.Source),
+		Summary:                       strings.TrimSpace(alert.Message),
+		StartedAt:                     alert.Datetime,
+		RecoveryConfirmationsRequired: 2,
 	}, true
 }
 
 func incidentFromPoolStatus(pool Pool, observedAt time.Time) (unifiedresources.ResourceIncident, bool) {
-	assessment := assessPool(pool)
-	if assessment.Level != storagehealth.RiskWarning && assessment.Level != storagehealth.RiskCritical {
-		return unifiedresources.ResourceIncident{}, false
+	for _, projection := range incidentsFromPoolHealth(pool, observedAt) {
+		if projection.Incident.Code == "zfs_pool_state" {
+			return projection.Incident, true
+		}
 	}
-	reason, ok := primaryIncidentReason(assessment, "zfs_pool_state")
-	if !ok {
-		return unifiedresources.ResourceIncident{}, false
-	}
+	return unifiedresources.ResourceIncident{}, false
+}
 
+func incidentsFromPoolHealth(pool Pool, observedAt time.Time) []poolIncidentProjection {
 	poolName := strings.TrimSpace(pool.Name)
 	if poolName == "" {
+		return nil
+	}
+	poolIdentity := firstNonEmptyString(pool.GUID, pool.ID, poolName)
+	source := "pool.query"
+	if pool.IsBoot {
+		source = "boot.get_state"
+	}
+	makeIncident := func(nativeID, code string, severity storagehealth.RiskLevel, summary string) unifiedresources.ResourceIncident {
+		return unifiedresources.ResourceIncident{
+			Provider:                      "truenas",
+			NativeID:                      nativeID,
+			Code:                          code,
+			Severity:                      severity,
+			Source:                        source,
+			Summary:                       summary,
+			StartedAt:                     observedAt,
+			ConfirmationsRequired:         2,
+			RecoveryConfirmationsRequired: 2,
+		}
+	}
+
+	var out []poolIncidentProjection
+	state := strings.ToUpper(strings.TrimSpace(pool.Status))
+	switch state {
+	case "DEGRADED":
+		out = append(out, poolIncidentProjection{Incident: makeIncident(
+			"pool:"+poolName+":state",
+			"zfs_pool_state",
+			storagehealth.RiskWarning,
+			fmt.Sprintf("ZFS pool %s is DEGRADED", poolName),
+		)})
+	case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL", "SUSPENDED":
+		out = append(out, poolIncidentProjection{Incident: makeIncident(
+			"pool:"+poolName+":state",
+			"zfs_pool_state",
+			storagehealth.RiskCritical,
+			fmt.Sprintf("ZFS pool %s is %s", poolName, state),
+		)})
+	}
+
+	hasVDevErrors := false
+	for _, vdev := range pool.VDevs {
+		if vdev.ReadErrors > 0 || vdev.WriteErrors > 0 || vdev.ChecksumErrors > 0 {
+			hasVDevErrors = true
+			break
+		}
+	}
+	if !hasVDevErrors && (pool.ReadErrors > 0 || pool.WriteErrors > 0 || pool.ChecksumErrors > 0) {
+		out = append(out, poolIncidentProjection{Incident: makeIncident(
+			"pool:"+poolIdentity,
+			"zfs_pool_errors",
+			storagehealth.RiskWarning,
+			fmt.Sprintf("ZFS pool %s reports read=%d write=%d checksum=%d errors", poolName, pool.ReadErrors, pool.WriteErrors, pool.ChecksumErrors),
+		)})
+	}
+
+	if pool.Scan != nil {
+		function := strings.ToUpper(strings.TrimSpace(pool.Scan.Function))
+		scanState := strings.ToUpper(strings.TrimSpace(pool.Scan.State))
+		switch {
+		case pool.Scan.Errors > 0:
+			out = append(out, poolIncidentProjection{Incident: makeIncident(
+				"pool:"+poolIdentity+":scan",
+				"zfs_scan_errors",
+				storagehealth.RiskCritical,
+				fmt.Sprintf("ZFS pool %s %s reports %d error(s)", poolName, strings.ToLower(firstNonEmptyString(function, "scan")), pool.Scan.Errors),
+			)})
+		case scanState == "FAILED":
+			out = append(out, poolIncidentProjection{Incident: makeIncident(
+				"pool:"+poolIdentity+":scan",
+				"zfs_scan_failed",
+				storagehealth.RiskCritical,
+				fmt.Sprintf("ZFS pool %s %s failed", poolName, strings.ToLower(firstNonEmptyString(function, "scan"))),
+			)})
+		case function == "RESILVER" && poolScanIsActive(scanState):
+			out = append(out, poolIncidentProjection{Incident: makeIncident(
+				"pool:"+poolIdentity+":scan",
+				"zfs_resilver_active",
+				storagehealth.RiskWarning,
+				poolScanSummary(pool),
+			)})
+		case function == "SCRUB" && poolScanIsActive(scanState):
+			out = append(out, poolIncidentProjection{Incident: makeIncident(
+				"pool:"+poolIdentity+":scan",
+				"zfs_scrub_active",
+				storagehealth.RiskMonitor,
+				poolScanSummary(pool),
+			)})
+		}
+	}
+
+	for _, vdev := range pool.VDevs {
+		state := strings.ToUpper(strings.TrimSpace(vdev.Status))
+		deviceIdentity := firstNonEmptyString(vdev.GUID, vdev.Disk, vdev.Device, vdev.Path, vdev.ID, vdev.Name)
+		if deviceIdentity == "" {
+			continue
+		}
+		displayName := firstNonEmptyString(vdev.Disk, vdev.Device, vdev.Path, vdev.Name, deviceIdentity)
+		nativeID := "pool:" + poolIdentity + ":vdev:" + deviceIdentity
+		diskName := strings.TrimSpace(vdev.Disk)
+		if vdev.Missing {
+			out = append(out, poolIncidentProjection{
+				Incident: makeIncident(nativeID, "zfs_device_missing", storagehealth.RiskCritical, fmt.Sprintf("ZFS device %s is reported missing by pool %s topology", displayName, poolName)),
+				Disk:     diskName,
+			})
+		} else {
+			switch state {
+			case "DEGRADED":
+				out = append(out, poolIncidentProjection{
+					Incident: makeIncident(nativeID, "zfs_device_state", storagehealth.RiskWarning, fmt.Sprintf("ZFS device %s in pool %s is DEGRADED", displayName, poolName)),
+					Disk:     diskName,
+				})
+			case "FAULTED", "FAILED", "OFFLINE", "REMOVED", "UNAVAIL":
+				out = append(out, poolIncidentProjection{
+					Incident: makeIncident(nativeID, "zfs_device_state", storagehealth.RiskCritical, fmt.Sprintf("ZFS device %s in pool %s is %s", displayName, poolName, state)),
+					Disk:     diskName,
+				})
+			}
+		}
+		if vdev.ReadErrors > 0 || vdev.WriteErrors > 0 || vdev.ChecksumErrors > 0 {
+			out = append(out, poolIncidentProjection{
+				Incident: makeIncident(nativeID, "zfs_device_errors", storagehealth.RiskWarning, fmt.Sprintf("ZFS device %s reports read=%d write=%d checksum=%d errors", displayName, vdev.ReadErrors, vdev.WriteErrors, vdev.ChecksumErrors)),
+				Disk:     diskName,
+			})
+		}
+	}
+	return out
+}
+
+func canonicalSignalsCoveredByNativeAlert(code string) []string {
+	switch strings.TrimSpace(code) {
+	case "truenas_volume_status":
+		return []string{"zfs_pool_state", "zfs_device_state", "zfs_device_missing"}
+	case "truenas_scrub":
+		return []string{"zfs_scan_errors", "zfs_scan_failed"}
+	default:
+		return nil
+	}
+}
+
+func incidentFromDatasetState(dataset Dataset, observedAt time.Time) (unifiedresources.ResourceIncident, bool) {
+	name := strings.TrimSpace(dataset.Name)
+	if name == "" {
+		return unifiedresources.ResourceIncident{}, false
+	}
+	code := ""
+	summary := ""
+	switch {
+	case dataset.Locked:
+		code = "zfs_dataset_locked"
+		summary = fmt.Sprintf("ZFS dataset %s is locked and unavailable", name)
+	case !dataset.Mounted:
+		code = "zfs_dataset_unmounted"
+		summary = fmt.Sprintf("ZFS dataset %s is not mounted", name)
+	default:
 		return unifiedresources.ResourceIncident{}, false
 	}
 	return unifiedresources.ResourceIncident{
-		Provider:  "truenas",
-		NativeID:  "pool:" + poolName + ":state",
-		Code:      reason.Code,
-		Severity:  reason.Severity,
-		Source:    "pool.query",
-		Summary:   reason.Summary,
-		StartedAt: observedAt,
+		Provider:                      "truenas",
+		NativeID:                      "dataset:" + firstNonEmptyString(dataset.ID, name),
+		Code:                          code,
+		Severity:                      storagehealth.RiskWarning,
+		Source:                        "pool.dataset.query",
+		Summary:                       summary,
+		StartedAt:                     observedAt,
+		ConfirmationsRequired:         2,
+		RecoveryConfirmationsRequired: 2,
 	}, true
 }
 
-func primaryIncidentReason(assessment storagehealth.Assessment, code string) (storagehealth.Reason, bool) {
-	code = strings.TrimSpace(code)
-	for _, reason := range assessment.Reasons {
-		if strings.TrimSpace(reason.Code) == code {
-			return reason, true
+func incidentsFromAppState(app App, observedAt time.Time) []unifiedresources.ResourceIncident {
+	appID := appIncidentKey(app)
+	if appID == "" {
+		return nil
+	}
+	makeIncident := func(nativeID, code string, severity storagehealth.RiskLevel, summary string) unifiedresources.ResourceIncident {
+		return unifiedresources.ResourceIncident{
+			Provider:                      "truenas",
+			NativeID:                      nativeID,
+			Code:                          code,
+			Severity:                      severity,
+			Source:                        "app.query",
+			Summary:                       summary,
+			StartedAt:                     observedAt,
+			ConfirmationsRequired:         2,
+			RecoveryConfirmationsRequired: 2,
 		}
 	}
-	if len(assessment.Reasons) == 0 {
-		return storagehealth.Reason{}, false
+	name := appDisplayName(app)
+	var out []unifiedresources.ResourceIncident
+	switch strings.ToUpper(strings.TrimSpace(app.State)) {
+	case "CRASHED":
+		out = append(out, makeIncident("app:"+appID, "truenas_app_crashed", storagehealth.RiskCritical, fmt.Sprintf("TrueNAS app %s is crashed", name)))
+	case "STOPPED":
+		out = append(out, makeIncident("app:"+appID, "truenas_app_stopped", storagehealth.RiskWarning, fmt.Sprintf("TrueNAS app %s is stopped", name)))
 	}
-	return assessment.Reasons[0], true
+	if !strings.EqualFold(strings.TrimSpace(app.State), "RUNNING") {
+		return out
+	}
+	for _, container := range app.Containers {
+		state := strings.ToUpper(strings.TrimSpace(container.State))
+		if state != "CRASHED" && state != "EXITED" {
+			continue
+		}
+		containerID := firstNonEmptyString(container.ID, container.ServiceName, container.Image)
+		if containerID == "" {
+			continue
+		}
+		containerName := firstNonEmptyString(container.ServiceName, container.ID, container.Image)
+		out = append(out, makeIncident(
+			"app:"+appID+":container:"+containerID,
+			"truenas_app_container_failed",
+			storagehealth.RiskCritical,
+			fmt.Sprintf("Container %s in TrueNAS app %s is %s", containerName, name, state),
+		))
+	}
+	return out
+}
+
+func appIncidentKey(app App) string {
+	return firstNonEmptyString(strings.TrimSpace(app.ID), strings.TrimSpace(app.Name))
 }
 
 func severityFromAlertLevel(level string) (storagehealth.RiskLevel, bool) {
@@ -1320,10 +1560,213 @@ func diskNameFromAlert(alert Alert) string {
 }
 
 func assessPool(pool Pool) storagehealth.Assessment {
-	return storagehealth.AssessZFSPool(models.ZFSPool{
-		Name:  strings.TrimSpace(pool.Name),
-		State: strings.ToUpper(strings.TrimSpace(pool.Status)),
-	})
+	return storagehealth.AssessZFSPool(zfsPoolFromPool(pool))
+}
+
+func zfsPoolFromPool(pool Pool) models.ZFSPool {
+	devices := make([]models.ZFSDevice, 0, len(pool.VDevs))
+	for _, vdev := range pool.VDevs {
+		devices = append(devices, models.ZFSDevice{
+			Name:           firstNonEmptyString(vdev.Name, vdev.Disk, vdev.Device, vdev.Path, vdev.ID),
+			Type:           strings.ToLower(strings.TrimSpace(vdev.Type)),
+			Role:           strings.ToLower(strings.TrimSpace(vdev.Role)),
+			Parent:         strings.TrimSpace(vdev.ParentID),
+			GUID:           strings.TrimSpace(vdev.GUID),
+			Disk:           strings.TrimSpace(vdev.Disk),
+			Path:           firstNonEmptyString(strings.TrimSpace(vdev.Path), devicePath(vdev.Device)),
+			State:          strings.ToUpper(strings.TrimSpace(vdev.Status)),
+			ReadErrors:     vdev.ReadErrors,
+			WriteErrors:    vdev.WriteErrors,
+			ChecksumErrors: vdev.ChecksumErrors,
+			Missing:        vdev.Missing,
+			Message:        strings.TrimSpace(vdev.Message),
+		})
+	}
+
+	var scanDetails *models.ZFSScan
+	scanSummary := ""
+	if pool.Scan != nil {
+		scanDetails = &models.ZFSScan{
+			Function:              strings.ToUpper(strings.TrimSpace(pool.Scan.Function)),
+			State:                 strings.ToUpper(strings.TrimSpace(pool.Scan.State)),
+			Percentage:            pool.Scan.Percentage,
+			Errors:                pool.Scan.Errors,
+			BytesExamined:         pool.Scan.BytesExamined,
+			BytesToProcess:        pool.Scan.BytesToProcess,
+			TotalSecondsRemaining: pool.Scan.TotalSecondsRemaining,
+			StartedAt:             pool.Scan.StartedAt,
+			EndedAt:               pool.Scan.EndedAt,
+		}
+		scanSummary = poolScanSummary(pool)
+	}
+
+	return models.ZFSPool{
+		Name:           strings.TrimSpace(pool.Name),
+		State:          strings.ToUpper(strings.TrimSpace(pool.Status)),
+		Status:         firstNonEmptyString(strings.TrimSpace(pool.StatusDetail), strings.TrimSpace(pool.StatusCode)),
+		Scan:           scanSummary,
+		ScanDetails:    scanDetails,
+		ReadErrors:     pool.ReadErrors,
+		WriteErrors:    pool.WriteErrors,
+		ChecksumErrors: pool.ChecksumErrors,
+		Devices:        devices,
+	}
+}
+
+func devicePath(device string) string {
+	device = strings.TrimSpace(device)
+	if device == "" {
+		return ""
+	}
+	if strings.HasPrefix(device, "/") {
+		return device
+	}
+	return "/dev/" + device
+}
+
+func poolScanSummary(pool Pool) string {
+	if pool.Scan == nil {
+		return ""
+	}
+	function := strings.ToLower(strings.TrimSpace(pool.Scan.Function))
+	state := strings.ToLower(strings.TrimSpace(pool.Scan.State))
+	if function == "" {
+		function = "scan"
+	}
+	summary := strings.TrimSpace(function + " " + state)
+	if pool.Scan.Percentage > 0 && poolScanIsActive(state) {
+		summary = fmt.Sprintf("%s (%.1f%%)", summary, pool.Scan.Percentage)
+	}
+	if pool.Scan.Errors > 0 {
+		summary = fmt.Sprintf("%s, %d error(s)", summary, pool.Scan.Errors)
+	}
+	return summary
+}
+
+func poolScanIsActive(state string) bool {
+	switch strings.ToUpper(strings.TrimSpace(state)) {
+	case "SCANNING", "RUNNING", "IN_PROGRESS", "INPROGRESS":
+		return true
+	default:
+		return false
+	}
+}
+
+func poolTopologyLabel(pool Pool) string {
+	var dataTypes []string
+	for _, vdev := range pool.VDevs {
+		if vdev.ParentID != "" || !strings.EqualFold(strings.TrimSpace(vdev.Role), "data") {
+			continue
+		}
+		vdevType := strings.ToLower(strings.TrimSpace(vdev.Type))
+		if vdevType == "" || containsExactString(dataTypes, vdevType) {
+			continue
+		}
+		dataTypes = append(dataTypes, vdevType)
+	}
+	if len(dataTypes) == 0 {
+		return "pool"
+	}
+	if len(dataTypes) == 1 && dataTypes[0] == "disk" && len(pool.DiskMembers) > 1 {
+		return "stripe"
+	}
+	return strings.Join(dataTypes, "+")
+}
+
+func poolHealthFromTrueNASPool(pool Pool, assessment storagehealth.Assessment, observedAt time.Time) *unifiedresources.PoolHealth {
+	canonicalState := canonicalPoolState(pool.Status)
+	severity := assessment.Level
+	if severity == "" {
+		severity = storagehealth.RiskHealthy
+	}
+	summary := ""
+	if len(assessment.Reasons) > 0 {
+		summary = strings.TrimSpace(assessment.Reasons[0].Summary)
+	} else if canonicalState != "UNKNOWN" {
+		summary = fmt.Sprintf("ZFS pool %s is %s", strings.TrimSpace(pool.Name), canonicalState)
+	}
+	evidenceCodes := make([]string, 0, len(assessment.Reasons))
+	for _, reason := range assessment.Reasons {
+		if code := strings.TrimSpace(reason.Code); code != "" && !containsExactString(evidenceCodes, code) {
+			evidenceCodes = append(evidenceCodes, code)
+		}
+	}
+	source := "pool.query"
+	if pool.IsBoot {
+		source = "boot.get_state"
+	}
+	return &unifiedresources.PoolHealth{
+		Scope:          "pool",
+		Provider:       "truenas",
+		NativeID:       firstNonEmptyString(pool.GUID, pool.ID, pool.Name),
+		CanonicalState: canonicalState,
+		NativeState:    strings.ToUpper(strings.TrimSpace(pool.Status)),
+		Severity:       severity,
+		Summary:        summary,
+		Recommendation: zfsPoolRecommendation(assessment),
+		Source:         source,
+		EvidenceCodes:  evidenceCodes,
+		ObservedAt:     observedAt,
+	}
+}
+
+func containsExactString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalPoolState(state string) string {
+	switch strings.ToUpper(strings.TrimSpace(state)) {
+	case "ONLINE":
+		return "ONLINE"
+	case "DEGRADED":
+		return "DEGRADED"
+	case "FAULTED":
+		return "FAULTED"
+	case "OFFLINE":
+		return "OFFLINE"
+	case "UNAVAIL":
+		return "UNAVAIL"
+	case "REMOVED":
+		return "UNAVAIL"
+	case "SUSPENDED":
+		return "FAULTED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func zfsPoolRecommendation(assessment storagehealth.Assessment) string {
+	hasCode := func(codes ...string) bool {
+		for _, reason := range assessment.Reasons {
+			for _, code := range codes {
+				if strings.TrimSpace(reason.Code) == code {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	switch {
+	case hasCode("zfs_device_missing", "zfs_device_state"):
+		return "Identify the affected vdev member, replace or reconnect it if native evidence confirms failure, then verify redundancy and resilver completion."
+	case hasCode("zfs_scan_errors", "zfs_scan_failed"):
+		return "Review the native scrub or resilver result, inspect affected devices and cabling, and restore a clean scan before making further storage changes."
+	case hasCode("zfs_pool_state"):
+		return "Inspect native pool and vdev status, preserve the remaining redundancy, and restore the pool to ONLINE."
+	case hasCode("zfs_pool_errors", "zfs_device_errors"):
+		return "Inspect the affected device and path, review SMART and cabling evidence, then run a scrub; replace hardware only when native evidence supports it."
+	case hasCode("zfs_resilver_active"):
+		return "Monitor resilver progress and avoid avoidable pool changes until protection returns to ONLINE."
+	case hasCode("zfs_scrub_active"):
+		return "Monitor the scrub to completion and review any reported errors."
+	default:
+		return ""
+	}
 }
 
 func assessDisk(disk Disk) storagehealth.Assessment {
@@ -2336,7 +2779,7 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 
 	copied := *snapshot
 	copied.System = cloneSystemInfo(snapshot.System)
-	copied.Pools = append([]Pool(nil), snapshot.Pools...)
+	copied.Pools = clonePools(snapshot.Pools)
 	copied.Datasets = append([]Dataset(nil), snapshot.Datasets...)
 	copied.Disks = append([]Disk(nil), snapshot.Disks...)
 	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
@@ -2347,6 +2790,23 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.ZFSSnapshots = append([]ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
 	copied.ReplicationTasks = append([]ReplicationTask(nil), snapshot.ReplicationTasks...)
 	return &copied
+}
+
+func clonePools(pools []Pool) []Pool {
+	if len(pools) == 0 {
+		return nil
+	}
+	out := make([]Pool, len(pools))
+	for i := range pools {
+		out[i] = pools[i]
+		if pools[i].Scan != nil {
+			scan := *pools[i].Scan
+			out[i].Scan = &scan
+		}
+		out[i].VDevs = append([]PoolVDev(nil), pools[i].VDevs...)
+		out[i].DiskMembers = append([]PoolDiskMember(nil), pools[i].DiskMembers...)
+	}
+	return out
 }
 
 func cloneSystemInfo(system SystemInfo) SystemInfo {

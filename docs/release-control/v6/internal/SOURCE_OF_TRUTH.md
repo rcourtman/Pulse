@@ -656,10 +656,18 @@ declared floor.
    path.
 5. Storage and disk health:
    Supported now for pools, datasets, and physical disks projected into the
-   shared storage and disk contracts, including SMART/disk-state risk, live
-   temperature, and recent temperature aggregates when the provider supplies
-   them. Out of scope: promising deeper TrueNAS-only topology or admin actions
-   beyond the current shared storage-health floor.
+   shared storage and disk contracts. The API-native floor preserves pool GUID,
+   state/detail, structured scrub or resilver progress, pool and vdev
+   read/write/checksum counters, mirror/RAIDZ/spare topology, path-only leaves,
+   and explicit missing-device evidence. `ONLINE`, `DEGRADED`, `FAULTED`,
+   `OFFLINE`, and `UNAVAIL` map into one canonical pool-health envelope while
+   retaining native evidence. Locked or unmounted datasets, failed app/runtime
+   state, SMART/disk-state risk, live temperature, and recent temperature
+   aggregates participate only when the provider supplies the corresponding
+   evidence. Unknown or absent telemetry never proves failure or recovery.
+   Out of scope: TrueNAS-only storage administration, automatic replacement,
+   pool mutation, or device-failure inference from an absent disk inventory
+   row.
 6. Recovery:
    Supported now as read-side visibility for TrueNAS snapshots and replication
    artifacts in the shared recovery model, filters, rollups, and cross-surface
@@ -667,10 +675,15 @@ declared floor.
    flow or promising provider-native restore/control actions that do not yet
    exist on the governed shared path.
 7. Alerts:
-   Supported now when TrueNAS systems, disks, and app parents participate in
-   the shared alert thresholds, incidents, and related-resource handoffs into
-   infrastructure, workloads, storage, and recovery. Out of scope: a separate
-   TrueNAS-only alert product surface.
+   Supported now when TrueNAS systems, pools, vdevs, datasets, disks, apps, and
+   app containers participate in the shared alert lifecycle, history,
+   suppression, and related-resource handoffs into infrastructure, workloads,
+   storage, and recovery. Provider-derived storage and workload conditions
+   require consecutive confirmation for activation and recovery, retain
+   connection-local identity across restart, and deduplicate equivalent native
+   TrueNAS alerts without suppressing distinct error evidence. Out of scope: a
+   second TrueNAS email-alert path or a separate TrueNAS-only alert product
+   surface.
 8. Assistant read/control:
    Supported now for canonical read-side resource access plus bounded app
    control. Assistant may read TrueNAS app logs via `pulse_read`, read app

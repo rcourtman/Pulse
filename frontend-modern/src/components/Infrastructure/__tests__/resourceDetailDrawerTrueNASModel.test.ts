@@ -198,6 +198,92 @@ describe('resourceDetailDrawerTrueNASModel', () => {
     );
   });
 
+  it('renders actionable canonical and native ZFS evidence without inventing a failed disk', () => {
+    const resource = baseResource({
+      type: 'storage',
+      displayName: 'tank',
+      status: 'degraded',
+      platformScopes: ['truenas'],
+      storage: {
+        type: 'zfs-pool',
+        topology: 'mirror',
+        platform: 'truenas',
+        zfsPoolState: 'DEGRADED',
+        poolHealth: {
+          scope: 'pool',
+          provider: 'truenas',
+          nativeId: 'pool-guid',
+          canonicalState: 'DEGRADED',
+          nativeState: 'DEGRADED',
+          severity: 'critical',
+          summary: 'Pool tank is degraded with a missing mirror member',
+          recommendation: 'Confirm the affected mirror member in TrueNAS before replacement.',
+          source: 'pool.query',
+          evidenceCodes: ['zfs_pool_state', 'zfs_device_missing'],
+        },
+        zfsPool: {
+          name: 'tank',
+          state: 'DEGRADED',
+          status: 'Degraded',
+          scan: 'RESILVER SCANNING',
+          scanDetails: {
+            function: 'RESILVER',
+            state: 'SCANNING',
+            percentage: 33.3,
+          },
+          readErrors: 1,
+          writeErrors: 0,
+          checksumErrors: 2,
+          devices: [
+            {
+              name: 'missing',
+              type: 'UNAVAIL_DISK',
+              role: 'data',
+              parent: 'mirror-0',
+              path: '/dev/disk/by-partuuid/missing',
+              state: 'UNAVAIL',
+              readErrors: 1,
+              writeErrors: 0,
+              checksumErrors: 0,
+              missing: true,
+            },
+          ],
+        },
+      },
+    });
+
+    const healthRows = buildTrueNASDetailSections(resource).find(
+      (section) => section.label === 'Health',
+    )?.rows;
+    expect(healthRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Canonical state', value: 'DEGRADED' }),
+        expect.objectContaining({ label: 'Native state', value: 'DEGRADED' }),
+        expect.objectContaining({
+          label: 'Scan / resilver',
+          value: 'Resilver Scanning (33.3%)',
+        }),
+        expect.objectContaining({
+          label: 'ZFS errors',
+          value: 'Read 1 · Write 0 · Checksum 2',
+        }),
+        expect.objectContaining({
+          label: 'Affected vdevs',
+          value: '/dev/disk/by-partuuid/missing (Data / Unavail Disk): Missing · R 1 W 0 C 0',
+        }),
+        expect.objectContaining({
+          label: 'Recommended',
+          value: 'Confirm the affected mirror member in TrueNAS before replacement.',
+        }),
+        expect.objectContaining({
+          label: 'Evidence',
+          value: 'zfs_pool_state, zfs_device_missing',
+        }),
+        expect.objectContaining({ label: 'Evidence source', value: 'pool.query' }),
+      ]),
+    );
+  });
+
   it('summarizes native TrueNAS physical disk metadata for the detail drawer', () => {
     const resource = baseResource({
       type: 'physical_disk',

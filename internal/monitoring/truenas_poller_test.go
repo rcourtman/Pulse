@@ -1007,12 +1007,95 @@ func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerKeepsPoolHealthConnectionLocalAcrossMatchingAppliances(t *testing.T) {
+	observedAt := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC)
+	fixture := func(state string) truenas.FixtureSnapshot {
+		return truenas.FixtureSnapshot{
+			CollectedAt: observedAt,
+			System:      truenas.SystemInfo{Hostname: "truenas", Healthy: true},
+			Pools: []truenas.Pool{{
+				ID:     "7",
+				GUID:   "shared-restored-guid",
+				Name:   "tank",
+				Status: state,
+			}},
+		}
+	}
+	provider := func(connectionID, state string) *truenas.Provider {
+		p := truenas.NewLiveProviderForConnection(
+			&truenas.FixtureFetcher{Snapshot: fixture(state)},
+			connectionID,
+		)
+		if err := p.Refresh(context.Background()); err != nil {
+			t.Fatalf("refresh %s: %v", connectionID, err)
+		}
+		return p
+	}
+
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{
+		"conn-primary": provider("conn-primary", "DEGRADED"),
+		"conn-dr":      provider("conn-dr", "ONLINE"),
+	}
+	poller.configsByOrg["default"] = map[string]config.TrueNASInstance{
+		"conn-primary": {ID: "conn-primary", Host: "192.0.2.10", Enabled: true},
+		"conn-dr":      {ID: "conn-dr", Host: "192.0.2.11", Enabled: true},
+	}
+	poller.rebuildCachedRecordsForOrg("default")
+
+	records := poller.GetCurrentRecordsForOrg("default")
+	poolSources := make(map[string]string)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+	for _, record := range records {
+		if record.Resource.Type != unifiedresources.ResourceTypeStorage ||
+			record.Resource.Storage == nil ||
+			record.Resource.Storage.Topology != "pool" {
+			continue
+		}
+		health := record.Resource.Storage.PoolHealth
+		if health == nil {
+			t.Fatalf("pool health missing from %s: %+v", record.SourceID, record.Resource.Storage)
+		}
+		poolSources[record.SourceID] = health.CanonicalState
+	}
+	if len(poolSources) != 2 {
+		t.Fatalf("connection-local pool records = %+v", poolSources)
+	}
+	if poolSources["system:conn-primary/pool:tank"] != "DEGRADED" ||
+		poolSources["system:conn-dr/pool:tank"] != "ONLINE" {
+		t.Fatalf("connection-local pool health = %+v", poolSources)
+	}
+
+	storageResources := 0
+	ids := make(map[string]struct{})
+	for _, resource := range registry.List() {
+		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Name != "tank" {
+			continue
+		}
+		storageResources++
+		ids[resource.ID] = struct{}{}
+	}
+	if storageResources != 2 || len(ids) != 2 {
+		t.Fatalf("matching appliances merged pool identity: resources=%d ids=%+v", storageResources, ids)
+	}
+}
+
 func copyTrueNASSnapshot(snapshot *truenas.FixtureSnapshot) *truenas.FixtureSnapshot {
 	if snapshot == nil {
 		return nil
 	}
 	cloned := *snapshot
-	cloned.Pools = append([]truenas.Pool(nil), snapshot.Pools...)
+	cloned.Pools = make([]truenas.Pool, len(snapshot.Pools))
+	for i := range snapshot.Pools {
+		cloned.Pools[i] = snapshot.Pools[i]
+		if snapshot.Pools[i].Scan != nil {
+			scan := *snapshot.Pools[i].Scan
+			cloned.Pools[i].Scan = &scan
+		}
+		cloned.Pools[i].VDevs = append([]truenas.PoolVDev(nil), snapshot.Pools[i].VDevs...)
+		cloned.Pools[i].DiskMembers = append([]truenas.PoolDiskMember(nil), snapshot.Pools[i].DiskMembers...)
+	}
 	cloned.Datasets = append([]truenas.Dataset(nil), snapshot.Datasets...)
 	cloned.Disks = append([]truenas.Disk(nil), snapshot.Disks...)
 	cloned.Alerts = append([]truenas.Alert(nil), snapshot.Alerts...)

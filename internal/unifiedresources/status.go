@@ -63,11 +63,11 @@ func statusFromPhysicalDisk(health string) ResourceStatus {
 
 func statusFromCephHealth(health string) ResourceStatus {
 	switch strings.ToUpper(strings.TrimSpace(health)) {
-	case "HEALTH_OK":
+	case "HEALTH_OK", "OK":
 		return StatusOnline
-	case "HEALTH_WARN":
+	case "HEALTH_WARN", "WARN":
 		return StatusWarning
-	case "HEALTH_ERR":
+	case "HEALTH_ERR", "ERR":
 		return StatusOffline
 	default:
 		return StatusUnknown

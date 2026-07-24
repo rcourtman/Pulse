@@ -41,12 +41,20 @@ type SystemInfo struct {
 
 // Pool mirrors the subset of TrueNAS pool fields needed for unified mapping.
 type Pool struct {
-	ID         string
-	Name       string
-	Status     string
-	TotalBytes int64
-	UsedBytes  int64
-	FreeBytes  int64
+	ID             string
+	GUID           string
+	Name           string
+	Status         string
+	StatusCode     string
+	StatusDetail   string
+	TotalBytes     int64
+	UsedBytes      int64
+	FreeBytes      int64
+	ReadErrors     int64
+	WriteErrors    int64
+	ChecksumErrors int64
+	Scan           *PoolScan
+	VDevs          []PoolVDev
 	// IsBoot distinguishes the boot pool collected from boot.get_state from
 	// data pools. Identity remains connection-scoped at projection time.
 	IsBoot bool
@@ -66,9 +74,54 @@ type PoolDiskMember struct {
 	// every path-bearing leaf; Device is the partition/label device (da0p2).
 	Disk   string
 	Device string
+	Path   string
+	GUID   string
+	Type   string
+	Role   string
 	// Status is the per-member ZFS state: ONLINE, DEGRADED, FAULTED,
 	// OFFLINE, UNAVAIL, REMOVED (spares report AVAIL/INUSE).
 	Status string
+	// Missing is true only when the native topology reports an unavailable
+	// datastore row or an unavail_disk vdev. Absence from disk.query alone is
+	// never treated as evidence that a disk is missing.
+	Missing        bool
+	ReadErrors     int64
+	WriteErrors    int64
+	ChecksumErrors int64
+	Message        string
+}
+
+// PoolVDev preserves the flattened native topology for mirrors, RAIDZ groups,
+// spares, special/log/cache vdevs, and their leaf disks.
+type PoolVDev struct {
+	ID             string
+	ParentID       string
+	GUID           string
+	Name           string
+	Type           string
+	Role           string
+	Disk           string
+	Device         string
+	Path           string
+	Status         string
+	ReadErrors     int64
+	WriteErrors    int64
+	ChecksumErrors int64
+	Missing        bool
+	Message        string
+}
+
+// PoolScan is the native pool.query/boot.get_state scrub or resilver state.
+type PoolScan struct {
+	Function              string
+	State                 string
+	Percentage            float64
+	Errors                int64
+	BytesExamined         int64
+	BytesToProcess        int64
+	TotalSecondsRemaining int64
+	StartedAt             *time.Time
+	EndedAt               *time.Time
 }
 
 // DatasetReadOnlyReason describes why a dataset is read-only when the API

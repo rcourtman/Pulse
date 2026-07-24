@@ -175,3 +175,37 @@ func TestUnknownGuestRatesRemainNumericOnAPIAndWebsocketShapes(t *testing.T) {
 		t.Fatalf("internal validity leaked into wire payload: %s", wire)
 	}
 }
+
+func TestNativePoolHealthEvidenceNormalizesWithoutChangingIdentity(t *testing.T) {
+	pool := (ZFSPool{
+		Name:  "tank",
+		State: "DEGRADED",
+		ScanDetails: &ZFSScan{
+			Function:   "RESILVER",
+			State:      "SCANNING",
+			Percentage: 42.5,
+		},
+		Devices: []ZFSDevice{{
+			GUID:    "leaf-guid",
+			Path:    "/dev/disk/by-partuuid/example",
+			State:   "UNAVAIL",
+			Missing: true,
+		}},
+	}).NormalizeCollections()
+	if pool.Name != "tank" || pool.ScanDetails == nil || len(pool.Devices) != 1 {
+		t.Fatalf("normalized ZFS evidence = %+v", pool)
+	}
+
+	cluster := (CephCluster{
+		FSID:   "cluster-fsid",
+		Health: "HEALTH_WARN",
+		HealthChecks: []CephHealthCheck{{
+			Code:     "OSD_DOWN",
+			Severity: "HEALTH_WARN",
+			Summary:  "one OSD is down",
+		}},
+	}).NormalizeCollections()
+	if cluster.FSID != "cluster-fsid" || len(cluster.HealthChecks) != 1 || cluster.HealthChecks[0].Code != "OSD_DOWN" {
+		t.Fatalf("normalized Ceph evidence = %+v", cluster)
+	}
+}
