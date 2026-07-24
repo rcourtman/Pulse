@@ -92,6 +92,17 @@ production 4,000-page auto-checkpoint enabled, a traced 157,452-sample run
 reduced total process write bytes from 392,445,952 to 257,208,320 and `fsync`
 calls from 42 to 32.
 
+Checkpoint threshold sweeps did not justify changing the production
+4,000-page setting. With no concurrent reader, 8k, 16k, and 32k thresholds
+reduced the 30-tick total from 1,501,548,544 bytes to 1,399,660,544,
+1,142,358,016, and 1,018,478,592 bytes, but grew the observed WAL allocation
+from 40,112,352 bytes to 51,306,392, 89,745,992, and 155,525,912 bytes. More
+importantly, with a paced reader on the production four-connection pool the
+16k threshold wrote 1,134,166,016 bytes versus 1,047,703,552 at 4k and retained
+a larger WAL allocation. The benefit was therefore not robust under the
+concurrent-read path that #1601 made release-critical, so the 16 MB nominal
+checkpoint bound remains unchanged.
+
 The migration keeps the legacy unique index authoritative until deferred
 startup maintenance transactionally swaps the indexes. Tests cover legacy
 duplicates, close/restart, a process exit between index drop and replacement,

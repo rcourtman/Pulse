@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,12 +31,17 @@ type issue1124DBStat struct {
 type issue1124ProfileReport struct {
 	SchemaMode           string            `json:"schema_mode"`
 	AutoCheckpoint       bool              `json:"auto_checkpoint"`
+	AutoCheckpointPages  int               `json:"auto_checkpoint_pages"`
 	Ticks                int               `json:"ticks"`
 	Resources            int               `json:"resources"`
 	Samples              int               `json:"samples"`
 	WriteCalls           int               `json:"write_calls"`
 	LogicalPayloadBytes  int64             `json:"logical_payload_bytes"`
 	Elapsed              time.Duration     `json:"elapsed"`
+	WriteP50             time.Duration     `json:"write_p50"`
+	WriteP95             time.Duration     `json:"write_p95"`
+	WriteP99             time.Duration     `json:"write_p99"`
+	WriteMax             time.Duration     `json:"write_max"`
 	WALBytes             int64             `json:"wal_bytes"`
 	WALFrames            int64             `json:"wal_frames"`
 	CacheWritesBefore    int64             `json:"cache_writes_before_checkpoint"`
@@ -43,6 +49,7 @@ type issue1124ProfileReport struct {
 	CacheSpills          int64             `json:"cache_spills"`
 	PhysicalWriteBytes   int64             `json:"physical_write_bytes"`
 	CheckpointWriteBytes int64             `json:"checkpoint_write_bytes"`
+	CheckpointLogFrames  int64             `json:"checkpoint_log_frames"`
 	CheckpointedFrames   int64             `json:"checkpointed_frames"`
 	MainBytesBefore      int64             `json:"main_bytes_before_checkpoint"`
 	MainBytesAfter       int64             `json:"main_bytes_after_checkpoint"`
@@ -50,6 +57,9 @@ type issue1124ProfileReport struct {
 	PageCount            int64             `json:"page_count"`
 	FreelistCount        int64             `json:"freelist_count"`
 	ReadCount            int64             `json:"concurrent_read_count"`
+	ReadP50              time.Duration     `json:"read_p50"`
+	ReadP95              time.Duration     `json:"read_p95"`
+	ReadP99              time.Duration     `json:"read_p99"`
 	MaxReadLatency       time.Duration     `json:"max_read_latency"`
 	RestartElapsed       time.Duration     `json:"restart_elapsed"`
 	RestartMainBytes     int64             `json:"restart_main_bytes"`
@@ -485,8 +495,10 @@ func TestMetricsWriteAmplificationInvariant(t *testing.T) {
 // and optionally PULSE_METRICS_WRITE_PROFILE_TICKS=N. The default 30 ticks
 // persist 393,630 samples across 2,197 resources. Set
 // PULSE_METRICS_WRITE_PROFILE_AUTOCHECKPOINT=1 for production checkpoint/fsync
-// tracing, PULSE_METRICS_WRITE_PROFILE_READERS=1 for a paced concurrent reader,
-// or PULSE_METRICS_WRITE_PROFILE_RETENTION=1 for retention/compaction counters.
+// tracing, PULSE_METRICS_WRITE_PROFILE_CHECKPOINT_PAGES=N for a bounded
+// threshold sweep, PULSE_METRICS_WRITE_PROFILE_READERS=1 for a paced concurrent
+// reader, or PULSE_METRICS_WRITE_PROFILE_RETENTION=1 for retention/compaction
+// counters.
 func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	mode := os.Getenv(issue1124ProfileEnv)
 	if mode == "" {
@@ -524,18 +536,25 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		t.Fatalf("startup maintenance: %v", err)
 	}
 
-	// Pin profiling to one configured connection so wal_autocheckpoint is
-	// deterministic. Production's four-connection concurrency has separate SLO
-	// coverage; this profile isolates bytes/pages written per logical sample.
-	store.db.SetMaxOpenConns(1)
-	store.db.SetMaxIdleConns(1)
-	autoCheckpoint := os.Getenv("PULSE_METRICS_WRITE_PROFILE_AUTOCHECKPOINT") == "1"
-	if !autoCheckpoint {
-		if _, err := store.db.Exec(`PRAGMA wal_autocheckpoint=0`); err != nil {
-			_ = store.Close()
-			t.Fatalf("disable auto-checkpoint: %v", err)
-		}
+	withReaders := os.Getenv("PULSE_METRICS_WRITE_PROFILE_READERS") == "1"
+	connectionCount := 1
+	if withReaders {
+		connectionCount = 4
 	}
+	checkpointPages := 0
+	if os.Getenv("PULSE_METRICS_WRITE_PROFILE_AUTOCHECKPOINT") == "1" {
+		checkpointPages = 4_000
+	}
+	if raw := os.Getenv("PULSE_METRICS_WRITE_PROFILE_CHECKPOINT_PAGES"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 65_536 {
+			_ = store.Close()
+			t.Fatalf("PULSE_METRICS_WRITE_PROFILE_CHECKPOINT_PAGES must be between 0 and 65536, got %q", raw)
+		}
+		checkpointPages = parsed
+	}
+	issue1124ConfigureConnections(t, store, connectionCount, checkpointPages)
+	autoCheckpoint := checkpointPages > 0
 
 	if mode == "full" || mode == "full-batched" {
 		// Reconstruct the v6.1.1 schema so released and consolidated layouts
@@ -578,8 +597,10 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		_ = store.Close()
 		t.Fatalf("reset WAL: %v", err)
 	}
-	_ = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, true)
-	_ = issue1124DBStatus(t, store, sqlite3.DBStatusCacheSpill, true)
+	if !withReaders {
+		_ = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, true)
+		_ = issue1124DBStatus(t, store, sqlite3.DBStatusCacheSpill, true)
+	}
 	processWritesBefore := issue1124ProcessWriteBytes()
 
 	series := issue1124Estate()
@@ -591,11 +612,12 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 
 	var readCount atomic.Int64
 	var maxReadNanos atomic.Int64
+	readLatencies := make([]time.Duration, 0)
 	var readStop chan struct{}
 	var readDone chan struct{}
 	var readErr atomic.Value
 	base := time.Unix(1_700_000_000, 0).UTC()
-	if os.Getenv("PULSE_METRICS_WRITE_PROFILE_READERS") == "1" {
+	if withReaders {
 		readStop = make(chan struct{})
 		readDone = make(chan struct{})
 		go func() {
@@ -621,6 +643,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 				}
 				readCount.Add(1)
 				elapsed := time.Since(started).Nanoseconds()
+				readLatencies = append(readLatencies, time.Duration(elapsed))
 				for {
 					previous := maxReadNanos.Load()
 					if elapsed <= previous || maxReadNanos.CompareAndSwap(previous, elapsed) {
@@ -633,6 +656,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	}
 
 	logicalBytes := int64(0)
+	writeLatencies := make([]time.Duration, 0, ticks*len(batches))
 	started := time.Now()
 	for tick := 0; tick < ticks; tick++ {
 		ts := base.Add(time.Duration(tick) * 10 * time.Second)
@@ -648,14 +672,19 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 			if mode == "full-batched" || mode == "consolidated-batched" {
 				tickBatch = append(tickBatch, batch...)
 			} else {
+				writeStarted := time.Now()
 				store.WriteBatchSync(batch)
+				writeLatencies = append(writeLatencies, time.Since(writeStarted))
 			}
 		}
 		if len(tickBatch) > 0 {
+			writeStarted := time.Now()
 			store.WriteBatchSync(tickBatch)
+			writeLatencies = append(writeLatencies, time.Since(writeStarted))
 		}
 	}
 	writeElapsed := time.Since(started)
+	sort.Slice(writeLatencies, func(i, j int) bool { return writeLatencies[i] < writeLatencies[j] })
 	if readStop != nil {
 		close(readStop)
 		<-readDone
@@ -664,14 +693,19 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		_ = store.Close()
 		t.Fatalf("concurrent query: %v", value)
 	}
+	sort.Slice(readLatencies, func(i, j int) bool { return readLatencies[i] < readLatencies[j] })
 
 	pageSize := issue1124PragmaInt(t, store, "page_size")
 	pageCount := issue1124PragmaInt(t, store, "page_count")
 	freelistCount := issue1124PragmaInt(t, store, "freelist_count")
 	walBytes := issue1124FileSize(t, dbPath+"-wal")
 	mainBefore := issue1124FileSize(t, dbPath)
-	cacheWritesBefore := issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, false)
-	cacheSpills := issue1124DBStatus(t, store, sqlite3.DBStatusCacheSpill, false)
+	cacheWritesBefore := int64(-1)
+	cacheSpills := int64(-1)
+	if !withReaders {
+		cacheWritesBefore = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, false)
+		cacheSpills = issue1124DBStatus(t, store, sqlite3.DBStatusCacheSpill, false)
+	}
 	processWritesAfterWAL := issue1124ProcessWriteBytes()
 	walFrames := int64(0)
 	if walBytes >= 32 {
@@ -688,7 +722,10 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		t.Fatalf("checkpoint remained busy: busy=%d log=%d checkpointed=%d", busy, logFrames, checkpointed)
 	}
 	mainAfter := issue1124FileSize(t, dbPath)
-	cacheWritesAfter := issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, false)
+	cacheWritesAfter := int64(-1)
+	if !withReaders {
+		cacheWritesAfter = issue1124DBStatus(t, store, sqlite3.DBStatusCacheWrite, false)
+	}
 	processWritesAfterCheckpoint := issue1124ProcessWriteBytes()
 	dbStats := issue1124ReadDBStats(t, store)
 
@@ -768,12 +805,17 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 	report := issue1124ProfileReport{
 		SchemaMode:           mode,
 		AutoCheckpoint:       autoCheckpoint,
+		AutoCheckpointPages:  checkpointPages,
 		Ticks:                ticks,
 		Resources:            len(series),
 		Samples:              expectedSamples,
 		WriteCalls:           ticks * len(batches),
 		LogicalPayloadBytes:  logicalBytes,
 		Elapsed:              writeElapsed,
+		WriteP50:             issue1124Percentile(writeLatencies, 0.50),
+		WriteP95:             issue1124Percentile(writeLatencies, 0.95),
+		WriteP99:             issue1124Percentile(writeLatencies, 0.99),
+		WriteMax:             issue1124Percentile(writeLatencies, 1),
 		WALBytes:             walBytes,
 		WALFrames:            walFrames,
 		CacheWritesBefore:    cacheWritesBefore,
@@ -781,6 +823,7 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		CacheSpills:          cacheSpills,
 		PhysicalWriteBytes:   issue1124CounterDelta(processWritesBefore, processWritesAfterWAL),
 		CheckpointWriteBytes: issue1124CounterDelta(processWritesAfterWAL, processWritesAfterCheckpoint),
+		CheckpointLogFrames:  logFrames,
 		CheckpointedFrames:   checkpointed,
 		MainBytesBefore:      mainBefore,
 		MainBytesAfter:       mainAfter,
@@ -788,6 +831,9 @@ func TestIssue1124WriteAmplificationProfile(t *testing.T) {
 		PageCount:            pageCount,
 		FreelistCount:        freelistCount,
 		ReadCount:            readCount.Load(),
+		ReadP50:              issue1124Percentile(readLatencies, 0.50),
+		ReadP95:              issue1124Percentile(readLatencies, 0.95),
+		ReadP99:              issue1124Percentile(readLatencies, 0.99),
 		MaxReadLatency:       time.Duration(maxReadNanos.Load()),
 		RestartElapsed:       restartElapsed,
 		RestartMainBytes:     restartMainBytes,
@@ -898,6 +944,33 @@ func issue1124DBStatus(t *testing.T, store *Store, op sqlite3.DBStatusOp, reset 
 	return int64(current)
 }
 
+func issue1124ConfigureConnections(t *testing.T, store *Store, count, checkpointPages int) {
+	t.Helper()
+	store.db.SetMaxOpenConns(count)
+	store.db.SetMaxIdleConns(count)
+
+	connections := make([]*sql.Conn, 0, count)
+	defer func() {
+		for _, conn := range connections {
+			_ = conn.Close()
+		}
+	}()
+
+	for i := 0; i < count; i++ {
+		conn, err := store.db.DB.Conn(context.Background())
+		if err != nil {
+			t.Fatalf("open configured SQLite connection %d: %v", i, err)
+		}
+		connections = append(connections, conn)
+		if _, err := conn.ExecContext(
+			context.Background(),
+			fmt.Sprintf(`PRAGMA wal_autocheckpoint=%d`, checkpointPages),
+		); err != nil {
+			t.Fatalf("configure auto-checkpoint on connection %d: %v", i, err)
+		}
+	}
+}
+
 func issue1124FileSize(t *testing.T, path string) int64 {
 	t.Helper()
 	info, err := os.Stat(path)
@@ -930,6 +1003,20 @@ func issue1124CounterDelta(before, after int64) int64 {
 		return -1
 	}
 	return after - before
+}
+
+func issue1124Percentile(sorted []time.Duration, quantile float64) time.Duration {
+	if len(sorted) == 0 {
+		return 0
+	}
+	index := int(float64(len(sorted)-1) * quantile)
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(sorted) {
+		index = len(sorted) - 1
+	}
+	return sorted[index]
 }
 
 func issue1124CopyFile(t *testing.T, source, destination string) {

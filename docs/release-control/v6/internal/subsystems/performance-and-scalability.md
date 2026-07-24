@@ -1217,7 +1217,10 @@ host exposes them, and traced sync calls rather than treating final file size
 as a proxy. Its checked invariant persists 157,452 samples across 2,197 mixed
 provider resources and caps the no-auto-checkpoint workload at 40,000 WAL
 frames; the former four-index schema produces 50,516 frames while the
-consolidated schema produces 35,030.
+consolidated schema produces 35,030. Checkpoint-threshold changes must also
+prove physical writes, WAL allocation, write latency, restart, and the
+four-connection concurrent-read case; a no-reader byte reduction alone is not
+sufficient to widen the production WAL bound.
 Retention must also return freed SQLite pages to the OS
 proportionally to the current freelist, bounded per cycle, and on every
 retention cycle rather than only when that cycle deleted rows: a fixed small
