@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rs/zerolog/log"
 )
 
 var lookupConfiguredHostIP = net.LookupIP
@@ -66,19 +67,38 @@ func configuredHostIPsFromConfig(cfg *config.Config) []string {
 			}
 			return
 		}
-		// Try to resolve hostname to IP
-		if addrs, err := lookupConfiguredHostIP(host); err == nil && len(addrs) > 0 {
-			for _, addr := range addrs {
-				// Prefer IPv4
-				if v4 := addr.To4(); v4 != nil {
-					ipStr := v4.String()
-					if _, exists := seen[ipStr]; !exists {
-						seen[ipStr] = struct{}{}
-						ips = append(ips, ipStr)
-					}
-					break
-				}
+		// Resolve the hostname and take every IPv4 it answers with. Stopping at
+		// the first address left a multi-homed host only partly suppressed, and
+		// discovery probes whichever address it reaches, not the one we picked.
+		addrs, err := lookupConfiguredHostIP(host)
+		if err != nil || len(addrs) == 0 {
+			// Suppression exists so Pulse does not write unauthenticated probe
+			// traffic into an operator's own PBS/PVE logs. Failing to resolve
+			// silently leaves the host scannable with no signal that the skip
+			// was missed, so say so (#1616).
+			log.Warn().
+				Str("host", host).
+				Err(err).
+				Msg("Could not resolve configured host to an address; discovery may probe it as if it were unknown")
+			return
+		}
+		resolved := 0
+		for _, addr := range addrs {
+			v4 := addr.To4()
+			if v4 == nil {
+				continue
 			}
+			resolved++
+			ipStr := v4.String()
+			if _, exists := seen[ipStr]; !exists {
+				seen[ipStr] = struct{}{}
+				ips = append(ips, ipStr)
+			}
+		}
+		if resolved == 0 {
+			log.Warn().
+				Str("host", host).
+				Msg("Configured host resolved to no IPv4 address; discovery scans IPv4 only and may probe it as if it were unknown")
 		}
 	}
 

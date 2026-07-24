@@ -236,6 +236,18 @@ also preserve the unreported sentinel rather than collapsing an absent facet
 onto the struct zero value, because `0` is a real reading meaning no endurance
 remains.
 
+Discovery suppression for configured connections is a fail-closed obligation,
+not a best-effort optimisation. Every configured PVE, PBS and PMG host is
+resolved into the discovery IP blocklist so the scanner never fingerprints a
+connection Pulse already holds credentials for. Those fingerprint probes are
+unauthenticated by construction and land in the operator's own server logs as
+authentication failures, so a host that escapes suppression is visible damage
+on someone else's system rather than a missed optimisation. Resolution must
+cover every IPv4 address a configured host answers with, not the first, because
+the scanner reaches whichever address it reaches. A host that cannot be resolved
+yields no entry and must say so in the log rather than passing silently, and it
+must never prevent the remaining configured hosts from being suppressed.
+
 ## Canonical Files
 
 1. `internal/monitoring/monitor.go`

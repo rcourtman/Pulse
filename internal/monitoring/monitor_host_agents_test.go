@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -4215,5 +4216,82 @@ func TestPhysicalDiskFromReadStateView_AbsentViewReportsUnknownWearout(t *testin
 	disk := physicalDiskFromReadStateView(nil)
 	if disk.Wearout != unifiedresources.WearoutUnreported {
 		t.Fatalf("absent view wearout = %d, want %d", disk.Wearout, unifiedresources.WearoutUnreported)
+	}
+}
+
+// Discovery suppression exists so Pulse does not probe hosts it already holds
+// credentials for and write unauthenticated requests into the operator's own
+// PBS/PVE logs (#1616). Taking only the first resolved address left a
+// multi-homed host partly suppressed, and discovery reaches whichever address
+// it reaches, not the one we happened to keep.
+func TestConfiguredHostIPs_CoversEveryResolvedIPv4(t *testing.T) {
+	originalLookup := lookupConfiguredHostIP
+	lookupConfiguredHostIP = func(host string) ([]net.IP, error) {
+		return []net.IP{
+			net.ParseIP("2001:db8::1"),
+			net.ParseIP("192.0.2.10"),
+			net.ParseIP("192.0.2.11"),
+		}, nil
+	}
+	defer func() { lookupConfiguredHostIP = originalLookup }()
+
+	ips := configuredHostIPsFromConfig(&config.Config{
+		PBSInstances: []config.PBSInstance{{Host: "pbs.example.test"}},
+	})
+
+	for _, want := range []string{"192.0.2.10", "192.0.2.11"} {
+		found := false
+		for _, got := range ips {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("configured host IPs %v missing resolved address %s", ips, want)
+		}
+	}
+}
+
+// A host configured by literal IP needs no resolution and must be suppressed
+// whatever DNS is doing.
+func TestConfiguredHostIPs_LiteralAddressNeedsNoResolution(t *testing.T) {
+	originalLookup := lookupConfiguredHostIP
+	lookupConfiguredHostIP = func(host string) ([]net.IP, error) {
+		t.Fatalf("literal address must not be resolved, got lookup for %q", host)
+		return nil, nil
+	}
+	defer func() { lookupConfiguredHostIP = originalLookup }()
+
+	ips := configuredHostIPsFromConfig(&config.Config{
+		PBSInstances: []config.PBSInstance{{Host: "https://192.0.2.20:8007"}},
+	})
+
+	if len(ips) != 1 || ips[0] != "192.0.2.20" {
+		t.Fatalf("configured host IPs = %v, want [192.0.2.20]", ips)
+	}
+}
+
+// A name that does not resolve yields no suppression entry. That is
+// unavoidable, but it must not take the other configured hosts down with it.
+func TestConfiguredHostIPs_UnresolvableHostDoesNotDropOthers(t *testing.T) {
+	originalLookup := lookupConfiguredHostIP
+	lookupConfiguredHostIP = func(host string) ([]net.IP, error) {
+		if host == "broken.example.test" {
+			return nil, errors.New("no such host")
+		}
+		return []net.IP{net.ParseIP("192.0.2.30")}, nil
+	}
+	defer func() { lookupConfiguredHostIP = originalLookup }()
+
+	ips := configuredHostIPsFromConfig(&config.Config{
+		PBSInstances: []config.PBSInstance{
+			{Host: "broken.example.test"},
+			{Host: "good.example.test"},
+		},
+	})
+
+	if len(ips) != 1 || ips[0] != "192.0.2.30" {
+		t.Fatalf("configured host IPs = %v, want only the resolvable host [192.0.2.30]", ips)
 	}
 }
