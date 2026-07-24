@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -113,6 +114,95 @@ func TestDetectClusterMembership_NoRefreshWhenEndpointsUnchanged(t *testing.T) {
 	}
 	if m.config.PVEInstances[0].ClusterEndpoints[0].Online {
 		t.Fatal("expected stored endpoints to be untouched when identity is unchanged")
+	}
+}
+
+func TestReconcilePVENodeInventoryRequiresRepeatedAuthoritativeRemoval(t *testing.T) {
+	cfg := &config.Config{PVEInstances: []config.PVEInstance{{
+		Name:        "cluster-api",
+		Host:        "https://pve-a:8006",
+		IsCluster:   true,
+		ClusterName: "production",
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{NodeName: "pve-a", Host: "https://pve-a:8006"},
+			{NodeName: "pve-b", Host: "https://pve-b:8006"},
+		},
+	}}}
+	m := newUnreachableTestMonitor(t, cfg)
+	previous := []models.Node{
+		{ID: "production-pve-a", Name: "pve-a", Instance: "cluster-api", Status: "online", LastSeen: time.Now()},
+		{ID: "production-pve-b", Name: "pve-b", Instance: "cluster-api", Status: "offline"},
+	}
+	client := &membershipPVEClient{statuses: []proxmox.ClusterStatus{
+		{Type: "cluster", Name: "production", Quorate: 1},
+		{Type: "node", ID: "node/a", Name: "pve-a", Online: 1},
+	}}
+
+	first := m.reconcilePVENodeInventory(
+		context.Background(),
+		"cluster-api",
+		&cfg.PVEInstances[0],
+		client,
+		previous[:1],
+		previous,
+	)
+	if len(first) != 2 || len(cfg.PVEInstances[0].ClusterEndpoints) != 2 {
+		t.Fatalf("first authoritative omission retired node: nodes=%+v endpoints=%+v", first, cfg.PVEInstances[0].ClusterEndpoints)
+	}
+
+	// A process restart resets the volatile confirmation counter while the
+	// durable endpoint keeps the member visible.
+	restarted := newUnreachableTestMonitor(t, cfg)
+	afterRestart := restarted.reconcilePVENodeInventory(
+		context.Background(),
+		"cluster-api",
+		&cfg.PVEInstances[0],
+		client,
+		first[:1],
+		first,
+	)
+	if len(afterRestart) != 2 {
+		t.Fatalf("restart converted one omission into removal: %+v", afterRestart)
+	}
+
+	// An uncertain read breaks the consecutive authoritative sequence.
+	uncertain := restarted.reconcilePVENodeInventory(
+		context.Background(),
+		"cluster-api",
+		&cfg.PVEInstances[0],
+		&membershipPVEClient{statusErr: fmt.Errorf("temporary membership failure")},
+		afterRestart[:1],
+		afterRestart,
+	)
+	if len(uncertain) != 2 {
+		t.Fatalf("uncertain read retired pending member: %+v", uncertain)
+	}
+
+	firstAfterUncertain := restarted.reconcilePVENodeInventory(
+		context.Background(),
+		"cluster-api",
+		&cfg.PVEInstances[0],
+		client,
+		uncertain[:1],
+		uncertain,
+	)
+	if len(firstAfterUncertain) != 2 {
+		t.Fatalf("first absence after uncertainty retired member: %+v", firstAfterUncertain)
+	}
+
+	confirmed := restarted.reconcilePVENodeInventory(
+		context.Background(),
+		"cluster-api",
+		&cfg.PVEInstances[0],
+		client,
+		firstAfterUncertain[:1],
+		firstAfterUncertain,
+	)
+	if len(confirmed) != 1 || confirmed[0].Name != "pve-a" {
+		t.Fatalf("confirmed removal = %+v, want only pve-a", confirmed)
+	}
+	if len(cfg.PVEInstances[0].ClusterEndpoints) != 1 || cfg.PVEInstances[0].ClusterEndpoints[0].NodeName != "pve-a" {
+		t.Fatalf("confirmed removal did not reconcile durable endpoints: %+v", cfg.PVEInstances[0].ClusterEndpoints)
 	}
 }
 

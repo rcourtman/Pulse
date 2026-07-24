@@ -634,22 +634,6 @@ func (m *Monitor) pollPVENodesParallel(
 	return modelNodes, nodeEffectiveStatus, nodeDiskSources
 }
 
-func (m *Monitor) preserveNodesWhenEmpty(instanceName string, modelNodes []models.Node, prevInstanceNodes []models.Node) []models.Node {
-	if len(modelNodes) > 0 || len(prevInstanceNodes) == 0 {
-		return modelNodes
-	}
-
-	log.Warn().
-		Str("instance", instanceName).
-		Int("previousCount", len(prevInstanceNodes)).
-		Msg("No Proxmox nodes returned this cycle - preserving previous state")
-
-	// Mark connection health as degraded to reflect polling failure
-	m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
-
-	return m.preserveOrExpireNodes(prevInstanceNodes)
-}
-
 // markPVEInstanceNodesUnreachable applies the node offline grace policy to an
 // instance whose poll failed outright (connection refused, timeout, all
 // cluster endpoints down). Without this, the early return on a poll error
@@ -671,39 +655,32 @@ func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
 	m.state.UpdateNodesForInstance(instanceName, m.preserveOrExpireNodes(prevInstanceNodes))
 }
 
-// placeholderNodesForInstance builds offline node entries from the instance
-// configuration for an instance with no node state yet. Cluster configs carry
-// their discovered member endpoints, so each member gets its own row with the
-// same node ID a live poll would assign; a standalone instance gets a single
-// row named after the configured instance. The next successful poll replaces
-// these wholesale via UpdateNodesForInstance.
+func (m *Monitor) placeholderNodeForInstance(instanceName string, instanceCfg *config.PVEInstance, nodeName string) models.Node {
+	nodeID := m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + nodeName
+	connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, monitorDiscoveryConfig(m), nodeName)
+	return models.Node{
+		ID:                           nodeID,
+		Name:                         nodeName,
+		DisplayName:                  getNodeDisplayName(instanceCfg, nodeName),
+		Instance:                     instanceName,
+		Host:                         connectionHost,
+		GuestURL:                     guestURL,
+		Status:                       "offline",
+		Type:                         "node",
+		ConnectionHealth:             "error",
+		LoadAverage:                  []float64{},
+		IsClusterMember:              instanceCfg.IsCluster,
+		ClusterName:                  instanceCfg.ClusterName,
+		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
+	}
+}
+
+// placeholderNodesForInstance builds offline node entries from the durable
+// instance configuration when no live or cached node state is available.
 func (m *Monitor) placeholderNodesForInstance(instanceName string) []models.Node {
 	instanceCfg := m.getInstanceConfig(instanceName)
 	if instanceCfg == nil {
 		return nil
-	}
-
-	makeNode := func(nodeName string) models.Node {
-		nodeID := instanceName + "-" + nodeName
-		if instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
-			nodeID = instanceCfg.ClusterName + "-" + nodeName
-		}
-		connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, monitorDiscoveryConfig(m), nodeName)
-		return models.Node{
-			ID:                           nodeID,
-			Name:                         nodeName,
-			DisplayName:                  getNodeDisplayName(instanceCfg, nodeName),
-			Instance:                     instanceName,
-			Host:                         connectionHost,
-			GuestURL:                     guestURL,
-			Status:                       "offline",
-			Type:                         "node",
-			ConnectionHealth:             "error",
-			LoadAverage:                  []float64{},
-			IsClusterMember:              instanceCfg.IsCluster,
-			ClusterName:                  instanceCfg.ClusterName,
-			TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
-		}
 	}
 
 	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
@@ -718,7 +695,7 @@ func (m *Monitor) placeholderNodesForInstance(instanceName string) []models.Node
 				continue
 			}
 			seen[strings.ToLower(nodeName)] = struct{}{}
-			nodes = append(nodes, makeNode(nodeName))
+			nodes = append(nodes, m.placeholderNodeForInstance(instanceName, instanceCfg, nodeName))
 		}
 		if len(nodes) > 0 {
 			return nodes
@@ -729,7 +706,7 @@ func (m *Monitor) placeholderNodesForInstance(instanceName string) []models.Node
 	if nodeName == "" {
 		nodeName = instanceName
 	}
-	return []models.Node{makeNode(nodeName)}
+	return []models.Node{m.placeholderNodeForInstance(instanceName, instanceCfg, nodeName)}
 }
 
 // preserveOrExpireNodes keeps recently seen nodes online through transient
@@ -1437,7 +1414,19 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		debugEnabled,
 	)
 
-	modelNodes = m.preserveNodesWhenEmpty(instanceName, modelNodes, prevInstanceNodes)
+	modelNodes = m.reconcilePVENodeInventory(
+		ctx,
+		instanceName,
+		instanceCfg,
+		client,
+		modelNodes,
+		prevInstanceNodes,
+	)
+	for _, node := range modelNodes {
+		if _, observed := nodeEffectiveStatus[node.Name]; !observed {
+			nodeEffectiveStatus[node.Name] = node.Status
+		}
+	}
 
 	// Update state first so we have nodes available
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)

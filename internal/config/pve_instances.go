@@ -9,7 +9,8 @@ import (
 )
 
 // ConsolidatePVEInstances canonicalizes PVE instance configuration by:
-//   - merging duplicate cluster definitions with the same ClusterName
+//   - merging duplicate cluster definitions only when the same ClusterName is
+//     backed by overlapping endpoint identity
 //   - removing standalone instances whose endpoint is already represented by
 //     a unique cluster endpoint
 //
@@ -20,8 +21,7 @@ func ConsolidatePVEInstances(instances []PVEInstance) ([]PVEInstance, bool) {
 	}
 
 	working := clonePVEInstances(instances)
-	changed := mergeDuplicateClusterInstances(working)
-	working = dedupeClusterInstances(working)
+	working, changed := mergeDuplicateClusterInstances(working)
 
 	standaloneMerged := mergeStandalonePVEIntoClusters(working)
 	if standaloneMerged {
@@ -47,35 +47,39 @@ func clonePVEInstances(instances []PVEInstance) []PVEInstance {
 	return out
 }
 
-func mergeDuplicateClusterInstances(instances []PVEInstance) bool {
-	clusterGroups := make(map[string][]int)
-	for i, instance := range instances {
-		if instance.IsCluster && strings.TrimSpace(instance.ClusterName) != "" {
-			clusterGroups[strings.TrimSpace(instance.ClusterName)] = append(clusterGroups[strings.TrimSpace(instance.ClusterName)], i)
-		}
-	}
-
+func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, bool) {
+	removed := make(map[int]struct{})
 	mergedAny := false
-	for clusterName, indices := range clusterGroups {
-		if len(indices) < 2 {
+	for primaryIdx := range instances {
+		if _, skip := removed[primaryIdx]; skip {
 			continue
 		}
-
-		log.Warn().
-			Str("cluster", clusterName).
-			Int("duplicates", len(indices)).
-			Msg("Detected duplicate cluster instances - consolidating")
-
-		primaryIdx := indices[0]
+		if !instances[primaryIdx].IsCluster || strings.TrimSpace(instances[primaryIdx].ClusterName) == "" {
+			continue
+		}
 		primary := &instances[primaryIdx]
-
 		existingEndpoints := make(map[string]int)
 		for idx, ep := range primary.ClusterEndpoints {
 			existingEndpoints[strings.TrimSpace(strings.ToLower(ep.NodeName))] = idx
 		}
 
-		for _, dupIdx := range indices[1:] {
+		for dupIdx := primaryIdx + 1; dupIdx < len(instances); dupIdx++ {
+			if _, skip := removed[dupIdx]; skip {
+				continue
+			}
 			duplicate := instances[dupIdx]
+			if !duplicate.IsCluster ||
+				!strings.EqualFold(strings.TrimSpace(primary.ClusterName), strings.TrimSpace(duplicate.ClusterName)) ||
+				!pveClusterInstancesHaveStrongOverlap(*primary, duplicate) {
+				continue
+			}
+
+			clusterName := strings.TrimSpace(primary.ClusterName)
+			log.Warn().
+				Str("cluster", clusterName).
+				Str("primary", primary.Name).
+				Str("duplicate", duplicate.Name).
+				Msg("Detected duplicate cluster instances with overlapping endpoints - consolidating")
 			log.Info().
 				Str("cluster", clusterName).
 				Str("primary", primary.Name).
@@ -97,12 +101,21 @@ func mergeDuplicateClusterInstances(instances []PVEInstance) bool {
 					Str("endpoint", ep.NodeName).
 					Msg("Added endpoint from duplicate cluster instance")
 			}
+			removed[dupIdx] = struct{}{}
+			mergedAny = true
 		}
-
-		mergedAny = true
 	}
-
-	return mergedAny
+	if !mergedAny {
+		return instances, false
+	}
+	out := make([]PVEInstance, 0, len(instances)-len(removed))
+	for idx, instance := range instances {
+		if _, skip := removed[idx]; skip {
+			continue
+		}
+		out = append(out, instance)
+	}
+	return out, true
 }
 
 func mergeClusterEndpointData(dst *ClusterEndpoint, src ClusterEndpoint) {
@@ -211,28 +224,6 @@ func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
 	}
 }
 
-func dedupeClusterInstances(instances []PVEInstance) []PVEInstance {
-	out := make([]PVEInstance, 0, len(instances))
-	seenClusters := make(map[string]bool)
-
-	for _, instance := range instances {
-		clusterName := strings.TrimSpace(instance.ClusterName)
-		if instance.IsCluster && clusterName != "" {
-			if seenClusters[clusterName] {
-				log.Info().
-					Str("cluster", clusterName).
-					Str("instance", instance.Name).
-					Msg("Removing duplicate cluster instance")
-				continue
-			}
-			seenClusters[clusterName] = true
-		}
-		out = append(out, instance)
-	}
-
-	return out
-}
-
 func normalizePVEEndpointIdentity(raw string) string {
 	value := strings.TrimSpace(raw)
 	if value == "" {
@@ -262,6 +253,55 @@ func normalizePVEEndpointIdentity(raw string) string {
 	}
 
 	return net.JoinHostPort(host, port)
+}
+
+func pveInstanceEndpointIdentityKeys(instance PVEInstance) map[string]struct{} {
+	keys := make(map[string]struct{}, 1+len(instance.ClusterEndpoints)*3)
+	if key := normalizePVEEndpointIdentity(instance.Host); key != "" {
+		keys[key] = struct{}{}
+	}
+	for _, endpoint := range instance.ClusterEndpoints {
+		for _, raw := range []string{endpoint.IP, endpoint.IPOverride} {
+			if key := normalizePVEEndpointIdentity(raw); key != "" {
+				keys[key] = struct{}{}
+			}
+		}
+		// Cluster discovery commonly synthesizes endpoint.Host from the raw
+		// member name. Equal node names such as "pve-1" are not identity
+		// evidence across two clusters with the same display name. A literal
+		// endpoint IP is strong enough to compare; named endpoint hosts are
+		// deliberately ignored unless they are the operator-saved instance
+		// authority above.
+		if endpointHost := endpointHostIdentityIP(endpoint.Host); endpointHost != "" {
+			keys[endpointHost] = struct{}{}
+		}
+	}
+	return keys
+}
+
+func endpointHostIdentityIP(raw string) string {
+	key := normalizePVEEndpointIdentity(raw)
+	if key == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(key)
+	if err != nil || net.ParseIP(host) == nil {
+		return ""
+	}
+	return key
+}
+
+func pveClusterInstancesHaveStrongOverlap(a, b PVEInstance) bool {
+	aKeys := pveInstanceEndpointIdentityKeys(a)
+	if len(aKeys) == 0 {
+		return false
+	}
+	for key := range pveInstanceEndpointIdentityKeys(b) {
+		if _, ok := aKeys[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func clusterEndpointIdentityKeys(endpoint ClusterEndpoint) []string {

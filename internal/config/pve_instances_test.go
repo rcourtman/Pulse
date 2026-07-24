@@ -4,8 +4,8 @@ import "testing"
 
 func TestConsolidatePVEInstancesMergesDuplicateClusters(t *testing.T) {
 	instances, changed := ConsolidatePVEInstances([]PVEInstance{
-		{Name: "c1", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []ClusterEndpoint{{NodeName: "n1"}}},
-		{Name: "c2", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []ClusterEndpoint{{NodeName: "n2"}}},
+		{Name: "c1", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []ClusterEndpoint{{NodeName: "n1", Host: "https://10.0.0.1:8006"}}},
+		{Name: "c2", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []ClusterEndpoint{{NodeName: "n1", Host: "https://10.0.0.1:8006"}, {NodeName: "n2", Host: "https://10.0.0.2:8006"}}},
 		{Name: "c3", ClusterName: "cluster-B", IsCluster: true},
 	})
 
@@ -17,6 +17,34 @@ func TestConsolidatePVEInstancesMergesDuplicateClusters(t *testing.T) {
 	}
 	if len(instances[0].ClusterEndpoints) != 2 {
 		t.Fatalf("expected 2 endpoints in primary cluster, got %d", len(instances[0].ClusterEndpoints))
+	}
+}
+
+func TestConsolidatePVEInstancesKeepsDistinctClustersWithSameName(t *testing.T) {
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{
+		{
+			Name:        "site-a",
+			ClusterName: "production",
+			IsCluster:   true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "pve1", Host: "https://pve1:8006", IP: "10.0.0.1"},
+			},
+		},
+		{
+			Name:        "site-b",
+			ClusterName: "production",
+			IsCluster:   true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "pve1", Host: "https://pve1:8006", IP: "10.1.0.1"},
+			},
+		},
+	})
+
+	if changed {
+		t.Fatalf("distinct same-name clusters must not be consolidated")
+	}
+	if len(instances) != 2 {
+		t.Fatalf("instances = %d, want 2 distinct clusters", len(instances))
 	}
 }
 
@@ -147,6 +175,7 @@ func TestConsolidatePVEInstancesMergesDuplicateClusterAuthIntoPrimary(t *testing
 			Fingerprint: "fp-1",
 			VerifySSL:   true,
 			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "n1", Host: "https://10.0.0.5:8006"},
 				{NodeName: "n2", Host: "https://10.0.0.6:8006"},
 			},
 		},

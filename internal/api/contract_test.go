@@ -56,6 +56,7 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog"
 	tmock "github.com/stretchr/testify/mock"
@@ -91,6 +92,81 @@ func TestContract_AgentVersionResponsePreventsStaleReconciliation(t *testing.T) 
 	}
 	if payload.Version == "" {
 		t.Fatal("agent target version is empty")
+	}
+}
+
+func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/cluster/status" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []proxmox.ClusterStatus{
+				{Type: "cluster", Name: "production", Quorate: 1},
+				{Type: "node", ID: "node/a", Name: "pve-a", IP: "127.0.0.1", Online: 1},
+				{Type: "node", ID: "node/b", Name: "pve-b", IP: "127.0.0.1", Online: 0},
+			},
+		})
+	}))
+	defer server.Close()
+
+	originalValidate := validatePVEClusterNode
+	t.Cleanup(func() { validatePVEClusterNode = originalValidate })
+	validatePVEClusterNode = func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string) {
+		if node.Name == "pve-a" {
+			return true, "fingerprint-a"
+		}
+		return false, ""
+	}
+	lastSeen := time.Now().Add(-time.Hour).UTC()
+
+	isCluster, clusterName, endpoints := defaultDetectPVECluster(
+		proxmox.ClientConfig{
+			Host:       server.URL,
+			TokenName:  "root@pam!pulse",
+			TokenValue: "secret",
+			Timeout:    time.Second,
+		},
+		"pve-a",
+		[]config.ClusterEndpoint{{
+			NodeName:    "pve-b",
+			GuestURL:    "https://guest.example/pve-b",
+			Fingerprint: "fingerprint-b",
+			LastSeen:    lastSeen,
+		}, {
+			NodeName: "pve-c",
+			Host:     "https://pve-c:8006",
+			LastSeen: lastSeen.Add(-time.Hour),
+		}},
+	)
+	if !isCluster || clusterName != "production" {
+		t.Fatalf("cluster detection = (%v, %q), want (true, production)", isCluster, clusterName)
+	}
+	if len(endpoints) != 3 {
+		t.Fatalf("cluster endpoints = %d, want 2 observed plus 1 pending reconciliation: %+v", len(endpoints), endpoints)
+	}
+	var offline config.ClusterEndpoint
+	for _, endpoint := range endpoints {
+		if endpoint.NodeName == "pve-b" {
+			offline = endpoint
+			break
+		}
+	}
+	if offline.NodeName == "" {
+		t.Fatalf("powered-off member missing from cluster endpoints: %+v", endpoints)
+	}
+	if offline.Online || offline.PulseReachable == nil || *offline.PulseReachable {
+		t.Fatalf("powered-off member reachability is not honest: %+v", offline)
+	}
+	if offline.Fingerprint != "fingerprint-b" || offline.GuestURL != "https://guest.example/pve-b" || !offline.LastSeen.Equal(lastSeen) {
+		t.Fatalf("powered-off member lost last-known endpoint evidence: %+v", offline)
+	}
+	if pending, ok := findExistingClusterEndpoint("pve-c", endpoints); !ok ||
+		pending.Host != "https://pve-c:8006" ||
+		!pending.LastSeen.Equal(lastSeen.Add(-time.Hour)) {
+		t.Fatalf("partially omitted endpoint was deleted before monitor reconciliation: %+v", endpoints)
 	}
 }
 

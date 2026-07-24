@@ -133,7 +133,9 @@ func inferLinkedHostsForProxmoxNodes(nodes []models.Node, hostByID map[string]*m
 		if inferredHostID == "" {
 			for hostID := range trustedHostIDs {
 				host := hostByID[hostID]
-				if host == nil || !proxmoxNodeCorroboratesHost(node, *host) {
+				if host == nil ||
+					proxmoxNodeUsesProviderScopedIdentity(node) ||
+					!proxmoxNodeCorroboratesHost(node, *host) {
 					continue
 				}
 				if inferredHostID != "" && inferredHostID != hostID {
@@ -161,6 +163,13 @@ func proxmoxNodeLinkKeys(node models.Node) []string {
 	}
 
 	keys := make([]string, 0, 4)
+	if proxmoxNodeUsesProviderScopedIdentity(node) {
+		instance := strings.TrimSpace(strings.ToLower(node.Instance))
+		if instance == "" {
+			return nil
+		}
+		return []string{"provider:" + instance + ":" + name}
+	}
 	if cluster := strings.TrimSpace(strings.ToLower(node.ClusterName)); cluster != "" {
 		keys = append(keys, "cluster:"+cluster+":"+name)
 	}
@@ -181,6 +190,9 @@ func proxmoxNodeLinkKeys(node models.Node) []string {
 func trustedProxmoxNodeHostLink(node models.Node, host models.Host) bool {
 	if strings.TrimSpace(host.LinkedNodeID) == strings.TrimSpace(node.ID) && strings.TrimSpace(node.ID) != "" {
 		return true
+	}
+	if proxmoxNodeUsesProviderScopedIdentity(node) {
+		return false
 	}
 	return proxmoxNodeCorroboratesHost(node, host)
 }

@@ -814,6 +814,12 @@ describe('useUnifiedResources', () => {
             proxmox: {
               nodeName: 'pve1',
               clusterName: 'cluster-b',
+              instance: 'site-a',
+              host: 'https://pve1.example:8006',
+              guestUrl: 'https://console.example/pve1',
+              connectionHealth: 'error',
+              pveVersion: '8.4.1',
+              kernelVersion: '6.8.12-10-pve',
             },
           },
         ],
@@ -830,6 +836,17 @@ describe('useUnifiedResources', () => {
     await result!.refetch();
 
     expect(result!.resources()[0]?.clusterId).toBe('cluster-b');
+    expect(result!.resources()[0]?.proxmox).toMatchObject({
+      node: 'pve1',
+      nodeName: 'pve1',
+      clusterName: 'cluster-b',
+      instance: 'site-a',
+      host: 'https://pve1.example:8006',
+      guestUrl: 'https://console.example/pve1',
+      connectionHealth: 'error',
+      pveVersion: '8.4.1',
+      kernelVersion: '6.8.12-10-pve',
+    });
 
     dispose();
   });

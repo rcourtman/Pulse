@@ -53,8 +53,8 @@ import type { Resource } from '@/types/resource';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   getResourceClusterLabel,
-  getResourceNodeName,
   getResourceVersion,
+  isProxmoxChildOfNode,
 } from './proxmoxPageModel';
 import {
   getProxmoxHostColumnWidthStyle,
@@ -88,10 +88,10 @@ const formatNodeUptime = (seconds: number | undefined): { label: string; warn: b
 
 type GuestCounts = { vms: number; containers: number };
 
-const countGuestsForNode = (guests: Resource[], nodeName: string): GuestCounts => {
+const countGuestsForNode = (guests: Resource[], node: Resource): GuestCounts => {
   const counts: GuestCounts = { vms: 0, containers: 0 };
   for (const guest of guests) {
-    if (getResourceNodeName(guest) !== nodeName) continue;
+    if (!isProxmoxChildOfNode(guest, node)) continue;
     if (guest.type === 'vm') counts.vms += 1;
     else if (guest.type === 'system-container' || guest.type === 'oci-container') {
       counts.containers += 1;
@@ -175,9 +175,9 @@ const getHostSortValue = (
     case 'uptime':
       return node.uptime ?? null;
     case 'vms':
-      return countGuestsForNode(guests, getResourceNodeName(node)).vms;
+      return countGuestsForNode(guests, node).vms;
     case 'cts':
-      return countGuestsForNode(guests, getResourceNodeName(node)).containers;
+      return countGuestsForNode(guests, node).containers;
     default:
       key satisfies never;
       return null;
@@ -276,10 +276,31 @@ export const ProxmoxNodesTable: Component<{
               };
               const version = () => asTrimmedString(getResourceVersion(node));
               const cluster = () => getResourceClusterLabel(node);
-              const counts = () => countGuestsForNode(props.guests, getResourceNodeName(node));
+              const counts = () => countGuestsForNode(props.guests, node);
               const indicator = () => getSimpleStatusIndicator(node.status);
-              const isOnline = () => indicator().variant === 'success';
-              const uptime = () => formatNodeUptime(node.uptime);
+              const connectionHealth = createMemo(() =>
+                (asTrimmedString(node.proxmox?.connectionHealth) ?? '').toLowerCase(),
+              );
+              const availabilityLabel = createMemo(() => {
+                if (node.status === 'offline') return 'Offline';
+                // A linked Pulse agent can still prove that a host is online
+                // while the Proxmox provider path is unavailable. In that
+                // hybrid case the provider metrics are stale, not evidence
+                // that the host itself is powered off.
+                if (connectionHealth() === 'error' && node.status === 'online') return 'Stale';
+                if (connectionHealth() === 'error') return 'Offline';
+                if (
+                  node.status === 'unknown' ||
+                  connectionHealth() === 'degraded' ||
+                  connectionHealth() === 'stale'
+                ) {
+                  return 'Stale';
+                }
+                if (node.status === 'degraded' || node.status === 'warning') return 'Degraded';
+                return 'Online';
+              });
+              const isOnline = createMemo(() => availabilityLabel() === 'Online');
+              const uptime = () => formatNodeUptime(isOnline() ? node.uptime : undefined);
               const metricsKey = () => buildMetricKeyForUnifiedResource(node);
               const temperature = () => node.temperature;
               const alertResourceIds = () => hostOverrideIdCandidates(node);
@@ -358,6 +379,11 @@ export const ProxmoxNodesTable: Component<{
                             fallbackClass="truncate font-semibold text-base-content"
                             title={`Open ${name()} web interface`}
                           />
+                          <Show when={!isOnline()}>
+                            <span class="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                              {availabilityLabel()}
+                            </span>
+                          </Show>
                           <Show when={isOnline() && pendingUpdates() > 0}>
                             <span
                               class={`rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap ${
@@ -398,27 +424,29 @@ export const ProxmoxNodesTable: Component<{
                   case 'cpu':
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show
-                          when={isSparklineMode()}
-                          fallback={
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent()}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={isOnline()}
-                              showMobile={false}
+                        <Show when={isOnline()} fallback={<PlatformTableMetricFallback />}>
+                          <Show
+                            when={isSparklineMode()}
+                            fallback={
+                              <ResponsiveMetricCell
+                                class="w-full"
+                                value={cpuPercent()}
+                                type="cpu"
+                                resourceId={metricsKey()}
+                                isRunning
+                                showMobile={false}
+                              />
+                            }
+                          >
+                            <MetricMiniSparkline
+                              series={cpuSeries()}
+                              valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
+                                normalizeRatio: true,
+                                clamp: true,
+                              })}
+                              title={`${name()} CPU history`}
                             />
-                          }
-                        >
-                          <MetricMiniSparkline
-                            series={cpuSeries()}
-                            valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
-                              normalizeRatio: true,
-                              clamp: true,
-                            })}
-                            title={`${name()} CPU history`}
-                          />
+                          </Show>
                         </Show>
                       </TableCell>
                     );
@@ -426,14 +454,12 @@ export const ProxmoxNodesTable: Component<{
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                         <Show
-                          when={isSparklineMode()}
-                          fallback={
-                            <Show
-                              when={
-                                isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)
-                              }
-                              fallback={<PlatformTableMetricFallback />}
-                            >
+                          when={isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)}
+                          fallback={<PlatformTableMetricFallback />}
+                        >
+                          <Show
+                            when={isSparklineMode()}
+                            fallback={
                               <StackedMemoryBar
                                 used={memoryUsed()}
                                 total={memoryTotal()}
@@ -444,21 +470,21 @@ export const ProxmoxNodesTable: Component<{
                                 swapUsed={drawerNode()?.memory?.swapUsed || 0}
                                 swapTotal={drawerNode()?.memory?.swapTotal || 0}
                               />
-                            </Show>
-                          }
-                        >
-                          <MetricMiniSparkline
-                            series={memorySeries()}
-                            valueLabel={
-                              drawerNode()?.memory?.usageUnavailable
-                                ? 'N/A'
-                                : formatPlatformTablePercentValue(memoryPercent(), {
-                                    normalizeRatio: true,
-                                    clamp: true,
-                                  })
                             }
-                            title={`${name()} memory history`}
-                          />
+                          >
+                            <MetricMiniSparkline
+                              series={memorySeries()}
+                              valueLabel={
+                                drawerNode()?.memory?.usageUnavailable
+                                  ? 'N/A'
+                                  : formatPlatformTablePercentValue(memoryPercent(), {
+                                      normalizeRatio: true,
+                                      clamp: true,
+                                    })
+                              }
+                              title={`${name()} memory history`}
+                            />
+                          </Show>
                         </Show>
                       </TableCell>
                     );
@@ -466,12 +492,12 @@ export const ProxmoxNodesTable: Component<{
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                         <Show
-                          when={isSparklineMode()}
-                          fallback={
-                            <Show
-                              when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
-                              fallback={<PlatformTableMetricFallback />}
-                            >
+                          when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
+                          fallback={<PlatformTableMetricFallback />}
+                        >
+                          <Show
+                            when={isSparklineMode()}
+                            fallback={
                               <StackedDiskBar
                                 mode={
                                   (node.agent?.disks?.length ?? 0) > 1 ? 'vertical-bars' : undefined
@@ -479,17 +505,17 @@ export const ProxmoxNodesTable: Component<{
                                 disks={normalizeDiskArray(node.agent?.disks)}
                                 aggregateDisk={aggregateDisk()}
                               />
-                            </Show>
-                          }
-                        >
-                          <MetricMiniSparkline
-                            series={diskSeries()}
-                            valueLabel={formatPlatformTablePercentValue(diskPercent(), {
-                              normalizeRatio: true,
-                              clamp: true,
-                            })}
-                            title={`${name()} disk history`}
-                          />
+                            }
+                          >
+                            <MetricMiniSparkline
+                              series={diskSeries()}
+                              valueLabel={formatPlatformTablePercentValue(diskPercent(), {
+                                normalizeRatio: true,
+                                clamp: true,
+                              })}
+                              title={`${name()} disk history`}
+                            />
+                          </Show>
                         </Show>
                       </TableCell>
                     );
@@ -497,7 +523,11 @@ export const ProxmoxNodesTable: Component<{
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                         <Show
-                          when={typeof temperature() === 'number' && (temperature() as number) > 0}
+                          when={
+                            isOnline() &&
+                            typeof temperature() === 'number' &&
+                            (temperature() as number) > 0
+                          }
                           fallback={<span class="text-xs text-muted">—</span>}
                         >
                           <TemperatureGauge
@@ -510,7 +540,10 @@ export const ProxmoxNodesTable: Component<{
                   case 'vms':
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
+                        <span
+                          class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}
+                          data-proxmox-vm-count
+                        >
                           {counts().vms}
                         </span>
                       </TableCell>
@@ -518,7 +551,10 @@ export const ProxmoxNodesTable: Component<{
                   case 'cts':
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
+                        <span
+                          class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}
+                          data-proxmox-container-count
+                        >
                           {counts().containers}
                         </span>
                       </TableCell>

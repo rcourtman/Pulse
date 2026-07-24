@@ -47,6 +47,52 @@ func TestMonitoringBroadcastCarriesEveryAvailabilityProjection(t *testing.T) {
 	}
 }
 
+func TestHostAgentCorrelationKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {
+	now := time.Now()
+	state := &models.State{
+		Nodes: []models.Node{
+			{
+				ID:               "node-from-b",
+				Name:             "pve01",
+				Instance:         "instance-b",
+				ClusterName:      "cluster-a",
+				IsClusterMember:  true,
+				Host:             "https://pve01:8006",
+				LinkedAgentID:    "shared-agent-id",
+				Status:           "online",
+				ConnectionHealth: "healthy",
+				LastSeen:         now,
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("instance-a", []models.Node{
+		{
+			ID:               "node-from-a",
+			Name:             "pve01",
+			Instance:         "instance-a",
+			ClusterName:      "cluster-a",
+			IsClusterMember:  true,
+			Host:             "https://pve01:8006",
+			LinkedAgentID:    "shared-agent-id",
+			Status:           "unknown",
+			ConnectionHealth: "unknown",
+			LastSeen:         now.Add(-time.Minute),
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want one node per provider instance", state.Nodes)
+	}
+	byInstance := make(map[string]models.Node, len(state.Nodes))
+	for _, node := range state.Nodes {
+		byInstance[node.Instance] = node
+	}
+	if byInstance["instance-a"].ID != "node-from-a" || byInstance["instance-b"].ID != "node-from-b" {
+		t.Fatalf("nodes = %#v, want stable instance-scoped identities", state.Nodes)
+	}
+}
+
 func TestNormalizeAgentMemoryCacheAwareFallbacks(t *testing.T) {
 	const gib = int64(1024 * 1024 * 1024)
 

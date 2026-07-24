@@ -202,6 +202,21 @@ when the member's effective dial URL is unchanged; a network move resets the
 old result until the new target is checked. Infrastructure Settings presents
 one cluster-level API source while retaining member addresses and their
 node-local Agent evidence.
+Proxmox cluster membership is not the `/nodes` telemetry slice. A quorate,
+complete `/cluster/status` response is absence-authoritative; members present
+there but missing from `/nodes` remain in `models.State` with their stable
+identity and last-known linkage while live CPU/uptime is cleared and
+connection state is offline or stale. Failed, incomplete, non-quorate, or
+cluster-identity-mismatched membership reads retain the last-known
+node/endpoint union, break any pending absence sequence, and never advance
+deletion. A member absent from a healthy
+authoritative membership read is retired only after two consecutive
+confirmations; the first omission remains in durable endpoint configuration so
+a monitor restart resets the confirmation window rather than converting
+uncertainty into removal. A newly reported member is admitted immediately.
+Cluster display names are not global identity: config consolidation requires
+overlapping endpoint authority, and different provider instances with the same
+cluster/member names stay distinct in node and storage identity.
 
 ## Canonical Files
 

@@ -110,6 +110,11 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 			delete(m.nodePendingUpdatesCache, nodeID)
 		}
 	}
+	for membershipKey := range m.pveMembershipMisses {
+		if strings.HasPrefix(membershipKey, strings.ToLower(strings.TrimSpace(instanceName))+"\x00") {
+			delete(m.pveMembershipMisses, membershipKey)
+		}
+	}
 	m.mu.Unlock()
 
 	m.diagMu.Lock()

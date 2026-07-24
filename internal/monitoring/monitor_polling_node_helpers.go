@@ -36,15 +36,12 @@ func resolveNodeConnectionInfo(instanceCfg *config.PVEInstance, discoveryCfg con
 
 func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *config.PVEInstance, node proxmox.Node) (string, string) {
 	// Apply grace period for node status to prevent flapping
-	// For clustered nodes, use clusterName-nodeName as the ID to deduplicate
-	// when the same cluster is registered via multiple entry points
-	// (e.g., agent installed with --enable-proxmox on multiple cluster nodes)
-	var nodeID string
-	if instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
-		nodeID = instanceCfg.ClusterName + "-" + node.Node
-	} else {
-		nodeID = instanceName + "-" + node.Node
-	}
+	// The configured instance is the canonical provider identity. Normally a
+	// cluster name remains the stable scope used by earlier Pulse releases,
+	// but two unrelated clusters are allowed to share that display name. In
+	// that ambiguous case the instance name prevents cross-cluster resource
+	// collisions without churning IDs for established unambiguous clusters.
+	nodeID := m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + node.Node
 	effectiveStatus := node.Status
 	now := time.Now()
 	gracePeriod := m.pveNodeOfflineGracePeriod()

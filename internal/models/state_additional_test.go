@@ -523,50 +523,6 @@ func TestUpdateNodesForInstanceDeduplicatesLogicalNodeByClusterName(t *testing.T
 	}
 }
 
-func TestUpdateNodesForInstancePrefersHealthyOnCrossInstanceClusterCollisionDifferentIDs(t *testing.T) {
-	now := time.Now()
-	state := &State{
-		Nodes: []Node{
-			{
-				ID:               "node-from-b",
-				Name:             "pve01",
-				Instance:         "instance-b",
-				ClusterName:      "cluster-a",
-				IsClusterMember:  true,
-				Status:           "online",
-				ConnectionHealth: "healthy",
-				LastSeen:         now,
-			},
-		},
-	}
-
-	state.UpdateNodesForInstance("instance-a", []Node{
-		{
-			ID:               "node-from-a",
-			Name:             "pve01",
-			Instance:         "instance-a",
-			ClusterName:      "cluster-a",
-			IsClusterMember:  true,
-			Status:           "unknown",
-			ConnectionHealth: "unknown",
-			LastSeen:         now.Add(-time.Minute),
-		},
-	})
-
-	if len(state.Nodes) != 1 {
-		t.Fatalf("nodes = %#v, want exactly one merged node", state.Nodes)
-	}
-	if state.Nodes[0].ID != "node-from-b" {
-		t.Fatalf("node id = %q, want node-from-b", state.Nodes[0].ID)
-	}
-	if state.Nodes[0].Instance != "instance-b" {
-		t.Fatalf("instance = %q, want instance-b", state.Nodes[0].Instance)
-	}
-	if state.Nodes[0].Status != "online" {
-		t.Fatalf("status = %q, want online", state.Nodes[0].Status)
-	}
-}
-
 func TestStateLinkHostAgentToNode(t *testing.T) {
 	state := &State{
 		Hosts: []Host{

@@ -8332,3 +8332,27 @@ steady-state authentication/processing emits only at debug severity.
 `internal/hostagent/proxmox_setup_test.go` prove the wire headers, omitted
 setup credential, one-time bootstrap, concurrency, and rejected-token
 diagnostics.
+
+### Proxmox cluster membership discovery transport
+
+The PVE config add, setup, and refresh paths treat `/cluster/status` member rows
+as inventory and per-member API validation as separate reachability evidence.
+Every returned member is persisted in `clusterEndpoints`, including powered-off
+or individually unreachable members. `online` reflects Proxmox cluster status;
+`pulseReachable`, `lastPulseCheck`, and `pulseError` reflect Pulse's endpoint
+probe. A failed member probe preserves existing guest URL, override,
+fingerprint, and last-seen evidence instead of removing the member. Config
+discovery may add or enrich members but retains any previously saved member
+omitted from a later read because it has no confirmation window for removal.
+normalization may consolidate two equal cluster labels only when their saved
+authority or literal endpoint address overlaps; equal cluster/member display
+names alone are not duplicate identity.
+
+The browser config payload remains additive and compatible: no endpoint field
+is removed or renamed. Monitoring owns the later repeated-authoritative-
+absence retirement rule; config handlers must not reinterpret a partial
+membership or telemetry read as deletion.
+`internal/api/config_handlers_cluster_additional_test.go` and
+`internal/config/pve_instances_test.go` prove unreachable-member persistence,
+evidence preservation, duplicate consolidation, and same-name-cluster
+isolation.

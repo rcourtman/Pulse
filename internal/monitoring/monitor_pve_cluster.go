@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,6 +15,437 @@ import (
 )
 
 var detectMonitorPVECluster = defaultDetectMonitorPVECluster
+
+type pveClusterStatusGetter interface {
+	GetClusterStatus(context.Context) ([]proxmox.ClusterStatus, error)
+}
+
+const pveMembershipRemovalConfirmations = 2
+
+// pveNodeIdentityScope preserves the historical cluster-name node identity
+// while it is unambiguous. If two configured clusters share a display name,
+// the provider instance becomes the identity scope so unrelated nodes cannot
+// collide in state, history, navigation, or resource projection.
+func (m *Monitor) pveNodeIdentityScope(instanceName string, instanceCfg *config.PVEInstance) string {
+	instanceName = strings.TrimSpace(instanceName)
+	if instanceCfg == nil || !instanceCfg.IsCluster || strings.TrimSpace(instanceCfg.ClusterName) == "" {
+		return instanceName
+	}
+
+	clusterName := strings.TrimSpace(instanceCfg.ClusterName)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.config != nil {
+		matches := 0
+		for i := range m.config.PVEInstances {
+			cfg := &m.config.PVEInstances[i]
+			if cfg.IsCluster && strings.EqualFold(strings.TrimSpace(cfg.ClusterName), clusterName) {
+				matches++
+				if matches > 1 {
+					return instanceName
+				}
+			}
+		}
+	}
+	return clusterName
+}
+
+func clusterMembershipFromStatus(statuses []proxmox.ClusterStatus) (string, map[string]proxmox.ClusterStatus, bool) {
+	clusterName := ""
+	members := make(map[string]proxmox.ClusterStatus)
+	for _, status := range statuses {
+		switch strings.ToLower(strings.TrimSpace(status.Type)) {
+		case "cluster":
+			if clusterName == "" {
+				clusterName = strings.TrimSpace(status.Name)
+				if clusterName == "" {
+					clusterName = strings.TrimSpace(status.ID)
+				}
+			}
+		case "node":
+			name := strings.TrimSpace(status.Name)
+			if name != "" {
+				members[strings.ToLower(name)] = status
+			}
+		}
+	}
+	return clusterName, members, clusterName != "" && len(members) > 0
+}
+
+func clusterMembershipRemovalAuthoritative(statuses []proxmox.ClusterStatus) bool {
+	for _, status := range statuses {
+		if strings.EqualFold(strings.TrimSpace(status.Type), "cluster") {
+			return status.Quorate == 1
+		}
+	}
+	return false
+}
+
+func clusterEndpointsFromStatus(
+	clientConfig proxmox.ClientConfig,
+	existing []config.ClusterEndpoint,
+	statuses []proxmox.ClusterStatus,
+) (string, []config.ClusterEndpoint, bool) {
+	clusterName, members, authoritative := clusterMembershipFromStatus(statuses)
+	if !authoritative {
+		return "", nil, false
+	}
+
+	scheme, port := monitorClusterEndpointDefaults(clientConfig.Host)
+	endpoints := make([]config.ClusterEndpoint, 0, len(members))
+	for _, clusterNode := range members {
+		lastSeen := time.Time{}
+		for _, endpoint := range existing {
+			if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(clusterNode.Name)) {
+				lastSeen = endpoint.LastSeen
+				break
+			}
+		}
+		if clusterNode.Online == 1 {
+			lastSeen = time.Now()
+		}
+		endpoints = append(endpoints, config.ClusterEndpoint{
+			NodeID:      clusterNode.ID,
+			NodeName:    clusterNode.Name,
+			Host:        monitorBuildClusterEndpointHost(scheme, clusterNode.Name, port),
+			IP:          strings.TrimSpace(clusterNode.IP),
+			GuestURL:    monitorExistingClusterGuestURL(clusterNode.Name, existing),
+			IPOverride:  monitorExistingClusterIPOverride(clusterNode.Name, existing),
+			Fingerprint: monitorExistingClusterFingerprint(clusterNode.Name, existing),
+			Online:      clusterNode.Online == 1,
+			LastSeen:    lastSeen,
+		})
+	}
+	sort.Slice(endpoints, func(i, j int) bool {
+		return strings.ToLower(endpoints[i].NodeName) < strings.ToLower(endpoints[j].NodeName)
+	})
+	return clusterName, endpoints, true
+}
+
+func pveNodeByName(nodes []models.Node) map[string]models.Node {
+	byName := make(map[string]models.Node, len(nodes))
+	for _, node := range nodes {
+		name := strings.ToLower(strings.TrimSpace(node.Name))
+		if name == "" {
+			continue
+		}
+		if existing, ok := byName[name]; ok {
+			byName[name] = preferNodeForInventory(existing, node)
+			continue
+		}
+		byName[name] = node
+	}
+	return byName
+}
+
+func preferNodeForInventory(existing, candidate models.Node) models.Node {
+	if strings.EqualFold(candidate.Status, "online") && !strings.EqualFold(existing.Status, "online") {
+		return candidate
+	}
+	if candidate.LastSeen.After(existing.LastSeen) {
+		return candidate
+	}
+	return existing
+}
+
+func pveMembershipMissKey(instanceName, nodeName string) string {
+	return strings.ToLower(strings.TrimSpace(instanceName)) + "\x00" + strings.ToLower(strings.TrimSpace(nodeName))
+}
+
+func (m *Monitor) clearPVEMembershipMisses(instanceName string) {
+	prefix := strings.ToLower(strings.TrimSpace(instanceName)) + "\x00"
+	m.mu.Lock()
+	for key := range m.pveMembershipMisses {
+		if strings.HasPrefix(key, prefix) {
+			delete(m.pveMembershipMisses, key)
+		}
+	}
+	m.mu.Unlock()
+}
+
+// confirmPVEMembershipRemovals requires two consecutive successful,
+// absence-authoritative membership reads before a last-known member is
+// retired. Ordinary telemetry omissions and failed membership reads never
+// advance this counter. The durable endpoint remains in config until the
+// second confirmation, so a restart safely resets the in-memory confirmation
+// window instead of turning uncertainty into deletion.
+func (m *Monitor) confirmPVEMembershipRemovals(
+	instanceName string,
+	authoritative map[string]proxmox.ClusterStatus,
+	current,
+	previous []models.Node,
+	instanceCfg *config.PVEInstance,
+) (map[string]proxmox.ClusterStatus, map[string]struct{}) {
+	effective := make(map[string]proxmox.ClusterStatus, len(authoritative))
+	for key, member := range authoritative {
+		effective[key] = member
+	}
+
+	candidates := pveNodeByName(current)
+	for key, node := range pveNodeByName(previous) {
+		if _, exists := candidates[key]; !exists {
+			candidates[key] = node
+		}
+	}
+	if instanceCfg != nil {
+		for _, endpoint := range instanceCfg.ClusterEndpoints {
+			name := strings.TrimSpace(endpoint.NodeName)
+			key := strings.ToLower(name)
+			if key == "" {
+				continue
+			}
+			if _, exists := candidates[key]; !exists {
+				candidates[key] = m.placeholderNodeForInstance(instanceName, instanceCfg, name)
+			}
+		}
+	}
+
+	pending := make(map[string]struct{})
+	m.mu.Lock()
+	if m.pveMembershipMisses == nil {
+		m.pveMembershipMisses = make(map[string]int)
+	}
+	for key := range authoritative {
+		delete(m.pveMembershipMisses, pveMembershipMissKey(instanceName, key))
+	}
+	for key, node := range candidates {
+		if _, present := authoritative[key]; present {
+			continue
+		}
+		missKey := pveMembershipMissKey(instanceName, key)
+		m.pveMembershipMisses[missKey]++
+		if m.pveMembershipMisses[missKey] >= pveMembershipRemovalConfirmations {
+			delete(m.pveMembershipMisses, missKey)
+			continue
+		}
+		online := 0
+		if strings.EqualFold(strings.TrimSpace(node.Status), "online") {
+			online = 1
+		}
+		effective[key] = proxmox.ClusterStatus{
+			Type:   "node",
+			Name:   node.Name,
+			Online: online,
+		}
+		pending[key] = struct{}{}
+	}
+	m.mu.Unlock()
+	return effective, pending
+}
+
+func retainPendingClusterEndpoints(
+	discovered,
+	existing []config.ClusterEndpoint,
+	current,
+	previous []models.Node,
+	pending map[string]struct{},
+) []config.ClusterEndpoint {
+	if len(pending) == 0 {
+		return discovered
+	}
+	byName := make(map[string]config.ClusterEndpoint, len(discovered)+len(pending))
+	for _, endpoint := range discovered {
+		byName[strings.ToLower(strings.TrimSpace(endpoint.NodeName))] = endpoint
+	}
+	for _, endpoint := range existing {
+		key := strings.ToLower(strings.TrimSpace(endpoint.NodeName))
+		if _, keep := pending[key]; keep {
+			byName[key] = endpoint
+		}
+	}
+	for key, node := range pveNodeByName(append(append([]models.Node{}, current...), previous...)) {
+		if _, keep := pending[key]; !keep {
+			continue
+		}
+		if _, exists := byName[key]; exists {
+			continue
+		}
+		byName[key] = config.ClusterEndpoint{
+			NodeName: node.Name,
+			Host:     node.Host,
+			Online:   strings.EqualFold(strings.TrimSpace(node.Status), "online"),
+			LastSeen: node.LastSeen,
+		}
+	}
+	out := make([]config.ClusterEndpoint, 0, len(byName))
+	for _, endpoint := range byName {
+		out = append(out, endpoint)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i].NodeName) < strings.ToLower(out[j].NodeName)
+	})
+	return out
+}
+
+func (m *Monitor) reconcileUncertainPVENodeInventory(
+	instanceName string,
+	instanceCfg *config.PVEInstance,
+	current,
+	previous []models.Node,
+) []models.Node {
+	reconciled := pveNodeByName(current)
+	missingPrevious := make([]models.Node, 0, len(previous))
+	for _, node := range previous {
+		name := strings.ToLower(strings.TrimSpace(node.Name))
+		if name == "" {
+			continue
+		}
+		if _, present := reconciled[name]; present {
+			continue
+		}
+		missingPrevious = append(missingPrevious, node)
+	}
+	for _, node := range m.preserveOrExpireNodes(missingPrevious) {
+		reconciled[strings.ToLower(strings.TrimSpace(node.Name))] = node
+	}
+	if instanceCfg != nil {
+		for _, endpoint := range instanceCfg.ClusterEndpoints {
+			name := strings.TrimSpace(endpoint.NodeName)
+			key := strings.ToLower(name)
+			if name == "" {
+				continue
+			}
+			if _, present := reconciled[key]; present {
+				continue
+			}
+			reconciled[key] = m.placeholderNodeForInstance(instanceName, instanceCfg, name)
+		}
+	}
+	return sortedPVENodeInventory(reconciled)
+}
+
+func sortedPVENodeInventory(nodes map[string]models.Node) []models.Node {
+	out := make([]models.Node, 0, len(nodes))
+	for _, node := range nodes {
+		out = append(out, node)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(out[i].Name))
+		right := strings.ToLower(strings.TrimSpace(out[j].Name))
+		if left == right {
+			return out[i].ID < out[j].ID
+		}
+		return left < right
+	})
+	return out
+}
+
+// reconcilePVENodeInventory separates membership from telemetry. /nodes is a
+// live metrics snapshot and may be partial when a member is powered off or one
+// endpoint is unreachable. A valid /cluster/status response is the only
+// absence-authoritative membership source; otherwise Pulse preserves the
+// durable endpoint/last-known union with honest offline or unknown state.
+func (m *Monitor) reconcilePVENodeInventory(
+	ctx context.Context,
+	instanceName string,
+	instanceCfg *config.PVEInstance,
+	client PVEClientInterface,
+	current,
+	previous []models.Node,
+) []models.Node {
+	if instanceCfg == nil || !instanceCfg.IsCluster {
+		if len(current) > 0 || len(previous) == 0 {
+			return current
+		}
+		m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
+		return m.preserveOrExpireNodes(previous)
+	}
+	if len(current) == 0 {
+		m.setProviderConnectionHealth(InstanceTypePVE, instanceName, false)
+	}
+
+	getter, ok := client.(pveClusterStatusGetter)
+	if !ok {
+		m.clearPVEMembershipMisses(instanceName)
+		return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
+	}
+	statuses, err := getter.GetClusterStatus(ctx)
+	if err != nil {
+		m.clearPVEMembershipMisses(instanceName)
+		log.Warn().
+			Err(err).
+			Str("instance", instanceName).
+			Msg("Cluster membership unavailable - retaining last-known Proxmox nodes")
+		return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
+	}
+	if !clusterMembershipRemovalAuthoritative(statuses) {
+		m.clearPVEMembershipMisses(instanceName)
+		log.Warn().
+			Str("instance", instanceName).
+			Msg("Cluster membership is not quorate - retaining last-known Proxmox nodes")
+		return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
+	}
+	clusterName, members, authoritative := clusterMembershipFromStatus(statuses)
+	if !authoritative {
+		m.clearPVEMembershipMisses(instanceName)
+		log.Warn().
+			Str("instance", instanceName).
+			Msg("Cluster membership response incomplete - retaining last-known Proxmox nodes")
+		return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
+	}
+	if configuredName := strings.TrimSpace(instanceCfg.ClusterName); configuredName != "" &&
+		!strings.EqualFold(configuredName, clusterName) {
+		m.clearPVEMembershipMisses(instanceName)
+		log.Warn().
+			Str("instance", instanceName).
+			Str("configuredCluster", configuredName).
+			Str("observedCluster", clusterName).
+			Msg("Cluster identity changed during membership read - retaining last-known Proxmox nodes")
+		return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
+	}
+	members, pendingRemovals := m.confirmPVEMembershipRemovals(
+		instanceName,
+		members,
+		current,
+		previous,
+		instanceCfg,
+	)
+
+	if discoveredName, endpoints, ok := clusterEndpointsFromStatus(config.CreateProxmoxConfig(instanceCfg), instanceCfg.ClusterEndpoints, statuses); ok {
+		endpoints = retainPendingClusterEndpoints(
+			endpoints,
+			instanceCfg.ClusterEndpoints,
+			current,
+			previous,
+			pendingRemovals,
+		)
+		m.refreshClusterEndpoints(instanceName, instanceCfg, discoveredName, endpoints)
+	}
+
+	currentByName := pveNodeByName(current)
+	previousByName := pveNodeByName(previous)
+	reconciled := make(map[string]models.Node, len(members))
+	for key, membership := range members {
+		node, present := currentByName[key]
+		if !present {
+			node, present = previousByName[key]
+		}
+		if !present {
+			node = m.placeholderNodeForInstance(instanceName, instanceCfg, membership.Name)
+		}
+
+		if membership.Online == 0 {
+			node.Status = "offline"
+			node.ConnectionHealth = "error"
+			node.CPU = 0
+			node.Uptime = 0
+		} else if _, observed := currentByName[key]; !observed {
+			node.Status = "unknown"
+			node.ConnectionHealth = "degraded"
+			node.CPU = 0
+			node.Uptime = 0
+		}
+		reconciled[key] = node
+	}
+
+	log.Info().
+		Str("instance", instanceName).
+		Str("cluster", clusterName).
+		Int("observedNodes", len(current)).
+		Int("membershipNodes", len(reconciled)).
+		Msg("Reconciled Proxmox node telemetry against authoritative cluster membership")
+	return sortedPVENodeInventory(reconciled)
+}
 
 func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName string, instanceCfg *config.PVEInstance, client PVEClientInterface) {
 	_ = client
@@ -292,38 +724,11 @@ func defaultDetectMonitorPVECluster(clientConfig proxmox.ClientConfig, existingE
 		return false, "", nil
 	}
 
-	clusterName := ""
-	clusterNodes := make([]proxmox.ClusterStatus, 0, len(clusterStatus))
-	for _, status := range clusterStatus {
-		switch status.Type {
-		case "cluster":
-			clusterName = strings.TrimSpace(status.Name)
-		case "node":
-			clusterNodes = append(clusterNodes, status)
-		}
-	}
-	if len(clusterNodes) <= 1 || clusterName == "" {
+	clusterName, clusterEndpoints, authoritative := clusterEndpointsFromStatus(clientConfig, existingEndpoints, clusterStatus)
+	if !authoritative || len(clusterEndpoints) <= 1 {
 		return false, "", nil
 	}
-
-	scheme, port := monitorClusterEndpointDefaults(clientConfig.Host)
-	endpoints := make([]config.ClusterEndpoint, 0, len(clusterNodes))
-	for _, clusterNode := range clusterNodes {
-		endpoint := config.ClusterEndpoint{
-			NodeID:      clusterNode.ID,
-			NodeName:    clusterNode.Name,
-			Host:        monitorBuildClusterEndpointHost(scheme, clusterNode.Name, port),
-			IP:          strings.TrimSpace(clusterNode.IP),
-			GuestURL:    monitorExistingClusterGuestURL(clusterNode.Name, existingEndpoints),
-			IPOverride:  monitorExistingClusterIPOverride(clusterNode.Name, existingEndpoints),
-			Fingerprint: monitorExistingClusterFingerprint(clusterNode.Name, existingEndpoints),
-			Online:      clusterNode.Online == 1,
-			LastSeen:    time.Now(),
-		}
-		endpoints = append(endpoints, endpoint)
-	}
-
-	return true, clusterName, endpoints
+	return true, clusterName, clusterEndpoints
 }
 
 func monitorClusterEndpointDefaults(rawHost string) (string, string) {

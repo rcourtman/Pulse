@@ -131,6 +131,15 @@ and every supported `pulse-agent` release target built from this source.
 
 ## Shared Boundaries
 
+`internal/models/models.go` and `internal/monitoring/monitor.go` also carry
+monitoring-owned Proxmox cluster node identity and membership-confirmation
+state. Provider instances with equal cluster/member display names must not
+collapse through a shared endpoint or linked-agent alias, but this scoping does
+not change Unified Agent enrollment, token binding, report admission,
+tombstones, re-enrollment, or command authority. A linked agent remains
+supplemental evidence on the retained canonical Proxmox member; its presence
+does not decide provider membership or authorize removal.
+
 Docker / Podman report transport is shared with `api-contracts`.
 `internal/dockeragent/agent.go` measures the gzip-encoded HTTP entity and the
 decoded JSON before attempting any destination, while

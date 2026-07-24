@@ -1101,6 +1101,34 @@ func findExistingIPOverride(nodeName string, existingEndpoints []config.ClusterE
 	return ""
 }
 
+func findExistingClusterEndpoint(nodeName string, existingEndpoints []config.ClusterEndpoint) (config.ClusterEndpoint, bool) {
+	for _, endpoint := range existingEndpoints {
+		if strings.EqualFold(strings.TrimSpace(endpoint.NodeName), strings.TrimSpace(nodeName)) {
+			return endpoint, true
+		}
+	}
+	return config.ClusterEndpoint{}, false
+}
+
+func retainUnreconciledClusterEndpoints(discovered, existing []config.ClusterEndpoint) []config.ClusterEndpoint {
+	seen := make(map[string]struct{}, len(discovered))
+	for _, endpoint := range discovered {
+		seen[strings.ToLower(strings.TrimSpace(endpoint.NodeName))] = struct{}{}
+	}
+	for _, endpoint := range existing {
+		key := strings.ToLower(strings.TrimSpace(endpoint.NodeName))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		discovered = append(discovered, endpoint)
+		seen[key] = struct{}{}
+	}
+	return discovered
+}
+
 // extractIPFromHost extracts the IP address from a host URL.
 // For example, "https://198.51.100.5:8006" returns 198.51.100.5 as net.IP.
 func extractIPFromHost(host string) net.IP {
@@ -1194,8 +1222,9 @@ func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, referenceIP net.
 }
 
 var (
-	detectPVECluster    = defaultDetectPVECluster
-	fetchTLSFingerprint = tlsutil.FetchFingerprint
+	detectPVECluster       = defaultDetectPVECluster
+	validatePVEClusterNode = validateNodeAPI
+	fetchTLSFingerprint    = tlsutil.FetchFingerprint
 )
 
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
@@ -1279,32 +1308,49 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 				Msg("Extracted connection IP for network preference")
 		}
 
-		var unvalidatedNodes []proxmox.ClusterStatus
-
+		validatedCount := 0
 		for _, clusterNode := range clusterNodes {
-			// Validate that this node actually has a working Proxmox API
-			// This filters out qdevice VMs and other non-Proxmox participants
-			// Also captures the node's TLS fingerprint for TOFU
-			isValid, nodeFingerprint := validateNodeAPI(clusterNode, clientConfig)
+			// Reachability enriches a member endpoint but never defines cluster
+			// membership. Powered-off nodes remain canonical members even
+			// though their individual API cannot answer during discovery.
+			isValid, nodeFingerprint := validatePVEClusterNode(clusterNode, clientConfig)
+			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
 			if !isValid {
-				log.Debug().
+				log.Info().
 					Str("node", clusterNode.Name).
 					Str("ip", clusterNode.IP).
-					Msg("Skipping cluster node - no valid Proxmox API detected (likely qdevice or external node)")
-				unvalidatedNodes = append(unvalidatedNodes, clusterNode)
-				continue
+					Msg("Cluster member API is unreachable - preserving membership with unavailable endpoint state")
+			} else {
+				validatedCount++
 			}
 
 			// Build the host URL with proper port
 			// Store hostname in Host field (for TLS validation), IP separately
+			now := time.Now()
+			lastSeen := time.Time{}
+			if hadExistingEndpoint {
+				lastSeen = existingEndpoint.LastSeen
+			}
+			if isValid {
+				lastSeen = now
+			}
+			if nodeFingerprint == "" && hadExistingEndpoint {
+				nodeFingerprint = existingEndpoint.Fingerprint
+			}
+			pulseReachable := isValid
 			endpoint := config.ClusterEndpoint{
-				NodeID:      clusterNode.ID,
-				NodeName:    clusterNode.Name,
-				GuestURL:    findExistingGuestURL(clusterNode.Name, existingEndpoints),
-				IPOverride:  findExistingIPOverride(clusterNode.Name, existingEndpoints), // Preserve user override
-				Fingerprint: nodeFingerprint,                                             // Store captured fingerprint for per-node TLS verification
-				Online:      clusterNode.Online == 1,
-				LastSeen:    time.Now(),
+				NodeID:         clusterNode.ID,
+				NodeName:       clusterNode.Name,
+				GuestURL:       findExistingGuestURL(clusterNode.Name, existingEndpoints),
+				IPOverride:     findExistingIPOverride(clusterNode.Name, existingEndpoints), // Preserve user override
+				Fingerprint:    nodeFingerprint,                                             // Store captured fingerprint for per-node TLS verification
+				Online:         clusterNode.Online == 1,
+				LastSeen:       lastSeen,
+				PulseReachable: &pulseReachable,
+				LastPulseCheck: &now,
+			}
+			if !isValid {
+				endpoint.PulseError = "Proxmox API endpoint unavailable during cluster discovery"
 			}
 
 			// Populate Host field with hostname (if available) for TLS certificate validation
@@ -1352,76 +1398,17 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 			clusterEndpoints = append(clusterEndpoints, endpoint)
 		}
 
-		if len(clusterEndpoints) == 0 && len(unvalidatedNodes) > 0 {
-			log.Warn().
-				Str("cluster", clusterName).
-				Int("total_discovered", len(unvalidatedNodes)).
-				Msg("All detected cluster nodes failed validation; falling back to cluster metadata")
+		// Configuration discovery can add or enrich membership, but it has no
+		// repeated-absence reconciliation state and therefore cannot safely
+		// retire an existing member. Monitoring owns confirmed removal.
+		clusterEndpoints = retainUnreconciledClusterEndpoints(clusterEndpoints, existingEndpoints)
 
-			for _, clusterNode := range unvalidatedNodes {
-				if clusterNode.Name == "" && clusterNode.IP == "" {
-					continue
-				}
-
-				endpoint := config.ClusterEndpoint{
-					NodeID:   clusterNode.ID,
-					NodeName: clusterNode.Name,
-					GuestURL: findExistingGuestURL(clusterNode.Name, existingEndpoints),
-					Online:   clusterNode.Online == 1,
-					LastSeen: time.Now(),
-				}
-
-				// Populate Host field with hostname (if available) for TLS certificate validation
-				if clusterNode.Name != "" {
-					nodeHost := ensureHostHasPort(clusterNode.Name, defaultPort)
-					endpoint.Host = schemePrefix + nodeHost
-				}
-
-				// Populate IP field separately for DNS-free connections
-				if clusterNode.IP != "" {
-					endpoint.IP = clusterNode.IP
-				}
-
-				// Apply subnet preference even in fallback path (refs #929)
-				// Node validation may have failed because cluster-reported IPs are on internal
-				// network, but we can still query node interfaces via the initial connection
-				if connectionIP != nil && clusterNode.IP != "" && clusterNode.Name != "" {
-					clusterIP := net.ParseIP(clusterNode.IP)
-					if clusterIP != nil && !ipsOnSameNetwork(clusterIP, connectionIP) {
-						// Cluster IP is on a different network, try to find one on the same network
-						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-						nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
-						cancel()
-
-						if err == nil {
-							preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
-							if preferredIP != "" && preferredIP != clusterNode.IP {
-								log.Info().
-									Str("node", clusterNode.Name).
-									Str("cluster_ip", clusterNode.IP).
-									Str("preferred_ip", preferredIP).
-									Str("connection_ip", connectionIP.String()).
-									Msg("Found preferred management IP for unvalidated cluster node")
-								endpoint.IPOverride = preferredIP
-							}
-						} else {
-							log.Debug().
-								Err(err).
-								Str("node", clusterNode.Name).
-								Msg("Could not query node network interfaces in fallback path")
-						}
-					}
-				}
-
-				clusterEndpoints = append(clusterEndpoints, endpoint)
-			}
-		}
-
-		// Log the final count of valid Proxmox nodes found
+		// Membership count and reachable API count are deliberately separate.
 		log.Info().
 			Str("cluster", clusterName).
 			Int("total_discovered", len(clusterNodes)).
-			Int("valid_proxmox_nodes", len(clusterEndpoints)).
+			Int("persisted_members", len(clusterEndpoints)).
+			Int("reachable_api_endpoints", validatedCount).
 			Msg("Cluster node validation complete")
 
 		// Fallback if we couldn't get the cluster name

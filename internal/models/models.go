@@ -3340,6 +3340,13 @@ func nodeLogicalKey(node Node) string {
 	}
 
 	if cluster := normalizeNodeIdentityPart(node.ClusterName); cluster != "" {
+		// Cluster names are display labels, not globally unique provider
+		// identities. Scope the primary key by connection instance and allow
+		// the stronger endpoint/link aliases below to merge duplicate views of
+		// the same physical node.
+		if instance := normalizeNodeIdentityPart(node.Instance); instance != "" {
+			return "cluster:" + cluster + ":instance:" + instance + ":" + name
+		}
 		return "cluster:" + cluster + ":" + name
 	}
 	if instance := normalizeNodeIdentityPart(node.Instance); instance != "" {
@@ -3374,13 +3381,24 @@ func registerNodeAliases(
 	}
 }
 
-// nodeClusterIdentityConflicts reports whether two nodes belong to two
-// different named clusters. Empty cluster names never conflict: a standalone
-// or not-yet-classified view of a node may still merge into its cluster view.
-func nodeClusterIdentityConflicts(a, b string) bool {
-	clusterA := normalizeNodeIdentityPart(a)
-	clusterB := normalizeNodeIdentityPart(b)
-	return clusterA != "" && clusterB != "" && clusterA != clusterB
+// nodeProviderIdentityConflicts reports whether two classified cluster nodes
+// belong to different provider scopes. Cluster names are display labels and
+// can legitimately repeat; two non-empty connection instances therefore stay
+// distinct even when the label and member hostname are identical. Empty
+// cluster identity still permits a standalone/not-yet-classified view to merge
+// into its canonical cluster view by stronger endpoint or linked-agent proof.
+func nodeProviderIdentityConflicts(a, b Node) bool {
+	clusterA := normalizeNodeIdentityPart(a.ClusterName)
+	clusterB := normalizeNodeIdentityPart(b.ClusterName)
+	if clusterA == "" || clusterB == "" {
+		return false
+	}
+	if clusterA != clusterB {
+		return true
+	}
+	instanceA := normalizeNodeIdentityPart(a.Instance)
+	instanceB := normalizeNodeIdentityPart(b.Instance)
+	return instanceA != "" && instanceB != "" && instanceA != instanceB
 }
 
 func resolveNodeMergeKey(
@@ -3409,7 +3427,7 @@ func resolveNodeMergeKey(
 		// Two clusters can reuse node names (pve01 in cluster A and cluster B),
 		// so an endpoint alias is only trustworthy when the cluster identities
 		// don't contradict each other.
-		if existing, exists := nodeMap[key]; exists && nodeClusterIdentityConflicts(existing.ClusterName, node.ClusterName) {
+		if existing, exists := nodeMap[key]; exists && nodeProviderIdentityConflicts(existing, node) {
 			continue
 		}
 		if resolved != "" && resolved != key {
@@ -3777,7 +3795,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 				if linkedKey := linkedHostToKey[node.LinkedAgentID]; linkedKey != "" {
 					// A shared agent identity must never collapse two different
 					// named clusters into one node slot.
-					if existing, ok := nodeMap[linkedKey]; !ok || !nodeClusterIdentityConflicts(existing.ClusterName, node.ClusterName) {
+					if existing, ok := nodeMap[linkedKey]; !ok || !nodeProviderIdentityConflicts(existing, node) {
 						targetKey = linkedKey
 					}
 				}

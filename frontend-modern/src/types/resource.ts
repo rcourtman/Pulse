@@ -656,6 +656,8 @@ export interface ResourceProxmoxMeta {
   host?: string;
   /** Operator-set web interface URL override. */
   guestUrl?: string;
+  /** Reachability of the Proxmox API source for this canonical node. */
+  connectionHealth?: string;
   cpus?: number;
   template?: boolean;
   disks?: Disk[];

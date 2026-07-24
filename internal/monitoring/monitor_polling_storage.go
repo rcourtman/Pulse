@@ -156,7 +156,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	// This must match what is set in each storage item's Instance field
 	storageInstanceName := instanceName
 	if instanceCfg != nil && instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
-		storageInstanceName = instanceCfg.ClusterName
+		storageInstanceName = m.pveNodeIdentityScope(instanceName, instanceCfg)
 	}
 
 	// Get cluster storage configuration first (single call)

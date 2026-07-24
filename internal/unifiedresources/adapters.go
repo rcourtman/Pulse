@@ -24,7 +24,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 	endpointHost := extractHostname(node.Host)
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{node.Name}),
-		ClusterName: node.ClusterName,
+		ClusterName: proxmoxNodeIdentityClusterName(node),
 	}
 	if endpointHost != "" {
 		if parsed := net.ParseIP(endpointHost); parsed != nil {
@@ -89,6 +89,29 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 	}
 
 	return resource, identity
+}
+
+// proxmoxNodeIdentityClusterName keeps the historical cluster+hostname
+// canonical identity while that pair is unambiguous. Monitoring switches a
+// node's source ID to instance+hostname when equal cluster display names exist.
+// In that case the display label is not a safe generic identity key, so the
+// registry falls back to the unique Proxmox source ID unless a linked agent
+// contributes stronger machine identity.
+func proxmoxNodeIdentityClusterName(node models.Node) string {
+	clusterName := strings.TrimSpace(node.ClusterName)
+	instance := strings.TrimSpace(node.Instance)
+	nodeName := strings.TrimSpace(node.Name)
+	if instance == "" || nodeName == "" || strings.EqualFold(instance, clusterName) {
+		return clusterName
+	}
+	if strings.EqualFold(strings.TrimSpace(node.ID), proxmoxNodeSourceID(instance, nodeName)) {
+		return ""
+	}
+	return clusterName
+}
+
+func proxmoxNodeUsesProviderScopedIdentity(node models.Node) bool {
+	return strings.TrimSpace(node.ClusterName) != "" && proxmoxNodeIdentityClusterName(node) == ""
 }
 
 func identityFromHost(host models.Host) ResourceIdentity {

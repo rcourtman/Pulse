@@ -35,6 +35,12 @@ availability-check identity by replaying authoritative supplemental records.
 That availability composition remains owned by API contracts and unified
 resources; it does not make availability rows recovery points, storage health,
 backup evidence, or restore authority.
+The shared Proxmox config discovery path likewise persists powered-off cluster
+members and separates membership from member API reachability. Storage and
+recovery consumers may use the resulting provider-scoped node/instance
+identity to keep same-named cluster storage distinct, but member retention or
+confirmed retirement does not fabricate backup evidence, restore points, or
+storage protection state.
 
 ## Canonical Files
 

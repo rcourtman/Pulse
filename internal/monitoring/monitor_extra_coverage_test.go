@@ -204,8 +204,8 @@ func TestMonitor_ConsolidateDuplicateClusters_Extra(t *testing.T) {
 	m := &Monitor{
 		config: &config.Config{
 			PVEInstances: []config.PVEInstance{
-				{Name: "c1", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "n1"}}},
-				{Name: "c2", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "n2"}}},
+				{Name: "c1", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "n1", Host: "https://10.0.0.1:8006"}}},
+				{Name: "c2", ClusterName: "cluster-A", IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "n1", Host: "https://10.0.0.1:8006"}, {NodeName: "n2", Host: "https://10.0.0.2:8006"}}},
 				{Name: "c3", ClusterName: "cluster-B", IsCluster: true},
 			},
 		},

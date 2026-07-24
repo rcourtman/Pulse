@@ -103,6 +103,63 @@ func TestResourceRegistry_GetByReferenceResolvesSourceIDAndCanonicalAlias(t *tes
 	}
 }
 
+func TestMonitorAdapterKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(NewMemoryStore()))
+	seen := time.Date(2026, 7, 24, 8, 0, 0, 0, time.UTC)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:              "site-a-pve-1",
+				Name:            "pve-1",
+				Instance:        "site-a",
+				Status:          "online",
+				Type:            "node",
+				IsClusterMember: true,
+				ClusterName:     "production",
+				LastSeen:        seen,
+				LinkedAgentID:   "shared-agent-id",
+			},
+			{
+				ID:              "site-b-pve-1",
+				Name:            "pve-1",
+				Instance:        "site-b",
+				Status:          "offline",
+				Type:            "node",
+				IsClusterMember: true,
+				ClusterName:     "production",
+				LastSeen:        seen,
+				LinkedAgentID:   "shared-agent-id",
+			},
+		},
+		Hosts: []models.Host{{
+			ID:           "shared-agent-id",
+			Hostname:     "pve-1",
+			MachineID:    "machine-site-a",
+			LinkedNodeID: "site-a-pve-1",
+			LastSeen:     seen,
+		}},
+		LastUpdate: seen,
+	})
+
+	resources := adapter.GetAll()
+	if len(resources) != 2 {
+		t.Fatalf("same-name provider resources = %d, want 2: %+v", len(resources), resources)
+	}
+	byInstance := make(map[string]Resource, len(resources))
+	for _, resource := range resources {
+		if resource.Proxmox != nil {
+			byInstance[resource.Proxmox.Instance] = resource
+		}
+	}
+	if byInstance["site-a"].ID == "" || byInstance["site-b"].ID == "" ||
+		byInstance["site-a"].ID == byInstance["site-b"].ID {
+		t.Fatalf("provider-scoped canonical identities collided: %+v", resources)
+	}
+	if got := MonitoredSystemCount(adapter); got != 2 {
+		t.Fatalf("same-name provider monitored-system count = %d, want 2", got)
+	}
+}
+
 func TestResourceRegistryAvailabilityLinkedResourceResolvesSourceReference(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Now().UTC()

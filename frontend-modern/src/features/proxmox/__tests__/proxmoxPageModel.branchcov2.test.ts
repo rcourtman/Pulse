@@ -744,7 +744,7 @@ describe('buildProxmoxPageModel cluster grouping', () => {
 
     const model = buildProxmoxPageModel([nodeA, guestOnNode, storageOnNode]);
 
-    expect(model.clusterGroups.map((g) => g.id)).toEqual(['cluster-x']);
+    expect(model.clusterGroups.map((g) => g.id)).toEqual(['lab::cluster-x']);
     const group = model.clusterGroups[0];
     expect(group.nodes.map((r) => r.id)).toEqual(['node-a']);
     expect(group.guests.map((r) => r.id)).toEqual(['vm-1']);
@@ -773,9 +773,9 @@ describe('buildProxmoxPageModel cluster grouping', () => {
 
     const model = buildProxmoxPageModel([nodeA, orphanGuest, orphanStorage]);
 
-    expect(model.clusterGroups.map((g) => g.id)).toEqual(['cluster-x', '__standalone__']);
+    expect(model.clusterGroups.map((g) => g.id)).toEqual(['lab::cluster-x', 'lab::__standalone__']);
     const standalone = model.clusterGroups[1];
-    expect(standalone.id).toBe('__standalone__');
+    expect(standalone.id).toBe('lab::__standalone__');
     expect(standalone.label).toBe('Standalone');
     expect(standalone.nodes).toEqual([]);
     expect(standalone.guests.map((r) => r.id)).toEqual(['vm-orphan']);
@@ -806,6 +806,10 @@ describe('buildProxmoxPageModel cluster grouping', () => {
     const model = buildProxmoxPageModel([nodeBravo, nodeAlpha, orphanGuest]);
 
     expect(model.clusterGroups.map((g) => g.label)).toEqual(['alpha', 'bravo', 'Standalone']);
-    expect(model.clusterGroups.map((g) => g.id)).toEqual(['alpha', 'bravo', '__standalone__']);
+    expect(model.clusterGroups.map((g) => g.id)).toEqual([
+      'lab::alpha',
+      'lab::bravo',
+      'lab::__standalone__',
+    ]);
   });
 });

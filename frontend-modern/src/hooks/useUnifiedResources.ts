@@ -206,6 +206,11 @@ type APIResource = {
     nodeName?: string;
     clusterName?: string;
     instance?: string;
+    host?: string;
+    guestUrl?: string;
+    connectionHealth?: string;
+    pveVersion?: string;
+    kernelVersion?: string;
     vmid?: number;
     cpus?: number;
     uptime?: number;
@@ -789,13 +794,20 @@ const toResource = (v2: APIResource): Resource => {
       ? {
           vmid: v2.proxmox.vmid,
           node: v2.proxmox.nodeName,
+          nodeName: v2.proxmox.nodeName,
           instance: v2.proxmox.instance,
+          clusterName: v2.proxmox.clusterName,
+          host: v2.proxmox.host,
+          guestUrl: v2.proxmox.guestUrl,
+          connectionHealth: v2.proxmox.connectionHealth,
           cpus: v2.proxmox.cpus,
           template: v2.proxmox.template,
           disks: normalizeDiskArray(v2.proxmox.disks),
           swapUsed: v2.proxmox.swapUsed,
           swapTotal: v2.proxmox.swapTotal,
           balloon: v2.proxmox.balloon,
+          pveVersion: v2.proxmox.pveVersion,
+          kernelVersion: v2.proxmox.kernelVersion,
           temperatureDetails: v2.proxmox.temperatureDetails,
         }
       : undefined,

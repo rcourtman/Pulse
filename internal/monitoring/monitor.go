@@ -1172,6 +1172,7 @@ type Monitor struct {
 	dlqInsightMap             map[string]*dlqInsight
 	nodeLastOnline            map[string]time.Time           // Track last time each node was seen online (for grace period)
 	nodePendingUpdatesCache   map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
+	pveMembershipMisses       map[string]int                 // Consecutive authoritative membership absences by instance/node
 	resourceStore             ResourceStoreInterface         // Optional unified resource store for polling optimization
 	supplementalProviders     map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
 	recoveryManager           *recoverymanager.Manager // Optional recovery store manager for backup rollups
@@ -1796,6 +1797,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		dlqInsightMap:              make(map[string]*dlqInsight),
 		nodeLastOnline:             make(map[string]time.Time),
 		nodePendingUpdatesCache:    make(map[string]pendingUpdatesCache),
+		pveMembershipMisses:        make(map[string]int),
 		supplementalProviders:      make(map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider),
 	}
 

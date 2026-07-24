@@ -65,6 +65,32 @@ describe('proxmoxPageModel', () => {
     it('still matches a node by its own name', () => {
       expect(filterProxmoxNodesForSearch([minipc, delly], [debianGo], 'delly')).toEqual([delly]);
     });
+
+    it('does not attach a matching guest to a same-named node in another provider', () => {
+      const siteANode = makeResource({
+        id: 'site-a-node',
+        type: 'agent',
+        platformId: 'site-a',
+        proxmox: { instance: 'site-a', nodeName: 'pve-1', clusterName: 'production' },
+      });
+      const siteBNode = makeResource({
+        id: 'site-b-node',
+        type: 'agent',
+        platformId: 'site-b',
+        proxmox: { instance: 'site-b', nodeName: 'pve-1', clusterName: 'production' },
+      });
+      const siteBGuest = makeResource({
+        id: 'site-b-vm',
+        type: 'vm',
+        name: 'database-b',
+        platformId: 'site-b',
+        proxmox: { instance: 'site-b', nodeName: 'pve-1', vmid: 101 },
+      });
+
+      expect(
+        filterProxmoxNodesForSearch([siteANode, siteBNode], [siteBGuest], 'database-b'),
+      ).toEqual([siteBNode]);
+    });
   });
 
   it('builds a Proxmox-first estate model from canonical v6 resources', () => {
@@ -172,6 +198,49 @@ describe('proxmoxPageModel', () => {
     ]);
 
     expect(buildVisibleProxmoxTabSpecs(model, 0).map((tab) => tab.id)).toEqual(['overview']);
+  });
+
+  it('keeps same-named clusters and nodes isolated by provider identity', () => {
+    const model = buildProxmoxPageModel([
+      makeResource({
+        id: 'site-a-node',
+        type: 'agent',
+        platformId: 'site-a',
+        proxmox: { instance: 'site-a', nodeName: 'pve-1', clusterName: 'production' },
+      }),
+      makeResource({
+        id: 'site-b-node',
+        type: 'agent',
+        platformId: 'site-b',
+        proxmox: { instance: 'site-b', nodeName: 'pve-1', clusterName: 'production' },
+      }),
+      makeResource({
+        id: 'site-a-vm',
+        type: 'vm',
+        platformId: 'site-a',
+        proxmox: { instance: 'site-a', nodeName: 'pve-1', vmid: 101 },
+      }),
+      makeResource({
+        id: 'site-b-vm',
+        type: 'vm',
+        platformId: 'site-b',
+        proxmox: { instance: 'site-b', nodeName: 'pve-1', vmid: 101 },
+      }),
+    ]);
+
+    expect(model.summary.clusterCount).toBe(2);
+    expect(model.clusterGroups).toHaveLength(2);
+    expect(model.clusterGroups.map((group) => group.label)).toEqual(['production', 'production']);
+    expect(
+      model.clusterGroups.map((group) => ({
+        id: group.id,
+        nodes: group.nodes.map((node) => node.id),
+        guests: group.guests.map((guest) => guest.id),
+      })),
+    ).toEqual([
+      { id: 'site-a::production', nodes: ['site-a-node'], guests: ['site-a-vm'] },
+      { id: 'site-b::production', nodes: ['site-b-node'], guests: ['site-b-vm'] },
+    ]);
   });
 
   it('resolves Proxmox suite scope from canonical platform hints', () => {

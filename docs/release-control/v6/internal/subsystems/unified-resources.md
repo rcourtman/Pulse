@@ -63,6 +63,18 @@ metric object exists, so `/api/resources`, `/api/state`, websocket resources,
 history, alerts, and UI adapters never need to interpret `null` as either idle
 or unknown. Unified resources must not infer validity from the numeric guest
 compatibility field alone.
+Proxmox node inventory continuity is monitoring-authored and
+unified-resource-consumed. A powered-off or temporarily unreachable cluster
+member must remain one canonical `agent` resource while monitoring still
+publishes it, preserving canonical ID, alerts, navigation, history target, and
+monitored-system membership with explicit non-fresh source status. Registry
+replacement must not emit `resource_removed` merely because live telemetry is
+missing; it emits removal only after monitoring's authoritative repeated-
+absence reconciliation removes the node from the snapshot. Confirmed removal
+then leaves the top-level monitored-system projection exactly once so usage and
+licensing do not count a decommissioned member. Proxmox platform consumers must
+scope equal cluster labels and node names by provider instance when grouping,
+searching, and assigning guests or storage.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART

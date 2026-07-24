@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -242,6 +243,143 @@ describe('ProxmoxNodesTable', () => {
     const offlineRow = screen.getByText('pve-node-2').closest('tr');
     expect(offlineRow?.className).toContain('opacity-60');
     expect(offlineRow).not.toHaveAttribute('data-workload-alert-accent');
+    expect(offlineRow).toHaveTextContent('Offline');
+  });
+
+  it('labels stale provider telemetry and does not present old metrics as current', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            status: 'online',
+            uptime: 187_200,
+            temperature: 76,
+            proxmox: {
+              clusterName: 'homelab',
+              nodeName: 'pve-node-1',
+              connectionHealth: 'degraded',
+            },
+          }),
+        ]}
+        guests={[]}
+        metricDisplayMode={() => 'sparklines'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const row = screen.getByText('pve-node-1').closest('tr');
+    expect(row).toHaveTextContent('Stale');
+    expect(row).toHaveTextContent('—');
+    expect(row?.className).toContain('opacity-60');
+    expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('temperature-gauge')).not.toBeInTheDocument();
+  });
+
+  it('updates every availability signal when a live row becomes offline', () => {
+    const [state, setState] = createStore({
+      nodes: [makeNodeResource({ uptime: 187_200, temperature: 76 })],
+    });
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={state.nodes}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const row = screen.getByText('pve-node-1').closest('tr');
+    expect(row).toHaveTextContent('2d 4h');
+    expect(screen.getByTestId('temperature-gauge')).toBeInTheDocument();
+
+    setState('nodes', 0, 'status', 'offline');
+    setState('nodes', 0, 'proxmox', 'connectionHealth', 'error');
+
+    expect(row).toHaveTextContent('Offline');
+    expect(row).toHaveTextContent('—');
+    expect(row).not.toHaveTextContent('2d 4h');
+    expect(row?.className).toContain('opacity-60');
+    expect(screen.queryByTestId('temperature-gauge')).not.toBeInTheDocument();
+  });
+
+  it('treats a live linked agent with an unavailable Proxmox provider as stale, not powered off', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            status: 'online',
+            uptime: 187_200,
+            proxmox: {
+              clusterName: 'homelab',
+              nodeName: 'pve-node-1',
+              connectionHealth: 'error',
+            },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const row = screen.getByText('pve-node-1').closest('tr');
+    expect(row).toHaveTextContent('Stale');
+    expect(row).not.toHaveTextContent('Offline');
+    expect(row).toHaveTextContent('—');
+  });
+
+  it('counts same-named-node guests only within the matching provider', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            id: 'site-a-node',
+            platformId: 'site-a',
+            proxmox: {
+              instance: 'site-a',
+              clusterName: 'production',
+              nodeName: 'pve-1',
+            },
+          }),
+          makeNodeResource({
+            id: 'site-b-node',
+            platformId: 'site-b',
+            proxmox: {
+              instance: 'site-b',
+              clusterName: 'production',
+              nodeName: 'pve-1',
+            },
+          }),
+        ]}
+        guests={[
+          {
+            id: 'site-b-vm',
+            type: 'vm',
+            name: 'site-b-vm',
+            displayName: 'site-b-vm',
+            platformId: 'site-b',
+            platformType: 'proxmox-pve',
+            sourceType: 'api',
+            status: 'running',
+            lastSeen: 1_700_000_000_000,
+            proxmox: { instance: 'site-b', nodeName: 'pve-1', vmid: 101 },
+          },
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const siteARow = document.querySelector('[data-proxmox-host-row="site-a-node"]');
+    const siteBRow = document.querySelector('[data-proxmox-host-row="site-b-node"]');
+    expect(siteARow?.querySelector('[data-proxmox-vm-count]')).toHaveTextContent('0');
+    expect(siteBRow?.querySelector('[data-proxmox-vm-count]')).toHaveTextContent('1');
   });
 
   it('sorts rows from the column headers with metric columns defaulting to descending', async () => {

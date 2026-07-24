@@ -379,6 +379,9 @@ func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
 		t.Fatalf("expected 1 resource after initial ingest, got %d", len(resources))
 	}
 	resourceID := resources[0].ID
+	if got := MonitoredSystemCount(adapter); got != 1 {
+		t.Fatalf("initial monitored-system count = %d, want 1", got)
+	}
 
 	changes, err := store.GetRecentChanges(resourceID, time.Time{}, 10)
 	if err != nil {
@@ -412,6 +415,85 @@ func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
 	}
 	if changes[0].Kind != ChangeStateTransition {
 		t.Fatalf("expected latest change to be a state transition, got %q", changes[0].Kind)
+	}
+}
+
+func TestMonitorAdapterKeepsOfflineProxmoxMemberWithoutRemovalChurn(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	seen := time.Date(2026, 7, 24, 8, 0, 0, 0, time.UTC)
+	node := models.Node{
+		ID:               "production-pve-b",
+		Name:             "pve-b",
+		Instance:         "cluster-api",
+		Status:           "online",
+		Type:             "node",
+		IsClusterMember:  true,
+		ClusterName:      "production",
+		LastSeen:         seen,
+		ConnectionHealth: "healthy",
+	}
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes:      []models.Node{node},
+		LastUpdate: seen,
+	})
+	resources := adapter.GetAll()
+	if len(resources) != 1 {
+		t.Fatalf("initial resources = %d, want 1", len(resources))
+	}
+	resourceID := resources[0].ID
+
+	node.Status = "offline"
+	node.ConnectionHealth = "error"
+	node.CPU = 0
+	node.Uptime = 0
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes:      []models.Node{node},
+		LastUpdate: seen.Add(time.Minute),
+	})
+	resources = adapter.GetAll()
+	if len(resources) != 1 || resources[0].ID != resourceID || resources[0].Status == StatusOnline {
+		t.Fatalf("offline membership projection = %+v, want stable non-online resource %q", resources, resourceID)
+	}
+	if resources[0].Proxmox == nil || resources[0].Proxmox.ConnectionHealth != "error" {
+		t.Fatalf("offline membership lost provider reachability truth: %+v", resources[0].Proxmox)
+	}
+	if got := MonitoredSystemCount(adapter); got != 1 {
+		t.Fatalf("offline member monitored-system count = %d, want 1", got)
+	}
+
+	changes, err := store.GetRecentChanges(resourceID, time.Time{}, 20)
+	if err != nil {
+		t.Fatalf("GetRecentChanges before removal: %v", err)
+	}
+	for _, change := range changes {
+		if change.Metadata != nil && change.Metadata["changeType"] == "resource_removed" {
+			t.Fatalf("offline transition emitted resource removal: %+v", change)
+		}
+	}
+
+	// The monitor only emits this empty snapshot after its explicit,
+	// repeatedly-confirmed membership reconciliation retires the node.
+	adapter.PopulateFromSnapshot(models.StateSnapshot{LastUpdate: seen.Add(2 * time.Minute)})
+	if resources = adapter.GetAll(); len(resources) != 0 {
+		t.Fatalf("confirmed removal left %d canonical resources: %+v", len(resources), resources)
+	}
+	if got := MonitoredSystemCount(adapter); got != 0 {
+		t.Fatalf("confirmed removal monitored-system count = %d, want 0", got)
+	}
+	changes, err = store.GetRecentChanges(resourceID, time.Time{}, 20)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after removal: %v", err)
+	}
+	foundRemoval := false
+	for _, change := range changes {
+		if change.Metadata != nil && change.Metadata["changeType"] == "resource_removed" {
+			foundRemoval = true
+		}
+	}
+	if !foundRemoval {
+		t.Fatalf("confirmed removal did not emit resource_removed: %+v", changes)
 	}
 }
 

@@ -170,6 +170,34 @@ export function getResourceNodeName(resource: Resource): string {
   );
 }
 
+export function getProxmoxProviderScope(resource: Resource): string {
+  return (
+    resource.proxmox?.instance ||
+    resource.platformId ||
+    resource.clusterId ||
+    resource.parentId ||
+    resource.id
+  );
+}
+
+const getProxmoxProviderScopes = (resource: Resource): string[] =>
+  [resource.proxmox?.instance, resource.platformId, resource.clusterId]
+    .filter((scope): scope is string => typeof scope === 'string' && scope.trim().length > 0)
+    .map((scope) => scope.trim());
+
+export function isProxmoxChildOfNode(child: Resource, node: Resource): boolean {
+  if (child.parentId && child.parentId === node.id) return true;
+  if (getResourceNodeName(child) !== getResourceNodeName(node)) return false;
+
+  const childScopes = getProxmoxProviderScopes(child);
+  const nodeScopes = new Set(getProxmoxProviderScopes(node));
+  return (
+    childScopes.length === 0 ||
+    nodeScopes.size === 0 ||
+    childScopes.some((scope) => nodeScopes.has(scope))
+  );
+}
+
 // filterProxmoxNodesForSearch narrows the nodes table to match the shared
 // workload search box. Because that box is a VM/LXC filter, filtering nodes by
 // the raw term alone collapses the table to its empty state whenever the term
@@ -183,15 +211,11 @@ export function filterProxmoxNodesForSearch(
   term: string,
 ): Resource[] {
   if (!term.trim()) return nodes;
-  const matchingGuestNodeNames = new Set(
-    guests
-      .filter((guest) => resourceMatchesSearch(guest, term))
-      .map((guest) => getResourceNodeName(guest))
-      .filter(Boolean),
-  );
+  const matchingGuests = guests.filter((guest) => resourceMatchesSearch(guest, term));
   return nodes.filter(
     (node) =>
-      resourceMatchesSearch(node, term) || matchingGuestNodeNames.has(getResourceNodeName(node)),
+      resourceMatchesSearch(node, term) ||
+      matchingGuests.some((guest) => isProxmoxChildOfNode(guest, node)),
   );
 }
 
@@ -280,8 +304,9 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
   const physicalDisks = proxmoxResources.filter((resource) => resource.type === 'physical_disk');
 
   const groupsById = new Map<string, ProxmoxClusterGroup>();
-  const ensureGroup = (label: string): ProxmoxClusterGroup => {
-    const id = label.toLowerCase() === 'standalone' ? '__standalone__' : label;
+  const ensureGroup = (label: string, providerScope: string): ProxmoxClusterGroup => {
+    const labelKey = label.toLowerCase() === 'standalone' ? '__standalone__' : label;
+    const id = `${providerScope}::${labelKey}`;
     const existing = groupsById.get(id);
     if (existing) return existing;
     const created: ProxmoxClusterGroup = {
@@ -295,30 +320,33 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
     return created;
   };
 
-  pveNodes.forEach((resource) =>
-    ensureGroup(getResourceClusterLabel(resource)).nodes.push(resource),
-  );
+  pveNodes.forEach((resource) => {
+    ensureGroup(getResourceClusterLabel(resource), getProxmoxProviderScope(resource)).nodes.push(
+      resource,
+    );
+  });
 
   guests.forEach((resource) => {
-    const nodeName = getResourceNodeName(resource);
-    const owningNode = pveNodes.find((node) => getResourceNodeName(node) === nodeName);
+    const owningNode = pveNodes.find((node) => isProxmoxChildOfNode(resource, node));
     ensureGroup(
       owningNode ? getResourceClusterLabel(owningNode) : getResourceClusterLabel(resource),
+      owningNode ? getProxmoxProviderScope(owningNode) : getProxmoxProviderScope(resource),
     ).guests.push(resource);
   });
 
   storage.forEach((resource) => {
-    const nodeName = getResourceNodeName(resource);
-    const owningNode = pveNodes.find((node) => getResourceNodeName(node) === nodeName);
+    const owningNode = pveNodes.find((node) => isProxmoxChildOfNode(resource, node));
     ensureGroup(
       owningNode ? getResourceClusterLabel(owningNode) : getResourceClusterLabel(resource),
+      owningNode ? getProxmoxProviderScope(owningNode) : getProxmoxProviderScope(resource),
     ).storage.push(resource);
   });
 
   const clusterGroups = Array.from(groupsById.values()).sort((a, b) => {
-    if (a.id === '__standalone__') return 1;
-    if (b.id === '__standalone__') return -1;
-    return a.label.localeCompare(b.label);
+    const aStandalone = a.label.toLowerCase() === 'standalone';
+    const bStandalone = b.label.toLowerCase() === 'standalone';
+    if (aStandalone !== bStandalone) return aStandalone ? 1 : -1;
+    return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
   });
 
   const alertCount = proxmoxResources.reduce(
@@ -337,7 +365,8 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
     physicalDisks,
     clusterGroups,
     summary: {
-      clusterCount: clusterGroups.filter((group) => group.id !== '__standalone__').length,
+      clusterCount: clusterGroups.filter((group) => group.label.toLowerCase() !== 'standalone')
+        .length,
       nodeCount: pveNodes.length,
       guestCount: guests.length,
       runningGuestCount: guests.filter(
