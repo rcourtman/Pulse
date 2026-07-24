@@ -2440,6 +2440,19 @@ verification.
     redaction boundary` in
     `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
 
+44. An org switch must leave every live query surface with data for the
+    new org, not merely cleared of the old org's data. Clearing state is
+    not sufficient in `createNonSuspendingQuery`, because the reset writes
+    signals the source effect does not track, so a consumer with a
+    constant source and no polling would sit empty until it remounted.
+    The org-switch handler therefore refetches, matching the clear-and-
+    refetch shape every other org-switch handler in the app already uses.
+    Stale pre-switch responses are still discarded by request generation.
+    Regression coverage: `refetches a constant-source query after an org
+    switch` and `does not repopulate the cache when an old-org request
+    resolves late` in
+    `frontend-modern/src/hooks/__tests__/createNonSuspendingQuery.test.tsx`.
+
 
 ## Current State
 

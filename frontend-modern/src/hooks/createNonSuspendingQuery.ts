@@ -188,6 +188,15 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
 
   const unsubscribeLiveQueryOrgSwitch = eventBus.on('org_switched', () => {
     reset();
+    // reset() only writes signals the source effect does not track, so it
+    // cannot re-run the query on its own. A consumer with a constant source
+    // and no polling would otherwise sit empty until it remounted. Refetch
+    // here, matching every other org-switch handler in the app.
+    const key = options.source();
+    if (key === null) {
+      return;
+    }
+    void run(key);
   });
   onCleanup(unsubscribeLiveQueryOrgSwitch);
 

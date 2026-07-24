@@ -108,23 +108,27 @@ describe('createNonSuspendingQuery', () => {
   });
 
   it('does not repopulate the cache when an old-org request resolves late', async () => {
-    let resolveFetch: ((value: string) => void) | undefined;
+    // The org switch itself now issues a fresh request, so keep every
+    // resolver and settle the pre-switch one specifically. Resolving the
+    // latest would prove nothing about stale responses.
+    const resolvers: ((value: string) => void)[] = [];
     render(() => (
       <QueryProbe
         cacheNamespace={`late-query-cache-${Date.now()}`}
         fetcher={() =>
           new Promise<string>((resolve) => {
-            resolveFetch = resolve;
+            resolvers.push(resolve);
           })
         }
       />
     ));
 
     await waitFor(() => {
-      expect(resolveFetch).toBeTypeOf('function');
+      expect(resolvers).toHaveLength(1);
     });
+    const resolveOldOrgFetch = resolvers[0];
     eventBus.emit('org_switched', 'org-b');
-    resolveFetch?.('late-org-a-value');
+    resolveOldOrgFetch('late-org-a-value');
 
     await waitFor(() => {
       expect(screen.getByTestId('query-probe').textContent).toContain('initial');
@@ -150,5 +154,32 @@ describe('createNonSuspendingQuery', () => {
     vi.advanceTimersByTime(diagnostics.maxAgeMs);
 
     expect(getCreateNonSuspendingQueryCacheDiagnosticsForTest().size).toBe(0);
+  });
+
+  it('refetches a constant-source query after an org switch', async () => {
+    // c77571685 added an org_switched handler that only called reset().
+    // reset() writes signals the source effect does not track, so for a
+    // consumer with a constant source and no polling (connectionsSnapshot,
+    // patrol-status) the panel emptied and stayed empty until remount.
+    const fetcher = vi.fn(async (key: string) => `value-for-${key}`);
+
+    render(() => (
+      <QueryProbe cacheNamespace={`org-refetch-${Date.now()}`} fetcher={fetcher} />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('query-probe').textContent).toContain('value-for-stable-key');
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    eventBus.emit('org_switched', 'org-b');
+
+    await waitFor(() => {
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('query-probe').textContent).toContain('value-for-stable-key');
+      expect(screen.getByTestId('query-probe').textContent).toContain('resolved:true');
+    });
   });
 });
