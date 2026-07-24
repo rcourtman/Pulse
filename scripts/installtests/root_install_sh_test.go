@@ -89,6 +89,29 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 	}
 }
 
+func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
+	downloadPulse := extractRootInstallShellFunction(t, "download_pulse")
+	orderedSteps := []string{
+		`ensure_update_disk_headroom "/tmp" "$INSTALL_DIR"`,
+		`download_release_archive "$LATEST_RELEASE" "$pulse_arch" "$archive_path"`,
+		`run_upgrade_readiness_preflight "$CURRENT_VERSION" "$expected_release"`,
+		`safe_systemctl stop "$EXISTING_SERVICE"`,
+		`install_pulse_archive "$archive_path" "$expected_release"`,
+	}
+
+	previous := -1
+	for _, step := range orderedSteps {
+		position := strings.Index(downloadPulse, step)
+		if position < 0 {
+			t.Fatalf("download_pulse missing update safety step: %s", step)
+		}
+		if position <= previous {
+			t.Fatalf("download_pulse update safety steps are out of order at: %s", step)
+		}
+		previous = position
+	}
+}
+
 func TestRootInstallScriptInstallsSignatureVerificationDependencies(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {

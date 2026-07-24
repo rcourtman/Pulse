@@ -54,6 +54,37 @@ func TestClientVMFSInfoParsing(t *testing.T) {
 	}
 }
 
+func TestClientVMFSInfoParsingCentOSXFSResult(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/pve1/qemu/1376/agent/get-fsinfo":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"result":[
+				{"name":"/dev/mapper/cs-root","type":"xfs","mountpoint":"/","total-bytes":"75151441920","used-bytes":"32212254720","disk":{"dev":"/dev/dm-0","bus-type":"scsi"}},
+				{"name":"/dev/sda2","type":"xfs","mountpoint":"/boot","total-bytes":1072693248,"used-bytes":268435456,"disk":[{"dev":"/dev/sda2","bus-type":"scsi"}]}
+			]}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	filesystems, err := client.GetVMFSInfo(context.Background(), "pve1", 1376)
+	if err != nil {
+		t.Fatalf("GetVMFSInfo error: %v", err)
+	}
+	if len(filesystems) != 2 {
+		t.Fatalf("expected CentOS root and boot filesystems, got %+v", filesystems)
+	}
+	if root := filesystems[0]; root.Type != "xfs" || root.Mountpoint != "/" ||
+		root.TotalBytes != 75151441920 || root.UsedBytes != 32212254720 || root.Disk != "/dev/dm-0" {
+		t.Fatalf("unexpected CentOS root filesystem: %+v", root)
+	}
+	if boot := filesystems[1]; boot.Type != "xfs" || boot.Mountpoint != "/boot" ||
+		boot.TotalBytes != 1072693248 || boot.UsedBytes != 268435456 || boot.Disk != "/dev/sda2" {
+		t.Fatalf("unexpected CentOS boot filesystem: %+v", boot)
+	}
+}
+
 func TestClientVMFSInfoParsingPrivilegedCapacityFallback(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

@@ -1770,6 +1770,47 @@ func TestBuildVMFromClusterResource_PrefersLinkedHostAgentDiskInventoryOverGuest
 	}
 }
 
+func TestSummarizeVMFSInfoIncludesCentOSXFSFilesystems(t *testing.T) {
+	monitor := &Monitor{}
+	fsInfo := []proxmox.VMFileSystem{
+		{
+			Mountpoint: "/",
+			Type:       "xfs",
+			TotalBytes: 75151441920,
+			UsedBytes:  32212254720,
+			Disk:       "/dev/dm-0",
+		},
+		{
+			Mountpoint: "/boot",
+			Type:       "xfs",
+			TotalBytes: 1072693248,
+			UsedBytes:  268435456,
+			Disk:       "/dev/sda2",
+		},
+	}
+
+	summary := monitor.summarizeVMFSInfo(
+		"cluster-a",
+		proxmox.ClusterResource{Name: "centos-stream", VMID: 1376},
+		fsInfo,
+	)
+
+	const wantTotal = uint64(75151441920 + 1072693248)
+	const wantUsed = uint64(32212254720 + 268435456)
+	if summary.totalBytes != wantTotal || summary.usedBytes != wantUsed {
+		t.Fatalf("summary bytes = total %d used %d, want total %d used %d", summary.totalBytes, summary.usedBytes, wantTotal, wantUsed)
+	}
+	if len(summary.individualDisks) != 2 {
+		t.Fatalf("expected both CentOS XFS filesystems in the disk inventory, got %+v", summary.individualDisks)
+	}
+	if root := summary.individualDisks[0]; root.Type != "xfs" || root.Mountpoint != "/" || root.Device != "/dev/dm-0" {
+		t.Fatalf("unexpected CentOS root disk projection: %+v", root)
+	}
+	if boot := summary.individualDisks[1]; boot.Type != "xfs" || boot.Mountpoint != "/boot" || boot.Device != "/dev/sda2" {
+		t.Fatalf("unexpected CentOS boot disk projection: %+v", boot)
+	}
+}
+
 func TestSummarizeVMFSInfoCountsIssue1319WindowsVolumes(t *testing.T) {
 	monitor := &Monitor{}
 	fsInfo := []proxmox.VMFileSystem{
