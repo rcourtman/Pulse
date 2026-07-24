@@ -1613,6 +1613,15 @@ recovery scope, or a storage/recovery-owned secret source.
 
 ## Completion Obligations
 
+Agent-backed lifecycle recovery must namespace every in-memory pending request,
+typed result, operation query, and deployment progress subscription by the
+admitted organization session. That transport namespace must not alter the
+durable receipt identity: action ID, attempt ID, operation kind/version,
+request digest, subject, and canonical agent ID remain immutable. Reconnect and
+restart recovery may query the owning live session for a terminal receipt, but
+may never resend an ambiguous mutation or accept a response from another
+tenant/session.
+
 Legacy RBAC JSON import is an adjacent security-owned migration, not recovery
 inventory or restore evidence. When shared `internal/api/` construction
 triggers that import, validation and SQLite writes must complete atomically,
@@ -2025,6 +2034,16 @@ Storage and recovery consumers may observe action detail, pending/settled
 projections, and correlated receipt state, but may not infer restore,
 verification, rollback, or compensation truth from those transport-only fields
 or create a local retry path when the core attempt is `receipt_pending`.
+The adjacent command transport now namespaces live sessions and pending
+response channels by organization plus agent identity, while durable receipt
+identity remains the immutable attempt/action/operation/digest/agent tuple.
+Action dispatch and query contexts must carry the owning organization into
+that transport; token rotation, server restart, socket replacement, or stale
+reader cleanup may make the executor unavailable, but must not rewrite the
+bound attempt, admit a cross-tenant response, replay a committed mutation, or
+convert report health into receipt evidence. Recovery continues query-only
+against the same bound operation and fails closed while its admitted session
+is absent.
 
 Unified Agent lifecycle fields added to the shared host and connections API are
 adjacent monitoring/API state only. Applied config fingerprints, updater

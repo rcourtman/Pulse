@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
+	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -26,6 +29,70 @@ func (stubMetadataProvider) SetHostURL(string, string) error   { return nil }
 
 type recordingMetadataProvider struct {
 	guestURLs map[string]string
+}
+
+func TestTenantAgentServerForOrganizationFailsClosedAcrossTenants(t *testing.T) {
+	admissions := map[string]agentexec.AgentAdmission{
+		"token-a": {OrganizationID: "tenant-a", TokenID: "token-a", AgentID: "agent-a", Hostname: "host-a"},
+		"token-b": {OrganizationID: "tenant-b", TokenID: "token-b", AgentID: "agent-b", Hostname: "host-b"},
+	}
+	server := agentexec.NewServerWithAdmissionValidator(
+		func(token, _, _ string) (agentexec.AgentAdmission, bool) {
+			admission, ok := admissions[token]
+			return admission, ok
+		},
+		func(agentexec.AgentAdmission) bool { return true },
+	)
+	websocketServer := httptest.NewServer(http.HandlerFunc(server.HandleWebSocket))
+	defer websocketServer.Close()
+
+	register := func(admission agentexec.AgentAdmission) *websocket.Conn {
+		t.Helper()
+		url := "ws" + strings.TrimPrefix(websocketServer.URL, "http")
+		conn, _, err := websocket.DefaultDialer.Dial(url, http.Header{
+			"Origin": []string{websocketServer.URL},
+		})
+		if err != nil {
+			t.Fatalf("dial agent websocket: %v", err)
+		}
+		message, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+			AgentID:  admission.AgentID,
+			Hostname: admission.Hostname,
+			Token:    admission.TokenID,
+		})
+		if err != nil {
+			t.Fatalf("create registration message: %v", err)
+		}
+		if err := conn.WriteJSON(message); err != nil {
+			t.Fatalf("write registration: %v", err)
+		}
+		var response agentexec.Message
+		if err := conn.ReadJSON(&response); err != nil {
+			t.Fatalf("read registration response: %v", err)
+		}
+		var registered agentexec.RegisteredPayload
+		if err := response.DecodePayload(&registered); err != nil || !registered.Success {
+			t.Fatalf("registration failed: payload=%+v err=%v", registered, err)
+		}
+		return conn
+	}
+
+	connA := register(admissions["token-a"])
+	defer connA.Close()
+	connB := register(admissions["token-b"])
+	defer connB.Close()
+
+	tenantA := tenantAgentServerForOrganization(server, "tenant-a")
+	agents := tenantA.GetConnectedAgents()
+	if len(agents) != 1 || agents[0].AgentID != "agent-a" {
+		t.Fatalf("tenant-a command view leaked another tenant: %#v", agents)
+	}
+	if _, err := tenantA.ExecuteCommand(context.Background(), "agent-b", agentexec.ExecuteCommandPayload{
+		Command: "true",
+		Trusted: true,
+	}); err == nil || !strings.Contains(err.Error(), "not connected") {
+		t.Fatalf("cross-tenant command dispatch did not fail closed: %v", err)
+	}
 }
 
 func (p *recordingMetadataProvider) SetGuestURL(id, url string) error {

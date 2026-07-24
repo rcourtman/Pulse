@@ -287,6 +287,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/availability_poller_test.go",
                         "internal/monitoring/availability_udp_test.go",
                         "internal/monitoring/canonical_guardrails_test.go",
+                        "internal/monitoring/ceph_test.go",
                         "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                         "internal/monitoring/issue1595_collection_trust_test.go",
                         "internal/monitoring/issue1613_contract_test.go",
@@ -300,6 +301,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/monitor_pve_cluster_refresh_test.go",
                         "internal/monitoring/monitor_pve_guest_lxc_test.go",
                         "internal/monitoring/ratetracker_test.go",
+                        "internal/monitoring/truenas_poller_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
@@ -466,6 +468,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/resources_test.go",
                         "internal/storagehealth/risk_test.go",
                         "internal/storagehealth/topology_test.go",
+                        "internal/storagehealth/zfs_pool_health_contract_test.go",
                     ],
                 }
             ],
@@ -1163,11 +1166,13 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/types/api.ts",
                         "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
+                        "internal/api/audit_handlers_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/docker_agents_report_size_test.go",
                         "internal/api/host_agent_removal_lifecycle_integration_test.go",
                         "internal/api/metadata_handlers_test.go",
                         "internal/api/patrol_autopilot_test.go",
+                        "pulse-enterprise:test/extensions_contract_test.go",
                     ],
                 }
             ],
@@ -2572,6 +2577,7 @@ None yet.
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
                 }
             ],
@@ -2597,6 +2603,7 @@ None yet.
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
                 }
             ],
@@ -2622,6 +2629,7 @@ None yet.
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
                 }
             ],
@@ -2653,6 +2661,7 @@ None yet.
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
                 }
             ],
@@ -2722,6 +2731,7 @@ None yet.
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 

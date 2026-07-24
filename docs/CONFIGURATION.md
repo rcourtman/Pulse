@@ -202,7 +202,7 @@ Environment variables take precedence over `system.json`.
 | ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port (web UI, API, and agent ingest) | `7655` |
 | `PORT` | **Deprecated** legacy alias for `FRONTEND_PORT`, honored only when `FRONTEND_PORT` is unset. Logs a deprecation warning at startup; switch to `FRONTEND_PORT`. | *(unset)* |
-| `PULSE_AGENT_INGEST_PORT` | Optional dedicated port that serves **only** agent ingest (`/api/agents/*`), network-isolated from the web UI and the rest of the API. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
+| `PULSE_AGENT_INGEST_PORT` | Optional dedicated port for the complete agent control plane: reports/config (`/api/agents/*`), command admission (`/api/agent/ws`), version checks, and bootstrap downloads. The web UI and management API stay isolated. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
@@ -249,7 +249,7 @@ Environment variables take precedence over `system.json`.
 
 ### Split-Port Agent Ingest (Network Isolation)
 
-By default Pulse serves the web UI, the REST API, and agent check-in together on `FRONTEND_PORT`. For deployments that expose Pulse to monitored hosts across an untrusted network (for example, a managed service provider whose clients' Proxmox nodes reach a central Pulse server over the internet), you can move agent check-in onto its own dedicated port and keep the web UI and management API on a separate, firewalled port.
+By default Pulse serves the web UI, the REST API, and the agent control plane together on `FRONTEND_PORT`. For deployments that expose Pulse to monitored hosts across an untrusted network (for example, a managed service provider whose clients' Proxmox nodes reach a central Pulse server over the internet), you can expose the agent control plane on its own dedicated port and keep the web UI and management API on a separate, firewalled port.
 
 Set `PULSE_AGENT_INGEST_PORT` to a port other than `FRONTEND_PORT`:
 
@@ -259,7 +259,7 @@ PULSE_AGENT_INGEST_PORT=7656
 
 When enabled:
 
-- The dedicated port serves **only** the agent-ingest routes (`/api/agents/*`). Every other path, including the web UI, login, and the management API, returns `404`. A host that can reach the agent port cannot pivot to the management interface.
+- The dedicated port serves only the agent-owned routes required for a complete lifecycle: `/api/agents/*`, `/api/agent/ws`, `/api/agent/version`, `/api/server/info`, `/install.sh`, `/install.ps1`, and `/download/pulse-agent`. Every other path, including the web UI, login, and management APIs, returns `404`. A host that can reach the agent port cannot pivot to the management interface.
 - The main `FRONTEND_PORT` listener is unchanged and still serves everything (including agent ingest), so existing single-port installs keep working. The dedicated listener is purely additive.
 - The value is validated at startup: it must be between 1 and 65535 and must differ from `FRONTEND_PORT` and the HTTP redirect port. An invalid value is rejected.
 
@@ -270,7 +270,7 @@ PULSE_AGENT_INGEST_PORT=7656
 PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
 ```
 
-Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener.
+Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report` and establish their command channel at `wss://agents.example.com:7656/api/agent/ws`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener. If command execution is enabled, both routes must traverse the same proxy/firewall path; a successful report does not prove that the WebSocket is admitted.
 
 ### Iframe Embedding (system.json)
 

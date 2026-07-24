@@ -108,11 +108,13 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 describe('settings architecture guardrails', () => {
   it('keeps Unified Agent lifecycle failures on the shared connections contract', () => {
     expect(connectionsApiSource).toContain("| 'failed'");
+    expect(connectionsApiSource).toContain("'disabled' | 'disconnected' | 'enabled'");
     expect(connectionsApiSource).toContain('agentUpdate?: ConnectionAgentUpdateStatus;');
     expect(connectionsApiSource).toContain('agentModules?: ConnectionAgentModuleStatus[];');
     expect(connectionsTableModelSource).toContain("key: 'module-health'");
     expect(connectionsTableModelSource).toContain("label: 'Agent update failed'");
     expect(connectionsTableModelSource).toContain('update?.lastError');
+    expect(connectionsTableModelSource).toContain("case 'disconnected':");
   });
 
   it('keeps Settings on the canonical page shell boundary', () => {

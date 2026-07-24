@@ -636,7 +636,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 	chatCfg := chat.Config{
 		AIConfig:    aiCfg,
 		DataDir:     dataDir,
-		AgentServer: h.agentServer,
+		AgentServer: tenantAgentServerForOrganization(h.agentServer, orgID),
 		ReadState:   h.readStateForOrg(orgID),
 		OrgID:       orgID,
 		ControlLevelResolver: func(next *config.AIConfig) string {
@@ -886,7 +886,7 @@ func (h *AIHandler) startWithConfig(ctx context.Context, monitor *monitoring.Mon
 		AIConfig:      aiCfg,
 		DataDir:       dataDir,
 		StateProvider: monitor,
-		AgentServer:   h.agentServer,
+		AgentServer:   tenantAgentServerForOrganization(h.agentServer, orgID),
 		ReadState:     h.readStateForOrg(orgID),
 		OrgID:         orgID,
 		ControlLevelResolver: func(next *config.AIConfig) string {

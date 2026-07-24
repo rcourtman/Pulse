@@ -71,7 +71,7 @@ func (e hostUpdateActionExecutor) CheckActionAvailable(ctx context.Context, req 
 	if !ok || capability.InternalHandler != hostPackageUpdateActionHandler {
 		return unified.ResourceActionReadiness{}
 	}
-	if err := e.validateResource(resource); err != nil {
+	if err := e.validateResource(ctx, resource); err != nil {
 		return unified.ResourceActionReadiness{
 			Name:       hostPackageUpdateCapability,
 			Available:  false,
@@ -112,7 +112,7 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 	if agentexec.HostUpdateOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
 		return nil, fmt.Errorf("host update dispatch binding drift")
 	}
-	result, err := e.agents.ExecuteHostUpdate(ctx, agentID, req)
+	result, err := e.agents.ExecuteHostUpdate(agentCommandContext(ctx), agentID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, r
 	if !ok {
 		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
-	query, err := querier.QueryAgentOperation(ctx, attempt.AgentID, identity)
+	query, err := querier.QueryAgentOperation(agentCommandContext(ctx), attempt.AgentID, identity)
 	if err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
@@ -186,13 +186,13 @@ func (e hostUpdateActionExecutor) currentResource(ctx context.Context, resourceI
 	if !ok || resource == nil {
 		return unified.Resource{}, fmt.Errorf("resource %q is no longer present", resourceID)
 	}
-	if err := e.validateResource(*resource); err != nil {
+	if err := e.validateResource(ctx, *resource); err != nil {
 		return unified.Resource{}, err
 	}
 	return *resource, nil
 }
 
-func (e hostUpdateActionExecutor) validateResource(resource unified.Resource) error {
+func (e hostUpdateActionExecutor) validateResource(ctx context.Context, resource unified.Resource) error {
 	if resource.Type != unified.ResourceTypeAgent || resource.Agent == nil {
 		return fmt.Errorf("resource is not an agent-managed host")
 	}
@@ -223,11 +223,10 @@ func (e hostUpdateActionExecutor) validateResource(resource unified.Resource) er
 		return fmt.Errorf("host has no pending package updates")
 	}
 	agentID := strings.TrimSpace(resource.Agent.AgentID)
-	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
-	if agentID == "" || e.agents == nil || !e.agents.IsAgentConnected(agentID) {
+	if agentID == "" || e.agents == nil || !isAgentCommandConnected(ctx, e.agents, agentID) {
 		return fmt.Errorf("host command agent is disconnected")
 	}
-	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
+	if liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion {
 		return fmt.Errorf("live durable operation receipt protocol is unsupported")
 	}
 	return nil

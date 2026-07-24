@@ -31,6 +31,28 @@ type fakeDockerActionAgentCommander struct {
 	queries          []operationreceipt.Identity
 }
 
+type scopedFakeDockerActionAgentCommander struct {
+	*fakeDockerActionAgentCommander
+	tokenAgents map[string]string
+	lastOrg     string
+}
+
+func (f *scopedFakeDockerActionAgentCommander) IsAgentConnectedForOrganization(organizationID, agentID string) bool {
+	f.lastOrg = organizationID
+	return f.IsAgentConnected(agentID)
+}
+
+func (f *scopedFakeDockerActionAgentCommander) GetAgentForHostForOrganization(organizationID, hostname string) (string, bool) {
+	f.lastOrg = organizationID
+	return f.GetAgentForHost(hostname)
+}
+
+func (f *scopedFakeDockerActionAgentCommander) GetAgentForTokenForOrganization(organizationID, tokenID string) (string, bool) {
+	f.lastOrg = organizationID
+	agentID, ok := f.tokenAgents[tokenID]
+	return agentID, ok
+}
+
 func dockerActionDispatchContext(t *testing.T, executor dockerContainerActionExecutor, record unified.ActionAuditRecord) context.Context {
 	t.Helper()
 	attempt, err := unified.NewActionDispatchAttempt(record.ID, time.Now())
@@ -120,6 +142,36 @@ func dockerActionReadinessByName(readinesses []unified.ResourceActionReadiness, 
 		}
 	}
 	return unified.ResourceActionReadiness{}, false
+}
+
+func TestDockerCommandSessionResolutionUsesTenantAndImmutableReportToken(t *testing.T) {
+	agents := &scopedFakeDockerActionAgentCommander{
+		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
+			connected:   map[string]bool{"canonical-agent": true, "stale-agent": true},
+			agentByHost: map[string]string{"docker-host": "stale-agent"},
+		},
+		tokenAgents: map[string]string{"fresh-token": "canonical-agent"},
+	}
+	executor := dockerContainerActionExecutor{agents: agents}
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "org-b")
+	resource := unified.Resource{Docker: &unified.DockerData{
+		TokenID:  "fresh-token",
+		AgentID:  "stale-agent",
+		Hostname: "docker-host",
+	}}
+
+	agentID, err := executor.connectedDockerCommandAgentID(ctx, resource)
+	if err != nil {
+		t.Fatalf("resolve command session: %v", err)
+	}
+	if agentID != "canonical-agent" || agents.lastOrg != "org-b" {
+		t.Fatalf("resolved agent/org = %q/%q, want canonical-agent/org-b", agentID, agents.lastOrg)
+	}
+
+	delete(agents.tokenAgents, "fresh-token")
+	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err == nil {
+		t.Fatalf("stale token unexpectedly fell back to report identity %q", agentID)
+	}
 }
 
 func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *testing.T) {

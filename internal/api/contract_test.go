@@ -20678,9 +20678,11 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	}
 	sharedSrc := string(sharedSource)
 	for _, snippet := range []string{
-		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(resource unified.Resource) (string, error)",
+		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context.Context, resource unified.Resource) (string, error)",
+		"resource.Docker.TokenID",
+		"commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)",
 		"resource.Docker.AgentID",
-		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))",
+		"commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))",
 		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",
 		"ActionDispatchOperationKinds",
 		"BindActionDispatch",
@@ -20715,9 +20717,11 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	if strings.Contains(reconcileSource, "executorForAction(ctx, record.Request)") {
 		t.Fatal("durable reconciliation must not rediscover its executor from current resource inventory")
 	}
-	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
-		strings.Index(src, "e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))") {
-		t.Fatal("docker lifecycle executor must try the Docker reporting agent id before falling back to hostname resolution")
+	if strings.Index(src, "commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)") >
+		strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") ||
+		strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
+			strings.Index(src, "commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname))") {
+		t.Fatal("docker lifecycle executor must resolve the immutable reporting token before legacy agent-id and hostname fallbacks")
 	}
 }
 
@@ -20750,9 +20754,9 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 	}
 	src := string(source)
 	for _, snippet := range []string{
-		"func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(resource unified.Resource) (string, error)",
+		"func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(ctx context.Context, resource unified.Resource) (string, error)",
 		"resource.Proxmox.LinkedAgentID",
-		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Proxmox.NodeName))",
+		"commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Proxmox.NodeName))",
 		"Trusted:    true",
 		"func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(",
 		"proxmoxGuestStatusCommand(kind, vmid)",
@@ -20764,7 +20768,7 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 		}
 	}
 	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Proxmox.LinkedAgentID)") >
-		strings.Index(src, "e.agents.GetAgentForHost(strings.TrimSpace(resource.Proxmox.NodeName))") {
+		strings.Index(src, "commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Proxmox.NodeName))") {
 		t.Fatal("proxmox lifecycle executor must try the linked Proxmox node agent before falling back to node hostname resolution")
 	}
 
@@ -20935,8 +20939,8 @@ func TestContract_DurableOperationReceiptCapabilityGatesAPTActions(t *testing.T)
 	files := map[string][]string{
 		"../../pkg/agents/host/report.go":         {"OperationReceiptVersion int", `json:"operationReceiptVersion,omitempty"`},
 		"../unifiedresources/adapters.go":         {"host.OperationReceiptVersion != operationreceipt.ProtocolVersion", "hostPackageUpdateCapabilities(host)", "hostStorageCleanupCapability(host)"},
-		"host_update_action_executor.go":          {"resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion", "AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion"},
-		"host_storage_cleanup_action_executor.go": {"resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion", "AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion"},
+		"host_update_action_executor.go":          {"resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion", "liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion"},
+		"host_storage_cleanup_action_executor.go": {"resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion", "liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion"},
 		"../ai/findings_apt_workflows.go":         {"aptHostHasCapability(host, \"install_os_updates\", \"host.package_updates\")", "aptHostHasCapability(host, \"clean_package_cache\", \"host.storage_cleanup\")"},
 	}
 	for path, fragments := range files {

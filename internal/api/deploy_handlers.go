@@ -113,7 +113,7 @@ func (h *DeployHandlers) HandleCandidates(w http.ResponseWriter, r *http.Request
 
 	// Build connected agents set
 	connectedAgents := make(map[string]bool)
-	for _, agent := range h.execServer.GetConnectedAgents() {
+	for _, agent := range h.execServer.GetConnectedAgentsForOrganization(GetOrgID(r.Context())) {
 		connectedAgents[agent.AgentID] = true
 	}
 
@@ -226,7 +226,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	}
 
 	// Verify source agent is connected.
-	if !h.execServer.IsAgentConnected(req.SourceAgentID) {
+	if !h.execServer.IsAgentConnectedForOrganization(resolveTenantOrgID(r), req.SourceAgentID) {
 		writeErrorResponse(w, http.StatusConflict, "source_agent_offline", "Source agent is not connected", nil)
 		return
 	}
@@ -361,11 +361,11 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	})
 
 	// Subscribe to progress before sending command to avoid race.
-	progressCh := h.execServer.SubscribeDeployProgress(req.SourceAgentID, jobID, 64)
+	progressCh := h.execServer.SubscribeDeployProgressForOrganization(job.OrgID, req.SourceAgentID, jobID, 64)
 
 	// Send command to agent.
-	if err := h.execServer.SendDeployPreflight(ctx, req.SourceAgentID, payload); err != nil {
-		h.execServer.UnsubscribeDeployProgress(req.SourceAgentID, jobID)
+	if err := h.execServer.SendDeployPreflight(agentCommandContext(ctx), req.SourceAgentID, payload); err != nil {
+		h.execServer.UnsubscribeDeployProgressForOrganization(job.OrgID, req.SourceAgentID, jobID)
 		_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobFailed)
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to send preflight command")
 		writeErrorResponse(w, http.StatusInternalServerError, "send_failed",
@@ -374,7 +374,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	}
 
 	// Start background goroutine to process progress events.
-	go h.processPreflightProgress(jobID, req.SourceAgentID, progressCh)
+	go h.processPreflightProgress(job.OrgID, jobID, req.SourceAgentID, progressCh)
 
 	resp := createPreflightResponse{
 		PreflightID: jobID,
@@ -554,8 +554,8 @@ func (h *DeployHandlers) HandlePreflightEvents(w http.ResponseWriter, r *http.Re
 
 // processPreflightProgress reads deploy progress events from the agent and
 // persists them as deploy events, also broadcasting to SSE clients.
-func (h *DeployHandlers) processPreflightProgress(jobID, agentID string, ch <-chan agentexec.DeployProgressPayload) {
-	defer h.execServer.UnsubscribeDeployProgress(agentID, jobID)
+func (h *DeployHandlers) processPreflightProgress(organizationID, jobID, agentID string, ch <-chan agentexec.DeployProgressPayload) {
+	defer h.execServer.UnsubscribeDeployProgressForOrganization(organizationID, agentID, jobID)
 
 	ctx := context.Background()
 
@@ -1016,7 +1016,7 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Verify source agent is connected.
-	if !h.execServer.IsAgentConnected(req.SourceAgentID) {
+	if !h.execServer.IsAgentConnectedForOrganization(resolveTenantOrgID(r), req.SourceAgentID) {
 		writeErrorResponse(w, http.StatusConflict, "source_agent_offline", "Source agent is not connected", nil)
 		return
 	}
@@ -1224,11 +1224,11 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Subscribe to progress before sending command.
-	progressCh := h.execServer.SubscribeDeployProgress(req.SourceAgentID, jobID, 64)
+	progressCh := h.execServer.SubscribeDeployProgressForOrganization(orgID, req.SourceAgentID, jobID, 64)
 
 	// Send install command to agent.
-	if err := h.execServer.SendDeployInstall(ctx, req.SourceAgentID, payload); err != nil {
-		h.execServer.UnsubscribeDeployProgress(req.SourceAgentID, jobID)
+	if err := h.execServer.SendDeployInstall(agentCommandContext(ctx), req.SourceAgentID, payload); err != nil {
+		h.execServer.UnsubscribeDeployProgressForOrganization(orgID, req.SourceAgentID, jobID)
 		_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobFailed)
 		// Mark pending targets as failed so they're eligible for retry.
 		for _, it := range installTargets {
@@ -1241,7 +1241,7 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Start background goroutine to process progress events.
-	go h.processInstallProgress(jobID, req.SourceAgentID, job.RetryMax, progressCh)
+	go h.processInstallProgress(orgID, jobID, req.SourceAgentID, job.RetryMax, progressCh)
 
 	resp := createJobResponse{
 		JobID:           jobID,
@@ -1315,7 +1315,7 @@ func (h *DeployHandlers) HandleCancelJob(w http.ResponseWriter, r *http.Request)
 		RequestID: generateID("req"),
 		JobID:     jobID,
 	}
-	if err := h.execServer.SendDeployCancel(ctx, job.SourceAgentID, cancelPayload); err != nil {
+	if err := h.execServer.SendDeployCancel(agentCommandContext(ctx), job.SourceAgentID, cancelPayload); err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to send cancel command")
 		// Don't fail the request — the agent may have already disconnected.
 		// processInstallProgress will handle the channel close.
@@ -1392,7 +1392,7 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Verify source agent is connected.
-	if !h.execServer.IsAgentConnected(job.SourceAgentID) {
+	if !h.execServer.IsAgentConnectedForOrganization(orgID, job.SourceAgentID) {
 		writeErrorResponse(w, http.StatusConflict, "source_agent_offline", "Source agent is not connected", nil)
 		return
 	}
@@ -1523,9 +1523,9 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Subscribe and send.
-	progressCh := h.execServer.SubscribeDeployProgress(job.SourceAgentID, jobID, 64)
-	if err := h.execServer.SendDeployInstall(ctx, job.SourceAgentID, payload); err != nil {
-		h.execServer.UnsubscribeDeployProgress(job.SourceAgentID, jobID)
+	progressCh := h.execServer.SubscribeDeployProgressForOrganization(orgID, job.SourceAgentID, jobID, 64)
+	if err := h.execServer.SendDeployInstall(agentCommandContext(ctx), job.SourceAgentID, payload); err != nil {
+		h.execServer.UnsubscribeDeployProgressForOrganization(orgID, job.SourceAgentID, jobID)
 		_ = h.store.UpdateJobStatus(ctx, jobID, deploy.JobFailed)
 		// Mark retried targets back to failed so they can be retried again.
 		for _, it := range installTargets {
@@ -1537,7 +1537,7 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	go h.processInstallProgress(jobID, job.SourceAgentID, job.RetryMax, progressCh)
+	go h.processInstallProgress(orgID, jobID, job.SourceAgentID, job.RetryMax, progressCh)
 
 	resp := map[string]any{
 		"jobId":        jobID,
@@ -1553,8 +1553,8 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 
 // processInstallProgress reads install progress events from the agent and
 // persists them as deploy events, also broadcasting to SSE clients.
-func (h *DeployHandlers) processInstallProgress(jobID, agentID string, retryMax int, ch <-chan agentexec.DeployProgressPayload) {
-	defer h.execServer.UnsubscribeDeployProgress(agentID, jobID)
+func (h *DeployHandlers) processInstallProgress(organizationID, jobID, agentID string, retryMax int, ch <-chan agentexec.DeployProgressPayload) {
+	defer h.execServer.UnsubscribeDeployProgressForOrganization(organizationID, agentID, jobID)
 
 	ctx := context.Background()
 

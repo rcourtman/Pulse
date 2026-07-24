@@ -321,6 +321,14 @@ const commandPolicyFromFleet = (fleet: ConnectionFleetGovernance): ConnectionFle
   if (fleet.commandPolicy) return fleet.commandPolicy;
 
   switch (fleet.remoteControl) {
+    case 'disconnected':
+      return {
+        status: 'blocked',
+        desired: 'unknown',
+        applied: 'enabled',
+        enforcement: 'blocked',
+        reason: 'The agent reports command execution enabled, but no command channel is connected.',
+      };
     case 'enabled':
       return {
         status: 'enabled',

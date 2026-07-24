@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -13,11 +14,23 @@ import (
 // any persistence of its own — it composes per-type stores and the
 // monitoring scheduler's in-memory health data into a single list.
 type ConnectionsHandlers struct {
-	getConfig        func(ctx context.Context) *config.Config
-	getPersistence   func(ctx context.Context) *config.ConfigPersistence
-	getMonitor       func(ctx context.Context) *monitoring.Monitor
-	getTrueNASPoller func(ctx context.Context) *monitoring.TrueNASPoller
-	getVMwarePoller  func(ctx context.Context) *monitoring.VMwarePoller
+	getConfig                    func(ctx context.Context) *config.Config
+	getPersistence               func(ctx context.Context) *config.ConfigPersistence
+	getMonitor                   func(ctx context.Context) *monitoring.Monitor
+	getTrueNASPoller             func(ctx context.Context) *monitoring.TrueNASPoller
+	getVMwarePoller              func(ctx context.Context) *monitoring.VMwarePoller
+	agentCommandSessionConnected func(organizationID, tokenID, agentID, hostname string) bool
+}
+
+// SetAgentCommandSessionProvider wires the live command-channel registry into
+// the ledger. Telemetry liveness alone is not command readiness.
+func (h *ConnectionsHandlers) SetAgentCommandSessionProvider(
+	connected func(organizationID, tokenID, agentID, hostname string) bool,
+) {
+	if h == nil {
+		return
+	}
+	h.agentCommandSessionConnected = connected
 }
 
 // NewConnectionsHandlers wires the aggregator behind the request-scoped
@@ -62,9 +75,39 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 	persistence := h.getPersistence(ctx)
 	monitor := h.getMonitor(ctx)
 
-	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, h.runtimeSources(ctx, resolveTenantOrgID(r)))
+	organizationID := resolveTenantOrgID(r)
+	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, h.runtimeSources(ctx, organizationID))
 
 	connections := buildConnections(inputs)
+	if h.agentCommandSessionConnected != nil {
+		for index := range connections {
+			conn := &connections[index]
+			if conn.Type != ConnectionTypeAgent || conn.AgentIdentity == nil {
+				continue
+			}
+			connected := h.agentCommandSessionConnected(
+				organizationID,
+				conn.agentTokenID,
+				conn.agentID,
+				conn.AgentIdentity.Hostname,
+			)
+			conn.commandChannelConnected = &connected
+			conn.Fleet.RemoteControl = connectionFleetRemoteControl(*conn)
+			if conn.AgentIdentity.CommandsEnabled && !connected {
+				desired := fleetStateUnknown
+				if conn.Fleet.CommandPolicy != nil && strings.TrimSpace(conn.Fleet.CommandPolicy.Desired) != "" {
+					desired = conn.Fleet.CommandPolicy.Desired
+				}
+				conn.Fleet.CommandPolicy = &ConnectionFleetCommandPolicy{
+					Status:      fleetStateBlocked,
+					Desired:     desired,
+					Applied:     fleetStateEnabled,
+					Enforcement: fleetStateBlocked,
+					Reason:      "agent reports command execution enabled, but no admitted command channel is connected",
+				}
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, ConnectionsListResponse{
 		Connections: connections,
 		Systems:     buildConnectionSystems(connections, monitor),

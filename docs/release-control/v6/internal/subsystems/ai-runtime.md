@@ -3198,6 +3198,14 @@ query...`, and `Reading storage...` before streamed tool arguments are
 
 ## Completion Obligations
 
+Every per-organization Assistant or legacy AI service that can discover or
+dispatch through the host-agent command transport must receive an
+organization-pinned command-server view. A tenant service must never enumerate
+the default organization or another tenant and must not rely on an unscoped
+agent ID to select a session. Loss, revocation, or replacement of the pinned
+session fails the invocation before command dispatch while the ordinary
+approval, action-audit, timeout, and cancellation contracts remain in force.
+
 Qualification floor: Patrol model launch and product-claim qualification must use
    `cmd/patrol-qualify` against reviewed scenario-owned ground truth. Expected
    faults and independent postconditions must be declared before the run and

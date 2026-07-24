@@ -38,6 +38,7 @@ const (
 	fleetStateCurrent         = "current"
 	fleetStateDegraded        = "degraded"
 	fleetStateDisabled        = "disabled"
+	fleetStateDisconnected    = "disconnected"
 	fleetStateEnabled         = "enabled"
 	fleetStateEnrolled        = "enrolled"
 	fleetStateHealthy         = "healthy"
@@ -543,6 +544,8 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentUpdate:          connectionAgentUpdateStatus(host.AgentUpdate),
 		AgentModules:         connectionAgentModuleStatuses(host.AgentModules),
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		agentID:              strings.TrimSpace(host.ID),
+		agentTokenID:         strings.TrimSpace(host.TokenID),
 	}, now)
 	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig, host.AppliedConfig)
 	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
@@ -725,6 +728,9 @@ func connectionFleetRemoteControl(conn Connection) string {
 		return fleetStateUnknown
 	}
 	if conn.AgentIdentity != nil && conn.AgentIdentity.CommandsEnabled {
+		if conn.commandChannelConnected != nil && !*conn.commandChannelConnected {
+			return fleetStateDisconnected
+		}
 		return fleetStateEnabled
 	}
 	return fleetStateDisabled
@@ -1008,6 +1014,15 @@ func connectionFleetAgentCommandPolicy(conn Connection, host models.Host, desire
 	}
 
 	applied := connectionFleetCommandPolicyState(host.CommandsEnabled)
+	if applied == fleetStateEnabled && conn.commandChannelConnected != nil && !*conn.commandChannelConnected {
+		return &ConnectionFleetCommandPolicy{
+			Status:      fleetStateBlocked,
+			Desired:     desired,
+			Applied:     applied,
+			Enforcement: fleetStateBlocked,
+			Reason:      "agent reports command execution enabled, but no admitted command channel is connected",
+		}
+	}
 	policy := &ConnectionFleetCommandPolicy{
 		Status:  applied,
 		Desired: desired,

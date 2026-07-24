@@ -181,6 +181,10 @@ type Connection struct {
 	AgentModules         []ConnectionAgentModuleStatus `json:"agentModules,omitempty"`
 	Fleet                ConnectionFleetGovernance     `json:"fleet"`
 	Capabilities         ConnectionCapabilities        `json:"capabilities"`
+
+	agentID                 string
+	agentTokenID            string
+	commandChannelConnected *bool
 }
 
 type ConnectionSystemComponentRole string

@@ -1622,7 +1622,7 @@ func TestProcessInstallProgress_AgentDisconnect(t *testing.T) {
 	close(ch)
 
 	// Run in foreground for testing.
-	h.processInstallProgress("dep_disc", "agent-1", 3, ch)
+	h.processInstallProgress("default", "dep_disc", "agent-1", 3, ch)
 
 	// Job should be failed.
 	job, _ := h.store.GetJob(ctx, "dep_disc")

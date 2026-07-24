@@ -84,7 +84,7 @@ for the full reference.
 
 ```bash
 FRONTEND_PORT=7655              # management UI + API: private network / VPN only
-PULSE_AGENT_INGEST_PORT=7656    # agent check-in only: reachable from client sites
+PULSE_AGENT_INGEST_PORT=7656    # agent reports + command/control: reachable from client sites
 PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
 ```
 
@@ -93,14 +93,16 @@ Firewall baseline:
 | Surface | Port | Reachable from |
 |---------|------|----------------|
 | Management UI + API | `FRONTEND_PORT` (7655) | Provider staff network / VPN only |
-| Agent ingest | `PULSE_AGENT_INGEST_PORT` (7656) | Client sites (or client VPN tunnels) |
+| Agent control plane | `PULSE_AGENT_INGEST_PORT` (7656) | Client sites (or client VPN tunnels) |
 | Prometheus metrics | 9091 | Provider monitoring network only |
 
-The dedicated agent port serves **only** `/api/agents/*`; every other path,
-including login and the management API, returns `404`. Agent check-in
-authenticates with an `agent:report`-scoped API token, which cannot read
-monitoring data or change settings — the token scope and the port isolation
-are independent layers.
+The dedicated agent port serves only the report/config, command WebSocket,
+version, and bootstrap routes documented in
+[Split-Port Agent Ingest](CONFIGURATION.md#split-port-agent-ingest-network-isolation);
+login and management APIs return `404`. Report and command access use separate
+least-privilege scopes (`agent:report` and `agent:exec`) on the same
+host-bound enrollment token. Token scope, immutable command-session binding,
+and port isolation are independent layers.
 
 If agents reach the central server over per-client VPN tunnels instead of the
 public internet, the same split still applies: expose only the agent port into
@@ -108,12 +110,16 @@ the tunnels and keep the management port out of them.
 
 ### Validation checklist (run after setup, repeat after network changes)
 
-1. **Agent port serves agent ingest only.** Both must return `404`:
+1. **Agent port excludes management surfaces.** Both must return `404`:
 
    ```bash
    curl -sk -o /dev/null -w '%{http_code}\n' https://agents.example.com:7656/          # 404
    curl -sk -o /dev/null -w '%{http_code}\n' https://agents.example.com:7656/api/login # 404
    ```
+
+   When commands are enabled, also verify that `/api/agent/ws` reaches Pulse
+   through the proxy. Agent Doctor reports the command channel as disconnected
+   if telemetry is current but WebSocket admission is absent.
 
 2. **Management port is not reachable from a client site.** From a client
    network (or through a client tunnel), a connection to `FRONTEND_PORT` must

@@ -153,7 +153,7 @@ describe('ConnectionsAPI', () => {
           configRollout: 'reported',
           credentialStatus: 'verified',
           updateStatus: 'update-available',
-          remoteControl: 'enabled',
+          remoteControl: 'disconnected',
           configDrift: {
             status: 'drifted',
             desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
@@ -172,12 +172,11 @@ describe('ConnectionsAPI', () => {
             lastVerifiedAt: '2026-04-22T20:00:00Z',
           },
           commandPolicy: {
-            status: 'enabled',
-            desired: 'disabled',
+            status: 'blocked',
+            desired: 'enabled',
             applied: 'enabled',
-            enforcement: 'drifted',
-            reason:
-              'agent still reports command execution enabled while desired policy disables it',
+            enforcement: 'blocked',
+            reason: 'agent command channel is not connected',
           },
         },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
@@ -195,7 +194,7 @@ describe('ConnectionsAPI', () => {
       configRollout: 'reported',
       credentialStatus: 'verified',
       updateStatus: 'update-available',
-      remoteControl: 'enabled',
+      remoteControl: 'disconnected',
       configDrift: {
         status: 'drifted',
         desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
@@ -214,11 +213,11 @@ describe('ConnectionsAPI', () => {
         lastVerifiedAt: '2026-04-22T20:00:00Z',
       },
       commandPolicy: {
-        status: 'enabled',
-        desired: 'disabled',
+        status: 'blocked',
+        desired: 'enabled',
         applied: 'enabled',
-        enforcement: 'drifted',
-        reason: 'agent still reports command execution enabled while desired policy disables it',
+        enforcement: 'blocked',
+        reason: 'agent command channel is not connected',
       },
     });
   });

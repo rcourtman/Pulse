@@ -58,7 +58,7 @@ func (e hostStorageCleanupActionExecutor) ActionDispatchOperationKinds() []strin
 	return []string{agentexec.HostStorageCleanupOperationPackageCache}
 }
 
-func (e hostStorageCleanupActionExecutor) CheckActionAvailable(_ context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
+func (e hostStorageCleanupActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
 	if strings.TrimSpace(req.CapabilityName) != hostStorageCleanupCapability {
 		return unified.ResourceActionReadiness{}
 	}
@@ -66,7 +66,7 @@ func (e hostStorageCleanupActionExecutor) CheckActionAvailable(_ context.Context
 	if !ok || capability.InternalHandler != hostStorageCleanupActionHandler {
 		return unified.ResourceActionReadiness{}
 	}
-	if err := e.validateResource(resource); err != nil {
+	if err := e.validateResource(ctx, resource); err != nil {
 		return unified.ResourceActionReadiness{
 			Name:       hostStorageCleanupCapability,
 			Available:  false,
@@ -107,7 +107,7 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 	if agentexec.HostStorageCleanupOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
 		return nil, fmt.Errorf("host cleanup dispatch binding drift")
 	}
-	result, err := e.agents.ExecuteHostStorageCleanup(ctx, agentID, req)
+	result, err := e.agents.ExecuteHostStorageCleanup(agentCommandContext(ctx), agentID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Co
 	if !ok {
 		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
-	query, err := querier.QueryAgentOperation(ctx, attempt.AgentID, identity)
+	query, err := querier.QueryAgentOperation(agentCommandContext(ctx), attempt.AgentID, identity)
 	if err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
@@ -174,13 +174,13 @@ func (e hostStorageCleanupActionExecutor) currentResource(ctx context.Context, r
 	if !ok || resource == nil {
 		return unified.Resource{}, fmt.Errorf("resource %q is no longer present", resourceID)
 	}
-	if err := e.validateResource(*resource); err != nil {
+	if err := e.validateResource(ctx, *resource); err != nil {
 		return unified.Resource{}, err
 	}
 	return *resource, nil
 }
 
-func (e hostStorageCleanupActionExecutor) validateResource(resource unified.Resource) error {
+func (e hostStorageCleanupActionExecutor) validateResource(ctx context.Context, resource unified.Resource) error {
 	if resource.Type != unified.ResourceTypeAgent || resource.Agent == nil {
 		return fmt.Errorf("resource is not an agent-managed host")
 	}
@@ -214,11 +214,10 @@ func (e hostStorageCleanupActionExecutor) validateResource(resource unified.Reso
 		return fmt.Errorf("package cache filesystem is not under storage pressure")
 	}
 	agentID := strings.TrimSpace(resource.Agent.AgentID)
-	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
-	if agentID == "" || e.agents == nil || !e.agents.IsAgentConnected(agentID) {
+	if agentID == "" || e.agents == nil || !isAgentCommandConnected(ctx, e.agents, agentID) {
 		return fmt.Errorf("host command agent is disconnected")
 	}
-	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
+	if liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion {
 		return fmt.Errorf("live durable operation receipt protocol is unsupported")
 	}
 	return nil

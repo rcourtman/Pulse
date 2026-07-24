@@ -562,6 +562,60 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 }
 
+func TestAgentExecTokenRejectsAmbiguousMultiOrganizationAuthority(t *testing.T) {
+	rawToken := "multi-org-agent-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
+		"bound_agent_id":           "agent-1",
+		"bound_hostname":           "host-1",
+		agentExecBindingVersionKey: agentExecBindingVersion,
+	})
+	record.OrgIDs = []string{"org-a", "org-b"}
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	if _, ok := router.admitAgentExecToken(rawToken, "agent-1", "host-1"); ok {
+		t.Fatal("multi-organization exec token was admitted to an ambiguous command session")
+	}
+}
+
+func TestAgentExecTokenBindingFailsClosedAndRestoresMetadataWhenPersistenceFails(t *testing.T) {
+	rawToken := "persist-failure-agent-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
+		"install_type": "docker",
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := newTestConfigWithTokens(t, record)
+
+	notDirectory := filepath.Join(t.TempDir(), "not-a-directory")
+	persistence := config.NewConfigPersistence(notDirectory)
+	if err := os.RemoveAll(notDirectory); err != nil {
+		t.Fatalf("remove persistence directory: %v", err)
+	}
+	if err := os.WriteFile(notDirectory, []byte("blocked"), 0600); err != nil {
+		t.Fatalf("create persistence blocker: %v", err)
+	}
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	if _, ok := router.admitAgentExecToken(rawToken, "agent-1", "host-1"); ok {
+		t.Fatal("first-use command admission succeeded without durable identity binding")
+	}
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	for _, key := range []string{
+		"bound_agent_id",
+		"bound_hostname",
+		"bound_at",
+		agentExecBindingVersionKey,
+	} {
+		if _, present := cfg.APITokens[0].Metadata[key]; present {
+			t.Fatalf("failed persistence left transient %q binding metadata behind", key)
+		}
+	}
+}
+
 // TestAgentExecTokenBindingAcceptsHostnameMatch covers the deploy/enroll flow
 // where the runtime token carries both bound_agent_id (server-canonical
 // "agent-<hostname>" form) and bound_hostname, but the agent's runtime
@@ -613,6 +667,43 @@ func TestAgentExecTokenBindingAcceptsHostnameMatch(t *testing.T) {
 	if !reg.Success {
 		conn.Close()
 		t.Fatalf("expected registration to be accepted when hostname matches bound_hostname, got %q", reg.Message)
+	}
+	conn.Close()
+	config.Mu.RLock()
+	if got := cfg.APITokens[0].Metadata["bound_agent_id"]; got != "f0c1b2a3e4d5f60718293a4b5c6d7e8f" {
+		config.Mu.RUnlock()
+		t.Fatalf("legacy hostname binding migrated agent id = %q", got)
+	}
+	if got := cfg.APITokens[0].Metadata[agentExecBindingVersionKey]; got != agentExecBindingVersion {
+		config.Mu.RUnlock()
+		t.Fatalf("legacy binding version = %q", got)
+	}
+	config.Mu.RUnlock()
+
+	// The hostname exception is a one-time upgrade migration. Once the runtime
+	// identity is persisted, replay with a second ID on the same host fails.
+	conn, _, err = websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	regMsg, err = agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "second-runtime-id",
+		Hostname: "prox97",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	if replay := readRegisteredPayload(t, conn); replay.Success {
+		conn.Close()
+		t.Fatal("migrated token accepted replay under a second runtime identity")
 	}
 	conn.Close()
 

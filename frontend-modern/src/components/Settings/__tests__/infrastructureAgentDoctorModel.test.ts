@@ -121,6 +121,46 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toBeUndefined();
   });
 
+  it('does not report healthy when telemetry is fresh but command admission is disconnected', () => {
+    const connection = connectionFixture({
+      agentUpdateAvailable: false,
+      agentVersion: '6.1.1',
+      expectedAgentVersion: '6.1.1',
+      agentIdentity: {
+        hostname: 'host-1',
+        platform: 'ubuntu',
+        architecture: 'amd64',
+        commandsEnabled: true,
+      },
+      fleet: {
+        versionDrift: 'current',
+        remoteControl: 'disconnected',
+        commandPolicy: {
+          status: 'blocked',
+          desired: 'enabled',
+          applied: 'enabled',
+          enforcement: 'blocked',
+          reason: 'Agent reports commands enabled, but no admitted command channel is connected.',
+        },
+      } as Connection['fleet'],
+    });
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [diagnosticFixture({ status: 'healthy', reasons: [] })],
+      diagnosticsAvailable: true,
+      targetVersion: '6.1.1',
+    });
+
+    expect(target.status).toBe('critical');
+    expect(target.reasons).toContainEqual(
+      expect.objectContaining({
+        code: 'command_channel_disconnected',
+        severity: 'critical',
+      }),
+    );
+  });
+
   it('falls back to ledger classification and blocks commands for unknown platforms', () => {
     const connection = connectionFixture({
       state: 'stale',

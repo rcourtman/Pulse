@@ -229,15 +229,13 @@ func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 		Token:    "any",
 	}))
 
-	waitFor(t, 2*time.Second, func() bool { return s.IsAgentConnected("a1") })
-
 	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected no registration ack when send fails")
 	}
-
-	conn.Close()
-	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+	if s.IsAgentConnected("a1") {
+		t.Fatal("agent must not remain command-connected when registration acknowledgement fails")
+	}
 }
 
 func TestHandleWebSocket_PongHandler(t *testing.T) {

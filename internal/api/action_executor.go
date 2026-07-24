@@ -16,6 +16,72 @@ type actionAgentCommander interface {
 	IsAgentConnected(agentID string) bool
 }
 
+type scopedActionAgentCommander interface {
+	IsAgentConnectedForOrganization(organizationID, agentID string) bool
+	GetAgentForHostForOrganization(organizationID, hostname string) (string, bool)
+	GetAgentForTokenForOrganization(organizationID, tokenID string) (string, bool)
+}
+
+type scopedAgentOperationReceiptCapability interface {
+	AgentOperationReceiptVersionForOrganization(organizationID, agentID string) int
+}
+
+type tenantAgentServer interface {
+	GetConnectedAgents() []agentexec.ConnectedAgent
+	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+}
+
+func tenantAgentServerForOrganization(server *agentexec.Server, organizationID string) tenantAgentServer {
+	if server == nil {
+		return nil
+	}
+	return server.ForOrganization(organizationID)
+}
+
+func agentCommandContext(ctx context.Context) context.Context {
+	return agentexec.WithOrganizationID(ctx, GetOrgID(ctx))
+}
+
+func isAgentCommandConnected(ctx context.Context, agents any, agentID string) bool {
+	if scoped, ok := agents.(scopedActionAgentCommander); ok {
+		return scoped.IsAgentConnectedForOrganization(GetOrgID(ctx), agentID)
+	}
+	if legacy, ok := agents.(interface{ IsAgentConnected(string) bool }); ok {
+		return legacy.IsAgentConnected(agentID)
+	}
+	return false
+}
+
+func commandAgentForHost(ctx context.Context, agents actionAgentCommander, hostname string) (string, bool) {
+	if scoped, ok := agents.(scopedActionAgentCommander); ok {
+		return scoped.GetAgentForHostForOrganization(GetOrgID(ctx), hostname)
+	}
+	if agents == nil {
+		return "", false
+	}
+	return agents.GetAgentForHost(hostname)
+}
+
+func commandAgentForToken(ctx context.Context, agents actionAgentCommander, tokenID string) (string, bool) {
+	if strings.TrimSpace(tokenID) == "" {
+		return "", false
+	}
+	if scoped, ok := agents.(scopedActionAgentCommander); ok {
+		return scoped.GetAgentForTokenForOrganization(GetOrgID(ctx), tokenID)
+	}
+	return "", false
+}
+
+func liveAgentOperationReceiptVersion(ctx context.Context, agents any, agentID string) int {
+	if scoped, ok := agents.(scopedAgentOperationReceiptCapability); ok {
+		return scoped.AgentOperationReceiptVersionForOrganization(GetOrgID(ctx), agentID)
+	}
+	if capability, ok := agents.(agentOperationReceiptCapability); ok {
+		return capability.AgentOperationReceiptVersion(agentID)
+	}
+	return 0
+}
+
 type actionHandlerProvider interface {
 	ActionHandlerNames() []string
 }

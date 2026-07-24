@@ -80,6 +80,7 @@ You can pre-configure Pulse by setting environment variables. Plain text credent
 ```bash
 # Docker Example
 docker run -d \
+  -e PULSE_DEPLOYMENT_METHOD=docker_run \
   -e PULSE_AUTH_USER=admin \
   -e PULSE_AUTH_PASS=secret123 \
   rcourtman/pulse:latest
@@ -201,7 +202,7 @@ Environment variables take precedence over `system.json`.
 | ---------- | ------------- | --------- |
 | `FRONTEND_PORT` | Public listening port (web UI, API, and agent ingest) | `7655` |
 | `PORT` | **Deprecated** legacy alias for `FRONTEND_PORT`, honored only when `FRONTEND_PORT` is unset. Logs a deprecation warning at startup; switch to `FRONTEND_PORT`. | *(unset)* |
-| `PULSE_AGENT_INGEST_PORT` | Optional dedicated port that serves **only** agent ingest (`/api/agents/*`), network-isolated from the web UI and the rest of the API. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
+| `PULSE_AGENT_INGEST_PORT` | Optional dedicated port for the complete agent control plane: reports/config (`/api/agents/*`), command admission (`/api/agent/ws`), version checks, and bootstrap downloads. The web UI and management API stay isolated. `0` = disabled (single port). See [Split-Port Agent Ingest](#split-port-agent-ingest-network-isolation). | `0` |
 | `LOG_LEVEL` | Log verbosity (see below) | `info` |
 | `LOG_FORMAT` | Log output format (`auto`, `json`, `console`) | `auto` |
 | `LOG_FILE` | Log file path (enables file logging) | *(unset)* |
@@ -248,7 +249,7 @@ Environment variables take precedence over `system.json`.
 
 ### Split-Port Agent Ingest (Network Isolation)
 
-By default Pulse serves the web UI, the REST API, and agent check-in together on `FRONTEND_PORT`. For deployments that expose Pulse to monitored hosts across an untrusted network (for example, a managed service provider whose clients' Proxmox nodes reach a central Pulse server over the internet), you can move agent check-in onto its own dedicated port and keep the web UI and management API on a separate, firewalled port.
+By default Pulse serves the web UI, the REST API, and the agent control plane together on `FRONTEND_PORT`. For deployments that expose Pulse to monitored hosts across an untrusted network (for example, a managed service provider whose clients' Proxmox nodes reach a central Pulse server over the internet), you can expose the agent control plane on its own dedicated port and keep the web UI and management API on a separate, firewalled port.
 
 Set `PULSE_AGENT_INGEST_PORT` to a port other than `FRONTEND_PORT`:
 
@@ -258,7 +259,7 @@ PULSE_AGENT_INGEST_PORT=7656
 
 When enabled:
 
-- The dedicated port serves **only** the agent-ingest routes (`/api/agents/*`). Every other path, including the web UI, login, and the management API, returns `404`. A host that can reach the agent port cannot pivot to the management interface.
+- The dedicated port serves only the agent-owned routes required for a complete lifecycle: `/api/agents/*`, `/api/agent/ws`, `/api/agent/version`, `/api/server/info`, `/install.sh`, `/install.ps1`, and `/download/pulse-agent`. Every other path, including the web UI, login, and management APIs, returns `404`. A host that can reach the agent port cannot pivot to the management interface.
 - The main `FRONTEND_PORT` listener is unchanged and still serves everything (including agent ingest), so existing single-port installs keep working. The dedicated listener is purely additive.
 - The value is validated at startup: it must be between 1 and 65535 and must differ from `FRONTEND_PORT` and the HTTP redirect port. An invalid value is rejected.
 
@@ -269,7 +270,7 @@ PULSE_AGENT_INGEST_PORT=7656
 PULSE_AGENT_CONNECT_URL=https://agents.example.com:7656
 ```
 
-Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener.
+Agents then post telemetry to `https://agents.example.com:7656/api/agents/agent/report` and establish their command channel at `wss://agents.example.com:7656/api/agent/ws`, while the web UI and management API remain reachable only on the private `FRONTEND_PORT` listener. If command execution is enabled, both routes must traverse the same proxy/firewall path; a successful report does not prove that the WebSocket is admitted.
 
 ### Iframe Embedding (system.json)
 
@@ -308,6 +309,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY` | Allow Proxmox-side minimal LXC Docker inventory collection with `pct exec`; collects Docker host/container summary, not inspect/env/mount/process data | `false` |
 | `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker inventory; empty means all running Docker-enabled LXCs are eligible when inventory is enabled | *(unset)* |
 | `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
+| `PULSE_DEPLOYMENT_METHOD` | Optional closed telemetry label: `docker_compose`, `docker_run`, `container_other`, `systemd`, `binary_other`, or `other`; invalid values are reported only as the safe runtime fallback | Inferred as `container_other` or `binary_other` |
 
 ### Logging Overrides
 

@@ -62,7 +62,7 @@ var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{
 // Server manages WebSocket connections from agents
 type Server struct {
 	mu                               sync.RWMutex
-	agents                           map[string]*agentConn                           // agentID -> connection
+	agents                           map[string]*agentConn                           // organizationID + agentID -> connection
 	pendingReqs                      map[string]chan CommandResultPayload            // scoped request key -> response channel
 	pendingHostStorageCleanups       map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates               map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
@@ -71,7 +71,8 @@ type Server struct {
 	pendingHostOperations            map[string]pendingHostOperation // scoped request key -> exact typed APT operation/query identity
 	pendingOperationQueries          map[string]pendingOperationQuery
 	deploySubs                       map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
-	validateToken                    func(token string, agentID string, hostname string) bool
+	admitToken                       AgentRegistrationValidator
+	validateSession                  AgentSessionValidator
 	commandPolicy                    *CommandPolicy
 	ipConnCounts                     map[string]int
 	maxConnsPerIP                    int
@@ -81,8 +82,30 @@ type Server struct {
 	commandAuthorizationVerifier     func(CommandAuthorizationRequest) error
 	newCommandApprovalGrant          func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
 	now                              func() time.Time
-	agentRegisteredNotifier          func(agentID string)
+	agentRegisteredNotifier          func(AgentAdmission)
 }
+
+const defaultOrganizationID = "default"
+
+type organizationContextKey struct{}
+
+// AgentAdmission is the immutable server-owned identity of an admitted command
+// session. The raw bearer token is deliberately not retained after
+// registration.
+type AgentAdmission struct {
+	OrganizationID string
+	TokenID        string
+	AgentID        string
+	Hostname       string
+}
+
+// AgentRegistrationValidator authenticates and binds a registration to one
+// organization, token, agent identity, and hostname.
+type AgentRegistrationValidator func(token string, agentID string, hostname string) (AgentAdmission, bool)
+
+// AgentSessionValidator revalidates the non-secret admission immediately
+// before the server treats a socket as connected or dispatches work to it.
+type AgentSessionValidator func(AgentAdmission) bool
 
 // CommandAuthorizationRequest is the complete server-side approval scope
 // verified and consumed immediately before an approval grant is signed.
@@ -99,6 +122,8 @@ type CommandAuthorizationRequest struct {
 type agentConn struct {
 	conn             *websocket.Conn
 	agent            ConnectedAgent
+	admission        AgentAdmission
+	sessionKey       string
 	approvalGrantKey []byte
 	writeMu          sync.Mutex
 	done             chan struct{}
@@ -143,6 +168,26 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		panic("agentexec: validateToken is required")
 	}
 
+	return NewServerWithAdmissionValidator(func(token string, agentID string, hostname string) (AgentAdmission, bool) {
+		if !validateToken(token, agentID, hostname) {
+			return AgentAdmission{}, false
+		}
+		return AgentAdmission{
+			OrganizationID: defaultOrganizationID,
+			AgentID:        strings.TrimSpace(agentID),
+			Hostname:       strings.TrimSpace(hostname),
+		}, true
+	}, nil)
+}
+
+// NewServerWithAdmissionValidator creates a command server whose sessions are
+// tenant-scoped and can be invalidated after registration without retaining
+// bearer tokens in memory.
+func NewServerWithAdmissionValidator(admit AgentRegistrationValidator, validateSession AgentSessionValidator) *Server {
+	if admit == nil {
+		panic("agentexec: admission validator is required")
+	}
+
 	return &Server{
 		agents:                           make(map[string]*agentConn),
 		pendingReqs:                      make(map[string]chan CommandResultPayload),
@@ -153,7 +198,8 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		pendingHostOperations:            make(map[string]pendingHostOperation),
 		pendingOperationQueries:          make(map[string]pendingOperationQuery),
 		deploySubs:                       make(map[string]chan DeployProgressPayload),
-		validateToken:                    validateToken,
+		admitToken:                       admit,
+		validateSession:                  validateSession,
 		commandPolicy:                    DefaultPolicy(),
 		ipConnCounts:                     make(map[string]int),
 		maxConnsPerIP:                    defaultMaxWebSocketConnectionsPerIP,
@@ -162,6 +208,83 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		newCommandApprovalGrant:          NewCommandApprovalGrant,
 		now:                              time.Now,
 	}
+}
+
+// WithOrganizationID scopes command-session lookup and dispatch to a tenant.
+// Empty values normalize to the single-tenant default for compatibility.
+func WithOrganizationID(ctx context.Context, organizationID string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, organizationContextKey{}, normalizeOrganizationID(organizationID))
+}
+
+func normalizeOrganizationID(organizationID string) string {
+	if organizationID = strings.TrimSpace(organizationID); organizationID != "" {
+		return organizationID
+	}
+	return defaultOrganizationID
+}
+
+func organizationIDFromContext(ctx context.Context) string {
+	if ctx != nil {
+		if organizationID, ok := ctx.Value(organizationContextKey{}).(string); ok {
+			return normalizeOrganizationID(organizationID)
+		}
+	}
+	return defaultOrganizationID
+}
+
+// OrganizationServer is a tenant-pinned view of a command server. It exists
+// for consumers whose interface cannot carry the request context through
+// discovery and dispatch as separate calls (for example, long-lived per-tenant
+// Assistant services).
+type OrganizationServer struct {
+	server         *Server
+	organizationID string
+}
+
+// ForOrganization returns a command-server view that can only discover and
+// dispatch sessions admitted to organizationID.
+func (s *Server) ForOrganization(organizationID string) *OrganizationServer {
+	return &OrganizationServer{
+		server:         s,
+		organizationID: normalizeOrganizationID(organizationID),
+	}
+}
+
+func (s *OrganizationServer) GetConnectedAgents() []ConnectedAgent {
+	if s == nil || s.server == nil {
+		return nil
+	}
+	return s.server.GetConnectedAgentsForOrganization(s.organizationID)
+}
+
+func (s *OrganizationServer) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
+	if s == nil || s.server == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	return s.server.ExecuteCommand(WithOrganizationID(ctx, s.organizationID), agentID, cmd)
+}
+
+func agentSessionKey(organizationID, agentID string) string {
+	organizationID = normalizeOrganizationID(organizationID)
+	agentID = strings.TrimSpace(agentID)
+	if organizationID == defaultOrganizationID {
+		// Preserve the historical key for direct single-tenant users and tests.
+		return agentID
+	}
+	return organizationID + "\x00" + agentID
+}
+
+func connectionSessionKey(ac *agentConn) string {
+	if ac == nil {
+		return ""
+	}
+	if strings.TrimSpace(ac.sessionKey) != "" {
+		return ac.sessionKey
+	}
+	return agentSessionKey(ac.admission.OrganizationID, ac.agent.AgentID)
 }
 
 // SetCommandAuthorizationVerifier installs the server-owned authorization
@@ -184,6 +307,20 @@ func (s *Server) SetAgentRegisteredNotifier(notify func(agentID string)) {
 	if s == nil {
 		return
 	}
+	if notify == nil {
+		s.agentRegisteredNotifier = nil
+		return
+	}
+	s.agentRegisteredNotifier = func(admission AgentAdmission) {
+		notify(admission.AgentID)
+	}
+}
+
+// SetAgentAdmissionNotifier installs the tenant-aware registration callback.
+func (s *Server) SetAgentAdmissionNotifier(notify func(AgentAdmission)) {
+	if s == nil {
+		return
+	}
 	s.agentRegisteredNotifier = notify
 }
 
@@ -198,6 +335,40 @@ func (s *Server) isShuttingDown() bool {
 
 func pendingRequestKey(agentID, requestID string) string {
 	return agentID + "\x00" + requestID
+}
+
+func (s *Server) connectionForOrganization(organizationID, agentID string) (*agentConn, bool) {
+	if s == nil {
+		return nil, false
+	}
+	key := agentSessionKey(organizationID, agentID)
+	s.mu.RLock()
+	ac, ok := s.agents[key]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	if s.validateSession == nil || s.validateSession(ac.admission) {
+		return ac, true
+	}
+
+	// A revoked, expired, re-bound, or otherwise stale token must stop being a
+	// command authority immediately. Pointer equality prevents an old
+	// validation result from evicting a replacement session.
+	s.mu.Lock()
+	if current, exists := s.agents[key]; exists && current == ac {
+		delete(s.agents, key)
+	}
+	s.mu.Unlock()
+	ac.signalDone()
+	if ac.conn != nil {
+		_ = ac.conn.Close()
+	}
+	return nil, false
+}
+
+func (s *Server) connectionForContext(ctx context.Context, agentID string) (*agentConn, bool) {
+	return s.connectionForOrganization(organizationIDFromContext(ctx), agentID)
 }
 
 func (s *Server) claimPendingHostOperation(agentID, requestID, actionID, operation string) (string, error) {
@@ -223,11 +394,15 @@ func (s *Server) matchesPendingHostOperation(agentID, requestID, actionID, opera
 }
 
 func (s *Server) claimPendingDockerOperation(identity operationreceipt.Identity, containerID string) (string, error) {
+	return s.claimPendingDockerOperationForSession(identity.AgentID, identity, containerID)
+}
+
+func (s *Server) claimPendingDockerOperationForSession(sessionKey string, identity operationreceipt.Identity, containerID string) (string, error) {
 	identity, err := operationreceipt.NormalizeIdentity(identity)
 	if err != nil {
 		return "", err
 	}
-	key := pendingRequestKey(identity.AgentID, identity.AttemptID)
+	key := pendingRequestKey(sessionKey, identity.AttemptID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.pendingHostOperations[key]; exists {
@@ -238,7 +413,11 @@ func (s *Server) claimPendingDockerOperation(identity operationreceipt.Identity,
 }
 
 func (s *Server) matchesPendingDockerOperation(agentID string, result DockerContainerLifecycleResultPayload) bool {
-	key := pendingRequestKey(agentID, result.RequestID)
+	return s.matchesPendingDockerOperationForSession(agentID, agentID, result)
+}
+
+func (s *Server) matchesPendingDockerOperationForSession(sessionKey, agentID string, result DockerContainerLifecycleResultPayload) bool {
+	key := pendingRequestKey(sessionKey, result.RequestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
@@ -247,7 +426,11 @@ func (s *Server) matchesPendingDockerOperation(agentID string, result DockerCont
 }
 
 func (s *Server) matchesPendingDockerUpdateOperation(agentID string, result DockerContainerUpdateResultPayload) bool {
-	key := pendingRequestKey(agentID, result.RequestID)
+	return s.matchesPendingDockerUpdateOperationForSession(agentID, agentID, result)
+}
+
+func (s *Server) matchesPendingDockerUpdateOperationForSession(sessionKey, agentID string, result DockerContainerUpdateResultPayload) bool {
+	key := pendingRequestKey(sessionKey, result.RequestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
@@ -723,8 +906,24 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate token
-	if !s.validateToken(reg.Token, reg.AgentID, reg.Hostname) {
+	// Validate and canonicalize the command-session admission. Reporting and
+	// command admission are intentionally separate trust decisions.
+	admission, admitted := s.admitToken(reg.Token, reg.AgentID, reg.Hostname)
+	admission.OrganizationID = normalizeOrganizationID(admission.OrganizationID)
+	admission.TokenID = strings.TrimSpace(admission.TokenID)
+	admission.AgentID = strings.TrimSpace(admission.AgentID)
+	admission.Hostname = strings.TrimSpace(admission.Hostname)
+	if admission.AgentID == "" {
+		admission.AgentID = reg.AgentID
+	}
+	if admission.Hostname == "" {
+		admission.Hostname = strings.TrimSpace(reg.Hostname)
+	}
+	if admission.AgentID != reg.AgentID ||
+		!unifiedresources.HostnamesEquivalent(admission.Hostname, reg.Hostname) {
+		admitted = false
+	}
+	if !admitted {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
 		// Actionable message instead of a bare "Invalid token": the agent logs
 		// this verbatim, and the dominant causes (token not recognised, or not
@@ -748,14 +947,18 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ac := &agentConn{
 		conn: conn,
 		agent: ConnectedAgent{
-			AgentID:                 reg.AgentID,
-			Hostname:                reg.Hostname,
+			OrganizationID:          admission.OrganizationID,
+			TokenID:                 admission.TokenID,
+			AgentID:                 admission.AgentID,
+			Hostname:                admission.Hostname,
 			Version:                 reg.Version,
 			Platform:                reg.Platform,
 			Tags:                    reg.Tags,
 			ConnectedAt:             time.Now(),
 			OperationReceiptVersion: reg.OperationReceiptVersion,
 		},
+		admission:        admission,
+		sessionKey:       agentSessionKey(admission.OrganizationID, admission.AgentID),
 		approvalGrantKey: DeriveApprovalGrantKey(reg.Token),
 		done:             make(chan struct{}),
 	}
@@ -789,23 +992,59 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Register agent - after this point, other goroutines can access the connection
 	s.mu.Lock()
-	// Close existing connection if any
-	if existing, ok := s.agents[reg.AgentID]; ok {
-		log.Info().
-			Str("agent_id", reg.AgentID).
-			Str("hostname", reg.Hostname).
-			Msg("Replacing existing agent connection")
-		close(existing.done)
-		if err := existing.conn.Close(); err != nil {
-			log.Debug().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to close existing connection during reconnect")
+	for key, existing := range s.agents {
+		if key != ac.sessionKey &&
+			normalizeOrganizationID(existing.admission.OrganizationID) == admission.OrganizationID &&
+			unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) {
+			s.mu.Unlock()
+			log.Warn().
+				Str("organization_id", admission.OrganizationID).
+				Str("connected_agent_id", existing.agent.AgentID).
+				Str("requested_agent_id", admission.AgentID).
+				Str("hostname", admission.Hostname).
+				Msg("Agent registration rejected: hostname is already owned by another command identity")
+			rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent hostname is already connected under another identity"})
+			if err == nil {
+				_ = s.sendMessage(conn, rejectedMsg)
+			}
+			closeConn("Failed to close duplicate agent hostname connection")
+			return
 		}
 	}
-	s.agents[reg.AgentID] = ac
+	// Close existing connection if any
+	if existing, ok := s.agents[ac.sessionKey]; ok {
+		if !unifiedresources.HostnamesEquivalent(existing.agent.Hostname, ac.agent.Hostname) {
+			s.mu.Unlock()
+			log.Warn().
+				Str("organization_id", admission.OrganizationID).
+				Str("agent_id", admission.AgentID).
+				Str("connected_hostname", existing.agent.Hostname).
+				Str("requested_hostname", admission.Hostname).
+				Msg("Agent registration rejected: duplicate identity is already connected from another host")
+			rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent identity is already connected from another host"})
+			if err == nil {
+				_ = s.sendMessage(conn, rejectedMsg)
+			}
+			closeConn("Failed to close duplicate agent identity connection")
+			return
+		}
+		log.Info().
+			Str("organization_id", admission.OrganizationID).
+			Str("agent_id", admission.AgentID).
+			Str("hostname", admission.Hostname).
+			Msg("Replacing existing agent connection")
+		existing.signalDone()
+		if err := existing.conn.Close(); err != nil {
+			log.Debug().Err(err).Str("agent_id", admission.AgentID).Msg("Failed to close existing connection during reconnect")
+		}
+	}
+	s.agents[ac.sessionKey] = ac
 	s.mu.Unlock()
 
 	log.Info().
-		Str("agent_id", reg.AgentID).
-		Str("hostname", reg.Hostname).
+		Str("organization_id", admission.OrganizationID).
+		Str("agent_id", admission.AgentID).
+		Str("hostname", admission.Hostname).
 		Str("version", reg.Version).
 		Str("platform", reg.Platform).
 		Msg("Agent connected")
@@ -824,6 +1063,15 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Str("agent_id", reg.AgentID).
 			Str("hostname", reg.Hostname).
 			Msg("Failed to send registration ack")
+		ac.writeMu.Unlock()
+		s.mu.Lock()
+		if existing, ok := s.agents[ac.sessionKey]; ok && existing == ac {
+			delete(s.agents, ac.sessionKey)
+		}
+		s.mu.Unlock()
+		ac.signalDone()
+		_ = conn.Close()
+		return
 	}
 	ac.writeMu.Unlock()
 
@@ -833,7 +1081,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer close(pingDone)
 
 	if notify := s.agentRegisteredNotifier; notify != nil {
-		go notify(reg.AgentID)
+		go notify(admission)
 	}
 
 	// Run read loop (blocking) - don't use goroutine, or HTTP handler will close connection
@@ -843,18 +1091,23 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 func (s *Server) readLoop(ac *agentConn) {
 	defer func() {
 		agentID := ac.agent.AgentID
+		sessionKey := connectionSessionKey(ac)
 		s.mu.Lock()
-		if existing, ok := s.agents[agentID]; ok && existing == ac {
-			delete(s.agents, agentID)
+		existing, sessionExists := s.agents[sessionKey]
+		ownsSession := !sessionExists || existing == ac
+		if sessionExists && existing == ac {
+			delete(s.agents, sessionKey)
 		}
 		// Close all deploy progress subscriptions for this agent so
 		// processPreflightProgress goroutines unblock and detect disconnect.
 		var closeChs []chan DeployProgressPayload
-		prefix := agentID + "\x00"
-		for key, ch := range s.deploySubs {
-			if strings.HasPrefix(key, prefix) {
-				closeChs = append(closeChs, ch)
-				delete(s.deploySubs, key)
+		if ownsSession {
+			prefix := sessionKey + "\x00"
+			for key, ch := range s.deploySubs {
+				if strings.HasPrefix(key, prefix) {
+					closeChs = append(closeChs, ch)
+					delete(s.deploySubs, key)
+				}
 			}
 		}
 		s.mu.Unlock()
@@ -926,7 +1179,7 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 			s.mu.RLock()
-			ch, ok := s.pendingReqs[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			ch, ok := s.pendingReqs[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
 			s.mu.RUnlock()
 
 			if ok {
@@ -958,12 +1211,12 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid host update result")
 				continue
 			}
-			if !s.matchesPendingHostOperation(ac.agent.AgentID, result.RequestID, result.ActionID, HostUpdateOperationInstall) {
+			if !s.matchesPendingHostOperation(connectionSessionKey(ac), result.RequestID, result.ActionID, HostUpdateOperationInstall) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated host update result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingHostUpdates[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			ch, ok := s.pendingHostUpdates[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
 			s.mu.RUnlock()
 			if ok {
 				select {
@@ -979,12 +1232,12 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid host storage cleanup result")
 				continue
 			}
-			if !s.matchesPendingHostOperation(ac.agent.AgentID, result.RequestID, result.ActionID, HostStorageCleanupOperationPackageCache) {
+			if !s.matchesPendingHostOperation(connectionSessionKey(ac), result.RequestID, result.ActionID, HostStorageCleanupOperationPackageCache) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated host storage cleanup result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingHostStorageCleanups[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			ch, ok := s.pendingHostStorageCleanups[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
 			s.mu.RUnlock()
 			if ok {
 				select {
@@ -1000,12 +1253,12 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container lifecycle result")
 				continue
 			}
-			if !s.matchesPendingDockerOperation(ac.agent.AgentID, result) {
+			if !s.matchesPendingDockerOperationForSession(connectionSessionKey(ac), ac.agent.AgentID, result) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated docker lifecycle result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingDockerContainerLifecycles[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			ch, ok := s.pendingDockerContainerLifecycles[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
 			s.mu.RUnlock()
 			if ok {
 				select {
@@ -1021,12 +1274,12 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container update result")
 				continue
 			}
-			if !s.matchesPendingDockerUpdateOperation(ac.agent.AgentID, result) {
+			if !s.matchesPendingDockerUpdateOperationForSession(connectionSessionKey(ac), ac.agent.AgentID, result) {
 				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated docker update result")
 				continue
 			}
 			s.mu.RLock()
-			ch, ok := s.pendingDockerContainerUpdates[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			ch, ok := s.pendingDockerContainerUpdates[pendingRequestKey(connectionSessionKey(ac), result.RequestID)]
 			s.mu.RUnlock()
 			if ok {
 				select {
@@ -1042,7 +1295,7 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid operation query result")
 				continue
 			}
-			key := pendingRequestKey(ac.agent.AgentID, strings.TrimSpace(msg.ID))
+			key := pendingRequestKey(connectionSessionKey(ac), strings.TrimSpace(msg.ID))
 			s.mu.RLock()
 			pending, ok := s.pendingOperationQueries[key]
 			s.mu.RUnlock()
@@ -1072,7 +1325,7 @@ func (s *Server) readLoop(ac *agentConn) {
 				continue
 			}
 
-			subKey := deploySubKey(ac.agent.AgentID, progress.JobID)
+			subKey := deploySubKey(connectionSessionKey(ac), progress.JobID)
 
 			// Hold the read lock across map lookup AND the non-blocking send to
 			// prevent UnsubscribeDeployProgress from closing the channel between
@@ -1257,10 +1510,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 	startedAt := time.Now()
 
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-
+	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		log.Warn().
 			Str("agent_id", agentID).
@@ -1307,8 +1557,12 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
-	reqKey := pendingRequestKey(agentID, cmd.RequestID)
+	reqKey := pendingRequestKey(connectionSessionKey(ac), cmd.RequestID)
 	s.mu.Lock()
+	if _, exists := s.pendingReqs[reqKey]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("command request %q is already pending", cmd.RequestID)
+	}
 	s.pendingReqs[reqKey] = respCh
 	s.mu.Unlock()
 
@@ -1360,7 +1614,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Dur("duration", time.Since(startedAt)).
 			Msg("Agent command completed")
 		return &result, nil
-	case <-time.After(timeout):
+	case <-timer.C:
 		execLog.Warn().
 			Dur("timeout", timeout).
 			Dur("duration", time.Since(startedAt)).
@@ -1372,6 +1626,8 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Dur("duration", time.Since(startedAt)).
 			Msg("Agent command canceled")
 		return nil, ctx.Err()
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before command result", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}
@@ -1426,9 +1682,7 @@ func prepareHostOperationRequest(s *Server, agentID string, requestID *string, b
 func dispatchHostOperation[Req hostOperationPayload, Res any](ctx context.Context, s *Server, agentID string, req Req, op hostOperationDispatch[Req, Res]) (*Res, error) {
 	requestID, actionID, operation, timeoutSeconds := req.hostOperationIdentity()
 
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
+	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent %s not connected", agentID)
 	}
@@ -1437,8 +1691,9 @@ func dispatchHostOperation[Req hostOperationPayload, Res any](ctx context.Contex
 	}
 
 	respCh := make(chan Res, 1)
-	reqKey := pendingRequestKey(agentID, requestID)
-	hostOperationKey, err := s.claimPendingHostOperation(agentID, requestID, actionID, operation)
+	sessionKey := connectionSessionKey(ac)
+	reqKey := pendingRequestKey(sessionKey, requestID)
+	hostOperationKey, err := s.claimPendingHostOperation(sessionKey, requestID, actionID, operation)
 	if err != nil {
 		return nil, err
 	}
@@ -1557,9 +1812,7 @@ func dispatchTypedDockerContainerOperation[Res any](
 	pending map[string]chan Res, label string,
 	validate func(Res) error,
 ) (*Res, error) {
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
+	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		return nil, fmt.Errorf("agent %s not connected", agentID)
 	}
@@ -1568,8 +1821,9 @@ func dispatchTypedDockerContainerOperation[Res any](
 	}
 
 	respCh := make(chan Res, 1)
-	reqKey := pendingRequestKey(agentID, requestID)
-	hostOperationKey, err := s.claimPendingDockerOperation(identity, containerID)
+	sessionKey := connectionSessionKey(ac)
+	reqKey := pendingRequestKey(sessionKey, requestID)
+	hostOperationKey, err := s.claimPendingDockerOperationForSession(sessionKey, identity, containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -1652,12 +1906,16 @@ func (s *Server) currentTime() time.Time {
 }
 
 func (s *Server) AgentOperationReceiptVersion(agentID string) int {
+	return s.AgentOperationReceiptVersionForOrganization(defaultOrganizationID, agentID)
+}
+
+// AgentOperationReceiptVersionForOrganization reports the live protocol
+// version only for a currently admitted tenant-scoped session.
+func (s *Server) AgentOperationReceiptVersionForOrganization(organizationID, agentID string) int {
 	if s == nil {
 		return 0
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	connection, ok := s.agents[strings.TrimSpace(agentID)]
+	connection, ok := s.connectionForOrganization(organizationID, agentID)
 	if !ok {
 		return 0
 	}
@@ -1674,9 +1932,7 @@ func (s *Server) QueryAgentOperation(ctx context.Context, agentID string, identi
 	if identity.AgentID != agentID {
 		return operationreceipt.QueryResult{}, operationreceipt.ErrBindingConflict
 	}
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
+	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		return operationreceipt.QueryResult{}, fmt.Errorf("agent %s not connected", agentID)
 	}
@@ -1684,7 +1940,7 @@ func (s *Server) QueryAgentOperation(ctx context.Context, agentID string, identi
 		return operationreceipt.QueryResult{}, fmt.Errorf("agent does not support durable operation receipts")
 	}
 	queryID := identity.AttemptID + ".query." + uuid.NewString()
-	key := pendingRequestKey(agentID, queryID)
+	key := pendingRequestKey(connectionSessionKey(ac), queryID)
 	ch := make(chan operationreceipt.QueryResult, 1)
 	s.mu.Lock()
 	if _, exists := s.pendingOperationQueries[key]; exists {
@@ -1734,10 +1990,7 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, err
 	}
 
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-
+	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		log.Warn().
 			Str("agent_id", agentID).
@@ -1759,8 +2012,12 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
-	reqKey := pendingRequestKey(agentID, req.RequestID)
+	reqKey := pendingRequestKey(connectionSessionKey(ac), req.RequestID)
 	s.mu.Lock()
+	if _, exists := s.pendingReqs[reqKey]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("read_file request %q is already pending", req.RequestID)
+	}
 	s.pendingReqs[reqKey] = respCh
 	s.mu.Unlock()
 
@@ -1819,6 +2076,8 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, fmt.Errorf("read_file %q on agent %q canceled: %w", req.RequestID, agentID, ctx.Err())
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before read_file result", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}
@@ -1826,33 +2085,100 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 // GetConnectedAgents returns a list of currently connected agents
 func (s *Server) GetConnectedAgents() []ConnectedAgent {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	return s.GetConnectedAgentsForOrganization(defaultOrganizationID)
+}
 
-	agents := make([]ConnectedAgent, 0, len(s.agents))
+// GetConnectedAgentsForOrganization returns only currently admitted sessions
+// owned by one tenant.
+func (s *Server) GetConnectedAgentsForOrganization(organizationID string) []ConnectedAgent {
+	if s == nil {
+		return nil
+	}
+	organizationID = normalizeOrganizationID(organizationID)
+	s.mu.RLock()
+	ids := make([]string, 0, len(s.agents))
 	for _, ac := range s.agents {
-		agents = append(agents, ac.agent)
+		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID {
+			ids = append(ids, ac.agent.AgentID)
+		}
+	}
+	s.mu.RUnlock()
+	agents := make([]ConnectedAgent, 0, len(ids))
+	for _, agentID := range ids {
+		if ac, ok := s.connectionForOrganization(organizationID, agentID); ok {
+			agents = append(agents, ac.agent)
+		}
 	}
 	return agents
 }
 
 // IsAgentConnected checks if an agent is currently connected
 func (s *Server) IsAgentConnected(agentID string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	_, ok := s.agents[agentID]
+	return s.IsAgentConnectedForOrganization(defaultOrganizationID, agentID)
+}
+
+// IsAgentConnectedForOrganization checks command-channel admission rather than
+// telemetry liveness.
+func (s *Server) IsAgentConnectedForOrganization(organizationID, agentID string) bool {
+	_, ok := s.connectionForOrganization(organizationID, agentID)
 	return ok
 }
 
 // GetAgentForHost finds the agent for a given hostname using the canonical
 // hostname-equivalence contract shared with the unified identity layer.
 func (s *Server) GetAgentForHost(hostname string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	return s.GetAgentForHostForOrganization(defaultOrganizationID, hostname)
+}
 
+// GetAgentForHostForOrganization resolves a hostname only within one tenant.
+func (s *Server) GetAgentForHostForOrganization(organizationID, hostname string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	organizationID = normalizeOrganizationID(organizationID)
+	s.mu.RLock()
+	ids := make([]string, 0, len(s.agents))
 	for _, ac := range s.agents {
-		if unifiedresources.HostnamesEquivalent(ac.agent.Hostname, hostname) {
-			return ac.agent.AgentID, true
+		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID &&
+			unifiedresources.HostnamesEquivalent(ac.agent.Hostname, hostname) {
+			ids = append(ids, ac.agent.AgentID)
+		}
+	}
+	s.mu.RUnlock()
+	if len(ids) != 1 {
+		return "", false
+	}
+	for _, agentID := range ids {
+		if _, ok := s.connectionForOrganization(organizationID, agentID); ok {
+			return agentID, true
+		}
+	}
+	return "", false
+}
+
+// GetAgentForTokenForOrganization resolves the canonical live command session
+// for the same enrollment token that owns a telemetry resource.
+func (s *Server) GetAgentForTokenForOrganization(organizationID, tokenID string) (string, bool) {
+	if s == nil || strings.TrimSpace(tokenID) == "" {
+		return "", false
+	}
+	organizationID = normalizeOrganizationID(organizationID)
+	tokenID = strings.TrimSpace(tokenID)
+	s.mu.RLock()
+	ids := make([]string, 0, 1)
+	for _, ac := range s.agents {
+		if normalizeOrganizationID(ac.admission.OrganizationID) == organizationID &&
+			strings.TrimSpace(ac.admission.TokenID) == tokenID {
+			ids = append(ids, ac.agent.AgentID)
+		}
+	}
+	s.mu.RUnlock()
+	if len(ids) != 1 {
+		return "", false
+	}
+	for _, agentID := range ids {
+		if _, ok := s.connectionForOrganization(organizationID, agentID); ok {
+			return agentID, true
 		}
 	}
 	return "", false
@@ -1864,12 +2190,16 @@ func (s *Server) GetAgentForHost(hostname string) (string, bool) {
 // events for the given agent and job ID. Returns a buffered channel. The caller
 // must call UnsubscribeDeployProgress when done.
 func (s *Server) SubscribeDeployProgress(agentID, jobID string, bufSize int) chan DeployProgressPayload {
+	return s.SubscribeDeployProgressForOrganization(defaultOrganizationID, agentID, jobID, bufSize)
+}
+
+func (s *Server) SubscribeDeployProgressForOrganization(organizationID, agentID, jobID string, bufSize int) chan DeployProgressPayload {
 	if bufSize <= 0 {
 		bufSize = 64
 	}
 	ch := make(chan DeployProgressPayload, bufSize)
 	s.mu.Lock()
-	s.deploySubs[deploySubKey(agentID, jobID)] = ch
+	s.deploySubs[deploySubKey(agentSessionKey(organizationID, agentID), jobID)] = ch
 	s.mu.Unlock()
 	return ch
 }
@@ -1877,7 +2207,11 @@ func (s *Server) SubscribeDeployProgress(agentID, jobID string, bufSize int) cha
 // UnsubscribeDeployProgress removes and closes the progress subscriber for an agent's job.
 // Safe to call multiple times — a no-op if already unsubscribed (e.g. by readLoop cleanup).
 func (s *Server) UnsubscribeDeployProgress(agentID, jobID string) {
-	key := deploySubKey(agentID, jobID)
+	s.UnsubscribeDeployProgressForOrganization(defaultOrganizationID, agentID, jobID)
+}
+
+func (s *Server) UnsubscribeDeployProgressForOrganization(organizationID, agentID, jobID string) {
+	key := deploySubKey(agentSessionKey(organizationID, agentID), jobID)
 	s.mu.Lock()
 	ch, exists := s.deploySubs[key]
 	delete(s.deploySubs, key)
@@ -1915,10 +2249,7 @@ func (s *Server) sendDeployCommand(ctx context.Context, agentID string, msgType 
 		return fmt.Errorf("agent id is required")
 	}
 
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-
+	ac, ok := s.connectionForContext(ctx, agentID)
 	if !ok {
 		return fmt.Errorf("agent %s not connected", agentID)
 	}

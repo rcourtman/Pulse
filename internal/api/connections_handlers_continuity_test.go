@@ -90,6 +90,79 @@ func TestConnectionsHandleListIncludesContinuityBackedHostAgents(t *testing.T) {
 	}
 }
 
+func TestConnectionsLedgerSeparatesTelemetryHealthFromCommandAdmission(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{DataPath: dir}
+	now := time.Now().UTC()
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+
+	for _, report := range []agentshost.Report{
+		{
+			Agent:     agentshost.AgentInfo{ID: "agent-enabled", Version: "6.1.1", IntervalSeconds: 30, CommandsEnabled: true},
+			Host:      agentshost.HostInfo{ID: "machine-enabled", MachineID: "machine-enabled", Hostname: "docker-host", Platform: "linux"},
+			Timestamp: now,
+		},
+		{
+			Agent:     agentshost.AgentInfo{ID: "agent-disabled", Version: "6.1.1", IntervalSeconds: 30, CommandsEnabled: false},
+			Host:      agentshost.HostInfo{ID: "machine-disabled", MachineID: "machine-disabled", Hostname: "policy-disabled", Platform: "linux"},
+			Timestamp: now,
+		},
+	} {
+		tokenID := "token-enabled"
+		if report.Agent.ID == "agent-disabled" {
+			tokenID = "token-disabled"
+		}
+		if _, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: tokenID, Name: tokenID}); err != nil {
+			t.Fatalf("ApplyHostReport(%s): %v", report.Agent.ID, err)
+		}
+	}
+
+	handler := NewConnectionsHandlers(
+		func(context.Context) *config.Config { return cfg },
+		func(context.Context) *config.ConfigPersistence { return nil },
+		func(context.Context) *monitoring.Monitor { return monitor },
+	)
+	handler.SetAgentCommandSessionProvider(func(_, tokenID, _, _ string) bool {
+		return tokenID == "token-connected"
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var response ConnectionsListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	byID := make(map[string]Connection, len(response.Connections))
+	for _, connection := range response.Connections {
+		byID[connection.ID] = connection
+	}
+
+	enabled := byID["agent:machine-enabled"]
+	if enabled.State != ConnectionStateActive || enabled.Fleet.AdapterHealth != fleetStateHealthy {
+		t.Fatalf("telemetry health changed when command channel was absent: %+v", enabled.Fleet)
+	}
+	if enabled.Fleet.RemoteControl != fleetStateDisconnected ||
+		enabled.Fleet.CommandPolicy == nil ||
+		enabled.Fleet.CommandPolicy.Status != fleetStateBlocked {
+		t.Fatalf("enabled report without admitted socket must be disconnected/blocked: %+v", enabled.Fleet)
+	}
+
+	disabled := byID["agent:machine-disabled"]
+	if disabled.Fleet.RemoteControl != fleetStateDisabled ||
+		disabled.Fleet.CommandPolicy == nil ||
+		disabled.Fleet.CommandPolicy.Status != fleetStateDisabled {
+		t.Fatalf("disabled command policy must not be misreported as a transport failure: %+v", disabled.Fleet)
+	}
+}
+
 func TestConnectionsHandleListUsesTrueNASPollerRuntimeSummary(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	connection := config.TrueNASInstance{

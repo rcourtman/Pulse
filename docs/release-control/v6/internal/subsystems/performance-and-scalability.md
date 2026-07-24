@@ -834,6 +834,14 @@ shell clickable behind another overlay.
 
 ## Completion Obligations
 
+Command-channel routing must remain bounded by tenant-scoped session keys.
+Router consumers may enumerate only the current organization and must resolve
+token or hostname aliases to exactly one revalidated live connection before
+dispatch. Reconnect replacement and token invalidation remove the indexed
+session without fleet-wide retry loops, and pending request correlation uses
+the same scoped key so concurrent tenants can reuse local agent/request IDs
+without contention or cross-delivery.
+
 1. Update benchmarks, SLOs, or query-plan tests when hot-path behavior changes
 2. Update this contract when a new protected hot path is adopted
 3. Route runtime changes through the explicit performance proof policies in `registry.json`; default fallback proof routing is not allowed

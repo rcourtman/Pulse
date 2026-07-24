@@ -400,6 +400,8 @@ const (
 
 // ConnectedAgent represents an agent connected via WebSocket
 type ConnectedAgent struct {
+	OrganizationID          string
+	TokenID                 string
 	AgentID                 string
 	Hostname                string
 	Version                 string

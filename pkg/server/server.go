@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -186,10 +187,9 @@ func Run(ctx context.Context, version string) error {
 	}
 	defer mainListener.Close()
 
-	// Optional dedicated agent-ingest listener. When PULSE_AGENT_INGEST_PORT is
-	// set, agent report/management traffic (/api/agents/*) is also served on this
-	// separate port so operators can expose it on its own network/firewall
-	// boundary without exposing the web UI or the rest of the REST API there.
+	// Optional dedicated agent-control listener. Reports, command admission,
+	// version checks, and bootstrap downloads share this network boundary;
+	// the web UI and management API are not exposed on it.
 	var agentListener net.Listener
 	if cfg.AgentIngestPort > 0 {
 		agentAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, cfg.AgentIngestPort)
@@ -633,9 +633,8 @@ func Run(ctx context.Context, version string) error {
 		},
 	}
 
-	// When a dedicated agent-ingest listener is configured, serve only the
-	// /api/agents/* surface on it so that port never exposes the web UI or the
-	// rest of the REST API.
+	// The dedicated listener serves the complete agent control plane, while
+	// excluding the web UI and management REST API.
 	var agentSrv *http.Server
 	if agentListener != nil {
 		agentSrv = &http.Server{
@@ -876,18 +875,37 @@ shutdown:
 	return runErr
 }
 
-// agentIngestHandler restricts a handler to the agent-ingest surface
-// (/api/agents/*). It backs the optional dedicated agent-ingest listener so
-// that port serves only agent report/management endpoints and never the web UI
-// or the rest of the REST API. Every other path returns 404.
+// agentIngestHandler restricts a handler to the complete agent control plane.
+// Reports, command admission, version checks, and bootstrap downloads must
+// share one reachable listener; management APIs and the web UI remain absent.
 func agentIngestHandler(inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/agents/") {
+		if !isAgentControlPlanePath(r.URL.Path) {
 			http.NotFound(w, r)
 			return
 		}
 		inner.ServeHTTP(w, r)
 	})
+}
+
+func isAgentControlPlanePath(requestPath string) bool {
+	if requestPath == "" || path.Clean(requestPath) != requestPath {
+		return false
+	}
+	if strings.HasPrefix(requestPath, "/api/agents/") {
+		return true
+	}
+	switch requestPath {
+	case "/api/agent/ws",
+		"/api/agent/version",
+		"/api/server/info",
+		"/install.sh",
+		"/install.ps1",
+		"/download/pulse-agent":
+		return true
+	default:
+		return false
+	}
 }
 
 // startMetricsServer starts the Prometheus /metrics endpoint. When metricsToken

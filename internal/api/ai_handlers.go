@@ -287,7 +287,7 @@ func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
 }
 
 func (h *AISettingsHandler) newFailClosedTenantService(orgID string) *ai.Service {
-	svc := ai.NewService(nil, h.agentServer)
+	svc := ai.NewService(nil, tenantAgentServerForOrganization(h.agentServer, orgID))
 	svc.SetOrgID(orgID)
 	h.stateMu.RLock()
 	patrolAutopilotPolicy := h.patrolAutopilotPolicy
@@ -338,7 +338,7 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 		incidentRecorders:    make(map[string]*metrics.IncidentRecorder),
 	}
 
-	defaultAIService = ai.NewService(defaultPersistence, agentServer)
+	defaultAIService = ai.NewService(defaultPersistence, tenantAgentServerForOrganization(agentServer, "default"))
 	defaultAIService.SetOrgID("default")
 	defaultAIService.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	if defaultPersistence != nil {
@@ -435,7 +435,7 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 		return h.newFailClosedTenantService(orgID)
 	}
 
-	svc = ai.NewService(persistence, h.agentServer)
+	svc = ai.NewService(persistence, tenantAgentServerForOrganization(h.agentServer, orgID))
 	svc.SetOrgID(orgID)
 	h.stateMu.RLock()
 	patrolAutopilotPolicy := h.patrolAutopilotPolicy
@@ -4747,7 +4747,7 @@ func (h *AISettingsHandler) HandleGetConnectedAgents(w http.ResponseWriter, r *h
 
 	var agents []agentInfo
 	if h.agentServer != nil {
-		for _, a := range h.agentServer.GetConnectedAgents() {
+		for _, a := range h.agentServer.GetConnectedAgentsForOrganization(GetOrgID(r.Context())) {
 			agents = append(agents, agentInfo{
 				AgentID:     a.AgentID,
 				Hostname:    a.Hostname,

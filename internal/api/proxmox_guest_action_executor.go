@@ -82,7 +82,7 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 		return nil, err
 	}
 	vmid := resource.Proxmox.VMID
-	agentID, err := e.connectedProxmoxNodeCommandAgentID(resource)
+	agentID, err := e.connectedProxmoxNodeCommandAgentID(ctx, resource)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 
 	command := proxmoxGuestLifecycleCommand(kind, operation, vmid)
 	actionStartedAt := time.Now().UTC()
-	result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+	result, err := e.agents.ExecuteCommand(agentCommandContext(ctx), agentID, agentexec.ExecuteCommandPayload{
 		RequestID:  attempt.ID,
 		Command:    command,
 		ApprovalID: record.ID,
@@ -129,7 +129,7 @@ func (e proxmoxGuestActionExecutor) CheckActionAvailable(ctx context.Context, re
 	if _, _, err := e.executableProxmoxGuestResource(resource, operation); err != nil {
 		return unavailableProxmoxActionReadiness(operation, proxmoxActionUnavailableReasonCode(err), proxmoxActionUnavailableReason(err))
 	}
-	if _, err := e.connectedProxmoxNodeCommandAgentID(resource); err != nil {
+	if _, err := e.connectedProxmoxNodeCommandAgentID(ctx, resource); err != nil {
 		return unavailableProxmoxActionReadiness(operation, "command_agent_disconnected", "Proxmox node command agent is not connected.")
 	}
 	return readiness
@@ -183,19 +183,19 @@ func (e proxmoxGuestActionExecutor) executableProxmoxGuestResource(resource unif
 	return resource, kind, nil
 }
 
-func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(resource unified.Resource) (string, error) {
+func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(ctx context.Context, resource unified.Resource) (string, error) {
 	if e.agents == nil {
 		return "", fmt.Errorf("proxmox node command agent is not connected")
 	}
 	if resource.Proxmox == nil {
 		return "", fmt.Errorf("proxmox resource metadata missing")
 	}
-	if agentID := strings.TrimSpace(resource.Proxmox.LinkedAgentID); agentID != "" && e.agents.IsAgentConnected(agentID) {
+	if agentID := strings.TrimSpace(resource.Proxmox.LinkedAgentID); agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 		return agentID, nil
 	}
-	if agentID, ok := e.agents.GetAgentForHost(strings.TrimSpace(resource.Proxmox.NodeName)); ok {
+	if agentID, ok := commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Proxmox.NodeName)); ok {
 		agentID = strings.TrimSpace(agentID)
-		if agentID != "" && e.agents.IsAgentConnected(agentID) {
+		if agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 			return agentID, nil
 		}
 	}
@@ -344,7 +344,7 @@ func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(ctx context.Context,
 			}
 		}
 
-		result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+		result, err := e.agents.ExecuteCommand(agentCommandContext(ctx), agentID, agentexec.ExecuteCommandPayload{
 			RequestID:  fmt.Sprintf("%s-verify-%d", actionID, attempt+1),
 			Command:    command,
 			ApprovalID: actionID,

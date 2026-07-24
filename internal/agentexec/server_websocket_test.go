@@ -846,6 +846,22 @@ func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 	}))
 	_ = wsReadRegisteredPayload(t, c1)
 
+	progressCh := s.SubscribeDeployProgress("a1", "job-reconnect", 1)
+	defer s.UnsubscribeDeployProgress("a1", "job-reconnect")
+	commandDone := make(chan error, 1)
+	go func() {
+		_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+			RequestID: "command-before-reconnect",
+			Command:   "true",
+			Timeout:   10,
+			Trusted:   true,
+		})
+		commandDone <- err
+	}()
+	if command := wsReadRawMessage(t, c1); command.Type != MsgTypeExecuteCmd {
+		t.Fatalf("old session received %q, want %q", command.Type, MsgTypeExecuteCmd)
+	}
+
 	c2 := dial()
 	defer c2.Close()
 	wsWriteMessage(t, c2, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
@@ -861,5 +877,151 @@ func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 	_, _, err := c1.ReadMessage()
 	if err == nil {
 		t.Fatalf("expected old connection to be closed")
+	}
+
+	select {
+	case commandErr := <-commandDone:
+		if commandErr == nil || !strings.Contains(commandErr.Error(), "disconnected") {
+			t.Fatalf("in-flight command reconnect result = %v, want disconnected", commandErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("in-flight command did not stop when its session was replaced")
+	}
+
+	progress := DeployProgressPayload{
+		RequestID: "deploy-after-reconnect",
+		JobID:     "job-reconnect",
+		Phase:     DeployPhasePreflightSSH,
+		Status:    DeployStepOK,
+	}
+	wsWriteMessage(t, c2, mustNewMessage(t, MsgTypeDeployProgress, progress.RequestID, progress))
+	select {
+	case received, ok := <-progressCh:
+		if !ok {
+			t.Fatal("replacement cleanup closed the active deploy subscription")
+		}
+		if received.RequestID != progress.RequestID {
+			t.Fatalf("deploy progress request id = %q, want %q", received.RequestID, progress.RequestID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("replacement session did not retain deploy progress subscription")
+	}
+}
+
+func TestCommandSessionsAreTenantScopedAndDuplicateIdentityFailsClosed(t *testing.T) {
+	admissions := map[string]AgentAdmission{
+		"token-a": {OrganizationID: "org-a", TokenID: "token-a", AgentID: "shared", Hostname: "host-a"},
+		"token-b": {OrganizationID: "org-b", TokenID: "token-b", AgentID: "shared", Hostname: "host-b"},
+		"token-c": {OrganizationID: "org-a", TokenID: "token-c", AgentID: "shared", Hostname: "other-host"},
+		"token-d": {OrganizationID: "org-a", TokenID: "token-d", AgentID: "other-id", Hostname: "host-a"},
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		admission, ok := admissions[token]
+		return admission, ok
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	register := func(token, agentID, hostname string) (*websocket.Conn, RegisteredPayload) {
+		t.Helper()
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatalf("Dial: %v", err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: agentID, Hostname: hostname, Token: token,
+		}))
+		return conn, wsReadRegisteredPayload(t, conn)
+	}
+
+	orgA, ack := register("token-a", "shared", "host-a")
+	defer orgA.Close()
+	if !ack.Success {
+		t.Fatalf("org-a registration failed: %s", ack.Message)
+	}
+	orgB, ack := register("token-b", "shared", "host-b")
+	defer orgB.Close()
+	if !ack.Success {
+		t.Fatalf("org-b registration failed: %s", ack.Message)
+	}
+	if !s.IsAgentConnectedForOrganization("org-a", "shared") ||
+		!s.IsAgentConnectedForOrganization("org-b", "shared") {
+		t.Fatal("same agent id must remain independently connected in both organizations")
+	}
+	if s.IsAgentConnected("shared") {
+		t.Fatal("tenant-scoped sessions must not leak into the default organization")
+	}
+	orgAView := s.ForOrganization("org-a")
+	orgAAgents := orgAView.GetConnectedAgents()
+	if len(orgAAgents) != 1 || orgAAgents[0].Hostname != "host-a" {
+		t.Fatalf("org-a server view leaked another tenant: %#v", orgAAgents)
+	}
+	orgBAgents := s.ForOrganization("org-b").GetConnectedAgents()
+	if len(orgBAgents) != 1 || orgBAgents[0].Hostname != "host-b" {
+		t.Fatalf("org-b server view leaked another tenant: %#v", orgBAgents)
+	}
+
+	duplicate, ack := register("token-c", "shared", "other-host")
+	defer duplicate.Close()
+	if ack.Success {
+		t.Fatal("same-tenant duplicate identity from another hostname was admitted")
+	}
+	if !s.IsAgentConnectedForOrganization("org-a", "shared") {
+		t.Fatal("rejected duplicate identity evicted the original session")
+	}
+
+	duplicateHost, ack := register("token-d", "other-id", "host-a")
+	defer duplicateHost.Close()
+	if ack.Success {
+		t.Fatal("same-tenant hostname was admitted under a second identity")
+	}
+	if !s.IsAgentConnectedForOrganization("org-a", "shared") {
+		t.Fatal("rejected duplicate hostname evicted the original session")
+	}
+}
+
+func TestRevokedAdmissionInvalidatesStaleSocketBeforeDispatch(t *testing.T) {
+	valid := true
+	admission := AgentAdmission{
+		OrganizationID: "org-a",
+		TokenID:        "token-a",
+		AgentID:        "agent-a",
+		Hostname:       "host-a",
+	}
+	s := NewServerWithAdmissionValidator(func(token, _, _ string) (AgentAdmission, bool) {
+		return admission, token == admission.TokenID
+	}, func(candidate AgentAdmission) bool {
+		return valid && candidate == admission
+	})
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: admission.AgentID, Hostname: admission.Hostname, Token: admission.TokenID,
+	}))
+	if ack := wsReadRegisteredPayload(t, conn); !ack.Success {
+		t.Fatalf("registration failed: %s", ack.Message)
+	}
+	if !s.IsAgentConnectedForOrganization("org-a", "agent-a") {
+		t.Fatal("expected admitted session")
+	}
+
+	valid = false
+	ctx := WithOrganizationID(context.Background(), "org-a")
+	if _, err := s.ExecuteCommand(ctx, "agent-a", ExecuteCommandPayload{
+		RequestID:  "after-revocation",
+		Command:    "true",
+		TargetType: "agent",
+		Trusted:    true,
+	}); err == nil || !strings.Contains(err.Error(), "not connected") {
+		t.Fatalf("revoked stale socket remained dispatchable: %v", err)
+	}
+	if s.IsAgentConnectedForOrganization("org-a", "agent-a") {
+		t.Fatal("revoked session remained visible as connected")
 	}
 }

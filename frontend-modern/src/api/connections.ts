@@ -25,7 +25,8 @@ export type ConnectionFleetUpdateStatus =
   | 'unknown'
   | 'update-available'
   | 'updating';
-export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable' | 'unknown';
+export type ConnectionFleetRemoteControl =
+  'disabled' | 'disconnected' | 'enabled' | 'not-applicable' | 'unknown';
 export type ConnectionFleetConfigDriftStatus =
   'current' | 'drifted' | 'not-applicable' | 'paused' | 'pending' | 'unknown';
 export type ConnectionFleetRolloutStatus =

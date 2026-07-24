@@ -471,6 +471,15 @@ the `white_label` branding entitlement.
 
 ## Completion Obligations
 
+Split-port agent exposure is complete only when its exact allowlist covers
+report/config routes, command WebSocket admission, version/server bootstrap,
+and the supported installer/download endpoints while every UI and management
+route remains unavailable. Registration binds one execution-scoped token to
+one organization, agent ID, and hostname; the server stores only the resulting
+non-secret admission, revalidates it before visibility or dispatch, and rejects
+multi-organization authority, identity drift, replay after migration, revoked
+tokens, and path-normalization variants.
+
 1. Update privacy/security docs and the telemetry runtime together when outbound-data behavior changes.
 2. Keep shared API-contract proof routing aligned whenever auth, token, or telemetry settings payloads change.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
@@ -1471,17 +1480,31 @@ Stopping the watcher is the synchronization point that lets tests and runtime
 teardown restore auth/config state without racing a background reload.
 That same server-bind config boundary now also owns optional agent-ingest
 network isolation. `internal/config/config.go` may accept
-`PULSE_AGENT_INGEST_PORT` as a dedicated listener for agent report and
-management traffic so operators can place `/api/agents/*` on its own network or
-firewall boundary, but the option must fail closed at validation: the agent
+`PULSE_AGENT_INGEST_PORT` as a dedicated listener for the bounded agent control
+plane so operators can place report/config traffic, command WebSocket
+admission, version checks, and bootstrap downloads on one network or firewall
+boundary, but the option must fail closed at validation: the agent
 ingest port stays disabled at `0`, must be a valid `1`-`65535` port, and must
 differ from both the frontend port and any HTTP redirect port. When that
-listener is active the runtime must serve only the `/api/agents/*` surface on
-it and must never expose the web UI or the rest of the REST API through that
-port, so a port reachable from an untrusted agent network cannot widen into the
-operator console. Enabling the dedicated port is additive: the main listener
-keeps serving agent ingest too, so the default single-port deployment and
-existing agents are unaffected.
+listener is active the runtime must serve only `/api/agents/*` plus the exact
+agent-owned `/api/agent/ws`, `/api/agent/version`, `/api/server/info`,
+`/install.sh`, `/install.ps1`, and `/download/pulse-agent` routes. It must never
+expose the web UI or management REST API through that port, so a port reachable
+from an untrusted agent network cannot widen into the operator console.
+Enabling the dedicated port is additive: the main listener keeps serving the
+agent control plane too, so the default single-port deployment and existing
+agents are unaffected.
+
+Command admission is a separate security fact from report health. A live
+session is owned by one organization, one token identity, one runtime agent ID,
+and one hostname. Multi-organization exec tokens are ambiguous and must be
+rejected; duplicate IDs remain isolated across organizations but fail closed
+inside one organization when hostnames conflict. Legacy hostname-bound tokens
+may migrate a synthesized ID to the first observed runtime ID once, after
+which both identity fields are immutable. Revoked, expired, re-scoped, or
+re-bound token records invalidate an existing socket before connectivity is
+reported or work is dispatched. Raw bearer values must not be retained in the
+session registry.
 
 Locale-catalog additions for shared mobile copy controls remain contract-neutral
 to security and privacy only while they preserve every governed token, scope,

@@ -3018,6 +3018,15 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Completion Obligations
 
+The public connection ledger and action APIs must project telemetry liveness
+and command admission independently. An agent may be adapter-healthy while
+remote control is `disconnected`; in that state command policy is blocked and
+action dispatch returns the canonical unavailable/disconnected error rather
+than inferring command readiness from reports. Resource actions resolve the
+live session inside the request organization, prefer the immutable report
+token binding when present, and refuse stale-token fallback to hostname or
+agent ID.
+
 Docker / Podman report transport changes must prove uncompressed and gzip
 ingress, exact inclusive boundaries, encoded and decoded 413 rejection,
 ordinary and 163-container Docker/Podman fleets, and typed compression
@@ -6316,6 +6325,15 @@ request/response surface is the Pulse Unified Agent route family, while
 `/api/agents/host/*` stays a compatibility alias and must not leak back into
 handler naming, router-owned state, or proof labels as if it were a second
 product-facing API surface.
+The optional split listener must carry that report family and the exact agent
+lifecycle routes `/api/agent/ws`, `/api/agent/version`, `/api/server/info`,
+`/install.sh`, `/install.ps1`, and `/download/pulse-agent`; allowing reports
+while returning `404` for the command WebSocket is an invalid partial control
+plane. The connections response must not infer `fleet.remoteControl="enabled"`
+from the report flag alone. It projects `disconnected` when command policy is
+applied enabled but the report token has no current admitted session in the
+request organization, and returns a blocked command-policy reason so API and
+Agent Doctor clients cannot present report health as action readiness.
 That confirmation marker must survive the legacy setup-script transport too:
 script-generated `/api/auto-register` payloads must send `source="script"`,
 and canonical callers must send that source explicitly, so later canonical

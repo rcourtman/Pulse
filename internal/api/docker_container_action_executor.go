@@ -68,7 +68,7 @@ func (e dockerContainerActionExecutor) BindActionDispatch(ctx context.Context, r
 		if err != nil {
 			return unified.ActionDispatchAttempt{}, err
 		}
-		agentID, err := e.connectedDockerCommandAgentID(resource)
+		agentID, err := e.connectedDockerCommandAgentID(ctx, resource)
 		if err != nil {
 			return unified.ActionDispatchAttempt{}, err
 		}
@@ -90,7 +90,7 @@ func (e dockerContainerActionExecutor) BindActionDispatch(ctx context.Context, r
 	if err != nil {
 		return unified.ActionDispatchAttempt{}, err
 	}
-	agentID, err := e.connectedDockerCommandAgentID(resource)
+	agentID, err := e.connectedDockerCommandAgentID(ctx, resource)
 	if err != nil {
 		return unified.ActionDispatchAttempt{}, err
 	}
@@ -149,7 +149,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	if dockerContainerRef(resource) == "" {
 		return nil, fmt.Errorf("docker container resource %q has no executable container id", record.Request.ResourceID)
 	}
-	agentID, err := e.connectedDockerCommandAgentID(resource)
+	agentID, err := e.connectedDockerCommandAgentID(ctx, resource)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	if agentexec.DockerContainerLifecycleOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
 		return nil, fmt.Errorf("docker container lifecycle dispatch binding drift")
 	}
-	result, err := typedAgents.ExecuteDockerContainerLifecycle(ctx, agentID, req)
+	result, err := typedAgents.ExecuteDockerContainerLifecycle(agentCommandContext(ctx), agentID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	if dockerContainerRef(resource) == "" {
 		return nil, fmt.Errorf("docker container resource %q has no executable container id", record.Request.ResourceID)
 	}
-	agentID, err := e.connectedDockerCommandAgentID(resource)
+	agentID, err := e.connectedDockerCommandAgentID(ctx, resource)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.
 	if agentexec.DockerContainerUpdateOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
 		return nil, fmt.Errorf("docker container update dispatch binding drift")
 	}
-	result, err := typedAgents.ExecuteDockerContainerUpdate(ctx, agentID, req)
+	result, err := typedAgents.ExecuteDockerContainerUpdate(agentCommandContext(ctx), agentID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
 	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
-	query, err := querier.QueryAgentOperation(ctx, attempt.AgentID, identity)
+	query, err := querier.QueryAgentOperation(agentCommandContext(ctx), attempt.AgentID, identity)
 	if err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
@@ -329,12 +329,11 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
 		return unavailableDockerActionReadiness(operation, dockerActionUnavailableReasonCode(err), dockerActionUnavailableReason(err))
 	}
-	if _, err := e.connectedDockerCommandAgentID(resource); err != nil {
+	if _, err := e.connectedDockerCommandAgentID(ctx, resource); err != nil {
 		return unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
 	}
-	agentID, _ := e.connectedDockerCommandAgentID(resource)
-	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
-	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
+	agentID, _ := e.connectedDockerCommandAgentID(ctx, resource)
+	if liveAgentOperationReceiptVersion(ctx, e.agents, agentID) != operationreceipt.ProtocolVersion {
 		return unavailableDockerActionReadiness(operation, "operation_receipt_unsupported", "The Pulse agent on this host cannot run reviewed actions: it is on an older version, or its durable state directory is unavailable. Update the agent, or check the agent logs if it is already current, then retry.")
 	}
 	return readiness
@@ -377,19 +376,27 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 	return resource, nil
 }
 
-func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(resource unified.Resource) (string, error) {
+func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context.Context, resource unified.Resource) (string, error) {
 	if e.agents == nil {
 		return "", fmt.Errorf("docker container command agent is not connected")
 	}
 	if resource.Docker == nil {
 		return "", fmt.Errorf("docker resource metadata missing")
 	}
-	if agentID := strings.TrimSpace(resource.Docker.AgentID); agentID != "" && e.agents.IsAgentConnected(agentID) {
+	if agentID, ok := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID); ok {
+		return strings.TrimSpace(agentID), nil
+	}
+	// When telemetry names a token, it is the immutable session binding. Do
+	// not fall back to a different identity or hostname after rotation.
+	if strings.TrimSpace(resource.Docker.TokenID) != "" {
+		return "", fmt.Errorf("docker container command agent is not connected")
+	}
+	if agentID := strings.TrimSpace(resource.Docker.AgentID); agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 		return agentID, nil
 	}
-	if agentID, ok := e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname)); ok {
+	if agentID, ok := commandAgentForHost(ctx, e.agents, strings.TrimSpace(resource.Docker.Hostname)); ok {
 		agentID = strings.TrimSpace(agentID)
-		if agentID != "" && e.agents.IsAgentConnected(agentID) {
+		if agentID != "" && isAgentCommandConnected(ctx, e.agents, agentID) {
 			return agentID, nil
 		}
 	}

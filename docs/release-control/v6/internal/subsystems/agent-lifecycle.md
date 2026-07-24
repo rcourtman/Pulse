@@ -1230,11 +1230,20 @@ the intentionally sparse public response.
    job, target, and expected node, but not the human owner.
    Command-agent WebSocket identity follows the same lifecycle/auth split:
    install-command tokens that enable command execution may be minted before
-   the final agent ID is known, but only Pulse-minted PVE/PBS install-command
-   tokens may bind on first `/api/agent/ws` registration. That first-use bind
+   the final agent ID is known, but only Pulse-minted PVE/PBS or host
+   install-command tokens may bind on first `/api/agent/ws` registration. That first-use bind
    must persist the registering agent ID and hostname and become authoritative
    for later command registration attempts; generic unbound `agent:exec`
-   tokens are not lifecycle credentials and must fail closed.
+   tokens are not lifecycle credentials and must fail closed. A pre-v6.1.1
+   hostname-bound record carrying a server-synthesized ID may migrate to the
+   registering runtime ID exactly once; the versioned result must then require
+   both fields. The live registry keys the session by organization plus agent
+   ID, retains only non-secret token identity, isolates equal IDs across
+   organizations, rejects same-organization hostname collisions, and
+   revalidates token existence, expiry, scope, organization, and binding before
+   reporting connectivity or dispatching work. Reconnect replacement and stale
+   socket cleanup must use pointer identity so an old reader cannot remove the
+   newly admitted session.
    The canonical durable-principal vocabulary for those shared auth routes is
    recorded in `docs/release-control/v6/internal/IDENTITY_INVARIANTS.md`; agent
    lifecycle work may consume that identity but must not define a parallel
@@ -1872,6 +1881,16 @@ the intentionally sparse public response.
 
 ## Completion Obligations
 
+Command-capable agent completion must prove more than fresh telemetry. The
+dedicated agent listener must admit the full bootstrap/report/WebSocket
+lifecycle, command sessions must be keyed by organization plus canonical bound
+identity, and every dispatch must revalidate the non-secret token admission.
+Reconnect replacement may replace only that exact tenant identity; duplicate
+hostnames, stale sockets, revoked or rebound tokens, and ambiguous hostname or
+token resolution fail closed. Fleet/Doctor projections must keep adapter health
+separate from command-channel admission and report an enabled-but-disconnected
+command runtime as a blocking condition.
+
 Any Docker / Podman report-size change must update the shared contract, agent
 diagnostic proof, API encoded/decoded boundary proof, and the API-contract
 dependency in one slice. A handler-local literal, agent-local threshold, or
@@ -2191,6 +2210,14 @@ structured fleet diagnostics that have no ledger binding (agents reporting
 only workload telemetry, e.g. Docker-only or Kubernetes-only agents) are now
 appended as diagnostics-only targets, honoring the scoped-agent filter, so a
 critical workload-only agent can no longer vanish from the fleet view.
+Telemetry liveness and an applied `commandsEnabled` report are not command
+connectivity. The connections ledger must consult the tenant- and
+token-scoped live session registry: an enabled report without an admitted
+socket projects `remoteControl="disconnected"` and a blocked command policy,
+while a deliberately disabled command policy remains disabled rather than
+becoming a transport alarm. Agent Doctor merges that ledger fact with
+structured diagnostics, so a diagnostic snapshot marked healthy cannot hide
+the critical `command_channel_disconnected` reason.
 Diagnostics-only rows render the diagnostic's status, reasons, and evidence
 but offer no host-local update command (there is no ledger connection to
 derive an update from). Removed rows are the deliberate exception in the

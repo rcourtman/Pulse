@@ -2205,6 +2205,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 
@@ -2263,6 +2264,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 
@@ -2294,6 +2296,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 
@@ -2325,6 +2328,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 
@@ -2356,6 +2360,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 
@@ -2387,6 +2392,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
         security_match = next(
@@ -2435,6 +2441,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],
         )
 
@@ -2518,6 +2525,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 [
                     "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                     "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                    "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                 ],
             )
 

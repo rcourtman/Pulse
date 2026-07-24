@@ -333,6 +333,20 @@ const ledgerFallbackReasons = (
       );
     }
   }
+  if (
+    connection.fleet?.remoteControl === 'disconnected' ||
+    (connection.fleet?.commandPolicy?.status === 'blocked' &&
+      connection.agentIdentity?.commandsEnabled)
+  ) {
+    reasons.push(
+      fallbackReason(
+        'command_channel_disconnected',
+        'critical',
+        'The agent is reporting, but its command channel is not connected.',
+        connection.fleet?.commandPolicy?.reason ? [connection.fleet.commandPolicy.reason] : [],
+      ),
+    );
+  }
   if (needsUpdate) {
     reasons.push(
       fallbackReason(
@@ -463,7 +477,17 @@ const doctorTargetFromBinding = (
   const expectedVersion = expectedVersionFor(connection, targetVersion);
   const needsUpdate = connectionNeedsUpdate(connection, expectedVersion);
   const fallbackReasons = ledgerFallbackReasons(connection, needsUpdate);
-  const reasons = diagnosticsAvailable && diagnostic ? (diagnostic.reasons ?? []) : fallbackReasons;
+  const reasons =
+    diagnosticsAvailable && diagnostic
+      ? Array.from(
+          new Map(
+            [
+              ...fallbackReasons.filter((reason) => reason.code === 'command_channel_disconnected'),
+              ...(diagnostic.reasons ?? []),
+            ].map((reason) => [reason.code, reason]),
+          ).values(),
+        )
+      : fallbackReasons;
   const updater = updaterPresentation(connection, diagnostic, needsUpdate);
   let status: InfrastructureAgentDoctorStatus =
     diagnosticsAvailable && diagnostic
@@ -472,7 +496,12 @@ const doctorTargetFromBinding = (
 
   // The ledger can advance one poll ahead of diagnostics. Never hide a live
   // update/error signal while the structured endpoint catches up.
-  if (status === 'healthy' && fallbackReasons.length > 0) status = 'warning';
+  const fallbackDoctorStatus = fallbackStatus(connection, fallbackReasons);
+  if (fallbackDoctorStatus === 'critical') {
+    status = 'critical';
+  } else if (status === 'healthy' && fallbackReasons.length > 0) {
+    status = 'warning';
+  }
 
   const nonVersionReasons = reasons.filter((reason) => reason.code !== 'agent_version_stale');
   if (

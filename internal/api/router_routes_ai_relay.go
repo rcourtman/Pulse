@@ -752,7 +752,7 @@ func (a *agentCommandAdapter) ExecuteCommand(ctx context.Context, agentID, comma
 	if a.handler.agentServer == nil {
 		return "", "", -1, fmt.Errorf("agent server not available")
 	}
-	result, execErr := a.handler.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+	result, execErr := a.handler.agentServer.ExecuteCommand(agentCommandContext(ctx), agentID, agentexec.ExecuteCommandPayload{
 		Command:    command,
 		TargetType: "agent",
 	})
@@ -766,7 +766,9 @@ func (a *agentCommandAdapter) FindAgentForTarget(targetHost string) string {
 	if a.handler.agentServer == nil {
 		return ""
 	}
-	agents := a.handler.agentServer.GetConnectedAgents()
+	// This legacy resolver is only used by the default-organization adapter.
+	// Tenant Assistant services receive an organization-pinned server view.
+	agents := a.handler.agentServer.GetConnectedAgentsForOrganization("default")
 	if len(agents) == 0 {
 		return ""
 	}

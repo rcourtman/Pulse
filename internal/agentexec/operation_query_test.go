@@ -27,7 +27,7 @@ func registeredTestAgent(t *testing.T, s *Server, agentID string) (*websocket.Co
 	if err != nil {
 		t.Fatal(err)
 	}
-	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: agentID, Hostname: "host", Version: "6", Platform: "linux", Token: "ok", OperationReceiptVersion: operationreceipt.ProtocolVersion}))
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: agentID, Hostname: agentID + "-host", Version: "6", Platform: "linux", Token: "ok", OperationReceiptVersion: operationreceipt.ProtocolVersion}))
 	if !wsReadRegisteredPayload(t, conn).Success {
 		t.Fatal("registration failed")
 	}

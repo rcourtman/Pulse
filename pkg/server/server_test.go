@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -36,6 +39,12 @@ func TestAgentIngestHandler(t *testing.T) {
 		{"/api/agents/kubernetes/report", true, http.StatusOK},
 		{"/api/agents/agent/lookup", true, http.StatusOK},
 		{"/api/agents/agent/config", true, http.StatusOK},
+		{"/api/agent/ws", true, http.StatusOK},
+		{"/api/agent/version", true, http.StatusOK},
+		{"/api/server/info", true, http.StatusOK},
+		{"/install.sh", true, http.StatusOK},
+		{"/install.ps1", true, http.StatusOK},
+		{"/download/pulse-agent", true, http.StatusOK},
 		// Everything outside the agent-ingest surface must be rejected so the
 		// dedicated port never exposes the web UI or the rest of the REST API.
 		{"/", false, http.StatusNotFound},
@@ -44,6 +53,10 @@ func TestAgentIngestHandler(t *testing.T) {
 		{"/api/state", false, http.StatusNotFound},
 		{"/api/security/status", false, http.StatusNotFound},
 		{"/api/agents", false, http.StatusNotFound},
+		{"/api/agents/../security/status", false, http.StatusNotFound},
+		{"/api/agents//agent/report", false, http.StatusNotFound},
+		{"/api/agent/ws/extra", false, http.StatusNotFound},
+		{"/install.sh/extra", false, http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		innerCalled = false
@@ -56,6 +69,49 @@ func TestAgentIngestHandler(t *testing.T) {
 		if rec.Code != tc.wantCode {
 			t.Errorf("path %q: status=%d, want %d", tc.path, rec.Code, tc.wantCode)
 		}
+	}
+}
+
+func TestAgentControlPlaneListenerAdmitsCommandWebSocket(t *testing.T) {
+	execServer := agentexec.NewServer(func(token, agentID, hostname string) bool {
+		return token == "exec-token" && agentID == "docker-agent" && hostname == "docker-host"
+	})
+	t.Cleanup(execServer.Shutdown)
+	server := httptest.NewServer(agentIngestHandler(http.HandlerFunc(execServer.HandleWebSocket)))
+	defer server.Close()
+
+	origin, err := securityutil.HTTPOriginForWebSocketBaseURL(server.URL)
+	if err != nil {
+		t.Fatalf("origin: %v", err)
+	}
+	headers := http.Header{}
+	headers.Set("Origin", origin)
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/agent/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("dial dedicated agent command websocket: %v", err)
+	}
+	defer conn.Close()
+
+	registration, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID: "docker-agent", Hostname: "docker-host", Token: "exec-token",
+	})
+	if err != nil {
+		t.Fatalf("registration message: %v", err)
+	}
+	if err := conn.WriteJSON(registration); err != nil {
+		t.Fatalf("write registration: %v", err)
+	}
+	var response agentexec.Message
+	if err := conn.ReadJSON(&response); err != nil {
+		t.Fatalf("read registration acknowledgement: %v", err)
+	}
+	var acknowledged agentexec.RegisteredPayload
+	if err := response.DecodePayload(&acknowledged); err != nil {
+		t.Fatalf("decode acknowledgement: %v", err)
+	}
+	if !acknowledged.Success || !execServer.IsAgentConnected("docker-agent") {
+		t.Fatalf("dedicated listener did not admit command channel: %+v", acknowledged)
 	}
 }
 
