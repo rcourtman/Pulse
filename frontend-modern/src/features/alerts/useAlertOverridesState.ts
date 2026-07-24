@@ -3,7 +3,10 @@ import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js'
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { Resource, ResourceType } from '@/types/resource';
-import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
+import {
+  isAgentFacetInfrastructureResource,
+  isPulseAgentPlatformResource,
+} from '@/utils/agentResources';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
 import {
@@ -46,6 +49,15 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
 
   const agentResources = createMemo(() =>
     props.allResources().filter((resource) => isAgentFacetInfrastructureResource(resource)),
+  );
+
+  // Standalone Pulse-agent machines are not virtualization hosts. They own a row
+  // in the Machines tab, which resolves overrides by agent identity. Leaving them
+  // in the Virtualization Hosts list gave the same machine a second row that saved
+  // overrides under the bare resource id, an identity agent alerting never reads,
+  // so the override silently did nothing.
+  const virtualizationHostResources = createMemo(() =>
+    props.byType('agent').filter((resource) => !isPulseAgentPlatformResource(resource)),
   );
 
   const pbsInstances = createMemo<PBSInstance[]>(() =>
@@ -157,6 +169,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
     replaceRawOverridesConfig,
     allGuests,
     agentResources,
+    virtualizationHostResources,
     containerRuntimeResources,
     pbsInstances,
     pmgInstances,

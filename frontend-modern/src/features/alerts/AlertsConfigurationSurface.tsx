@@ -88,7 +88,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           pbsInstances={state.pbsInstances()}
           pmgInstances={state.pmgInstances()}
           containerRuntimes={state.containerRuntimeResources()}
-          nodes={props.byType('agent')}
+          nodes={state.virtualizationHostResources()}
           agents={state.agentResources()}
           storage={props
             .allResources()

@@ -62,6 +62,53 @@ describe('useAlertOverridesState', () => {
     expect(overviewOverrides()).toEqual(result.overrides());
   });
 
+  it('keeps standalone agent machines out of the virtualization host list while retaining provider-owned nodes', () => {
+    const [hasUnsavedChanges] = createSignal(false);
+    const [, setOverviewOverrides] = createSignal([]);
+    const resources = [
+      // A cloud box running only the Pulse agent. It belongs to the Machines tab,
+      // whose overrides resolve by agent identity, so a second row here would save
+      // an override that agent alerting never reads.
+      makeResource({
+        id: 'docker-host-gcp-01',
+        name: 'docker-host-gcp-01',
+        type: 'agent',
+        platformType: 'agent',
+        sourceType: 'agent',
+        platformData: {
+          agent: { agentId: 'agent-gcp-01', platform: 'Linux' },
+        },
+      }),
+      // A real Proxmox node must still appear under Virtualization Hosts.
+      makeResource({
+        id: 'cluster-a:pve01',
+        name: 'pve01',
+        type: 'agent',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        platformData: {
+          proxmox: { node: 'pve01', instance: 'cluster-a' },
+        },
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useAlertOverridesState({
+        allResources: () => resources,
+        byType: (resourceType) => resources.filter((resource) => resource.type === resourceType),
+        children: () => [],
+        hasUnsavedChanges,
+        setOverviewOverrides,
+      }),
+    );
+
+    expect(result.virtualizationHostResources().map((resource) => resource.id)).toEqual([
+      'cluster-a:pve01',
+    ]);
+    // The standalone machine is still reachable, via the Machines tab.
+    expect(result.agentResources().map((resource) => resource.id)).toContain('docker-host-gcp-01');
+  });
+
   it('projects guest overrides without agent resources and clears stale overrides when config is emptied', async () => {
     const [hasUnsavedChanges] = createSignal(false);
     const [overviewOverrides, setOverviewOverrides] = createSignal([]);
