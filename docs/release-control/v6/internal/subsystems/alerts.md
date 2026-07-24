@@ -43,6 +43,13 @@ used/free/total evidence must not open or clear a memory alert. If such a
 sample follows an active alert, the alert remains active with its last trusted
 value until a subsequent trusted sample proves recovery; missing evidence is
 not evidence that pressure disappeared.
+Proxmox guest disk-read, disk-write, network-in, and network-out thresholds
+consume only monitoring-owned valid rate observations. A valid idle interval
+is explicit zero and may prove recovery; a first sample, missing/null counter,
+partial response, or rejected out-of-order sample is unknown and must not
+start, clear, or match a custom metric filter. Alert units remain MiB/s at the
+threshold boundary (`bytes/s / 1024 / 1024`); that display/threshold conversion
+must not be applied to the upstream cumulative-counter divisor.
 
 ## Canonical Files
 

@@ -159,6 +159,7 @@ func metricsFromVM(vm models.VM) *ResourceMetrics {
 		vm.NetworkOut,
 		vm.DiskRead,
 		vm.DiskWrite,
+		vm.IORateValidity,
 		SourceProxmox,
 	)
 }
@@ -172,6 +173,7 @@ func metricsFromContainer(ct models.Container) *ResourceMetrics {
 		ct.NetworkOut,
 		ct.DiskRead,
 		ct.DiskWrite,
+		ct.IORateValidity,
 		SourceProxmox,
 	)
 }
@@ -181,6 +183,7 @@ func buildVMMetricPayload(
 	memory models.Memory,
 	disk models.Disk,
 	netIn, netOut, diskRead, diskWrite int64,
+	rateValidity models.IORateValidity,
 	source DataSource,
 ) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
@@ -194,7 +197,7 @@ func buildVMMetricPayload(
 		percent := percentFromUsage(disk.Usage)
 		metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
-	setNetworkAndDiskIOMetricsVM(metrics, netIn, netOut, diskRead, diskWrite, source)
+	setNetworkAndDiskIOMetricsVM(metrics, netIn, netOut, diskRead, diskWrite, rateValidity, source)
 	return metrics
 }
 
@@ -822,17 +825,18 @@ func setNetworkAndDiskIOMetricsHost(metrics *ResourceMetrics, netIn, netOut, dis
 	}
 }
 
-func setNetworkAndDiskIOMetricsVM(metrics *ResourceMetrics, netIn, netOut, diskRead, diskWrite int64, source DataSource) {
-	if netIn != 0 {
+func setNetworkAndDiskIOMetricsVM(metrics *ResourceMetrics, netIn, netOut, diskRead, diskWrite int64, validity models.IORateValidity, source DataSource) {
+	effective := validity.EffectiveForRates(diskRead, diskWrite, netIn, netOut)
+	if effective.NetworkIn {
 		metrics.NetIn = &MetricValue{Value: float64(netIn), Unit: "bytes/s", Source: source}
 	}
-	if netOut != 0 {
+	if effective.NetworkOut {
 		metrics.NetOut = &MetricValue{Value: float64(netOut), Unit: "bytes/s", Source: source}
 	}
-	if diskRead != 0 {
+	if effective.DiskRead {
 		metrics.DiskRead = &MetricValue{Value: float64(diskRead), Unit: "bytes/s", Source: source}
 	}
-	if diskWrite != 0 {
+	if effective.DiskWrite {
 		metrics.DiskWrite = &MetricValue{Value: float64(diskWrite), Unit: "bytes/s", Source: source}
 	}
 }

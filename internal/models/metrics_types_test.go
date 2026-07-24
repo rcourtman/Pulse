@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,6 +27,7 @@ func TestIOMetrics_Fields(t *testing.T) {
 		NetworkIn:  3000,
 		NetworkOut: 4000,
 		Timestamp:  now,
+		ObservedAt: IOCounterObservationTimes{DiskRead: now},
 	}
 
 	if metrics.DiskRead != 1000 {
@@ -115,5 +117,61 @@ func TestIOMetrics_JSONSerializationUsesCamelCaseFields(t *testing.T) {
 	}
 	if _, ok := decoded["Timestamp"]; ok {
 		t.Error("expected Timestamp key to be absent")
+	}
+	if _, ok := decoded["ObservedAt"]; ok {
+		t.Error("expected per-counter observation times to be absent")
+	}
+}
+
+func TestIORateValidityLegacyFallbackTreatsOnlyNonZeroRatesAsKnown(t *testing.T) {
+	validity := (IORateValidity{}).EffectiveForRates(1024, 0, 2048, 0)
+	if !validity.DiskRead || validity.DiskWrite || !validity.NetworkIn || validity.NetworkOut {
+		t.Fatalf("legacy inferred validity = %+v", validity)
+	}
+
+	explicitIdle := IORateValidity{
+		Explicit:   true,
+		DiskRead:   true,
+		DiskWrite:  true,
+		NetworkIn:  true,
+		NetworkOut: true,
+	}.EffectiveForRates(0, 0, 0, 0)
+	if !explicitIdle.DiskRead || !explicitIdle.DiskWrite || !explicitIdle.NetworkIn || !explicitIdle.NetworkOut {
+		t.Fatalf("explicit idle validity was not preserved: %+v", explicitIdle)
+	}
+}
+
+func TestUnknownGuestRatesRemainNumericOnAPIAndWebsocketShapes(t *testing.T) {
+	vm := VM{
+		ID:        "site:node:100",
+		DiskRead:  0,
+		DiskWrite: 0,
+		IORateValidity: IORateValidity{
+			Explicit: true,
+		},
+	}
+	modelPayload, err := json.Marshal(vm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(modelPayload), "IORateValidity") || strings.Contains(string(modelPayload), "ioRateValidity") {
+		t.Fatalf("internal validity leaked into guest model JSON: %s", modelPayload)
+	}
+
+	payload, err := json.Marshal(vm.ToFrontend())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire := string(payload)
+	for _, field := range []string{`"diskRead":0`, `"diskWrite":0`, `"networkIn":0`, `"networkOut":0`} {
+		if !strings.Contains(wire, field) {
+			t.Fatalf("wire payload %s does not contain numeric field %s", wire, field)
+		}
+	}
+	if strings.Contains(wire, "null") {
+		t.Fatalf("guest wire payload contains unstable null: %s", wire)
+	}
+	if strings.Contains(wire, "IORateValidity") {
+		t.Fatalf("internal validity leaked into wire payload: %s", wire)
 	}
 }

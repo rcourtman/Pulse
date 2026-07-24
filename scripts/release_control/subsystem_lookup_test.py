@@ -4159,6 +4159,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "internal/api/host_agent_removal_lifecycle_integration_test.go",
                 "internal/config/host_continuity_test.go",
+                "internal/models/metrics_types_test.go",
                 "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
                 "scripts/installtests/agent_state_dir_lifecycle_test.go",

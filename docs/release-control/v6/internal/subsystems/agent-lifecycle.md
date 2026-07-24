@@ -36,6 +36,11 @@ one compressed unified-agent report without a collector-side suffix cap.
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
 report admission, removal, update, profile, or command authority.
+The JSON-excluded Proxmox VM/LXC I/O-rate validity fields carried by
+`internal/models/models.go` are likewise monitoring-owned sidecar evidence.
+They distinguish a valid idle interval from an unknown rate for history,
+alerts, and unified-resource projection; they do not describe agent report
+admission, heartbeat, enrollment, command reachability, or fleet liveness.
 Docker / Podman report sizing is a two-dimensional transport contract:
 `pkg/agents/docker/report_limits.go` owns the inclusive encoded HTTP-body and
 decoded JSON byte ceilings, derives the 80% early-warning boundaries, and

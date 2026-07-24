@@ -110,14 +110,33 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 	now := time.Now()
 	for _, vm := range allVMs {
 		if vm.Status == "running" {
-			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, now)
+			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, vm.IORateValidity)
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
 	for _, ct := range allContainers {
 		if ct.Status == "running" {
-			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, now)
+			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, ct.IORateValidity)
+			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
+}
+
+func guestHistoryRates(diskRead, diskWrite, networkIn, networkOut int64, validity models.IORateValidity) (int64, int64, int64, int64) {
+	effective := validity.EffectiveForRates(diskRead, diskWrite, networkIn, networkOut)
+	if !effective.DiskRead {
+		diskRead = -1
+	}
+	if !effective.DiskWrite {
+		diskWrite = -1
+	}
+	if !effective.NetworkIn {
+		networkIn = -1
+	}
+	if !effective.NetworkOut {
+		networkOut = -1
+	}
+	return diskRead, diskWrite, networkIn, networkOut
 }
 
 func historyMemoryUsage(memory models.Memory) float64 {

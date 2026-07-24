@@ -216,6 +216,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "internal/api/host_agent_removal_lifecycle_integration_test.go",
                         "internal/config/host_continuity_test.go",
+                        "internal/models/metrics_types_test.go",
                         "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "scripts/installtests/agent_state_dir_lifecycle_test.go",
@@ -258,6 +259,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "docker-swarm-runtime",
                 "kubernetes-native-agent-runtime",
                 "runtime-report-model",
+                "proxmox-guest-counter-runtime",
                 "proxmox-zfs-runtime",
                 "proxmox-cluster-client-runtime",
                 "proxmox-ceph-runtime",
@@ -287,6 +289,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/canonical_guardrails_test.go",
                         "internal/monitoring/issue1485_unraid_lifecycle_test.go",
                         "internal/monitoring/issue1595_collection_trust_test.go",
+                        "internal/monitoring/issue1613_contract_test.go",
                         "internal/monitoring/monitor_additional_test.go",
                         "internal/monitoring/monitor_alert_intent_test.go",
                         "internal/monitoring/monitor_alert_override_migration_test.go",
@@ -295,6 +298,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "internal/monitoring/monitor_pve_cluster_refresh_test.go",
+                        "internal/monitoring/monitor_pve_guest_lxc_test.go",
+                        "internal/monitoring/ratetracker_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
@@ -392,6 +397,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "internal/api/host_agent_removal_lifecycle_integration_test.go",
                         "internal/config/host_continuity_test.go",
+                        "internal/models/metrics_types_test.go",
                         "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "scripts/installtests/agent_state_dir_lifecycle_test.go",

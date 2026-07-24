@@ -105,12 +105,16 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				guestID := makeGuestID(instanceName, n.Node, int(container.VMID))
 
 				sampleTime := time.Now()
+				counterObservedAt := observedAtOr(container.ObservedAt, sampleTime)
 				currentMetrics := IOMetrics{
-					DiskRead:   int64(container.DiskRead),
-					DiskWrite:  int64(container.DiskWrite),
-					NetworkIn:  int64(container.NetIn),
-					NetworkOut: int64(container.NetOut),
-					Timestamp:  sampleTime,
+					DiskRead:     int64(container.DiskRead),
+					DiskWrite:    int64(container.DiskWrite),
+					NetworkIn:    int64(container.NetIn),
+					NetworkOut:   int64(container.NetOut),
+					Timestamp:    counterObservedAt,
+					Presence:     pveCounterPresence(container.IOCounters),
+					ObservedAt:   counterObservationTimes(counterObservedAt),
+					SourceUptime: uint64(container.Uptime),
 				}
 				statusSnapshot := (*proxmox.Container)(nil)
 				if container.Status == "running" {
@@ -124,7 +128,16 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					)
 					currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
 				}
-				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
+					makeGuestRateKey(instanceName, "lxc", int(container.VMID)),
+					currentMetrics,
+				)
+				diskReadValue, diskWriteValue, networkInValue, networkOutValue, rateValidity := guestRateValues(
+					diskReadRate,
+					diskWriteRate,
+					netInRate,
+					netOutRate,
+				)
 
 				// Set CPU to 0 for non-running containers
 				cpuUsage := safeFloat(container.CPU)
@@ -201,14 +214,15 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 						Free:  diskFreeBytes,
 						Usage: diskUsagePercent,
 					},
-					NetworkIn:  max(0, int64(netInRate)),
-					NetworkOut: max(0, int64(netOutRate)),
-					DiskRead:   max(0, int64(diskReadRate)),
-					DiskWrite:  max(0, int64(diskWriteRate)),
-					Uptime:     int64(container.Uptime),
-					Template:   container.Template == 1,
-					LastSeen:   sampleTime,
-					Tags:       tags,
+					NetworkIn:      networkInValue,
+					NetworkOut:     networkOutValue,
+					DiskRead:       diskReadValue,
+					DiskWrite:      diskWriteValue,
+					IORateValidity: rateValidity,
+					Uptime:         int64(container.Uptime),
+					Template:       container.Template == 1,
+					LastSeen:       sampleTime,
+					Tags:           tags,
 				}
 
 				if prevContainerIsOCI[modelContainer.VMID] {
@@ -258,6 +272,13 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					modelContainer.NetworkOut = 0
 					modelContainer.DiskRead = 0
 					modelContainer.DiskWrite = 0
+					modelContainer.IORateValidity = models.IORateValidity{
+						Explicit:   true,
+						DiskRead:   true,
+						DiskWrite:  true,
+						NetworkIn:  true,
+						NetworkOut: true,
+					}
 				}
 
 				// Trigger guest metadata migration if old format exists
@@ -349,9 +370,25 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 			if ct.Status != "running" {
 				continue
 			}
-			// IO/network series are not recorded on the traditional polling
-			// path (parity with the historical inline writes).
-			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, -1, -1, -1, -1, now)
+			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(
+				ct.DiskRead,
+				ct.DiskWrite,
+				ct.NetworkIn,
+				ct.NetworkOut,
+				ct.IORateValidity,
+			)
+			m.recordGuestMetric(
+				"container",
+				ct.ID,
+				unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
+				historyMemoryUsage(ct.Memory),
+				ct.Disk.Usage,
+				diskRead,
+				diskWrite,
+				networkIn,
+				networkOut,
+				now,
+			)
 		}
 	}
 

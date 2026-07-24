@@ -20,17 +20,18 @@ func (m *Manager) evaluateFilterCondition(guest any, condition FilterCondition) 
 
 // guestMetrics holds common metrics for filter evaluation
 type guestMetrics struct {
-	CPU        float64 // CPU usage as percentage (0-100)
-	MemUsage   float64 // Memory usage percentage
-	DiskUsage  float64 // Disk usage percentage
-	DiskRead   int64   // Bytes/s
-	DiskWrite  int64   // Bytes/s
-	NetworkIn  int64   // Bytes/s
-	NetworkOut int64   // Bytes/s
-	Name       string
-	Node       string
-	ID         string
-	Status     string
+	CPU            float64 // CPU usage as percentage (0-100)
+	MemUsage       float64 // Memory usage percentage
+	DiskUsage      float64 // Disk usage percentage
+	DiskRead       int64   // Bytes/s
+	DiskWrite      int64   // Bytes/s
+	NetworkIn      int64   // Bytes/s
+	NetworkOut     int64   // Bytes/s
+	IORateValidity models.IORateValidity
+	Name           string
+	Node           string
+	ID             string
+	Status         string
 }
 
 // extractGuestMetrics extracts common metrics from a VM or Container
@@ -47,6 +48,12 @@ func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) boo
 	switch condition.Type {
 	case "metric":
 		value := 0.0
+		validity := metrics.IORateValidity.EffectiveForRates(
+			metrics.DiskRead,
+			metrics.DiskWrite,
+			metrics.NetworkIn,
+			metrics.NetworkOut,
+		)
 		switch strings.ToLower(condition.Field) {
 		case "cpu":
 			value = metrics.CPU
@@ -55,12 +62,24 @@ func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) boo
 		case "disk":
 			value = metrics.DiskUsage
 		case "diskread":
+			if !validity.DiskRead {
+				return false
+			}
 			value = float64(metrics.DiskRead) / 1024 / 1024 // Convert to MB/s
 		case "diskwrite":
+			if !validity.DiskWrite {
+				return false
+			}
 			value = float64(metrics.DiskWrite) / 1024 / 1024
 		case "networkin":
+			if !validity.NetworkIn {
+				return false
+			}
 			value = float64(metrics.NetworkIn) / 1024 / 1024
 		case "networkout":
+			if !validity.NetworkOut {
+				return false
+			}
 			value = float64(metrics.NetworkOut) / 1024 / 1024
 		default:
 			return false

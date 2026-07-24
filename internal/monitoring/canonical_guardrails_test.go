@@ -1819,7 +1819,7 @@ func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor_pve_guest_builders.go":  {"Pool:     strings.TrimSpace(res.Pool)"},
 		"monitor_pve_guest_lxc.go":       {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_pve_node_vm_builder.go": {"Pool:      vm.Pool"},
+		"monitor_pve_node_vm_builder.go": {"Pool:       vm.Pool"},
 		"monitor_polling_containers.go":  {"Pool:     strings.TrimSpace(container.Pool)"},
 	}
 
@@ -2021,14 +2021,16 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			file: "monitor_polling_vm.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, -1, -1, -1, -1, now)`,
+				"guestHistoryRates(",
+				"m.recordGuestMetric(",
 			},
 		},
 		{
 			file: "monitor_polling_containers.go",
 			snippets: []string{
 				"if !shouldSkipNativeMockStateMetricWrites() {",
-				`m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, -1, -1, -1, -1, now)`,
+				"guestHistoryRates(",
+				"m.recordGuestMetric(",
 			},
 		},
 		{

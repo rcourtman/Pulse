@@ -374,6 +374,28 @@ func TestEvaluateVMCondition(t *testing.T) {
 	}
 }
 
+func TestEvaluateVMConditionTreatsUnknownIORateAsNonMatch(t *testing.T) {
+	manager := NewManager()
+	vm := models.VM{
+		DiskRead:       0,
+		IORateValidity: models.IORateValidity{Explicit: true},
+	}
+	condition := FilterCondition{
+		Type:     "metric",
+		Field:    "diskread",
+		Operator: "<=",
+		Value:    0,
+	}
+	if manager.evaluateVMCondition(vm, condition) {
+		t.Fatal("unknown disk read rate matched a zero-valued filter")
+	}
+
+	vm.IORateValidity.DiskRead = true
+	if !manager.evaluateVMCondition(vm, condition) {
+		t.Fatal("valid zero disk read rate did not match a zero-valued filter")
+	}
+}
+
 func TestEvaluateContainerCondition(t *testing.T) {
 	// t.Parallel()
 	m := NewManager()

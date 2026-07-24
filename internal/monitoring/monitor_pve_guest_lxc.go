@@ -101,12 +101,16 @@ func (m *Monitor) buildContainerFromClusterResource(
 	guestID := makeGuestID(instanceName, res.Node, res.VMID)
 
 	sampleTime := time.Now()
+	counterObservedAt := observedAtOr(res.ObservedAt, sampleTime)
 	currentMetrics := IOMetrics{
-		DiskRead:   int64(res.DiskRead),
-		DiskWrite:  int64(res.DiskWrite),
-		NetworkIn:  int64(res.NetIn),
-		NetworkOut: int64(res.NetOut),
-		Timestamp:  sampleTime,
+		DiskRead:     int64(res.DiskRead),
+		DiskWrite:    int64(res.DiskWrite),
+		NetworkIn:    int64(res.NetIn),
+		NetworkOut:   int64(res.NetOut),
+		Timestamp:    counterObservedAt,
+		Presence:     pveCounterPresence(res.IOCounters),
+		ObservedAt:   counterObservationTimes(counterObservedAt),
+		SourceUptime: res.Uptime,
 	}
 	statusSnapshot := (*proxmox.Container)(nil)
 	if res.Status == "running" {
@@ -120,7 +124,16 @@ func (m *Monitor) buildContainerFromClusterResource(
 		)
 		currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
 	}
-	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
+		makeGuestRateKey(instanceName, "lxc", res.VMID),
+		currentMetrics,
+	)
+	diskReadValue, diskWriteValue, networkInValue, networkOutValue, rateValidity := guestRateValues(
+		diskReadRate,
+		diskWriteRate,
+		netInRate,
+		netOutRate,
+	)
 
 	memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(ctx, instanceName, res, client)
 	memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
@@ -181,13 +194,14 @@ func (m *Monitor) buildContainerFromClusterResource(
 			Free:  diskFree,
 			Usage: safePercentage(float64(diskUsed), float64(res.MaxDisk)),
 		},
-		NetworkIn:  max(0, int64(netInRate)),
-		NetworkOut: max(0, int64(netOutRate)),
-		DiskRead:   max(0, int64(diskReadRate)),
-		DiskWrite:  max(0, int64(diskWriteRate)),
-		Uptime:     int64(res.Uptime),
-		Template:   res.Template == 1,
-		LastSeen:   lastSeen,
+		NetworkIn:      networkInValue,
+		NetworkOut:     networkOutValue,
+		DiskRead:       diskReadValue,
+		DiskWrite:      diskWriteValue,
+		IORateValidity: rateValidity,
+		Uptime:         int64(res.Uptime),
+		Template:       res.Template == 1,
+		LastSeen:       lastSeen,
 	}
 
 	if prevContainerIsOCI[container.VMID] {
@@ -231,6 +245,13 @@ func (m *Monitor) buildContainerFromClusterResource(
 		container.NetworkOut = 0
 		container.DiskRead = 0
 		container.DiskWrite = 0
+		container.IORateValidity = models.IORateValidity{
+			Explicit:   true,
+			DiskRead:   true,
+			DiskWrite:  true,
+			NetworkIn:  true,
+			NetworkOut: true,
+		}
 	}
 
 	return container, guestRaw, memorySource, sampleTime, true

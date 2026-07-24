@@ -12,6 +12,7 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -60,6 +61,62 @@ func safeFloat(val float64) float64 {
 // For standalone nodes, the instance name matches the node name.
 func makeGuestID(instanceName string, node string, vmid int) string {
 	return fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)
+}
+
+// makeGuestRateKey identifies one counter stream independently of placement.
+// A live migration changes the canonical row ID's node coordinate but not the
+// cumulative counter epoch. The configured instance remains in the key so
+// duplicate cluster registrations never race on one baseline.
+func makeGuestRateKey(instanceName, guestType string, vmid int) string {
+	return fmt.Sprintf("pve:%s:%s:%d", instanceName, strings.ToLower(strings.TrimSpace(guestType)), vmid)
+}
+
+func pveCounterPresence(p proxmox.IOCounterPresence) models.IOCounterPresence {
+	effective := p.Effective()
+	return models.IOCounterPresence{
+		Explicit:   true,
+		DiskRead:   effective.DiskRead,
+		DiskWrite:  effective.DiskWrite,
+		NetworkIn:  effective.NetworkIn,
+		NetworkOut: effective.NetworkOut,
+	}
+}
+
+func observedAtOr(value, fallback time.Time) time.Time {
+	if !value.IsZero() {
+		return value
+	}
+	return fallback
+}
+
+func counterObservationTimes(observedAt time.Time) models.IOCounterObservationTimes {
+	return models.IOCounterObservationTimes{
+		DiskRead:   observedAt,
+		DiskWrite:  observedAt,
+		NetworkIn:  observedAt,
+		NetworkOut: observedAt,
+	}
+}
+
+func numericGuestRate(rate float64) (int64, bool) {
+	if rate < 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		return 0, false
+	}
+	return max(0, int64(rate)), true
+}
+
+func guestRateValues(diskRead, diskWrite, networkIn, networkOut float64) (int64, int64, int64, int64, models.IORateValidity) {
+	diskReadValue, diskReadKnown := numericGuestRate(diskRead)
+	diskWriteValue, diskWriteKnown := numericGuestRate(diskWrite)
+	networkInValue, networkInKnown := numericGuestRate(networkIn)
+	networkOutValue, networkOutKnown := numericGuestRate(networkOut)
+	return diskReadValue, diskWriteValue, networkInValue, networkOutValue, models.IORateValidity{
+		Explicit:   true,
+		DiskRead:   diskReadKnown,
+		DiskWrite:  diskWriteKnown,
+		NetworkIn:  networkInKnown,
+		NetworkOut: networkOutKnown,
+	}
 }
 
 // parseBoolEnv parses a boolean from an environment variable, returning defaultVal if not set or invalid

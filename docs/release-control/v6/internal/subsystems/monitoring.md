@@ -144,6 +144,31 @@ no core-count division and no in-guest host-agent substitution. A linked host
 agent may supplement metrics the platform does not provide, but guest CPU and
 its `vm` / `system-container` history target remain platform-owned so dashboard,
 details, API state, alerts, and history cannot select different authorities.
+Proxmox guest disk and network throughput has one cumulative-counter sampling
+contract. `diskread`, `diskwrite`, `netin`, and `netout` are cumulative bytes;
+the canonical rate is `(current counter - previous counter) / elapsed
+observation seconds`, in bytes per second, with no 1024 divisor. Elapsed time
+comes from the receipt time stamped immediately after the relevant Proxmox API
+response is decoded, not from later guest-agent, filesystem, or metadata
+enrichment. Each counter keeps an independent adjacent-sample baseline:
+explicitly unchanged counters produce a valid zero, missing/null fields produce
+unknown, out-of-order samples produce unknown without moving the baseline, and
+a counter decrease caused by restart, reconnect, migration epoch change, or
+wrap rebases that counter and produces a valid zero for the reset interval. A
+source-uptime rollback rebases the complete counter epoch and leaves the first
+post-restart rate unknown, including when a busy guest already surpassed its
+pre-restart counter value before the next poll.
+First-sample and missing-field unknowns remain internal validity state; the
+legacy API/websocket guest number fields stay numeric, while history, unified
+metrics, and alerts omit the unknown observation instead of manufacturing
+zero. The rate-tracker identity is `(configured PVE instance, guest kind,
+VMID)`: it survives node migration, separates QEMU from LXC, and prevents
+duplicate configured cluster identities from sharing a concurrent baseline.
+Idle and partial samples still refresh tracker liveness.
+Proxmox row liveness uses the same cadence-derived threshold as source
+freshness (`max(2 * configured poll interval, 60s)`). Node offline grace and
+guest preservation must not expire between healthy 60- or 90-second polls, and
+must not use a separate fixed 60-second timer.
 Tenant monitor enumeration is monitoring-owned runtime topology, not a
 reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
 persisted organization IDs to API-owned background workers, but it must not
@@ -202,6 +227,8 @@ node-local Agent evidence.
 20. `internal/dockeragent/collect.go`
 21. `pkg/proxmox/ceph.go`
 21a. `pkg/proxmox/cluster_client.go`
+21b. `pkg/proxmox/client.go`
+21c. `pkg/proxmox/io_counters.go`
 22. `pkg/proxmox/zfs.go`
 23. `internal/monitoring/guest_memory_sources.go`
 24. `internal/monitoring/guest_memory_stability.go`
@@ -222,6 +249,7 @@ node-local Agent evidence.
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
 38a. `internal/models/proxmox_guest_state.go`
+38b. `internal/models/metrics_types.go`
 39. `internal/models/models_frontend.go`
 40. `internal/models/converters.go`
 41. `internal/models/deepcopy.go`
@@ -1076,14 +1104,17 @@ legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
 so long-lived infrastructure, workloads, storage, and recovery demos do not
 decay into synthetic stale-state warnings while mock mode remains enabled.
 That same Proxmox container monitoring boundary now also owns runtime counter
-recovery when the lower-fidelity container list or cluster-resources payload
-reports stale or zero I/O totals. `internal/monitoring/monitor_pve.go`,
+authority when the lower-fidelity container list or cluster-resources payload
+and the current-status payload differ. `internal/monitoring/monitor_pve.go`,
 `internal/monitoring/monitor_pve_guest_lxc.go`, and
 `internal/monitoring/monitor_polling_containers.go` must merge the current
 `GetContainerStatus` counters through one canonical `mergeContainerRuntimeCounters`
-path before LXC rate calculation and must reuse the same prefetched status
-snapshot for metadata enrichment instead of paying disconnected metric and
-metadata status reads that can diverge.
+path before LXC rate calculation. A present status field is newer authority
+even when it is zero or lower after a restart; an absent/null status field
+retains the listing field and its presence state. The merge must retain the
+status response receipt time and reuse the same prefetched status snapshot for
+metadata enrichment instead of paying disconnected metric and metadata status
+reads that can diverge.
 That same Proxmox backup/snapshot boundary owns bounded concurrent guest
 snapshot enumeration. `internal/monitoring/monitor_backups.go` must query VM
 and LXC snapshot endpoints through one capped worker pool and preserve

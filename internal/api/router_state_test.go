@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,6 +106,83 @@ func TestRouter_HandleState_MockIsolation(t *testing.T) {
 		router.handleState(w, req)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
+}
+
+func TestRouterHandleStatePreservesNumericIdleRatesAndOmitsUnknownRates(t *testing.T) {
+	dataPath := t.TempDir()
+	hp, err := auth.HashPassword("password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath: dataPath,
+		AuthUser: "admin",
+		AuthPass: hp,
+	}
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.VMs = []models.VM{
+		{
+			ID:       "site-a:pve-a:100",
+			VMID:     100,
+			Name:     "idle-vm",
+			Node:     "pve-a",
+			Instance: "site-a",
+			Status:   "running",
+			IORateValidity: models.IORateValidity{
+				Explicit:   true,
+				DiskRead:   true,
+				DiskWrite:  true,
+				NetworkIn:  true,
+				NetworkOut: true,
+			},
+		},
+		{
+			ID:       "site-a:pve-a:101",
+			VMID:     101,
+			Name:     "unknown-vm",
+			Node:     "pve-a",
+			Instance: "site-a",
+			Status:   "running",
+			IORateValidity: models.IORateValidity{
+				Explicit: true,
+			},
+		},
+	}
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{config: cfg, monitor: monitor}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	req.SetBasicAuth("admin", "password")
+	router.handleState(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/api/state status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Resources []models.ResourceFrontend `json:"resources"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode /api/state: %v", err)
+	}
+
+	byName := make(map[string]models.ResourceFrontend, len(payload.Resources))
+	for _, resource := range payload.Resources {
+		byName[resource.Name] = resource
+	}
+	idle := byName["idle-vm"]
+	if idle.DiskIO == nil || idle.DiskIO.ReadRate != 0 || idle.DiskIO.WriteRate != 0 {
+		t.Fatalf("valid idle rates were not emitted as numeric zero: %+v", idle.DiskIO)
+	}
+	if unknown := byName["unknown-vm"]; unknown.DiskIO != nil {
+		t.Fatalf("unknown rates projected a disk I/O object: %+v", unknown.DiskIO)
+	}
+	if strings.Contains(rec.Body.String(), `"readRate":null`) || strings.Contains(rec.Body.String(), `"writeRate":null`) {
+		t.Fatalf("/api/state emitted unstable null rates: %s", rec.Body.String())
+	}
 }
 
 func TestRouter_HandleStateSummary(t *testing.T) {

@@ -321,7 +321,7 @@ type ResourceMetrics struct {
 
 // MetricValue represents a metric value, optionally with totals.
 type MetricValue struct {
-	Value   float64    `json:"value,omitempty"`
+	Value   float64    `json:"value"`
 	Used    *int64     `json:"used,omitempty"`
 	Total   *int64     `json:"total,omitempty"`
 	Percent float64    `json:"percent,omitempty"`

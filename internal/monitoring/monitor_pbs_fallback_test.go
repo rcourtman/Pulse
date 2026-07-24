@@ -65,6 +65,7 @@ func TestMonitor_PollPBSInstance_Fallback_Extra(t *testing.T) {
 		},
 		state:            models.NewState(),
 		stalenessTracker: NewStalenessTracker(nil),
+		pollStatusMap:    make(map[string]*pollStatus),
 	}
 
 	ctx := context.Background()

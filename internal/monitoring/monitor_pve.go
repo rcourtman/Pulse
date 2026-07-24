@@ -63,10 +63,35 @@ func mergeContainerRuntimeCounters(current IOMetrics, status *proxmox.Container)
 		return current
 	}
 
-	current.DiskRead = max(current.DiskRead, int64(status.DiskRead))
-	current.DiskWrite = max(current.DiskWrite, int64(status.DiskWrite))
-	current.NetworkIn = max(current.NetworkIn, int64(status.NetIn))
-	current.NetworkOut = max(current.NetworkOut, int64(status.NetOut))
+	currentPresence := current.Presence.Effective()
+	statusPresence := status.IOCounters.Effective()
+	if statusPresence.DiskRead {
+		current.DiskRead = int64(status.DiskRead)
+		currentPresence.DiskRead = true
+		current.ObservedAt.DiskRead = status.ObservedAt
+	}
+	if statusPresence.DiskWrite {
+		current.DiskWrite = int64(status.DiskWrite)
+		currentPresence.DiskWrite = true
+		current.ObservedAt.DiskWrite = status.ObservedAt
+	}
+	if statusPresence.NetworkIn {
+		current.NetworkIn = int64(status.NetIn)
+		currentPresence.NetworkIn = true
+		current.ObservedAt.NetworkIn = status.ObservedAt
+	}
+	if statusPresence.NetworkOut {
+		current.NetworkOut = int64(status.NetOut)
+		currentPresence.NetworkOut = true
+		current.ObservedAt.NetworkOut = status.ObservedAt
+	}
+	current.Presence = currentPresence
+	if !status.ObservedAt.IsZero() {
+		current.Timestamp = status.ObservedAt
+	}
+	if status.Uptime > 0 {
+		current.SourceUptime = status.Uptime
+	}
 	return current
 }
 
@@ -712,6 +737,7 @@ func (m *Monitor) placeholderNodesForInstance(instanceName string) []models.Node
 func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []models.Node {
 	preserved := make([]models.Node, 0, len(prevInstanceNodes))
 	now := time.Now()
+	gracePeriod := m.pveNodeOfflineGracePeriod()
 	for _, prevNode := range prevInstanceNodes {
 		nodeCopy := prevNode
 
@@ -729,9 +755,9 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 		lastOnline, sawOnline := m.nodeLastOnline[prevNode.ID]
 		m.mu.Unlock()
 
-		withinGrace := sawOnline && now.Sub(lastOnline) < nodeOfflineGracePeriod
+		withinGrace := sawOnline && now.Sub(lastOnline) < gracePeriod
 		if !withinGrace && strings.EqualFold(strings.TrimSpace(prevNode.Status), "online") {
-			withinGrace = !prevNode.LastSeen.IsZero() && now.Sub(prevNode.LastSeen) < nodeOfflineGracePeriod
+			withinGrace = !prevNode.LastSeen.IsZero() && now.Sub(prevNode.LastSeen) < gracePeriod
 		}
 		if withinGrace {
 			if strings.TrimSpace(nodeCopy.Status) == "" || strings.EqualFold(nodeCopy.Status, "offline") {

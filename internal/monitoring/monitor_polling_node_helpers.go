@@ -47,6 +47,7 @@ func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *con
 	}
 	effectiveStatus := node.Status
 	now := time.Now()
+	gracePeriod := m.pveNodeOfflineGracePeriod()
 
 	m.mu.Lock()
 	if strings.ToLower(node.Status) == "online" {
@@ -55,14 +56,14 @@ func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *con
 	} else {
 		// Node is reported as offline - check grace period
 		lastOnline, exists := m.nodeLastOnline[nodeID]
-		if exists && now.Sub(lastOnline) < nodeOfflineGracePeriod {
+		if exists && now.Sub(lastOnline) < gracePeriod {
 			// Still within grace period - preserve online status
 			effectiveStatus = "online"
 			log.Debug().
 				Str("instance", instanceName).
 				Str("node", node.Node).
 				Dur("timeSinceOnline", now.Sub(lastOnline)).
-				Dur("gracePeriod", nodeOfflineGracePeriod).
+				Dur("gracePeriod", gracePeriod).
 				Msg("Node offline but within grace period - preserving online status")
 		} else {
 			// Grace period expired or never seen online - mark as offline

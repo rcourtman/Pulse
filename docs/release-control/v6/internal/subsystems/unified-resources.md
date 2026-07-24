@@ -55,6 +55,14 @@ at the adapter boundary; a mutation that arrives during a rebuild must apply to
 the newly published registry rather than a superseded pointer. Authoritative
 snapshot omissions still remove resources and emit the normal canonical
 history change.
+Proxmox guest I/O projection preserves the monitoring-owned rate validity
+contract. A valid idle interval publishes an explicit zero-valued `bytes/s`
+metric; an unknown first, missing, partial, or out-of-order observation leaves
+that metric absent. `MetricValue.value` is always a numeric JSON field when a
+metric object exists, so `/api/resources`, `/api/state`, websocket resources,
+history, alerts, and UI adapters never need to interpret `null` as either idle
+or unknown. Unified resources must not infer validity from the numeric guest
+compatibility field alone.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART

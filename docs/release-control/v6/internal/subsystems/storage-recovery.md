@@ -1568,6 +1568,11 @@ recovery scope, or a storage/recovery-owned secret source.
     remain absent optional timestamps on that shared facet; storage and recovery
     must not reinterpret absence or a year-one zero-time serialization as
     recovery age, missed backup cadence, or restore freshness.
+    The same shared type file keeps `MetricValue.value` numeric whenever a
+    metric object is present. Storage/recovery consumers must preserve explicit
+    zero as an observed idle value and use absence of the metric object for
+    unknown Proxmox guest I/O; they must not reinterpret zero as missing or
+    accept a JSON `null` value as recovery, backup, or storage-health evidence.
 
 ## Forbidden Paths
 

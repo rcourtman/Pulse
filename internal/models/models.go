@@ -162,6 +162,7 @@ type VM struct {
 	NetworkOut         int64                   `json:"networkOut"`
 	DiskRead           int64                   `json:"diskRead"`
 	DiskWrite          int64                   `json:"diskWrite"`
+	IORateValidity     IORateValidity          `json:"-"`
 	Uptime             int64                   `json:"uptime"`
 	Template           bool                    `json:"template"`
 	OnBoot             *bool                   `json:"onBoot,omitempty"`
@@ -209,6 +210,7 @@ type Container struct {
 	NetworkOut        int64                   `json:"networkOut"`
 	DiskRead          int64                   `json:"diskRead"`
 	DiskWrite         int64                   `json:"diskWrite"`
+	IORateValidity    IORateValidity          `json:"-"`
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
 	OnBoot            *bool                   `json:"onBoot,omitempty"`

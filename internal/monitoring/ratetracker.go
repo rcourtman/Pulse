@@ -7,81 +7,49 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// IOMetrics is an alias for models.IOMetrics
+// IOMetrics is an alias for models.IOMetrics.
 type IOMetrics = models.IOMetrics
 
-// rateWindowSize is the number of counter samples retained per guest.
-// Rate is computed from the oldest to the newest sample, giving an average
-// over (rateWindowSize-1) polling intervals. With a 10s poll interval and
-// window size 4, this produces a 30-second sliding window — the same approach
-// Prometheus rate() uses to smooth out per-interval counter jitter.
-const rateWindowSize = 4
-
-// counterRing is a fixed-size ring buffer of IOMetrics samples.
-type counterRing struct {
-	entries [rateWindowSize]IOMetrics
-	count   int // number of entries stored (up to rateWindowSize)
-	head    int // next write position
+type counterBaseline struct {
+	value       int64
+	observedAt  time.Time
+	initialized bool
 }
 
-func (r *counterRing) add(m IOMetrics) {
-	r.entries[r.head] = m
-	r.head = (r.head + 1) % rateWindowSize
-	if r.count < rateWindowSize {
-		r.count++
-	}
+type counterHistory struct {
+	diskRead       counterBaseline
+	diskWrite      counterBaseline
+	diskBusy       counterBaseline
+	networkIn      counterBaseline
+	networkOut     counterBaseline
+	lastObservedAt time.Time
+	sourceUptime   uint64
 }
 
-func (r *counterRing) oldest() IOMetrics {
-	if r.count < rateWindowSize {
-		return r.entries[0]
-	}
-	return r.entries[r.head] // head points to the oldest when full
-}
-
-func (r *counterRing) newest() IOMetrics {
-	return r.entries[(r.head-1+rateWindowSize)%rateWindowSize]
-}
-
-// newestTimestamp returns the timestamp of the most recent entry.
-func (r *counterRing) newestTimestamp() time.Time {
-	return r.newest().Timestamp
-}
-
-// RateTracker tracks I/O metrics to calculate rates
+// RateTracker converts cumulative byte counters into adjacent-sample rates.
+// Each counter has an independent baseline because Proxmox may omit only part
+// of an otherwise valid status payload.
 type RateTracker struct {
-	mu        sync.RWMutex
-	history   map[string]*counterRing
-	lastRates map[string]RateCache
+	mu      sync.RWMutex
+	history map[string]*counterHistory
 }
 
-// RateCache stores the last calculated rates for a guest
-type RateCache struct {
-	DiskReadRate  float64
-	DiskWriteRate float64
-	DiskBusyPct   float64
-	NetInRate     float64
-	NetOutRate    float64
-}
-
-// NewRateTracker creates a new rate tracker
+// NewRateTracker creates a new rate tracker.
 func NewRateTracker() *RateTracker {
-	return &RateTracker{
-		history:   make(map[string]*counterRing),
-		lastRates: make(map[string]RateCache),
-	}
+	return &RateTracker{history: make(map[string]*counterHistory)}
 }
 
-// CalculateRates calculates I/O rates for a guest
-// Returns -1 for rates that don't have enough data yet (will be converted to null in JSON)
+// CalculateRates calculates disk and network rates in bytes per second.
+// A negative result means the upstream counter was absent, the sample was
+// out-of-order, or no earlier observation exists. A returned zero is a valid
+// observed idle/reset interval.
 func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, netInRate, netOutRate float64) {
 	diskReadRate, diskWriteRate, _, netInRate, netOutRate = rt.calculateRates(guestID, current)
 	return
 }
 
-// CalculateRatesWithBusy calculates disk/network rates plus disk busy percent
-// from cumulative counters. Returns -1 for metrics that do not yet have enough
-// data to produce a rate.
+// CalculateRatesWithBusy also calculates disk busy percent from a cumulative
+// millisecond counter.
 func (rt *RateTracker) CalculateRatesWithBusy(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, diskBusyPct, netInRate, netOutRate float64) {
 	return rt.calculateRates(guestID, current)
 }
@@ -90,102 +58,104 @@ func (rt *RateTracker) calculateRates(guestID string, current IOMetrics) (diskRe
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	ring, exists := rt.history[guestID]
-
-	if !exists {
-		// No previous data, store it and return -1 to indicate no data available
-		ring = &counterRing{}
-		ring.add(current)
-		rt.history[guestID] = ring
+	if current.Timestamp.IsZero() {
 		return -1, -1, -1, -1, -1
 	}
 
-	prev := ring.newest()
-
-	// Check if the values have actually changed (detect stale data)
-	// If all cumulative values are the same, we're getting cached data from Proxmox
-	if current.DiskRead == prev.DiskRead &&
-		current.DiskWrite == prev.DiskWrite &&
-		current.DiskBusy == prev.DiskBusy &&
-		current.NetworkIn == prev.NetworkIn &&
-		current.NetworkOut == prev.NetworkOut {
-		// Data hasn't changed - return last known good rates
-		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
-			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.DiskBusyPct, lastRate.NetInRate, lastRate.NetOutRate
+	history := rt.history[guestID]
+	if history == nil {
+		history = &counterHistory{}
+		rt.history[guestID] = history
+	}
+	if current.SourceUptime > 0 {
+		if history.sourceUptime > 0 && current.SourceUptime < history.sourceUptime {
+			history.resetCounterEpoch()
 		}
-		// No last rates available, return 0
-		return 0, 0, 0, 0, 0
+		history.sourceUptime = current.SourceUptime
 	}
 
-	// Data has changed, add to ring buffer
-	ring.add(current)
+	presence := current.Presence.Effective()
+	diskReadRate = calculateCounterRate(&history.diskRead, current.DiskRead, observationTime(current.ObservedAt.DiskRead, current.Timestamp), presence.DiskRead)
+	diskWriteRate = calculateCounterRate(&history.diskWrite, current.DiskWrite, observationTime(current.ObservedAt.DiskWrite, current.Timestamp), presence.DiskWrite)
+	diskBusyRate := calculateCounterRate(&history.diskBusy, current.DiskBusy, observationTime(current.ObservedAt.DiskBusy, current.Timestamp), presence.DiskBusy)
+	netInRate = calculateCounterRate(&history.networkIn, current.NetworkIn, observationTime(current.ObservedAt.NetworkIn, current.Timestamp), presence.NetworkIn)
+	netOutRate = calculateCounterRate(&history.networkOut, current.NetworkOut, observationTime(current.ObservedAt.NetworkOut, current.Timestamp), presence.NetworkOut)
 
-	// Calculate rate over the full window (oldest to current), like Prometheus rate().
-	// This naturally smooths out per-interval jitter from Proxmox's lumpy counter
-	// reporting by averaging over a wider time span.
-	oldest := ring.oldest()
-	timeDiff := current.Timestamp.Sub(oldest.Timestamp).Seconds()
-	if timeDiff <= 0 {
-		// Return last known rates if time hasn't advanced
-		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
-			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.DiskBusyPct, lastRate.NetInRate, lastRate.NetOutRate
-		}
-		return 0, 0, 0, 0, 0
-	}
-
-	// Calculate rates (bytes per second) over the window
-	if current.DiskRead >= oldest.DiskRead {
-		diskReadRate = float64(current.DiskRead-oldest.DiskRead) / timeDiff
-	}
-	if current.DiskWrite >= oldest.DiskWrite {
-		diskWriteRate = float64(current.DiskWrite-oldest.DiskWrite) / timeDiff
-	}
-	if current.DiskBusy >= oldest.DiskBusy {
-		diskBusyPct = (float64(current.DiskBusy-oldest.DiskBusy) / (timeDiff * 1000)) * 100
-		if diskBusyPct < 0 {
-			diskBusyPct = 0
-		}
+	if diskBusyRate < 0 {
+		diskBusyPct = -1
+	} else {
+		// DiskBusy is cumulative busy milliseconds, so ms/s divided by ten is
+		// the percentage of wall time spent busy.
+		diskBusyPct = diskBusyRate / 10
 		if diskBusyPct > 100 {
 			diskBusyPct = 100
 		}
 	}
-	if current.NetworkIn >= oldest.NetworkIn {
-		netInRate = float64(current.NetworkIn-oldest.NetworkIn) / timeDiff
-	}
-	if current.NetworkOut >= oldest.NetworkOut {
-		netOutRate = float64(current.NetworkOut-oldest.NetworkOut) / timeDiff
-	}
 
-	// Cache the calculated rates
-	rt.lastRates[guestID] = RateCache{
-		DiskReadRate:  diskReadRate,
-		DiskWriteRate: diskWriteRate,
-		DiskBusyPct:   diskBusyPct,
-		NetInRate:     netInRate,
-		NetOutRate:    netOutRate,
+	if current.Timestamp.After(history.lastObservedAt) {
+		history.lastObservedAt = current.Timestamp
 	}
-
 	return
 }
 
-// Clear removes all tracked data
+func (history *counterHistory) resetCounterEpoch() {
+	history.diskRead = counterBaseline{}
+	history.diskWrite = counterBaseline{}
+	history.diskBusy = counterBaseline{}
+	history.networkIn = counterBaseline{}
+	history.networkOut = counterBaseline{}
+}
+
+func observationTime(counterTime, fallback time.Time) time.Time {
+	if counterTime.IsZero() {
+		return fallback
+	}
+	return counterTime
+}
+
+func calculateCounterRate(baseline *counterBaseline, value int64, observedAt time.Time, present bool) float64 {
+	if !present {
+		return -1
+	}
+	if !baseline.initialized {
+		baseline.value = value
+		baseline.observedAt = observedAt
+		baseline.initialized = true
+		return -1
+	}
+	if !observedAt.After(baseline.observedAt) {
+		return -1
+	}
+
+	elapsed := observedAt.Sub(baseline.observedAt).Seconds()
+	previous := baseline.value
+	baseline.value = value
+	baseline.observedAt = observedAt
+
+	if value < previous {
+		// A guest restart, migration reconnect, or counter wrap starts a new
+		// cumulative epoch. Rebase without inventing a negative or huge rate.
+		return 0
+	}
+	return float64(value-previous) / elapsed
+}
+
+// Clear removes all tracked data.
 func (rt *RateTracker) Clear() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	rt.history = make(map[string]*counterRing)
-	rt.lastRates = make(map[string]RateCache)
+	rt.history = make(map[string]*counterHistory)
 }
 
-// Cleanup removes entries for resources that haven't reported data since the cutoff time.
-// This prevents unbounded memory growth when containers/VMs are deleted.
+// Cleanup removes resources that have not supplied any newer sample since the
+// cutoff. Idle and partial samples still refresh resource observation time.
 func (rt *RateTracker) Cleanup(cutoff time.Time) (removed int) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
-	for guestID, ring := range rt.history {
-		if ring.newestTimestamp().Before(cutoff) {
+	for guestID, history := range rt.history {
+		if history.lastObservedAt.Before(cutoff) {
 			delete(rt.history, guestID)
-			delete(rt.lastRates, guestID)
 			removed++
 		}
 	}

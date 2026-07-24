@@ -124,10 +124,6 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	cpu := snapshot.CPUPercent
 	memUsage := snapshot.MemUsage
 	diskUsage := snapshot.DiskUsage
-	diskRead := snapshot.DiskRead
-	diskWrite := snapshot.DiskWrite
-	netIn := snapshot.NetworkIn
-	netOut := snapshot.NetworkOut
 	disks := snapshot.Disks
 
 	// Debug logging for high memory VMs
@@ -265,6 +261,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	if !snapshot.MemoryUnavailable {
 		memoryMetric = &UnifiedResourceMetric{Percent: memUsage}
 	}
+	diskReadMetric, diskWriteMetric, networkInMetric, networkOutMetric := guestIORateMetrics(snapshot)
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:         guestID,
 		Type:       snapshot.resourceType(),
@@ -274,10 +271,10 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		CPU:        &UnifiedResourceMetric{Percent: cpu},
 		Memory:     memoryMetric,
 		Disk:       &UnifiedResourceMetric{Percent: diskUsage},
-		DiskRead:   &UnifiedResourceMetric{Value: float64(diskRead) / 1024 / 1024},
-		DiskWrite:  &UnifiedResourceMetric{Value: float64(diskWrite) / 1024 / 1024},
-		NetworkIn:  &UnifiedResourceMetric{Value: float64(netIn) / 1024 / 1024},
-		NetworkOut: &UnifiedResourceMetric{Value: float64(netOut) / 1024 / 1024},
+		DiskRead:   diskReadMetric,
+		DiskWrite:  diskWriteMetric,
+		NetworkIn:  networkInMetric,
+		NetworkOut: networkOutMetric,
 	}, thresholds, evalOpts)
 
 	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 && len(disks) > 0 {
@@ -367,6 +364,28 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	} else if cleared := m.cleanupGuestDiskAlerts(guestID, nil); cleared > 0 {
 		m.saveActiveAlertsAsync("guest-disk-alerts-cleared")
 	}
+}
+
+func guestIORateMetrics(snapshot guestSnapshot) (diskRead, diskWrite, networkIn, networkOut *UnifiedResourceMetric) {
+	validity := snapshot.IORateValidity.EffectiveForRates(
+		snapshot.DiskRead,
+		snapshot.DiskWrite,
+		snapshot.NetworkIn,
+		snapshot.NetworkOut,
+	)
+	if validity.DiskRead {
+		diskRead = &UnifiedResourceMetric{Value: float64(snapshot.DiskRead) / 1024 / 1024}
+	}
+	if validity.DiskWrite {
+		diskWrite = &UnifiedResourceMetric{Value: float64(snapshot.DiskWrite) / 1024 / 1024}
+	}
+	if validity.NetworkIn {
+		networkIn = &UnifiedResourceMetric{Value: float64(snapshot.NetworkIn) / 1024 / 1024}
+	}
+	if validity.NetworkOut {
+		networkOut = &UnifiedResourceMetric{Value: float64(snapshot.NetworkOut) / 1024 / 1024}
+	}
+	return
 }
 
 // checkGuestPoweredOff creates an alert for powered-off guests.

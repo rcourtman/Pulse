@@ -146,7 +146,8 @@ func TestMockVMPollingDefersMemoryHistoryToCanonicalSampler(t *testing.T) {
 
 	requiredSnippets := []string{
 		"if !shouldSkipNativeMockStateMetricWrites() {",
-		`m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, -1, -1, -1, -1, now)`,
+		"guestHistoryRates(",
+		"m.recordGuestMetric(",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

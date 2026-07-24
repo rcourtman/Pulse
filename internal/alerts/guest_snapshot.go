@@ -36,6 +36,7 @@ type guestSnapshot struct {
 	DiskWrite         int64
 	NetworkIn         int64
 	NetworkOut        int64
+	IORateValidity    models.IORateValidity
 
 	Disks  []models.Disk
 	Tags   []string
@@ -80,17 +81,18 @@ func (g guestSnapshot) resourceType() string {
 
 func (g guestSnapshot) metrics() guestMetrics {
 	return guestMetrics{
-		CPU:        g.CPUPercent,
-		MemUsage:   g.MemUsage,
-		DiskUsage:  g.DiskUsage,
-		DiskRead:   g.DiskRead,
-		DiskWrite:  g.DiskWrite,
-		NetworkIn:  g.NetworkIn,
-		NetworkOut: g.NetworkOut,
-		Name:       g.Name,
-		Node:       g.Node,
-		ID:         g.ID,
-		Status:     g.Status,
+		CPU:            g.CPUPercent,
+		MemUsage:       g.MemUsage,
+		DiskUsage:      g.DiskUsage,
+		DiskRead:       g.DiskRead,
+		DiskWrite:      g.DiskWrite,
+		NetworkIn:      g.NetworkIn,
+		NetworkOut:     g.NetworkOut,
+		IORateValidity: g.IORateValidity,
+		Name:           g.Name,
+		Node:           g.Node,
+		ID:             g.ID,
+		Status:         g.Status,
 	}
 }
 
@@ -112,6 +114,7 @@ func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 		DiskWrite:         vm.DiskWrite,
 		NetworkIn:         vm.NetworkIn,
 		NetworkOut:        vm.NetworkOut,
+		IORateValidity:    vm.IORateValidity,
 		Disks:             append([]models.Disk(nil), vm.Disks...),
 		Tags:              append([]string(nil), vm.Tags...),
 		OnBoot:            vm.OnBoot,
@@ -136,6 +139,7 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		DiskWrite:         container.DiskWrite,
 		NetworkIn:         container.NetworkIn,
 		NetworkOut:        container.NetworkOut,
+		IORateValidity:    container.IORateValidity,
 		Disks:             append([]models.Disk(nil), container.Disks...),
 		Tags:              append([]string(nil), container.Tags...),
 		OnBoot:            container.OnBoot,

@@ -1199,6 +1199,23 @@ describe('getOutlierEmphasis (via I/O column rendering)', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
+  it('renders valid zero I/O rates for a running guest on an online parent', () => {
+    renderGuestRow({
+      guest: makeGuest({
+        status: 'running',
+        networkIn: 0,
+        networkOut: 0,
+        diskRead: 0,
+        diskWrite: 0,
+      }),
+      parentNodeOnline: true,
+      visibleColumnIds: ['name', 'netIo', 'diskIo'],
+    });
+
+    expect(screen.getAllByText('0 B/s')).toHaveLength(4);
+    expect(screen.queryByText('—')).toBeNull();
+  });
+
   it('shows dash for disk I/O when guest is stopped', () => {
     renderGuestRow({
       guest: makeGuest({ status: 'stopped', diskRead: 0, diskWrite: 0 }),

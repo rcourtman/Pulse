@@ -1,397 +1,236 @@
 package monitoring
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func TestCalculateRates_FirstCallReturnsNegativeOnes(t *testing.T) {
-	rt := NewRateTracker()
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: time.Now(),
-	})
-	if d != -1 || w != -1 || ni != -1 || no != -1 {
-		t.Errorf("first call: got (%v, %v, %v, %v), want (-1, -1, -1, -1)", d, w, ni, no)
+func fullCounterSample(at time.Time, diskRead, diskWrite, networkIn, networkOut int64) models.IOMetrics {
+	return models.IOMetrics{
+		DiskRead:   diskRead,
+		DiskWrite:  diskWrite,
+		NetworkIn:  networkIn,
+		NetworkOut: networkOut,
+		Timestamp:  at,
 	}
 }
 
-func TestCalculateRates_StaleDataReturnsCachedRates(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
+func TestRateTrackerConstantRatesUseActualElapsedTime(t *testing.T) {
+	for _, interval := range []time.Duration{30 * time.Second, 60 * time.Second, 90 * time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			tracker := NewRateTracker()
+			start := time.Unix(1_700_000_000, 0)
+			tracker.CalculateRates("guest", fullCounterSample(start, 1_000, 2_000, 3_000, 4_000))
 
-	// Seed
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base,
-	})
-	// Establish rates
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
-		Timestamp: base.Add(10 * time.Second),
-	})
-
-	// Send stale data (same counter values, different timestamp)
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
-		Timestamp: base.Add(20 * time.Second),
-	})
-	if d != 500 || w != 1000 || ni != 1500 || no != 2000 {
-		t.Errorf("stale data: got (%v, %v, %v, %v), want (500, 1000, 1500, 2000)", d, w, ni, no)
+			seconds := int64(interval / time.Second)
+			read, write, in, out := tracker.CalculateRates(
+				"guest",
+				fullCounterSample(
+					start.Add(interval),
+					1_000+seconds*1_024,
+					2_000+seconds*2_048,
+					3_000+seconds*4_096,
+					4_000+seconds*8_192,
+				),
+			)
+			if read != 1_024 || write != 2_048 || in != 4_096 || out != 8_192 {
+				t.Fatalf("rates = (%v, %v, %v, %v), want (1024, 2048, 4096, 8192)", read, write, in, out)
+			}
+		})
 	}
 }
 
-func TestCalculateRates_StaleDataWithoutCachedRatesReturnsZeros(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
+func TestRateTrackerBurstUsesAdjacentObservationInterval(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRates("guest", fullCounterSample(start, 0, 0, 0, 0))
 
-	// Seed with values
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base,
-	})
+	read, _, _, _ := tracker.CalculateRates("guest", fullCounterSample(start.Add(90*time.Second), 90_000, 0, 0, 0))
+	if read != 1_000 {
+		t.Fatalf("burst rate = %v, want 1000 B/s", read)
+	}
 
-	// Send identical values (stale) — no cached rates yet
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base.Add(10 * time.Second),
-	})
-	if d != 0 || w != 0 || ni != 0 || no != 0 {
-		t.Errorf("stale without cache: got (%v, %v, %v, %v), want (0, 0, 0, 0)", d, w, ni, no)
+	read, _, _, _ = tracker.CalculateRates("guest", fullCounterSample(start.Add(180*time.Second), 90_000, 0, 0, 0))
+	if read != 0 {
+		t.Fatalf("idle interval rate = %v, want valid zero", read)
 	}
 }
 
-func TestCalculateRates_NormalRateCalculation(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
-
-	// Seed
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base,
+func TestRateTrackerMissingAndExplicitZeroAreDistinct(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	diskOnly := models.IOCounterPresence{Explicit: true, DiskRead: true}
+	tracker.CalculateRates("guest", models.IOMetrics{
+		DiskRead:  0,
+		Timestamp: start,
+		Presence:  diskOnly,
 	})
 
-	// Second call — rate over 1 interval (ring only has 2 entries)
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
-		Timestamp: base.Add(10 * time.Second),
+	read, write, in, out := tracker.CalculateRates("guest", models.IOMetrics{
+		DiskRead:  0,
+		Timestamp: start.Add(60 * time.Second),
+		Presence:  diskOnly,
 	})
-	if d != 500 || w != 1000 || ni != 1500 || no != 2000 {
-		t.Errorf("normal rate: got (%v, %v, %v, %v), want (500, 1000, 1500, 2000)", d, w, ni, no)
+	if read != 0 {
+		t.Fatalf("explicit zero rate = %v, want 0", read)
+	}
+	if write != -1 || in != -1 || out != -1 {
+		t.Fatalf("missing rates = (%v, %v, %v), want unknown", write, in, out)
 	}
 }
 
-func TestCalculateRates_CounterRolloverReturnsZero(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
+func TestRateTrackerPartialSampleKeepsIndependentBaseline(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRates("guest", fullCounterSample(start, 0, 0, 0, 0))
 
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 5000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base,
+	read, write, in, out := tracker.CalculateRates("guest", models.IOMetrics{
+		DiskRead:  60_000,
+		Timestamp: start.Add(60 * time.Second),
+		Presence: models.IOCounterPresence{
+			Explicit: true,
+			DiskRead: true,
+		},
 	})
-
-	// DiskRead decreased (counter rollover)
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
-		Timestamp: base.Add(10 * time.Second),
-	})
-	if d != 0 {
-		t.Errorf("DiskRead rollover: got %v, want 0", d)
+	if read != 1_000 || write != -1 || in != -1 || out != -1 {
+		t.Fatalf("partial rates = (%v, %v, %v, %v)", read, write, in, out)
 	}
-	if w != 1000 || ni != 1500 || no != 2000 {
-		t.Errorf("other rates: got (%v, %v, %v), want (1000, 1500, 2000)", w, ni, no)
-	}
-}
 
-func TestCalculateRates_AllCountersRollover(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
-
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 6000, DiskWrite: 12000, NetworkIn: 18000, NetworkOut: 24000,
-		Timestamp: base,
+	_, write, _, _ = tracker.CalculateRates("guest", models.IOMetrics{
+		DiskWrite: 180_000,
+		Timestamp: start.Add(90 * time.Second),
+		Presence: models.IOCounterPresence{
+			Explicit:  true,
+			DiskWrite: true,
+		},
 	})
-
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base.Add(10 * time.Second),
-	})
-	if d != 0 || w != 0 || ni != 0 || no != 0 {
-		t.Errorf("all rollover: got (%v, %v, %v, %v), want (0, 0, 0, 0)", d, w, ni, no)
+	if write != 2_000 {
+		t.Fatalf("disk write rate = %v, want 2000 over its 90s observation gap", write)
 	}
 }
 
-func TestCalculateRates_FractionalTimeDifference(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
+func TestRateTrackerUsesEachCounterReceiptTimeForPartialSources(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRates("guest", fullCounterSample(start, 0, 0, 0, 0))
 
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: base,
+	read, write, _, _ := tracker.CalculateRates("guest", models.IOMetrics{
+		DiskRead:  30_000,
+		DiskWrite: 180_000,
+		Timestamp: start.Add(90 * time.Second),
+		Presence: models.IOCounterPresence{
+			Explicit:  true,
+			DiskRead:  true,
+			DiskWrite: true,
+		},
+		ObservedAt: models.IOCounterObservationTimes{
+			DiskRead:  start.Add(30 * time.Second),
+			DiskWrite: start.Add(90 * time.Second),
+		},
 	})
-
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1500, DiskWrite: 2500, NetworkIn: 3500, NetworkOut: 4500,
-		Timestamp: base.Add(500 * time.Millisecond),
-	})
-	// 500 / 0.5 = 1000
-	if d != 1000 || w != 1000 || ni != 1000 || no != 1000 {
-		t.Errorf("fractional time: got (%v, %v, %v, %v), want (1000, 1000, 1000, 1000)", d, w, ni, no)
+	if read != 1_000 || write != 2_000 {
+		t.Fatalf("rates = (%v, %v), want per-counter receipt rates (1000, 2000)", read, write)
 	}
 }
 
-func TestCalculateRates_LargeValues(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
+func TestRateTrackerResetOrWrapRebasesCounterEpoch(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRates("guest", fullCounterSample(start, math.MaxInt64-1_000, 50_000, 10_000, 20_000))
 
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000000000, DiskWrite: 2000000000, NetworkIn: 3000000000, NetworkOut: 4000000000,
-		Timestamp: base,
-	})
+	read, write, in, out := tracker.CalculateRates(
+		"guest",
+		fullCounterSample(start.Add(30*time.Second), 500, 1_000, 100, 200),
+	)
+	if read != 0 || write != 0 || in != 0 || out != 0 {
+		t.Fatalf("reset rates = (%v, %v, %v, %v), want zeros", read, write, in, out)
+	}
 
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1100000000, DiskWrite: 2200000000, NetworkIn: 3300000000, NetworkOut: 4400000000,
-		Timestamp: base.Add(100 * time.Second),
-	})
-	if d != 1000000 || w != 2000000 || ni != 3000000 || no != 4000000 {
-		t.Errorf("large values: got (%v, %v, %v, %v), want (1000000, 2000000, 3000000, 4000000)", d, w, ni, no)
+	read, _, _, _ = tracker.CalculateRates("guest", fullCounterSample(start.Add(60*time.Second), 30_500, 1_000, 100, 200))
+	if read != 1_000 {
+		t.Fatalf("post-reset rate = %v, want 1000", read)
 	}
 }
 
-func TestCalculateRates_WindowSmooths(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
+func TestRateTrackerUptimeRollbackRebasesEvenWhenCounterSurpassesOldValue(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	beforeRestart := fullCounterSample(start, 1_000, 2_000, 3_000, 4_000)
+	beforeRestart.SourceUptime = 10_000
+	tracker.CalculateRates("guest", beforeRestart)
 
-	// Simulate a steady 1000 bytes/sec download with Proxmox's lumpy counter updates.
-	// Over 4 intervals (40 seconds), 40000 bytes should arrive.
-	// But Proxmox distributes them unevenly across intervals.
-
-	// T=0: seed
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		NetworkIn: 0, Timestamp: base,
-	})
-
-	// T=10: normal interval (10000 bytes in 10s = 1000 B/s)
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		NetworkIn: 10000, Timestamp: base.Add(10 * time.Second),
-	})
-
-	// T=20: short-changed interval (only 5000 bytes reported)
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		NetworkIn: 15000, Timestamp: base.Add(20 * time.Second),
-	})
-
-	// T=30: lumpy interval (15000 bytes — makes up for the deficit + normal)
-	// Without windowing, raw rate would be 15000/10 = 1500 B/s (50% spike).
-	// With windowing (oldest=T=0, current=T=30), rate = 30000/30 = 1000 B/s.
-	_, _, ni, _ := rt.CalculateRates("vm-100", models.IOMetrics{
-		NetworkIn: 30000, Timestamp: base.Add(30 * time.Second),
-	})
-
-	if ni != 1000 {
-		t.Errorf("windowed rate during lumpy interval: got %v, want 1000", ni)
+	afterRestart := fullCounterSample(start.Add(90*time.Second), 91_000, 182_000, 273_000, 364_000)
+	afterRestart.SourceUptime = 30
+	read, write, in, out := tracker.CalculateRates("guest", afterRestart)
+	if read != -1 || write != -1 || in != -1 || out != -1 {
+		t.Fatalf("first sample in restarted epoch = (%v, %v, %v, %v), want unknown", read, write, in, out)
 	}
 
-	// T=40: ring is now full (4 entries), oldest is T=10.
-	// Rate = (40000-10000)/(40-10) = 30000/30 = 1000 B/s
-	_, _, ni, _ = rt.CalculateRates("vm-100", models.IOMetrics{
-		NetworkIn: 40000, Timestamp: base.Add(40 * time.Second),
-	})
-
-	if ni != 1000 {
-		t.Errorf("windowed rate after ring full: got %v, want 1000", ni)
+	next := fullCounterSample(start.Add(120*time.Second), 121_000, 242_000, 363_000, 484_000)
+	next.SourceUptime = 60
+	read, write, in, out = tracker.CalculateRates("guest", next)
+	if read != 1_000 || write != 2_000 || in != 3_000 || out != 4_000 {
+		t.Fatalf("post-restart rates = (%v, %v, %v, %v), want (1000, 2000, 3000, 4000)", read, write, in, out)
 	}
 }
 
-func TestCalculateRates_MultipleGuestsTrackedIndependently(t *testing.T) {
-	rt := NewRateTracker()
-	baseTime := time.Unix(1000, 0)
+func TestRateTrackerRejectsOutOfOrderSamplesWithoutChangingBaseline(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRates("guest", fullCounterSample(start, 0, 0, 0, 0))
+	tracker.CalculateRates("guest", fullCounterSample(start.Add(60*time.Second), 60_000, 0, 0, 0))
 
-	// First call for guest A - should return -1 for all
-	diskReadA1, diskWriteA1, netInA1, netOutA1 := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: baseTime,
-	})
-	if diskReadA1 != -1 || diskWriteA1 != -1 || netInA1 != -1 || netOutA1 != -1 {
-		t.Errorf("first call for vm-100: got (%v, %v, %v, %v), want (-1, -1, -1, -1)",
-			diskReadA1, diskWriteA1, netInA1, netOutA1)
+	read, _, _, _ := tracker.CalculateRates("guest", fullCounterSample(start.Add(30*time.Second), 90_000, 0, 0, 0))
+	if read != -1 {
+		t.Fatalf("out-of-order rate = %v, want unknown", read)
 	}
-
-	// First call for guest B - should also return -1 for all
-	diskReadB1, diskWriteB1, netInB1, netOutB1 := rt.CalculateRates("vm-200", models.IOMetrics{
-		DiskRead: 5000, DiskWrite: 6000, NetworkIn: 7000, NetworkOut: 8000,
-		Timestamp: baseTime,
-	})
-	if diskReadB1 != -1 || diskWriteB1 != -1 || netInB1 != -1 || netOutB1 != -1 {
-		t.Errorf("first call for vm-200: got (%v, %v, %v, %v), want (-1, -1, -1, -1)",
-			diskReadB1, diskWriteB1, netInB1, netOutB1)
-	}
-
-	// Second call for guest A
-	diskReadA2, diskWriteA2, netInA2, netOutA2 := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 11000, DiskWrite: 22000, NetworkIn: 33000, NetworkOut: 44000,
-		Timestamp: baseTime.Add(10 * time.Second),
-	})
-	if diskReadA2 != 1000 || diskWriteA2 != 2000 || netInA2 != 3000 || netOutA2 != 4000 {
-		t.Errorf("second call for vm-100: got (%v, %v, %v, %v), want (1000, 2000, 3000, 4000)",
-			diskReadA2, diskWriteA2, netInA2, netOutA2)
-	}
-
-	// Second call for guest B - different rates
-	diskReadB2, diskWriteB2, netInB2, netOutB2 := rt.CalculateRates("vm-200", models.IOMetrics{
-		DiskRead: 10000, DiskWrite: 16000, NetworkIn: 22000, NetworkOut: 28000,
-		Timestamp: baseTime.Add(5 * time.Second),
-	})
-	if diskReadB2 != 1000 || diskWriteB2 != 2000 || netInB2 != 3000 || netOutB2 != 4000 {
-		t.Errorf("second call for vm-200: got (%v, %v, %v, %v), want (1000, 2000, 3000, 4000)",
-			diskReadB2, diskWriteB2, netInB2, netOutB2)
+	read, _, _, _ = tracker.CalculateRates("guest", fullCounterSample(start.Add(90*time.Second), 90_000, 0, 0, 0))
+	if read != 1_000 {
+		t.Fatalf("rate after rejected sample = %v, want 1000", read)
 	}
 }
 
-func TestCalculateRates_CachesRates(t *testing.T) {
-	rt := NewRateTracker()
-	baseTime := time.Unix(1000, 0)
-
-	// Seed
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, DiskWrite: 2000, NetworkIn: 3000, NetworkOut: 4000,
-		Timestamp: baseTime,
-	})
-
-	// Calculate rates
-	diskRead2, diskWrite2, netIn2, netOut2 := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 11000, DiskWrite: 22000, NetworkIn: 33000, NetworkOut: 44000,
-		Timestamp: baseTime.Add(10 * time.Second),
-	})
-
-	// Verify rates are cached
-	cachedRates, exists := rt.lastRates["vm-100"]
-	if !exists {
-		t.Fatal("expected rates to be cached for vm-100")
-	}
-	if cachedRates.DiskReadRate != diskRead2 {
-		t.Errorf("cached DiskReadRate = %v, want %v", cachedRates.DiskReadRate, diskRead2)
-	}
-	if cachedRates.DiskWriteRate != diskWrite2 {
-		t.Errorf("cached DiskWriteRate = %v, want %v", cachedRates.DiskWriteRate, diskWrite2)
-	}
-	if cachedRates.NetInRate != netIn2 {
-		t.Errorf("cached NetInRate = %v, want %v", cachedRates.NetInRate, netIn2)
-	}
-	if cachedRates.NetOutRate != netOut2 {
-		t.Errorf("cached NetOutRate = %v, want %v", cachedRates.NetOutRate, netOut2)
-	}
-
-	// Stale data returns cached rates
-	diskRead3, diskWrite3, netIn3, netOut3 := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 11000, DiskWrite: 22000, NetworkIn: 33000, NetworkOut: 44000,
-		Timestamp: baseTime.Add(15 * time.Second),
-	})
-	if diskRead3 != diskRead2 || diskWrite3 != diskWrite2 || netIn3 != netIn2 || netOut3 != netOut2 {
-		t.Errorf("stale data call: got (%v, %v, %v, %v), want cached (%v, %v, %v, %v)",
-			diskRead3, diskWrite3, netIn3, netOut3, diskRead2, diskWrite2, netIn2, netOut2)
-	}
-}
-
-func TestCalculateRates_DoesNotAddStaleDataToRing(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
-
-	// Seed
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, NetworkIn: 3000, Timestamp: base,
-	})
-
-	// Real data
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 6000, NetworkIn: 18000, Timestamp: base.Add(10 * time.Second),
-	})
-
-	// Stale data — should not be added to ring
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 6000, NetworkIn: 18000, Timestamp: base.Add(20 * time.Second),
-	})
-
-	// Ring should still have 2 entries (seed + one real update)
-	ring := rt.history["vm-100"]
-	if ring.count != 2 {
-		t.Errorf("ring count after stale data: got %d, want 2", ring.count)
-	}
-}
-
-func TestClear(t *testing.T) {
-	rt := NewRateTracker()
-	base := time.Unix(1000, 0)
-
-	rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, Timestamp: base,
-	})
-	rt.CalculateRates("vm-200", models.IOMetrics{
-		DiskRead: 1000, Timestamp: base,
-	})
-
-	if len(rt.history) != 2 {
-		t.Fatalf("expected 2 entries in history, got %d", len(rt.history))
-	}
-
-	rt.Clear()
-
-	if len(rt.history) != 0 {
-		t.Errorf("expected history to be empty after Clear, got %d entries", len(rt.history))
-	}
-	if len(rt.lastRates) != 0 {
-		t.Errorf("expected lastRates to be empty after Clear, got %d entries", len(rt.lastRates))
-	}
-
-	// After clear, first call returns -1
-	d, w, ni, no := rt.CalculateRates("vm-100", models.IOMetrics{
-		DiskRead: 1000, Timestamp: base,
-	})
-	if d != -1 || w != -1 || ni != -1 || no != -1 {
-		t.Errorf("after Clear: got (%v, %v, %v, %v), want (-1, -1, -1, -1)", d, w, ni, no)
-	}
-}
-
-func TestRateTrackerCleanup(t *testing.T) {
-	rt := NewRateTracker()
+func TestRateTrackerCleanupUsesLatestSampleEvenWhenIdleOrPartial(t *testing.T) {
+	tracker := NewRateTracker()
 	now := time.Now()
-
-	rt.CalculateRates("active-guest", models.IOMetrics{
-		DiskRead: 1000, Timestamp: now.Add(-1 * time.Hour),
+	tracker.CalculateRates("idle", fullCounterSample(now.Add(-2*time.Hour), 100, 100, 100, 100))
+	tracker.CalculateRates("idle", models.IOMetrics{
+		Timestamp: now,
+		Presence:  models.IOCounterPresence{Explicit: true},
 	})
-	rt.CalculateRates("stale-guest", models.IOMetrics{
-		DiskRead: 1000, Timestamp: now.Add(-48 * time.Hour),
-	})
+	tracker.CalculateRates("stale", fullCounterSample(now.Add(-2*time.Hour), 100, 100, 100, 100))
 
-	if len(rt.history) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(rt.history))
+	if removed := tracker.Cleanup(now.Add(-time.Hour)); removed != 1 {
+		t.Fatalf("removed = %d, want 1", removed)
 	}
-
-	cutoff := now.Add(-24 * time.Hour)
-	removed := rt.Cleanup(cutoff)
-
-	if removed != 1 {
-		t.Errorf("expected 1 entry removed, got %d", removed)
-	}
-	if len(rt.history) != 1 {
-		t.Errorf("expected 1 entry remaining, got %d", len(rt.history))
-	}
-	if _, exists := rt.history["active-guest"]; !exists {
-		t.Error("active-guest should still exist after cleanup")
-	}
-	if _, exists := rt.history["stale-guest"]; exists {
-		t.Error("stale-guest should be removed after cleanup")
+	if _, ok := tracker.history["idle"]; !ok {
+		t.Fatal("idle resource was removed despite a recent sample")
 	}
 }
 
-func TestRateTrackerCleanupEmpty(t *testing.T) {
-	rt := NewRateTracker()
-	cutoff := time.Now().Add(-24 * time.Hour)
+func TestRateTrackerDiskBusyUsesElapsedMilliseconds(t *testing.T) {
+	tracker := NewRateTracker()
+	start := time.Unix(1_700_000_000, 0)
+	tracker.CalculateRatesWithBusy("disk", models.IOMetrics{DiskBusy: 100, Timestamp: start})
+	_, _, busy, _, _ := tracker.CalculateRatesWithBusy("disk", models.IOMetrics{
+		DiskBusy:  15_100,
+		Timestamp: start.Add(30 * time.Second),
+	})
+	if busy != 50 {
+		t.Fatalf("busy = %v, want 50%%", busy)
+	}
+}
 
-	removed := rt.Cleanup(cutoff)
-	if removed != 0 {
-		t.Errorf("expected 0 entries removed from empty tracker, got %d", removed)
+func TestRateTrackerClearRestoresFirstSampleUnknown(t *testing.T) {
+	tracker := NewRateTracker()
+	now := time.Now()
+	tracker.CalculateRates("guest", fullCounterSample(now, 1, 2, 3, 4))
+	tracker.Clear()
+	read, write, in, out := tracker.CalculateRates("guest", fullCounterSample(now.Add(time.Second), 2, 3, 4, 5))
+	if read != -1 || write != -1 || in != -1 || out != -1 {
+		t.Fatalf("first rates after clear = (%v, %v, %v, %v)", read, write, in, out)
 	}
 }

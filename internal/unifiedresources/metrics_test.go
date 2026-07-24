@@ -33,6 +33,31 @@ func TestMetricsFromDockerHostIncludesIORates(t *testing.T) {
 	}
 }
 
+func TestProxmoxGuestMetricsDistinguishValidZeroFromUnknown(t *testing.T) {
+	validZero := metricsFromVM(models.VM{
+		Status: "running",
+		IORateValidity: models.IORateValidity{
+			Explicit:   true,
+			DiskRead:   true,
+			DiskWrite:  true,
+			NetworkIn:  true,
+			NetworkOut: true,
+		},
+	})
+	if validZero.DiskRead == nil || validZero.DiskRead.Value != 0 ||
+		validZero.DiskWrite == nil || validZero.NetIn == nil || validZero.NetOut == nil {
+		t.Fatalf("valid zero rates were not projected: %+v", validZero)
+	}
+
+	unknown := metricsFromVM(models.VM{
+		Status:         "running",
+		IORateValidity: models.IORateValidity{Explicit: true},
+	})
+	if unknown.DiskRead != nil || unknown.DiskWrite != nil || unknown.NetIn != nil || unknown.NetOut != nil {
+		t.Fatalf("unknown rates were projected as measurements: %+v", unknown)
+	}
+}
+
 func TestUnavailableMemoryDoesNotProjectOrOverwriteTrustedCrossSourceMetric(t *testing.T) {
 	unavailable := models.UnavailableMemory(8 * 1024 * 1024 * 1024)
 

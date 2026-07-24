@@ -943,59 +943,63 @@ func (c *Client) GetVMRRDData(ctx context.Context, node string, vmid int, timefr
 
 // VM represents a Proxmox VE virtual machine
 type VM struct {
-	VMID      int     `json:"vmid"`
-	Name      string  `json:"name"`
-	Node      string  `json:"node"`
-	Pool      string  `json:"pool,omitempty"`
-	Status    string  `json:"status"`
-	CPU       float64 `json:"cpu"`
-	CPUs      int     `json:"cpus"`
-	Mem       uint64  `json:"mem"`
-	MaxMem    uint64  `json:"maxmem"`
-	Disk      uint64  `json:"disk"`
-	MaxDisk   uint64  `json:"maxdisk"`
-	NetIn     uint64  `json:"netin"`
-	NetOut    uint64  `json:"netout"`
-	DiskRead  uint64  `json:"diskread"`
-	DiskWrite uint64  `json:"diskwrite"`
-	Uptime    uint64  `json:"uptime"`
-	Template  int     `json:"template"`
-	Tags      string  `json:"tags"`
-	Lock      string  `json:"lock"`
-	Agent     int     `json:"agent"`
+	VMID       int               `json:"vmid"`
+	Name       string            `json:"name"`
+	Node       string            `json:"node"`
+	Pool       string            `json:"pool,omitempty"`
+	Status     string            `json:"status"`
+	CPU        float64           `json:"cpu"`
+	CPUs       int               `json:"cpus"`
+	Mem        uint64            `json:"mem"`
+	MaxMem     uint64            `json:"maxmem"`
+	Disk       uint64            `json:"disk"`
+	MaxDisk    uint64            `json:"maxdisk"`
+	NetIn      uint64            `json:"netin"`
+	NetOut     uint64            `json:"netout"`
+	DiskRead   uint64            `json:"diskread"`
+	DiskWrite  uint64            `json:"diskwrite"`
+	Uptime     uint64            `json:"uptime"`
+	Template   int               `json:"template"`
+	Tags       string            `json:"tags"`
+	Lock       string            `json:"lock"`
+	Agent      int               `json:"agent"`
+	IOCounters IOCounterPresence `json:"-"`
+	ObservedAt time.Time         `json:"-"`
 }
 
 // Container represents a Proxmox VE LXC container
 type Container struct {
-	VMID      FlexInt                           `json:"vmid"` // Changed to FlexInt to handle string VMIDs from some Proxmox versions
-	Name      string                            `json:"name"`
-	Node      string                            `json:"node"`
-	Pool      string                            `json:"pool,omitempty"`
-	Status    string                            `json:"status"`
-	CPU       float64                           `json:"cpu"`
-	CPUs      FlexInt                           `json:"cpus"`
-	Mem       uint64                            `json:"mem"`
-	MaxMem    uint64                            `json:"maxmem"`
-	Swap      uint64                            `json:"swap"`
-	MaxSwap   uint64                            `json:"maxswap"`
-	Disk      uint64                            `json:"disk"`
-	MaxDisk   uint64                            `json:"maxdisk"`
-	NetIn     uint64                            `json:"netin"`
-	NetOut    uint64                            `json:"netout"`
-	DiskRead  uint64                            `json:"diskread"`
-	DiskWrite uint64                            `json:"diskwrite"`
-	Uptime    uint64                            `json:"uptime"`
-	Template  int                               `json:"template"`
-	Tags      string                            `json:"tags"`
-	Lock      string                            `json:"lock"`
-	Hostname  string                            `json:"hostname,omitempty"`
-	IP        string                            `json:"ip,omitempty"`
-	IP6       string                            `json:"ip6,omitempty"`
-	IPv4      json.RawMessage                   `json:"ipv4,omitempty"`
-	IPv6      json.RawMessage                   `json:"ipv6,omitempty"`
-	Network   map[string]ContainerNetworkConfig `json:"network,omitempty"`
-	DiskInfo  map[string]ContainerDiskUsage     `json:"diskinfo,omitempty"`
-	RootFS    string                            `json:"rootfs,omitempty"`
+	VMID       FlexInt                           `json:"vmid"` // Changed to FlexInt to handle string VMIDs from some Proxmox versions
+	Name       string                            `json:"name"`
+	Node       string                            `json:"node"`
+	Pool       string                            `json:"pool,omitempty"`
+	Status     string                            `json:"status"`
+	CPU        float64                           `json:"cpu"`
+	CPUs       FlexInt                           `json:"cpus"`
+	Mem        uint64                            `json:"mem"`
+	MaxMem     uint64                            `json:"maxmem"`
+	Swap       uint64                            `json:"swap"`
+	MaxSwap    uint64                            `json:"maxswap"`
+	Disk       uint64                            `json:"disk"`
+	MaxDisk    uint64                            `json:"maxdisk"`
+	NetIn      uint64                            `json:"netin"`
+	NetOut     uint64                            `json:"netout"`
+	DiskRead   uint64                            `json:"diskread"`
+	DiskWrite  uint64                            `json:"diskwrite"`
+	Uptime     uint64                            `json:"uptime"`
+	Template   int                               `json:"template"`
+	Tags       string                            `json:"tags"`
+	Lock       string                            `json:"lock"`
+	Hostname   string                            `json:"hostname,omitempty"`
+	IP         string                            `json:"ip,omitempty"`
+	IP6        string                            `json:"ip6,omitempty"`
+	IPv4       json.RawMessage                   `json:"ipv4,omitempty"`
+	IPv6       json.RawMessage                   `json:"ipv6,omitempty"`
+	Network    map[string]ContainerNetworkConfig `json:"network,omitempty"`
+	DiskInfo   map[string]ContainerDiskUsage     `json:"diskinfo,omitempty"`
+	RootFS     string                            `json:"rootfs,omitempty"`
+	IOCounters IOCounterPresence                 `json:"-"`
+	ObservedAt time.Time                         `json:"-"`
 }
 
 // ContainerNetworkConfig captures basic container network status information.
@@ -1153,6 +1157,7 @@ func (c *Client) GetVMs(ctx context.Context, node string) ([]VM, error) {
 		return nil, err
 	}
 
+	stampVMObservation(result.Data, time.Now().UTC())
 	return result.Data, nil
 }
 
@@ -1172,6 +1177,7 @@ func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, e
 		return nil, err
 	}
 
+	stampContainerObservation(result.Data, time.Now().UTC())
 	return result.Data, nil
 }
 
@@ -2290,6 +2296,7 @@ func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMSta
 		return nil, err
 	}
 
+	result.Data.ObservedAt = time.Now().UTC()
 	return &result.Data, nil
 }
 
@@ -2309,31 +2316,34 @@ func (c *Client) GetContainerStatus(ctx context.Context, node string, vmid int) 
 		return nil, err
 	}
 
+	result.Data.ObservedAt = time.Now().UTC()
 	return &result.Data, nil
 }
 
 // ClusterResource represents a resource from /cluster/resources
 type ClusterResource struct {
-	ID        string  `json:"id"`
-	Type      string  `json:"type"`
-	Node      string  `json:"node"`
-	Pool      string  `json:"pool,omitempty"`
-	Status    string  `json:"status"`
-	Name      string  `json:"name,omitempty"`
-	VMID      int     `json:"vmid,omitempty"`
-	CPU       float64 `json:"cpu,omitempty"`
-	MaxCPU    int     `json:"maxcpu,omitempty"`
-	Mem       uint64  `json:"mem,omitempty"`
-	MaxMem    uint64  `json:"maxmem,omitempty"`
-	Disk      uint64  `json:"disk,omitempty"`
-	MaxDisk   uint64  `json:"maxdisk,omitempty"`
-	NetIn     uint64  `json:"netin,omitempty"`
-	NetOut    uint64  `json:"netout,omitempty"`
-	DiskRead  uint64  `json:"diskread,omitempty"`
-	DiskWrite uint64  `json:"diskwrite,omitempty"`
-	Uptime    uint64  `json:"uptime,omitempty"`
-	Template  int     `json:"template,omitempty"`
-	Tags      string  `json:"tags,omitempty"`
+	ID         string            `json:"id"`
+	Type       string            `json:"type"`
+	Node       string            `json:"node"`
+	Pool       string            `json:"pool,omitempty"`
+	Status     string            `json:"status"`
+	Name       string            `json:"name,omitempty"`
+	VMID       int               `json:"vmid,omitempty"`
+	CPU        float64           `json:"cpu,omitempty"`
+	MaxCPU     int               `json:"maxcpu,omitempty"`
+	Mem        uint64            `json:"mem,omitempty"`
+	MaxMem     uint64            `json:"maxmem,omitempty"`
+	Disk       uint64            `json:"disk,omitempty"`
+	MaxDisk    uint64            `json:"maxdisk,omitempty"`
+	NetIn      uint64            `json:"netin,omitempty"`
+	NetOut     uint64            `json:"netout,omitempty"`
+	DiskRead   uint64            `json:"diskread,omitempty"`
+	DiskWrite  uint64            `json:"diskwrite,omitempty"`
+	Uptime     uint64            `json:"uptime,omitempty"`
+	Template   int               `json:"template,omitempty"`
+	Tags       string            `json:"tags,omitempty"`
+	IOCounters IOCounterPresence `json:"-"`
+	ObservedAt time.Time         `json:"-"`
 }
 
 // GetClusterResources returns all resources (VMs, containers) across the cluster
@@ -2357,6 +2367,7 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 		return nil, err
 	}
 
+	stampClusterResourceObservation(result.Data, time.Now().UTC())
 	return result.Data, nil
 }
 
@@ -2596,24 +2607,26 @@ func (a *VMAgentField) UnmarshalJSON(data []byte) error {
 
 // VMStatus represents detailed VM status returned by Proxmox.
 type VMStatus struct {
-	Status      string         `json:"status"`
-	CPU         float64        `json:"cpu"`
-	CPUs        int            `json:"cpus"`
-	Mem         uint64         `json:"mem"`
-	MaxMem      uint64         `json:"maxmem"`
-	Balloon     uint64         `json:"balloon"`
-	BalloonMin  uint64         `json:"balloon_min"`
-	BalloonInfo *VMBalloonInfo `json:"ballooninfo,omitempty"`
-	FreeMem     uint64         `json:"freemem"`
-	MemInfo     *VMMemInfo     `json:"meminfo,omitempty"`
-	Disk        uint64         `json:"disk"`
-	MaxDisk     uint64         `json:"maxdisk"`
-	DiskRead    uint64         `json:"diskread"`
-	DiskWrite   uint64         `json:"diskwrite"`
-	NetIn       uint64         `json:"netin"`
-	NetOut      uint64         `json:"netout"`
-	Uptime      uint64         `json:"uptime"`
-	Agent       VMAgentField   `json:"agent"`
+	Status      string            `json:"status"`
+	CPU         float64           `json:"cpu"`
+	CPUs        int               `json:"cpus"`
+	Mem         uint64            `json:"mem"`
+	MaxMem      uint64            `json:"maxmem"`
+	Balloon     uint64            `json:"balloon"`
+	BalloonMin  uint64            `json:"balloon_min"`
+	BalloonInfo *VMBalloonInfo    `json:"ballooninfo,omitempty"`
+	FreeMem     uint64            `json:"freemem"`
+	MemInfo     *VMMemInfo        `json:"meminfo,omitempty"`
+	Disk        uint64            `json:"disk"`
+	MaxDisk     uint64            `json:"maxdisk"`
+	DiskRead    uint64            `json:"diskread"`
+	DiskWrite   uint64            `json:"diskwrite"`
+	NetIn       uint64            `json:"netin"`
+	NetOut      uint64            `json:"netout"`
+	Uptime      uint64            `json:"uptime"`
+	Agent       VMAgentField      `json:"agent"`
+	IOCounters  IOCounterPresence `json:"-"`
+	ObservedAt  time.Time         `json:"-"`
 }
 
 // GetZFSPoolStatus gets the status of ZFS pools on a node

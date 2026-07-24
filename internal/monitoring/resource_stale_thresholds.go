@@ -39,6 +39,10 @@ func (m *Monitor) resourceStaleThresholds() map[unifiedresources.DataSource]time
 	return ResourceStaleThresholdsForConfig(m.config)
 }
 
+func (m *Monitor) pveNodeOfflineGracePeriod() time.Duration {
+	return m.resourceStaleThresholds()[unifiedresources.SourceProxmox]
+}
+
 func effectivePVEPollingIntervalForConfig(cfg *config.Config) time.Duration {
 	const minInterval = 10 * time.Second
 	const maxInterval = time.Hour

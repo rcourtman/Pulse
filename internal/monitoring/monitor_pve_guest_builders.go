@@ -13,30 +13,34 @@ import (
 )
 
 type vmBuildState struct {
-	memTotal           uint64
-	memUsed            uint64
-	memorySource       string
-	guestRaw           VMMemoryRaw
-	diskReadBytes      int64
-	diskWriteBytes     int64
-	networkInBytes     int64
-	networkOutBytes    int64
-	diskTotal          uint64
-	diskUsed           uint64
-	diskFree           uint64
-	diskUsage          float64
-	diskFromAgent      bool
-	diskStatusReason   string
-	guestAgentStatus   string
-	guestAgentExpected bool
-	individualDisks    []models.Disk
-	ipAddresses        []string
-	networkInterfaces  []models.GuestNetworkInterface
-	osName             string
-	osVersion          string
-	agentVersion       string
-	detailedStatus     *proxmox.VMStatus
-	onBoot             *bool
+	memTotal                uint64
+	memUsed                 uint64
+	memorySource            string
+	guestRaw                VMMemoryRaw
+	diskReadBytes           int64
+	diskWriteBytes          int64
+	networkInBytes          int64
+	networkOutBytes         int64
+	counterPresence         models.IOCounterPresence
+	counterObservedAt       time.Time
+	counterObservationTimes models.IOCounterObservationTimes
+	counterUptime           uint64
+	diskTotal               uint64
+	diskUsed                uint64
+	diskFree                uint64
+	diskUsage               float64
+	diskFromAgent           bool
+	diskStatusReason        string
+	guestAgentStatus        string
+	guestAgentExpected      bool
+	individualDisks         []models.Disk
+	ipAddresses             []string
+	networkInterfaces       []models.GuestNetworkInterface
+	osName                  string
+	osVersion               string
+	agentVersion            string
+	detailedStatus          *proxmox.VMStatus
+	onBoot                  *bool
 }
 
 func (m *Monitor) applyVMStatusDetails(
@@ -71,11 +75,7 @@ func (m *Monitor) applyVMStatusDetails(
 		&state.guestRaw,
 	)
 
-	// Use actual disk I/O values from detailed status
-	state.diskReadBytes = int64(status.DiskRead)
-	state.diskWriteBytes = int64(status.DiskWrite)
-	state.networkInBytes = int64(status.NetIn)
-	state.networkOutBytes = int64(status.NetOut)
+	mergeVMRuntimeCounters(state, status)
 
 	// Gather guest metadata from the agent when available
 	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
@@ -132,6 +132,42 @@ func (m *Monitor) applyVMStatusDetails(
 
 }
 
+func mergeVMRuntimeCounters(state *vmBuildState, status *proxmox.VMStatus) {
+	if state == nil || status == nil {
+		return
+	}
+
+	// A detailed status response is newer and more authoritative than the
+	// cluster listing, but only for fields it actually contains.
+	statusPresence := status.IOCounters.Effective()
+	if statusPresence.DiskRead {
+		state.diskReadBytes = int64(status.DiskRead)
+		state.counterPresence.DiskRead = true
+		state.counterObservationTimes.DiskRead = status.ObservedAt
+	}
+	if statusPresence.DiskWrite {
+		state.diskWriteBytes = int64(status.DiskWrite)
+		state.counterPresence.DiskWrite = true
+		state.counterObservationTimes.DiskWrite = status.ObservedAt
+	}
+	if statusPresence.NetworkIn {
+		state.networkInBytes = int64(status.NetIn)
+		state.counterPresence.NetworkIn = true
+		state.counterObservationTimes.NetworkIn = status.ObservedAt
+	}
+	if statusPresence.NetworkOut {
+		state.networkOutBytes = int64(status.NetOut)
+		state.counterPresence.NetworkOut = true
+		state.counterObservationTimes.NetworkOut = status.ObservedAt
+	}
+	if !status.ObservedAt.IsZero() {
+		state.counterObservedAt = status.ObservedAt
+	}
+	if status.Uptime > 0 {
+		state.counterUptime = status.Uptime
+	}
+}
+
 func vmGuestAgentRuntimeState(status *proxmox.VMStatus, recentGuestAgentEvidence bool) (string, bool) {
 	if status == nil {
 		return "", false
@@ -171,16 +207,20 @@ func (m *Monitor) buildVMFromClusterResource(
 		m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, prePollTime)
 
 	state := vmBuildState{
-		memTotal:        res.MaxMem,
-		memUsed:         res.Mem,
-		memorySource:    "cluster-resources",
-		guestRaw:        VMMemoryRaw{ListingMem: res.Mem, ListingMaxMem: res.MaxMem},
-		diskReadBytes:   int64(res.DiskRead),
-		diskWriteBytes:  int64(res.DiskWrite),
-		networkInBytes:  int64(res.NetIn),
-		networkOutBytes: int64(res.NetOut),
-		diskTotal:       res.MaxDisk,
-		diskUsed:        res.Disk,
+		memTotal:                res.MaxMem,
+		memUsed:                 res.Mem,
+		memorySource:            "cluster-resources",
+		guestRaw:                VMMemoryRaw{ListingMem: res.Mem, ListingMaxMem: res.MaxMem},
+		diskReadBytes:           int64(res.DiskRead),
+		diskWriteBytes:          int64(res.DiskWrite),
+		networkInBytes:          int64(res.NetIn),
+		networkOutBytes:         int64(res.NetOut),
+		counterPresence:         pveCounterPresence(res.IOCounters),
+		counterObservedAt:       observedAtOr(res.ObservedAt, prePollTime),
+		counterObservationTimes: counterObservationTimes(observedAtOr(res.ObservedAt, prePollTime)),
+		counterUptime:           res.Uptime,
+		diskTotal:               res.MaxDisk,
+		diskUsed:                res.Disk,
 	}
 	state.diskFree = state.diskTotal - state.diskUsed
 	state.diskUsage = safePercentage(float64(state.diskUsed), float64(state.diskTotal))
@@ -339,13 +379,25 @@ func (m *Monitor) buildVMFromClusterResource(
 		memFree = state.memTotal - state.memUsed
 	}
 	currentMetrics := IOMetrics{
-		DiskRead:   state.diskReadBytes,
-		DiskWrite:  state.diskWriteBytes,
-		NetworkIn:  state.networkInBytes,
-		NetworkOut: state.networkOutBytes,
-		Timestamp:  sampleTime,
+		DiskRead:     state.diskReadBytes,
+		DiskWrite:    state.diskWriteBytes,
+		NetworkIn:    state.networkInBytes,
+		NetworkOut:   state.networkOutBytes,
+		Timestamp:    state.counterObservedAt,
+		Presence:     state.counterPresence,
+		ObservedAt:   state.counterObservationTimes,
+		SourceUptime: state.counterUptime,
 	}
-	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
+	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
+		makeGuestRateKey(instanceName, "qemu", res.VMID),
+		currentMetrics,
+	)
+	diskReadValue, diskWriteValue, networkInValue, networkOutValue, rateValidity := guestRateValues(
+		diskReadRate,
+		diskWriteRate,
+		netInRate,
+		netOutRate,
+	)
 
 	memory := models.UnavailableMemory(clampToInt64(state.memTotal))
 	if CanonicalMemorySource(state.memorySource) != "unavailable" {
@@ -403,10 +455,11 @@ func (m *Monitor) buildVMFromClusterResource(
 		OSVersion:          state.osVersion,
 		AgentVersion:       state.agentVersion,
 		NetworkInterfaces:  state.networkInterfaces,
-		NetworkIn:          max(0, int64(netInRate)),
-		NetworkOut:         max(0, int64(netOutRate)),
-		DiskRead:           max(0, int64(diskReadRate)),
-		DiskWrite:          max(0, int64(diskWriteRate)),
+		NetworkIn:          networkInValue,
+		NetworkOut:         networkOutValue,
+		DiskRead:           diskReadValue,
+		DiskWrite:          diskWriteValue,
+		IORateValidity:     rateValidity,
 		Uptime:             int64(res.Uptime),
 		Template:           res.Template == 1,
 		OnBoot:             state.onBoot,
@@ -427,6 +480,19 @@ func (m *Monitor) buildVMFromClusterResource(
 					Str("tag", tag).
 					Msg("Pulse control tag detected on VM")
 			}
+		}
+	}
+	if res.Status != "running" {
+		vm.NetworkIn = 0
+		vm.NetworkOut = 0
+		vm.DiskRead = 0
+		vm.DiskWrite = 0
+		vm.IORateValidity = models.IORateValidity{
+			Explicit:   true,
+			DiskRead:   true,
+			DiskWrite:  true,
+			NetworkIn:  true,
+			NetworkOut: true,
 		}
 	}
 

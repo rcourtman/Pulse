@@ -59,6 +59,7 @@ package unifiedresources
 // banned direct-state access patterns.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -69,6 +70,22 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func TestMetricValueAlwaysCarriesNumericValueWhenObjectExists(t *testing.T) {
+	payload, err := json.Marshal(MetricValue{Unit: "bytes/s", Source: SourceProxmox})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	value, ok := decoded["value"].(float64)
+	if !ok || value != 0 {
+		t.Fatalf("MetricValue JSON must contain numeric zero, got %s", payload)
+	}
+}
 
 func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")

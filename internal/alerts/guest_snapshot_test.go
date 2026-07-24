@@ -94,3 +94,27 @@ func TestExtractGuestSnapshot_UnknownTypeReturnsCanonicalEmptySnapshot(t *testin
 		t.Fatalf("expected canonical empty guest snapshot on unknown type, got %#v", snapshot)
 	}
 }
+
+func TestGuestIORateMetricsDistinguishValidZeroFromUnknown(t *testing.T) {
+	validZero := guestSnapshotFromVM(models.VM{
+		IORateValidity: models.IORateValidity{
+			Explicit:   true,
+			DiskRead:   true,
+			DiskWrite:  true,
+			NetworkIn:  true,
+			NetworkOut: true,
+		},
+	})
+	diskRead, diskWrite, networkIn, networkOut := guestIORateMetrics(validZero)
+	if diskRead == nil || diskRead.Value != 0 || diskWrite == nil || networkIn == nil || networkOut == nil {
+		t.Fatalf("valid zero rates were not alert candidates: %+v %+v %+v %+v", diskRead, diskWrite, networkIn, networkOut)
+	}
+
+	unknown := guestSnapshotFromVM(models.VM{
+		IORateValidity: models.IORateValidity{Explicit: true},
+	})
+	diskRead, diskWrite, networkIn, networkOut = guestIORateMetrics(unknown)
+	if diskRead != nil || diskWrite != nil || networkIn != nil || networkOut != nil {
+		t.Fatalf("unknown rates became alert candidates: %+v %+v %+v %+v", diskRead, diskWrite, networkIn, networkOut)
+	}
+}
