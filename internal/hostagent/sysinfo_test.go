@@ -47,7 +47,7 @@ func TestDefaultCollector_Smoke(t *testing.T) {
 	_, _ = c.CephStatus(ctx)
 
 	// SMART
-	_, _ = c.SMARTLocal(ctx, nil)
+	_, _ = c.SMARTLocal(ctx, nil, nil)
 
 	// Now
 	if c.Now().IsZero() {

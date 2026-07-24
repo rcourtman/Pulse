@@ -264,6 +264,7 @@ func TestAssessUnraidStorageUsesDiskStatusesOverAggregateCounters(t *testing.T) 
 		SyncAction:   "check",
 		NumDisabled:  1,
 		NumInvalid:   1,
+		NumMissing:   2,
 		Disks: []models.HostUnraidDisk{
 			{Name: "parity", Role: "parity", Status: "online"},
 			{Name: "disk1", Role: "data", Status: "online"},
@@ -274,10 +275,31 @@ func TestAssessUnraidStorageUsesDiskStatusesOverAggregateCounters(t *testing.T) 
 		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
 	}
 	for _, reason := range assessment.Reasons {
-		if reason.Code == "unraid_disabled_disks" || reason.Code == "unraid_invalid_disks" {
+		if reason.Code == "unraid_disabled_disks" || reason.Code == "unraid_invalid_disks" || reason.Code == "unraid_missing_disks" {
 			t.Fatalf("unexpected aggregate-count reason when structured disk state is healthy: %+v", assessment.Reasons)
 		}
 	}
+}
+
+func TestAssessUnraidStoragePreservesGenuineStructuredMissingDisk(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		Disks: []models.HostUnraidDisk{
+			{Name: "parity", Role: "parity", Status: "online"},
+			{Name: "disk1", Role: "data", Status: "online"},
+			{Name: "disk2", Role: "data", Status: "missing", RawStatus: "DISK_NP", Serial: "EXPECTED-DISK"},
+		},
+	})
+
+	if assessment.Level != RiskCritical {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskCritical)
+	}
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_missing_disks" {
+			return
+		}
+	}
+	t.Fatalf("genuine missing member was not preserved: %+v", assessment.Reasons)
 }
 
 func TestAssessUnraidStorageFallsBackToAggregateCountersWithoutDiskStatuses(t *testing.T) {

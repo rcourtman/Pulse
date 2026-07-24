@@ -2020,9 +2020,9 @@ api-contract/security owned and create no storage, recovery-point, or
 backup-surface semantics.
 
 The shared PVE setup-script SMART wrapper remains a storage/recovery dependency
-only for disk-temperature evidence. Storage surfaces may depend on its explicit
-`-d sat` and `-d scsi` retries for active direct Linux SATA/SAT-style disks, but
-they must not fork a storage-local disk-temperature collector or replace the
+only for disk-temperature evidence. Storage surfaces may depend on its
+non-opening scan and transport-aware SAT/SCSI/USB/HBA probe selection, but they
+must not fork a storage-local disk-temperature collector or replace the
 API-owned setup-script contract. Storage physical-disk rows also depend on the
 unified-resource disk contract preserving Proxmox node/instance metadata and
 SMART capacity when Proxmox inventory and host-agent SMART telemetry merge;
@@ -3915,12 +3915,13 @@ script renderer, but they must not replace the symlink path with a local file
 when filtering Pulse-managed `# pulse-` SSH key entries.
 That same dependency also assumes the shared PVE setup script binds
 temperature-monitoring SSH keys to `/usr/local/sbin/pulse-sensors` and emits
-SMART disk temperatures in the wrapper payload, including explicit `-d sat`
-and `-d scsi` retries for direct Linux SATA/SAT-style disks whose smartctl
-auto-detection returns no temperature. Storage and recovery disk temperature
-surfaces may depend on that monitoring-owned SMART merge path, but they must
-not reintroduce raw `sensors -j` as the setup contract or build a storage-local
-disk-temperature collector.
+SMART disk temperatures in the wrapper payload. The wrapper uses non-opening
+`smartctl --scan`, merges `lsblk` transport evidence, permits explicit `-d sat`
+for direct SATA and `-d scsi` only for SAS/SCSI evidence, retains typed USB and
+multiplexed HBA modes, and never infers SCSI from an `sdX` basename. Storage and
+recovery disk temperature surfaces may depend on that monitoring-owned SMART
+merge path, but they must not reintroduce raw `sensors -j` as the setup contract
+or build a storage-local disk-temperature collector.
 Pressure-only host-agent telemetry remains outside that storage collector
 contract: storage surfaces may read the shared host context, but may not add a
 parallel macOS thermal collector or fold `thermalState` into disk SMART state.

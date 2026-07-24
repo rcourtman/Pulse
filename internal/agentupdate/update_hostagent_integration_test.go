@@ -78,7 +78,7 @@ func (c *integrationCollector) CephStatus(context.Context) (*hostagent.CephClust
 	return nil, nil
 }
 
-func (c *integrationCollector) SMARTLocal(context.Context, []string) ([]hostagent.DiskSMART, error) {
+func (c *integrationCollector) SMARTLocal(context.Context, []string, *agentshost.UnraidStorage) ([]hostagent.DiskSMART, error) {
 	return nil, nil
 }
 

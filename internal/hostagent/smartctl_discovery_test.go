@@ -15,15 +15,15 @@ import (
 )
 
 // scanOpenPVENVMeOnly reproduces the #1483 discovery failure: smartctl
-// --scan-open lists the two NVMe controllers but omits the SATA disk it could
+// --scan lists the two NVMe controllers but omits the SATA disk it could
 // not open at scan time (open failures are only emitted as # comments).
-// The NVMe lines are verbatim `smartctl --scan-open` output from a PVE 9.1.9
+// The NVMe lines are verbatim `smartctl --scan` output from a PVE 9.1.9
 // host (delly, 2026-06-10).
 const scanOpenPVENVMeOnly = `/dev/nvme0 -d nvme # /dev/nvme0, NVMe device
 /dev/nvme1 -d nvme # /dev/nvme1, NVMe device
 `
 
-// scanOpenPVESATA is verbatim `smartctl --scan-open` output from a PVE 9.1.9
+// scanOpenPVESATA is verbatim `smartctl --scan` output from a PVE 9.1.9
 // host with a single SATA SSD (minipc, 2026-06-10).
 const scanOpenPVESATA = `/dev/sda -d sat # /dev/sda [SAT], ATA device
 `
@@ -52,7 +52,7 @@ const smartctlNVMeProbeJSON = `{
 }`
 
 func TestParseSmartctlScanOpenTargetsRealPVEOutput(t *testing.T) {
-	targets := parseSmartctlScanOpenTargets([]byte(scanOpenPVENVMeOnly+scanOpenPVESATA), nil)
+	targets := parseSmartctlScanTargets([]byte(scanOpenPVENVMeOnly+scanOpenPVESATA), nil)
 	if len(targets) != 3 {
 		t.Fatalf("expected 3 targets, got %#v", targets)
 	}
@@ -90,7 +90,7 @@ func TestUnionSMARTTargetsAddsDevicesMissingFromScanOpen(t *testing.T) {
 }
 
 // TestCollectSMARTLocalIncludesSATADiskOmittedByScanOpen reproduces the #1483
-// host: two NVMe controllers in the scan-open output, the SATA SSD missing
+// host: two NVMe controllers in the scan output, the SATA SSD missing
 // from it, and all three disks present in /sys/block. The SATA disk must
 // still be discovered, probed untyped, and reported.
 func TestCollectSMARTLocalIncludesSATADiskOmittedByScanOpen(t *testing.T) {
@@ -113,7 +113,7 @@ func TestCollectSMARTLocalIncludesSATADiskOmittedByScanOpen(t *testing.T) {
 
 	var probed []string
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return []byte(scanOpenPVENVMeOnly), nil
 		}
 		device := args[len(args)-1]
@@ -306,7 +306,7 @@ func TestCollectSMARTLocalEmitsIdentityOnlyEntryWhenSMARTUnavailable(t *testing.
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return []byte(scanOpenPVESATA), nil
 		}
 		return []byte(smartctlNoDataJSON), nil
@@ -350,7 +350,7 @@ func TestCollectSMARTLocalSkipsIdentityOnlyEntries(t *testing.T) {
 		execLookPath = func(string) (string, error) { return "smartctl", nil }
 
 		smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			if len(args) == 1 && args[0] == "--scan-open" {
+			if len(args) == 1 && args[0] == "--scan" {
 				return []byte("/dev/sda -d megaraid,0 # slot 0\n/dev/sda -d megaraid,1 # slot 1\n"), nil
 			}
 			return []byte(smartctlNoDataJSON), nil
@@ -377,7 +377,7 @@ func TestCollectSMARTLocalSkipsIdentityOnlyEntries(t *testing.T) {
 		execLookPath = func(string) (string, error) { return "smartctl", nil }
 
 		smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			if len(args) == 1 && args[0] == "--scan-open" {
+			if len(args) == 1 && args[0] == "--scan" {
 				return []byte(scanOpenPVESATA), nil
 			}
 			return []byte(smartctlNoDataJSON), nil
@@ -411,7 +411,7 @@ func TestCollectSMARTLocalAppliesExcludeToCanonicalNamespaceName(t *testing.T) {
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return []byte("/dev/nvme0 -d nvme # /dev/nvme0, NVMe device\n"), nil
 		}
 		return []byte(smartctlNVMeProbeJSON), nil

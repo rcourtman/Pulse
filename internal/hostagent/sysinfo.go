@@ -25,7 +25,7 @@ type SystemCollector interface {
 	RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error)
 	UnraidStorage(ctx context.Context) (*agentshost.UnraidStorage, error)
 	CephStatus(ctx context.Context) (*CephClusterStatus, error)
-	SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error)
+	SMARTLocal(ctx context.Context, exclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error)
 	Now() time.Time
 	GOOS() string
 	ReadFile(name string) ([]byte, error)
@@ -84,8 +84,8 @@ func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, 
 	return CollectCeph(ctx)
 }
 
-func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error) {
-	return CollectSMARTLocal(ctx, exclude)
+func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error) {
+	return CollectSMARTLocalWithUnraid(ctx, exclude, unraid)
 }
 
 func (c *defaultCollector) Now() time.Time {

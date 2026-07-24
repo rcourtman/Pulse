@@ -31,7 +31,7 @@ func TestIssue1516PermissionFailureRemainsUnknownAndKeepsSysfsIdentity(t *testin
 	})
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return nil, nil
 		}
 		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
@@ -83,7 +83,7 @@ func TestIssue1516StandbyDiskKeepsStableIdentityWithoutSMARTClaims(t *testing.T)
 	})
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return []byte("/dev/sdb -d scsi # sleeping SAS disk\n"), nil
 		}
 		return exec.CommandContext(ctx, "sh", "-c", "exit 3").Output()

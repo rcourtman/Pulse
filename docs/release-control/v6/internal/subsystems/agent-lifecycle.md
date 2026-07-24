@@ -26,7 +26,11 @@ smartctl permission/open failures are not standby; only the explicit
 must retain sysfs model, serial, WWID, size, and transport when available,
 smartctl retry modes merge rather than replace evidence, and partial NVMe JSON
 must preserve field presence so omitted health counters are not fabricated as
-zero. Direct SATA, SAS, NVMe, and controller-member inventory must all survive
+zero. On Unraid, native `disks.ini` spin state may suppress SMART commands
+entirely and produce an identity-only standby row without touching the device.
+Unsupported SMART commands, permission failures, and timeouts must never alter
+native array membership or turn a present disk into a missing disk. Direct
+SATA, SAS, USB-bridge, NVMe, and controller-member inventory must all survive
 one compressed unified-agent report without a collector-side suffix cap.
 `internal/monitoring/monitor.go` also serializes shared unified-resource
 websocket payloads. Carrying plural availability facets through that serializer
@@ -899,10 +903,14 @@ generic block-device inference. The Unified Agent should best-effort merge
 `/var/local/emhttp/disks.ini` into the `mdcmd status` view and carry disk
 device, model, transport, filesystem, size, used/free capacity, temperature,
 spin state, read/write counters, and error counters in the report contract.
-Failure to read the native file must degrade to the existing mdcmd view without
-blocking host reporting, but successful native collection is the canonical
-source for Unraid array/cache membership; SMART rows are supplemental hardware
-telemetry, not the owner of Unraid storage topology.
+The runtime must read that native membership before optional SMART work and
+preserve it when `mdcmd status` times out or is unavailable. When structured
+native per-disk states exist, their disabled/invalid/missing counts override
+stale aggregate mdcmd counters while assigned `DISK_NP` evidence still remains
+a genuine missing disk. Failure to read the native file must degrade to the
+existing mdcmd view without blocking host reporting. SMART collection uses an
+independent deadline, receives native transport/spin hints, and is supplemental
+hardware telemetry rather than the owner of Unraid storage topology.
 First-class platform hosts that also run the Pulse Agent must keep the same
 operator-facing system identity split: a Proxmox VE node may report a Debian
 runtime platform underneath, but the host-agent OS identity and infrastructure
@@ -1355,11 +1363,16 @@ the intentionally sparse public response.
    loading solely because no API token was supplied.
    That runtime-side ownership includes local disk telemetry collection in
    `internal/hostagent/smartctl.go`. Linux SMART discovery must prefer
-   `smartctl --scan-open` typed targets before generic block-device fallback so
-   controller-backed disks keep their canonical SMART and wearout coverage.
+   non-opening `smartctl --scan` typed targets before generic block-device
+   fallback so controller-backed disks keep their canonical SMART and wearout
+   coverage without opening every enumerated disk during discovery.
    Direct Linux SATA/SAT-style block devices that return health but no
-   temperature through smartctl auto-detection must retry explicit `-d sat` and
-   `-d scsi` probes before settling on a no-temperature result.
+   temperature through smartctl auto-detection may retry explicit `-d sat`
+   before settling on a no-temperature result. The runtime must not infer
+   `-d scsi` from an `sdX` basename: direct ATA may use SAT, direct SAS may use
+   SCSI only from native/sysfs/typed-scan evidence, USB bridges keep their
+   explicit scan mode, and multiplexed HBA members keep their exact controller
+   target without an untyped fallback.
    Those retries must accumulate model, serial, WWN, health, temperature, and
    SMART attributes across attempts. A later healthy result must not erase an
    earlier explicit failure, and an omitted NVMe counter must stay absent while

@@ -22,7 +22,7 @@ type mockCollector struct {
 	raidArraysFn    func(ctx context.Context) ([]agentshost.RAIDArray, error)
 	unraidStorageFn func(ctx context.Context) (*agentshost.UnraidStorage, error)
 	cephStatusFn    func(ctx context.Context) (*CephClusterStatus, error)
-	smartLocalFn    func(ctx context.Context, exclude []string) ([]DiskSMART, error)
+	smartLocalFn    func(ctx context.Context, exclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error)
 	nowFn           func() time.Time
 	goos            string
 	readFileFn      func(name string) ([]byte, error)
@@ -102,9 +102,9 @@ func (m *mockCollector) CephStatus(ctx context.Context) (*CephClusterStatus, err
 	return nil, nil
 }
 
-func (m *mockCollector) SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error) {
+func (m *mockCollector) SMARTLocal(ctx context.Context, exclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error) {
 	if m.smartLocalFn != nil {
-		return m.smartLocalFn(ctx, exclude)
+		return m.smartLocalFn(ctx, exclude, unraid)
 	}
 	return nil, nil
 }

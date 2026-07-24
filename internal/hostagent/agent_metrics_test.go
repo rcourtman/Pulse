@@ -379,7 +379,7 @@ rdevId.29=
 
 	// Test case 6: SMART collection
 	t.Run("SMART collection", func(t *testing.T) {
-		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
+		mc.smartLocalFn = func(_ context.Context, _ []string, _ *agentshost.UnraidStorage) ([]DiskSMART, error) {
 			return []DiskSMART{
 				{
 					Device:      "/dev/sda",
@@ -407,7 +407,7 @@ rdevId.29=
 	t.Run("SMART collection preserves typed controller-backed attributes", func(t *testing.T) {
 		used := 6
 		spare := 94
-		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
+		mc.smartLocalFn = func(_ context.Context, _ []string, _ *agentshost.UnraidStorage) ([]DiskSMART, error) {
 			return []DiskSMART{
 				{
 					Device: "/dev/sda [megaraid,7]",

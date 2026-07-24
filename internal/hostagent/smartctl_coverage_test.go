@@ -221,7 +221,7 @@ func TestParseSmartctlScanOpenTargets(t *testing.T) {
 		``,
 	}, "\n"))
 
-	targets := parseSmartctlScanOpenTargets(output, []string{"sdc"})
+	targets := parseSmartctlScanTargets(output, []string{"sdc"})
 	if len(targets) != 4 {
 		t.Fatalf("expected 4 targets, got %#v", targets)
 	}
@@ -250,7 +250,7 @@ func TestCollectSMARTLocalUsesSmartctlScanOpenTargetsOnLinux(t *testing.T) {
 
 	runtimeGOOS = "linux"
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	// Empty /sys/block: the scan-open target is the only discovery source, so
+	// Empty /sys/block: the scan target is the only discovery source, so
 	// the seenArgs order below stays scan -> probe.
 	readDir = func(string) ([]os.DirEntry, error) { return nil, nil }
 
@@ -258,7 +258,7 @@ func TestCollectSMARTLocalUsesSmartctlScanOpenTargetsOnLinux(t *testing.T) {
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		seenArgs = append(seenArgs, append([]string(nil), args...))
 
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return []byte("/dev/sda -d megaraid,7 # RAID-backed SSD\n"), nil
 		}
 
@@ -487,7 +487,7 @@ func TestCollectSMARTLocalReportsIdentityOnlyForProbeErrors(t *testing.T) {
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "smartctl" {
-			if len(args) == 1 && args[0] == "--scan-open" {
+			if len(args) == 1 && args[0] == "--scan" {
 				return nil, nil
 			}
 			device := args[len(args)-1]

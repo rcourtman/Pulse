@@ -20,6 +20,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
@@ -225,8 +226,9 @@ var (
 )
 
 type smartctlTarget struct {
-	Path       string
-	DeviceType string
+	Path            string
+	DeviceType      string
+	NativeTransport string
 }
 
 func (t smartctlTarget) displayName() string {
@@ -243,49 +245,56 @@ func (t smartctlTarget) displayName() string {
 // CollectSMARTLocal collects S.M.A.R.T. data from all local block devices.
 // The diskExclude parameter specifies patterns for devices to skip (e.g., "sda", "/dev/nvme*", "*cache*").
 func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error) {
+	return CollectSMARTLocalWithUnraid(ctx, diskExclude, nil)
+}
+
+// CollectSMARTLocalWithUnraid collects local SMART data while treating native
+// Unraid membership, transport, and spin state as authoritative hints. Native
+// array state is never derived from SMART success or failure.
+func CollectSMARTLocalWithUnraid(ctx context.Context, diskExclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error) {
 	targets, err := listSMARTTargets(ctx, diskExclude)
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to list block devices for SMART collection")
 		return nil, fmt.Errorf("list block devices for SMART collection: %w", err)
 	}
 
-	if len(targets) == 0 {
-		return nil, nil
-	}
+	targets, nativeStandby := applyUnraidSMARTInventory(targets, diskExclude, unraid)
 
 	type smartOutcome struct {
 		smart *DiskSMART
 		err   error
 	}
 	outcomes := make([]smartOutcome, len(targets))
-	workerCount := smartCollectionConcurrency
-	if len(targets) < smartCollectionParallelThreshold {
-		workerCount = 1
+	if len(targets) > 0 {
+		workerCount := smartCollectionConcurrency
+		if len(targets) < smartCollectionParallelThreshold {
+			workerCount = 1
+		}
+		if workerCount < 1 {
+			workerCount = 1
+		}
+		if workerCount > len(targets) {
+			workerCount = len(targets)
+		}
+		jobs := make(chan int)
+		var workers sync.WaitGroup
+		workers.Add(workerCount)
+		for worker := 0; worker < workerCount; worker++ {
+			go func() {
+				defer workers.Done()
+				for index := range jobs {
+					outcomes[index].smart, outcomes[index].err = collectSMARTTarget(ctx, targets[index])
+				}
+			}()
+		}
+		for index := range targets {
+			jobs <- index
+		}
+		close(jobs)
+		workers.Wait()
 	}
-	if workerCount < 1 {
-		workerCount = 1
-	}
-	if workerCount > len(targets) {
-		workerCount = len(targets)
-	}
-	jobs := make(chan int)
-	var workers sync.WaitGroup
-	workers.Add(workerCount)
-	for worker := 0; worker < workerCount; worker++ {
-		go func() {
-			defer workers.Done()
-			for index := range jobs {
-				outcomes[index].smart, outcomes[index].err = collectSMARTTarget(ctx, targets[index])
-			}
-		}()
-	}
-	for index := range targets {
-		jobs <- index
-	}
-	close(jobs)
-	workers.Wait()
 
-	var results []DiskSMART
+	results := append([]DiskSMART(nil), nativeStandby...)
 	var missed []smartctlTarget
 	collected := make(map[string]struct{}, len(targets))
 	multiplexed := make(map[string]struct{})
@@ -352,6 +361,90 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 	return results, nil
 }
 
+func applyUnraidSMARTInventory(targets []smartctlTarget, diskExclude []string, unraid *agentshost.UnraidStorage) ([]smartctlTarget, []DiskSMART) {
+	if unraid == nil || len(unraid.Disks) == 0 {
+		return targets, nil
+	}
+
+	nativeByBlock := make(map[string]agentshost.UnraidDisk, len(unraid.Disks))
+	for _, disk := range unraid.Disks {
+		block := canonicalBlockDeviceForScanPath(disk.Device)
+		if block == "" || matchesDeviceExclude(block, "/dev/"+block, diskExclude) {
+			continue
+		}
+		nativeByBlock[block] = disk
+	}
+
+	filtered := make([]smartctlTarget, 0, len(targets))
+	standbyByBlock := make(map[string]DiskSMART)
+	for _, target := range targets {
+		block := canonicalBlockDeviceForScanPath(target.Path)
+		native, ok := nativeByBlock[block]
+		if !ok {
+			filtered = append(filtered, target)
+			continue
+		}
+		target.NativeTransport = normalizeSMARTTransport(native.Transport)
+		if !native.SpunDown {
+			filtered = append(filtered, target)
+			continue
+		}
+		standbyByBlock[block] = nativeStandbySMARTDisk(block, native)
+		log.Debug().
+			Str("component", smartctlComponent).
+			Str("action", "skip_native_standby").
+			Str("device", block).
+			Msg("Skipping SMART commands for disk reported spun down by Unraid")
+	}
+
+	// A spun-down native member can be absent from smartctl's non-opening scan.
+	// Preserve its identity without touching the device.
+	for block, native := range nativeByBlock {
+		if native.SpunDown {
+			standbyByBlock[block] = nativeStandbySMARTDisk(block, native)
+		}
+	}
+
+	standby := make([]DiskSMART, 0, len(standbyByBlock))
+	for _, disk := range standbyByBlock {
+		standby = append(standby, disk)
+	}
+	sort.Slice(standby, func(i, j int) bool { return standby[i].Device < standby[j].Device })
+	return filtered, standby
+}
+
+func nativeStandbySMARTDisk(block string, disk agentshost.UnraidDisk) DiskSMART {
+	serialStatus := diskinventory.Missing("unraid", "disk serial was not reported")
+	if strings.TrimSpace(disk.Serial) != "" {
+		serialStatus = diskinventory.Available("unraid")
+	}
+	return DiskSMART{
+		Device:    block,
+		Model:     strings.TrimSpace(disk.Model),
+		Serial:    strings.TrimSpace(disk.Serial),
+		Type:      normalizeSMARTTransport(disk.Transport),
+		SizeBytes: disk.SizeBytes,
+		Health:    "UNKNOWN",
+		Standby:   true,
+		Collection: &diskinventory.CollectionStatus{
+			Serial:      serialStatus,
+			Temperature: diskinventory.Unavailable("unraid", "disk is reported spun down"),
+		},
+		LastUpdated: timeNow(),
+	}
+}
+
+func normalizeSMARTTransport(transport string) string {
+	switch normalized := strings.ToLower(strings.TrimSpace(transport)); normalized {
+	case "ata":
+		return "sata"
+	case "sata", "sas", "usb", "nvme":
+		return normalized
+	default:
+		return ""
+	}
+}
+
 func listSMARTTargets(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
 	if runtimeGOOS == "linux" {
 		return listSMARTTargetsLinux(ctx, diskExclude)
@@ -376,27 +469,25 @@ func smartctlTargetsFromDevices(devices []string) []smartctlTarget {
 }
 
 func listSMARTTargetsLinux(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
-	scanTargets, scanErr := listSMARTTargetsLinuxFromScanOpen(ctx, diskExclude)
+	scanTargets, scanErr := listSMARTTargetsLinuxFromScan(ctx, diskExclude)
 	if scanErr != nil {
 		log.Debug().
 			Str("component", smartctlComponent).
 			Err(scanErr).
-			Msg("Failed to enumerate Linux SMART targets via smartctl --scan-open, relying on block device discovery")
+			Msg("Failed to enumerate Linux SMART targets via smartctl --scan, relying on block device discovery")
 	}
 
-	// smartctl --scan-open silently omits any device it fails to open at scan
-	// time (the failure is only a #-comment in its output), so the scan alone
-	// can hide a real disk while listing its neighbours (#1483: a SATA SSD
-	// missing while two NVMe controllers were reported). The kernel block
-	// device list is the ground truth for which disks exist; scan-open only
-	// contributes device-type hints. Union the two.
+	// smartctl's scan alone can omit devices it cannot classify (#1483: a SATA
+	// SSD missing while two NVMe controllers were reported). The kernel block
+	// device list is the ground truth for which disks exist; the non-opening
+	// scan only contributes device-type hints. Union the two.
 	devices, devErr := listBlockDevicesLinux(ctx, diskExclude)
 	if devErr != nil {
 		if len(scanTargets) > 0 {
 			log.Debug().
 				Str("component", smartctlComponent).
 				Err(devErr).
-				Msg("Block device discovery failed; using smartctl --scan-open targets only")
+				Msg("Block device discovery failed; using smartctl --scan targets only")
 			return scanTargets, nil
 		}
 		if scanErr != nil {
@@ -437,21 +528,21 @@ func unionSMARTTargets(scanTargets []smartctlTarget, devices []string) []smartct
 	return targets
 }
 
-func listSMARTTargetsLinuxFromScanOpen(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
+func listSMARTTargetsLinuxFromScan(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
 	smartctlPath, err := execLookPath("smartctl")
 	if err != nil {
 		return nil, fmt.Errorf("look up smartctl binary: %w", err)
 	}
 
-	output, err := smartRunCommandOutput(ctx, smartctlPath, "--scan-open")
+	output, err := smartRunCommandOutput(ctx, smartctlPath, "--scan")
 	if err != nil {
 		return nil, err
 	}
 
-	return parseSmartctlScanOpenTargets(output, diskExclude), nil
+	return parseSmartctlScanTargets(output, diskExclude), nil
 }
 
-func parseSmartctlScanOpenTargets(output []byte, diskExclude []string) []smartctlTarget {
+func parseSmartctlScanTargets(output []byte, diskExclude []string) []smartctlTarget {
 	lines := strings.Split(string(output), "\n")
 	targets := make([]smartctlTarget, 0, len(lines))
 	typedByPath := make(map[string]bool)
@@ -493,7 +584,7 @@ func parseSmartctlScanOpenTargets(output []byte, diskExclude []string) []smartct
 				Str("component", smartctlComponent).
 				Str("action", "skip_virtual_device").
 				Str("device", path).
-				Msg("Skipping non-physical device reported by smartctl --scan-open")
+				Msg("Skipping non-physical device reported by smartctl --scan")
 			continue
 		}
 		if matchesDeviceExclude(name, path, diskExclude) {
@@ -843,7 +934,7 @@ func isFreeBSDDiskDeviceName(name string) bool {
 
 // refineLinuxBlockDeviceIdentity rewrites a freshly collected SMART reading so
 // that its device identity and size reflect the underlying block device rather
-// than the smartctl scan target. smartctl --scan-open reports NVMe disks by their
+// than the smartctl scan target. smartctl --scan reports NVMe disks by their
 // controller char device (/dev/nvme0), but the stable, user-visible identity is
 // the namespace block device (/dev/nvme0n1) — the same name Proxmox's disks/list
 // and /sys/block expose. It also backfills the capacity from /sys/block, the
@@ -870,9 +961,12 @@ func refineLinuxBlockDeviceIdentity(smart *DiskSMART, target smartctlTarget) {
 	smart.Device = block
 	smart.Controller, smart.Target = linuxBlockDeviceTopology(block)
 	ensureControllerCollectionStatus(smart, "sysfs")
+	// Unraid's native transport is authoritative for array members. Otherwise
 	// smartctl labels SAS members with the generic SCSI protocol when the
-	// transport descriptor is absent; sysfs knows the real link type.
-	if smart.Type == "" || smart.Type == "scsi" {
+	// transport descriptor is absent, so prefer explicit sysfs evidence.
+	if native := normalizeSMARTTransport(target.NativeTransport); native != "" {
+		smart.Type = native
+	} else if smart.Type == "" || smart.Type == "scsi" {
 		if evidence := linuxBlockDeviceTransportEvidence(block); evidence != "" {
 			smart.Type = evidence
 		}
@@ -969,10 +1063,32 @@ func linuxBlockDeviceTransportEvidence(block string) string {
 			return "usb"
 		}
 	}
+	resolvedTransport := ""
+	if resolved, err := smartctlEvalSymlinks(filepath.Join("/sys/block", block, "device")); err == nil {
+		normalized := strings.ToLower(filepath.ToSlash(resolved))
+		switch {
+		case strings.Contains(normalized, "/usb"):
+			return "usb"
+		case strings.Contains(normalized, "/ata"):
+			resolvedTransport = "sata"
+		}
+	}
+	if readTrimmedFile(filepath.Join("/sys/block", block, "device", "sas_address")) != "" {
+		return "sas"
+	}
+	if strings.EqualFold(readTrimmedFile(filepath.Join("/sys/block", block, "device", "vendor")), "ATA") {
+		return "sata"
+	}
+	if resolvedTransport != "" {
+		return resolvedTransport
+	}
 	return ""
 }
 
 func linuxBlockDeviceTransport(block string, target smartctlTarget) string {
+	if native := normalizeSMARTTransport(target.NativeTransport); native != "" {
+		return native
+	}
 	if evidence := linuxBlockDeviceTransportEvidence(block); evidence != "" {
 		return evidence
 	}
@@ -1460,8 +1576,11 @@ func mergeSMARTAttributes(base, incoming *SMARTAttributes) *SMARTAttributes {
 func smartctlProbeAttempts(target smartctlTarget) [][]string {
 	device := target.Path
 	if target.DeviceType != "" {
-		deviceTypes := []string{target.DeviceType}
-		// A scan-open device type is a hint, not ground truth: smartctl can
+		deviceTypes := []string{}
+		if smartctlDeviceTypeMatchesTransport(target.DeviceType, linuxSMARTTargetTransport(target)) {
+			deviceTypes = append(deviceTypes, target.DeviceType)
+		}
+		// A scan device type is a hint, not ground truth: smartctl can
 		// suggest a type whose full query (-i -A -H) fails or returns no usable
 		// data even though untyped auto-detection works (#1483: a SATA SSD
 		// dropped after its typed probe yielded nothing). Retry untyped before
@@ -1469,13 +1588,13 @@ func smartctlProbeAttempts(target smartctlTarget) [][]string {
 		// the -d would re-probe the shared array device, not the member.
 		if runtimeGOOS == "linux" && !isMultiplexedDeviceType(target.DeviceType) {
 			deviceTypes = append(deviceTypes, "")
-			deviceTypes = append(deviceTypes, linuxInferredSmartctlDeviceTypes(device)...)
+			deviceTypes = append(deviceTypes, linuxInferredSmartctlDeviceTypes(target)...)
 		}
 		return smartctlArgsForDeviceTypes(device, deviceTypes)
 	}
 
 	if runtimeGOOS == "linux" {
-		deviceTypes := append([]string{""}, linuxInferredSmartctlDeviceTypes(device)...)
+		deviceTypes := append([]string{""}, linuxInferredSmartctlDeviceTypes(target)...)
 		return smartctlArgsForDeviceTypes(device, deviceTypes)
 	}
 
@@ -1505,16 +1624,51 @@ func smartctlArgsForDeviceTypes(device string, deviceTypes []string) [][]string 
 	return attempts
 }
 
-func linuxInferredSmartctlDeviceTypes(device string) []string {
+func linuxInferredSmartctlDeviceTypes(target smartctlTarget) []string {
 	if runtimeGOOS != "linux" {
 		return nil
 	}
-	name := strings.ToLower(filepath.Base(strings.TrimSpace(device)))
-	switch {
-	case linuxDirectSATDeviceRE.MatchString(name):
-		return []string{"sat", "scsi"}
-	default:
+	name := strings.ToLower(filepath.Base(strings.TrimSpace(target.Path)))
+	if !linuxDirectSATDeviceRE.MatchString(name) {
 		return nil
+	}
+	switch linuxSMARTTargetTransport(target) {
+	case "sata":
+		return []string{"sat"}
+	case "sas":
+		return []string{"scsi"}
+	case "usb":
+		return nil
+	default:
+		// An untyped sdX target is more commonly direct ATA than SAS. The SAT
+		// retry recovers omitted SATA scan targets (#1483), but deliberately
+		// never guesses SCSI: forcing -d scsi on libata can issue an unsupported
+		// REPORT SUPPORTED OPERATION CODES request (#1612).
+		return []string{"sat"}
+	}
+}
+
+func linuxSMARTTargetTransport(target smartctlTarget) string {
+	if native := normalizeSMARTTransport(target.NativeTransport); native != "" {
+		return native
+	}
+	block := canonicalBlockDeviceForScanPath(target.Path)
+	if block == "" {
+		return ""
+	}
+	return linuxBlockDeviceTransportEvidence(block)
+}
+
+func smartctlDeviceTypeMatchesTransport(deviceType, transport string) bool {
+	deviceType = strings.ToLower(strings.TrimSpace(deviceType))
+	transport = normalizeSMARTTransport(transport)
+	switch transport {
+	case "sata":
+		return !strings.HasPrefix(deviceType, "scsi")
+	case "sas":
+		return !strings.HasPrefix(deviceType, "sat")
+	default:
+		return true
 	}
 }
 

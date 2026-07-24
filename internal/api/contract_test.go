@@ -1214,6 +1214,41 @@ fi`
 	}
 }
 
+func TestContract_PVESetupScriptUsesNonOpeningTransportAwareSMARTProbes(t *testing.T) {
+	script := renderSetupScript("pve", setupScriptRenderContext{
+		ServerName:       "pve-example",
+		PulseURL:         "https://pulse.example",
+		ServerHost:       "https://pve.example:8006",
+		SetupToken:       "setup-token-123",
+		TokenName:        "pulse-example",
+		TokenMatchPrefix: "pulse-example",
+		SensorsPublicKey: "ssh-ed25519 AAAATEST pulse@test",
+	})
+
+	for _, required := range []string{
+		`run_command([path, "--scan"])`,
+		`def smart_probe_attempts(device, device_type, transport):`,
+		`if device_type and smart_device_type_matches_transport(device_type, transport):`,
+		`if transport == "sata":`,
+		`return ["sat"]`,
+		`if transport == "sas":`,
+		`return ["scsi"]`,
+		`if transport == "usb":`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("PVE setup script must contain %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`run_command([path, "--scan-open"])`,
+		`return ["sat", "scsi"]`,
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Fatalf("PVE setup script must not contain unsafe SMART probe %q", forbidden)
+		}
+	}
+}
+
 func TestContract_NodeConfigUpdateTracksOptionalConnectionFieldsAndRedactedSecrets(t *testing.T) {
 	var preserveReq NodeConfigRequest
 	if err := json.Unmarshal([]byte(`{"name":"cluster","tokenName":"pulse-monitor@pve!pulse-pve","tokenValue":"********"}`), &preserveReq); err != nil {
@@ -6629,10 +6664,15 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	}
 	if !strings.Contains(script, `"smart": collect_smart(),`) ||
 		!strings.Contains(script, `apt-get install -y smartmontools`) ||
-		!strings.Contains(script, `def inferred_smart_device_types(device):`) ||
-		!strings.Contains(script, `for dtype in inferred_smart_device_types(device):`) ||
+		!strings.Contains(script, `run_command([path, "--scan"])`) ||
+		!strings.Contains(script, `def inferred_transport_device_types(device, transport):`) ||
+		!strings.Contains(script, `for dtype in inferred_transport_device_types(device, transport):`) ||
 		!strings.Contains(script, `attempt_index == len(attempts) - 1`) {
 		t.Fatalf("setup script missing SMART temperature wrapper contract: %s", script)
+	}
+	if strings.Contains(script, `run_command([path, "--scan-open"])`) ||
+		strings.Contains(script, `return ["sat", "scsi"]`) {
+		t.Fatalf("setup script preserved opening or transport-blind SMART discovery: %s", script)
 	}
 	if strings.Contains(script, `SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\"`) {
 		t.Fatalf("setup script preserved stale raw sensors forced command: %s", script)

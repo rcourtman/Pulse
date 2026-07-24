@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog/log"
 )
 
 const hostAgentUnraidVersionPath = "/etc/unraid-version"
@@ -39,8 +40,25 @@ func CollectUnraidStorage(ctx context.Context, collector SystemCollector) (*agen
 		return nil, fmt.Errorf("stat %s: %w", hostAgentUnraidVersionPath, err)
 	}
 
+	// disks.ini is Unraid's native membership inventory. Read it before mdcmd
+	// so assigned disks remain reportable even when the status command is
+	// unavailable, slow, or canceled by the caller.
+	var iniDisks []agentshost.UnraidDisk
+	if data, err := collector.ReadFile(hostAgentUnraidDisksINIPath); err == nil {
+		iniDisks = parseUnraidDisksINI(string(data))
+	} else {
+		log.Debug().
+			Str("component", "unraid_collector").
+			Str("action", "native_inventory_unavailable").
+			Err(err).
+			Msg("Unable to read Unraid native disk inventory; mdcmd remains available as fallback")
+	}
+
 	mdcmdPath, err := resolveUnraidMdcmdBinary(collector)
 	if err != nil {
+		if len(iniDisks) > 0 {
+			return unraidNativeInventoryFallback(iniDisks, err), nil
+		}
 		return nil, err
 	}
 
@@ -49,17 +67,71 @@ func CollectUnraidStorage(ctx context.Context, collector SystemCollector) (*agen
 
 	output, err := collector.CommandCombinedOutput(statusCtx, mdcmdPath, "status")
 	if err != nil {
+		if len(iniDisks) > 0 {
+			return unraidNativeInventoryFallback(iniDisks, fmt.Errorf("run mdcmd status: %w", err)), nil
+		}
 		return nil, fmt.Errorf("run mdcmd status: %w", err)
 	}
 
 	storage, err := parseUnraidStatusOutput(output)
 	if err != nil {
+		if len(iniDisks) > 0 {
+			return unraidNativeInventoryFallback(iniDisks, err), nil
+		}
 		return nil, err
 	}
-	if data, readErr := collector.ReadFile(hostAgentUnraidDisksINIPath); readErr == nil {
-		storage = mergeUnraidDiskINI(storage, parseUnraidDisksINI(string(data)))
+	storage = mergeUnraidDiskINI(storage, iniDisks)
+	return reconcileUnraidDiskCounts(storage), nil
+}
+
+func unraidNativeInventoryFallback(disks []agentshost.UnraidDisk, cause error) *agentshost.UnraidStorage {
+	log.Debug().
+		Str("component", "unraid_collector").
+		Str("action", "native_inventory_fallback").
+		Int("disk_count", len(disks)).
+		Err(cause).
+		Msg("Reporting Unraid native disk inventory without mdcmd runtime state")
+	return reconcileUnraidDiskCounts(mergeUnraidDiskINI(nil, disks))
+}
+
+// reconcileUnraidDiskCounts makes structured native disk states authoritative
+// over aggregate mdcmd counters when those states are available. This avoids
+// stale or capability-related aggregate values turning healthy assigned disks
+// into false missing/disabled alerts, while retaining aggregate fallback on
+// older Unraid responses that do not expose per-disk state.
+func reconcileUnraidDiskCounts(storage *agentshost.UnraidStorage) *agentshost.UnraidStorage {
+	if storage == nil {
+		return nil
 	}
-	return storage, nil
+
+	hasStructuredStatus := false
+	disabled, invalid, missing := 0, 0, 0
+	for _, disk := range storage.Disks {
+		if isUnraidEmptySlot(disk) {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(disk.Status)) {
+		case "":
+			continue
+		case "disabled":
+			hasStructuredStatus = true
+			disabled++
+		case "invalid":
+			hasStructuredStatus = true
+			invalid++
+		case "missing":
+			hasStructuredStatus = true
+			missing++
+		default:
+			hasStructuredStatus = true
+		}
+	}
+	if hasStructuredStatus {
+		storage.NumDisabled = disabled
+		storage.NumInvalid = invalid
+		storage.NumMissing = missing
+	}
+	return storage
 }
 
 func resolveUnraidMdcmdBinary(collector SystemCollector) (string, error) {

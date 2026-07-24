@@ -1032,6 +1032,13 @@ func (a *Agent) loadPersistedReportQueue(queue *utils.Queue[agentshost.Report], 
 }
 
 func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
+	// Unraid's native inventory is the authority for array membership. Collect
+	// it before optional disk diagnostics and on an independent deadline so a
+	// slow or unsupported SMART target cannot starve mdcmd/disks.ini.
+	unraidCtx, cancelUnraid := context.WithTimeout(ctx, 5*time.Second)
+	unraidData := a.collectUnraidStorage(unraidCtx)
+	cancelUnraid()
+
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -1048,21 +1055,21 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect temperature data (best effort - don't fail if unavailable)
 	sensorData := a.collectTemperatures(collectCtx)
 
-	// Collect S.M.A.R.T. disk data (best effort - don't fail if unavailable)
-	smartData := a.collectSMARTData(collectCtx, runtimeConfig.diskExclude)
+	// Collect RAID array data (best effort - don't fail if unavailable)
+	raidData := a.collectRAIDArrays(collectCtx)
+
+	// Collect Ceph cluster data (best effort - only on Ceph nodes)
+	cephData := a.collectCephStatus(collectCtx, runtimeConfig.disableCeph)
+
+	// Collect S.M.A.R.T. disk data after topology owners and on its own
+	// deadline. Unsupported diagnostics must not starve RAID/Unraid/Ceph state.
+	smartCtx, cancelSMART := context.WithTimeout(ctx, 10*time.Second)
+	smartData := a.collectSMARTData(smartCtx, runtimeConfig.diskExclude, unraidData)
+	cancelSMART()
 	if len(smartData) > 0 {
 		annotateSMARTWithDiskIO(smartData, snapshot.DiskIO)
 		sensorData.SMART = smartData
 	}
-
-	// Collect RAID array data (best effort - don't fail if unavailable)
-	raidData := a.collectRAIDArrays(collectCtx)
-
-	// Collect Unraid array topology (best effort - only on Unraid hosts).
-	unraidData := a.collectUnraidStorage(collectCtx)
-
-	// Collect Ceph cluster data (best effort - only on Ceph nodes)
-	cephData := a.collectCephStatus(collectCtx, runtimeConfig.disableCeph)
 
 	// Collect temperature data from Proxmox cluster peers via SSH (best effort).
 	// Uses parent ctx, not collectCtx — cluster SSH has its own 15s budget that
@@ -1975,13 +1982,13 @@ func (a *Agent) collectCephStatus(ctx context.Context, disableCeph bool) *agents
 
 // collectSMARTData collects S.M.A.R.T. data from local disks.
 // Returns nil if smartctl is not available or no disks are found.
-func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string) []agentshost.DiskSMART {
+func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string, unraid *agentshost.UnraidStorage) []agentshost.DiskSMART {
 	goos := a.collector.GOOS()
 	if goos != "linux" && goos != "freebsd" {
 		return nil
 	}
 
-	smartData, err := a.collector.SMARTLocal(ctx, diskExclude)
+	smartData, err := a.collector.SMARTLocal(ctx, diskExclude, unraid)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect S.M.A.R.T. data (smartctl may not be installed)")
 		return nil

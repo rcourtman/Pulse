@@ -951,8 +951,38 @@ def is_non_rotational_block_device(device):
 def inferred_smart_device_types(device):
     name = os.path.basename(str(device or "").strip()).lower()
     if re.fullmatch(r"(sd|hd)[a-z]+", name or ""):
-        return ["sat", "scsi"]
+        return ["sat"]
     return []
+
+
+def normalize_smart_transport(transport):
+    value = str(transport or "").strip().lower()
+    if value == "ata":
+        return "sata"
+    if value in ("sata", "sas", "usb", "nvme"):
+        return value
+    return ""
+
+
+def smart_device_type_matches_transport(device_type, transport):
+    dtype = str(device_type or "").strip().lower()
+    transport = normalize_smart_transport(transport)
+    if transport == "sata":
+        return not dtype.startswith("scsi")
+    if transport == "sas":
+        return not dtype.startswith("sat")
+    return True
+
+
+def inferred_transport_device_types(device, transport):
+    transport = normalize_smart_transport(transport)
+    if transport == "sata":
+        return ["sat"]
+    if transport == "sas":
+        return ["scsi"]
+    if transport == "usb":
+        return []
+    return inferred_smart_device_types(device)
 
 
 def is_physical_block_device(device):
@@ -995,7 +1025,7 @@ def block_device_targets():
         if not name or name in seen:
             continue
         seen.add(name)
-        devices.append("/dev/" + name)
+        devices.append(("/dev/" + name, normalize_smart_transport(device.get("tran"))))
     return devices
 
 
@@ -1003,19 +1033,24 @@ def union_smart_targets(scan_targets, block_devices):
     targets = []
     seen_targets = set()
     covered_blocks = set()
+    transport_by_block = {
+        canonical_block_for_device(device): transport
+        for device, transport in block_devices
+        if canonical_block_for_device(device)
+    }
 
     for device, device_type in scan_targets:
         key = (device, device_type)
         if key in seen_targets:
             continue
         seen_targets.add(key)
-        targets.append(key)
+        block = canonical_block_for_device(device)
+        targets.append((device, device_type, transport_by_block.get(block, "")))
         if not is_multiplexed_device_type(device_type):
-            block = canonical_block_for_device(device)
             if block:
                 covered_blocks.add(block)
 
-    for device in block_devices:
+    for device, transport in block_devices:
         block = canonical_block_for_device(device)
         if not block or block in covered_blocks:
             continue
@@ -1023,14 +1058,14 @@ def union_smart_targets(scan_targets, block_devices):
         if key in seen_targets:
             continue
         seen_targets.add(key)
-        targets.append(key)
+        targets.append((key[0], key[1], transport))
         covered_blocks.add(block)
 
     return targets
 
 
 def smart_targets(path):
-    result = run_command([path, "--scan-open"])
+    result = run_command([path, "--scan"])
 
     targets = []
     seen = set()
@@ -1069,7 +1104,7 @@ def smart_targets(path):
     return union_smart_targets(scan_targets, block_device_targets())
 
 
-def smart_probe_attempts(device, device_type):
+def smart_probe_attempts(device, device_type, transport):
     attempts = []
     seen = set()
 
@@ -1080,15 +1115,15 @@ def smart_probe_attempts(device, device_type):
         seen.add(key)
         attempts.append(key)
 
-    if device_type:
+    if device_type and smart_device_type_matches_transport(device_type, transport):
         add(device_type)
-    else:
-        add("")
 
     if device_type and not is_multiplexed_device_type(device_type):
         add("")
+    elif not device_type:
+        add("")
     if not is_multiplexed_device_type(device_type):
-        for dtype in inferred_smart_device_types(device):
+        for dtype in inferred_transport_device_types(device, transport):
             add(dtype)
     return attempts
 
@@ -1190,9 +1225,9 @@ def collect_smart():
 
     entries = []
     observed_at = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    for device, device_type in smart_targets(path):
+    for device, device_type, transport in smart_targets(path):
         best_entry = None
-        attempts = smart_probe_attempts(device, device_type)
+        attempts = smart_probe_attempts(device, device_type, transport)
         for attempt_index, (attempt_device, attempt_type) in enumerate(attempts):
             args = [path]
             if attempt_type:

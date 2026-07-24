@@ -155,7 +155,7 @@ func TestIssue1595CollectSMARTLocalPreservesTwentyFourSASDisksAcrossTwoHBAs(t *t
 	var active atomic.Int32
 	var maxActive atomic.Int32
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) == 1 && args[0] == "--scan-open" {
+		if len(args) == 1 && args[0] == "--scan" {
 			return []byte(scan.String()), nil
 		}
 		device := strings.TrimPrefix(args[len(args)-1], "/dev/")
