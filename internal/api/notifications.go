@@ -707,67 +707,10 @@ func (h *NotificationHandlers) GetWebhookHistory(w http.ResponseWriter, r *http.
 	json.NewEncoder(w).Encode(history)
 }
 
-// redactSecretsFromURL masks tokens and credentials in URLs
+// redactSecretsFromURL is retained as the API package boundary for delivery
+// history while the canonical redaction policy lives with webhook execution.
 func redactSecretsFromURL(urlStr string) string {
-	// Redact common patterns like:
-	// - /bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/sendMessage → /botXXX:REDACTED/sendMessage
-	// - ?token=abc123 → ?token=REDACTED
-	// - ?apikey=abc123 → ?apikey=REDACTED
-
-	// Redact Telegram bot tokens
-	if idx := strings.Index(urlStr, "/bot"); idx != -1 {
-		// Search for next "/" after "/bot" (starting at idx+4)
-		if endIdx := strings.Index(urlStr[idx+4:], "/"); endIdx != -1 {
-			urlStr = urlStr[:idx+4] + "REDACTED" + urlStr[idx+4+endIdx:]
-		} else {
-			// No trailing slash - token extends to end of URL or query string
-			if qIdx := strings.Index(urlStr[idx+4:], "?"); qIdx != -1 {
-				urlStr = urlStr[:idx+4] + "REDACTED" + urlStr[idx+4+qIdx:]
-			} else {
-				urlStr = urlStr[:idx+4] + "REDACTED"
-			}
-		}
-	}
-
-	// Redact query parameters with sensitive names
-	if qIdx := strings.Index(urlStr, "?"); qIdx != -1 {
-		sensitiveParams := []string{"token", "apikey", "api_key", "key", "secret", "password"}
-		for _, param := range sensitiveParams {
-			pattern := param + "="
-			// Search for the pattern after the query string starts
-			searchStart := qIdx
-			for {
-				paramIdx := strings.Index(urlStr[searchStart:], pattern)
-				if paramIdx == -1 {
-					break
-				}
-				paramIdx += searchStart // Convert to absolute index
-
-				// Check that we're at a parameter boundary (after ? or &)
-				if paramIdx > 0 {
-					prevChar := urlStr[paramIdx-1]
-					if prevChar != '?' && prevChar != '&' {
-						// Not at a boundary - this is part of another param name
-						// Move past this match and continue searching
-						searchStart = paramIdx + len(pattern)
-						continue
-					}
-				}
-
-				// Valid match - redact the value
-				start := paramIdx + len(pattern)
-				end := start
-				for end < len(urlStr) && urlStr[end] != '&' && urlStr[end] != '#' {
-					end++
-				}
-				urlStr = urlStr[:start] + "REDACTED" + urlStr[end:]
-				// After modification, continue from after the inserted REDACTED
-				searchStart = start + len("REDACTED")
-			}
-		}
-	}
-
-	return urlStr
+	return notifications.RedactWebhookURLSecrets(urlStr)
 }
 
 // GetEmailProviders returns available email providers
@@ -813,7 +756,7 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 
 	log.Info().
 		Str("service", webhook.Service).
-		Str("url", webhook.URL).
+		Str("url", notifications.RedactWebhookURLSecrets(webhook.URL)).
 		Str("name", webhook.Name).
 		Msg("Testing webhook")
 

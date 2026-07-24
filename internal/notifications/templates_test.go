@@ -239,6 +239,7 @@ func TestGetWebhookTemplates_KnownServices(t *testing.T) {
 		"slack",
 		"teams",
 		"pagerduty",
+		"gotify",
 		"generic",
 	}
 

@@ -1137,6 +1137,7 @@ describe('WebhookConfig', () => {
       { service: 'teams', expected: 'Microsoft Teams' },
       { service: 'pagerduty', expected: 'PagerDuty' },
       { service: 'telegram', expected: 'Telegram' },
+      { service: 'gotify', expected: 'Gotify' },
       { service: 'ntfy', expected: 'ntfy' },
     ];
 

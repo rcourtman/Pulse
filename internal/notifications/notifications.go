@@ -2745,7 +2745,7 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send webhook: %w", err)
+		return nil, fmt.Errorf("failed to send webhook: %w", redactWebhookTransportError(err))
 	}
 	defer resp.Body.Close()
 
@@ -2790,7 +2790,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 		log.Error().
 			Err(err).
 			Str("webhook", webhook.Name).
-			Str("url", webhook.URL).
+			Str("url", RedactWebhookURLSecrets(webhook.URL)).
 			Msg("webhook URL validation failed at send time - possible DNS rebinding")
 		return fmt.Errorf("webhook URL validation failed: %w", err)
 	}
@@ -2799,7 +2799,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 	if !n.checkWebhookRateLimit(webhook.URL) {
 		log.Warn().
 			Str("webhook", webhook.Name).
-			Str("url", webhook.URL).
+			Str("url", RedactWebhookURLSecrets(webhook.URL)).
 			Msg("Webhook request dropped due to rate limiting")
 		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}
@@ -3160,7 +3160,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 		}
 		log.Debug().
 			Str("host", host).
-			Str("url", webhookURL).
+			Str("url", RedactWebhookURLSecrets(webhookURL)).
 			Msg("localhost webhook URL allowed via allowlist")
 	}
 
@@ -3183,7 +3183,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 			if n.isIPInAllowlist(ip) {
 				log.Debug().
 					Str("ip", ip.String()).
-					Str("url", webhookURL).
+					Str("url", RedactWebhookURLSecrets(webhookURL)).
 					Msg("webhook URL resolves to private IP in allowlist")
 			} else {
 				return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security (configure allowlist in System Settings)", ip.String())
@@ -3207,7 +3207,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 	// This helps prevent SSRF attacks using numeric IPs to bypass filters
 	if u.Scheme == "https" && isNumericIP(host) {
 		log.Warn().
-			Str("url", webhookURL).
+			Str("url", RedactWebhookURLSecrets(webhookURL)).
 			Msg("webhook URL uses numeric IP with HTTPS - certificate validation may fail")
 	}
 

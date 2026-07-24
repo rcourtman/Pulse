@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,45 @@ func TestEnhancedWebhook(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, "ok", resp)
+}
+
+func TestGotifyPresetTestDelivery(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.example")
+	require.NoError(t, nm.UpdateAllowedPrivateCIDRs("127.0.0.1"))
+
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "gotify-app-token", r.URL.Query().Get("token"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var payload struct {
+			Message  string                 `json:"message"`
+			Title    string                 `json:"title"`
+			Priority int                    `json:"priority"`
+			Extras   map[string]interface{} `json:"extras"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		assert.NotEmpty(t, payload.Message)
+		assert.NotEmpty(t, payload.Title)
+		assert.Positive(t, payload.Priority)
+		assert.Contains(t, payload.Extras, "client::display")
+		assert.Contains(t, payload.Extras, "pulse::alert")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":1}`))
+	}))
+	defer server.Close()
+
+	basic := WebhookConfig{
+		Name:    "Operations Gotify",
+		URL:     server.URL + "/message?token=gotify-app-token",
+		Method:  http.MethodPost,
+		Enabled: true,
+		Service: "gotify",
+	}
+	status, response, err := nm.TestEnhancedWebhook(BuildEnhancedWebhookTestConfig(basic, "gotify"))
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, status)
+	assert.JSONEq(t, `{"id":1}`, response)
 }
 
 func TestShouldSendWebhook(t *testing.T) {

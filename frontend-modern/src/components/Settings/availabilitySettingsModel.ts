@@ -125,10 +125,20 @@ export function getAvailabilityTargetStatusClass(target: AvailabilityTarget): st
 
 export function getAvailabilityTargetsSummary(targets: readonly AvailabilityTarget[]): string {
   const enabled = targets.filter((target) => target.enabled).length;
+  const indeterminate = targets.filter(
+    (target) => target.enabled && target.status?.outcome === 'indeterminate',
+  ).length;
   const down = targets.filter(
-    (target) => target.enabled && target.status?.available === false,
+    (target) =>
+      target.enabled &&
+      target.status?.available === false &&
+      target.status.outcome !== 'indeterminate',
   ).length;
   if (targets.length === 0) return 'No availability checks configured';
+  if (down > 0 && indeterminate > 0) {
+    return `${down} down · ${indeterminate} open or filtered · ${enabled} enabled`;
+  }
   if (down > 0) return `${down} down · ${enabled} enabled`;
+  if (indeterminate > 0) return `${indeterminate} open or filtered · ${enabled} enabled`;
   return `${enabled} enabled · ${targets.length} total`;
 }

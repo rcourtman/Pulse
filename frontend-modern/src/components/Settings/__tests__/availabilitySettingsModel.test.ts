@@ -105,6 +105,41 @@ describe('availabilitySettingsModel', () => {
         }),
       ]),
     ).toBe('1 down · 2 enabled');
+    expect(
+      getAvailabilityTargetsSummary([
+        target({
+          protocol: 'udp',
+          port: 27015,
+          status: {
+            ...target(),
+            targetId: 'steam-server',
+            protocol: 'udp',
+            available: false,
+            outcome: 'indeterminate',
+          },
+        }),
+      ]),
+    ).toBe('1 open or filtered · 1 enabled');
+    expect(
+      getAvailabilityTargetsSummary([
+        target({
+          id: 'closed-port',
+          status: { ...target(), targetId: 'closed-port', available: false },
+        }),
+        target({
+          id: 'silent-port',
+          protocol: 'udp',
+          port: 27015,
+          status: {
+            ...target(),
+            targetId: 'silent-port',
+            protocol: 'udp',
+            available: false,
+            outcome: 'indeterminate',
+          },
+        }),
+      ]),
+    ).toBe('1 down · 1 open or filtered · 2 enabled');
     expect(getAvailabilityTargetStatusClass(target({ enabled: false }))).toBe(
       'bg-surface-alt text-muted',
     );

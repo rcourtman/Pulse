@@ -4,6 +4,7 @@
 package migration
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -254,6 +256,49 @@ func TestV5DataDir_EncryptedConfigRoundtrip(t *testing.T) {
 	nodesCfg3, err := cp2.LoadNodesConfig()
 	require.NoError(t, err)
 	assert.Len(t, nodesCfg3.PVEInstances, 4)
+}
+
+func TestV5GotifyWebhookSurvivesV6LoadAndRestart(t *testing.T) {
+	dataDir, _, _, _, _ := buildV5DataDir(t)
+	const token = "v5-gotify-app-token"
+
+	// v5.1.36 stored this exact WebhookConfig JSON shape in webhooks.enc with
+	// the installation's AES-GCM key. Build that fixture directly so this test
+	// does not accidentally rely on the current SaveWebhooks implementation.
+	v5Webhooks := []notifications.WebhookConfig{{
+		ID:      "gotify-v5",
+		Name:    "Operations Gotify",
+		URL:     "https://gotify.example/message?token=" + token,
+		Method:  "POST",
+		Headers: map[string]string{"Content-Type": "application/json"},
+		Enabled: true,
+		Service: "gotify",
+	}}
+	plaintext, err := json.Marshal(v5Webhooks)
+	require.NoError(t, err)
+
+	cryptoManager, err := crypto.NewCryptoManagerAt(dataDir)
+	require.NoError(t, err)
+	encrypted, err := cryptoManager.Encrypt(plaintext)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "webhooks.enc"), encrypted, 0o600))
+
+	v6Persistence := config.NewConfigPersistence(dataDir)
+	loaded, err := v6Persistence.LoadWebhooks()
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+	assert.Equal(t, v5Webhooks[0], loaded[0])
+
+	// A fresh persistence instance models the post-upgrade process restart.
+	restarted := config.NewConfigPersistence(dataDir)
+	loadedAfterRestart, err := restarted.LoadWebhooks()
+	require.NoError(t, err)
+	require.Len(t, loadedAfterRestart, 1)
+	assert.Equal(t, v5Webhooks[0], loadedAfterRestart[0])
+
+	stored, err := os.ReadFile(filepath.Join(dataDir, "webhooks.enc"))
+	require.NoError(t, err)
+	assert.False(t, bytes.Contains(stored, []byte(token)), "Gotify token must remain encrypted at rest")
 }
 
 // TestV5DataDir_EmptyDataDir verifies that v6 starts cleanly against an
