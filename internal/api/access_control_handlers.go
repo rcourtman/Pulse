@@ -40,6 +40,21 @@ func NewRBACHandlers(cfg *config.Config, rbacProvider ...*TenantRBACProvider) *R
 	}
 }
 
+// rbacMigrationFailure reports a store whose legacy import was rejected.
+//
+// The store itself stays live so admin recovery keeps working, but RBAC
+// management routes must still fail closed: the operator is looking at data
+// that does not include their legacy roles and assignments, and editing it
+// would build on an incomplete picture. Recovery reaches the provider directly
+// and so is deliberately not routed through this check.
+func rbacMigrationFailure(manager any) error {
+	degraded, ok := manager.(interface{ MigrationError() error })
+	if !ok {
+		return nil
+	}
+	return degraded.MigrationError()
+}
+
 // getManager returns the RBAC Manager for the org in the request context.
 // Falls back to global manager if no provider is set (backward compat).
 func (h *RBACHandlers) getManager(ctx context.Context) (auth.Manager, error) {
@@ -47,6 +62,9 @@ func (h *RBACHandlers) getManager(ctx context.Context) (auth.Manager, error) {
 		orgID := GetOrgID(ctx)
 		manager, err := h.rbacProvider.GetManager(orgID)
 		if err != nil {
+			return nil, err
+		}
+		if err := rbacMigrationFailure(manager); err != nil {
 			return nil, err
 		}
 		return manager, nil
@@ -60,6 +78,9 @@ func (h *RBACHandlers) getExtendedManager(ctx context.Context) (auth.ExtendedMan
 		orgID := GetOrgID(ctx)
 		manager, err := h.rbacProvider.GetManager(orgID)
 		if err != nil {
+			return nil, err
+		}
+		if err := rbacMigrationFailure(manager); err != nil {
 			return nil, err
 		}
 		return manager, nil

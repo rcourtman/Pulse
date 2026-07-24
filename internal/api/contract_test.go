@@ -21686,3 +21686,80 @@ func TestContract_DockerContainerUpdateRidesTheLifecycleExecutor(t *testing.T) {
 		t.Fatalf("restart operation resolves handler %q, want %q", handler, dockerContainerLifecycleHandler)
 	}
 }
+
+// TestAdminRecoverySurvivesFailedLegacyRBACMigration is the regression guard for
+// the recovery hole in d235aab3c. That commit put MigrateFromFiles on a
+// production path for the default org and failed the whole manager when the
+// import was rejected, so GetManager returned an error, every RBAC route 503'd,
+// and ResetAdminRole (the operator's only way back) was unreachable. The
+// realistic trigger is a v5 install that recreated a role the v6 store already
+// holds under the same ID.
+func TestAdminRecoverySurvivesFailedLegacyRBACMigration(t *testing.T) {
+	dataDir := t.TempDir()
+
+	// Seed a v6 store so the legacy file below is a genuine current-state
+	// conflict rather than a first-time import.
+	seed, err := authpkg.NewSQLiteManager(authpkg.SQLiteManagerConfig{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("seed manager: %v", err)
+	}
+	if err := seed.SaveRole(authpkg.Role{
+		ID:          "operations",
+		Name:        "Operations",
+		Permissions: []authpkg.Permission{{Action: "read", Resource: "*", Effect: authpkg.EffectAllow}},
+	}); err != nil {
+		t.Fatalf("seed role: %v", err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close seed manager: %v", err)
+	}
+
+	// Same ID, different content: the conflict the migration must reject.
+	legacy, err := json.Marshal([]authpkg.Role{{
+		ID:          "operations",
+		Name:        "Operations (legacy)",
+		Permissions: []authpkg.Permission{{Action: "admin", Resource: "*", Effect: authpkg.EffectAllow}},
+	}})
+	if err != nil {
+		t.Fatalf("marshal legacy roles: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "rbac_roles.json"), legacy, 0600); err != nil {
+		t.Fatalf("write legacy roles: %v", err)
+	}
+
+	provider := NewTenantRBACProvider(dataDir)
+
+	manager, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager must survive a rejected legacy import: %v", err)
+	}
+	sqliteManager, ok := manager.(*authpkg.SQLiteManager)
+	if !ok {
+		t.Fatalf("expected a SQLite-backed manager, got %T", manager)
+	}
+	migrationErr := sqliteManager.MigrationError()
+	if migrationErr == nil || !strings.Contains(migrationErr.Error(), "conflicts with current v6 data") {
+		t.Fatalf("migration error = %v, want the rejected current-state conflict", migrationErr)
+	}
+
+	// The whole point: recovery is still reachable.
+	if err := ResetAdminRole(provider, "default", "operator"); err != nil {
+		t.Fatalf("admin recovery unreachable after a failed migration: %v", err)
+	}
+
+	if _, exists := manager.GetRole(authpkg.RoleAdmin); !exists {
+		t.Fatal("admin role missing after recovery")
+	}
+
+	// The rejected legacy data stayed rejected and its source was preserved.
+	role, exists := manager.GetRole("operations")
+	if !exists {
+		t.Fatal("pre-existing v6 role was lost")
+	}
+	if role.Name != "Operations" {
+		t.Fatalf("legacy data overwrote current v6 role: %+v", role)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "rbac_roles.json")); err != nil {
+		t.Fatalf("legacy source was not preserved for a retry: %v", err)
+	}
+}

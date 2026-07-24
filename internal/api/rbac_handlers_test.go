@@ -430,6 +430,14 @@ func TestRBACHandlersReportLegacyMigrationFailure(t *testing.T) {
 	if !bytes.Contains(response.Body.Bytes(), []byte(`"code":"rbac_store_unavailable"`)) {
 		t.Fatalf("missing explicit RBAC store error: %s", response.Body.String())
 	}
+
+	// Management routes fail closed, but the store itself stays live so admin
+	// recovery remains reachable. Failing the manager outright used to take
+	// ResetAdminRole down with the rest of the surface, leaving no way back
+	// from a rejected legacy import.
+	if err := ResetAdminRole(provider, "default", "operator"); err != nil {
+		t.Fatalf("admin recovery must stay reachable while RBAC routes fail closed: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(baseDir, "rbac_roles.json")); err != nil {
 		t.Fatalf("corrupt source was not preserved: %v", err)
 	}

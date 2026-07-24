@@ -34,6 +34,9 @@ type SQLiteManager struct {
 	db                 *sql.DB
 	dbPath             string
 	changeLogRetention int
+	// migrationErr records a failed legacy import. The store stays usable so
+	// the operator can still reach RBAC, including admin recovery.
+	migrationErr error
 }
 
 // NewSQLiteManager creates a new SQLite-backed RBAC manager.
@@ -102,15 +105,37 @@ func NewSQLiteManager(cfg SQLiteManagerConfig) (*SQLiteManager, error) {
 		return nil, fmt.Errorf("failed to initialize built-in roles: %w", err)
 	}
 
-	// Migrate from file-based storage if requested
+	// Migrate from file-based storage if requested.
+	//
+	// A failure here must not take the manager down with it. importLegacyRBAC
+	// runs in a transaction and the legacy files are left in place, so a failed
+	// import leaves the database un-migrated rather than half-migrated: users
+	// are missing roles, which denies access rather than granting it. Returning
+	// nil instead would fail GetManager for the whole org and 503 every RBAC
+	// route, including ResetAdminRole, which is the operator's only way back.
+	// The realistic trigger is a v5 install that recreated a role the v6 store
+	// already has under the same ID, so this is reachable on ordinary upgrades.
 	if cfg.MigrateFromFiles {
 		if err := m.migrateFromFiles(dataDir); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("migrate legacy RBAC data: %w", err)
+			m.migrationErr = fmt.Errorf("migrate legacy RBAC data: %w", err)
+			log.Error().
+				Err(err).
+				Str("dataDir", dataDir).
+				Msg("Legacy RBAC import failed. The RBAC store is running without the legacy data; " +
+					"the legacy files were left untouched. Resolve the conflict and restart to retry.")
 		}
 	}
 
 	return m, nil
+}
+
+// MigrationError reports a failed legacy RBAC import, or nil when the import
+// succeeded or was not requested. The manager is usable either way; this exists
+// so callers can surface the degraded state instead of it living only in logs.
+func (m *SQLiteManager) MigrationError() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.migrationErr
 }
 
 func (m *SQLiteManager) initSchema() error {

@@ -2158,6 +2158,22 @@ Agent` secondary handoff against the live setup wizard instead of relying
     consume one declared-type initial registration after durable first-host
     binding and serialized completion.
 
+22. A rejected legacy RBAC import must not destroy the store. The import is
+    transactional and leaves the legacy files in place, so a failure leaves the
+    database un-migrated rather than half-migrated, which denies access rather
+    than granting it. Failing manager construction instead takes the whole org's
+    RBAC surface offline including `ResetAdminRole`, the operator's only way
+    back, on a conflict an ordinary v5 upgrade can produce. The store therefore
+    stays live and records the failure on `SQLiteManager.MigrationError`.
+    Management routes still fail closed with `rbac_store_unavailable` through
+    the handler manager accessors; recovery reaches the provider directly and is
+    deliberately exempt. Regression coverage:
+    `TestAdminRecoverySurvivesFailedLegacyRBACMigration` in
+    `internal/api/contract_test.go`,
+    `TestRBACHandlersReportLegacyMigrationFailure` in
+    `internal/api/rbac_handlers_test.go`, and the rejection cases in
+    `pkg/auth/sqlite_manager_test.go`.
+
 ## Current State
 
 ### PBS connection health does not create agent lifecycle evidence

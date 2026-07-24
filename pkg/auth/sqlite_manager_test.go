@@ -454,11 +454,21 @@ func TestSQLiteManagerMigrationRejectsCorruptAndStaleData(t *testing.T) {
 				DataDir:          tmpDir,
 				MigrateFromFiles: true,
 			})
-			if manager != nil {
-				_ = manager.Close()
+			// A rejected import must not take the store down with it: the
+			// manager still has to serve RBAC, including admin recovery.
+			if err != nil {
+				t.Fatalf("rejected migration must not fail manager construction: %v", err)
 			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
-				t.Fatalf("error = %v, want substring %q", err, tt.wantError)
+			if manager == nil {
+				t.Fatal("manager is nil after a rejected migration")
+			}
+			defer func() { _ = manager.Close() }()
+			migrationErr := manager.MigrationError()
+			if migrationErr == nil || !strings.Contains(migrationErr.Error(), tt.wantError) {
+				t.Fatalf("migration error = %v, want substring %q", migrationErr, tt.wantError)
+			}
+			if roles := manager.GetRoles(); len(roles) == 0 {
+				t.Fatal("store unusable after a rejected migration: no built-in roles")
 			}
 			if _, err := os.Stat(rolesPath); err != nil {
 				t.Fatalf("legacy roles source was not preserved: %v", err)
@@ -512,12 +522,22 @@ func TestSQLiteManagerMigrationRejectsCurrentStateConflicts(t *testing.T) {
 		DataDir:          tmpDir,
 		MigrateFromFiles: true,
 	})
-	if manager != nil {
-		_ = manager.Close()
+	if err != nil {
+		t.Fatalf("conflicting migration must not fail manager construction: %v", err)
 	}
-	if err == nil || !strings.Contains(err.Error(), "conflicts with current v6 data") {
-		t.Fatalf("error = %v, want current-state conflict", err)
+	if manager == nil {
+		t.Fatal("manager is nil after a conflicting migration")
 	}
+	migrationErr := manager.MigrationError()
+	if migrationErr == nil || !strings.Contains(migrationErr.Error(), "conflicts with current v6 data") {
+		t.Fatalf("migration error = %v, want current-state conflict", migrationErr)
+	}
+	// The conflict is the realistic v5 upgrade case, so the operator must still
+	// be able to reach RBAC rather than facing a store-wide outage.
+	if roles := manager.GetRoles(); len(roles) == 0 {
+		t.Fatal("store unusable after a conflicting migration: no built-in roles")
+	}
+	_ = manager.Close()
 
 	reopened, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: tmpDir})
 	if err != nil {
