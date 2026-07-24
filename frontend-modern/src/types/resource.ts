@@ -644,6 +644,8 @@ export interface ResourceAgentMeta {
 }
 
 export interface ResourceProxmoxMeta {
+  /** Proxmox-authored VM/LXC power state, kept separate from collection freshness. */
+  runtimeStatus?: string;
   vmid?: number;
   node?: string;
   nodeName?: string;

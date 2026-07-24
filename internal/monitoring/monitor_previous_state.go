@@ -93,14 +93,17 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 	if vm == nil {
 		return models.VM{}
 	}
+	instance := vm.Instance()
+	node := vm.Node()
+	vmid := vm.VMID()
 	return models.VM{
-		ID:           vm.ID(),
-		Instance:     vm.Instance(),
-		Node:         vm.Node(),
-		VMID:         vm.VMID(),
+		ID:           makeGuestID(instance, node, vmid),
+		Instance:     instance,
+		Node:         node,
+		VMID:         vmid,
 		Name:         vm.Name(),
 		Type:         "qemu",
-		Status:       string(vm.Status()),
+		Status:       vm.RuntimeStatus(),
 		IPAddresses:  vm.IPAddresses(),
 		OSName:       vm.OSName(),
 		OSVersion:    vm.OSVersion(),
@@ -122,13 +125,16 @@ func previousContainerFromView(ct *unifiedresources.ContainerView) models.Contai
 	if ct == nil {
 		return models.Container{}
 	}
+	instance := ct.Instance()
+	node := ct.Node()
+	vmid := ct.VMID()
 	return models.Container{
-		ID:       ct.ID(),
-		Instance: ct.Instance(),
-		Node:     ct.Node(),
-		VMID:     ct.VMID(),
+		ID:       makeGuestID(instance, node, vmid),
+		Instance: instance,
+		Node:     node,
+		VMID:     vmid,
 		Name:     ct.Name(),
-		Status:   string(ct.Status()),
+		Status:   ct.RuntimeStatus(),
 		Type:     ct.ContainerType(),
 		IsOCI:    ct.IsOCI(),
 		LastSeen: ct.LastSeen(),

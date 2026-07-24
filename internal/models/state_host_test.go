@@ -1327,6 +1327,44 @@ func TestSyncGuestBackupTimesVMContainerCollision(t *testing.T) {
 	}
 }
 
+func TestUpdateGuestsForInstancePublishesCoherentGeneration(t *testing.T) {
+	state := NewState()
+	previousBackup := time.Now().Add(-2 * time.Hour).UTC()
+
+	state.UpdateVMs([]VM{
+		{ID: "lab-a:node-a:101", VMID: 101, Instance: "lab-a", Node: "node-a", LastBackup: previousBackup},
+		{ID: "lab-b:node-b:201", VMID: 201, Instance: "lab-b", Node: "node-b"},
+	})
+	state.UpdateContainers([]Container{
+		{ID: "lab-a:node-a:102", VMID: 102, Instance: "lab-a", Node: "node-a", LastBackup: previousBackup},
+		{ID: "lab-b:node-b:202", VMID: 202, Instance: "lab-b", Node: "node-b"},
+	})
+	before := state.GetSnapshot().LastUpdate
+
+	state.UpdateGuestsForInstance(
+		"lab-a",
+		[]VM{{ID: "lab-a:node-a:101", VMID: 101, Instance: "lab-a", Node: "node-a", Status: "running"}},
+		[]Container{{ID: "lab-a:node-a:103", VMID: 103, Instance: "lab-a", Node: "node-a", Status: "running"}},
+	)
+
+	snapshot := state.GetSnapshot()
+	if !snapshot.LastUpdate.After(before) {
+		t.Fatalf("LastUpdate did not advance: before=%v after=%v", before, snapshot.LastUpdate)
+	}
+	if len(snapshot.VMs) != 2 || len(snapshot.Containers) != 2 {
+		t.Fatalf("unexpected coherent generation sizes: vms=%d containers=%d", len(snapshot.VMs), len(snapshot.Containers))
+	}
+	if snapshot.VMs[0].ID != "lab-a:node-a:101" || !snapshot.VMs[0].LastBackup.Equal(previousBackup) {
+		t.Fatalf("updated VM did not retain backup state: %+v", snapshot.VMs[0])
+	}
+	if snapshot.Containers[0].ID != "lab-a:node-a:103" {
+		t.Fatalf("authoritatively deleted container remained in state: %+v", snapshot.Containers)
+	}
+	if snapshot.VMs[1].Instance != "lab-b" || snapshot.Containers[1].Instance != "lab-b" {
+		t.Fatalf("other instance was not isolated: vms=%+v containers=%+v", snapshot.VMs, snapshot.Containers)
+	}
+}
+
 func TestUpdateStorageBackupsForInstance(t *testing.T) {
 	state := NewState()
 

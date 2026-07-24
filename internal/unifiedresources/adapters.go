@@ -1676,6 +1676,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	metrics := metricsFromVM(vm)
 	proxmox := &ProxmoxData{
 		SourceID:           sourceID,
+		RuntimeStatus:      vm.Status,
 		NodeName:           vm.Node,
 		Pool:               vm.Pool,
 		Instance:           vm.Instance,
@@ -1742,6 +1743,7 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	metrics := metricsFromContainer(ct)
 	proxmox := &ProxmoxData{
 		SourceID:          sourceID,
+		RuntimeStatus:     ct.Status,
 		NodeName:          ct.Node,
 		Pool:              ct.Pool,
 		Instance:          ct.Instance,

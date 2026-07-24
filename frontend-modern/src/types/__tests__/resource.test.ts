@@ -240,6 +240,7 @@ describe('Resource Helper Functions', () => {
         vmid: 101,
         nodeName: 'pve-a',
         instance: 'cluster-a',
+        runtimeStatus: 'running',
         diskStatusReason: 'agent-not-running',
         guestAgentStatus: 'expected-unreachable',
         guestAgentExpected: true,
@@ -262,6 +263,7 @@ describe('Resource Helper Functions', () => {
 
       expect(resource.proxmox?.guestAgentStatus).toBe('expected-unreachable');
       expect(resource.proxmox?.guestAgentExpected).toBe(true);
+      expect(resource.proxmox?.runtimeStatus).toBe('running');
       expect(resource.proxmox?.diskStatusReason).toBe('agent-not-running');
       expect(resource.incidents?.[0]?.source).toBe('qemu-guest-agent');
     });

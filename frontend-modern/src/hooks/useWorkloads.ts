@@ -87,6 +87,7 @@ type APIResource = {
   node?: string;
   instance?: string;
   proxmox?: {
+    runtimeStatus?: string;
     nodeName?: string;
     clusterName?: string;
     instance?: string;
@@ -451,7 +452,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     node,
     instance,
     status: normalizeWorkloadStatus(
-      resource.status || (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
+      resource.proxmox?.runtimeStatus ||
+        resource.status ||
+        (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
     ),
     type:
       workloadType === 'vm'
@@ -587,10 +590,9 @@ async function fetchWorkloads(): Promise<WorkloadGuest[]> {
     for (let page = 2; page <= totalPages; page++) {
       pageRequests.push(apiFetchJSON<unknown>(buildWorkloadsUrl(page), { cache: 'no-store' }));
     }
-    const settled = await Promise.allSettled(pageRequests);
-    for (const result of settled) {
-      if (result.status !== 'fulfilled') continue;
-      const pageData = resolveWorkloadsPayload(result.value);
+    const responses = await Promise.all(pageRequests);
+    for (const response of responses) {
+      const pageData = resolveWorkloadsPayload(response);
       allResources.push(...pageData.data);
     }
   }
@@ -775,8 +777,12 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
         }
         applyWorkloads(data, scope);
         setError(undefined);
-      } catch {
-        // Silently ignore poll errors; keep showing last data
+      } catch (err) {
+        // Keep the last coherent snapshot while making the failed refresh
+        // observable to the surface.
+        if (scope === resolveActiveOrgScope()) {
+          setError(err);
+        }
       }
     }, DEFAULT_POLL_INTERVAL_MS);
     onCleanup(() => clearInterval(id));

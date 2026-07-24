@@ -27,6 +27,14 @@ Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
 the stale threshold is derived from the configured polling interval with a
 minimum floor, so API-facing resource status must not degrade merely because a
 healthy source is between normal poll cycles.
+Proxmox guest enumeration is a generation boundary. VM and LXC collection and
+enrichment must finish before one `State.UpdateGuestsForInstance` publication,
+so readers never observe a VM-only or LXC-only intermediate snapshot. A failed
+online cluster member retains only that member's last coherent guests and their
+source-native `{instance}:{node}:{vmid}` IDs; a successful empty member
+enumeration is authoritative and removes genuinely deleted guests. Collection
+failure remains visible through source freshness/error state and must not be
+converted into an authoritative empty inventory.
 Host-agent report liveness is server-observed, not agent-clock-observed:
 `ApplyHostReport` must stamp `Host.LastSeen`, agent-sourced Ceph cluster
 freshness, and host-agent cluster sensor freshness from Pulse receipt time, so
@@ -213,6 +221,7 @@ node-local Agent evidence.
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
+38a. `internal/models/proxmox_guest_state.go`
 39. `internal/models/models_frontend.go`
 40. `internal/models/converters.go`
 41. `internal/models/deepcopy.go`

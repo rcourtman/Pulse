@@ -200,6 +200,19 @@ func TestMonitorAdapterUsesConfiguredProxmoxStaleThreshold(t *testing.T) {
 	if defaultVMs[0].Status() != StatusWarning {
 		t.Fatalf("default stale threshold status = %q, want warning", defaultVMs[0].Status())
 	}
+	if defaultVMs[0].RuntimeStatus() != "running" {
+		t.Fatalf("default stale runtime status = %q, want running", defaultVMs[0].RuntimeStatus())
+	}
+	defaultResources := defaultAdapter.GetByType(ResourceTypeVM)
+	if len(defaultResources) != 1 || defaultResources[0].Proxmox == nil {
+		t.Fatalf("expected one Proxmox VM resource, got %+v", defaultResources)
+	}
+	if got := defaultResources[0].Proxmox.RuntimeStatus; got != "running" {
+		t.Fatalf("Proxmox runtime status = %q, want running while collection is stale", got)
+	}
+	if got := defaultResources[0].SourceStatus[SourceProxmox].Status; got != "stale" {
+		t.Fatalf("Proxmox source status = %q, want stale", got)
+	}
 
 	adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), map[DataSource]time.Duration{
 		SourceProxmox: 10 * time.Minute,

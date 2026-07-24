@@ -1172,12 +1172,12 @@ func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	if len(prev.vms) != 1 || prev.vms[0].VMID != 101 || prev.vms[0].Instance != "pve1" || prev.vms[0].Name != "vm1" {
 		t.Fatalf("expected only pve1 VMs, got %#v", prev.vms)
 	}
-	canonicalID := prev.vms[0].ID
-	if len(prev.vmsByID) != 2 || prev.vmsByID[canonicalID].VMID != 101 || prev.vmsByID[makeGuestID("pve1", "", 101)].VMID != 101 {
-		t.Fatalf("expected previous VM lookup to be indexed by canonical and runtime guest IDs, got %#v", prev.vmsByID)
+	guestID := makeGuestID("pve1", "", 101)
+	if prev.vms[0].ID != guestID || len(prev.vmsByID) != 1 || prev.vmsByID[guestID].VMID != 101 {
+		t.Fatalf("expected previous VM lookup to retain the source-authored guest ID, got %#v", prev.vmsByID)
 	}
-	if prev.vmsByID[canonicalID].Disk.Total != 100 || prev.vmsByID[canonicalID].Disk.Used != 40 {
-		t.Fatalf("expected previous VM projection to preserve aggregate disk summary, got %#v", prev.vmsByID[canonicalID].Disk)
+	if prev.vmsByID[guestID].Disk.Total != 100 || prev.vmsByID[guestID].Disk.Used != 40 {
+		t.Fatalf("expected previous VM projection to preserve aggregate disk summary, got %#v", prev.vmsByID[guestID].Disk)
 	}
 	if len(prev.containers) != 2 {
 		t.Fatalf("expected only pve1 containers, got %#v", prev.containers)

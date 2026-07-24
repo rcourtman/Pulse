@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+func (m *Monitor) collectVMsWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) []models.VM {
 	startTime := time.Now()
 
 	type nodeResult struct {
@@ -85,10 +85,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	qemuTemplateSubjects := make(map[string]struct{})
 	successfulNodes := 0
 	failedNodes := 0
+	failedNodeNames := make(map[string]struct{})
 
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
+			failedNodeNames[result.node] = struct{}{}
 			continue
 		}
 		successfulNodes++
@@ -101,20 +103,22 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		m.updatePVEBackupTemplateSubjectsForType(instanceName, "qemu", qemuTemplateSubjects)
 	}
 
-	if len(allVMs) == 0 && len(nodes) > 0 {
-		allVMs = append(allVMs, prevGuests.vms...)
-		prevVMCount := len(prevGuests.vms)
-		if prevVMCount > 0 {
-			log.Warn().
-				Str("instance", instanceName).
-				Int("prevVMs", prevVMCount).
-				Int("successfulNodes", successfulNodes).
-				Int("totalNodes", len(nodes)).
-				Msg("Traditional polling returned zero VMs but had VMs before - preserving previous VMs")
+	preservedVMs := 0
+	if len(failedNodeNames) > 0 {
+		for _, vm := range prevGuests.vms {
+			if _, failed := failedNodeNames[vm.Node]; failed {
+				allVMs = append(allVMs, vm)
+				preservedVMs++
+			}
 		}
 	}
-
-	m.state.UpdateVMsForInstance(instanceName, allVMs)
+	if preservedVMs > 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("preservedVMs", preservedVMs).
+			Int("failedNodes", failedNodes).
+			Msg("Preserved prior VMs for nodes whose enumeration failed")
+	}
 
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
@@ -136,4 +140,14 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		Int("failedNodes", failedNodes).
 		Dur("duration", duration).
 		Msg("Parallel VM polling completed")
+
+	return allVMs
+}
+
+// pollVMsWithNodes retains the focused single-kind polling entry point used by
+// tests and maintenance callers. The production guest cycle uses
+// collectVMsWithNodes and publishes both guest kinds atomically.
+func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+	vms := m.collectVMsWithNodes(ctx, instanceName, clusterName, isCluster, client, nodes, nodeEffectiveStatus)
+	m.state.UpdateVMsForInstance(instanceName, vms)
 }

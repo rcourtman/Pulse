@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) []models.Container {
 	startTime := time.Now()
 
 	// Channel to collect container results from each node
@@ -303,10 +303,12 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	lxcTemplateSubjects := make(map[string]struct{})
 	successfulNodes := 0
 	failedNodes := 0
+	failedNodeNames := make(map[string]struct{})
 
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
+			failedNodeNames[result.node] = struct{}{}
 		} else {
 			successfulNodes++
 			allContainers = append(allContainers, result.containers...)
@@ -319,27 +321,26 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		m.updatePVEBackupTemplateSubjectsForType(instanceName, "lxc", lxcTemplateSubjects)
 	}
 
-	// If we got ZERO containers but had containers before (likely cluster health issue),
-	// preserve previous containers instead of clearing them
-	if len(allContainers) == 0 && len(nodes) > 0 {
-		allContainers = append(allContainers, prevGuests.containers...)
-		prevContainerCount := len(prevGuests.containers)
-		if prevContainerCount > 0 {
-			log.Warn().
-				Str("instance", instanceName).
-				Int("prevContainers", prevContainerCount).
-				Int("successfulNodes", successfulNodes).
-				Int("totalNodes", len(nodes)).
-				Msg("Traditional polling returned zero containers but had containers before - preserving previous containers")
+	preservedContainers := 0
+	if len(failedNodeNames) > 0 {
+		for _, container := range prevGuests.containers {
+			if _, failed := failedNodeNames[container.Node]; failed {
+				allContainers = append(allContainers, container)
+				preservedContainers++
+			}
 		}
+	}
+	if preservedContainers > 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Int("preservedContainers", preservedContainers).
+			Int("failedNodes", failedNodes).
+			Msg("Preserved prior containers for nodes whose enumeration failed")
 	}
 
 	// Check Docker presence for containers that need it (new, restarted, started)
 	allContainers = m.CheckContainersForDocker(ctx, allContainers)
 	m.CollectProxmoxGuestDockerInventory(ctx, allContainers)
-
-	// Update state with all containers
-	m.state.UpdateContainersForInstance(instanceName, allContainers)
 
 	// Record guest metrics history for running containers (enables sparkline/trends view)
 	if !shouldSkipNativeMockStateMetricWrites() {
@@ -362,6 +363,16 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 		Int("failedNodes", failedNodes).
 		Dur("duration", duration).
 		Msg("Parallel container polling completed")
+
+	return allContainers
+}
+
+// pollContainersWithNodes retains the focused single-kind polling entry point
+// used by tests and maintenance callers. The production guest cycle uses
+// collectContainersWithNodes and publishes both guest kinds atomically.
+func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName string, clusterName string, isCluster bool, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+	containers := m.collectContainersWithNodes(ctx, instanceName, clusterName, isCluster, client, nodes, nodeEffectiveStatus)
+	m.state.UpdateContainersForInstance(instanceName, containers)
 }
 
 // pollStorageWithNodes polls storage from all nodes in parallel using goroutines

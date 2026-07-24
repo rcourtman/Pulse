@@ -331,7 +331,8 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
-	SourceID                     string              `json:"sourceId,omitempty"` // raw model ID from source snapshot
+	SourceID                     string              `json:"sourceId,omitempty"`      // raw model ID from source snapshot
+	RuntimeStatus                string              `json:"runtimeStatus,omitempty"` // source-authored VM/LXC power state, independent of collection freshness
 	NodeName                     string              `json:"nodeName,omitempty"`
 	Pool                         string              `json:"pool,omitempty"`
 	ClusterName                  string              `json:"clusterName,omitempty"`

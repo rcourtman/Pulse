@@ -5306,6 +5306,71 @@ func TestMarkStaleRecomputesFromRemainingFreshSources(t *testing.T) {
 	}
 }
 
+func TestMarkStaleKeepsProxmoxRuntimeStateIndependentOfAvailabilityFacet(t *testing.T) {
+	rr := NewRegistry(nil)
+	staleSeen := time.Now().UTC().Add(-5 * time.Minute)
+	freshSeen := time.Now().UTC()
+
+	for _, sourceID := range []string{"lab:node-a:101", "lab:node-a:102"} {
+		rr.IngestRecords(SourceProxmox, []IngestRecord{{
+			SourceID: sourceID,
+			Resource: Resource{
+				Type:     ResourceTypeSystemContainer,
+				Name:     sourceID,
+				Status:   StatusOnline,
+				LastSeen: staleSeen,
+				Proxmox:  &ProxmoxData{RuntimeStatus: "running", NodeName: "node-a"},
+			},
+		}})
+	}
+
+	resources := rr.ListByType(ResourceTypeSystemContainer)
+	if len(resources) != 2 {
+		t.Fatalf("expected two Proxmox containers, got %d", len(resources))
+	}
+	var checkedID string
+	for _, resource := range resources {
+		if resource.Name == "lab:node-a:102" {
+			checkedID = resource.ID
+			break
+		}
+	}
+	if checkedID == "" {
+		t.Fatal("availability target container not found")
+	}
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{{
+		SourceID: "probe-102",
+		Resource: Resource{
+			Type:     ResourceTypeNetworkEndpoint,
+			Name:     "probe-102",
+			Status:   StatusOnline,
+			LastSeen: freshSeen,
+			Availability: &AvailabilityData{
+				TargetID: "probe-102", LinkedResourceID: checkedID,
+				Address: "192.0.2.102", Protocol: "icmp", Enabled: true, Available: true,
+			},
+		},
+	}})
+
+	rr.MarkStale(freshSeen, nil)
+
+	resources = rr.ListByType(ResourceTypeSystemContainer)
+	statuses := make(map[string]ResourceStatus, len(resources))
+	for _, resource := range resources {
+		statuses[resource.Name] = resource.Status
+		if resource.Proxmox == nil || resource.Proxmox.RuntimeStatus != "running" {
+			t.Fatalf("runtime status changed with source freshness for %s: %+v", resource.Name, resource.Proxmox)
+		}
+	}
+	if got := statuses["lab:node-a:101"]; got != StatusWarning {
+		t.Fatalf("unfaceted stale container status = %q, want warning", got)
+	}
+	if got := statuses["lab:node-a:102"]; got != StatusOnline {
+		t.Fatalf("availability-faceted stale container status = %q, want online", got)
+	}
+}
+
 func TestResourceRegistryUsesConfiguredProxmoxStaleThresholds(t *testing.T) {
 	seen := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Millisecond)
 	snapshot := models.StateSnapshot{

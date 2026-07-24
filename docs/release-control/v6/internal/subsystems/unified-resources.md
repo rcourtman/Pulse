@@ -43,6 +43,18 @@ comparable fallback because LXC observes the shared kernel and QEMU accounting
 is independently scoped. Agent CPU may fill the field only when the platform
 has no CPU observation. Agent-only fields that the platform does not provide
 remain eligible per metric.
+Proxmox guest power state is likewise source-authored semantic state, separate
+from aggregate resource health. `ProxmoxData.RuntimeStatus` retains the last
+coherent `running`/`stopped` observation while `Resource.Status` and
+`SourceStatus` continue to report stale, warning, offline, availability, and
+error evidence honestly. Availability checks may add facets and influence
+aggregate health after Proxmox becomes stale, but they must not overwrite or
+erase the Proxmox runtime state used by workload power filters. Full monitor
+registry generations and incremental agent/availability mutations serialize
+at the adapter boundary; a mutation that arrives during a rebuild must apply to
+the newly published registry rather than a superseded pointer. Authoritative
+snapshot omissions still remove resources and emit the normal canonical
+history change.
 Physical-disk resources own cross-source disk identity. When Proxmox inventory
 and host-agent SMART telemetry describe the same device, the merged resource
 must retain Proxmox node/instance source payloads while carrying SMART

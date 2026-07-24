@@ -22,6 +22,23 @@ func TestCanonicalResourceTypeDoesNotAliasHost(t *testing.T) {
 	}
 }
 
+func TestProxmoxRuntimeStatusJSONContract(t *testing.T) {
+	payload := ProxmoxData{
+		SourceID:      "lab:node-a:101",
+		RuntimeStatus: "running",
+		NodeName:      "node-a",
+		VMID:          101,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal ProxmoxData: %v", err)
+	}
+	if !strings.Contains(string(data), `"runtimeStatus":"running"`) {
+		t.Fatalf("ProxmoxData JSON did not carry runtimeStatus: %s", data)
+	}
+}
+
 func TestHostSMARTMetaCarriesSizeBytesJSONContract(t *testing.T) {
 	payload := HostSMARTMeta{
 		Device:    "/dev/sda",

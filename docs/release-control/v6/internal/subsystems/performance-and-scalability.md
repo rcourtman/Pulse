@@ -854,6 +854,19 @@ shell clickable behind another overlay.
 
 ## Current State
 
+### Workload refreshes retain one coherent paged generation
+
+The workload polling cache accepts a REST refresh only when every advertised
+page succeeds. A failed later page leaves the prior array and its stable row
+identities in place, ends loading, and exposes the refresh error; it must not
+publish a partial list, clear rows as a loading transition, or silently hide
+the error. Proxmox workload filtering consumes the source-authored
+`proxmox.runtimeStatus` before aggregate health so an availability-only
+freshness update cannot collapse a Running view. A later complete response may
+still remove an authoritatively deleted guest. These rules preserve sort,
+selection, drawer, and virtualized viewport state without adding another
+resource scan, websocket subscription, or browser-local source of truth.
+
 ### Canonical mutation-plane dependency
 
 Router wiring now exposes only typed action planning for model-originated

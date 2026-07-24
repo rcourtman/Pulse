@@ -803,12 +803,16 @@ func (m *Monitor) pollGuestsWithFallback(
 		}
 
 		// Use optimized parallel polling for better performance
+		previous := m.previousGuestContextForInstance(instanceName)
+		vms := previous.vms
+		containers := previous.containers
 		if instanceCfg.MonitorVMs {
-			m.pollVMsWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
+			vms = m.collectVMsWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 		}
 		if instanceCfg.MonitorContainers {
-			m.pollContainersWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
+			containers = m.collectContainersWithNodes(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 		}
+		m.state.UpdateGuestsForInstance(instanceName, vms, containers)
 	}
 
 	return nil

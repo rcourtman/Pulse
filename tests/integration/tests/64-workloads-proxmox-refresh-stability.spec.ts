@@ -1,7 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test as base, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test as base,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 
 import {
   createAuthenticatedStorageState,
@@ -113,6 +118,49 @@ async function readGuestDrawerActiveTab(detailRow: Locator): Promise<string> {
   return active;
 }
 
+function issue1611Container(
+  vmid: number,
+  name: string,
+  status: "online" | "warning",
+  availability = false,
+) {
+  return {
+    id: `lab-node-a-${vmid}`,
+    type: "system-container",
+    name,
+    status,
+    lastSeen: "2026-07-24T08:00:00Z",
+    vmid,
+    node: "node-a",
+    instance: "lab",
+    sources: ["proxmox", ...(availability ? ["availability"] : [])],
+    platformScopes: ["proxmox-pve"],
+    metrics: {
+      cpu: { percent: 0.12 },
+      memory: { used: 1024, total: 4096, percent: 25 },
+      disk: { used: 2048, total: 8192, percent: 25 },
+    },
+    proxmox: {
+      runtimeStatus: "running",
+      nodeName: "node-a",
+      instance: "lab",
+      vmid,
+      cpus: 2,
+      uptime: 3600,
+    },
+    ...(availability
+      ? {
+          availability: {
+            targetId: `probe-${vmid}`,
+            protocol: "icmp",
+            enabled: true,
+            available: true,
+          },
+        }
+      : {}),
+  };
+}
+
 test.describe.serial("Workloads Proxmox refresh stability", () => {
   test.setTimeout(180_000);
 
@@ -172,7 +220,9 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(discoveryButton).toBeVisible();
     await discoveryButton.click();
 
-    await expect.poll(() => readGuestDrawerActiveTab(detailRow)).toBe("discovery");
+    await expect
+      .poll(() => readGuestDrawerActiveTab(detailRow))
+      .toBe("discovery");
 
     const beforePollScrollTop = await readPrimaryViewportScrollTop(page);
 
@@ -187,5 +237,96 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     expect(afterPollScrollTop).toBeGreaterThanOrEqual(
       Math.max(10, beforePollScrollTop - 80),
     );
+  });
+
+  test("retains running LXC rows through stale availability projections and removes a confirmed deletion", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only workload refresh proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    let workloadRequests = 0;
+    let staleProjectionResponses = 0;
+    let deletionResponses = 0;
+    let publishDeletion = false;
+    await page.route("**/api/resources?**", async (route) => {
+      const url = new URL(route.request().url());
+      if (
+        url.pathname !== "/api/resources" ||
+        url.searchParams.get("type") !== "vm,system-container,app-container,pod"
+      ) {
+        await route.continue();
+        return;
+      }
+
+      workloadRequests += 1;
+      let data;
+      if (workloadRequests === 1) {
+        data = [
+          issue1611Container(101, "lxc-alpha", "online"),
+          issue1611Container(102, "lxc-beta", "online", true),
+          issue1611Container(103, "lxc-gamma", "online"),
+        ];
+      } else if (!publishDeletion) {
+        staleProjectionResponses += 1;
+        data = [
+          issue1611Container(101, "lxc-alpha", "warning"),
+          issue1611Container(102, "lxc-beta", "online", true),
+          issue1611Container(103, "lxc-gamma", "warning"),
+        ];
+      } else {
+        deletionResponses += 1;
+        data = [
+          issue1611Container(101, "lxc-alpha", "online"),
+          issue1611Container(102, "lxc-beta", "online", true),
+        ];
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data,
+          meta: { page: 1, limit: 200, total: data.length, totalPages: 1 },
+        }),
+      });
+    });
+
+    await page.goto(
+      "/proxmox/workloads?type=system-container&platform=proxmox-pve&status=running",
+      { waitUntil: "domcontentloaded" },
+    );
+
+    const rows = page.locator("tr[data-guest-id]");
+    await expect(rows).toHaveCount(3, { timeout: 60_000 });
+    await expect(rows.first()).toBeVisible();
+
+    await page.locator("th").filter({ hasText: "Name" }).last().click();
+    const retainedRow = rows.filter({ hasText: "lxc-beta" });
+    await retainedRow.click();
+    const detailRow = page.locator(
+      'tr[data-inline-detail-for="lab:node-a:102"]',
+    );
+    await expect(detailRow).toBeVisible();
+
+    await expect
+      .poll(() => staleProjectionResponses, { timeout: 15_000 })
+      .toBeGreaterThan(0);
+    await expect(rows).toHaveCount(3);
+    await expect(rows.filter({ hasText: "lxc-alpha" })).toBeVisible();
+    await expect(rows.filter({ hasText: "lxc-gamma" })).toBeVisible();
+    await expect(detailRow).toBeVisible();
+
+    publishDeletion = true;
+    await expect
+      .poll(() => deletionResponses, { timeout: 15_000 })
+      .toBeGreaterThan(0);
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: "lxc-gamma" })).toHaveCount(0);
+    await expect(detailRow).toBeVisible();
   });
 });

@@ -97,6 +97,13 @@ func (v VMView) Status() ResourceStatus {
 	return v.r.Status
 }
 
+func (v VMView) RuntimeStatus() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.RuntimeStatus)
+}
+
 func (v VMView) VMID() int {
 	if v.r == nil || v.r.Proxmox == nil {
 		return 0
@@ -373,6 +380,13 @@ func (v ContainerView) Status() ResourceStatus {
 		return ""
 	}
 	return v.r.Status
+}
+
+func (v ContainerView) RuntimeStatus() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.RuntimeStatus)
 }
 
 func (v ContainerView) VMID() int {

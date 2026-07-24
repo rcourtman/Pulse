@@ -779,11 +779,12 @@ func TestResourceListDerivesProxmoxWorkloadParentFromUnifiedSeed(t *testing.T) {
 				Sources:  []unified.DataSource{unified.SourceProxmox},
 				Identity: unified.ResourceIdentity{Hostnames: []string{"cloudflared"}},
 				Proxmox: &unified.ProxmoxData{
-					SourceID:    "delly:delly:104",
-					NodeName:    "delly",
-					ClusterName: "homelab",
-					Instance:    "delly",
-					VMID:        104,
+					SourceID:      "delly:delly:104",
+					RuntimeStatus: "running",
+					NodeName:      "delly",
+					ClusterName:   "homelab",
+					Instance:      "delly",
+					VMID:          104,
 				},
 			},
 		},
@@ -814,6 +815,9 @@ func TestResourceListDerivesProxmoxWorkloadParentFromUnifiedSeed(t *testing.T) {
 	}
 	if resource.Proxmox == nil || resource.Proxmox.NodeName != "delly" || resource.Proxmox.ClusterName != "homelab" {
 		t.Fatalf("expected cloudflared Proxmox node metadata, got %+v", resource.Proxmox)
+	}
+	if resource.Proxmox.RuntimeStatus != "running" {
+		t.Fatalf("expected source-authored runtime status, got %+v", resource.Proxmox)
 	}
 }
 

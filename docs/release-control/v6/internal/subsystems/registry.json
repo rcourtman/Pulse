@@ -5186,6 +5186,7 @@
         "internal/models/deepcopy.go",
         "internal/models/models.go",
         "internal/models/models_frontend.go",
+        "internal/models/proxmox_guest_state.go",
         "internal/proxmoxidentity/backup_identity.go",
         "pkg/agents/docker/report.go",
         "pkg/agents/host/report.go",
@@ -5398,6 +5399,7 @@
               "internal/models/deepcopy.go",
               "internal/models/models.go",
               "internal/models/models_frontend.go",
+              "internal/models/proxmox_guest_state.go",
               "pkg/agents/docker/report.go"
             ],
             "allow_same_subsystem_tests": false,

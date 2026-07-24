@@ -14,6 +14,11 @@ import (
 type MonitorAdapter struct {
 	registry *ResourceRegistry
 
+	// mutationMu serializes complete registry generations with incremental
+	// supplemental updates. Registry construction intentionally happens while
+	// readers keep using the prior pointer, but two writers must never publish
+	// out of order or mutate a registry after it has been replaced.
+	mutationMu      sync.Mutex
 	mu              sync.RWMutex
 	activeAlerts    []models.Alert
 	lastRebuiltAt   time.Time
@@ -142,6 +147,12 @@ func (a *MonitorAdapter) ResolveCanonicalResourceID(ref string) (string, bool) {
 }
 
 func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
+	if a == nil {
+		return
+	}
+	a.mutationMu.Lock()
+	defer a.mutationMu.Unlock()
+
 	registry := a.currentRegistry()
 	if registry == nil {
 		return
@@ -360,6 +371,12 @@ func (a *MonitorAdapter) PopulateSnapshotAndSupplemental(snapshot models.StateSn
 // PopulateSupplementalRecords ingests source-native records emitted outside the
 // legacy state snapshot pipeline.
 func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records []IngestRecord) {
+	if a == nil {
+		return
+	}
+	a.mutationMu.Lock()
+	defer a.mutationMu.Unlock()
+
 	registry := a.currentRegistry()
 	if registry == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 		return

@@ -228,6 +228,126 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('keeps Proxmox power state stable while aggregate freshness changes, then removes an authoritative deletion', async () => {
+    const guest = (vmid: number, status: string, runtimeStatus: string) => ({
+      ...sampleResource,
+      id: `cluster-a-pve1-${vmid}`,
+      type: 'system-container',
+      name: `lxc-${vmid}`,
+      status,
+      vmid,
+      proxmox: {
+        vmid,
+        nodeName: 'pve1',
+        instance: 'cluster-a',
+        runtimeStatus,
+      },
+    });
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        guest(101, 'online', 'running'),
+        guest(102, 'online', 'running'),
+        guest(103, 'online', 'running'),
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await waitForWorkloadCount(() => result!.workloads().length, 3);
+    const initialIds = result!.workloads().map((workload) => workload.id);
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        guest(101, 'warning', 'running'),
+        {
+          ...guest(102, 'online', 'running'),
+          availability: { targetId: 'probe-102', protocol: 'icmp', enabled: true, available: true },
+        },
+        guest(103, 'warning', 'running'),
+      ],
+      meta: { totalPages: 1 },
+    });
+    await result!.refetch();
+
+    expect(result!.workloads().map((workload) => workload.id)).toEqual(initialIds);
+    expect(result!.workloads().map((workload) => workload.status)).toEqual([
+      'running',
+      'running',
+      'running',
+    ]);
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [guest(101, 'online', 'running'), guest(102, 'online', 'running')],
+      meta: { totalPages: 1 },
+    });
+    await result!.refetch();
+
+    expect(result!.workloads().map((workload) => workload.id)).toEqual(initialIds.slice(0, 2));
+    expect(result!.error()).toBeUndefined();
+
+    dispose();
+  });
+
+  it('rejects a partial paged refresh and retains the last coherent snapshot', async () => {
+    const secondResource = {
+      ...sampleResource,
+      id: 'cluster-a-pve1-102',
+      name: 'vm-102',
+      vmid: 102,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [sampleResource, secondResource],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await waitForWorkloadCount(() => result!.workloads().length, 2);
+    const coherentSnapshot = result!.workloads();
+
+    apiFetchJSONMock
+      .mockResolvedValueOnce({
+        data: [sampleResource],
+        meta: { totalPages: 2 },
+      })
+      .mockRejectedValueOnce(new Error('page 2 unavailable'));
+
+    await expect(result!.refetch()).rejects.toThrow('page 2 unavailable');
+    expect(result!.workloads()).toBe(coherentSnapshot);
+    expect(result!.workloads()).toHaveLength(2);
+    expect(result!.error()).toBeInstanceOf(Error);
+
+    apiFetchJSONMock
+      .mockResolvedValueOnce({
+        data: [sampleResource],
+        meta: { totalPages: 2 },
+      })
+      .mockResolvedValueOnce({
+        data: [],
+        meta: { totalPages: 2 },
+      });
+    await result!.refetch();
+
+    expect(result!.workloads()).toHaveLength(1);
+    expect(result!.error()).toBeUndefined();
+
+    dispose();
+  });
+
   it('does not apply in-flight workload results after the hook is disabled', async () => {
     const pendingFetch = deferred<unknown>();
     apiFetchJSONMock.mockImplementationOnce(() => pendingFetch.promise as Promise<any>);

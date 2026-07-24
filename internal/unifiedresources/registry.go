@@ -3372,6 +3372,9 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	if incoming.HostURL != "" {
 		merged.HostURL = incoming.HostURL
 	}
+	if incoming.RuntimeStatus != "" {
+		merged.RuntimeStatus = incoming.RuntimeStatus
+	}
 	if incoming.VMID != 0 {
 		merged.VMID = incoming.VMID
 	}

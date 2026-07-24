@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -522,6 +523,89 @@ func TestMonitorAdapterIngestsAvailabilityAfterCorrelatableSupplementalSources(t
 	projectedHost, ok := adapter.currentRegistry().Get(hostID)
 	if !ok || len(AvailabilityChecksForResource(*projectedHost)) != 1 {
 		t.Fatalf("supplemental host projection = %+v", projectedHost)
+	}
+}
+
+func TestMonitorAdapterStalenessDoesNotEmitRemovalButAuthoritativeOmissionDoes(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+	now := time.Now().UTC()
+	container := func(vmid int, name string, seen time.Time) models.Container {
+		return models.Container{
+			ID:       fmt.Sprintf("lab:node-a:%d", vmid),
+			VMID:     vmid,
+			Name:     name,
+			Node:     "node-a",
+			Instance: "lab",
+			Status:   "running",
+			Type:     "lxc",
+			LastSeen: seen,
+		}
+	}
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		LastUpdate: now,
+		Containers: []models.Container{
+			container(101, "alpha", now),
+			container(102, "beta", now),
+		},
+	})
+	initial := adapter.GetByType(ResourceTypeSystemContainer)
+	if len(initial) != 2 {
+		t.Fatalf("initial container count = %d, want 2", len(initial))
+	}
+	var removedID string
+	for _, resource := range initial {
+		if resource.Name == "beta" {
+			removedID = resource.ID
+		}
+	}
+	if removedID == "" {
+		t.Fatal("beta canonical ID not found")
+	}
+
+	staleSeen := now.Add(-5 * time.Minute)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		LastUpdate: now.Add(time.Second),
+		Containers: []models.Container{
+			container(101, "alpha", staleSeen),
+			container(102, "beta", staleSeen),
+		},
+	})
+	if got := len(adapter.GetByType(ResourceTypeSystemContainer)); got != 2 {
+		t.Fatalf("stale refresh container count = %d, want 2", got)
+	}
+	if changes, err := store.GetRecentChanges(removedID, time.Time{}, 20); err != nil {
+		t.Fatalf("GetRecentChanges before deletion: %v", err)
+	} else {
+		for _, change := range changes {
+			if change.Metadata["changeType"] == "resource_removed" {
+				t.Fatalf("staleness emitted a removal: %+v", change)
+			}
+		}
+	}
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		LastUpdate: now.Add(2 * time.Second),
+		Containers: []models.Container{
+			container(101, "alpha", now.Add(2*time.Second)),
+		},
+	})
+	if got := len(adapter.GetByType(ResourceTypeSystemContainer)); got != 1 {
+		t.Fatalf("authoritative deletion container count = %d, want 1", got)
+	}
+	changes, err := store.GetRecentChanges(removedID, time.Time{}, 20)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after deletion: %v", err)
+	}
+	removals := 0
+	for _, change := range changes {
+		if change.Metadata["changeType"] == "resource_removed" {
+			removals++
+		}
+	}
+	if removals != 1 {
+		t.Fatalf("resource removal history count = %d, want 1: %+v", removals, changes)
 	}
 }
 

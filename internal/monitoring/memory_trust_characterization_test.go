@@ -22,6 +22,38 @@ type vmMemoryTrustStubClient struct {
 	vmAgentMemCalls     int
 }
 
+func TestCollectVMsWithNodesRetainsFailedNodeRuntimeState(t *testing.T) {
+	monitor := newTestPVEMonitor("lab")
+	defer monitor.alertManager.Stop()
+	defer monitor.notificationMgr.Stop()
+	monitor.state.UpdateVMsForInstance("lab", []models.VM{{
+		ID:       "lab:node-b:201",
+		VMID:     201,
+		Name:     "database",
+		Node:     "node-b",
+		Instance: "lab",
+		Status:   "running",
+	}})
+
+	client := &partialNodeGuestClient{
+		stubPVEClient: &stubPVEClient{},
+		failedNodes:   map[string]bool{"node-b": true},
+	}
+	vms := monitor.collectVMsWithNodes(
+		context.Background(),
+		"lab",
+		"",
+		false,
+		client,
+		[]proxmox.Node{{Node: "node-b", Status: "online"}},
+		map[string]string{"node-b": "online"},
+	)
+
+	if len(vms) != 1 || vms[0].ID != "lab:node-b:201" || vms[0].Status != "running" {
+		t.Fatalf("failed-node VM continuity = %+v, want retained source ID and running state", vms)
+	}
+}
+
 func (s *vmMemoryTrustStubClient) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
 	return s.vms, nil
 }

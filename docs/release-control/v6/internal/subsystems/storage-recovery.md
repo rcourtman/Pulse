@@ -1917,6 +1917,17 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
 
+### Proxmox runtime continuity is not protection evidence
+
+The additive `ProxmoxData.RuntimeStatus` field preserves VM/LXC power-state
+presentation while a platform snapshot is stale or refreshing. Storage and
+recovery consumers must not interpret `running`, `stopped`, a retained guest
+row, or an availability facet as backup freshness, protection coverage,
+restore-chain verification, or recoverability. Authoritative guest deletion
+may remove the inventory row and its canonical history identity, while
+Recovery Assurance remains governed solely by its own backup and verification
+evidence.
+
 ### Storage history remount state is bounded
 
 Storage summary history no longer treats every node/range combination visited

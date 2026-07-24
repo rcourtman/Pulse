@@ -44,15 +44,14 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 
 	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevGuests.vms, prevGuests.containers, nodeEffectiveStatus, allVMs, allContainers)
 
-	// Always update state when using efficient polling path
-	// Even if arrays are empty, we need to update to clear out VMs from genuinely offline nodes
-	m.state.UpdateVMsForInstance(instanceName, allVMs)
-
 	// Check Docker presence for containers that need it (new, restarted, started)
 	allContainers = m.CheckContainersForDocker(ctx, allContainers)
 	m.CollectProxmoxGuestDockerInventory(ctx, allContainers)
 
-	m.state.UpdateContainersForInstance(instanceName, allContainers)
+	// Publish the complete guest generation only after both VM and container
+	// collection/enrichment has finished. Empty authoritative results still
+	// remove genuinely deleted guests.
+	m.state.UpdateGuestsForInstance(instanceName, allVMs, allContainers)
 
 	m.recordGuestMetrics(allVMs, allContainers)
 
