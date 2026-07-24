@@ -21,13 +21,11 @@ describe('webInterfaceUrlFieldModel.branchcov2', () => {
       );
     });
 
-    it('returns the parse-failure message for a whitespace-only value (truthy string that URL rejects)', () => {
-      // ' ' is a truthy string so it bypasses the `!value` guard but still
-      // throws inside `new URL(...)`, exercising the catch arm via a different
-      // inbound state than a plain word.
-      expect(validateWebInterfaceCustomUrl(' ')).toBe(
-        'Enter a valid URL (for example: https://198.51.100.100:8080).',
-      );
+    it('treats a whitespace-only value as empty rather than invalid', () => {
+      // The field trims before classifying, so a value of only spaces is the
+      // same inbound state as a cleared field. Nagging "enter a valid URL" at
+      // someone who has just emptied the box is noise, not validation.
+      expect(validateWebInterfaceCustomUrl(' ')).toBeNull();
     });
 
     it('returns the parse-failure message for a bare scheme like "http://" (URL constructor throws)', () => {

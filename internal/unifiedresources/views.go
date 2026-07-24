@@ -2118,8 +2118,10 @@ func (v PhysicalDiskView) Health() string {
 }
 
 func (v PhysicalDiskView) Wearout() int {
+	// -1 is the canonical unreported sentinel for this field. Returning 0 here
+	// published "0% endurance remaining" for a disk that reported nothing.
 	if v.r == nil || v.r.PhysicalDisk == nil {
-		return 0
+		return WearoutUnreported
 	}
 	return v.r.PhysicalDisk.Wearout
 }

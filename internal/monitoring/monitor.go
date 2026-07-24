@@ -716,7 +716,9 @@ func deriveWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
 
 func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) models.PhysicalDisk {
 	if view == nil {
-		return models.PhysicalDisk{}
+		// Wearout 0 means no endurance remaining, so an absent view has to
+		// carry the unreported sentinel rather than the struct zero value.
+		return models.PhysicalDisk{Wearout: unifiedresources.WearoutUnreported}
 	}
 
 	return models.PhysicalDisk{

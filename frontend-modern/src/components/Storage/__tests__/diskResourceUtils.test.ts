@@ -87,6 +87,34 @@ describe('diskResourceUtils', () => {
     ).toBe(true);
   });
 
+  it('keeps agent-reported disks attached to their Proxmox node without instance evidence', () => {
+    // A host-agent SMART disk carries no Proxmox block at all, so it has no
+    // instance to compare against the PVE node it physically lives on.
+    const agentDisk = buildDisk({
+      platformId: 'agent-tower',
+      platformType: 'agent',
+      sourceType: 'agent',
+      platformData: { physicalDisk: { devPath: '/dev/sda' } } as never,
+    });
+
+    expect(
+      matchesPhysicalDiskNode(agentDisk, {
+        id: 'node-1',
+        name: 'tower',
+        instance: 'cluster-main',
+      }),
+    ).toBe(true);
+
+    // Node identity still has to agree.
+    expect(
+      matchesPhysicalDiskNode(agentDisk, {
+        id: 'node-2',
+        name: 'other-node',
+        instance: 'cluster-main',
+      }),
+    ).toBe(false);
+  });
+
   it('resolves physical disk metric targets through linked agents when needed', () => {
     expect(resolvePhysicalDiskMetricResourceId(buildDisk(), [buildNode()], '/dev/sda')).toBe(
       'agent-tower:sda',

@@ -52,9 +52,8 @@ func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 		Model:       disk.Model,
 		Health:      disk.Health,
 		Temperature: disk.Temperature,
-		Wearout:     disk.Wearout,
-		WearoutKnown: disk.Wearout > 0 ||
-			(disk.Wearout == 0 && isNonRotationalDiskType(disk.Type)),
+		Wearout:      disk.Wearout,
+		WearoutKnown: WearoutReported(disk.Wearout, disk.Type),
 	}
 	if attrs := disk.SmartAttributes; attrs != nil {
 		if attrs.PowerOnHours != nil {
@@ -228,6 +227,19 @@ func RemainingLifeFromPercentageUsed(used int) int {
 		used = 100
 	}
 	return 100 - used
+}
+
+// WearoutReported reports whether a wearout reading is real evidence rather
+// than an absent value. -1 is the canonical unreported sentinel. 0 is a real
+// reading meaning no endurance remains, but only from a device that reports
+// endurance at all: rotational disks never do, so a 0 from one is treated as
+// absent. Every consumer of wearout must gate on this rather than reinventing
+// the boundary, or the UI and alerting drift apart on the same disk.
+func WearoutReported(wearout int, diskType string) bool {
+	if wearout > 0 {
+		return true
+	}
+	return wearout == 0 && isNonRotationalDiskType(diskType)
 }
 
 func isNonRotationalDiskType(diskType string) bool {

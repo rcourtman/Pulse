@@ -83,9 +83,8 @@ func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assess
 		Model:       meta.Model,
 		Health:      meta.Health,
 		Temperature: meta.Temperature,
-		Wearout:     meta.Wearout,
-		WearoutKnown: meta.Wearout > 0 ||
-			(meta.Wearout == 0 && physicalDiskTypeIsNonRotational(meta.DiskType)),
+		Wearout:      meta.Wearout,
+		WearoutKnown: storagehealth.WearoutReported(meta.Wearout, meta.DiskType),
 	}
 	if meta.SMART != nil {
 		if meta.SMART.PowerOnHours != nil {
@@ -128,15 +127,6 @@ func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assess
 		}
 	}
 	return storagehealth.AssessSample(sample)
-}
-
-func physicalDiskTypeIsNonRotational(diskType string) bool {
-	switch strings.ToLower(strings.TrimSpace(diskType)) {
-	case "nvme", "ssd":
-		return true
-	default:
-		return false
-	}
 }
 
 func physicalDiskStatus(model, health string, assessment storagehealth.Assessment) ResourceStatus {

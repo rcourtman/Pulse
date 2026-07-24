@@ -119,8 +119,11 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		clearDiskAlert(alertID, canonicalHealthAlertID)
 	}
 
-	// Check for low wearout (SSD life remaining)
-	if disk.Wearout > 0 && disk.Wearout < 10 {
+	// Check for low wearout (SSD life remaining). Gate on the same predicate
+	// the risk assessment uses so a disk cannot read critical in the UI while
+	// staying silent here: 0 from an SSD means no endurance left and must
+	// alert, while -1 and a rotational 0 are absent evidence.
+	if storagehealth.WearoutReported(disk.Wearout, disk.Type) && disk.Wearout < 10 {
 		message := fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout)
 		spec, err := buildCanonicalSeverityThresholdSpecWithDirection(canonicalResourceID+"-wearout", canonicalResourceID, resourceName, resourceType, "wearout-remaining", alertspecs.ThresholdDirectionBelow, 10, 0, false)
 		if err != nil {

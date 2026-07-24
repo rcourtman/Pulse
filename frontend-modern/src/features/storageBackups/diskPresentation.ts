@@ -542,7 +542,7 @@ export function getPhysicalDiskHealthStatus(
   const criticalRisk = (disk.riskLevel || '').trim().toLowerCase() === 'critical';
   const warningRisk = (disk.riskLevel || '').trim().toLowerCase() === 'warning';
   const smartWarning = hasPhysicalDiskSmartWarning(disk);
-  const lowLife = disk.wearout >= 0 && disk.wearout < 10;
+  const lowLife = isPhysicalDiskWearoutReported(disk) && disk.wearout < 10;
 
   if (normalizedHealth === 'FAILED' || criticalRisk) {
     return {
@@ -632,14 +632,24 @@ export function getPhysicalDiskParentLabel(disk: PhysicalDiskPresentationData): 
   return '';
 }
 
+// Mirrors storagehealth.WearoutReported on the backend. Wearout is "% life
+// remaining" (100 = new). -1 is the unreported sentinel, and 0 is a real
+// reading only from a device that reports endurance at all, so a 0 from a
+// rotational disk is absent evidence rather than a spent disk.
+export function isPhysicalDiskWearoutReported(disk: PhysicalDiskPresentationData): boolean {
+  if (typeof disk.wearout !== 'number') return false;
+  if (disk.wearout > 0) return true;
+  const normalizedType = (disk.type || '').trim().toLowerCase();
+  return disk.wearout === 0 && (normalizedType === 'nvme' || normalizedType === 'ssd');
+}
+
 export function getPhysicalDiskLifeLabel(disk: PhysicalDiskPresentationData): string {
-  // Wearout is "% life remaining" (100 = new); only negative values are unreported.
   if (typeof disk.wearout !== 'number' || disk.wearout < 0) return '';
   return `${Math.min(disk.wearout, 100)}%`;
 }
 
 export function getPhysicalDiskLifeTextClass(disk: PhysicalDiskPresentationData): string {
-  if (typeof disk.wearout !== 'number' || disk.wearout < 0) {
+  if (!isPhysicalDiskWearoutReported(disk)) {
     return PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS;
   }
   if (disk.wearout < 20) return 'text-red-600 dark:text-red-400';

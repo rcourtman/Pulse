@@ -586,8 +586,20 @@ describe('getPhysicalDiskHealthStatus branch coverage', () => {
     expect(status.summary).toBe('No active disk-health issues.');
   });
 
-  it('does not classify wearout of 0 as low life (unreported boundary)', () => {
+  it('classifies wearout of 0 on an SSD as low life (no endurance remaining)', () => {
+    const disk = makeDiskData({ health: 'PASSED', wearout: 0, type: 'ssd' });
+    expect(getPhysicalDiskHealthStatus(disk).label).toBe('Needs Attention');
+  });
+
+  it('does not classify wearout of 0 on a disk that reports no endurance as low life', () => {
+    // Rotational and untyped disks never report endurance, so a 0 from one is
+    // absent evidence rather than a spent disk.
     const disk = makeDiskData({ health: 'PASSED', wearout: 0 });
+    expect(getPhysicalDiskHealthStatus(disk).label).toBe('Healthy');
+  });
+
+  it('does not classify the unreported wearout sentinel -1 as low life', () => {
+    const disk = makeDiskData({ health: 'PASSED', wearout: -1, type: 'ssd' });
     expect(getPhysicalDiskHealthStatus(disk).label).toBe('Healthy');
   });
 

@@ -48,11 +48,19 @@ export const matchesPhysicalDiskNode = (
 
   const diskInstance = normalize(diskIdentity.instance);
   const targetInstance = normalize(target.instance);
-  if (!diskInstance && !targetInstance) {
+
+  // Host-agent SMART disks carry no Proxmox scope, so the disk side has no
+  // instance to discriminate on and the matching node name is the only
+  // evidence available. Requiring an instance here dropped agent-reported
+  // disks on Proxmox nodes out of the node filter, grouping, and metric
+  // target resolution entirely (#1487, #1516).
+  if (!diskInstance) {
     return true;
   }
 
-  return Boolean(diskInstance && targetInstance && diskInstance === targetInstance);
+  // A Proxmox-scoped disk only belongs to a node in the same instance. A node
+  // with no instance is not that scope, so it must not absorb the disk.
+  return Boolean(targetInstance && diskInstance === targetInstance);
 };
 
 export const resolvePhysicalDiskMetricResourceId = (

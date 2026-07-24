@@ -489,8 +489,20 @@ describe('diskPresentation.branchcov0720pm', () => {
   });
 
   describe('getPhysicalDiskLifeTextClass muted placeholder arm', () => {
-    it('returns the muted placeholder class when wearout is 0', () => {
+    it('returns the muted placeholder class when wearout is 0 on a disk that reports no endurance', () => {
       expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 0 }))).toBe(
+        PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS,
+      );
+    });
+
+    it('returns the critical class when an SSD reports wearout 0', () => {
+      expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 0, type: 'nvme' }))).toBe(
+        'text-red-600 dark:text-red-400',
+      );
+    });
+
+    it('returns the muted placeholder class for the unreported sentinel -1', () => {
+      expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: -1, type: 'nvme' }))).toBe(
         PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS,
       );
     });

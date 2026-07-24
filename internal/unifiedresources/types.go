@@ -469,6 +469,11 @@ type PoolHealth struct {
 	ObservedAt     time.Time               `json:"observedAt,omitempty"`
 }
 
+// WearoutUnreported is the canonical sentinel for PhysicalDiskMeta.Wearout when
+// a disk reports no endurance evidence. 0 is a real value meaning no endurance
+// remaining, so unknown must never collapse onto it.
+const WearoutUnreported = -1
+
 // PhysicalDiskMeta contains physical disk-specific metadata.
 type PhysicalDiskMeta struct {
 	DevPath              string                          `json:"devPath"`
