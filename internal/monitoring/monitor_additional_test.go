@@ -336,3 +336,71 @@ func TestBuildClusterEndpointsForInit_RespectsDiscoveryPolicy(t *testing.T) {
 		t.Fatalf("expected only the discovery-allowed member as failover, got %#v", endpoints)
 	}
 }
+
+// TestGuestObservedInCycleFailsOpenWithoutEvidence pins the direction of the
+// guard. Dropping a legitimate sample is worse than recording a fabricated one,
+// so a guest with no LastSeen evidence is recorded rather than skipped.
+func TestGuestObservedInCycleFailsOpenWithoutEvidence(t *testing.T) {
+	cycleStart := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+
+	for _, tc := range []struct {
+		name     string
+		lastSeen time.Time
+		want     bool
+	}{
+		{name: "observed this cycle", lastSeen: cycleStart.Add(2 * time.Second), want: true},
+		{name: "observed exactly at cycle start", lastSeen: cycleStart, want: true},
+		{name: "carried forward from an earlier cycle", lastSeen: cycleStart.Add(-30 * time.Second), want: false},
+		{name: "no evidence either way", lastSeen: time.Time{}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := guestObservedInCycle(tc.lastSeen, cycleStart); got != tc.want {
+				t.Fatalf("guestObservedInCycle(%v) = %v, want %v", tc.lastSeen, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRecordGuestMetricsSkipsGracePeriodGuestsButKeepsObservedOnes is the
+// regression guard for the fabricated-zero defect. ac0fb263c made preserved
+// guests carry their real runtime status ("running") instead of the stringified
+// aggregate status ("online"), so they started passing recordGuestMetrics'
+// status filter. The carried-forward projection has no counters, so every cycle
+// a node spent in its grace period wrote CPU, disk and network zeroes into the
+// persistent store, showing a collapse to zero rather than a gap.
+//
+// Both directions matter: the observed guest must still be recorded, because
+// silently losing real samples would be a worse regression than the one being
+// fixed.
+func TestRecordGuestMetricsSkipsGracePeriodGuestsButKeepsObservedOnes(t *testing.T) {
+	history := NewMetricsHistory(32, time.Hour)
+	monitor := &Monitor{metricsHistory: history}
+
+	cycleStart := time.Now().UTC()
+	observedAt := cycleStart.Add(time.Second)
+	carriedForward := cycleStart.Add(-2 * time.Minute)
+
+	monitor.recordGuestMetrics(
+		[]models.VM{
+			{ID: "vm-observed", Status: "running", CPU: 0.42, CPUs: 4, LastSeen: observedAt},
+			{ID: "vm-preserved", Status: "running", CPU: 0, CPUs: 4, LastSeen: carriedForward},
+		},
+		[]models.Container{
+			{ID: "ct-observed", Status: "running", Type: "lxc", CPU: 0.25, CPUs: 1, LastSeen: observedAt},
+			{ID: "ct-preserved", Status: "running", Type: "lxc", CPU: 0, CPUs: 1, LastSeen: carriedForward},
+		},
+		cycleStart,
+	)
+
+	for _, id := range []string{"vm-observed", "ct-observed"} {
+		if got := history.GetGuestMetrics(id, "cpu", time.Hour); len(got) == 0 {
+			t.Fatalf("%s: observed guest lost its sample entirely", id)
+		}
+	}
+
+	for _, id := range []string{"vm-preserved", "ct-preserved"} {
+		if got := history.GetGuestMetrics(id, "cpu", time.Hour); len(got) != 0 {
+			t.Fatalf("%s: grace-period guest recorded %d fabricated sample(s): %+v", id, len(got), got)
+		}
+	}
+}

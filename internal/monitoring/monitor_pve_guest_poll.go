@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -21,6 +22,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		Msg("Polling VMs and containers using efficient cluster/resources endpoint")
 
 	// Get all resources in a single API call
+	cycleStart := time.Now()
 	resources, err := client.GetClusterResources(ctx, "vm")
 	if err != nil {
 		log.Debug().Err(err).Str("instance", instanceName).Msg("cluster/resources not available, falling back to traditional polling")
@@ -53,7 +55,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// remove genuinely deleted guests.
 	m.state.UpdateGuestsForInstance(instanceName, allVMs, allContainers)
 
-	m.recordGuestMetrics(allVMs, allContainers)
+	m.recordGuestMetrics(allVMs, allContainers, cycleStart)
 
 	m.pollReplicationStatus(ctx, instanceName, client, allVMs)
 

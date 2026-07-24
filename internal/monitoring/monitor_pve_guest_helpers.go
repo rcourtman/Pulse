@@ -105,16 +105,42 @@ func (m *Monitor) preserveGuestsForGracePeriod(
 	return allVMs, allContainers
 }
 
-// recordGuestMetrics records metrics for all running VMs and containers.
-func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.Container) {
+// guestObservedInCycle reports whether a guest's telemetry came from this poll
+// rather than being carried forward while its node sits in the grace period.
+//
+// Preserved guests keep the LastSeen of the cycle that actually observed them,
+// so anything older than this cycle's start was not observed. Recording one as
+// a sample fabricates a reading: the carried-forward projection has no counters,
+// so it writes CPU, disk and network zeroes for a guest Pulse cannot currently
+// see, and the history shows a collapse to zero instead of a gap.
+//
+// A zero LastSeen means we have no evidence either way, so this fails open and
+// records. Dropping a legitimate sample is the worse error of the two, and
+// harder to notice.
+func guestObservedInCycle(lastSeen, cycleStart time.Time) bool {
+	if lastSeen.IsZero() {
+		return true
+	}
+	return !lastSeen.Before(cycleStart)
+}
+
+// recordGuestMetrics records metrics for all running VMs and containers that
+// this cycle actually observed.
+func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.Container, cycleStart time.Time) {
 	now := time.Now()
 	for _, vm := range allVMs {
+		if !guestObservedInCycle(vm.LastSeen, cycleStart) {
+			continue
+		}
 		if vm.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, vm.IORateValidity)
 			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
 	for _, ct := range allContainers {
+		if !guestObservedInCycle(ct.LastSeen, cycleStart) {
+			continue
+		}
 		if ct.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, ct.IORateValidity)
 			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)

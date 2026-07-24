@@ -35,6 +35,7 @@ func TestRecordGuestMetricsKeepsLiveAndHistoricalProxmoxCPUUnitsAligned(t *testi
 		metricsHistory: history,
 		metricsStore:   store,
 	}
+	cycleStart := time.Now().UTC().Add(-time.Second)
 	monitor.recordGuestMetrics(
 		[]models.VM{{
 			ID:       "cluster-a-node-1-301",
@@ -51,6 +52,7 @@ func TestRecordGuestMetricsKeepsLiveAndHistoricalProxmoxCPUUnitsAligned(t *testi
 			CPUs:     1,
 			LastSeen: time.Now().UTC(),
 		}},
+		cycleStart,
 	)
 	store.Flush()
 

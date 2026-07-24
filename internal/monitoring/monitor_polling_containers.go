@@ -367,6 +367,9 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
 		for _, ct := range allContainers {
+			if !guestObservedInCycle(ct.LastSeen, startTime) {
+				continue
+			}
 			if ct.Status != "running" {
 				continue
 			}

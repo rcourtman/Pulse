@@ -123,6 +123,9 @@ func (m *Monitor) collectVMsWithNodes(ctx context.Context, instanceName string, 
 	if !shouldSkipNativeMockStateMetricWrites() {
 		now := time.Now()
 		for _, vm := range allVMs {
+			if !guestObservedInCycle(vm.LastSeen, startTime) {
+				continue
+			}
 			if vm.Status != "running" {
 				continue
 			}

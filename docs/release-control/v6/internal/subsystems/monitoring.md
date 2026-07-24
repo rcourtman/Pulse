@@ -734,6 +734,23 @@ must never prevent the remaining configured hosts from being suppressed.
     coverage: `TestPoolTopologyStaysDiscriminatorAcrossVDevLayouts` in
     `internal/truenas/provider_pool_health_contract_test.go`.
 
+12. Guest metric history records only guests the current poll actually
+    observed. A guest preserved while its node sits in the grace period
+    carries the `LastSeen` of the cycle that saw it, so every metric
+    recording loop gates on `guestObservedInCycle` before writing a
+    sample. Recording a carried-forward guest fabricates a reading: the
+    projection has no counters, so it writes CPU, disk and network zeroes
+    for a guest Pulse cannot currently see and the history shows a
+    collapse to zero rather than a gap. The guard fails open on an absent
+    `LastSeen`, because losing a real sample is the worse error and the
+    harder one to notice. Regression coverage:
+    `TestRecordGuestMetricsSkipsGracePeriodGuestsButKeepsObservedOnes` and
+    `TestGuestObservedInCycleFailsOpenWithoutEvidence` in
+    `internal/monitoring/monitor_additional_test.go`, and
+    `TestGracePeriodGuestContributesNoMemorySample` in
+    `internal/monitoring/memory_trust_characterization_test.go`.
+
+
 ## Current State
 
 ### PBS health is one completed-poll outcome

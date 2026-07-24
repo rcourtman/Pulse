@@ -1250,3 +1250,36 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 		})
 	}
 }
+
+// TestGracePeriodGuestContributesNoMemorySample extends the memory-trust
+// boundary to carried-forward guests. A guest preserved while its node sits in
+// the grace period has no fresh observation behind it, so recording one writes
+// a memory reading Pulse did not take. Before the cycle guard this was hidden
+// only by accident: the carried-forward projection leaves Memory without known
+// usage, so historyMemoryUsage returned the -1 sentinel rather than a
+// fabricated percentage. That is a coincidence of the projection, not a
+// guarantee, and it would break the moment preservation started carrying
+// memory forward.
+func TestGracePeriodGuestContributesNoMemorySample(t *testing.T) {
+	history := NewMetricsHistory(32, time.Hour)
+	monitor := &Monitor{metricsHistory: history}
+
+	cycleStart := time.Now().UTC()
+
+	monitor.recordGuestMetrics(
+		[]models.VM{{
+			ID:       "vm-grace",
+			Status:   "running",
+			CPU:      0,
+			CPUs:     4,
+			LastSeen: cycleStart.Add(-2 * time.Minute),
+			Memory:   models.Memory{Total: 8 << 30, Used: 4 << 30, Usage: 50},
+		}},
+		nil,
+		cycleStart,
+	)
+
+	if got := history.GetGuestMetrics("vm-grace", "memory", time.Hour); len(got) != 0 {
+		t.Fatalf("grace-period guest recorded %d memory sample(s): %+v", len(got), got)
+	}
+}
