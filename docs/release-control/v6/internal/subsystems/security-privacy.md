@@ -369,6 +369,13 @@ the `white_label` branding entitlement.
     token headers through private curl configuration rather than exposing the
     token in curl process arguments; generated service definitions and
     `connection.env` may contain only protected token-file paths.
+    Disk exclusion is an operator-defined collection boundary:
+    `--disk-exclude` accepts device names, device paths, and mount-point
+    patterns, combines repeated flags with comma-separated environment values,
+    and applies before filesystem-usage, disk-I/O, and SMART collection.
+    Excluded inventory must not re-enter through linked Proxmox disk health or
+    wear alerts, and the CLI help text must state the supported exclusion
+    forms.
     Global resource timeline reads through `/api/resources/timeline` are
     adjacent monitoring-read surfaces, not a privacy bypass. Provider activity
     filters may expose backend-authored task/event metadata, but the endpoint

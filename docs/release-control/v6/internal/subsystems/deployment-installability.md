@@ -326,6 +326,10 @@ TLS floor in the dynamic config.
    used Go's single-dash flag spelling, the installer-owned recovery path must
    accept both single-dash and double-dash forms for recovered agent args
    without weakening the existing missing-state failure behavior.
+   Disk exclusions share that continuity contract. `--disk-exclude` accepts
+   device names, device paths, and mount-point patterns, and every repeated
+   value must survive live-process or service recovery, update re-entry,
+   service rendering, and restart without being collapsed or reordered.
    FreeBSD and pfSense updates have the same continuity obligation without
    Linux procfs or systemd: the installer must read live process arguments via
    `ps` (and environment via `procstat` when available), then fall back to the

@@ -420,6 +420,13 @@ update, profile rollout, command reachability, or fleet-control authority.
     Successful recovery always migrates the raw legacy token into the v6
     installer-owned token file; absence of complete local URL and token state
     remains a fail-closed update, never a fresh enrollment.
+    Disk exclusion is lifecycle state rather than an install-only hint.
+    `--disk-exclude` accepts device names, device paths, and mount-point
+    patterns; repeated values must retain their order across live-process,
+    systemd, and rc.d recovery, service rendering, restart, and update. The
+    recovered exclusions must apply before filesystem-usage, disk-I/O, and
+    SMART collection and must also suppress linked Proxmox disk health and
+    wear alerts for excluded devices.
     FreeBSD-family uninstall must stop the installer-owned rc.d supervisor
     before removing the agent binary so daemon(8) cannot restart a deleted
     child. It must also remove the rc.d script, pfSense boot wrapper,
@@ -1552,6 +1559,9 @@ the intentionally sparse public response.
    The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Public control-plane hostnames remain HTTPS/WSS, but self-hosted local control planes may use plain HTTP/WS when the host is loopback, a private, link-local, or carrier-grade NAT IP, a single-label LAN name, or a local DNS suffix such as `.local`, `.lan`, `.home`, `.home.arpa`, or `.internal`; installer-persisted local HTTP URLs must not be accepted by one runtime path and rejected by another.
    Plaintext to a host that does not look local is available only as an explicit operator override: the `--allow-plaintext-http` flag (`PULSE_AGENT_ALLOW_PLAINTEXT_HTTP`) records process-wide consent through `securityutil.SetOperatorPlaintextHTTPConsent` before any module validates a URL, applies uniformly to every agent transport (HTTP and WS), warns at startup that the API token travels in cleartext, defaults closed, and is never emitted by generated install commands. It exists for self-hosted networks numbered from nominally public IP space; the Pulse server never sets it.
    The unified agent CLI copy follows the same command-execution vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Pulse command execution for Patrol actions and governed Proxmox LXC Docker inventory rather than reviving AI auto-fix language.
+   The `--disk-exclude` help text must describe device names or paths and
+   mount-point patterns, and the repeatable flag must append values rather than
+   replacing exclusions already supplied by the environment.
    The unified agent CLI copy also owns operator-facing Docker / Podman runtime
    labels. `cmd/pulse-agent/main.go` may keep the historical
    `--enable-docker` and `--docker-runtime` flag names for compatibility, but
@@ -1835,7 +1845,7 @@ command transport, update policy, or fleet lifecycle authority.
 
 1. Update this contract when agent lifecycle ownership changes. Routes added under the shared `internal/api/` extension point that are clearly outside lifecycle ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem. Canonical scoped Patrol resolution on `POST /api/ai/patrol/run` and structured `patrol_assess_finding` lifecycle outcomes are likewise adjacent AI/API contracts: they may consume agent-reported identities and evidence, but they do not change agent registration, install, token, profile, command transport, update, or fleet-lifecycle authority.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
-3. Update runtime and settings tests in the same slice when lifecycle behavior changes. Shell installer lifecycle changes must keep `scripts/installtests/install_sh_test.go` covering explicit flags, persisted connection state, legacy running-process/service recovery, legacy single-dash v5 agent flag recovery, and secure token-file service argument rendering for update re-entry.
+3. Update runtime and settings tests in the same slice when lifecycle behavior changes. Shell installer lifecycle changes must keep `scripts/installtests/install_sh_test.go` covering explicit flags, persisted connection state, legacy running-process/service recovery, legacy single-dash v5 agent flag recovery, repeated disk-exclusion recovery, and secure token-file service argument rendering for update re-entry. Host metrics tests must prove excluded FreeBSD `fdescfs` mounts are filtered before filesystem usage is attempted.
 4. Keep host-agent test hooks, command-client factories, and timing overrides
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test
