@@ -811,6 +811,9 @@ deadbeef
 agent-123
 --hostname
 pve-one
+--disk-exclude
+/dev/sda
+--disk-exclude=/var/run/samba/fd
 ARGS
 		build_exec_args
 		printf 'URL=%s\nTOKEN=%s\nDOCKER=%s\nDOCKER_EXPLICIT=%s\nINSECURE=%s\nAGENT_ID=%s\nHOSTNAME=%s\nEXEC_ARGS=%s\n' \
@@ -832,6 +835,8 @@ ARGS
 		"HOSTNAME=pve-one",
 		"--token-file /var/lib/pulse-agent/token",
 		"--enable-docker",
+		"--disk-exclude /dev/sda",
+		"--disk-exclude /var/run/samba/fd",
 	}
 	for _, needle := range required {
 		if !strings.Contains(got, needle) {

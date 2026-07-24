@@ -1062,7 +1062,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	var kubeExcludeNamespaceFlags multiValue
 	fs.Var(&kubeExcludeNamespaceFlags, "kube-exclude-namespace", "Namespace to exclude (repeatable)")
 	var diskExcludeFlags multiValue
-	fs.Var(&diskExcludeFlags, "disk-exclude", "Mount point or path prefix to exclude from disk monitoring (repeatable)")
+	fs.Var(&diskExcludeFlags, "disk-exclude", "Device name/path or mount point pattern to exclude from disk monitoring (repeatable)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err

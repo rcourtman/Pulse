@@ -113,6 +113,41 @@ func TestCollectDisks_DeviceDeduplication(t *testing.T) {
 	}
 }
 
+func TestCollectDisksExcludesFreeBSDFdescfsBeforeUsage(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	t.Cleanup(func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	})
+
+	diskPartitions = func(context.Context, bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "fdescfs", Mountpoint: "/var/run/samba/fd", Fstype: "fdescfs"},
+			{Device: "/dev/ada0p2", Mountpoint: "/", Fstype: "ufs"},
+		}, nil
+	}
+
+	usageCalls := make([]string, 0, 1)
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		usageCalls = append(usageCalls, path)
+		return &godisk.UsageStat{
+			Total:       100,
+			Used:        25,
+			Free:        75,
+			UsedPercent: 25,
+		}, nil
+	}
+
+	disks := collectDisks(context.Background(), []string{"/var/run/samba/fd"})
+	if len(disks) != 1 || disks[0].Mountpoint != "/" {
+		t.Fatalf("excluded fdescfs mount was reported: %+v", disks)
+	}
+	if len(usageCalls) != 1 || usageCalls[0] != "/" {
+		t.Fatalf("disk usage was queried for an excluded fdescfs mount: %v", usageCalls)
+	}
+}
+
 func TestCollectSplitsReclaimableCache(t *testing.T) {
 	origVirtualMemory := virtualMemory
 	t.Cleanup(func() { virtualMemory = origVirtualMemory })

@@ -104,7 +104,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 | `--proxmox-type` | `PULSE_PROXMOX_TYPE` | Proxmox type: `pve` or `pbs` | *(auto-detect)* |
 | `--enable-commands` | `PULSE_ENABLE_COMMANDS` | Enable AI command execution (disabled by default) | `false` |
 | `--disable-commands` | `PULSE_DISABLE_COMMANDS` | **Deprecated** (commands are disabled by default) | - |
-| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Mount point patterns to exclude from disk monitoring (repeatable or CSV) | *(none)* |
+| `--disk-exclude` | `PULSE_DISK_EXCLUDE` | Device name/path or mount point patterns to exclude from disk and S.M.A.R.T. monitoring (repeatable or CSV) | *(none)* |
 | `--kubeconfig` | `PULSE_KUBECONFIG` | Kubeconfig path (optional) | *(auto)* |
 | `--kube-context` | `PULSE_KUBE_CONTEXT` | Kubeconfig context (optional) | *(auto)* |
 | `--kube-include-namespace` | `PULSE_KUBE_INCLUDE_NAMESPACES` | Limit namespaces (repeatable or CSV, wildcards supported) | *(all)* |
@@ -258,8 +258,11 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 
 ### Exclude Specific Disks from Monitoring
 ```bash
+# Exclude whole block devices by name or path
+pulse-agent --disk-exclude sda --disk-exclude /dev/sdb
+
 # Exclude specific mount points
-pulse-agent --disk-exclude /mnt/backup --disk-exclude /media/external
+pulse-agent --disk-exclude /mnt/backup --disk-exclude /var/run/samba/fd
 
 # Exclude using patterns (prefix match)
 pulse-agent --disk-exclude '/mnt/pbs*'  # Matches /mnt/pbs-data, /mnt/pbs-backup, etc.
@@ -268,13 +271,17 @@ pulse-agent --disk-exclude '/mnt/pbs*'  # Matches /mnt/pbs-data, /mnt/pbs-backup
 pulse-agent --disk-exclude '*pbs*'  # Matches any path containing 'pbs'
 
 # Via environment variable (comma-separated)
-PULSE_DISK_EXCLUDE=/mnt/backup,*pbs*,/media/external
+PULSE_DISK_EXCLUDE=/dev/sda,*pbs*,/var/run/samba/fd
 ```
 
 **Pattern types:**
-- Exact: `/mnt/backup` - matches only that exact path
-- Prefix: `/mnt/ext*` - matches paths starting with `/mnt/ext`
-- Contains: `*pbs*` - matches paths containing `pbs`
+- Exact: `/dev/sda`, `sda`, or `/mnt/backup` - matches that device path, device name, or mount point
+- Prefix: `/dev/nvme*` or `/mnt/ext*` - matches device paths or mount points with that prefix
+- Contains: `*cache*` or `*pbs*` - matches device paths, device names, or mount points containing that text
+
+Exclusions are applied before filesystem usage, disk I/O, and S.M.A.R.T. collection.
+On linked Proxmox hosts, matching physical-disk health and SSD wear alerts are
+also suppressed.
 
 ## S.M.A.R.T. Disk Health
 

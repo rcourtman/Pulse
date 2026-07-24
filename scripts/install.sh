@@ -20,7 +20,7 @@
 #   --disable-proxmox   Disable Proxmox integration even if detected
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
-#   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
+#   --disk-exclude <pattern>  Exclude device names/paths or mount points (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --server-fingerprint <sha256> Pin the Pulse server leaf certificate
 #   --observers-file <path> Report to additional observer Pulse instances
@@ -334,7 +334,7 @@ Options:
   --hostname <name>       Override hostname reported to Pulse
   --report-ip <ip>        IP address to report to Pulse (for multi-NIC systems)
   --state-dir <path>      Override persistent state directory
-  --disk-exclude <path>   Exclude mount point (repeatable)
+  --disk-exclude <pattern> Exclude device names/paths or mount points (repeatable)
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
