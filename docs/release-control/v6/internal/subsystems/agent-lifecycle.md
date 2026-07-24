@@ -2174,6 +2174,17 @@ Agent` secondary handoff against the live setup wizard instead of relying
     `internal/api/rbac_handlers_test.go`, and the rejection cases in
     `pkg/auth/sqlite_manager_test.go`.
 
+23. Linux SMART transport classification tests vendor before bus address.
+    Vendor `ATA` is the SCSI layer's marker for a device reached through a SAT
+    translation layer, so it is the more specific signal; a genuine SAS disk
+    reports its own vendor and never `ATA`. SATA disks behind an LSI/mpt3sas HBA
+    (the common Unraid and TrueNAS layout) expose `sas_address` on their
+    scsi_device while reporting vendor `ATA`, so testing `sas_address` first
+    classified them as SAS, which drops the `-d sat` probe hint and steers them
+    back to the `-d scsi` probe the discovery work exists to avoid. Regression
+    coverage: `TestSATABehindSASControllerClassifiesAsSATA` in
+    `internal/hostagent/issue1595_sas_collection_test.go`.
+
 ## Current State
 
 ### PBS connection health does not create agent lifecycle evidence

@@ -1073,11 +1073,18 @@ func linuxBlockDeviceTransportEvidence(block string) string {
 			resolvedTransport = "sata"
 		}
 	}
-	if readTrimmedFile(filepath.Join("/sys/block", block, "device", "sas_address")) != "" {
-		return "sas"
-	}
+	// Vendor "ATA" is the SCSI layer's marker for an ATA device reached through
+	// a SAT translation layer, so it is the more specific signal and must be
+	// tested first. A SATA disk behind an LSI/mpt3sas HBA (the common Unraid
+	// and TrueNAS layout) exposes sas_address on its scsi_device while still
+	// reporting vendor ATA; checking sas_address first classified those as SAS,
+	// which drops the -d sat probe hint and steers them back to the -d scsi
+	// probe. A genuine SAS disk reports its own vendor, never "ATA".
 	if strings.EqualFold(readTrimmedFile(filepath.Join("/sys/block", block, "device", "vendor")), "ATA") {
 		return "sata"
+	}
+	if readTrimmedFile(filepath.Join("/sys/block", block, "device", "sas_address")) != "" {
+		return "sas"
 	}
 	if resolvedTransport != "" {
 		return resolvedTransport

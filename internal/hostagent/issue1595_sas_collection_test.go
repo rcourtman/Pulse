@@ -270,3 +270,81 @@ func issue1595DeviceFromSysfsPath(path string) string {
 	}
 	return remainder
 }
+
+// TestSATABehindSASControllerClassifiesAsSATA pins the transport precedence for
+// the common Unraid and TrueNAS layout: SATA disks hanging off an LSI/mpt3sas
+// HBA. Those expose sas_address on their scsi_device while reporting vendor
+// "ATA", which is the SCSI layer's marker for a device reached through a SAT
+// translation layer. Classifying them as SAS makes
+// linuxInferredSmartctlDeviceTypes return only "scsi" and discards the correct
+// "-d sat" hint, steering the disk back to the "-d scsi" probe that 6e93cb3b5
+// exists to avoid.
+func TestSATABehindSASControllerClassifiesAsSATA(t *testing.T) {
+	origRead := smartctlReadFile
+	origEval := smartctlEvalSymlinks
+	origGOOS := runtimeGOOS
+	t.Cleanup(func() {
+		smartctlReadFile = origRead
+		smartctlEvalSymlinks = origEval
+		runtimeGOOS = origGOOS
+	})
+	runtimeGOOS = "linux"
+	smartctlEvalSymlinks = func(string) (string, error) { return "", fs.ErrNotExist }
+
+	for _, tc := range []struct {
+		name  string
+		files map[string]string
+		want  string
+	}{
+		{
+			name: "sata disk behind an HBA reports both sas_address and vendor ATA",
+			files: map[string]string{
+				"/sys/block/sdb/device/sas_address": "0x4433221105000000",
+				"/sys/block/sdb/device/vendor":      "ATA",
+			},
+			want: "sata",
+		},
+		{
+			name: "genuine sas disk reports its own vendor",
+			files: map[string]string{
+				"/sys/block/sdb/device/sas_address": "0x5000c500a1b2c3d4",
+				"/sys/block/sdb/device/vendor":      "SEAGATE",
+			},
+			want: "sas",
+		},
+		{
+			name: "direct sata disk with no sas_address",
+			files: map[string]string{
+				"/sys/block/sdb/device/vendor": "ATA",
+			},
+			want: "sata",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			smartctlReadFile = func(path string) ([]byte, error) {
+				if value, ok := tc.files[filepath.ToSlash(path)]; ok {
+					return []byte(value), nil
+				}
+				return nil, fs.ErrNotExist
+			}
+			if got := linuxBlockDeviceTransportEvidence("sdb"); got != tc.want {
+				t.Fatalf("transport = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// The probe hint must follow the classification, not just the label.
+	smartctlReadFile = func(path string) ([]byte, error) {
+		switch filepath.ToSlash(path) {
+		case "/sys/block/sdb/device/sas_address":
+			return []byte("0x4433221105000000"), nil
+		case "/sys/block/sdb/device/vendor":
+			return []byte("ATA"), nil
+		}
+		return nil, fs.ErrNotExist
+	}
+	types := linuxInferredSmartctlDeviceTypes(smartctlTarget{Path: "/dev/sdb"})
+	if len(types) == 0 || types[0] != "sat" {
+		t.Fatalf("inferred device types = %v, want the sat hint first", types)
+	}
+}
