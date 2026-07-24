@@ -181,4 +181,36 @@ describe('diagnosticsModel', () => {
       'pulse-diagnostics-sanitized-2026-04-22.json',
     );
   });
+
+  it('redacts PBS probe failures and state reasons in the exported bundle', () => {
+    // 4815a5c80 moved probe failure text onto pbs.probe and added
+    // pbs.stateReason, both of which carry raw transport strings. The
+    // sanitizer only redacted the top-level pbs.error, so addresses that used
+    // to be scrubbed escaped into the support bundle people email.
+    const raw = createDiagnosticsData();
+    raw.pbs[0].stateReason = 'unreachable since dial tcp 192.168.1.20:8007 failed';
+    raw.pbs[0].probe = {
+      connected: false,
+      error: 'dial tcp 192.168.1.20:8007: connect: connection refused',
+      errorKind: 'network',
+      troubleshooting: 'Check that 192.168.1.20 is reachable on port 8007.',
+    };
+
+    const sanitized = sanitizeDiagnosticsData(raw);
+    const serialized = JSON.stringify(sanitized);
+
+    expect(serialized).not.toContain('192.168.1.20');
+    expect(sanitized.pbs[0].probe?.error).toBe(
+      'dial tcp [REDACTED_IP]:8007: connect: connection refused',
+    );
+    expect(sanitized.pbs[0].probe?.troubleshooting).toBe(
+      'Check that [REDACTED_IP] is reachable on port 8007.',
+    );
+    expect(sanitized.pbs[0].stateReason).toBe(
+      'unreachable since dial tcp [REDACTED_IP]:8007 failed',
+    );
+    // Non-sensitive probe fields survive the copy.
+    expect(sanitized.pbs[0].probe?.errorKind).toBe('network');
+    expect(sanitized.pbs[0].probe?.connected).toBe(false);
+  });
 });

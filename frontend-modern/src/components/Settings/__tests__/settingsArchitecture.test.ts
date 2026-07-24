@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { sanitizeDiagnosticsData } from '../diagnosticsModel';
+import type { DiagnosticsData } from '../diagnosticsModel';
 import settingsSource from '../Settings.tsx?raw';
 import { EN_MESSAGES } from '@/i18n/messages';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
@@ -1736,5 +1738,33 @@ describe('settings architecture guardrails', () => {
     expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('const StatusBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+  });
+
+  it('keeps every PBS diagnostic failure string inside the export redaction boundary', () => {
+    // Behavioural guard, not a source scan: the redaction gap that shipped was
+    // a field added to the payload after the sanitizer was written, which no
+    // amount of reading the sanitizer's own source would reveal. Assert on the
+    // serialized bundle so any future PBS failure string has to be redacted to
+    // pass.
+    const sanitized = sanitizeDiagnosticsData({
+      pbs: [
+        {
+          id: 'pbs-1',
+          name: 'backup',
+          host: '192.168.1.20',
+          connected: false,
+          state: 'unreachable',
+          stateReason: 'dial tcp 192.168.1.20:8007 failed',
+          error: 'Get https://192.168.1.20:8007: EOF',
+          probe: {
+            connected: false,
+            error: 'dial tcp 192.168.1.20:8007: connect: connection refused',
+            troubleshooting: 'Confirm 192.168.1.20 accepts connections on 8007.',
+          },
+        },
+      ],
+    } as unknown as DiagnosticsData);
+
+    expect(JSON.stringify(sanitized)).not.toContain('192.168.1.20');
   });
 });

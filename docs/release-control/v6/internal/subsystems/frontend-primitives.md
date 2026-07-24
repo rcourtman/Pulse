@@ -2426,6 +2426,21 @@ verification.
     the pool discriminator` in
     `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts`.
 
+43. The diagnostics export sanitizer owns the redaction boundary for the
+    whole diagnostics payload, not just the fields that existed when it
+    was written. Any provider failure string reaching the export must be
+    passed through the IP redactor, including nested probe results and
+    state reasons. Proofs assert on the serialized bundle rather than on
+    the sanitizer's source, because the failure mode is a payload field
+    added later that the sanitizer never learned about. Regression
+    coverage: `redacts PBS probe failures and state reasons in the
+    exported bundle` in
+    `frontend-modern/src/components/Settings/__tests__/diagnosticsModel.test.ts`
+    and `keeps every PBS diagnostic failure string inside the export
+    redaction boundary` in
+    `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
+
+
 ## Current State
 
 ### System member rows are source-type aware

@@ -191,6 +191,23 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
       name: `pbs-${index + 1}`,
       id: `pbs-${index + 1}`,
       error: pbs.error ? redactString(pbs.error) : undefined,
+      // Probe failures and state reasons carry raw transport text such as
+      // "dial tcp 192.168.1.20:8007: connect: connection refused". They were
+      // added after this sanitizer was written and are exported in support
+      // bundles, so they need the same redaction the top-level error gets.
+      // Spread conditionally so an entry without them keeps its exact shape.
+      ...(pbs.stateReason ? { stateReason: redactString(pbs.stateReason) } : {}),
+      ...(pbs.probe
+        ? {
+            probe: {
+              ...pbs.probe,
+              ...(pbs.probe.error ? { error: redactString(pbs.probe.error) } : {}),
+              ...(pbs.probe.troubleshooting
+                ? { troubleshooting: redactString(pbs.probe.troubleshooting) }
+                : {}),
+            },
+          }
+        : {}),
     }));
   }
 
