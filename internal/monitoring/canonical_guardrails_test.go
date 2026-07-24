@@ -90,6 +90,22 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestPBSClientConstructionCannotPublishConnectedHealth(t *testing.T) {
+	for _, name := range []string{"monitor_client_init.go", "monitor_client_reconnect.go"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		source := string(data)
+		if strings.Contains(source, "setProviderConnectionHealth(InstanceTypePBS") {
+			t.Fatalf("%s must wait for a completed PBS poll before publishing connection health", name)
+		}
+		if !strings.Contains(source, "awaiting") {
+			t.Fatalf("%s must make the first-poll boundary explicit", name)
+		}
+	}
+}
+
 func TestMultiTenantMonitorListOrganizationIDsFallsBackToDefault(t *testing.T) {
 	got, err := (&MultiTenantMonitor{}).ListOrganizationIDs()
 	if err != nil {

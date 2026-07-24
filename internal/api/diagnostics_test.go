@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -797,6 +799,56 @@ func TestMergeDiagnosticsConnection(t *testing.T) {
 				t.Fatalf("error %q does not contain %q", gotErr, tc.wantErrContains)
 			}
 		})
+	}
+}
+
+func TestPBSDiagnosticsKeepsCanonicalPollStateSeparateFromLiveProbe(t *testing.T) {
+	now := time.Now()
+	lastSuccess := now.Add(-time.Minute)
+	connections := buildConnections(aggregatorInputs{
+		pbsInstances: []config.PBSInstance{{
+			Name: "pbs-primary",
+			Host: "https://backup.local:8007",
+		}},
+		instanceHealth: map[string]monitoring.InstanceHealth{
+			"pbs::pbs-primary": {
+				PollStatus: monitoring.InstancePollStatus{
+					LastSuccess: &lastSuccess,
+					LastError: &monitoring.ErrorDetail{
+						At:      now,
+						Message: "connection timed out",
+					},
+				},
+			},
+		},
+		now: now,
+	})
+	if len(connections) != 1 {
+		t.Fatalf("connections = %+v, want one PBS connection", connections)
+	}
+
+	diagnostic := PBSDiagnostic{
+		ID:   "pbs-primary",
+		Name: "pbs-primary",
+		Host: "https://backup.local:8007",
+		Probe: PBSProbeDiagnostic{
+			Connected: true,
+			Details:   &PBSDetails{Version: "3.4.2"},
+		},
+	}
+	applyPBSConnectionDiagnostic(&diagnostic, connections[0])
+
+	if diagnostic.Connected {
+		t.Fatal("canonical diagnostics state became connected from a successful direct probe")
+	}
+	if diagnostic.State != ConnectionStateUnreachable {
+		t.Fatalf("state = %q, want unreachable", diagnostic.State)
+	}
+	if !diagnostic.Probe.Connected {
+		t.Fatal("successful direct probe evidence was lost")
+	}
+	if diagnostic.LastSeen == nil || !diagnostic.LastSeen.Equal(lastSuccess) {
+		t.Fatalf("last seen = %v, want %s", diagnostic.LastSeen, lastSuccess)
 	}
 }
 

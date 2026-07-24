@@ -63,6 +63,12 @@ func TestMonitor_PollPBSInstance_AuthFailure(t *testing.T) {
 	if snapshot.ConnectionHealth["pbs-pbs-auth-fail"] {
 		t.Error("Expected connection health to be false")
 	}
+	if len(snapshot.PBSInstances) != 1 {
+		t.Fatalf("expected failed PBS poll to refresh one dashboard projection, got %+v", snapshot.PBSInstances)
+	}
+	if instance := snapshot.PBSInstances[0]; instance.Status != "offline" || instance.ConnectionHealth != "error" {
+		t.Fatalf("failed PBS dashboard projection = %+v, want offline/error", instance)
+	}
 
 	// Regression: pollStatusMap must record the failure. A defer-arg bug
 	// previously captured pollErr at register-time (always nil), so failed

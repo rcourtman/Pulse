@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -1035,6 +1036,86 @@ func TestDeriveConnectionState_FirstPollFailureIsUnreachable(t *testing.T) {
 	}
 	if lastError == nil || lastError.Message != "connection refused" {
 		t.Fatalf("lastError = %+v, want connection refused", lastError)
+	}
+}
+
+func TestDeriveConnectionState_CurrentFailureOverridesRecentSuccess(t *testing.T) {
+	now := time.Now()
+	lastSuccess := now.Add(-5 * time.Second)
+
+	for _, test := range []struct {
+		name      string
+		message   string
+		wantState ConnectionState
+	}{
+		{
+			name:      "authentication rejected",
+			message:   "401 Unauthorized: token invalid",
+			wantState: ConnectionStateUnauthorized,
+		},
+		{
+			name:      "network timeout",
+			message:   "context deadline exceeded while awaiting response headers",
+			wantState: ConnectionStateUnreachable,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h := healthEntry(&lastSuccess, test.message, "transient", "closed")
+			state, reason, gotLastSeen, lastError := deriveConnectionState(true, h, now)
+			if state != test.wantState {
+				t.Fatalf("state = %q, want %q", state, test.wantState)
+			}
+			if reason != test.message || lastError == nil || lastError.Message != test.message {
+				t.Fatalf("failure detail = reason %q error %+v, want %q", reason, lastError, test.message)
+			}
+			if gotLastSeen == nil || !gotLastSeen.Equal(lastSuccess) {
+				t.Fatalf("lastSeen = %+v, want preserved success %s", gotLastSeen, lastSuccess)
+			}
+		})
+	}
+}
+
+func TestBuildConnectionsKeepsDistinctPBSSystemsWithSameHostname(t *testing.T) {
+	now := time.Now()
+	lastSuccess := now.Add(-10 * time.Second)
+	got := buildConnections(aggregatorInputs{
+		pbsInstances: []config.PBSInstance{
+			{Name: "pbs-east", Host: "https://backup.local:8007"},
+			{Name: "pbs-west", Host: "https://backup.local:8007"},
+		},
+		instanceHealth: map[string]monitoring.InstanceHealth{
+			"pbs::pbs-east": healthEntry(&lastSuccess, "", "", "closed"),
+			"pbs::pbs-west": healthEntry(&lastSuccess, "dial tcp: i/o timeout", "transient", "closed"),
+		},
+		now: now,
+	})
+	if len(got) != 2 {
+		t.Fatalf("connections = %d, want two distinct PBS rows", len(got))
+	}
+	byID := make(map[string]Connection, len(got))
+	for _, connection := range got {
+		byID[connection.ID] = connection
+	}
+	if byID["pbs:pbs-east"].State != ConnectionStateActive {
+		t.Fatalf("pbs-east = %+v, want active", byID["pbs:pbs-east"])
+	}
+	if byID["pbs:pbs-west"].State != ConnectionStateUnreachable {
+		t.Fatalf("pbs-west = %+v, want unreachable", byID["pbs:pbs-west"])
+	}
+
+	alertSnapshots := snapshotConnectionsForAlerts(got)
+	if len(alertSnapshots) != 2 {
+		t.Fatalf("alert snapshots = %+v, want both PBS systems", alertSnapshots)
+	}
+	alertsByID := make(map[string]alerts.ConnectionSnapshot, len(alertSnapshots))
+	for _, snapshot := range alertSnapshots {
+		alertsByID[snapshot.ID] = snapshot
+	}
+	if alertsByID["pbs:pbs-east"].State != alerts.ConnectionStateActive {
+		t.Fatalf("pbs-east alert state = %+v, want active", alertsByID["pbs:pbs-east"])
+	}
+	if west := alertsByID["pbs:pbs-west"]; west.State != alerts.ConnectionStateUnreachable || west.LastError == nil {
+		t.Fatalf("pbs-west alert state = %+v, want unreachable with current error", west)
 	}
 }
 

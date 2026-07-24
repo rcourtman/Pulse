@@ -1950,6 +1950,18 @@ registered-agent counts does not alter any Recovery Assurance domain:
 recovery evidence still comes exclusively from its own deterministic
 verification paths.
 
+### PBS reachability remains separate from recovery freshness
+
+The shared PBS scheduler outcome may mark a source unreachable or unauthorized,
+but storage and recovery consumers must not reinterpret that connection state
+as deletion, corruption, or current freshness of previously collected
+datastores, backups, or recovery points. Conversely, a successful PBS version
+or datastore connectivity probe proves reachability only; optional inventory
+and job collection can remain partial, and Recovery Assurance continues to
+derive protection and recoverability from its own timestamped evidence.
+`internal/api/connections_aggregator.go` and diagnostics may project the shared
+connection outcome, but they do not become storage or restore authority.
+
 ### Recovery actions retain execution-time readiness checks
 
 Recovery-oriented capabilities admitted to canonical Actions are subject to

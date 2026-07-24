@@ -559,10 +559,26 @@ type ClusterInfo struct {
 
 // PBSDiagnostic contains diagnostic info for a PBS instance
 type PBSDiagnostic struct {
-	ID              string      `json:"id"`
-	Name            string      `json:"name"`
-	Host            string      `json:"host"`
-	AuthMethod      string      `json:"authMethod"`
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	Host            string             `json:"host"`
+	AuthMethod      string             `json:"authMethod"`
+	Connected       bool               `json:"connected"`
+	State           ConnectionState    `json:"state"`
+	StateReason     string             `json:"stateReason,omitempty"`
+	LastSeen        *time.Time         `json:"lastSeen,omitempty"`
+	LastError       *ConnectionError   `json:"lastError,omitempty"`
+	Error           string             `json:"error,omitempty"`
+	ErrorKind       string             `json:"errorKind,omitempty"`
+	Troubleshooting string             `json:"troubleshooting,omitempty"`
+	Details         *PBSDetails        `json:"details,omitempty"`
+	Probe           PBSProbeDiagnostic `json:"probe"`
+}
+
+// PBSProbeDiagnostic keeps the direct diagnostics request separate from the
+// canonical monitor result. A successful one-off probe is useful recovery
+// evidence, but it cannot overwrite the last completed runtime poll.
+type PBSProbeDiagnostic struct {
 	Connected       bool        `json:"connected"`
 	Error           string      `json:"error,omitempty"`
 	ErrorKind       string      `json:"errorKind,omitempty"`
@@ -943,10 +959,32 @@ func applyNodeDiagnosticFailure(diag *NodeDiagnostic, failure diagnosticsConnect
 }
 
 func applyPBSDiagnosticFailure(diag *PBSDiagnostic, failure diagnosticsConnectionFailure) {
-	diag.Connected = false
-	diag.Error = failure.message
-	diag.ErrorKind = failure.kind
-	diag.Troubleshooting = failure.troubleshooting
+	diag.Probe.Connected = false
+	diag.Probe.Error = failure.message
+	diag.Probe.ErrorKind = failure.kind
+	diag.Probe.Troubleshooting = failure.troubleshooting
+}
+
+func applyPBSConnectionDiagnostic(diag *PBSDiagnostic, connection Connection) {
+	if diag == nil {
+		return
+	}
+	diag.State = connection.State
+	diag.StateReason = connection.StateReason
+	diag.LastSeen = connection.LastSeen
+	diag.LastError = connection.LastError
+	diag.Connected = connection.State == ConnectionStateActive
+	if diag.Connected {
+		return
+	}
+
+	diag.Error = connection.StateReason
+	if connection.LastError != nil {
+		failure := classifyDiagnosticsConnectionFailure(errors.New(connection.LastError.Message), connection.StateReason)
+		diag.Error = failure.message
+		diag.ErrorKind = failure.kind
+		diag.Troubleshooting = failure.troubleshooting
+	}
 }
 
 func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
@@ -1058,7 +1096,21 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		diag.Nodes = append(diag.Nodes, nodeDiag)
 	}
 
-	// Test PBS instances
+	pbsConnections := make(map[string]Connection)
+	for _, connection := range buildConnections(buildAggregatorInputsWithRuntimeSources(
+		ctx,
+		r.config,
+		r.persistence,
+		r.monitor,
+		aggregatorRuntimeSources{},
+	)) {
+		if connection.Type == ConnectionTypePBS {
+			pbsConnections[connection.Name] = connection
+		}
+	}
+
+	// Test PBS instances. Connected/state use the canonical scheduler ledger;
+	// Probe records this request's direct check as separate evidence.
 	for _, pbsNode := range r.config.PBSInstances {
 		pbsDiag := PBSDiagnostic{
 			ID:         pbsNode.Name,
@@ -1066,11 +1118,9 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Host:       pbsNode.Host,
 			AuthMethod: diagnosticsAuthMethod(pbsNode.User, pbsNode.Password, pbsNode.TokenName, pbsNode.TokenValue),
 		}
-		pbsKeyName := pbsNode.Name
-		if strings.TrimSpace(pbsKeyName) == "" {
-			pbsKeyName = pbsNode.Host
+		if connection, ok := pbsConnections[pbsNode.Name]; ok {
+			applyPBSConnectionDiagnostic(&pbsDiag, connection)
 		}
-		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pbs-"+pbsKeyName)
 		if pbsDiag.AuthMethod == "none" {
 			applyPBSDiagnosticFailure(&pbsDiag, missingStoredSecretDiagnosticsFailure())
 			diag.PBS = append(diag.PBS, pbsDiag)
@@ -1092,16 +1142,15 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			failure := classifyDiagnosticsConnectionFailure(err, "Failed to initialize connection")
 			applyPBSDiagnosticFailure(&pbsDiag, failure)
 			log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS client init failed")
-			pbsDiag.Connected, pbsDiag.Error = mergeDiagnosticsConnection(pbsDiag.Connected, pbsDiag.Error, monitorConnected, hasMonitorStatus)
 		} else {
 			if version, err := client.GetVersion(ctx); err != nil {
 				failure := classifyDiagnosticsConnectionFailure(err, "Connection established but version check failed")
 				applyPBSDiagnosticFailure(&pbsDiag, failure)
 				log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS version check failed")
-				pbsDiag.Connected, pbsDiag.Error = mergeDiagnosticsConnection(pbsDiag.Connected, pbsDiag.Error, monitorConnected, hasMonitorStatus)
 			} else {
-				pbsDiag.Connected = true
+				pbsDiag.Probe.Connected = true
 				pbsDiag.Details = &PBSDetails{Version: version.Version}
+				pbsDiag.Probe.Details = pbsDiag.Details
 			}
 		}
 

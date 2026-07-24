@@ -3866,6 +3866,11 @@ run/export lifecycle, results rendering, sanitization/model helpers, and
 customer-facing diagnostics copy. The shell must not re-accumulate inline API
 calls, export-download plumbing, diagnostics-card composition, or diagnostics
 surface copy.
+PBS diagnostics status badges render the backend's canonical monitored
+`connected`/`state` result. The one-off diagnostics request remains a nested
+`probe` result; when the probe and monitor disagree, the row must name both
+states instead of turning a successful live check into a green monitored badge
+or hiding recovery evidence behind an undifferentiated failure.
 That same diagnostics owner split also keeps maintainer analytics out of the
 customer diagnostics surface. `DiagnosticsResultsPanel.tsx`,
 `diagnosticsModel.ts`, and the diagnostics export path must not render or

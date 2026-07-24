@@ -1293,7 +1293,11 @@ func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.T
 		return ConnectionStateUnauthorized, lastError.Message, lastSeen, lastError
 	}
 
-	if lastSeen == nil && lastError != nil {
+	// PollStatus.LastError is a current outstanding failure, not historical
+	// metadata: recordTaskResult clears it on the next success. A prior success
+	// therefore preserves LastSeen for freshness context but must not make a
+	// newly failed connection appear active while its breaker is still closed.
+	if lastError != nil {
 		return ConnectionStateUnreachable, lastError.Message, lastSeen, lastError
 	}
 

@@ -134,13 +134,13 @@ func TestComputeDiagnosticsClassifiesMissingNodeSecrets(t *testing.T) {
 	if got := diag.PBS[0].AuthMethod; got != "none" {
 		t.Fatalf("PBS auth method = %q, want none", got)
 	}
-	if got := diag.PBS[0].ErrorKind; got != "no_stored_secret" {
+	if got := diag.PBS[0].Probe.ErrorKind; got != "no_stored_secret" {
 		t.Fatalf("PBS error kind = %q, want no_stored_secret", got)
 	}
-	if !strings.Contains(diag.PBS[0].Error, "no stored credentials") {
-		t.Fatalf("PBS error should describe missing credentials, got %q", diag.PBS[0].Error)
+	if !strings.Contains(diag.PBS[0].Probe.Error, "no stored credentials") {
+		t.Fatalf("PBS probe error should describe missing credentials, got %q", diag.PBS[0].Probe.Error)
 	}
-	if strings.TrimSpace(diag.PBS[0].Troubleshooting) == "" {
+	if strings.TrimSpace(diag.PBS[0].Probe.Troubleshooting) == "" {
 		t.Fatal("expected PBS troubleshooting guidance")
 	}
 }

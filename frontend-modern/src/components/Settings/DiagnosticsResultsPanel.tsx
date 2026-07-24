@@ -172,16 +172,30 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               <div class="space-y-1">
                 <For each={props.diagnosticsData?.pbs || []}>
                   {(pbs) => (
-                    <div class="flex items-center justify-between border-b border-border-subtle py-1 last:border-0">
-                      <span class="max-w-[120px] truncate" title={pbs.host}>
-                        {pbs.name}
-                      </span>
-                      <StatusIndicatorBadge
-                        status={pbs.connected ? 'online' : 'offline'}
-                        dot
-                        uppercase
-                        size="xs"
-                      />
+                    <div class="border-b border-border-subtle py-1 last:border-0">
+                      <div class="flex items-center justify-between">
+                        <span class="max-w-[120px] truncate" title={pbs.host}>
+                          {pbs.name}
+                        </span>
+                        <StatusIndicatorBadge
+                          status={pbs.connected ? 'online' : 'offline'}
+                          dot
+                          uppercase
+                          size="xs"
+                        />
+                      </div>
+                      <Show
+                        when={
+                          pbs.probe && pbs.probe.connected !== pbs.connected ? pbs.probe : undefined
+                        }
+                      >
+                        {(probe) => (
+                          <div class="mt-0.5 text-xs text-muted">
+                            Monitor: {pbs.state || (pbs.connected ? 'active' : 'unreachable')}; live
+                            check: {probe().connected ? 'connected' : 'failed'}
+                          </div>
+                        )}
+                      </Show>
                     </div>
                   )}
                 </For>

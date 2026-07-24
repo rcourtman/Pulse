@@ -644,6 +644,21 @@ node-local Agent evidence.
 
 ## Current State
 
+### PBS health is one completed-poll outcome
+
+PBS client construction is transport setup, not connectivity evidence. Initial
+client creation and retry recreation therefore remain pending until a poll
+completes; client-construction failures publish a failed scheduler result
+instead of leaving Settings pending while legacy state is disconnected.
+`pollPBSInstance` finalizes its dynamic `pollErr` once and uses that outcome for
+the scheduler ledger, staleness tracker, poll metrics, connection-health map,
+dashboard `PBSInstance`, and legacy PBS alert evaluation. Authentication,
+timeout, cancellation, and panic outcomes all publish `offline`/`error`, while
+a later success clears the current error and publishes `online`/`healthy`.
+Optional node, datastore, namespace, or job collection failures remain partial
+data evidence and do not turn a successful version/datastore connectivity
+probe into a connection failure.
+
 ### Host snapshots carry integration provenance; doctor copy is user-facing
 
 `models.Host.IntegrationSource` mirrors the unified fabric's

@@ -5916,6 +5916,17 @@ machine-readable `errorKind` values with operator guidance in
 certificate mismatch, refused connections, unreachable networks, DNS failures,
 timeouts, and unknown connection failures must remain distinguishable in
 support bundles instead of collapsing into a generic connection failure string.
+PBS connection state follows the same scheduler-ledger authority as the
+Settings connections response and connection-alert snapshots.
+`InstancePollStatus.LastError` is a current outstanding failure that is cleared
+by the next successful poll; a preserved `LastSuccess` supplies freshness
+context but must not downgrade that current failure back to `active` before the
+circuit breaker opens. `/api/diagnostics` exposes that canonical state through
+`PBSDiagnostic.connected`, `state`, `stateReason`, `lastSeen`, and `lastError`.
+Its immediate credential/network check is separate `probe` evidence, so a
+successful support probe can demonstrate recovery in progress without
+overwriting the last completed runtime poll, and a transient probe failure
+cannot make a healthy monitored source appear disconnected.
 That same diagnostics boundary now explicitly excludes maintainer analytics.
 `internal/api/diagnostics.go` must not serialize commercial funnel, sales
 funnel, pricing/checkout conversion, or infrastructure onboarding telemetry in

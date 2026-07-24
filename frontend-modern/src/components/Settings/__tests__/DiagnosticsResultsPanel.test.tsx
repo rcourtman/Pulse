@@ -244,4 +244,54 @@ describe('DiagnosticsResultsPanel', () => {
     );
     expect(screen.queryByText('Container Runtime Agents')).not.toBeInTheDocument();
   });
+
+  it('shows direct PBS probe evidence without replacing monitored state', () => {
+    const diagnosticsData = {
+      version: '6.1.1',
+      runtime: 'go',
+      uptime: 3600,
+      nodes: [],
+      pbs: [
+        {
+          id: 'pbs-primary',
+          name: 'pbs-primary',
+          host: 'https://backup.local:8007',
+          connected: false,
+          state: 'unreachable',
+          stateReason: 'connection timed out',
+          probe: {
+            connected: true,
+            details: { version: '3.4.2' },
+          },
+        },
+      ],
+      system: {
+        os: 'linux',
+        arch: 'amd64',
+        goVersion: 'go1.25',
+        numCPU: 8,
+        numGoroutine: 32,
+        memoryMB: 128,
+      },
+      errors: [],
+    } as DiagnosticsData;
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <DiagnosticsResultsPanel
+              diagnosticsData={diagnosticsData}
+              loading={false}
+              onRunDiagnostics={() => {}}
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    expect(screen.getByText('pbs-primary')).toBeInTheDocument();
+    expect(screen.getByText('Monitor: unreachable; live check: connected')).toBeInTheDocument();
+  });
 });

@@ -139,6 +139,7 @@ func TestPollPBSInstance(t *testing.T) {
 		},
 		state:                   models.NewState(),
 		stalenessTracker:        NewStalenessTracker(nil), // Pass nil or mock PollMetrics
+		pollStatusMap:           make(map[string]*pollStatus),
 		nodePendingUpdatesCache: make(map[string]pendingUpdatesCache),
 	}
 

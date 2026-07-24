@@ -16,8 +16,18 @@ export interface DiagnosticsPBS {
   name: string;
   host: string;
   connected: boolean;
+  state?: 'active' | 'paused' | 'unauthorized' | 'unreachable' | 'stale' | 'pending';
+  stateReason?: string;
+  lastSeen?: string;
   error?: string;
   details?: Record<string, unknown>;
+  probe?: {
+    connected: boolean;
+    error?: string;
+    errorKind?: string;
+    troubleshooting?: string;
+    details?: Record<string, unknown>;
+  };
 }
 
 export interface SystemDiagnostic {

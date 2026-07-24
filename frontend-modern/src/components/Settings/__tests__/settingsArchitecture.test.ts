@@ -1700,6 +1700,8 @@ describe('settings architecture guardrails', () => {
 
     expect(diagnosticsModelSource).toContain('stripInternalAnalyticsDiagnosticsFields');
     expect(diagnosticsModelSource).toContain('assistantRuntimeConnected');
+    expect(diagnosticsModelSource).toContain('probe?: {');
+    expect(diagnosticsResultsPanelSource).toContain("probe().connected ? 'connected' : 'failed'");
     expect(diagnosticsModelSource).not.toContain('mcpConnected');
     expect(diagnosticsModelSource).not.toContain('mcpToolCount');
     expect(diagnosticsModelSource).not.toContain('export interface CommercialFunnelDiagnostic');

@@ -2101,6 +2101,15 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### PBS connection health does not create agent lifecycle evidence
+
+The shared API connections ledger and diagnostics now project PBS health from
+the monitoring scheduler's completed poll result and keep immediate diagnostics
+probes separate. This does not enroll a PBS host as a Pulse Agent, extend an
+agent heartbeat, prove command reachability, or create update/repair authority.
+Agent lifecycle consumers continue to use agent-source identity and report
+freshness only; same-hostname PBS connections remain distinct provider rows.
+
 ### Docker and Podman report sizes share one exact-byte contract
 
 The Unified Agent now measures the encoded gzip body and decoded report JSON

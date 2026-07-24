@@ -167,15 +167,37 @@ func pbsJobHealthPosture(fact pbs.JobHealthEvidence, freshness models.PBSJobHeal
 
 // pollPBSInstance polls a single PBS instance
 func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, client *pbs.Client) {
-	defer recoverFromPanic(fmt.Sprintf("pollPBSInstance-%s", instanceName))
-
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
+	var pbsInst models.PBSInstance
+	publishResult := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")
-		defer m.pollMetrics.DecInFlight("pbs")
-		defer func() {
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			pollErr = fmt.Errorf("panic while polling PBS instance %q: %v", instanceName, recovered)
+			log.Error().
+				Str("goroutine", fmt.Sprintf("pollPBSInstance-%s", instanceName)).
+				Interface("panic", recovered).
+				Stack().
+				Msg("Recovered from panic in monitoring goroutine")
+		}
+
+		m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
+		if m.stalenessTracker != nil {
+			if pollErr == nil {
+				m.stalenessTracker.UpdateSuccess(InstanceTypePBS, instanceName, nil)
+			} else {
+				m.stalenessTracker.UpdateError(InstanceTypePBS, instanceName)
+			}
+		}
+		if publishResult {
+			m.publishPBSConnectionOutcome(pbsInst, pollErr)
+		}
+		if m.pollMetrics != nil {
+			m.pollMetrics.DecInFlight("pbs")
 			m.pollMetrics.RecordResult(PollResult{
 				InstanceName: instanceName,
 				InstanceType: "pbs",
@@ -184,35 +206,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				StartTime:    start,
 				EndTime:      time.Now(),
 			})
-		}()
-	}
-	if m.stalenessTracker != nil {
-		defer func() {
-			if pollErr == nil {
-				m.stalenessTracker.UpdateSuccess(InstanceTypePBS, instanceName, nil)
-			} else {
-				m.stalenessTracker.UpdateError(InstanceTypePBS, instanceName)
-			}
-		}()
-	}
-	defer func() {
-		m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
-	}()
-
-	// Check if context is cancelled
-	select {
-	case <-ctx.Done():
-		pollErr = ctx.Err()
-		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("polling cancelled")
 		}
-		return
-	default:
-	}
-
-	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("polling PBS instance")
-	}
+	}()
 
 	// Get instance config
 	var instanceCfg *config.PBSInstance
@@ -229,6 +224,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 	if instanceCfg == nil {
+		pollErr = fmt.Errorf("PBS instance config %q not found", instanceName)
 		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
 		return
 	}
@@ -240,7 +236,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	}
 
 	// Initialize PBS instance with default values
-	pbsInst := models.PBSInstance{
+	pbsInst = models.PBSInstance{
 		ID:               "pbs-" + instanceName,
 		Name:             instanceName,
 		Host:             instanceCfg.Host,
@@ -250,6 +246,23 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		ConnectionHealth: "unhealthy",
 		LastSeen:         time.Now(),
 	}
+	publishResult = true
+
+	// Check if context is cancelled after the configured instance projection is
+	// available, so cancellation still publishes the same failed poll outcome.
+	select {
+	case <-ctx.Done():
+		pollErr = ctx.Err()
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("polling cancelled")
+		}
+		return
+	default:
+	}
+
+	if debugEnabled {
+		log.Debug().Str("instance", instanceName).Msg("polling PBS instance")
+	}
 
 	// Try to get version first
 	version, versionErr := client.GetVersion(ctx)
@@ -258,7 +271,6 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		pbsInst.Version = version.Version
 		pbsInst.ConnectionHealth = "healthy"
 		m.resetAuthFailures(instanceName, "pbs")
-		m.setProviderConnectionHealth(InstanceTypePBS, instanceName, true)
 
 		if debugEnabled {
 			log.Debug().
@@ -281,7 +293,6 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.Version = "connected"
 			pbsInst.ConnectionHealth = "healthy"
 			m.resetAuthFailures(instanceName, "pbs")
-			m.setProviderConnectionHealth(InstanceTypePBS, instanceName, true)
 
 			log.Info().
 				Str("instance", instanceName).
@@ -289,15 +300,18 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		} else {
 			pbsInst.Status = "offline"
 			pbsInst.ConnectionHealth = "error"
-			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
+			connectionErr := versionErr
+			if errors.IsAuthError(datastoreErr) {
+				connectionErr = datastoreErr
+			}
+			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, connectionErr)
 			pollErr = monErr
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PBS")
-			m.setProviderConnectionHealth(InstanceTypePBS, instanceName, false)
 
 			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
 				m.recordAuthFailure(instanceName, "pbs")
-				return
 			}
+			return
 		}
 	}
 
@@ -442,14 +456,6 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		pbsInst.JobHealthEvidence = pbsJobHealthEvidenceFromFacts(jobFacts, time.Now())
 	}
 
-	// Update state and run alerts
-	m.state.UpdatePBSInstance(pbsInst)
-	log.Info().
-		Str("instance", instanceName).
-		Str("id", pbsInst.ID).
-		Int("datastores", len(pbsInst.Datastores)).
-		Msg("PBS instance updated in state")
-
 	// Convert PBS datastores to Storage entries for unified storage view
 	if len(pbsInst.Datastores) > 0 && instanceCfg.MonitorDatastores {
 		var pbsStorages []models.Storage
@@ -484,10 +490,6 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			Str("instance", instanceName).
 			Int("storageEntries", len(pbsStorages)).
 			Msg("Added PBS datastores to unified storage view")
-	}
-
-	if m.alertManager != nil {
-		m.alertManager.CheckPBS(pbsInst)
 	}
 
 	// Poll backups if enabled
@@ -577,6 +579,34 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		log.Debug().
 			Str("instance", instanceName).
 			Msg("PBS backup monitoring disabled")
+	}
+}
+
+// publishPBSConnectionOutcome projects the final connectivity result into every
+// legacy PBS health consumer. Inventory collection may be partial, but the
+// connection map, dashboard resource, and legacy alert evaluator must all use
+// the same poll error that is recorded in the scheduler ledger.
+func (m *Monitor) publishPBSConnectionOutcome(instance models.PBSInstance, pollErr error) {
+	connected := pollErr == nil
+	if connected {
+		instance.Status = "online"
+		instance.ConnectionHealth = "healthy"
+	} else {
+		instance.Status = "offline"
+		instance.ConnectionHealth = "error"
+	}
+
+	m.setProviderConnectionHealth(InstanceTypePBS, instance.Name, connected)
+	m.state.UpdatePBSInstance(instance)
+	log.Info().
+		Str("instance", instance.Name).
+		Str("id", instance.ID).
+		Bool("connected", connected).
+		Int("datastores", len(instance.Datastores)).
+		Msg("PBS instance updated in state")
+
+	if m.alertManager != nil {
+		m.alertManager.CheckPBS(instance)
 	}
 }
 

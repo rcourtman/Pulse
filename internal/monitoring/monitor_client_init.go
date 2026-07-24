@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -106,14 +107,24 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 				Bool("hasPassword", pbsInst.Password != "").
 				Bool("hasToken", pbsInst.TokenValue != "").
 				Msg("Failed to create PBS client - node will show as disconnected")
-			// Set initial connection health to false for this node
-			m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, false)
+			m.recordTaskResult(InstanceTypePBS, pbsInst.Name, monErr)
+			if m.stalenessTracker != nil {
+				m.stalenessTracker.UpdateError(InstanceTypePBS, pbsInst.Name)
+			}
+			m.publishPBSConnectionOutcome(models.PBSInstance{
+				ID:       "pbs-" + pbsInst.Name,
+				Name:     pbsInst.Name,
+				Host:     pbsInst.Host,
+				GuestURL: pbsInst.GuestURL,
+				Version:  "unknown",
+				LastSeen: time.Now(),
+			}, monErr)
 			continue
 		}
 		m.pbsClients[pbsInst.Name] = client
-		log.Info().Str("instance", pbsInst.Name).Msg("PBS client created successfully")
-		// Set initial connection health to true
-		m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, true)
+		log.Info().
+			Str("instance", pbsInst.Name).
+			Msg("PBS client created; awaiting first connectivity poll")
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -123,5 +125,48 @@ func TestHandleTestConnection(t *testing.T) {
 				tt.verifyResponse(t, response)
 			}
 		})
+	}
+}
+
+func TestHandleTestNodePBSIsADirectProbeWithoutChangingRuntimeHealth(t *testing.T) {
+	var authorization string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}})
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PBSInstances: []config.PBSInstance{{
+			Name:       "backup",
+			Host:       server.URL,
+			TokenName:  "root@pam!pulse",
+			TokenValue: "rotated-secret",
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	beforeHealth := handler.defaultMonitor.SchedulerHealth()
+	beforeStatuses := handler.defaultMonitor.GetConnectionStatuses()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes/pbs-0/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestNode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("saved PBS test status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(authorization, "rotated-secret") {
+		t.Fatalf("saved PBS test did not use the current stored token: %q", authorization)
+	}
+	afterHealth := handler.defaultMonitor.SchedulerHealth()
+	if !reflect.DeepEqual(afterHealth.Instances, beforeHealth.Instances) ||
+		!reflect.DeepEqual(afterHealth.Breakers, beforeHealth.Breakers) ||
+		!reflect.DeepEqual(afterHealth.Staleness, beforeHealth.Staleness) {
+		t.Fatalf("direct PBS test mutated canonical scheduler health:\nbefore=%+v\nafter=%+v", beforeHealth, afterHealth)
+	}
+	if !reflect.DeepEqual(handler.defaultMonitor.GetConnectionStatuses(), beforeStatuses) {
+		t.Fatal("direct PBS test mutated the runtime connection projection")
 	}
 }

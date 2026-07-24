@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	monitorerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
@@ -154,21 +156,33 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 			clientConfig.Timeout = 60 * time.Second
 			client, err := pbs.NewClient(clientConfig)
 			if err != nil {
+				monErr := monitorerrors.WrapConnectionError("recreate_pbs_client", pbsInst.Name, err)
 				log.Warn().
-					Err(err).
+					Err(monErr).
 					Str("instance", pbsInst.Name).
 					Msg("Failed to reconnect PBS client, will retry")
+				m.recordTaskResult(InstanceTypePBS, pbsInst.Name, monErr)
+				if m.stalenessTracker != nil {
+					m.stalenessTracker.UpdateError(InstanceTypePBS, pbsInst.Name)
+				}
+				m.publishPBSConnectionOutcome(models.PBSInstance{
+					ID:       "pbs-" + pbsInst.Name,
+					Name:     pbsInst.Name,
+					Host:     pbsInst.Host,
+					GuestURL: pbsInst.GuestURL,
+					Version:  "unknown",
+					LastSeen: time.Now(),
+				}, monErr)
 				continue
 			}
 
 			m.mu.Lock()
 			m.pbsClients[pbsInst.Name] = client
 			m.mu.Unlock()
-			m.setProviderConnectionHealth(InstanceTypePBS, pbsInst.Name, true)
 
 			log.Info().
 				Str("instance", pbsInst.Name).
-				Msg("Successfully reconnected PBS client")
+				Msg("PBS client recreated; awaiting connectivity poll")
 		}
 	}
 }
