@@ -165,7 +165,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				// Clear any pending powered-off tracking and alerts when globally disabled
 				m.mu.Lock()
 				delete(m.offlineConfirmations, guestID)
+				intentCleared := m.clearIntentPendingNoLock(canonicalPoweredStateStateID(guestID))
 				m.mu.Unlock()
+				if intentCleared {
+					m.saveActiveAlertsAsync("guest offline intent disabled")
+				}
 				m.rehomeStrandedGuestAlert(canonicalPoweredStateStateID(guestID), canonicalPoweredStateSpecID(guestID), string(alertspecs.AlertSpecKindPoweredState), guestID, name, node, instanceName, "guest")
 				m.clearAlert(canonicalPoweredStateStateID(guestID))
 			} else if snapshot.OnBoot != nil && !*snapshot.OnBoot {
@@ -180,9 +184,10 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.mu.RLock()
 				thresholds := m.getGuestThresholds(guest, guestID)
 				m.mu.RUnlock()
+				observedAt := m.policyNow().UTC()
 				backupContext := BackupIntentContext{
 					Active:     strings.EqualFold(strings.TrimSpace(snapshot.Lock), "backup"),
-					ObservedAt: time.Now(),
+					ObservedAt: observedAt,
 					Evidence:   "guest_lock",
 				}
 				if !backupContext.Active {
@@ -190,7 +195,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 					resolver := m.backupIntentResolver
 					m.mu.RUnlock()
 					if resolver != nil {
-						if resolved, ok := resolver(guestID, instanceName, node, snapshot.VMID, backupContext.ObservedAt); ok {
+						if resolved, ok := resolver(guestID, instanceName, node, snapshot.VMID, observedAt); ok {
 							backupContext = resolved
 						}
 					}
@@ -407,7 +412,21 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, nod
 	if strings.EqualFold(guestType, "container") {
 		resourceType = unifiedresources.ResourceTypeSystemContainer
 	}
-	spec, err := buildCanonicalPoweredStateSpec(guestID, name, resourceType, severity, 2, thresholds.Disabled || thresholds.DisableConnectivity)
+	m.mu.RLock()
+	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(guestID, string(resourceType), string(AlertIntentSignalOffline))
+	m.mu.RUnlock()
+	confirmations := 2
+	tracking := m.offlineConfirmations
+	durationAuthoritative := effectiveIntent.Sources["graceSeconds"] != "factory" ||
+		(effectiveIntent.BackupOffline != nil && effectiveIntent.BackupOffline.Enabled)
+	if durationAuthoritative {
+		// Explicit powered-state policies are duration authoritative. A zero
+		// grace therefore fires on the first stopped observation, while a
+		// positive grace is independent of polling cadence.
+		confirmations = 1
+		tracking = nil
+	}
+	spec, err := buildCanonicalPoweredStateSpec(guestID, name, resourceType, severity, confirmations, thresholds.Disabled || thresholds.DisableConnectivity)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -420,13 +439,13 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, nod
 	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{
-			ObservedAt: time.Now(),
+			ObservedAt: m.policyNow().UTC(),
 			PoweredState: &alertspecs.PoweredStateEvidence{
 				Expected: alertspecs.PowerStateOn,
 				Observed: alertspecs.PowerStateOff,
 			},
 		},
-		Tracking:     m.offlineConfirmations,
+		Tracking:     tracking,
 		TrackingKey:  guestID,
 		AlertID:      alertID,
 		AlertType:    "powered-off",
@@ -467,7 +486,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 			Msg("Guest is running, resetting powered-off confirmation count")
 		delete(m.offlineConfirmations, guestID)
 	}
-	if decision := m.evaluateIntentNoLock(guestID, "", string(AlertIntentSignalOffline), alertID, time.Now(), false, BackupIntentContext{}); decision.StateChanged {
+	if decision := m.evaluateIntentNoLock(guestID, "", string(AlertIntentSignalOffline), alertID, m.policyNow().UTC(), false, BackupIntentContext{}); decision.StateChanged {
 		m.saveActiveAlertsAsync("guest offline intent cleared")
 	}
 
@@ -649,6 +668,13 @@ func (m *Manager) suppressGuestAlerts(guestID string) bool {
 	}
 
 	delete(m.offlineConfirmations, guestID)
+	for key, pending := range m.intentPending {
+		if pending.ResourceID == guestID || strings.HasPrefix(pending.ResourceID, guestID+"/") {
+			if m.clearIntentPendingNoLock(key) {
+				cleared = true
+			}
+		}
+	}
 
 	return cleared
 }

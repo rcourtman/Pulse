@@ -48,10 +48,13 @@ type Manager struct {
 	resolvedMutex    sync.RWMutex // Secondary lock - see Lock Ordering Documentation above
 	// Time threshold tracking
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
-	// Intent-policy pending state retains wall-clock and transient-context
-	// evidence for policy-enabled candidates. It is keyed by canonical alert
-	// tracking key and persisted with the alert manager's transition state.
+	// Intent-policy pending state retains server timestamps, accumulated
+	// monotonic elapsed time, and transient-context evidence for policy-enabled
+	// candidates. It is keyed by canonical alert tracking key and persisted
+	// with the alert manager's transition state.
 	intentPending          map[string]IntentPendingState
+	intentRuntimeTicks     map[string]time.Duration
+	intentClock            func() time.Duration
 	intentPolicies         AlertIntentPolicyDocument
 	operatorIntentResolver OperatorIntentContextResolver
 	backupIntentResolver   BackupIntentContextResolver
@@ -137,6 +140,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		resolvedAlias:                   make(map[string]string),
 		pendingAlerts:                   make(map[string]time.Time),
 		intentPending:                   make(map[string]IntentPendingState),
+		intentRuntimeTicks:              make(map[string]time.Duration),
 		intentPolicies:                  NewAlertIntentPolicyDocument(),
 		nodeOfflineCount:                make(map[string]int),
 		connectionDegradedCount:         make(map[string]int),
@@ -159,6 +163,10 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		instanceNodeDisplayNames:        make(map[string]string),
 		now:                             time.Now,
 		config:                          defaultAlertConfig(),
+	}
+	intentClockEpoch := time.Now()
+	m.intentClock = func() time.Duration {
+		return time.Since(intentClockEpoch)
 	}
 
 	// Load saved active alerts

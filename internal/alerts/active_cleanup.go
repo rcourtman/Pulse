@@ -314,13 +314,15 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 // ClearActiveAlerts removes all active and pending alerts, resetting the manager state.
 func (m *Manager) ClearActiveAlerts() {
 	m.mu.Lock()
-	if len(m.activeAlerts) == 0 && len(m.pendingAlerts) == 0 {
+	if len(m.activeAlerts) == 0 && len(m.pendingAlerts) == 0 && len(m.intentPending) == 0 {
 		m.mu.Unlock()
 		return
 	}
 	m.activeAlerts = make(map[string]*Alert)
 	m.activeAlertAlias = make(map[string]string)
 	m.pendingAlerts = make(map[string]time.Time)
+	m.intentPending = make(map[string]IntentPendingState)
+	m.intentRuntimeTicks = make(map[string]time.Duration)
 	m.recentAlerts = make(map[string]*Alert)
 	m.suppressedUntil = make(map[string]time.Time)
 	m.alertRateLimit = make(map[string][]time.Time)

@@ -126,7 +126,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		observedAvailability[storageKey] = struct{}{}
 		if existing, exists := m.getActiveAlertNoLock(storageKey); exists && existing != nil {
 			if _, pending := m.intentPending[storageKey]; pending {
-				delete(m.intentPending, storageKey)
+				m.clearIntentPendingNoLock(storageKey)
 				intentStateChanged = true
 			}
 			continue
@@ -142,7 +142,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			alert.StartTime = pending.FirstMatchedAt
 		}
 		if _, ok := m.intentPending[storageKey]; ok {
-			delete(m.intentPending, storageKey)
+			m.clearIntentPendingNoLock(storageKey)
 			intentStateChanged = true
 		}
 	}
@@ -153,7 +153,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 		if _, observed := observedAvailability[storageKey]; observed {
 			continue
 		}
-		delete(m.intentPending, storageKey)
+		m.clearIntentPendingNoLock(storageKey)
 		intentStateChanged = true
 	}
 	if intentStateChanged {

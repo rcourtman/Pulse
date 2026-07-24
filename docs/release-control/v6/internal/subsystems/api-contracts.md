@@ -8247,7 +8247,14 @@ default, resource-type, and canonical-resource rules. A stale revision returns
 `409 Conflict`; invalid policy or preview input returns `400`; unavailable
 runtime or persistence ownership returns `503`. A save failure restores the
 previous in-memory document and returns `500`. Preview is bounded and read-only
-and cannot advance pending grace state.
+and cannot advance pending grace state. Both write and preview transports
+accept exactly one JSON object, reject unknown fields, and validate the signal
+against the same stable policy vocabulary as persistence. JSON coercion,
+trailing objects, unsupported signals, fractional durations, negative
+durations, and values above the 30-day bound fail with `400` rather than being
+silently rounded or ignored. Tenant selection remains request-context owned;
+policy reads, preview, and writes never fall back to another organization's
+manager once an organization context is present.
 
 Availability targets add `udp` plus `response_required` and
 `open_or_filtered` modes. Request and expected-response payloads remain
@@ -8257,7 +8264,7 @@ clients. A silent open-or-filtered result is `indeterminate`, not successful
 reachability and not a transport failure that may be promoted to an outage.
 
 `internal/api/alerts_endpoints_test.go` proves scopes, revision conflicts,
-rollback, and preview behavior.
+rollback, exact decoding, invalid-signal rejection, and preview behavior.
 `frontend-modern/src/api/__tests__/alertIntentPolicies.test.ts` and the
 availability target API and settings tests prove the canonical browser routes
 and additive UDP wire fields.

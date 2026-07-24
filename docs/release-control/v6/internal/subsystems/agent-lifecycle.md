@@ -5066,6 +5066,11 @@ Neither an expected-transient decision nor an indeterminate UDP outcome may be
 translated into an agent action. Any later customer-infrastructure mutation
 still requires the canonical Actions planner, approval, executor, receipt,
 audit, and verification boundaries.
+Powered-off tolerance is evaluated from the Pulse server's monotonic elapsed
+time and the existing VM/LXC observation stream. It does not accept agent time,
+poll count, a new report field, or remote configuration authority, and a guest
+resource-type default cannot change node or host-agent connectivity
+confirmations.
 
 ### Server-side host deletion and re-enrollment authority
 

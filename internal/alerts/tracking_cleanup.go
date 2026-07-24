@@ -60,6 +60,16 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 	}
 
+	for trackingKey, pending := range m.intentPending {
+		if m.hasActiveAlertNoLock(trackingKey) {
+			continue
+		}
+		if pending.LastObservedAt.IsZero() || now.Sub(pending.LastObservedAt) > staleThreshold {
+			m.clearIntentPendingNoLock(trackingKey)
+			cleaned++
+		}
+	}
+
 	for resourceID := range m.offlineConfirmations {
 		hasRelatedAlert := false
 		for storageKey, alert := range m.activeAlerts {

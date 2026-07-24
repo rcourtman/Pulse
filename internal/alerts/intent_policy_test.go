@@ -44,6 +44,38 @@ func TestAlertIntentPolicyResolutionPrecedenceIsFieldByField(t *testing.T) {
 	}
 }
 
+func TestAlertIntentPolicyResourceTypeInheritanceIsGeneralThenSpecific(t *testing.T) {
+	m := NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(m.Stop)
+	document := NewAlertIntentPolicyDocument()
+	document.ResourceTypes["guest"] = map[string]AlertIntentRule{
+		string(AlertIntentSignalOffline): {
+			GraceSeconds:       intPointer(300),
+			HonorOperatorState: boolPointer(true),
+		},
+	}
+	document.ResourceTypes["vm"] = map[string]AlertIntentRule{
+		string(AlertIntentSignalOffline): {HonorOperatorState: boolPointer(false)},
+	}
+	if err := m.LoadIntentPolicies(document); err != nil {
+		t.Fatal(err)
+	}
+
+	vm := m.ResolveEffectiveIntentPolicy("vm:101", "vm", string(AlertIntentSignalOffline))
+	if vm.GraceSeconds != 300 || vm.HonorOperatorState {
+		t.Fatalf("vm effective policy = %+v", vm)
+	}
+	if vm.Sources["graceSeconds"] != "resourceTypes.guest.state.offline" ||
+		vm.Sources["honorOperatorState"] != "resourceTypes.vm.state.offline" {
+		t.Fatalf("vm policy sources = %+v", vm.Sources)
+	}
+
+	node := m.ResolveEffectiveIntentPolicy("node:a", "node", string(AlertIntentSignalOffline))
+	if node.Explicit || node.Sources["graceSeconds"] != "factory" {
+		t.Fatalf("guest powered-off default leaked into node connectivity policy: %+v", node)
+	}
+}
+
 func TestAlertIntentPolicyResolvesCanonicalResourceFromSourceID(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)
@@ -86,6 +118,11 @@ func TestAlertIntentPolicyValidationRejectsAmbiguousNormalizedKeys(t *testing.T)
 func TestAlertIntentBackupDeferralEndsWithPostGraceAndHardCap(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)
+	start := time.Date(2026, 7, 13, 9, 0, 0, 0, time.UTC)
+	now := start
+	var tick time.Duration
+	m.now = func() time.Time { return now }
+	m.intentClock = func() time.Duration { return tick }
 	document := NewAlertIntentPolicyDocument()
 	document.Resources["vm:101"] = map[string]AlertIntentRule{
 		string(AlertIntentSignalOffline): {
@@ -99,11 +136,13 @@ func TestAlertIntentBackupDeferralEndsWithPostGraceAndHardCap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	start := time.Date(2026, 7, 13, 9, 0, 0, 0, time.UTC)
 	m.mu.Lock()
 	active := m.evaluateIntentNoLock("vm:101", "vm", string(AlertIntentSignalOffline), "offline:vm:101", start, true, BackupIntentContext{Active: true, Evidence: "guest_lock"})
+	now, tick = start.Add(100*time.Second), 100*time.Second
 	ended := m.evaluateIntentNoLock("vm:101", "vm", string(AlertIntentSignalOffline), "offline:vm:101", start.Add(100*time.Second), true, BackupIntentContext{})
+	now, tick = start.Add(159*time.Second), 159*time.Second
 	pending := m.evaluateIntentNoLock("vm:101", "vm", string(AlertIntentSignalOffline), "offline:vm:101", start.Add(159*time.Second), true, BackupIntentContext{})
+	now, tick = start.Add(160*time.Second), 160*time.Second
 	eligible := m.evaluateIntentNoLock("vm:101", "vm", string(AlertIntentSignalOffline), "offline:vm:101", start.Add(160*time.Second), true, BackupIntentContext{})
 	m.mu.Unlock()
 
@@ -158,6 +197,11 @@ func TestAlertIntentPreviewHonorsOperatorStateWithoutMutatingRuntime(t *testing.
 func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	m := NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(m.Stop)
+	start := time.Date(2026, 7, 13, 11, 0, 0, 0, time.UTC)
+	now := start
+	var tick time.Duration
+	m.now = func() time.Time { return now }
+	m.intentClock = func() time.Duration { return tick }
 	document := NewAlertIntentPolicyDocument()
 	document.Resources["vm:101"] = map[string]AlertIntentRule{
 		string(AlertIntentSignalOffline): {GraceSeconds: intPointer(60)},
@@ -170,7 +214,6 @@ func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tracking := make(map[string]int)
-	start := time.Date(2026, 7, 13, 11, 0, 0, 0, time.UTC)
 	params := canonicalLifecycleAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{
@@ -186,6 +229,7 @@ func TestLifecycleAlertStartsAtFirstIntentMatch(t *testing.T) {
 	if result, _ := m.evaluateCanonicalLifecycleAlert(params); result.State.State != alertspecs.AlertStatePending {
 		t.Fatalf("initial state = %s, want pending", result.State.State)
 	}
+	now, tick = start.Add(60*time.Second), 60*time.Second
 	params.Evidence.ObservedAt = start.Add(60 * time.Second)
 	if result, _ := m.evaluateCanonicalLifecycleAlert(params); result.State.State != alertspecs.AlertStateFiring {
 		t.Fatalf("eligible state = %s, want firing", result.State.State)
@@ -227,5 +271,54 @@ func TestIntentPendingStatePersistsAcrossRestart(t *testing.T) {
 	second.mu.RUnlock()
 	if !ok || !restored.FirstMatchedAt.Equal(now.Add(-time.Minute)) {
 		t.Fatalf("restored intent state = %+v, found %v", restored, ok)
+	}
+	if restored.ElapsedNanos != int64(time.Minute) {
+		t.Fatalf("restored elapsed = %s, want 1m", time.Duration(restored.ElapsedNanos))
+	}
+}
+
+func TestIntentPendingElapsedProgressSurvivesRestartConservatively(t *testing.T) {
+	dataDir := t.TempDir()
+	now := time.Now().UTC().Truncate(time.Second)
+	first := NewManagerWithDataDir(dataDir)
+	first.mu.Lock()
+	first.intentPending["state:vm:restart"] = IntentPendingState{
+		TrackingKey: "state:vm:restart", ResourceID: "vm:restart", ResourceType: "vm",
+		Signal: string(AlertIntentSignalOffline), FirstMatchedAt: now.Add(-2 * time.Minute),
+		LastObservedAt: now, ElapsedNanos: int64(120 * time.Second),
+	}
+	first.mu.Unlock()
+	if err := first.SaveActiveAlerts(); err != nil {
+		first.Stop()
+		t.Fatalf("SaveActiveAlerts: %v", err)
+	}
+	first.Stop()
+
+	second := NewManagerWithDataDir(dataDir)
+	t.Cleanup(second.Stop)
+	document := NewAlertIntentPolicyDocument()
+	document.Resources["vm:restart"] = map[string]AlertIntentRule{
+		string(AlertIntentSignalOffline): {GraceSeconds: intPointer(300)},
+	}
+	if err := second.LoadIntentPolicies(document); err != nil {
+		t.Fatal(err)
+	}
+	wall := now.Add(time.Hour)
+	var tick time.Duration
+	second.now = func() time.Time { return wall }
+	second.intentClock = func() time.Duration { return tick }
+
+	second.mu.Lock()
+	afterRestart := second.evaluateIntentNoLock("vm:restart", "vm", string(AlertIntentSignalOffline), "state:vm:restart", wall, true, BackupIntentContext{})
+	tick = 180 * time.Second
+	wall = wall.Add(180 * time.Second)
+	eligible := second.evaluateIntentNoLock("vm:restart", "vm", string(AlertIntentSignalOffline), "state:vm:restart", wall, true, BackupIntentContext{})
+	second.mu.Unlock()
+
+	if !afterRestart.Pending || afterRestart.ShouldActivate {
+		t.Fatalf("restart counted unobserved process downtime: %+v", afterRestart)
+	}
+	if !eligible.ShouldActivate {
+		t.Fatalf("persisted plus post-restart elapsed time did not reach tolerance: %+v", eligible)
 	}
 }

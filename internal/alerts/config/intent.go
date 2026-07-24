@@ -219,3 +219,9 @@ func validAlertIntentSignal(signal string) bool {
 	}
 	return strings.HasPrefix(signal, "metric.") && strings.TrimPrefix(signal, "metric.") != ""
 }
+
+// ValidAlertIntentSignal reports whether signal is accepted by both persisted
+// policy rules and preview requests.
+func ValidAlertIntentSignal(signal string) bool {
+	return validAlertIntentSignal(strings.ToLower(strings.TrimSpace(signal)))
+}

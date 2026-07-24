@@ -32,15 +32,17 @@ type BackupIntentContextResolver func(resourceID, instance, node string, vmid in
 type ResourceIntentIdentityResolver func(resourceID string) (canonicalID string, found bool)
 
 type IntentPendingState struct {
-	TrackingKey    string     `json:"trackingKey"`
-	ResourceID     string     `json:"resourceId"`
-	ResourceType   string     `json:"resourceType"`
-	Signal         string     `json:"signal"`
-	FirstMatchedAt time.Time  `json:"firstMatchedAt"`
-	LastObservedAt time.Time  `json:"lastObservedAt"`
-	BackupActive   bool       `json:"backupActive,omitempty"`
-	BackupEndedAt  *time.Time `json:"backupEndedAt,omitempty"`
-	BackupEvidence string     `json:"backupEvidence,omitempty"`
+	TrackingKey             string     `json:"trackingKey"`
+	ResourceID              string     `json:"resourceId"`
+	ResourceType            string     `json:"resourceType"`
+	Signal                  string     `json:"signal"`
+	FirstMatchedAt          time.Time  `json:"firstMatchedAt"`
+	LastObservedAt          time.Time  `json:"lastObservedAt"`
+	ElapsedNanos            int64      `json:"elapsedNanos,omitempty"`
+	BackupActive            bool       `json:"backupActive,omitempty"`
+	BackupEndedAt           *time.Time `json:"backupEndedAt,omitempty"`
+	BackupEndedElapsedNanos *int64     `json:"backupEndedElapsedNanos,omitempty"`
+	BackupEvidence          string     `json:"backupEvidence,omitempty"`
 }
 
 type EffectiveAlertIntentPolicy struct {
@@ -210,10 +212,11 @@ func (m *Manager) resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, s
 	}
 
 	applyRules(m.intentPolicies.Defaults, "defaults")
-	for _, typeKey := range CanonicalResourceTypeKeys(resourceType) {
+	typeKeys := CanonicalResourceTypeKeys(resourceType)
+	for i := len(typeKeys) - 1; i >= 0; i-- {
+		typeKey := typeKeys[i]
 		if rules, ok := m.intentPolicies.ResourceTypes[typeKey]; ok {
 			applyRules(rules, "resourceTypes."+typeKey)
-			break
 		}
 	}
 	resourceIDs := make([]string, 0, 2)
@@ -250,37 +253,97 @@ func (m *Manager) ResolveEffectiveIntentPolicy(resourceID, resourceType, signal 
 	return effective
 }
 
-func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackingKey string, observedAt time.Time, conditionActive bool, backup BackupIntentContext) intentDecision {
+func (m *Manager) intentTickNoLock() time.Duration {
+	if m.intentClock == nil {
+		return 0
+	}
+	return m.intentClock()
+}
+
+func (m *Manager) clearIntentPendingNoLock(trackingKey string) bool {
+	_, pending := m.intentPending[trackingKey]
+	_, ticking := m.intentRuntimeTicks[trackingKey]
+	delete(m.intentPending, trackingKey)
+	delete(m.intentRuntimeTicks, trackingKey)
+	return pending || ticking
+}
+
+func (m *Manager) advanceIntentElapsedNoLock(trackingKey string, state *IntentPendingState, tick time.Duration) {
+	if state == nil {
+		return
+	}
+	if previous, ok := m.intentRuntimeTicks[trackingKey]; ok && tick >= previous {
+		delta := tick - previous
+		if delta > 0 && state.ElapsedNanos <= int64(^uint64(0)>>1)-int64(delta) {
+			state.ElapsedNanos += int64(delta)
+		}
+	}
+	m.intentRuntimeTicks[trackingKey] = tick
+}
+
+func durationUntil(total, elapsed time.Duration) time.Duration {
+	if total <= elapsed {
+		return 0
+	}
+	return total - elapsed
+}
+
+func absoluteDuration(value time.Duration) time.Duration {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func intentTimePointer(value time.Time) *time.Time {
+	return &value
+}
+
+func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackingKey string, _ time.Time, conditionActive bool, backup BackupIntentContext) intentDecision {
 	effective := m.resolveEffectiveIntentPolicyNoLock(resourceID, resourceType, signal)
 	decision := intentDecision{Effective: effective}
 	if !conditionActive {
-		if _, exists := m.intentPending[trackingKey]; exists {
-			delete(m.intentPending, trackingKey)
+		if m.clearIntentPendingNoLock(trackingKey) {
 			decision.StateChanged = true
 		}
 		decision.Reason = "condition_clear"
 		return decision
 	}
 	if !effective.Explicit {
-		if _, exists := m.intentPending[trackingKey]; exists {
-			delete(m.intentPending, trackingKey)
+		if m.clearIntentPendingNoLock(trackingKey) {
 			decision.StateChanged = true
 		}
 		decision.ShouldActivate = true
 		return decision
 	}
-	if observedAt.IsZero() {
-		observedAt = m.policyNow()
-	}
+	observedAt := m.policyNow().UTC()
+	tick := m.intentTickNoLock()
 	state, exists := m.intentPending[trackingKey]
 	if !exists || state.FirstMatchedAt.IsZero() {
 		state = IntentPendingState{
 			TrackingKey: trackingKey, ResourceID: resourceID, ResourceType: resourceType,
 			Signal: signal, FirstMatchedAt: observedAt,
 		}
+		m.intentRuntimeTicks[trackingKey] = tick
 		decision.StateChanged = true
+	} else {
+		previousElapsed := state.ElapsedNanos
+		m.advanceIntentElapsedNoLock(trackingKey, &state, tick)
+		if state.ElapsedNanos != previousElapsed {
+			decision.StateChanged = true
+		}
 	}
 	state.LastObservedAt = observedAt
+	elapsed := time.Duration(state.ElapsedNanos)
+	projectedFirstMatchedAt := observedAt.Add(-elapsed)
+	if absoluteDuration(state.FirstMatchedAt.Add(elapsed).Sub(observedAt)) > time.Minute {
+		state.FirstMatchedAt = projectedFirstMatchedAt
+		if state.BackupEndedElapsedNanos != nil {
+			backupEndedElapsed := time.Duration(*state.BackupEndedElapsedNanos)
+			state.BackupEndedAt = intentTimePointer(observedAt.Add(-(elapsed - backupEndedElapsed)))
+		}
+		decision.StateChanged = true
+	}
 
 	if effective.HonorOperatorState && m.operatorIntentResolver != nil {
 		if operator, ok := m.operatorIntentResolver(resourceID, observedAt); ok {
@@ -304,7 +367,7 @@ func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackin
 		}
 	}
 
-	eligibleAt := state.FirstMatchedAt.Add(time.Duration(effective.GraceSeconds) * time.Second)
+	eligibleElapsed := time.Duration(effective.GraceSeconds) * time.Second
 	if effective.BackupOffline != nil && effective.BackupOffline.Enabled && signal == string(AlertIntentSignalOffline) {
 		if backup.Active {
 			if !state.BackupActive || state.BackupEvidence != backup.Evidence {
@@ -312,17 +375,21 @@ func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackin
 			}
 			state.BackupActive = true
 			state.BackupEndedAt = nil
+			state.BackupEndedElapsedNanos = nil
 			state.BackupEvidence = backup.Evidence
 		} else if state.BackupActive {
 			endedAt := observedAt
+			endedElapsed := state.ElapsedNanos
 			state.BackupActive = false
 			state.BackupEndedAt = &endedAt
+			state.BackupEndedElapsedNanos = &endedElapsed
 			decision.StateChanged = true
 		}
 
-		capAt := state.FirstMatchedAt.Add(time.Duration(effective.BackupOffline.MaxDeferralSeconds) * time.Second)
+		capElapsed := time.Duration(effective.BackupOffline.MaxDeferralSeconds) * time.Second
+		capAt := observedAt.Add(durationUntil(capElapsed, elapsed))
 		decision.HardCapAt = capAt
-		if state.BackupActive && observedAt.Before(capAt) {
+		if state.BackupActive && elapsed < capElapsed {
 			m.intentPending[trackingKey] = state
 			decision.Pending = true
 			decision.Suppressed = true
@@ -330,23 +397,24 @@ func (m *Manager) evaluateIntentNoLock(resourceID, resourceType, signal, trackin
 			decision.EligibleAt = capAt
 			return decision
 		}
-		if state.BackupEndedAt != nil {
-			postEligible := state.BackupEndedAt.Add(time.Duration(effective.BackupOffline.PostGraceSeconds) * time.Second)
-			if postEligible.After(eligibleAt) {
-				eligibleAt = postEligible
+		if state.BackupEndedElapsedNanos != nil {
+			postEligibleElapsed := time.Duration(*state.BackupEndedElapsedNanos) + time.Duration(effective.BackupOffline.PostGraceSeconds)*time.Second
+			if postEligibleElapsed > eligibleElapsed {
+				eligibleElapsed = postEligibleElapsed
 			}
 		}
-		if eligibleAt.After(capAt) {
-			eligibleAt = capAt
+		if eligibleElapsed > capElapsed {
+			eligibleElapsed = capElapsed
 		}
-		if !observedAt.Before(capAt) {
+		if elapsed >= capElapsed {
 			decision.Reason = "backup_grace_cap_exceeded"
 		}
 	}
 
 	m.intentPending[trackingKey] = state
+	eligibleAt := observedAt.Add(durationUntil(eligibleElapsed, elapsed))
 	decision.EligibleAt = eligibleAt
-	if observedAt.Before(eligibleAt) {
+	if elapsed < eligibleElapsed {
 		decision.Pending = true
 		if decision.Reason == "" {
 			decision.Reason = "grace_period"
@@ -367,6 +435,9 @@ func (m *Manager) PreviewIntentPolicy(request AlertIntentPolicyPreviewRequest) (
 	if request.ResourceID == "" || request.ResourceType == "" || request.Signal == "" {
 		return AlertIntentPolicyPreview{}, errors.New("resourceId, resourceType, and signal are required")
 	}
+	if !ValidAlertIntentSignal(request.Signal) {
+		return AlertIntentPolicyPreview{}, fmt.Errorf("unsupported alert intent signal %q", request.Signal)
+	}
 	now := m.policyNow().UTC()
 	trackingKey := "preview:" + request.ResourceID + ":" + request.Signal
 	backup := BackupIntentContext{}
@@ -380,11 +451,18 @@ func (m *Manager) PreviewIntentPolicy(request AlertIntentPolicyPreviewRequest) (
 
 	m.mu.Lock()
 	previous, hadPrevious := m.intentPending[trackingKey]
+	previousTick, hadPreviousTick := m.intentRuntimeTicks[trackingKey]
 	if request.FirstMatchedAt != nil {
+		firstMatchedAt := request.FirstMatchedAt.UTC()
+		elapsed := now.Sub(firstMatchedAt)
+		if elapsed < 0 {
+			elapsed = 0
+		}
 		m.intentPending[trackingKey] = IntentPendingState{
 			TrackingKey: trackingKey, ResourceID: request.ResourceID, ResourceType: request.ResourceType,
-			Signal: request.Signal, FirstMatchedAt: request.FirstMatchedAt.UTC(),
+			Signal: request.Signal, FirstMatchedAt: firstMatchedAt, LastObservedAt: now, ElapsedNanos: int64(elapsed),
 		}
+		m.intentRuntimeTicks[trackingKey] = m.intentTickNoLock()
 	}
 	decision := m.evaluateIntentNoLock(request.ResourceID, request.ResourceType, request.Signal, trackingKey, now, request.ConditionActive, backup)
 	state, stateExists := m.intentPending[trackingKey]
@@ -397,6 +475,11 @@ func (m *Manager) PreviewIntentPolicy(request AlertIntentPolicyPreviewRequest) (
 		m.intentPending[trackingKey] = previous
 	} else {
 		delete(m.intentPending, trackingKey)
+	}
+	if hadPreviousTick {
+		m.intentRuntimeTicks[trackingKey] = previousTick
+	} else {
+		delete(m.intentRuntimeTicks, trackingKey)
 	}
 	m.mu.Unlock()
 

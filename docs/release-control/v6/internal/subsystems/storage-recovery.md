@@ -2402,6 +2402,11 @@ evidence fails closed for alert deferral, while PBS and provider recovery
 evidence continues through its independent mapper and posture rules. An alert
 grace period or hard-cap expiry cannot be interpreted as backup success or
 failure and grants no restore or infrastructure mutation authority.
+The alert runtime measures its base powered-off tolerance and backup hard cap
+from server-owned monotonic elapsed time. Backup task timestamps may qualify
+fresh matching context but cannot advance, reset, or extend that clock beyond
+the cap. A restart conservatively resumes persisted alert progress without
+claiming process downtime as backup coverage or recovery evidence.
 
 ### Physical-disk collection truth
 

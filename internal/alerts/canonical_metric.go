@@ -156,7 +156,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			if !decision.ShouldActivate {
 				return
 			}
-			delete(m.intentPending, trackingKey)
+			m.clearIntentPendingNoLock(trackingKey)
 			m.saveActiveAlertsAsync("canonical metric intent activated")
 		} else if timeThreshold := m.getTimeThreshold(spec.ResourceID, resourceType, metricType); timeThreshold > 0 {
 			if pendingTime, isPending := m.pendingAlerts[trackingKey]; isPending {

@@ -396,7 +396,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			if pending, ok := m.intentPending[storageKey]; ok && !pending.FirstMatchedAt.IsZero() {
 				result.State.FirstMatchedAt = pending.FirstMatchedAt
 			}
-			delete(m.intentPending, storageKey)
+			m.clearIntentPendingNoLock(storageKey)
 			m.saveActiveAlertsAsync("lifecycle intent activated")
 		}
 	}

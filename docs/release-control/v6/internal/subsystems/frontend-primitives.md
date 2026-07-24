@@ -5263,6 +5263,16 @@ server-owned document after success. Preview renders clear,
 expected-transient, pending-grace, and would-activate as distinct states and
 never presents preview as a write.
 
+The powered-off default is presented and persisted as the `guest` resource-type
+rule so VM and LXC resources inherit it without changing node or agent
+connectivity. Blank means inherit, `0` explicitly means no wait, and the UI
+states both meanings next to the control. Duration fields accept only base-10
+whole seconds from zero through 30 days; an enabled backup hard cap must be
+positive. Invalid, fractional, negative, or oversized values remain local,
+show an actionable error, and issue no API write. Disabling backup extension is
+an explicit `enabled: false` rule and remains separate from disabling a guest's
+powered-off alerts.
+
 Availability controls expose UDP mode, request payload, and optional expected
 response only where valid for the selected protocol. Unified-resource
 presentation keeps `indeterminate` visibly distinct from reachable and
@@ -5273,6 +5283,7 @@ does not infer detector, operator-intent, or recovery truth.
 The focused proofs are
 `frontend-modern/src/features/alerts/__tests__/AlertIntentPolicyPanel.test.tsx`,
 `frontend-modern/src/features/alerts/__tests__/ThresholdsTab.test.tsx`,
+`tests/integration/tests/85-powered-off-tolerance.spec.ts`,
 `frontend-modern/src/components/Settings/ConnectionEditor/__tests__/AvailabilityTargetSlot.test.tsx`,
 and
 `frontend-modern/src/utils/__tests__/availabilityProbePresentation.test.ts`.

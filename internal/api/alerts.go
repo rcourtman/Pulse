@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -326,8 +327,14 @@ func (h *AlertHandlers) GetAlertIntentPolicies(w http.ResponseWriter, r *http.Re
 func (h *AlertHandlers) UpdateAlertIntentPolicies(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
 	var document alerts.AlertIntentPolicyDocument
-	if err := json.NewDecoder(r.Body).Decode(&document); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&document); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		http.Error(w, "request body must contain one JSON object", http.StatusBadRequest)
 		return
 	}
 	// Treat revision check, in-memory install, and durable save as one API
@@ -371,8 +378,14 @@ func (h *AlertHandlers) UpdateAlertIntentPolicies(w http.ResponseWriter, r *http
 func (h *AlertHandlers) PreviewAlertIntentPolicy(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	var request alerts.AlertIntentPolicyPreviewRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		http.Error(w, "request body must contain one JSON object", http.StatusBadRequest)
 		return
 	}
 	h.intentPolicyMu.Lock()

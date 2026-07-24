@@ -1283,6 +1283,27 @@ same resolver but restores pending state before returning, so it is read-only.
 Invalid documents, persistence failures, or revision conflicts must leave the
 prior in-memory and durable policy active.
 
+Resource-type inheritance is field-wise from general to specific before the
+canonical-resource rule: for example `guest` supplies a VM/LXC default and
+`vm` or `system-container` may replace individual fields. A guest policy must
+not leak into node or agent connectivity. Omitted grace preserves inherited or
+factory behavior, explicit zero is a deliberate no-wait policy, and a positive
+powered-off grace is duration authority rather than a poll-count threshold.
+The no-policy powered-state path retains the legacy two-confirmation contract
+for migration compatibility; an applicable powered-state duration activates
+on the first stopped observation at or after elapsed eligibility.
+
+Runtime eligibility uses server receipt time plus process-monotonic elapsed
+progress, never client/provider timestamps or poll counts. Duplicate reports
+advance no time, delayed polls count actual elapsed time, and wall-clock
+forward/backward changes do not change the decision. Pending state persists
+accumulated elapsed progress. Restart re-baselines the monotonic clock without
+counting unobserved process downtime, while legacy timestamp-only pending files
+are imported once into the elapsed representation. Recovery, explicit guest
+suppression, disabling offline alerts, and tracking cleanup remove both
+durable pending state and its transient monotonic baseline before a later
+outage can start.
+
 Operator maintenance and intentionally-offline state are read only through the
 canonical unified-resource identity. Backup-aware offline deferral consumes
 fresh, matching, active task evidence, applies the configured post-backup grace,
@@ -1291,6 +1312,9 @@ finished, or mismatched backup evidence cannot suppress an outage. This policy
 changes alert activation only: notification delivery, recovery assurance, and
 customer-infrastructure mutation retain their existing owners.
 
-`internal/alerts/intent_policy_test.go` proves precedence, normalization,
-operator and backup contexts, preview immutability, restart continuity, and
-first-match lifecycle identity.
+`internal/alerts/intent_policy_test.go` and
+`internal/alerts/powered_off_tolerance_test.go` prove field-wise type
+precedence, normalization, exact zero/positive duration boundaries, VM/LXC
+coverage, duplicate and delayed reports, wall-clock changes, suppression
+reset, migration/restart continuity, backup hard-cap behavior, preview
+immutability, and first-match lifecycle identity.

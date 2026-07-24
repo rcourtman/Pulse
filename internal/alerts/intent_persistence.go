@@ -75,16 +75,56 @@ func (m *Manager) loadIntentPendingNoLock() error {
 	if err := json.Unmarshal(data, &states); err != nil {
 		return fmt.Errorf("decode alert intent pending state: %w", err)
 	}
-	now := time.Now()
+	now := m.policyNow().UTC()
 	if m.intentPending == nil {
 		m.intentPending = make(map[string]IntentPendingState)
+	}
+	if m.intentRuntimeTicks == nil {
+		m.intentRuntimeTicks = make(map[string]time.Duration)
 	}
 	for _, state := range states {
 		if state.TrackingKey == "" || state.ResourceID == "" || state.Signal == "" || state.FirstMatchedAt.IsZero() {
 			continue
 		}
-		if now.Sub(state.LastObservedAt) > 24*time.Hour || state.LastObservedAt.After(now.Add(time.Minute)) || state.FirstMatchedAt.After(now.Add(time.Minute)) {
+		if state.LastObservedAt.IsZero() || (!state.LastObservedAt.After(now) && now.Sub(state.LastObservedAt) > 24*time.Hour) {
 			continue
+		}
+		if state.ElapsedNanos < 0 {
+			state.ElapsedNanos = 0
+		}
+		// Schema-v1 files written before elapsed tracking used wall-clock
+		// timestamps only. Import their observed progress once, then use the
+		// process monotonic clock for all future decisions.
+		if state.ElapsedNanos == 0 && state.LastObservedAt.After(state.FirstMatchedAt) {
+			elapsed := state.LastObservedAt.Sub(state.FirstMatchedAt)
+			if elapsed > 24*time.Hour {
+				elapsed = 24 * time.Hour
+			}
+			state.ElapsedNanos = int64(elapsed)
+		}
+		elapsed := time.Duration(state.ElapsedNanos)
+		if state.LastObservedAt.After(now.Add(time.Minute)) || state.FirstMatchedAt.After(now.Add(time.Minute)) {
+			state.LastObservedAt = now
+			state.FirstMatchedAt = now.Add(-elapsed)
+		}
+		if state.BackupEndedElapsedNanos == nil && state.BackupEndedAt != nil && state.BackupEndedAt.After(state.FirstMatchedAt) {
+			endedElapsed := state.BackupEndedAt.Sub(state.FirstMatchedAt)
+			if endedElapsed > time.Duration(state.ElapsedNanos) {
+				endedElapsed = time.Duration(state.ElapsedNanos)
+			}
+			value := int64(endedElapsed)
+			state.BackupEndedElapsedNanos = &value
+		}
+		if state.BackupEndedElapsedNanos != nil {
+			if *state.BackupEndedElapsedNanos < 0 {
+				value := int64(0)
+				state.BackupEndedElapsedNanos = &value
+			} else if *state.BackupEndedElapsedNanos > state.ElapsedNanos {
+				value := state.ElapsedNanos
+				state.BackupEndedElapsedNanos = &value
+			}
+			backupEndedElapsed := time.Duration(*state.BackupEndedElapsedNanos)
+			state.BackupEndedAt = intentTimePointer(now.Add(-(elapsed - backupEndedElapsed)))
 		}
 		m.intentPending[state.TrackingKey] = state
 	}

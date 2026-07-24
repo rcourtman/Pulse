@@ -60,6 +60,10 @@ func ValidateAlertIntentPolicyDocument(document AlertIntentPolicyDocument) error
 	return alertconfig.ValidateAlertIntentPolicyDocument(document)
 }
 
+func ValidAlertIntentSignal(signal string) bool {
+	return alertconfig.ValidAlertIntentSignal(signal)
+}
+
 var ErrAlertNotFound = errors.New("alert not found")
 
 func NormalizeAlertConfigAliases(config *AlertConfig) {

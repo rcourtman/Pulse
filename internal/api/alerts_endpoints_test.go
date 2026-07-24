@@ -146,6 +146,42 @@ func TestAlertsEndpoints(t *testing.T) {
 		if preview.Status != "pending_grace" || preview.Effective.GraceSeconds != grace {
 			t.Fatalf("preview = %+v", preview)
 		}
+
+		for name, payload := range map[string]string{
+			"unsupported signal": `{"resourceId":"vm:101","resourceType":"vm","signal":"state.unknown","conditionActive":true}`,
+			"unknown field":      `{"resourceId":"vm:101","resourceType":"vm","signal":"state.offline","conditionActive":true,"pollCount":2}`,
+			"trailing document":  `{"resourceId":"vm:101","resourceType":"vm","signal":"state.offline","conditionActive":true}{}`,
+		} {
+			t.Run(name, func(t *testing.T) {
+				response, err := http.Post(
+					srv.server.URL+"/api/alerts/intent-policies/preview",
+					"application/json",
+					bytes.NewBufferString(payload),
+				)
+				if err != nil {
+					t.Fatalf("invalid preview request: %v", err)
+				}
+				defer response.Body.Close()
+				if response.StatusCode != http.StatusBadRequest {
+					t.Fatalf("invalid preview status = %d, want %d", response.StatusCode, http.StatusBadRequest)
+				}
+			})
+		}
+
+		unknownPolicy := []byte(`{"schemaVersion":1,"revision":1,"defaults":{},"resourceTypes":{},"resources":{},"pollTolerance":2}`)
+		unknownRequest, err := http.NewRequest(http.MethodPut, srv.server.URL+"/api/alerts/intent-policies", bytes.NewReader(unknownPolicy))
+		if err != nil {
+			t.Fatalf("create unknown-field policy update: %v", err)
+		}
+		unknownRequest.Header.Set("Content-Type", "application/json")
+		unknownResponse, err := http.DefaultClient.Do(unknownRequest)
+		if err != nil {
+			t.Fatalf("unknown-field policy update: %v", err)
+		}
+		defer unknownResponse.Body.Close()
+		if unknownResponse.StatusCode != http.StatusBadRequest {
+			t.Fatalf("unknown-field policy status = %d, want %d", unknownResponse.StatusCode, http.StatusBadRequest)
+		}
 	})
 
 	// 3. Activate alerts

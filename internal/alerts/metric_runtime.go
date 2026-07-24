@@ -237,7 +237,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				if !decision.ShouldActivate {
 					return
 				}
-				delete(m.intentPending, trackingKey)
+				m.clearIntentPendingNoLock(trackingKey)
 				m.saveActiveAlertsAsync("metric intent activated")
 			} else if timeThreshold := m.getTimeThreshold(resourceID, resourceType, metricType); timeThreshold > 0 {
 				// Check if this threshold was already pending

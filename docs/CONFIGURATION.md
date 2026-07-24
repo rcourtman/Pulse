@@ -396,6 +396,26 @@ Pulse uses a powerful alerting engine with hysteresis (separate trigger/clear th
 
 **Managed via UI**: Alerts → Thresholds
 
+### VM and container powered-off tolerance
+
+Open **Alerts → Thresholds → Alert intent & grace** to configure how long a
+Proxmox VM or LXC container may remain stopped before Pulse raises its
+powered-off alert.
+
+- Leave the VM/container default blank to inherit the existing policy. An
+  installation with no applicable policy keeps the legacy two-poll behavior.
+- Set it to `0` to alert on the first authoritative stopped observation.
+- Set a positive number of seconds (for example, `300`) to tolerate a short
+  stop regardless of polling cadence. Per-resource values override the
+  VM/container default; a blank per-resource value inherits it.
+- **Extend offline grace during Proxmox backups** applies only while Pulse has
+  fresh matching evidence of an active backup. The maximum deferral is a hard
+  cap, so a stale or stuck backup cannot hide a sustained outage.
+
+This tolerance delays activation; it does not disable powered-off monitoring.
+Use the existing guest offline-alert toggle when a guest should never produce
+powered-off alerts.
+
 <details>
 <summary><strong>Manual Configuration (JSON)</strong></summary>
 

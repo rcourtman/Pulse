@@ -29,9 +29,26 @@ const SIGNALS: ReadonlyArray<{ value: AlertIntentSignal; label: string }> = [
   { value: 'metric.disk', label: 'Disk threshold' },
 ];
 
-const nonNegativeInt = (value: string, fallback = 0): number => {
-  const parsed = Number.parseInt(value.trim(), 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+const MAX_GRACE_SECONDS = 30 * 24 * 60 * 60;
+
+const durationSeconds = (
+  value: string,
+  label: string,
+  options: { allowBlank?: boolean; positive?: boolean } = {},
+): number | undefined => {
+  const normalized = value.trim();
+  if (normalized === '' && options.allowBlank) return undefined;
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`${label} must be a whole number of seconds.`);
+  }
+  const parsed = Number(normalized);
+  const minimum = options.positive ? 1 : 0;
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > MAX_GRACE_SECONDS) {
+    throw new Error(
+      `${label} must be between ${minimum} and ${MAX_GRACE_SECONDS.toLocaleString()} seconds.`,
+    );
+  }
+  return parsed;
 };
 
 const detachedDocument = (document: AlertIntentPolicyDocument): AlertIntentPolicyDocument =>
@@ -51,8 +68,8 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
   const [error, setError] = createSignal<string | null>(null);
   const [message, setMessage] = createSignal<string | null>(null);
 
-  const [offlineGrace, setOfflineGrace] = createSignal('0');
-  const [availabilityGrace, setAvailabilityGrace] = createSignal('0');
+  const [offlineGrace, setOfflineGrace] = createSignal('');
+  const [availabilityGrace, setAvailabilityGrace] = createSignal('');
   const [honorOperatorState, setHonorOperatorState] = createSignal(false);
   const [backupAware, setBackupAware] = createSignal(false);
   const [backupPostGrace, setBackupPostGrace] = createSignal('60');
@@ -92,10 +109,13 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
     try {
       const loaded = await AlertIntentPoliciesAPI.get();
       setDocument(loaded);
-      const offline = loaded.defaults?.['state.offline'] ?? {};
+      const offline =
+        loaded.resourceTypes?.guest?.['state.offline'] ?? loaded.defaults?.['state.offline'] ?? {};
       const availability = loaded.defaults?.['incident.availability'] ?? {};
-      setOfflineGrace(String(offline.graceSeconds ?? 0));
-      setAvailabilityGrace(String(availability.graceSeconds ?? 0));
+      setOfflineGrace(offline.graceSeconds === undefined ? '' : String(offline.graceSeconds));
+      setAvailabilityGrace(
+        availability.graceSeconds === undefined ? '' : String(availability.graceSeconds),
+      );
       setHonorOperatorState(offline.honorOperatorState ?? false);
       setBackupAware(offline.backupOffline?.enabled ?? false);
       setBackupPostGrace(String(offline.backupOffline?.postGraceSeconds ?? 60));
@@ -164,23 +184,64 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
   const saveDefaults = async () => {
     const current = document();
     if (!current) return;
+    let guestOfflineGrace: number | undefined;
+    let defaultAvailabilityGrace: number | undefined;
+    let postGrace = 0;
+    let maxDeferral = 0;
+    try {
+      guestOfflineGrace = durationSeconds(offlineGrace(), 'VM / container powered-off tolerance', {
+        allowBlank: true,
+      });
+      defaultAvailabilityGrace = durationSeconds(
+        availabilityGrace(),
+        'Default availability grace',
+        { allowBlank: true },
+      );
+      if (backupAware()) {
+        postGrace =
+          durationSeconds(backupPostGrace(), 'Post-backup grace') ??
+          /* istanbul ignore next -- nonblank input is required above */ 0;
+        maxDeferral =
+          durationSeconds(backupMaxDeferral(), 'Maximum backup deferral', {
+            positive: true,
+          }) ?? /* istanbul ignore next -- nonblank input is required above */ 0;
+      }
+    } catch (cause) {
+      setMessage(null);
+      setError(cause instanceof Error ? cause.message : 'Invalid alert tolerance.');
+      return;
+    }
     const next = detachedDocument(current);
+    next.resourceTypes ??= {};
+    next.resourceTypes.guest ??= {};
+    const guestOffline: AlertIntentRule = {
+      ...(next.resourceTypes.guest['state.offline'] ?? {}),
+      honorOperatorState: honorOperatorState(),
+      backupOffline: backupAware()
+        ? {
+            enabled: true,
+            postGraceSeconds: postGrace,
+            maxDeferralSeconds: maxDeferral,
+          }
+        : { enabled: false },
+    };
+    if (guestOfflineGrace === undefined) {
+      delete guestOffline.graceSeconds;
+    } else {
+      guestOffline.graceSeconds = guestOfflineGrace;
+    }
+    next.resourceTypes.guest['state.offline'] = guestOffline;
     next.defaults ??= {};
-    next.defaults['state.offline'] = {
-      ...(next.defaults['state.offline'] ?? {}),
-      graceSeconds: nonNegativeInt(offlineGrace()),
-      honorOperatorState: honorOperatorState(),
-      backupOffline: {
-        enabled: backupAware(),
-        postGraceSeconds: nonNegativeInt(backupPostGrace(), 60),
-        maxDeferralSeconds: nonNegativeInt(backupMaxDeferral(), 3600),
-      },
-    };
-    next.defaults['incident.availability'] = {
+    const availability: AlertIntentRule = {
       ...(next.defaults['incident.availability'] ?? {}),
-      graceSeconds: nonNegativeInt(availabilityGrace()),
       honorOperatorState: honorOperatorState(),
     };
+    if (defaultAvailabilityGrace === undefined) {
+      delete availability.graceSeconds;
+    } else {
+      availability.graceSeconds = defaultAvailabilityGrace;
+    }
+    next.defaults['incident.availability'] = availability;
     await persist(next, 'Default intent policy saved.');
   };
 
@@ -188,12 +249,31 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
     const current = document();
     const id = resourceId();
     if (!current || !id) return;
+    let grace: number | undefined;
+    let postGrace = 0;
+    let maxDeferral = 0;
+    try {
+      grace = durationSeconds(overrideGrace(), 'Grace override', { allowBlank: true });
+      if (signal() === 'state.offline' && overrideBackupMode() === 'enabled') {
+        postGrace =
+          durationSeconds(overrideBackupPostGrace(), 'Post-backup grace') ??
+          /* istanbul ignore next -- nonblank input is required above */ 0;
+        maxDeferral =
+          durationSeconds(overrideBackupMaxDeferral(), 'Maximum deferral', {
+            positive: true,
+          }) ?? /* istanbul ignore next -- nonblank input is required above */ 0;
+      }
+    } catch (cause) {
+      setMessage(null);
+      setError(cause instanceof Error ? cause.message : 'Invalid alert tolerance.');
+      return;
+    }
     const next = detachedDocument(current);
     next.resources ??= {};
     next.resources[id] ??= {};
     const rule: AlertIntentRule = {};
-    if (overrideGrace().trim() !== '') {
-      rule.graceSeconds = nonNegativeInt(overrideGrace());
+    if (grace !== undefined) {
+      rule.graceSeconds = grace;
     }
     if (overrideOperatorMode() !== 'inherit') {
       rule.honorOperatorState = overrideOperatorMode() === 'honor';
@@ -201,8 +281,9 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
     if (signal() === 'state.offline' && overrideBackupMode() !== 'inherit') {
       rule.backupOffline = {
         enabled: overrideBackupMode() === 'enabled',
-        postGraceSeconds: nonNegativeInt(overrideBackupPostGrace(), 60),
-        maxDeferralSeconds: nonNegativeInt(overrideBackupMaxDeferral(), 3600),
+        ...(overrideBackupMode() === 'enabled'
+          ? { postGraceSeconds: postGrace, maxDeferralSeconds: maxDeferral }
+          : {}),
       };
     }
     if (Object.keys(rule).length === 0) {
@@ -289,21 +370,34 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
         >
           <div class="grid gap-4 border-t border-border pt-4 sm:grid-cols-2 lg:grid-cols-3">
             <label class={formField}>
-              <span class={formLabel}>Default offline grace (seconds)</span>
+              <span class={formLabel}>VM / container powered-off tolerance (seconds)</span>
               <input
                 class={formControl}
+                type="number"
                 inputMode="numeric"
+                min="0"
+                max={MAX_GRACE_SECONDS}
+                step="1"
                 value={offlineGrace()}
                 onInput={(event) => setOfflineGrace(event.currentTarget.value)}
+                placeholder="Use inherited behavior"
               />
+              <span class={formHelpText}>
+                Blank inherits the existing policy; 0 alerts on the first stopped observation.
+              </span>
             </label>
             <label class={formField}>
               <span class={formLabel}>Default availability grace (seconds)</span>
               <input
                 class={formControl}
+                type="number"
                 inputMode="numeric"
+                min="0"
+                max={MAX_GRACE_SECONDS}
+                step="1"
                 value={availabilityGrace()}
                 onInput={(event) => setAvailabilityGrace(event.currentTarget.value)}
+                placeholder="Use inherited behavior"
               />
             </label>
             <label class="flex items-center gap-3 rounded-md border border-border px-3 py-2">
@@ -332,7 +426,11 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
               <span class={formLabel}>Post-backup grace (seconds)</span>
               <input
                 class={formControl}
+                type="number"
                 inputMode="numeric"
+                min="0"
+                max={MAX_GRACE_SECONDS}
+                step="1"
                 disabled={!backupAware()}
                 value={backupPostGrace()}
                 onInput={(event) => setBackupPostGrace(event.currentTarget.value)}
@@ -342,7 +440,11 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
               <span class={formLabel}>Maximum backup deferral (seconds)</span>
               <input
                 class={formControl}
+                type="number"
                 inputMode="numeric"
+                min="1"
+                max={MAX_GRACE_SECONDS}
+                step="1"
                 disabled={!backupAware()}
                 value={backupMaxDeferral()}
                 onInput={(event) => setBackupMaxDeferral(event.currentTarget.value)}
@@ -400,12 +502,16 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
                 <span class={formLabel}>Grace override (seconds)</span>
                 <input
                   class={formControl}
+                  type="number"
                   inputMode="numeric"
+                  min="0"
+                  max={MAX_GRACE_SECONDS}
+                  step="1"
                   value={overrideGrace()}
                   onInput={(event) => setOverrideGrace(event.currentTarget.value)}
                   placeholder="Inherit"
                 />
-                <span class={formHelpText}>Leave blank to inherit.</span>
+                <span class={formHelpText}>Leave blank to inherit; 0 means no wait.</span>
               </label>
               <FormSelect
                 label="Operator state override"
@@ -438,7 +544,11 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
                   <span class={formLabel}>Post-backup grace</span>
                   <input
                     class={formControl}
+                    type="number"
                     inputMode="numeric"
+                    min="0"
+                    max={MAX_GRACE_SECONDS}
+                    step="1"
                     disabled={overrideBackupMode() !== 'enabled'}
                     value={overrideBackupPostGrace()}
                     onInput={(event) => setOverrideBackupPostGrace(event.currentTarget.value)}
@@ -448,7 +558,11 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
                   <span class={formLabel}>Maximum deferral</span>
                   <input
                     class={formControl}
+                    type="number"
                     inputMode="numeric"
+                    min="1"
+                    max={MAX_GRACE_SECONDS}
+                    step="1"
                     disabled={overrideBackupMode() !== 'enabled'}
                     value={overrideBackupMaxDeferral()}
                     onInput={(event) => setOverrideBackupMaxDeferral(event.currentTarget.value)}
