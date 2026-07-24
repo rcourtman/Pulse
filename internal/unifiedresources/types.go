@@ -384,16 +384,21 @@ type ProxmoxData struct {
 
 // StorageMeta contains storage-specific metadata for storage resources.
 type StorageMeta struct {
-	Type                  string                `json:"type,omitempty"`
-	Content               string                `json:"content,omitempty"`
-	ContentTypes          []string              `json:"contentTypes,omitempty"`
-	Shared                bool                  `json:"shared"`
-	Enabled               bool                  `json:"enabled"`
-	Active                bool                  `json:"active"`
-	IsCeph                bool                  `json:"isCeph"`
-	IsZFS                 bool                  `json:"isZfs"`
-	Platform              string                `json:"platform,omitempty"`
+	Type         string   `json:"type,omitempty"`
+	Content      string   `json:"content,omitempty"`
+	ContentTypes []string `json:"contentTypes,omitempty"`
+	Shared       bool     `json:"shared"`
+	Enabled      bool     `json:"enabled"`
+	Active       bool     `json:"active"`
+	IsCeph       bool     `json:"isCeph"`
+	IsZFS        bool     `json:"isZfs"`
+	Platform     string   `json:"platform,omitempty"`
+	// Topology is a closed discriminator vocabulary shared by every storage
+	// provider ("pool", "dataset", "array", "datastore"). Consumers key
+	// resource identity off it, so it must never carry presentation detail.
+	// Per-pool vdev layout belongs in VDevLayout.
 	Topology              string                `json:"topology,omitempty"`
+	VDevLayout            string                `json:"vdevLayout,omitempty"`
 	Protection            string                `json:"protection,omitempty"`
 	Risk                  *StorageRisk          `json:"risk,omitempty"`
 	RiskSummary           string                `json:"riskSummary,omitempty"`

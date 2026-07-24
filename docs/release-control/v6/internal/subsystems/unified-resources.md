@@ -1633,6 +1633,16 @@ AI-only summary payloads, or page-local heuristics.
     `TestIngestRecordsSkipRecordDeclaredSuccessionForLiveOldID` in
     `internal/unifiedresources/canonical_id_succession_test.go`.
 
+28. `StorageMeta.Topology` is a closed discriminator vocabulary shared by
+    every storage provider (`pool`, `dataset`, `array`, `datastore`).
+    Consumers key resource identity off it, so a provider must never
+    publish presentation detail there. ZFS data vdev layout is
+    presentation and belongs in `StorageMeta.VDevLayout`, which is absent
+    rather than invented when the native report carries no data vdevs.
+    Regression coverage:
+    `TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields` in
+    `internal/unifiedresources/canonical_identity_test.go`.
+
 ## Current State
 
 ### Host views expose the integration-source discriminator

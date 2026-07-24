@@ -389,7 +389,14 @@ export interface ResourceStorageMeta {
   isCeph?: boolean;
   isZfs?: boolean;
   platform?: string;
+  /**
+   * Closed discriminator vocabulary shared by every storage provider
+   * ('pool' | 'dataset' | 'array' | 'datastore'). Resource identity keys off
+   * it, so it never carries presentation detail — see `vdevLayout`.
+   */
   topology?: string;
+  /** ZFS data vdev layout for display ('mirror', 'raidz2', 'mirror+special'). */
+  vdevLayout?: string;
   protection?: string;
   risk?: ResourceStorageRisk;
   riskSummary?: string;

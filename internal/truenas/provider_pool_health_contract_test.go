@@ -59,8 +59,14 @@ func TestProviderProjectsFullZFSHealthAndActionableDatasetAppIncidents(t *testin
 	if pool.Storage == nil || pool.Storage.ZFSPool == nil || pool.Storage.PoolHealth == nil {
 		t.Fatalf("full pool health contract missing: %+v", pool.Storage)
 	}
-	if pool.Storage.Topology != "mirror" {
-		t.Fatalf("topology = %q", pool.Storage.Topology)
+	// Topology is the cross-provider discriminator every pool consumer keys on
+	// and must stay "pool" even for a pool with a rich vdev layout; the layout
+	// itself rides in VDevLayout.
+	if pool.Storage.Topology != "pool" {
+		t.Fatalf("topology = %q, want \"pool\"", pool.Storage.Topology)
+	}
+	if pool.Storage.VDevLayout != "mirror" {
+		t.Fatalf("vdev layout = %q, want \"mirror\"", pool.Storage.VDevLayout)
 	}
 	if pool.Storage.ZFSReadErrors != 1 || pool.Storage.ZFSChecksumErrors != 2 {
 		t.Fatalf("flattened errors = %+v", pool.Storage)
@@ -151,4 +157,81 @@ func requireRecordByNameAndType(t *testing.T, records []unifiedresources.IngestR
 	}
 	t.Fatalf("missing %s %q in %+v", resourceType, name, records)
 	return unifiedresources.IngestRecord{}
+}
+
+// TestPoolTopologyStaysDiscriminatorAcrossVDevLayouts pins the boundary that
+// broke in 599c8e634: the frontend identifies a TrueNAS pool solely by
+// storage.topology == "pool" (TrueNAS pools are transported as
+// ResourceTypeStorage, so resource.type is never "pool"), and the producer
+// briefly published the vdev layout there instead. Every fixture in this
+// package omits VDevs, so the projection kept returning "pool" and both sides
+// stayed green while disagreeing on real hardware. Drive real layouts here.
+func TestPoolTopologyStaysDiscriminatorAcrossVDevLayouts(t *testing.T) {
+	observedAt := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC)
+
+	for _, tc := range []struct {
+		name       string
+		vdevs      []PoolVDev
+		members    []PoolDiskMember
+		wantLayout string
+	}{
+		{name: "no vdevs reported", wantLayout: ""},
+		{
+			name:       "mirror",
+			vdevs:      []PoolVDev{{ID: "m0", Name: "mirror-0", Type: "MIRROR", Role: "data", Status: "ONLINE"}},
+			wantLayout: "mirror",
+		},
+		{
+			name:       "raidz2",
+			vdevs:      []PoolVDev{{ID: "z0", Name: "raidz2-0", Type: "RAIDZ2", Role: "data", Status: "ONLINE"}},
+			wantLayout: "raidz2",
+		},
+		{
+			name: "striped single disks",
+			vdevs: []PoolVDev{
+				{ID: "d0", Name: "sda", Type: "DISK", Role: "data", Status: "ONLINE"},
+				{ID: "d1", Name: "sdb", Type: "DISK", Role: "data", Status: "ONLINE"},
+			},
+			members: []PoolDiskMember{
+				{Disk: "sda", Status: "ONLINE", Role: "data"},
+				{Disk: "sdb", Status: "ONLINE", Role: "data"},
+			},
+			wantLayout: "stripe",
+		},
+		{
+			name: "mixed data vdev types",
+			vdevs: []PoolVDev{
+				{ID: "m0", Name: "mirror-0", Type: "MIRROR", Role: "data", Status: "ONLINE"},
+				{ID: "s0", Name: "special-0", Type: "SPECIAL", Role: "data", Status: "ONLINE"},
+			},
+			wantLayout: "mirror+special",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			records := FixtureRecords(FixtureSnapshot{
+				CollectedAt: observedAt,
+				System:      SystemInfo{Hostname: "nas-a", Healthy: true},
+				Pools: []Pool{{
+					ID:          "1",
+					GUID:        "pool-guid",
+					Name:        "tank",
+					Status:      "ONLINE",
+					VDevs:       tc.vdevs,
+					DiskMembers: tc.members,
+				}},
+			})
+
+			pool := requirePoolRecord(t, records, "tank").Resource
+			if pool.Storage == nil {
+				t.Fatalf("pool record carries no storage meta: %+v", pool)
+			}
+			if pool.Storage.Topology != "pool" {
+				t.Fatalf("topology = %q, want %q: a non-%q value drops the pool out of the TrueNAS page entirely",
+					pool.Storage.Topology, "pool", "pool")
+			}
+			if pool.Storage.VDevLayout != tc.wantLayout {
+				t.Fatalf("vdev layout = %q, want %q", pool.Storage.VDevLayout, tc.wantLayout)
+			}
+		})
+	}
 }

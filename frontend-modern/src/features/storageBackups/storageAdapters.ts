@@ -152,7 +152,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const topologyLabel = getResourceStorageTopologyLabel(
     resource,
     storageType,
-    resource.storage?.topology,
+    // Prefer the concrete vdev layout ("Mirror", "Raidz2") over the generic
+    // discriminator ("Pool") when the provider reports one.
+    resource.storage?.vdevLayout || resource.storage?.topology,
   );
   const metricsTarget = metricsTargetForStorageResource(resource);
 

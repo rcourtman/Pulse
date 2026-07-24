@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -913,5 +914,53 @@ func TestRefreshCanonicalIdentityPreservesTrueNASVMIdentity(t *testing.T) {
 	}
 	if got := resource.Canonical.PrimaryID; got != "vm:42" {
 		t.Fatalf("primaryId = %q, want vm:42", got)
+	}
+}
+
+// TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields pins the separation
+// restored after 599c8e634. StorageMeta.Topology is the closed discriminator
+// vocabulary consumers use to identify a resource ("pool", "dataset", "array",
+// "datastore"); the ZFS vdev layout is presentation and lives in VDevLayout.
+// Collapsing the two, or dropping either through a clone, silently changes
+// resource identity for every storage consumer.
+func TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields(t *testing.T) {
+	meta := &StorageMeta{
+		Type:       "zfs-pool",
+		Platform:   "truenas",
+		Topology:   "pool",
+		VDevLayout: "mirror+special",
+	}
+
+	cloned := cloneStorageMeta(meta)
+	if cloned == nil {
+		t.Fatal("cloneStorageMeta returned nil")
+	}
+	if cloned.Topology != "pool" {
+		t.Fatalf("cloned topology = %q, want \"pool\"", cloned.Topology)
+	}
+	if cloned.VDevLayout != "mirror+special" {
+		t.Fatalf("cloned vdev layout = %q, want \"mirror+special\"", cloned.VDevLayout)
+	}
+
+	// A pool with no reported vdevs still carries the discriminator, and the
+	// layout stays absent rather than being backfilled from it.
+	bare := cloneStorageMeta(&StorageMeta{Topology: "pool"})
+	if bare.Topology != "pool" || bare.VDevLayout != "" {
+		t.Fatalf("bare pool meta = %+v, want topology \"pool\" and empty layout", bare)
+	}
+
+	encoded, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatalf("marshal storage meta: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal storage meta: %v", err)
+	}
+	if decoded["topology"] != "pool" {
+		t.Fatalf("wire topology = %v, want \"pool\"", decoded["topology"])
+	}
+	if decoded["vdevLayout"] != "mirror+special" {
+		t.Fatalf("wire vdevLayout = %v, want \"mirror+special\"", decoded["vdevLayout"])
 	}
 }

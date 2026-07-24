@@ -605,7 +605,8 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 					Type:              "zfs-pool",
 					IsZFS:             true,
 					Platform:          "truenas",
-					Topology:          poolTopologyLabel(pool),
+					Topology:          "pool",
+					VDevLayout:        poolVDevLayout(pool),
 					Protection:        "zfs",
 					Risk:              risk,
 					RiskSummary:       unifiedresources.StorageRiskSummary(risk),
@@ -1652,7 +1653,12 @@ func poolScanIsActive(state string) bool {
 	}
 }
 
-func poolTopologyLabel(pool Pool) string {
+// poolVDevLayout summarizes the pool's data vdev layout ("mirror", "raidz2",
+// "stripe", "mirror+special") for presentation. It returns an empty string when
+// the native report carries no data vdevs, so callers fall back rather than
+// inventing a layout. This is deliberately NOT the pool's topology
+// discriminator: see StorageMeta.Topology.
+func poolVDevLayout(pool Pool) string {
 	var dataTypes []string
 	for _, vdev := range pool.VDevs {
 		if vdev.ParentID != "" || !strings.EqualFold(strings.TrimSpace(vdev.Role), "data") {
@@ -1665,7 +1671,7 @@ func poolTopologyLabel(pool Pool) string {
 		dataTypes = append(dataTypes, vdevType)
 	}
 	if len(dataTypes) == 0 {
-		return "pool"
+		return ""
 	}
 	if len(dataTypes) == 1 && dataTypes[0] == "disk" && len(pool.DiskMembers) > 1 {
 		return "stripe"

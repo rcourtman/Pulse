@@ -662,4 +662,48 @@ describe('storageAdapters', () => {
     expect(records).toHaveLength(1);
     expect(records[0].details?.zfsPool).toEqual(zfsPool);
   });
+
+  it('labels a TrueNAS pool by its vdev layout while keeping the pool discriminator', () => {
+    // Regression guard for 599c8e634: the layout must ride in `vdevLayout`, not
+    // in `topology`. `topology` identifies the resource as a pool; publishing a
+    // layout there dropped every pool off the TrueNAS page on real hardware.
+    const state = baseState();
+    const records = buildStorageRecords({
+      state,
+      resources: [
+        makeResourceStorage({
+          storage: {
+            type: 'zfs-pool',
+            isZfs: true,
+            platform: 'truenas',
+            topology: 'pool',
+            vdevLayout: 'mirror',
+          } as Resource['storage'],
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].topologyLabel).toBe('Mirror');
+  });
+
+  it('falls back to the topology discriminator when no vdev layout is reported', () => {
+    const state = baseState();
+    const records = buildStorageRecords({
+      state,
+      resources: [
+        makeResourceStorage({
+          storage: {
+            type: 'zfs-pool',
+            isZfs: true,
+            platform: 'truenas',
+            topology: 'pool',
+          } as Resource['storage'],
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].topologyLabel).toBe('Pool');
+  });
 });

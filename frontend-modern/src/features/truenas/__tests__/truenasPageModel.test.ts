@@ -990,3 +990,54 @@ describe('truenasPageModel', () => {
     );
   });
 });
+
+describe('pool identity boundary', () => {
+  // Regression guard for 599c8e634: the producer briefly published the ZFS vdev
+  // layout ("mirror", "raidz2") as storage.topology. TrueNAS pools arrive as
+  // type 'storage', so `topology === 'pool'` is the only thing that identifies
+  // them here — publishing a layout there dropped every pool off this page on
+  // real hardware while every fixture (which omits vdevs) stayed green.
+  it('recognises a pool that also reports a vdev layout', () => {
+    const system = makeResource({ id: 'nas-a', type: 'agent', name: 'nas-a' });
+    const pool = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      parentId: system.id,
+      storage: { topology: 'pool', vdevLayout: 'mirror', platform: 'truenas' },
+    });
+    const dataset = makeResource({
+      id: 'dataset-media',
+      type: 'storage',
+      name: 'tank/media',
+      parentId: pool.id,
+      storage: { topology: 'dataset', platform: 'truenas' },
+    });
+
+    const rows = buildTrueNASStorageTopologyRows([system, pool, dataset]);
+    const poolRow = rows.find((row) => row.resource.id === pool.id);
+
+    expect(poolRow?.kind).toBe('pool');
+    // The dataset must still hang off the pool rather than orphaning.
+    const datasetRow = rows.find((row) => row.resource.id === dataset.id);
+    expect(datasetRow?.parentRowId).toBe(poolRow?.id);
+  });
+
+  it('does not identify a pool by its vdev layout alone', () => {
+    const system = makeResource({ id: 'nas-a', type: 'agent', name: 'nas-a' });
+    // A pool whose topology carries a layout instead of the discriminator is
+    // exactly the broken shape; assert it is NOT silently accepted, so the
+    // producer contract stays the single place this is fixed.
+    const malformed = makeResource({
+      id: 'pool-tank',
+      type: 'storage',
+      name: 'tank',
+      parentId: system.id,
+      storage: { topology: 'mirror', platform: 'truenas' },
+    });
+
+    const rows = buildTrueNASStorageTopologyRows([system, malformed]);
+
+    expect(rows.find((row) => row.resource.id === malformed.id)).toBeUndefined();
+  });
+});

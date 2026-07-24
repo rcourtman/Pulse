@@ -712,6 +712,16 @@ remains.
     paths added to the adapter must keep that persistence step; ephemeral
     snapshot-bridge adapters stay read-only.
 
+11. The TrueNAS provider projects pools with `Storage.Topology` fixed to
+    `pool` and the ZFS data vdev layout in `Storage.VDevLayout`. The
+    layout summary (`poolVDevLayout`) returns an empty string when the
+    native report carries no data vdevs so callers fall back instead of
+    inventing a layout. Publishing the layout as the topology drops every
+    pool out of the TrueNAS page, and package fixtures carry no vdevs, so
+    layout-bearing pools must be exercised explicitly. Regression
+    coverage: `TestPoolTopologyStaysDiscriminatorAcrossVDevLayouts` in
+    `internal/truenas/provider_pool_health_contract_test.go`.
+
 ## Current State
 
 ### PBS health is one completed-poll outcome

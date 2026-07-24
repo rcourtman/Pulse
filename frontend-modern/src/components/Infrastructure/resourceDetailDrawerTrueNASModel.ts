@@ -205,6 +205,8 @@ const buildTrueNASSystemSections = (
 };
 
 const storageKindLabel = (storage: ResourceStorageMeta): string | null => {
+  const layout = asString(storage.vdevLayout);
+  if (layout) return normalizeDelimitedLabel(layout);
   const topology = asString(storage.topology);
   if (topology) return normalizeDelimitedLabel(topology);
   return normalizeDelimitedLabel(storage.type);

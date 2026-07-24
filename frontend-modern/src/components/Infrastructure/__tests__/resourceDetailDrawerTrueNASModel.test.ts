@@ -206,7 +206,8 @@ describe('resourceDetailDrawerTrueNASModel', () => {
       platformScopes: ['truenas'],
       storage: {
         type: 'zfs-pool',
-        topology: 'mirror',
+        topology: 'pool',
+        vdevLayout: 'mirror',
         platform: 'truenas',
         zfsPoolState: 'DEGRADED',
         poolHealth: {
@@ -312,5 +313,36 @@ describe('resourceDetailDrawerTrueNASModel', () => {
       'Health',
       'SMART',
     ]);
+  });
+
+  it('shows the vdev layout as the storage kind while topology stays the pool discriminator', () => {
+    // Regression guard for 599c8e634. `topology` is the cross-provider
+    // discriminator ('pool' | 'dataset' | ...); the ZFS layout belongs in
+    // `vdevLayout`. The drawer prefers the layout for display but must not
+    // depend on it being in `topology`.
+    const withLayout = baseResource({
+      type: 'storage',
+      displayName: 'tank',
+      storage: {
+        type: 'zfs-pool',
+        topology: 'pool',
+        vdevLayout: 'raidz2',
+        platform: 'truenas',
+      },
+    } as Partial<Resource>);
+
+    expect(buildTrueNASDetailsSummary(withLayout)).toContain('Raidz2');
+
+    const withoutLayout = baseResource({
+      type: 'storage',
+      displayName: 'tank',
+      storage: {
+        type: 'zfs-pool',
+        topology: 'pool',
+        platform: 'truenas',
+      },
+    } as Partial<Resource>);
+
+    expect(buildTrueNASDetailsSummary(withoutLayout)).toContain('Pool');
   });
 });

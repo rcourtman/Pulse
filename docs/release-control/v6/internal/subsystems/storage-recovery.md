@@ -1958,6 +1958,15 @@ pressure to assess context selection, but it must not read live backup records,
 invoke recovery APIs, mutate storage, or treat a synthetic pass as evidence
 that Safe auto-fix or Autopilot remediation is verified.
 
+26. Storage row presentation resolves its topology label from
+    `storage.vdevLayout` first and falls back to `storage.topology`, so a
+    pool reads as its concrete layout ("Mirror", "Raidz2") without the
+    discriminator ever carrying presentation detail. Regression coverage:
+    `labels a TrueNAS pool by its vdev layout while keeping the pool
+    discriminator` and `falls back to the topology discriminator when no
+    vdev layout is reported` in
+    `frontend-modern/src/features/storageBackups/__tests__/storageAdapters.test.ts`.
+
 ## Current State
 
 ### Proxmox runtime continuity is not protection evidence

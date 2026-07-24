@@ -2415,6 +2415,17 @@ verification.
     rather than verified results. Safe auto-fix and Autopilot remain visibly
     `not_assessed` until their governed canaries exist.
 
+42. Frontend consumers identify a storage resource by
+    `storage.topology`, never by a ZFS vdev layout. TrueNAS pools arrive
+    as `type: 'storage'`, so `topology === 'pool'` is the only pool
+    discriminator available to the page model, and layout strings belong
+    in `storage.vdevLayout`. Regression coverage: the `pool identity
+    boundary` cases in
+    `frontend-modern/src/features/truenas/__tests__/truenasPageModel.test.ts`
+    and `shows the vdev layout as the storage kind while topology stays
+    the pool discriminator` in
+    `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts`.
+
 ## Current State
 
 ### System member rows are source-type aware
