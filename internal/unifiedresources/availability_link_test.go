@@ -576,3 +576,51 @@ func TestAvailabilityIdentityRemainsTenantLocal(t *testing.T) {
 		)
 	}
 }
+
+// TestAvailabilityRepeatedProjectionKeepsHostRelationshipsStable pins the
+// registry side of the relationship-aliasing fix. The projection scrub filters
+// each resource's `checks` edges before re-projecting; when it compacted the
+// slice in place, a resource whose relationships still shared a backing array
+// with another copy ended up with a duplicated trailing edge. Re-ingesting the
+// same check repeatedly is the ordinary path (every registry rebuild replays
+// availability records), so the edge set must stay stable.
+func TestAvailabilityRepeatedProjectionKeepsHostRelationshipsStable(t *testing.T) {
+	rr := NewRegistry(nil)
+	hostID := ingestAgentFixture(t, rr, "host-1", "machine-1")
+
+	var checkEdges int
+	for round := range 4 {
+		observedAt := time.Now().UTC()
+		rr.IngestRecords(SourceAvailability, []IngestRecord{
+			availabilityProbeRecord("probe-1", "192.0.2.10", &AvailabilityData{
+				LinkedResourceID: hostID,
+				Address:          "192.0.2.10",
+				Protocol:         "icmp",
+				Enabled:          true,
+				Available:        true,
+				LastChecked:      &observedAt,
+				Evidence:         availabilityProbeEvidence(t, "probe-1", observedAt),
+			}),
+		})
+
+		host, ok := rr.Get(hostID)
+		if !ok || host == nil {
+			t.Fatalf("host %q missing after round %d", hostID, round)
+		}
+
+		round0Edges := 0
+		for _, relationship := range host.Relationships {
+			if relationship.Type == RelChecks {
+				round0Edges++
+			}
+		}
+		if round == 0 {
+			checkEdges = round0Edges
+			continue
+		}
+		if round0Edges != checkEdges {
+			t.Fatalf("round %d: checks edges = %d, want %d stable across re-projection",
+				round, round0Edges, checkEdges)
+		}
+	}
+}

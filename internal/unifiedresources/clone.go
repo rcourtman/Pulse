@@ -34,6 +34,7 @@ func cloneResource(in *Resource) Resource {
 	out.parentBySource = cloneParentBySourceMap(in.parentBySource)
 	out.Tags = cloneStringSlice(in.Tags)
 	out.Incidents = cloneResourceIncidentSlice(in.Incidents)
+	out.Relationships = cloneResourceRelationshipSlice(in.Relationships)
 	out.Proxmox = cloneProxmoxData(in.Proxmox)
 	out.Storage = cloneStorageMeta(in.Storage)
 	out.Agent = cloneAgentData(in.Agent)
@@ -204,6 +205,19 @@ func cloneStorageConsumerMetaSlice(in []StorageConsumerMeta) []StorageConsumerMe
 		return nil
 	}
 	out := make([]StorageConsumerMeta, len(in))
+	copy(out, in)
+	return out
+}
+
+// cloneResourceRelationshipSlice gives the clone its own backing array. Without
+// it a clone shares the original's array, and any in-place compaction (a
+// `Relationships[:0]` filter) writes straight through into the live registry
+// from whatever goroutine holds the clone.
+func cloneResourceRelationshipSlice(in []ResourceRelationship) []ResourceRelationship {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ResourceRelationship, len(in))
 	copy(out, in)
 	return out
 }

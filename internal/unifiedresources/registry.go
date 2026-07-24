@@ -2607,7 +2607,10 @@ func (rr *ResourceRegistry) removeAvailabilityProjectionLocked(
 			}
 		}
 
-		filteredRelationships := resource.Relationships[:0]
+		// Build a fresh slice rather than compacting in place: callers may hold
+		// a resource whose relationships still share a backing array with
+		// another copy, and an in-place filter would write through into it.
+		filteredRelationships := make([]ResourceRelationship, 0, len(resource.Relationships))
 		for _, relationship := range resource.Relationships {
 			relationshipTargetID, _ := relationship.Metadata["targetId"].(string)
 			if relationship.Type == RelChecks &&

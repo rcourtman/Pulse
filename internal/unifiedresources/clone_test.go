@@ -718,3 +718,45 @@ func TestZeroTimeToPtr_NonZeroReturnsPtr(t *testing.T) {
 		t.Error("returned time should equal input")
 	}
 }
+
+// TestCloneResourceGivesRelationshipsTheirOwnBackingArray pins the aliasing fix
+// for the availability projection scrub. cloneResource deep-copies every other
+// slice on Resource; Relationships was left shallow, so a clone shared the
+// original's backing array and removeAvailabilityProjectionLocked's in-place
+// compaction wrote through into the live registry from an HTTP goroutine.
+func TestCloneResourceGivesRelationshipsTheirOwnBackingArray(t *testing.T) {
+	original := Resource{
+		ID:   "host-1",
+		Type: ResourceTypeAgent,
+		Name: "host-1",
+		Relationships: []ResourceRelationship{
+			{SourceID: "check-1", TargetID: "host-1", Type: RelChecks, Active: true},
+			{SourceID: "check-2", TargetID: "host-1", Type: RelChecks, Active: true},
+			{SourceID: "host-1", TargetID: "vm-1", Type: RelRunsOn, Active: true},
+		},
+	}
+
+	cloned := cloneResource(&original)
+	if len(cloned.Relationships) != 3 {
+		t.Fatalf("cloned relationships = %d, want 3", len(cloned.Relationships))
+	}
+
+	// Simulate the projection scrub compacting the clone in place.
+	filtered := cloned.Relationships[:0]
+	for _, relationship := range cloned.Relationships {
+		if relationship.Type == RelChecks {
+			continue
+		}
+		filtered = append(filtered, relationship)
+	}
+	cloned.Relationships = filtered
+
+	if len(original.Relationships) != 3 {
+		t.Fatalf("original relationships = %d, want 3", len(original.Relationships))
+	}
+	for i, want := range []string{"check-1", "check-2", "host-1"} {
+		if got := original.Relationships[i].SourceID; got != want {
+			t.Fatalf("original relationship %d sourceID = %q, want %q (clone wrote through)", i, got, want)
+		}
+	}
+}

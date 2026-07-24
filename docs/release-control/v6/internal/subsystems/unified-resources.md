@@ -1643,6 +1643,18 @@ AI-only summary payloads, or page-local heuristics.
     `TestStorageTopologyAndVDevLayoutAreDistinctIdentityFields` in
     `internal/unifiedresources/canonical_identity_test.go`.
 
+29. `cloneResource` owns copy isolation for every slice on `Resource`,
+    including `Relationships`. A clone that shares the original's
+    relationship backing array lets any in-place compaction write through
+    into the live registry from whatever goroutine holds the clone, which
+    is reachable on the ordinary `GET /api/resources` rebuild path.
+    Relationship filters additionally build a fresh slice rather than
+    compacting in place, so correctness does not depend on every caller
+    having cloned first. Regression coverage:
+    `TestCloneResourceGivesRelationshipsTheirOwnBackingArray` in
+    `internal/unifiedresources/clone_test.go`.
+
+
 ## Current State
 
 ### Host views expose the integration-source discriminator
