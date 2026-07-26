@@ -18,12 +18,28 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 )
 
-// connectionStaleThreshold is the baseline "haven't heard from this connection
-// recently" cutoff used to transition `active` → `stale`. Per-type poll
-// intervals vary (PVE 5-10s, TrueNAS 60s, agents 30-60s); 2 minutes sits
+// connectionStaleThreshold is the floor for the "haven't heard from this
+// connection recently" cutoff used to transition `active` → `stale`. Per-type
+// poll intervals vary (PVE 5-10s, TrueNAS 60s, agents 30-60s); 2 minutes sits
 // comfortably above 2× the slowest default so we don't flap on a single
-// dropped tick. Refined later once per-type intervals become first-class.
+// dropped tick. Connections polled slower than that get a scaled cutoff via
+// connectionStaleThresholdFor.
 const connectionStaleThreshold = 2 * time.Minute
+
+// connectionStaleThresholdFor scales the active→stale cutoff with the
+// configured polling cadence: max(3 × interval, connectionStaleThreshold).
+// The multiplier is 3× (not the 2× availability probes use) because
+// connection-degraded alerts are evaluated concurrently with the poll on the
+// same scheduler tick, so a healthy connection's LastSuccess is routinely one
+// full interval old at evaluation time; 2× would flap on a single missed
+// tick. A non-positive interval (cadence unknown) keeps the floor.
+func connectionStaleThresholdFor(pollInterval time.Duration) time.Duration {
+	threshold := 3 * pollInterval
+	if threshold < connectionStaleThreshold {
+		return connectionStaleThreshold
+	}
+	return threshold
+}
 
 // connectionAuthErrorPattern matches the error strings pollers surface when a
 // credential is wrong or the token lacks scope. Kept centrally so
@@ -106,6 +122,14 @@ type aggregatorInputs struct {
 	instanceHealth       map[string]monitoring.InstanceHealth
 	expectedAgentVersion string
 	now                  time.Time
+
+	// Configured poll cadences, used to scale the active→stale cutoff so slow
+	// cadences (e.g. 5 minutes) don't read as permanently stale. Zero means
+	// unknown and falls back to the connectionStaleThreshold floor. VMware and
+	// TrueNAS cadences come from their summaries/instances instead.
+	pvePollingInterval time.Duration
+	pbsPollingInterval time.Duration
+	pmgPollingInterval time.Duration
 }
 
 type connectionAgentDesiredConfig struct {
@@ -127,13 +151,13 @@ func buildConnections(in aggregatorInputs) []Connection {
 			len(in.vmwareInstances)+len(in.truenasInstances)+len(in.availabilityTargets)+len(in.hosts))
 
 	for _, pve := range in.pveInstances {
-		out = append(out, buildPVEConnection(pve, in.instanceHealth, now))
+		out = append(out, buildPVEConnection(pve, in.instanceHealth, now, in.pvePollingInterval))
 	}
 	for _, pbs := range in.pbsInstances {
-		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now))
+		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now, in.pbsPollingInterval))
 	}
 	for _, pmg := range in.pmgInstances {
-		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now))
+		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now, in.pmgPollingInterval))
 	}
 	for _, vmw := range in.vmwareInstances {
 		out = append(out, buildVMwareConnection(vmw, in.instanceHealth, in.vmwareSummaries, now))
@@ -166,7 +190,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 	return out
 }
 
-func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
+func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.InstanceHealth, now time.Time, pollInterval time.Duration) Connection {
 	enabled := !inst.Disabled
 	surfaces := []string{"vms", "containers", "storage", "backups"}
 	scope := map[string]bool{
@@ -176,7 +200,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 		"backups":    inst.MonitorBackups,
 	}
 	h := health["pve::"+inst.Name]
-	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
+	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now, pollInterval)
 	conn := withFleetGovernance(Connection{
 		ID:           "pve:" + inst.Name,
 		Type:         ConnectionTypePVE,
@@ -197,7 +221,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 	return conn
 }
 
-func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
+func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.InstanceHealth, now time.Time, pollInterval time.Duration) Connection {
 	enabled := !inst.Disabled
 	surfaces := []string{"backups", "datastores", "syncJobs", "verifyJobs", "pruneJobs", "garbageJobs"}
 	scope := map[string]bool{
@@ -209,7 +233,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 		"garbageJobs": inst.MonitorGarbageJobs,
 	}
 	h := health["pbs::"+inst.Name]
-	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
+	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now, pollInterval)
 	conn := withFleetGovernance(Connection{
 		ID:           "pbs:" + inst.Name,
 		Type:         ConnectionTypePBS,
@@ -230,7 +254,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 	return conn
 }
 
-func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
+func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.InstanceHealth, now time.Time, pollInterval time.Duration) Connection {
 	enabled := !inst.Disabled
 	surfaces := []string{"mailStats", "queues", "quarantine", "domainStats"}
 	scope := map[string]bool{
@@ -240,7 +264,7 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 		"domainStats": inst.MonitorDomainStats,
 	}
 	h := health["pmg::"+inst.Name]
-	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
+	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now, pollInterval)
 	conn := withFleetGovernance(Connection{
 		ID:           "pmg:" + inst.Name,
 		Type:         ConnectionTypePMG,
@@ -275,10 +299,14 @@ func buildVMwareConnection(
 		"datastores": inst.MonitorDatastores,
 	}
 	h := health["vmware::"+inst.ID]
+	var pollInterval time.Duration
 	if summary, ok := summaries[strings.TrimSpace(inst.ID)]; ok {
 		h = mergeVMwareSummaryHealth(h, summary)
+		if summary.Poll != nil && summary.Poll.IntervalSeconds > 0 {
+			pollInterval = time.Duration(summary.Poll.IntervalSeconds) * time.Second
+		}
 	}
-	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
+	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now, pollInterval)
 	port := inst.Port
 	if port == 0 {
 		port = 443
@@ -320,7 +348,8 @@ func buildTrueNASConnection(
 	if summary, ok := summaries[strings.TrimSpace(inst.ID)]; ok {
 		h = mergeTrueNASSummaryHealth(h, summary)
 	}
-	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
+	pollInterval := time.Duration(inst.EffectivePollIntervalSecs()) * time.Second
+	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now, pollInterval)
 	scheme := "https"
 	if !inst.UseHTTPS {
 		scheme = "http"
@@ -1279,8 +1308,10 @@ func connectionHostAliasesForAgent(host models.Host, name, address string) []str
 
 // deriveConnectionState maps (Enabled, InstanceHealth) onto the unified state
 // vocabulary. No new state is persisted — the inputs come from the existing
-// monitoring scheduler.
-func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.Time) (ConnectionState, string, *time.Time, *ConnectionError) {
+// monitoring scheduler. pollInterval is the configured cadence for this
+// connection (zero if unknown); it scales the active→stale cutoff via
+// connectionStaleThresholdFor.
+func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.Time, pollInterval time.Duration) (ConnectionState, string, *time.Time, *ConnectionError) {
 	var lastSeen *time.Time
 	if h.PollStatus.LastSuccess != nil && !h.PollStatus.LastSuccess.IsZero() {
 		t := *h.PollStatus.LastSuccess
@@ -1324,7 +1355,7 @@ func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.T
 		return ConnectionStateUnreachable, reason, lastSeen, lastError
 	}
 
-	if lastSeen != nil && now.Sub(*lastSeen) > connectionStaleThreshold {
+	if lastSeen != nil && now.Sub(*lastSeen) > connectionStaleThresholdFor(pollInterval) {
 		return ConnectionStateStale, fmt.Sprintf("no successful poll in %s", now.Sub(*lastSeen).Round(time.Second)), lastSeen, lastError
 	}
 
