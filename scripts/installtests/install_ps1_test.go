@@ -102,6 +102,25 @@ func TestWindowsAgentLifecycleHarnessPinsCompleteServiceProof(t *testing.T) {
 	}
 }
 
+func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatalf("read native agent workflow: %v", err)
+	}
+
+	workflow := string(content)
+	required := []string{
+		`$selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'`,
+		`$selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'`,
+		`--self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("native Windows self-test must keep lifecycle state isolated: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1OwnsWindowsServiceLoggingAndRecovery(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {
