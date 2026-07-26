@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // This file exercises the previously-uncovered branch arms of three helpers
@@ -271,4 +273,25 @@ func TestBranchcov0722UniqueMatch(t *testing.T) {
 			t.Fatalf("uniqueMatch(ambiguous) = %q, want %q (must not silently pick one of multiple matches)", got, "")
 		}
 	})
+}
+
+// Regression for https://github.com/rcourtman/Pulse/issues/1620: the alert
+// snapshot path must thread the configured polling cadences into the
+// aggregator so slow cadences do not read as permanently stale.
+func TestBuildAggregatorInputsThreadsPollingIntervals(t *testing.T) {
+	cfg := &config.Config{
+		PVEPollingInterval: 5 * time.Minute,
+		PBSPollingInterval: 4 * time.Minute,
+		PMGPollingInterval: 3 * time.Minute,
+	}
+	inputs := buildAggregatorInputsWithRuntimeSources(context.Background(), cfg, nil, nil, aggregatorRuntimeSources{})
+	if inputs.pvePollingInterval != 5*time.Minute {
+		t.Fatalf("pvePollingInterval = %s, want 5m", inputs.pvePollingInterval)
+	}
+	if inputs.pbsPollingInterval != 4*time.Minute {
+		t.Fatalf("pbsPollingInterval = %s, want 4m", inputs.pbsPollingInterval)
+	}
+	if inputs.pmgPollingInterval != 3*time.Minute {
+		t.Fatalf("pmgPollingInterval = %s, want 3m", inputs.pmgPollingInterval)
+	}
 }

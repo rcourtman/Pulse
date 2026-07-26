@@ -49,7 +49,7 @@ func desiredAgentConfig(t *testing.T, commandsEnabled *bool, settings map[string
 }
 
 func TestDeriveConnectionState_Paused(t *testing.T) {
-	state, reason, _, _ := deriveConnectionState(false, monitoring.InstanceHealth{}, time.Now())
+	state, reason, _, _ := deriveConnectionState(false, monitoring.InstanceHealth{}, time.Now(), 0)
 	if state != ConnectionStatePaused {
 		t.Fatalf("got %q, want %q", state, ConnectionStatePaused)
 	}
@@ -59,7 +59,7 @@ func TestDeriveConnectionState_Paused(t *testing.T) {
 }
 
 func TestDeriveConnectionState_Pending(t *testing.T) {
-	state, _, lastSeen, lastError := deriveConnectionState(true, monitoring.InstanceHealth{}, time.Now())
+	state, _, lastSeen, lastError := deriveConnectionState(true, monitoring.InstanceHealth{}, time.Now(), 0)
 	if state != ConnectionStatePending {
 		t.Fatalf("got %q, want %q", state, ConnectionStatePending)
 	}
@@ -71,7 +71,7 @@ func TestDeriveConnectionState_Pending(t *testing.T) {
 func TestDeriveConnectionState_Unauthorized(t *testing.T) {
 	now := time.Now()
 	h := healthEntry(ptrTime(now.Add(-30*time.Second)), "401 Unauthorized: token invalid", "auth", "closed")
-	state, reason, _, err := deriveConnectionState(true, h, now)
+	state, reason, _, err := deriveConnectionState(true, h, now, 0)
 	if state != ConnectionStateUnauthorized {
 		t.Fatalf("got %q, want %q", state, ConnectionStateUnauthorized)
 	}
@@ -86,7 +86,7 @@ func TestDeriveConnectionState_Unauthorized(t *testing.T) {
 func TestDeriveConnectionState_Unreachable(t *testing.T) {
 	now := time.Now()
 	h := healthEntry(ptrTime(now.Add(-30*time.Second)), "connection refused", "network", "open")
-	state, _, _, _ := deriveConnectionState(true, h, now)
+	state, _, _, _ := deriveConnectionState(true, h, now, 0)
 	if state != ConnectionStateUnreachable {
 		t.Fatalf("got %q, want %q", state, ConnectionStateUnreachable)
 	}
@@ -96,7 +96,7 @@ func TestDeriveConnectionState_Stale(t *testing.T) {
 	now := time.Now()
 	stale := now.Add(-5 * time.Minute)
 	h := healthEntry(ptrTime(stale), "", "", "closed")
-	state, reason, _, _ := deriveConnectionState(true, h, now)
+	state, reason, _, _ := deriveConnectionState(true, h, now, 0)
 	if state != ConnectionStateStale {
 		t.Fatalf("got %q, want %q", state, ConnectionStateStale)
 	}
@@ -108,7 +108,7 @@ func TestDeriveConnectionState_Stale(t *testing.T) {
 func TestDeriveConnectionState_Active(t *testing.T) {
 	now := time.Now()
 	h := healthEntry(ptrTime(now.Add(-10*time.Second)), "", "", "closed")
-	state, _, _, _ := deriveConnectionState(true, h, now)
+	state, _, _, _ := deriveConnectionState(true, h, now, 0)
 	if state != ConnectionStateActive {
 		t.Fatalf("got %q, want %q", state, ConnectionStateActive)
 	}
@@ -1024,7 +1024,7 @@ func TestBuildConnections_PlatformPollerSummariesDriveRuntimeState(t *testing.T)
 func TestDeriveConnectionState_FirstPollFailureIsUnreachable(t *testing.T) {
 	now := time.Now()
 	h := healthEntry(nil, "connection refused", "network", "closed")
-	state, reason, lastSeen, lastError := deriveConnectionState(true, h, now)
+	state, reason, lastSeen, lastError := deriveConnectionState(true, h, now, 0)
 	if state != ConnectionStateUnreachable {
 		t.Fatalf("state = %q, want unreachable", state)
 	}
@@ -1061,7 +1061,7 @@ func TestDeriveConnectionState_CurrentFailureOverridesRecentSuccess(t *testing.T
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			h := healthEntry(&lastSuccess, test.message, "transient", "closed")
-			state, reason, gotLastSeen, lastError := deriveConnectionState(true, h, now)
+			state, reason, gotLastSeen, lastError := deriveConnectionState(true, h, now, 0)
 			if state != test.wantState {
 				t.Fatalf("state = %q, want %q", state, test.wantState)
 			}
@@ -1135,5 +1135,85 @@ func TestBuildConnections_UsesHealthLookup(t *testing.T) {
 	}
 	if got[0].LastSeen == nil || !got[0].LastSeen.Equal(ls) {
 		t.Fatalf("lastSeen not propagated: %+v", got[0].LastSeen)
+	}
+}
+
+func TestConnectionStaleThresholdFor(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		interval time.Duration
+		want     time.Duration
+	}{
+		{name: "unknown cadence keeps floor", interval: 0, want: connectionStaleThreshold},
+		{name: "negative cadence keeps floor", interval: -time.Minute, want: connectionStaleThreshold},
+		{name: "fast cadence keeps floor", interval: 10 * time.Second, want: connectionStaleThreshold},
+		{name: "floor boundary cadence keeps floor", interval: 40 * time.Second, want: connectionStaleThreshold},
+		{name: "slow cadence scales to 3x", interval: 5 * time.Minute, want: 15 * time.Minute},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := connectionStaleThresholdFor(test.interval); got != test.want {
+				t.Fatalf("connectionStaleThresholdFor(%s) = %s, want %s", test.interval, got, test.want)
+			}
+		})
+	}
+}
+
+// Regression for https://github.com/rcourtman/Pulse/issues/1620: with a
+// 5-minute polling cadence the previous fixed 2-minute cutoff marked every
+// connection permanently stale, latching the connection-degraded alert.
+func TestDeriveConnectionState_SlowCadenceIsNotPermanentlyStale(t *testing.T) {
+	now := time.Now()
+	interval := 5 * time.Minute
+
+	// A last success exactly one interval old is the steady state when the
+	// connection check runs concurrently with the poll on the same tick; it
+	// must derive active, not stale.
+	h := healthEntry(ptrTime(now.Add(-interval)), "", "", "closed")
+	state, _, _, _ := deriveConnectionState(true, h, now, interval)
+	if state != ConnectionStateActive {
+		t.Fatalf("state at 1x interval = %q, want %q", state, ConnectionStateActive)
+	}
+
+	// Beyond 3x the interval the connection is genuinely stale.
+	h = healthEntry(ptrTime(now.Add(-3*interval-time.Second)), "", "", "closed")
+	state, _, _, _ = deriveConnectionState(true, h, now, interval)
+	if state != ConnectionStateStale {
+		t.Fatalf("state beyond 3x interval = %q, want %q", state, ConnectionStateStale)
+	}
+}
+
+func TestBuildConnections_ScalesStaleThresholdWithPollingIntervals(t *testing.T) {
+	now := time.Now()
+	lastSuccess := now.Add(-5 * time.Minute)
+	in := aggregatorInputs{
+		pveInstances: []config.PVEInstance{{Name: "pve1", Host: "https://pve1.lan:8006"}},
+		pbsInstances: []config.PBSInstance{{Name: "pbs1", Host: "https://pbs1.lan:8007"}},
+		truenasInstances: []config.TrueNASInstance{
+			{ID: "tn1", Name: "tn1", Host: "tn1.lan", Enabled: true, PollIntervalSecs: 300},
+		},
+		instanceHealth: map[string]monitoring.InstanceHealth{
+			"pve::pve1":    healthEntry(&lastSuccess, "", "", "closed"),
+			"pbs::pbs1":    healthEntry(&lastSuccess, "", "", "closed"),
+			"truenas::tn1": healthEntry(&lastSuccess, "", "", "closed"),
+		},
+		pvePollingInterval: 5 * time.Minute,
+		now:                now,
+	}
+	got := buildConnections(in)
+	byID := make(map[string]Connection, len(got))
+	for _, conn := range got {
+		byID[conn.ID] = conn
+	}
+
+	if state := byID["pve:pve1"].State; state != ConnectionStateActive {
+		t.Fatalf("pve state = %q, want active (threshold scaled by pvePollingInterval)", state)
+	}
+	if state := byID["truenas:tn1"].State; state != ConnectionStateActive {
+		t.Fatalf("truenas state = %q, want active (threshold scaled by PollIntervalSecs)", state)
+	}
+	// PBS was left at the zero-value interval, so the 2-minute floor still
+	// applies and the same 5-minute-old success reads as stale.
+	if state := byID["pbs:pbs1"].State; state != ConnectionStateStale {
+		t.Fatalf("pbs state = %q, want stale under the floor threshold", state)
 	}
 }

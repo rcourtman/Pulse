@@ -64,7 +64,7 @@ var wantPMGSurfaces = []string{"mailStats", "queues", "quarantine", "domainStats
 func TestBranchcov0722PMGConnectionDisabledFlip(t *testing.T) {
 	t.Run("disabled_instance_is_paused_and_not_enabled", func(t *testing.T) {
 		inst := config.PMGInstance{Name: "mail-relay", Host: "mail.lan", Disabled: true}
-		conn := buildPMGConnection(inst, nil, frozenNow)
+		conn := buildPMGConnection(inst, nil, frozenNow, 0)
 
 		if conn.Enabled {
 			t.Fatalf("Enabled = true, want false for Disabled instance")
@@ -104,7 +104,7 @@ func TestBranchcov0722PMGConnectionDisabledFlip(t *testing.T) {
 
 	t.Run("enabled_instance_is_not_paused", func(t *testing.T) {
 		inst := config.PMGInstance{Name: "mail-relay", Host: "mail.lan"}
-		conn := buildPMGConnection(inst, nil, frozenNow)
+		conn := buildPMGConnection(inst, nil, frozenNow, 0)
 
 		if !conn.Enabled {
 			t.Fatalf("Enabled = false, want true for non-Disabled instance")
@@ -177,7 +177,7 @@ func TestBranchcov0722PMGConnectionScopeFlags(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			conn := buildPMGConnection(tc.inst, nil, frozenNow)
+			conn := buildPMGConnection(tc.inst, nil, frozenNow, 0)
 
 			// Surfaces are always the full, ordered list regardless of scope.
 			if !reflect.DeepEqual(conn.Surfaces, wantPMGSurfaces) {
@@ -216,7 +216,7 @@ func TestBranchcov0722PMGConnectionHealthLookup(t *testing.T) {
 		health := map[string]monitoring.InstanceHealth{
 			"pmg::mail-relay": pmgHealthEntry(&recentSuccess, nil, "", "", "closed"),
 		}
-		conn := buildPMGConnection(inst, health, frozenNow)
+		conn := buildPMGConnection(inst, health, frozenNow, 0)
 		if conn.State != ConnectionStateActive {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStateActive)
 		}
@@ -236,7 +236,7 @@ func TestBranchcov0722PMGConnectionHealthLookup(t *testing.T) {
 			"empty_map": {},
 			"wrong_key": {"pmg::other-relay": pmgHealthEntry(&recentSuccess, nil, "", "", "closed")},
 		} {
-			conn := buildPMGConnection(inst, health, frozenNow)
+			conn := buildPMGConnection(inst, health, frozenNow, 0)
 			if conn.State != ConnectionStatePending {
 				t.Fatalf("%s: State = %q, want %q", label, conn.State, ConnectionStatePending)
 			}
@@ -271,7 +271,7 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 		health := map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(ptrTime(frozenNow.Add(-30*time.Second)), &errAt, "401 Unauthorized", "auth", "closed"),
 		}
-		conn := buildPMGConnection(inst, health, frozenNow)
+		conn := buildPMGConnection(inst, health, frozenNow, 0)
 		if conn.State != ConnectionStatePaused {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStatePaused)
 		}
@@ -283,7 +283,7 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 	t.Run("pending_with_no_poll_history", func(t *testing.T) {
 		conn := buildPMGConnection(base, map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(nil, nil, "", "", "closed"),
-		}, frozenNow)
+		}, frozenNow, 0)
 		if conn.State != ConnectionStatePending {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStatePending)
 		}
@@ -300,7 +300,7 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 		health := map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(nil, &errAt, "403 Forbidden: token lacks scope", "auth", "closed"),
 		}
-		conn := buildPMGConnection(base, health, frozenNow)
+		conn := buildPMGConnection(base, health, frozenNow, 0)
 		if conn.State != ConnectionStateUnauthorized {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStateUnauthorized)
 		}
@@ -329,7 +329,7 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 		health := map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(nil, &errAt, "connection refused", "network", "closed"),
 		}
-		conn := buildPMGConnection(base, health, frozenNow)
+		conn := buildPMGConnection(base, health, frozenNow, 0)
 		if conn.State != ConnectionStateUnreachable {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStateUnreachable)
 		}
@@ -348,7 +348,7 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 		health := map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(&success, nil, "", "", "open"),
 		}
-		conn := buildPMGConnection(base, health, frozenNow)
+		conn := buildPMGConnection(base, health, frozenNow, 0)
 		if conn.State != ConnectionStateUnreachable {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStateUnreachable)
 		}
@@ -361,12 +361,13 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 	})
 
 	t.Run("stale_when_last_success_beyond_threshold", func(t *testing.T) {
-		// connectionStaleThreshold is 2 minutes; 5 minutes ago must be stale.
+		// With no configured interval the connectionStaleThreshold floor of
+		// 2 minutes applies; 5 minutes ago must be stale.
 		staleSuccess := frozenNow.Add(-5 * time.Minute)
 		health := map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(&staleSuccess, nil, "", "", "closed"),
 		}
-		conn := buildPMGConnection(base, health, frozenNow)
+		conn := buildPMGConnection(base, health, frozenNow, 0)
 		if conn.State != ConnectionStateStale {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStateStale)
 		}
@@ -384,7 +385,7 @@ func TestBranchcov0722PMGConnectionStateDerivation(t *testing.T) {
 		health := map[string]monitoring.InstanceHealth{
 			healthKey: pmgHealthEntry(&recentSuccess, nil, "", "", "closed"),
 		}
-		conn := buildPMGConnection(base, health, frozenNow)
+		conn := buildPMGConnection(base, health, frozenNow, 0)
 		if conn.State != ConnectionStateActive {
 			t.Fatalf("State = %q, want %q", conn.State, ConnectionStateActive)
 		}
@@ -427,7 +428,7 @@ func TestBranchcov0722PMGConnectionCredentialKind(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			conn := buildPMGConnection(tc.inst, nil, frozenNow)
+			conn := buildPMGConnection(tc.inst, nil, frozenNow, 0)
 			ch := conn.Fleet.CredentialHealth
 			if ch == nil {
 				t.Fatalf("CredentialHealth is nil")
@@ -457,7 +458,7 @@ func TestBranchcov0722PMGConnectionStaticFields(t *testing.T) {
 		Name: "mail-relay",
 		Host: "https://mail.lan:8006",
 	}
-	conn := buildPMGConnection(inst, nil, frozenNow)
+	conn := buildPMGConnection(inst, nil, frozenNow, 0)
 
 	if conn.ID != "pmg:mail-relay" {
 		t.Fatalf("ID = %q, want %q", conn.ID, "pmg:mail-relay")

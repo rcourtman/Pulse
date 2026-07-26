@@ -31,6 +31,9 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.pbsInstances = cfg.PBSInstances
 		inputs.pmgInstances = cfg.PMGInstances
 		inputs.apiTokens = append([]config.APITokenRecord(nil), cfg.APITokens...)
+		inputs.pvePollingInterval = cfg.PVEPollingInterval
+		inputs.pbsPollingInterval = cfg.PBSPollingInterval
+		inputs.pmgPollingInterval = cfg.PMGPollingInterval
 	}
 
 	if persistence != nil {
