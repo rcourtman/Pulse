@@ -1307,8 +1307,8 @@ These routes manage Docker / Podman telemetry and container actions reported by 
 - `PUT /api/agents/docker/runtimes/{agentId}/pending-uninstall` (`docker:manage`)
 - `PUT /api/agents/docker/runtimes/{agentId}/display-name` (`docker:manage`)
 - `POST /api/agents/docker/runtimes/{agentId}/check-updates` (`docker:manage`)
-- `POST /api/agents/docker/runtimes/{agentId}/update-all` (`docker:manage`)
-- `POST /api/agents/docker/containers/update` (`docker:manage`)
+- `POST /api/agents/docker/runtimes/{agentId}/update-all` (`docker:manage`) — retired, returns `410 Gone`; container updates run as reviewed per-container actions through `/api/actions`
+- `POST /api/agents/docker/containers/update` (`docker:manage`) — retired, returns `410 Gone`; use the `/api/actions` plan/decision/execute flow instead
 
 ### Kubernetes Agent Management (Admin)
 - `DELETE /api/agents/kubernetes/clusters/{clusterId}` (`kubernetes:manage`, supports `?hide=true` or `?force=true`)
