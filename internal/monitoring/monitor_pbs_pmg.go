@@ -498,7 +498,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			log.Debug().
 				Str("instance", instanceName).
 				Msg("No PBS datastores available for backup polling")
-		} else if !m.config.EnableBackupPolling {
+		} else if !m.backupPollingEnabledSetting() {
 			log.Debug().
 				Str("instance", instanceName).
 				Msg("Skipping PBS backup polling - globally disabled")

@@ -33,6 +33,9 @@ type SystemSettingsMonitor interface {
 	EnableTemperatureMonitoring()
 	DisableTemperatureMonitoring()
 	GetNotificationManager() *notifications.NotificationManager
+	SetBackupPollingEnabled(enabled bool)
+	SetBackupPollingInterval(interval time.Duration)
+	SetPMGPollingInterval(interval time.Duration)
 }
 
 // SystemSettingsHandler handles system settings
@@ -158,6 +161,30 @@ func (h *SystemSettingsHandler) forEachNotificationManager(r *http.Request, fn f
 		if nm := monitor.GetNotificationManager(); nm != nil {
 			fn(nm)
 		}
+	}
+}
+
+// forEachTenantMonitor applies fn to every live tenant monitor when
+// multi-tenant iteration is available, falling back to the request's monitor
+// otherwise. Instance-wide polling cadence settings must reach every org's
+// monitor: each one polls against a detached copy of the base config, so
+// mutating h.config alone never affects a running monitor.
+func (h *SystemSettingsHandler) forEachTenantMonitor(r *http.Request, fn func(SystemSettingsMonitor)) {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	h.stateMu.RUnlock()
+
+	type monitorRanger interface {
+		ForEachMonitor(func(*monitoring.Monitor))
+	}
+	if ranger, ok := mtMonitor.(monitorRanger); ok && ranger != nil {
+		ranger.ForEachMonitor(func(m *monitoring.Monitor) {
+			fn(m)
+		})
+		return
+	}
+	if monitor := h.getMonitor(r.Context()); monitor != nil {
+		fn(monitor)
 	}
 }
 
@@ -1085,6 +1112,27 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			nm.SetPublicURL(settings.PublicURL)
 		})
 		log.Info().Str("publicURL", settings.PublicURL).Msg("Updated notification public URL from settings")
+	}
+	// Polling cadence settings are read every cycle by each tenant monitor
+	// from its own detached config copy, so push them into the live monitors
+	// directly; only pvePollingInterval triggers a full monitor reload.
+	if _, ok := rawRequest["backupPollingEnabled"]; ok && settings.BackupPollingEnabled != nil {
+		enabled := *settings.BackupPollingEnabled
+		h.forEachTenantMonitor(r, func(m SystemSettingsMonitor) {
+			m.SetBackupPollingEnabled(enabled)
+		})
+	}
+	if _, ok := rawRequest["backupPollingInterval"]; ok {
+		interval := h.config.BackupPollingInterval
+		h.forEachTenantMonitor(r, func(m SystemSettingsMonitor) {
+			m.SetBackupPollingInterval(interval)
+		})
+	}
+	if _, ok := rawRequest["pmgPollingInterval"]; ok && settings.PMGPollingInterval > 0 {
+		interval := time.Duration(settings.PMGPollingInterval) * time.Second
+		h.forEachTenantMonitor(r, func(m SystemSettingsMonitor) {
+			m.SetPMGPollingInterval(interval)
+		})
 	}
 
 	// Reload cached system settings after successful save

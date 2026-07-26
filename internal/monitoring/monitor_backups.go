@@ -2031,7 +2031,7 @@ func (m *Monitor) pollPVEBackupsAsync(
 		return nil
 	}
 
-	if !m.config.EnableBackupPolling {
+	if !m.backupPollingEnabledSetting() {
 		log.Debug().
 			Str("instance", instanceName).
 			Msg("Skipping backup polling - globally disabled")

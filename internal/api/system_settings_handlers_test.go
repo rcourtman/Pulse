@@ -22,6 +22,9 @@ import (
 
 // MockMonitor implementation
 type mockMonitor struct {
+	backupPollingEnabledCalls  []bool
+	backupPollingIntervalCalls []time.Duration
+	pmgPollingIntervalCalls    []time.Duration
 }
 
 func (m *mockMonitor) GetDiscoveryService() *discovery.Service { return nil }
@@ -31,6 +34,15 @@ func (m *mockMonitor) StopDiscoveryService()                                    
 func (m *mockMonitor) EnableTemperatureMonitoring()                               {}
 func (m *mockMonitor) DisableTemperatureMonitoring()                              {}
 func (m *mockMonitor) GetNotificationManager() *notifications.NotificationManager { return nil }
+func (m *mockMonitor) SetBackupPollingEnabled(enabled bool) {
+	m.backupPollingEnabledCalls = append(m.backupPollingEnabledCalls, enabled)
+}
+func (m *mockMonitor) SetBackupPollingInterval(interval time.Duration) {
+	m.backupPollingIntervalCalls = append(m.backupPollingIntervalCalls, interval)
+}
+func (m *mockMonitor) SetPMGPollingInterval(interval time.Duration) {
+	m.pmgPollingIntervalCalls = append(m.pmgPollingIntervalCalls, interval)
+}
 
 type mockTenantMonitorProvider struct {
 	orgID   string
@@ -260,6 +272,74 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	// Verify config update
 	if cfg.PVEPollingInterval != 60*time.Second {
 		t.Errorf("Config was not updated. Expected 60s, got %v", cfg.PVEPollingInterval)
+	}
+}
+
+// Regression test for #1619: backupPollingInterval, pmgPollingInterval and
+// backupPollingEnabled must be pushed into live monitors on save. Mutating
+// h.config alone never reaches a running monitor (each polls a detached
+// config copy), and these settings do not trigger a monitor reload.
+func TestHandleUpdateSystemSettings_PollingCadencePushedToLiveMonitors(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:              tempDir,
+		ConfigPath:            tempDir,
+		EnableBackupPolling:   true,
+		BackupPollingInterval: time.Hour,
+		PMGPollingInterval:    time.Minute,
+	}
+	persistence := config.NewConfigPersistence(tempDir)
+	monitor := &mockMonitor{}
+	reloadCalled := false
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error {
+		reloadCalled = true
+		return nil
+	})
+
+	tokenVal := "testtoken123"
+	cfg.APITokens = []config.APITokenRecord{
+		{ID: "token1", Hash: internalauth.HashAPIToken(tokenVal), Name: "Test Token"},
+	}
+
+	updates := map[string]interface{}{
+		"backupPollingInterval": 600,
+		"pmgPollingInterval":    120,
+		"backupPollingEnabled":  false,
+	}
+	body, _ := json.Marshal(updates)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", tokenVal)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(monitor.backupPollingIntervalCalls) != 1 || monitor.backupPollingIntervalCalls[0] != 600*time.Second {
+		t.Errorf("expected SetBackupPollingInterval(600s) on live monitor, got %v", monitor.backupPollingIntervalCalls)
+	}
+	if len(monitor.pmgPollingIntervalCalls) != 1 || monitor.pmgPollingIntervalCalls[0] != 120*time.Second {
+		t.Errorf("expected SetPMGPollingInterval(120s) on live monitor, got %v", monitor.pmgPollingIntervalCalls)
+	}
+	if len(monitor.backupPollingEnabledCalls) != 1 || monitor.backupPollingEnabledCalls[0] != false {
+		t.Errorf("expected SetBackupPollingEnabled(false) on live monitor, got %v", monitor.backupPollingEnabledCalls)
+	}
+	if reloadCalled {
+		t.Error("polling cadence settings should not trigger a full monitor reload")
+	}
+
+	// The base config still updates so future tenant monitors inherit the values.
+	if cfg.BackupPollingInterval != 600*time.Second {
+		t.Errorf("expected base config BackupPollingInterval 600s, got %v", cfg.BackupPollingInterval)
+	}
+	if cfg.PMGPollingInterval != 120*time.Second {
+		t.Errorf("expected base config PMGPollingInterval 120s, got %v", cfg.PMGPollingInterval)
+	}
+	if cfg.EnableBackupPolling {
+		t.Error("expected base config EnableBackupPolling false")
 	}
 }
 
