@@ -66,7 +66,8 @@ func TestUnifiedProviderIncidentConfirmationRecoveryAndStableIdentity(t *testing
 func TestUnifiedProviderIncidentRecoveryConfirmationSurvivesRestart(t *testing.T) {
 	dataDir := t.TempDir()
 	cfg := unifiedEvalBaseConfig()
-	observedAt := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC)
+	// Restore drops alerts older than 24h, so the incident must start recently.
+	observedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
 	resource := confirmedProviderIncidentResource(observedAt)
 
 	first := NewManagerWithDataDir(dataDir)
