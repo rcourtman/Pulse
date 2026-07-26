@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1981,6 +1982,8 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	}
 
 	var backupTasks []models.BackupTask
+	var jobTasks []models.BackupTask
+	jobUPIDs := make(map[string]string)
 	for _, task := range tasks {
 		// Extract VMID from task ID (format: "UPID:node:pid:starttime:type:vmid:user@realm:")
 		vmid := 0
@@ -2008,7 +2011,17 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 
 		backupTasks = append(backupTasks, backupTask)
+
+		// Scheduled multi-guest backup jobs run under a single UPID with an
+		// empty VMID slot, so the task alone says nothing about which guests
+		// it covered (#1452 area, regressed with the guest-centric redesign).
+		if vmid == 0 && task.Type == "vzdump" && task.UPID != "" {
+			jobUPIDs[backupTask.ID] = task.UPID
+			jobTasks = append(jobTasks, backupTask)
+		}
 	}
+
+	backupTasks = append(backupTasks, m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)...)
 
 	// Update state with new backup tasks for this instance
 	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
@@ -2016,6 +2029,226 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEBackupTasks(backupTasks, guestInfo))
+}
+
+// vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one
+// vzdump job run's log so finished jobs are fetched at most once.
+type vzdumpJobTaskCacheEntry struct {
+	tasks []models.BackupTask
+	final bool
+}
+
+// maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
+// large backlog of historical job runs (e.g. right after startup) trickles in
+// over a few cycles instead of stalling the shared backup-poll budget.
+const maxVzdumpJobLogFetchesPerPoll = 25
+
+// synthesizeVzdumpJobGuestTasks expands multi-guest vzdump job runs into one
+// synthetic per-guest task each by parsing the job's task log. Results are
+// cached by instance|UPID; logs of finished jobs are immutable, so those are
+// fetched only once. Running jobs are re-parsed every cycle to pick up guests
+// as the job progresses.
+func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string) []models.BackupTask {
+	if len(jobTasks) == 0 {
+		m.pruneVzdumpJobTaskCache(instanceName, nil)
+		return nil
+	}
+
+	now := time.Now().UTC()
+	seen := make(map[string]struct{}, len(jobTasks))
+	var synthesized []models.BackupTask
+	fetches := 0
+
+	for _, jobTask := range jobTasks {
+		upid := jobUPIDs[jobTask.ID]
+		key := instanceName + "|" + upid
+		seen[key] = struct{}{}
+
+		m.mu.RLock()
+		entry, cached := m.vzdumpJobTaskCache[key]
+		m.mu.RUnlock()
+
+		if cached && entry.final {
+			synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+			continue
+		}
+
+		if fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
+			// Serve a stale non-final entry if we have one; the next cycle
+			// will catch up.
+			if cached {
+				synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+			}
+			continue
+		}
+		fetches++
+
+		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
+		if err != nil {
+			log.Debug().Err(err).
+				Str("instance", instanceName).
+				Str("upid", upid).
+				Msg("failed to fetch vzdump job task log; per-guest status unavailable this cycle")
+			if cached {
+				synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+			}
+			continue
+		}
+
+		guestTasks := parseVzdumpJobLog(jobTask, upid, logLines)
+		m.mu.Lock()
+		if m.vzdumpJobTaskCache == nil {
+			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
+		}
+		m.vzdumpJobTaskCache[key] = vzdumpJobTaskCacheEntry{
+			tasks: guestTasks,
+			final: !jobTask.EndTime.IsZero(),
+		}
+		m.mu.Unlock()
+		synthesized = append(synthesized, refreshObservedAt(guestTasks, now)...)
+	}
+
+	m.pruneVzdumpJobTaskCache(instanceName, seen)
+	return synthesized
+}
+
+// pruneVzdumpJobTaskCache drops cached job entries for this instance whose
+// UPIDs are no longer present in the task list (fell out of the window).
+func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}) {
+	prefix := instanceName + "|"
+	m.mu.Lock()
+	for key := range m.vzdumpJobTaskCache {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		if _, ok := seen[key]; !ok {
+			delete(m.vzdumpJobTaskCache, key)
+		}
+	}
+	m.mu.Unlock()
+}
+
+func refreshObservedAt(tasks []models.BackupTask, now time.Time) []models.BackupTask {
+	if len(tasks) == 0 {
+		return nil
+	}
+	out := make([]models.BackupTask, len(tasks))
+	copy(out, tasks)
+	for i := range out {
+		out[i].ObservedAt = now
+	}
+	return out
+}
+
+// vzdump job logs mark each guest's section with these lines.
+var (
+	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)`)
+	vzdumpLogGuestFinishRe = regexp.MustCompile(`^INFO: Finished Backup of VM (\d+) \((\d+):(\d{2}):(\d{2})\)$`)
+	vzdumpLogGuestFailRe   = regexp.MustCompile(`^ERROR: Backup of VM (\d+) failed -\s*(.*)$`)
+)
+
+// parseVzdumpJobLog turns a multi-guest vzdump job run into synthetic
+// per-guest BackupTask entries. Log lines carry no timestamps, so per-guest
+// times are reconstructed from the job start plus the durations vzdump prints
+// on each "Finished Backup" line. Task IDs embed the parent UPID, keeping them
+// stable across polls and distinct from individually-run guest backups.
+func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmox.TaskLogLine) []models.BackupTask {
+	type guestSection struct {
+		vmid   int
+		start  time.Time
+		end    time.Time
+		status string
+		errMsg string
+	}
+
+	var order []int
+	sections := make(map[int]*guestSection)
+	cursor := jobTask.StartTime
+
+	ensureSection := func(vmid int) *guestSection {
+		if sec, ok := sections[vmid]; ok {
+			return sec
+		}
+		sec := &guestSection{vmid: vmid, start: cursor, status: "running"}
+		sections[vmid] = sec
+		order = append(order, vmid)
+		return sec
+	}
+
+	for _, line := range logLines {
+		text := strings.TrimSpace(line.Text)
+		if match := vzdumpLogGuestStartRe.FindStringSubmatch(text); match != nil {
+			vmid, err := strconv.Atoi(match[1])
+			if err != nil || vmid <= 0 {
+				continue
+			}
+			sec := ensureSection(vmid)
+			sec.start = cursor
+			sec.status = "running"
+		} else if match := vzdumpLogGuestFinishRe.FindStringSubmatch(text); match != nil {
+			vmid, err := strconv.Atoi(match[1])
+			if err != nil || vmid <= 0 {
+				continue
+			}
+			sec := ensureSection(vmid)
+			if sec.status == "running" {
+				sec.status = "OK"
+			}
+			hours, _ := strconv.Atoi(match[2])
+			minutes, _ := strconv.Atoi(match[3])
+			seconds, _ := strconv.Atoi(match[4])
+			duration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
+			sec.end = sec.start.Add(duration)
+			cursor = sec.end
+		} else if match := vzdumpLogGuestFailRe.FindStringSubmatch(text); match != nil {
+			vmid, err := strconv.Atoi(match[1])
+			if err != nil || vmid <= 0 {
+				continue
+			}
+			sec := ensureSection(vmid)
+			sec.status = "error"
+			sec.errMsg = strings.TrimSpace(match[2])
+			if sec.errMsg == "" {
+				sec.errMsg = "backup failed"
+			}
+		}
+	}
+
+	if len(order) == 0 {
+		return nil
+	}
+
+	jobFinished := !jobTask.EndTime.IsZero()
+	tasks := make([]models.BackupTask, 0, len(order))
+	for _, vmid := range order {
+		sec := sections[vmid]
+		if jobFinished {
+			if sec.status == "running" {
+				// The job ended without a per-guest verdict; treat as failed
+				// so the guest doesn't look covered by a backup that never
+				// completed.
+				sec.status = "error"
+				sec.errMsg = "backup job ended before guest backup completed"
+			}
+			if sec.end.IsZero() {
+				sec.end = jobTask.EndTime
+			}
+		}
+
+		tasks = append(tasks, models.BackupTask{
+			ID:        fmt.Sprintf("%s-%s-vm%d", jobTask.Instance, upid, vmid),
+			Node:      jobTask.Node,
+			Instance:  jobTask.Instance,
+			Type:      jobTask.Type,
+			VMID:      vmid,
+			Status:    sec.status,
+			Error:     sec.errMsg,
+			StartTime: sec.start,
+			EndTime:   sec.end,
+		})
+	}
+
+	return tasks
 }
 
 func (m *Monitor) pollPVEBackupsAsync(

@@ -521,3 +521,33 @@ func TestClusterClient_GetContainerConfig(t *testing.T) {
 		t.Errorf("expected hostname ct1, got %v", config["hostname"])
 	}
 }
+
+func TestClusterClient_GetTaskLog(t *testing.T) {
+	const upid = "UPID:node1:000E9F2C:0AC734B2:68A1B2C3:vzdump::root@pam:"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api2/json/nodes" {
+			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
+			return
+		}
+		if r.URL.Path != "/api2/json/nodes/node1/tasks/"+upid+"/log" {
+			t.Errorf("unexpected path %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 101 (qemu)"},{"n":2,"t":"INFO: Finished Backup of VM 101 (00:01:30)"}]}`)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{Host: server.URL, TokenName: "u@p!t", TokenValue: "v"}
+	cc := NewClusterClient("test", cfg, []string{server.URL}, nil)
+
+	lines, err := cc.GetTaskLog(context.Background(), "node1", upid)
+	if err != nil {
+		t.Fatalf("GetTaskLog failed: %v", err)
+	}
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 log lines, got %d", len(lines))
+	}
+	if lines[0].Text != "INFO: Starting Backup of VM 101 (qemu)" || lines[0].LineNumber != 1 {
+		t.Errorf("unexpected first line: %+v", lines[0])
+	}
+}

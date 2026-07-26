@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestResolveBackupIntentContextRequiresFreshActiveMatchingEvidence(t *testing.T) {
@@ -66,5 +67,43 @@ func TestResolveBackupIntentContextRequiresFreshActiveMatchingEvidence(t *testin
 				t.Fatalf("unexpected backup intent context: %+v", got)
 			}
 		})
+	}
+}
+
+// A guest covered by a running multi-guest vzdump job has no task of its own;
+// pollBackupTasks synthesizes one from the job log. That synthetic task must
+// count as backup-intent evidence so the guest's alerts are suppressed while
+// the job is backing it up, and must stop counting once its section finishes.
+func TestResolveBackupIntentContextAcceptsSynthesizedJobGuestTask(t *testing.T) {
+	now := time.Date(2026, 7, 25, 2, 5, 0, 0, time.UTC)
+	jobTask := models.BackupTask{
+		ID:        "pve-a-UPID:node-a:000E9F2C:0AC734B2:68A1B2C3:vzdump::root@pam:",
+		Node:      "node-a",
+		Instance:  "pve-a",
+		Type:      "vzdump",
+		StartTime: now.Add(-4 * time.Minute),
+		// no EndTime: the job is still running
+	}
+
+	synthesized := parseVzdumpJobLog(jobTask, "UPID:node-a:000E9F2C:0AC734B2:68A1B2C3:vzdump::root@pam:", []proxmox.TaskLogLine{
+		{LineNumber: 1, Text: "INFO: Starting Backup of VM 101 (qemu)"},
+		{LineNumber: 2, Text: "INFO: Finished Backup of VM 101 (00:01:30)"},
+		{LineNumber: 3, Text: "INFO: Starting Backup of VM 102 (lxc)"},
+	})
+	for i := range synthesized {
+		synthesized[i].ObservedAt = now.Add(-30 * time.Second)
+	}
+
+	state := models.NewState()
+	state.UpdateBackupTasksForInstance("pve-a", append([]models.BackupTask{jobTask}, synthesized...))
+	monitor := &Monitor{state: state}
+
+	context, found := monitor.resolveBackupIntentContext("", "pve-a", "node-a", 102, now)
+	if !found || !context.Active {
+		t.Fatalf("guest being backed up by running job did not resolve: found=%v context=%+v", found, context)
+	}
+
+	if got, ok := monitor.resolveBackupIntentContext("", "pve-a", "node-a", 101, now); ok {
+		t.Fatalf("guest whose job section already finished should not carry intent: %+v", got)
 	}
 }

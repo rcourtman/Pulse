@@ -398,6 +398,9 @@ func (noopPVEClient) GetStorage(ctx context.Context, node string) ([]proxmox.Sto
 }
 func (noopPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) { return nil, nil }
 func (noopPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)   { return nil, nil }
+func (noopPVEClient) GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error) {
+	return nil, nil
+}
 func (noopPVEClient) GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error) {
 	return nil, nil
 }

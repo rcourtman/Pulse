@@ -1274,7 +1274,13 @@ func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) 
 	return result.Data, nil
 }
 
-// GetBackupTasks gets all backup tasks across all nodes
+// backupTaskListLimit caps how many vzdump tasks are listed per node. The PVE
+// default of 50 covers all task types, so vzdump entries get crowded out on
+// busy nodes; filtering server-side keeps the window useful.
+const backupTaskListLimit = 200
+
+// GetBackupTasks gets all backup tasks across all nodes, including currently
+// running ones (source=all) so in-progress backup jobs are visible.
 func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	// First get all nodes
 	nodes, err := c.GetNodes(ctx)
@@ -1288,14 +1294,23 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 			continue
 		}
 
-		tasks, err := c.GetNodeTasks(ctx, node.Node)
+		resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks?typefilter=vzdump&source=all&limit=%d", node.Node, backupTaskListLimit))
 		if err != nil {
 			// Log error but continue with other nodes
 			continue
 		}
 
+		var result struct {
+			Data []Task `json:"data"`
+		}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if decodeErr != nil {
+			continue
+		}
+
 		// Filter for backup tasks
-		for _, task := range tasks {
+		for _, task := range result.Data {
 			if task.Type == "vzdump" {
 				allTasks = append(allTasks, task)
 			}
@@ -1303,6 +1318,44 @@ func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	}
 
 	return allTasks, nil
+}
+
+// TaskLogLine is a single line of a task's log output.
+type TaskLogLine struct {
+	LineNumber int64  `json:"n"`
+	Text       string `json:"t"`
+}
+
+// taskLogLineLimit caps how many log lines are fetched per task. The PVE
+// default is 50 lines, far too few for multi-guest vzdump job logs; 20k lines
+// covers jobs with hundreds of guests while bounding response size.
+const taskLogLineLimit = 20000
+
+// GetTaskLog fetches the log output of a task.
+func (c *Client) GetTaskLog(ctx context.Context, node, upid string) ([]TaskLogLine, error) {
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks/%s/log?start=0&limit=%d", node, url.PathEscape(upid), taskLogLineLimit))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("failed to get task log (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Data []TaskLogLine `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
 }
 
 // GetContainerInterfaces returns the network interfaces (with IPs) for a container.

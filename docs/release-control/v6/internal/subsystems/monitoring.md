@@ -750,6 +750,29 @@ must never prevent the remaining configured hosts from being suppressed.
     `TestGracePeriodGuestContributesNoMemorySample` in
     `internal/monitoring/memory_trust_characterization_test.go`.
 
+13. Multi-guest vzdump job runs must surface per-guest task status. A
+    scheduled backup job executes under one UPID whose VMID slot is empty,
+    so the task listing alone cannot say which guests it covered and the
+    guest-centric coverage surfaces would show status only for guests
+    backed up individually. `pollBackupTasks` therefore expands each
+    job-run task by fetching its task log (`GetTaskLog` on the PVE client,
+    with cluster failover) and parsing the per-guest markers into
+    synthetic `BackupTask` entries whose IDs embed the parent UPID. The
+    task listing queries `source=all` so running jobs are visible: a guest
+    an in-progress job is currently backing up carries a `running`
+    synthetic task, which is valid backup-intent evidence for
+    `resolveBackupIntentContext`. Finished job logs are immutable and are
+    fetched at most once per instance|UPID, with a per-cycle fetch cap so
+    a historical backlog cannot stall the shared backup poll budget.
+    Regression coverage: `TestParseVzdumpJobLogFinishedJob`,
+    `TestPollBackupTasksSynthesizesJobGuestTasks`, and
+    `TestPollBackupTasksRunningJobRefetchesAndSuppressesAlerts` in
+    `internal/monitoring/monitor_backup_job_tasks_test.go`,
+    `TestResolveBackupIntentContextAcceptsSynthesizedJobGuestTask` in
+    `internal/monitoring/monitor_alert_intent_test.go`, and
+    `TestClusterClient_GetTaskLog` in
+    `pkg/proxmox/cluster_client_api_test.go`.
+
 
 ## Current State
 

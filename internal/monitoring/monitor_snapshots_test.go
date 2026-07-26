@@ -38,6 +38,10 @@ func (f fakeSnapshotClient) GetStorage(ctx context.Context, node string) ([]prox
 func (f fakeSnapshotClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) {
 	return nil, nil
 }
+func (f fakeSnapshotClient) GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error) {
+	return nil, nil
+}
+
 func (f fakeSnapshotClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
 	return nil, nil
 }

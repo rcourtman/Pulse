@@ -62,6 +62,10 @@ func (s *stubPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, e
 	return s.allStorage, nil
 }
 
+func (s *stubPVEClient) GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error) {
+	return nil, nil
+}
+
 func (s *stubPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
 	return nil, nil
 }

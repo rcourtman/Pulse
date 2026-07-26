@@ -59,6 +59,10 @@ func (f *fakeStorageClient) GetAllStorage(ctx context.Context) ([]proxmox.Storag
 	return f.allStorage, nil
 }
 
+func (f *fakeStorageClient) GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error) {
+	return nil, nil
+}
+
 func (f *fakeStorageClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
 	return nil, nil
 }

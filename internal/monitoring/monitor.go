@@ -77,6 +77,7 @@ type PVEClientInterface interface {
 	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
 	GetAllStorage(ctx context.Context) ([]proxmox.Storage, error)
 	GetBackupTasks(ctx context.Context) ([]proxmox.Task, error)
+	GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error)
 	GetReplicationStatus(ctx context.Context) ([]proxmox.ReplicationJob, error)
 	GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error)
 	GetVMSnapshots(ctx context.Context, node string, vmid int) ([]proxmox.Snapshot, error)
@@ -1099,6 +1100,7 @@ type Monitor struct {
 	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
+	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
 	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
 	pveBackupTemplateSubjects  map[string]map[string]struct{}             // Track template VMIDs excluded from runtime workloads but valid for backups
@@ -1740,6 +1742,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastClusterCheck:           make(map[string]time.Time),
 		lastPhysicalDiskPoll:       make(map[string]time.Time),
 		lastPVEBackupPoll:          make(map[string]time.Time),
+		vzdumpJobTaskCache:         make(map[string]vzdumpJobTaskCacheEntry),
 		lastPBSBackupPoll:          make(map[string]time.Time),
 		pveBackupInventoryReady:    make(map[string]map[string]bool),
 		pveBackupTemplateSubjects:  make(map[string]map[string]struct{}),

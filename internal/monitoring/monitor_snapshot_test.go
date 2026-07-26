@@ -62,6 +62,10 @@ type backupStorageTimeoutSnapshotClient struct {
 	storageCalls  int
 }
 
+func (m *backupStorageTimeoutSnapshotClient) GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error) {
+	return nil, nil
+}
+
 func (m *backupStorageTimeoutSnapshotClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
 	return nil, nil
 }

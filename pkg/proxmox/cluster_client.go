@@ -1202,6 +1202,19 @@ func (cc *ClusterClient) GetBackupTasks(ctx context.Context) ([]Task, error) {
 	return result, err
 }
 
+func (cc *ClusterClient) GetTaskLog(ctx context.Context, node, upid string) ([]TaskLogLine, error) {
+	var result []TaskLogLine
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		lines, err := client.GetTaskLog(ctx, node, upid)
+		if err != nil {
+			return err
+		}
+		result = lines
+		return nil
+	})
+	return result, err
+}
+
 func (cc *ClusterClient) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, error) {
 	var result []ReplicationJob
 	err := cc.executeWithFailover(ctx, func(client *Client) error {

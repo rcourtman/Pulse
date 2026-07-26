@@ -739,6 +739,10 @@ func (m *mockPVEClientExtended) GetNodePendingUpdates(ctx context.Context, node 
 	return nil, nil
 }
 
+func (m *mockPVEClientExtended) GetTaskLog(ctx context.Context, node, upid string) ([]proxmox.TaskLogLine, error) {
+	return nil, nil
+}
+
 func (m *mockPVEClientExtended) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {
 	return []proxmox.Task{
 		{UPID: "UPID:node1:00001D1A:00000000:65E1E1E1:vzdump:101:root@pam:", Node: "node1", Status: "OK", StartTime: time.Now().Unix(), ID: "101"},
