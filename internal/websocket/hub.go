@@ -258,21 +258,27 @@ type Client struct {
 	lastPing      time.Time
 	closed        atomic.Bool // Set when the client is unregistered; prevents sends to closed channel
 	writeFailures int32       // Consecutive write failures; disconnects after maxWriteFailures
+	lifecycleMu   sync.Mutex
 	lifecycleDone chan struct{}
 	lifecycleOnce sync.Once
 }
 
-func (c *Client) initializeLifecycle() {
+func (c *Client) lifecycleSignal() chan struct{} {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
 	if c.lifecycleDone == nil {
 		c.lifecycleDone = make(chan struct{})
 	}
+	return c.lifecycleDone
+}
+
+func (c *Client) initializeLifecycle() {
+	c.lifecycleSignal()
 }
 
 func (c *Client) closeLifecycle() {
 	c.lifecycleOnce.Do(func() {
-		if c.lifecycleDone != nil {
-			close(c.lifecycleDone)
-		}
+		close(c.lifecycleSignal())
 	})
 }
 
@@ -684,6 +690,7 @@ func (h *Hub) isStopping() bool {
 func (h *Hub) waitForActiveClient(client *Client, delay time.Duration) bool {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
+	lifecycleDone := client.lifecycleSignal()
 
 	select {
 	case <-timer.C:
@@ -691,7 +698,7 @@ func (h *Hub) waitForActiveClient(client *Client, delay time.Duration) bool {
 		_, registered := h.clients[client]
 		h.mu.RUnlock()
 		return registered && !client.closed.Load() && !h.isStopping()
-	case <-client.lifecycleDone:
+	case <-lifecycleDone:
 		return false
 	case <-h.stopChan:
 		return false
@@ -794,6 +801,7 @@ func (h *Hub) acquireStateBuildSlot(client *Client) bool {
 		}
 	}
 
+	lifecycleDone := client.lifecycleSignal()
 	select {
 	case h.stateBuildSlot <- struct{}{}:
 		h.mu.RLock()
@@ -804,7 +812,7 @@ func (h *Hub) acquireStateBuildSlot(client *Client) bool {
 		}
 		h.releaseStateBuildSlot()
 		return false
-	case <-client.lifecycleDone:
+	case <-lifecycleDone:
 		return false
 	case <-h.stopChan:
 		return false
