@@ -355,11 +355,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     drawer.resourceTimelineCount() > 0 ||
     Boolean(drawer.facetBundleError());
   const shouldRenderOperationalGovernanceSections = () => !compactTableRow();
-  const shouldRenderOperatorStateSection = () =>
-    !compactTableRow() ||
-    resource.capabilities?.some(
-      (capability) => capability.autoAuthorization && capability.autoAuthorization !== 'never',
-    );
   const shouldRenderActionHistorySection = () =>
     drawer.actionAuditAvailable() &&
     (!compactTableRow() ||
@@ -697,8 +692,13 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             never auto-remediate) sits next to the action history so
             the "what overrides has the operator set" and "what actions
             has Pulse taken" stories read together. The section is
-            self-fetching keyed on the canonical resource id. */}
-        <Show when={shouldRenderOperatorStateSection() && resource.id}>
+            self-fetching keyed on the canonical resource id. Rendered
+            for every resource with an id — the operator overrides
+            (intentionally offline, never auto-remediate, note, priority)
+            don't depend on capabilities; only the automatic-actions
+            block does, and it gates itself inside the section
+            (issue #1622). */}
+        <Show when={resource.id}>
           <ResourceOperatorStateSection
             resourceId={resource.id}
             capabilities={resource.capabilities}

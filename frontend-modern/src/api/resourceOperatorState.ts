@@ -17,7 +17,12 @@ export interface AutoRemediationWindow {
 
 export interface AutoRemediationPolicy {
   enabled: boolean;
-  capabilityNames: string[];
+  /**
+   * Nullable on the wire: rows persisted before the store normalized the
+   * policy on read carry `"capabilityNames": null` (issue #1621). Treat
+   * null the same as [].
+   */
+  capabilityNames: string[] | null;
   window?: AutoRemediationWindow;
 }
 

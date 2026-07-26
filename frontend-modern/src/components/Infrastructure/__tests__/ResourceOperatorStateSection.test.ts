@@ -197,12 +197,16 @@ describe('ResourceDetailDrawerOverviewTab integration', () => {
     expect(operatorIndex).toBeLessThan(historyIndex);
   });
 
-  it('keeps eligible automatic actions reachable from compact platform rows', () => {
-    expect(overviewTabSource).toContain('shouldRenderOperatorStateSection');
-    expect(overviewTabSource).toContain('capability.autoAuthorization');
-    expect(overviewTabSource).toContain("capability.autoAuthorization !== 'never'");
-    expect(overviewTabSource).toContain(
-      '<Show when={shouldRenderOperatorStateSection() && resource.id}>',
-    );
+  it('renders operator overrides for every resource regardless of capability eligibility', () => {
+    // Issue #1622: the section used to be gated on the resource exposing
+    // an auto-authorizable capability, which hid intentionally-offline /
+    // never-auto-remediate exactly when they matter most (a stopped
+    // container only exposes `start`, which is never auto-authorized).
+    // The overrides don't depend on capabilities — only the
+    // automatic-actions block does, and it self-gates inside the section
+    // via eligibleAutoCapabilities.
+    expect(overviewTabSource).toContain('<Show when={resource.id}>');
+    expect(overviewTabSource).not.toContain('shouldRenderOperatorStateSection');
+    expect(sectionSource).toContain('<Show when={eligibleAutoCapabilities().length > 0}>');
   });
 });

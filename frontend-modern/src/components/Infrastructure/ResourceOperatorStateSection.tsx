@@ -139,7 +139,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       capabilityNames: [],
     };
     const selected = [...autoCapabilities()].sort();
-    const persistedSelected = [...persistedAuto.capabilityNames].sort();
+    // capabilityNames can arrive as null from rows persisted before the
+    // policy column was always written (issue #1621) — never assume [].
+    const persistedSelected = [...(persistedAuto.capabilityNames ?? [])].sort();
     const windowChanged = autoWindowEnabled()
       ? !persistedAuto.window ||
         persistedAuto.window.timezone !== autoWindowTimezone() ||
@@ -536,7 +538,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           = +1h) or with the persisted window when one exists. */}
       <Show when={!schedulerOpen()}>
         <div class="flex items-center justify-between gap-3 pt-2 border-t border-border-subtle">
-          <div class="flex-1">
+          <div class="min-w-0 flex-1">
             <label class="text-sm font-medium text-base-content">Maintenance window</label>
             <p class="text-[11px] text-muted mt-0.5 leading-tight">
               Suspend findings on this resource for a defined window. Useful for scheduled upgrades,
@@ -673,7 +675,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       <Show when={eligibleAutoCapabilities().length > 0}>
         <div class="space-y-3 border-t border-border-subtle pt-3" aria-label="Automatic actions">
           <div class="flex items-start justify-between gap-3">
-            <div class="flex-1">
+            <div class="min-w-0 flex-1">
               <label class="text-sm font-medium text-base-content">Automatic actions</label>
               <p class="mt-0.5 text-[11px] leading-tight text-muted">
                 Choose exactly which actions Patrol may run on this resource. Your Patrol mode, live
@@ -780,7 +782,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </Show>
 
       <div class="flex items-start justify-between gap-3">
-        <div class="flex-1">
+        <div class="min-w-0 flex-1">
           <label class="text-sm font-medium text-base-content">Intentionally offline</label>
           <p class="text-[11px] text-muted mt-0.5 leading-tight">
             Suppress findings on this resource. Use when a workload is deprecated, a dev environment
@@ -795,7 +797,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       </div>
 
       <div class="flex items-start justify-between gap-3 pt-2 border-t border-border-subtle">
-        <div class="flex-1">
+        <div class="min-w-0 flex-1">
           <label class="text-sm font-medium text-red-700 dark:text-red-400">
             Never auto-remediate
           </label>

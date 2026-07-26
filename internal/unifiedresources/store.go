@@ -2931,8 +2931,11 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 		if err := json.Unmarshal([]byte(autoPolicyJSON.String), &state.AutoRemediationPolicy); err != nil {
 			return ResourceOperatorState{}, fmt.Errorf("unmarshal auto remediation policy: %w", err)
 		}
-		state.AutoRemediationPolicy = NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
 	}
+	// Normalize even when the column was NULL (row saved with an empty
+	// policy) so CapabilityNames is never nil and the wire carries [],
+	// not null (issue #1621).
+	state.AutoRemediationPolicy = NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
 	if startAt.Valid {
 		t := startAt.Time
 		state.MaintenanceStartAt = &t

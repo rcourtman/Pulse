@@ -3688,7 +3688,10 @@ Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific
 `data-*` attributes, colspan, and content classes, but they must not recreate
-the surface-alt detail row shell locally.
+the surface-alt detail row shell locally. The content shell must clip
+horizontal paint below the large breakpoint without becoming a scroll
+container, then restore visible overflow for the static desktop layout, so
+long operator-state copy cannot escape the shared row border.
 Inline detail section content is registry-backed separately from the row shell.
 `DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
 detail row compaction, section-table rendering, value-tone classes, and the

@@ -366,7 +366,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Current state')).toBeInTheDocument();
     expect(screen.getByText('Identity')).toBeInTheDocument();
     expect(screen.queryByText('Change history')).not.toBeInTheDocument();
-    expect(screen.queryByText('Operator overrides')).not.toBeInTheDocument();
+    // Operator overrides render in every presentation (issue #1622) —
+    // intentionally-offline and never-auto-remediate must stay reachable
+    // even for resources with no auto-authorizable capabilities.
+    expect(screen.getByText('Operator overrides')).toBeInTheDocument();
     expect(screen.queryByText('Maintenance verification')).not.toBeInTheDocument();
     expect(screen.queryByText('Action history')).not.toBeInTheDocument();
     expect(screen.queryByText('Refreshing changes...')).not.toBeInTheDocument();

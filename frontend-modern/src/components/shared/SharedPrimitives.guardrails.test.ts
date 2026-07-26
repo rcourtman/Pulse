@@ -7408,6 +7408,8 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('InlineDetailTableRow');
     expect(inlineDetailTableRowSource).toContain('INLINE_DETAIL_TABLE_CELL_CLASS');
     expect(inlineDetailTableRowSource).toContain('INLINE_DETAIL_TABLE_CONTENT_CLASS');
+    expect(inlineDetailTableRowSource).toContain('overflow-x-clip');
+    expect(inlineDetailTableRowSource).toContain('lg:overflow-x-visible');
     expect(inlineDetailTableRowSource).toContain('event.stopPropagation()');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([

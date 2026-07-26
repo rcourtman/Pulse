@@ -1790,7 +1790,11 @@ capability is never eligible, low-risk eligible, or elevated eligible; it does
 not lower `MinimumApprovalLevel`. The first eligible vertical is Docker/Podman
 container `restart` at `low_risk`; unspecified capabilities normalize to never.
 `NormalizeResourceOperatorState` trims whitespace, de-duplicates capability
-names, and lower-cases the criticality value before persistence. The
+names, guarantees a non-nil empty capability list, and lower-cases the
+criticality value before persistence. SQLite reads must apply that
+normalization even when `auto_remediation_policy_json` is `NULL`, so an
+operator state containing only intentionally-offline or another independent
+override serializes `capabilityNames: []` rather than `null`. The
 `ResourceStore` interface now exposes
 `GetResourceOperatorState`, `SetResourceOperatorState`, and
 `ClearResourceOperatorState`; both the SQLite (table
@@ -1821,7 +1825,10 @@ overview tab, which routes through the canonical TS client at
 `frontend-modern/src/api/resourceOperatorState.ts` to
 `/api/resources/{id}/operator-state`. Alongside the existing operator-state
 controls, the drawer offers automatic actions only for backend-advertised
-eligible capabilities. Enabling it requires selecting exact capabilities and
+eligible capabilities. The operator-state section itself remains available for
+every canonical resource id, including stopped containers and resources with
+no auto-authorizable capability; only the automatic-actions subsection is
+capability-gated. Enabling it requires selecting exact capabilities and
 may add a recurring daily time/timezone window; copy must state that this is a
 resource allowlist and that the tenant Patrol mode remains the upper bound.
 The UI must never infer eligibility from capability names, severity, or the

@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -82,5 +84,43 @@ func TestAutoRemediationPolicySQLiteRoundTrip(t *testing.T) {
 	}
 	if !got.AutoRemediationPolicy.Enabled || len(got.AutoRemediationPolicy.CapabilityNames) != 1 || got.AutoRemediationPolicy.Window == nil || got.AutoRemediationPolicy.Window.Timezone != "Europe/London" {
 		t.Fatalf("round-trip policy = %#v", got.AutoRemediationPolicy)
+	}
+}
+
+func TestSQLiteOperatorStateNullPolicyColumnNormalizesOnRead(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), defaultOrgID)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	saved := ResourceOperatorState{
+		CanonicalID:          "docker:host-1/ct-nginx",
+		IntentionallyOffline: true,
+		SetAt:                time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC),
+		SetBy:                "operator:richard",
+	}
+	if err := store.SetResourceOperatorState(saved); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	got, found, err := store.GetResourceOperatorState(saved.CanonicalID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !found {
+		t.Fatal("expected entry after set")
+	}
+	if got.AutoRemediationPolicy.CapabilityNames == nil {
+		t.Fatal("CapabilityNames must be normalized when the policy column is NULL")
+	}
+
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(encoded), `"capabilityNames":null`) ||
+		!strings.Contains(string(encoded), `"capabilityNames":[]`) {
+		t.Fatalf("wire payload must contain an empty capabilityNames list, got: %s", encoded)
 	}
 }

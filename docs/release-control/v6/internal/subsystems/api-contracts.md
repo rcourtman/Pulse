@@ -4458,6 +4458,12 @@ normalizes the server's `404 operator_state_not_set` response into
 than a thrown error; non-404 errors propagate. The PUT path
 percent-encodes the canonical resource id segment so colon-bearing
 ids round-trip safely through URL routing.
+Operator-state reads must keep `autoRemediationPolicy.capabilityNames`
+iterable. SQLite rows whose policy column is `NULL` normalize to an empty
+capability list before JSON serialization, while the TS compatibility type and
+rendering path continue to tolerate `null` from pre-fix or cached payloads.
+Saving only `intentionallyOffline`, `neverAutoRemediate`, priority, or note
+must therefore never produce a drawer-breaking operator-state response.
 
 The router wires the operator-state adapter into the findings runtime
 at startup: `internal/api/router.go` calls
