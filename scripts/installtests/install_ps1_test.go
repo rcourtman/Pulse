@@ -113,6 +113,9 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 		`$selfTestStateDir = Join-Path $env:RUNNER_TEMP 'pulse-agent-self-test'`,
 		`$selfTestLogFile = Join-Path $selfTestStateDir 'pulse-agent.log'`,
 		`--self-test --state-dir $selfTestStateDir --log-file $selfTestLogFile`,
+		`Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue`,
+		`$lifecycleStateDir = Join-Path $env:ProgramData 'Pulse'`,
+		`Remove-Item -Path $lifecycleStateDir -Recurse -Force`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {

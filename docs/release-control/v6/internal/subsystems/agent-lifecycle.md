@@ -4959,7 +4959,10 @@ native installed-lifecycle, appliance-lab, and platform code-signing evidence
 separately. The native Windows binary self-test must use runner-temporary state
 and logging paths so it cannot create the machine-global `ProgramData\Pulse`
 directory before the same job exercises the clean install, update, service
-recovery, and uninstall lifecycle.
+recovery, and uninstall lifecycle. The dedicated ephemeral Windows job must
+also clear test-only `ProgramData\Pulse` state immediately before that proof;
+the lifecycle harness still refuses to proceed when the PulseAgent service is
+already installed.
 
 Normal release promotion requires platform-native identity for desktop agent
 binaries. macOS agents must be Developer ID signed, submitted successfully to

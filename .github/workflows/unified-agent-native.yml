@@ -131,6 +131,14 @@ jobs:
         shell: pwsh
         timeout-minutes: 10
         run: |
+          if (Get-Service -Name 'PulseAgent' -ErrorAction SilentlyContinue) {
+            throw 'PulseAgent is already installed; refusing to clear lifecycle state.'
+          }
+          $lifecycleStateDir = Join-Path $env:ProgramData 'Pulse'
+          if (Test-Path $lifecycleStateDir) {
+            Write-Host "Removing test-only Pulse state before clean lifecycle proof: $lifecycleStateDir"
+            Remove-Item -Path $lifecycleStateDir -Recurse -Force
+          }
           go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.1" -o pulse-agent-windows-ci-1.exe ./cmd/pulse-agent
           go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.2" -o pulse-agent-windows-ci-2.exe ./cmd/pulse-agent
           go build -buildvcs=false -trimpath -o windows-lifecycle-server.exe ./scripts/installtests/windowslifecycleserver
