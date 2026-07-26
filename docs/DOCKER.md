@@ -220,6 +220,25 @@ You can also toggle "Hide Docker Update Buttons" from the UI in **Settings → S
 
 ---
 
+## ▶️ Container Lifecycle Actions
+
+Pulse can start, stop, and restart Docker / Podman containers directly from the UI. Running containers offer **stop** and **restart**; stopped containers offer **start**.
+
+### Requirements
+
+- **Pulse Agent** installed on the container host (see [Unified Agent](UNIFIED_AGENT.md)) and currently connected
+- **Command execution enabled** on the agent — it is disabled by default. Either:
+  - start the agent with `--enable-commands` (or `PULSE_ENABLE_COMMANDS=true`), or
+  - tick **Enable Pulse command execution** in **Settings → Infrastructure** before copying the install command, which adds the flag and grants the token the command execution permission
+- **Admin approval**: every lifecycle action requires confirmation by an admin in the UI before it runs. The agent then verifies the container's state before the change and confirms it actually reached the requested state afterwards.
+
+### Limitations
+
+- If the Docker daemon has **authorization plugins** configured, Pulse blocks all daemon-mutating commands on that host (see advisory GO-2026-4887) and the lifecycle buttons are not offered. Podman hosts are not affected.
+- Actions are unavailable while the host's Docker inventory is stale or the agent is disconnected.
+
+---
+
 ## 🛠️ Troubleshooting
 
 - **Forgot Password?**
