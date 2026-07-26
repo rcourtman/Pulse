@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -348,7 +347,7 @@ type prefixedPollProviderSpec[C comparable] struct {
 	prefix          string
 	configInstances func(*Monitor) []pollProviderInstanceConfig
 	clients         func(*Monitor) map[string]C
-	pollingInterval func(*config.Config) time.Duration
+	pollingInterval func(*Monitor) time.Duration
 	buildPollTask   func(*Monitor, string) (PollTask, error)
 }
 
@@ -375,7 +374,7 @@ func newPrefixedPollProvider[C comparable](spec prefixedPollProviderSpec[C]) Pol
 			if m == nil || m.config == nil {
 				return 0
 			}
-			return clampInterval(spec.pollingInterval(m.config), 10*time.Second, time.Hour)
+			return clampInterval(spec.pollingInterval(m), 10*time.Second, time.Hour)
 		},
 		buildPollTask: spec.buildPollTask,
 	}
@@ -387,7 +386,7 @@ func newPBSPollProvider() PollProvider {
 		prefix:          "pbs-",
 		configInstances: pbsInstanceConfigs,
 		clients:         pbsClientMap,
-		pollingInterval: func(cfg *config.Config) time.Duration { return cfg.PBSPollingInterval },
+		pollingInterval: func(m *Monitor) time.Duration { return m.config.PBSPollingInterval },
 		buildPollTask: func(m *Monitor, instanceName string) (PollTask, error) {
 			if m == nil {
 				return PollTask{}, fmt.Errorf("monitor is nil")
@@ -411,7 +410,7 @@ func newPMGPollProvider() PollProvider {
 		prefix:          "pmg-",
 		configInstances: pmgInstanceConfigs,
 		clients:         pmgClientMap,
-		pollingInterval: func(cfg *config.Config) time.Duration { return cfg.PMGPollingInterval },
+		pollingInterval: func(m *Monitor) time.Duration { return m.pmgPollingIntervalSetting() },
 		buildPollTask: func(m *Monitor, instanceName string) (PollTask, error) {
 			if m == nil {
 				return PollTask{}, fmt.Errorf("monitor is nil")
