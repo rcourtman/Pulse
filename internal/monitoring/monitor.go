@@ -1109,6 +1109,7 @@ type Monitor struct {
 	runtimePollingMu              sync.RWMutex                               // Guards the polling-cadence overrides below; polling goroutines read them every cycle
 	backupPollingEnabledOverride  *bool                                      // Runtime override for config.EnableBackupPolling (nil = use config)
 	backupPollingIntervalOverride *time.Duration                             // Runtime override for config.BackupPollingInterval (nil = use config)
+	pbsPollingIntervalOverride    *time.Duration                             // Runtime override for config.PBSPollingInterval (nil = use config)
 	pmgPollingIntervalOverride    *time.Duration                             // Runtime override for config.PMGPollingInterval (nil = use config)
 	runtimeCtx                    context.Context                            // Context used while monitor is running
 	wsHub                         *websocket.Hub                             // Hub used for broadcasting state
@@ -1956,7 +1957,7 @@ func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Du
 	case InstanceTypePVE:
 		return m.effectivePVEPollingInterval()
 	case InstanceTypePBS:
-		return clampInterval(m.config.PBSPollingInterval, 10*time.Second, time.Hour)
+		return clampInterval(m.pbsPollingIntervalSetting(), 10*time.Second, time.Hour)
 	case InstanceTypePMG:
 		return clampInterval(m.pmgPollingIntervalSetting(), 10*time.Second, time.Hour)
 	default:

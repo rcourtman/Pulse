@@ -24,6 +24,7 @@ import (
 type mockMonitor struct {
 	backupPollingEnabledCalls  []bool
 	backupPollingIntervalCalls []time.Duration
+	pbsPollingIntervalCalls    []time.Duration
 	pmgPollingIntervalCalls    []time.Duration
 }
 
@@ -39,6 +40,9 @@ func (m *mockMonitor) SetBackupPollingEnabled(enabled bool) {
 }
 func (m *mockMonitor) SetBackupPollingInterval(interval time.Duration) {
 	m.backupPollingIntervalCalls = append(m.backupPollingIntervalCalls, interval)
+}
+func (m *mockMonitor) SetPBSPollingInterval(interval time.Duration) {
+	m.pbsPollingIntervalCalls = append(m.pbsPollingIntervalCalls, interval)
 }
 func (m *mockMonitor) SetPMGPollingInterval(interval time.Duration) {
 	m.pmgPollingIntervalCalls = append(m.pmgPollingIntervalCalls, interval)
@@ -275,10 +279,11 @@ func TestHandleUpdateSystemSettings_Basic(t *testing.T) {
 	}
 }
 
-// Regression test for #1619: backupPollingInterval, pmgPollingInterval and
-// backupPollingEnabled must be pushed into live monitors on save. Mutating
-// h.config alone never reaches a running monitor (each polls a detached
-// config copy), and these settings do not trigger a monitor reload.
+// Regression test for #1619: backupPollingInterval, pbsPollingInterval,
+// pmgPollingInterval and backupPollingEnabled must be pushed into live
+// monitors on save. Mutating h.config alone never reaches a running monitor
+// (each polls a detached config copy), and these settings do not trigger a
+// monitor reload.
 func TestHandleUpdateSystemSettings_PollingCadencePushedToLiveMonitors(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{
@@ -286,6 +291,7 @@ func TestHandleUpdateSystemSettings_PollingCadencePushedToLiveMonitors(t *testin
 		ConfigPath:            tempDir,
 		EnableBackupPolling:   true,
 		BackupPollingInterval: time.Hour,
+		PBSPollingInterval:    time.Minute,
 		PMGPollingInterval:    time.Minute,
 	}
 	persistence := config.NewConfigPersistence(tempDir)
@@ -303,6 +309,7 @@ func TestHandleUpdateSystemSettings_PollingCadencePushedToLiveMonitors(t *testin
 
 	updates := map[string]interface{}{
 		"backupPollingInterval": 600,
+		"pbsPollingInterval":    90,
 		"pmgPollingInterval":    120,
 		"backupPollingEnabled":  false,
 	}
@@ -321,6 +328,9 @@ func TestHandleUpdateSystemSettings_PollingCadencePushedToLiveMonitors(t *testin
 	if len(monitor.backupPollingIntervalCalls) != 1 || monitor.backupPollingIntervalCalls[0] != 600*time.Second {
 		t.Errorf("expected SetBackupPollingInterval(600s) on live monitor, got %v", monitor.backupPollingIntervalCalls)
 	}
+	if len(monitor.pbsPollingIntervalCalls) != 1 || monitor.pbsPollingIntervalCalls[0] != 90*time.Second {
+		t.Errorf("expected SetPBSPollingInterval(90s) on live monitor, got %v", monitor.pbsPollingIntervalCalls)
+	}
 	if len(monitor.pmgPollingIntervalCalls) != 1 || monitor.pmgPollingIntervalCalls[0] != 120*time.Second {
 		t.Errorf("expected SetPMGPollingInterval(120s) on live monitor, got %v", monitor.pmgPollingIntervalCalls)
 	}
@@ -334,6 +344,9 @@ func TestHandleUpdateSystemSettings_PollingCadencePushedToLiveMonitors(t *testin
 	// The base config still updates so future tenant monitors inherit the values.
 	if cfg.BackupPollingInterval != 600*time.Second {
 		t.Errorf("expected base config BackupPollingInterval 600s, got %v", cfg.BackupPollingInterval)
+	}
+	if cfg.PBSPollingInterval != 90*time.Second {
+		t.Errorf("expected base config PBSPollingInterval 90s, got %v", cfg.PBSPollingInterval)
 	}
 	if cfg.PMGPollingInterval != 120*time.Second {
 		t.Errorf("expected base config PMGPollingInterval 120s, got %v", cfg.PMGPollingInterval)
