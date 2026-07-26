@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -218,7 +219,8 @@ func TestBranchcov0724pmWriteSelfTestTokenFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat token file: %v", err)
 		}
-		if info.Mode().Perm() != 0o600 {
+		// Windows does not expose POSIX permission bits through os.FileMode.
+		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 			t.Fatalf("token file mode = %o, want 0600", info.Mode().Perm())
 		}
 	})

@@ -111,9 +111,7 @@ test.beforeEach(async ({ page }) => {
     `The authenticated shell was blank at ${page.url()}`,
   ).not.toBe("");
   await expect(
-    page
-      .getByRole("tab", { name: /Patrol/ })
-      .or(page.getByRole("button", { name: "Patrol", exact: true })),
+    page.getByRole("tab", { name: "Patrol", exact: true }),
   ).toBeVisible();
 });
 

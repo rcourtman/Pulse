@@ -78,7 +78,7 @@ async function stabilizeVisualState(page: Page): Promise<void> {
       [role="tab"] span[class*="rounded-full"] {
         display: none !important;
       }
-      .tabs [role="group"][aria-label="Infrastructure"] [role="tab"]:nth-child(n + 4) {
+      .tabs [role="group"][aria-label="Infrastructure"] {
         visibility: hidden !important;
       }
       .tabs [role="group"][aria-label="System"] {

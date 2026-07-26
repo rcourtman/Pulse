@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/netip"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -131,6 +132,9 @@ func TestBuildContainerRecreatePlanNetworkModesAndDesiredConfiguration(t *testin
 		{name: "host namespace", networkMode: "host"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if runtime.GOOS == "windows" && tc.networkMode == "host" {
+				t.Skip("Docker host network mode is unsupported on Windows")
+			}
 			inspect := base()
 			inspect.Config.ExposedPorts = network.PortSet{network.MustParsePort("8080/tcp"): {}}
 			inspect.HostConfig.PortBindings = network.PortMap{

@@ -262,7 +262,7 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
 
     const dialog = await openAddTrueNASDialog(page);
 
-    await dialog.getByRole("textbox", { name: "Name" }).fill("Tower NAS");
+    await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Tower NAS");
     await dialog.getByRole("textbox", { name: "Host" }).fill("tower.local");
     await dialog.getByRole("textbox", { name: "API key" }).fill("secret-api-key");
 
@@ -343,7 +343,7 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
 
     const dialog = await openAddTrueNASDialog(page);
 
-    await dialog.getByRole("textbox", { name: "Name" }).fill("Tower NAS");
+    await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Tower NAS");
     await dialog.getByRole("textbox", { name: "Host" }).fill("tower.local");
     await dialog.getByRole("textbox", { name: "API key" }).fill("secret-api-key");
 

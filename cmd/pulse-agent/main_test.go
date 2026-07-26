@@ -1004,14 +1004,15 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("state directory flag overrides platform default", func(t *testing.T) {
-		cfg, err := loadConfig([]string{"-token", "test-token", "-state-dir", "/custom/pulse-state"}, func(s string) string { return "" })
+		stateDir := filepath.FromSlash("/custom/pulse-state")
+		cfg, err := loadConfig([]string{"-token", "test-token", "-state-dir", stateDir}, func(s string) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cfg.StateDir != "/custom/pulse-state" {
+		if cfg.StateDir != stateDir {
 			t.Errorf("expected explicit state directory, got %q", cfg.StateDir)
 		}
-		if cfg.AgentIDFile != "/custom/pulse-state/agent-id" {
+		if cfg.AgentIDFile != filepath.Join(stateDir, "agent-id") {
 			t.Errorf("expected agent ID file under explicit state directory, got %q", cfg.AgentIDFile)
 		}
 	})
