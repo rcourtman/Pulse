@@ -3624,6 +3624,10 @@ context-quality, and latency dimensions plus per-autonomy-mode suitability;
 `patrol_model_readiness`. Advisor execution must remain cancellable, use the
 same settings-write permission boundary as other AI diagnostics, and avoid
 returning prompts, tool transcripts, credentials, or infrastructure data.
+Failed evaluations carry per-scenario probe and validator evidence in
+`details` (synthetic scenario names, validator messages, and provider stop
+reasons only — never fixture prompts or infrastructure content) so operators
+can diagnose a failure from the snapshot alone.
 
 Every mobile-facing contract change must update the canonical manifest,
 regenerate both repositories, keep the mobile consumer minimum compatible, and

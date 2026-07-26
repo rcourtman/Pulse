@@ -6255,6 +6255,18 @@ Ordinary Assistant success plus missing Patrol tools is a warning and
 admission remains fail closed. Local Ollama and custom OpenAI-compatible health,
 catalog and preflight operations honor the configured request timeout so cold
 model loads are not truncated by the hosted-provider 30-second check budget.
+Advisor probes must pin the runtime they are testing rather than inherit
+provider server defaults: a runtime context window sized to the haystack
+fixtures (forwarded as `num_ctx` on Ollama and clamped to the model's trained
+window), an explicitly forwarded temperature 0, a generation budget that
+absorbs thinking-model reasoning, and the same inter-chunk stream stall
+allowance as the Patrol loop the advisor certifies. Adapters must forward an
+explicitly pinned zero temperature and synthesise tool-call IDs when a
+compatible server omits them (llama.cpp) instead of failing tool protocol on
+transport shape. Probe and validator errors, including the provider stop
+reason, must be logged and surfaced in the readiness result's `details`
+evidence rather than discarded, and a transport-level probe failure keeps its
+specific diagnosis instead of the generic capability wording.
 That same browser-owned chat read model must keep target normalization helper-
 driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and

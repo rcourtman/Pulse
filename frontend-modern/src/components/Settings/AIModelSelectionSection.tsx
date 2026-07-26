@@ -288,6 +288,14 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
             <Show when={r().recommendation}>
               <p class="text-[11px] mt-1 opacity-90">{r().recommendation}</p>
             </Show>
+            <Show when={(r().details?.length ?? 0) > 0}>
+              <div class="mt-1">
+                <p class="text-[11px] font-medium">Evaluation detail</p>
+                <ul class="mt-0.5 list-disc pl-4 text-[10px] opacity-80">
+                  <For each={r().details}>{(item) => <li>{item}</li>}</For>
+                </ul>
+              </div>
+            </Show>
             <Show when={r().metadata?.context_window || r().metadata?.quantization_level}>
               <p class="text-[11px] mt-1 opacity-70">
                 <Show when={r().metadata?.context_window}>

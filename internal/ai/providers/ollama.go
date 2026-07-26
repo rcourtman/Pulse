@@ -168,8 +168,38 @@ type ollamaToolFunction struct {
 }
 
 type ollamaOptions struct {
-	NumPredict  int     `json:"num_predict,omitempty"`
-	Temperature float64 `json:"temperature,omitempty"`
+	// NumCtx is the runtime context window for this request. Without it
+	// Ollama serves the model at its server default (typically 4096 tokens)
+	// even when the model's trained window is far larger, silently dropping
+	// the oldest prompt tokens (#1624).
+	NumCtx     int `json:"num_ctx,omitempty"`
+	NumPredict int `json:"num_predict,omitempty"`
+	// Temperature is a pointer so an explicit 0 survives serialization;
+	// omitempty on a plain float64 would drop it and Ollama would fall back
+	// to its 0.8 default (#1624).
+	Temperature *float64 `json:"temperature,omitempty"`
+}
+
+// ollamaOptionsForRequest maps provider-neutral sampling and context controls
+// onto Ollama's options payload. Returns nil when the request pins nothing so
+// the server defaults apply unchanged.
+func ollamaOptionsForRequest(req ChatRequest) *ollamaOptions {
+	sendTemperature := req.TemperatureSet || req.Temperature > 0
+	if req.MaxTokens <= 0 && !sendTemperature && req.MinContextTokens <= 0 {
+		return nil
+	}
+	options := &ollamaOptions{}
+	if req.MaxTokens > 0 {
+		options.NumPredict = req.MaxTokens
+	}
+	if sendTemperature {
+		temperature := req.Temperature
+		options.Temperature = &temperature
+	}
+	if req.MinContextTokens > 0 {
+		options.NumCtx = req.MinContextTokens
+	}
+	return options
 }
 
 // ollamaResponse is the response from the Ollama API
@@ -277,15 +307,7 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		}
 	}
 
-	if req.MaxTokens > 0 || req.Temperature > 0 {
-		ollamaReq.Options = &ollamaOptions{}
-		if req.MaxTokens > 0 {
-			ollamaReq.Options.NumPredict = req.MaxTokens
-		}
-		if req.Temperature > 0 {
-			ollamaReq.Options.Temperature = req.Temperature
-		}
-	}
+	ollamaReq.Options = ollamaOptionsForRequest(req)
 
 	body, err := json.Marshal(ollamaReq)
 	if err != nil {
@@ -448,15 +470,7 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		}
 	}
 
-	if req.MaxTokens > 0 || req.Temperature > 0 {
-		ollamaReq.Options = &ollamaOptions{}
-		if req.MaxTokens > 0 {
-			ollamaReq.Options.NumPredict = req.MaxTokens
-		}
-		if req.Temperature > 0 {
-			ollamaReq.Options.Temperature = req.Temperature
-		}
-	}
+	ollamaReq.Options = ollamaOptionsForRequest(req)
 
 	body, err := json.Marshal(ollamaReq)
 	if err != nil {

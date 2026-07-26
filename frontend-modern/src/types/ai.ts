@@ -193,6 +193,9 @@ export interface PatrolModelReadinessSnapshot {
   cause?: string;
   summary: string;
   recommendation?: string;
+  // Per-scenario probe and validator evidence explaining a failed evaluation
+  // (e.g. "expected exactly one tool call, got 0").
+  details?: string[];
   metadata?: {
     fingerprint?: string;
     family?: string;

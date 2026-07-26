@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -41,6 +42,20 @@ const (
 	patrolReadinessReceiptTool        = "readiness_confirm_result"
 	patrolReadinessMinimumContext     = 8192
 	patrolReadinessWatchEnvelope      = 4 * time.Minute
+
+	// patrolReadinessProbeContextTokens is the runtime context requested for
+	// probe requests on providers with a runtime context control (Ollama
+	// num_ctx). The haystack fixtures are ~25KB (~7-9k tokens) before tool
+	// schemas and generation budget; without an explicit num_ctx Ollama runs
+	// at its server default (typically 4096) and silently truncates the
+	// prompt, capping context quality regardless of the model (#1624).
+	patrolReadinessProbeContextTokens = 16384
+
+	// patrolReadinessProbeMaxTokens caps probe generation. Thinking models
+	// (qwen3) spend reasoning tokens against this budget before emitting the
+	// tool call — Ollama counts <think> output toward num_predict — so the
+	// previous 256-token cap could cut the model off mid-reasoning (#1624).
+	patrolReadinessProbeMaxTokens = 2048
 )
 
 // PatrolModelReadinessDimension is one independently reported piece of
@@ -96,23 +111,27 @@ type PatrolModelReadinessResult struct {
 	// TransportHealthy records provider/model reachability independently from
 	// PatrolCapable. A model can serve ordinary Assistant chat while failing
 	// Patrol's stricter streaming tool protocol.
-	TransportHealthy bool                           `json:"transport_healthy"`
-	PatrolCapable    bool                           `json:"patrol_capable"`
-	Status           string                         `json:"status"`
-	Provider         string                         `json:"provider,omitempty"`
-	Model            string                         `json:"model,omitempty"`
-	DurationMs       int64                          `json:"duration_ms"`
-	MaxVerifiedMode  string                         `json:"max_verified_mode,omitempty"`
-	Cause            PatrolFailureCause             `json:"cause,omitempty"`
-	Summary          string                         `json:"summary"`
-	Recommendation   string                         `json:"recommendation,omitempty"`
-	Metadata         *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
-	Dimensions       PatrolModelReadinessDimensions `json:"dimensions"`
-	Modes            PatrolModelReadinessModes      `json:"modes"`
-	CacheKey         string                         `json:"-"`
-	inputTokens      int
-	outputTokens     int
-	providerCalls    int
+	TransportHealthy bool               `json:"transport_healthy"`
+	PatrolCapable    bool               `json:"patrol_capable"`
+	Status           string             `json:"status"`
+	Provider         string             `json:"provider,omitempty"`
+	Model            string             `json:"model,omitempty"`
+	DurationMs       int64              `json:"duration_ms"`
+	MaxVerifiedMode  string             `json:"max_verified_mode,omitempty"`
+	Cause            PatrolFailureCause `json:"cause,omitempty"`
+	Summary          string             `json:"summary"`
+	Recommendation   string             `json:"recommendation,omitempty"`
+	// Details carries per-scenario probe and validator evidence ("expected
+	// exactly one tool call, got 0", "nonce did not match"). Without it a
+	// failed evaluation is undiagnosable from the result alone (#1624, #1614).
+	Details       []string                       `json:"details,omitempty"`
+	Metadata      *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
+	Dimensions    PatrolModelReadinessDimensions `json:"dimensions"`
+	Modes         PatrolModelReadinessModes      `json:"modes"`
+	CacheKey      string                         `json:"-"`
+	inputTokens   int
+	outputTokens  int
+	providerCalls int
 }
 
 type patrolModelReadinessCache struct {
@@ -153,6 +172,9 @@ func clonePatrolModelReadinessResult(result *PatrolModelReadinessResult) *Patrol
 		return nil
 	}
 	clone := *result
+	if result.Details != nil {
+		clone.Details = append([]string(nil), result.Details...)
+	}
 	if result.Metadata != nil {
 		metadata := *result.Metadata
 		metadata.Capabilities = append([]string(nil), result.Metadata.Capabilities...)
@@ -433,6 +455,7 @@ type patrolReadinessScenario struct {
 
 type patrolReadinessProbeOutcome struct {
 	toolCalls       []providers.ToolCall
+	stopReason      string
 	duration        time.Duration
 	firstResponse   time.Duration
 	inputTokens     int
@@ -507,6 +530,17 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	var continuationSource patrolReadinessProbeOutcome
 	var continuationScenario patrolReadinessScenario
 	var probeErr error
+	var details []string
+
+	// Probes must run with the runtime the fixtures need, not the provider's
+	// server defaults: an explicit context window sized to the haystack, the
+	// pinned zero temperature forwarded, and the same stream stall allowance
+	// as the real Patrol loop (#1624, #1614). The runtime context request is
+	// clamped to the model's trained window when the runtime reports one.
+	probeContextTokens := patrolReadinessProbeContextTokens
+	if result.Metadata != nil && result.Metadata.ContextWindow > 0 && result.Metadata.ContextWindow < probeContextTokens {
+		probeContextTokens = result.Metadata.ContextWindow
+	}
 
 	for _, scenario := range scenarios {
 		req := providers.ChatRequest{
@@ -514,10 +548,13 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 			System: "You are running a synthetic Pulse Patrol readiness evaluation. " +
 				"Use exactly one appropriate readiness tool. Never call readiness_apply_change. " +
 				"Do not answer in prose. Copy identifiers and the nonce exactly from the fixture.",
-			Messages:    []providers.Message{{Role: "user", Content: scenario.prompt}},
-			Tools:       tools,
-			MaxTokens:   256,
-			Temperature: 0,
+			Messages:          []providers.Message{{Role: "user", Content: scenario.prompt}},
+			Tools:             tools,
+			MaxTokens:         patrolReadinessProbeMaxTokens,
+			Temperature:       0,
+			TemperatureSet:    true,
+			MinContextTokens:  probeContextTokens,
+			StreamIdleTimeout: chat.PatrolProviderStreamIdleTimeout,
 		}
 		if providerName == config.AIProviderGemini {
 			req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}
@@ -528,15 +565,39 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		result.outputTokens += outcome.outputTokens
 		if err != nil {
 			probeErr = err
+			details = append(details, fmt.Sprintf("Scenario %q probe failed: %v", scenario.name, err))
+			log.Warn().Err(err).
+				Str("scenario", scenario.name).
+				Str("provider", providerName).
+				Str("model", model).
+				Msg("Patrol readiness streaming probe failed")
 			break
 		}
 		durations = append(durations, outcome.duration)
 		firstResponses = append(firstResponses, outcome.firstResponse)
-		if validatePatrolReadinessProtocol(outcome.toolCalls, scenario.nonce) == nil {
+		protocolErr := validatePatrolReadinessProtocol(outcome.toolCalls, scenario.nonce)
+		if protocolErr == nil {
 			toolPassed++
+		} else {
+			details = append(details, fmt.Sprintf("Scenario %q tool protocol: %v%s", scenario.name, protocolErr, patrolReadinessStopReasonNote(outcome.stopReason)))
+			log.Warn().Err(protocolErr).
+				Str("scenario", scenario.name).
+				Str("stop_reason", outcome.stopReason).
+				Str("provider", providerName).
+				Str("model", model).
+				Msg("Patrol readiness scenario failed tool-protocol validation")
 		}
-		if scenario.context && validatePatrolReadinessCall(outcome.toolCalls, scenario) == nil {
-			contextPassed++
+		if scenario.context {
+			if contextErr := validatePatrolReadinessCall(outcome.toolCalls, scenario); contextErr == nil {
+				contextPassed++
+			} else if protocolErr == nil {
+				details = append(details, fmt.Sprintf("Scenario %q context quality: %v", scenario.name, contextErr))
+				log.Warn().Err(contextErr).
+					Str("scenario", scenario.name).
+					Str("provider", providerName).
+					Str("model", model).
+					Msg("Patrol readiness scenario failed context validation")
+			}
 		}
 		if scenario.name == "storage-pressure" {
 			continuationSource = outcome
@@ -562,9 +623,12 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 				{Role: "assistant", ToolCalls: []providers.ToolCall{call}},
 				{Role: "user", ToolResult: &providers.ToolResult{ToolUseID: call.ID, Content: string(toolResult)}},
 			},
-			Tools:       []providers.Tool{patrolReadinessReceiptDefinition()},
-			MaxTokens:   128,
-			Temperature: 0,
+			Tools:             []providers.Tool{patrolReadinessReceiptDefinition()},
+			MaxTokens:         patrolReadinessProbeMaxTokens,
+			Temperature:       0,
+			TemperatureSet:    true,
+			MinContextTokens:  probeContextTokens,
+			StreamIdleTimeout: chat.PatrolProviderStreamIdleTimeout,
 		}
 		if providerName == config.AIProviderGemini {
 			followup.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}
@@ -575,10 +639,24 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		result.outputTokens += outcome.outputTokens
 		if err != nil {
 			probeErr = err
+			details = append(details, fmt.Sprintf("Multi-turn continuation probe failed: %v", err))
+			log.Warn().Err(err).
+				Str("provider", providerName).
+				Str("model", model).
+				Msg("Patrol readiness continuation probe failed")
 		} else {
 			durations = append(durations, outcome.duration)
 			firstResponses = append(firstResponses, outcome.firstResponse)
-			continuationObserved = validatePatrolReadinessReceipt(outcome.toolCalls, continuationScenario.nonce, findingID) == nil
+			receiptErr := validatePatrolReadinessReceipt(outcome.toolCalls, continuationScenario.nonce, findingID)
+			continuationObserved = receiptErr == nil
+			if receiptErr != nil {
+				details = append(details, fmt.Sprintf("Multi-turn continuation: %v%s", receiptErr, patrolReadinessStopReasonNote(outcome.stopReason)))
+				log.Warn().Err(receiptErr).
+					Str("stop_reason", outcome.stopReason).
+					Str("provider", providerName).
+					Str("model", model).
+					Msg("Patrol readiness continuation failed receipt validation")
+			}
 		}
 	}
 
@@ -593,11 +671,11 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 			toolSummary += " Initial tool use passed, but multi-turn continuation was not verified."
 		}
 	}
+	var probeFailure *patrolRuntimeFailure
 	if probeErr != nil {
 		failure := patrolRuntimeFailureFromError(probeErr)
-		result.Cause = failure.Cause
+		probeFailure = &failure
 		toolSummary = failure.Summary
-		result.Recommendation = failure.Recommendation
 	}
 	result.Dimensions.ToolProtocol = PatrolModelReadinessDimension{
 		Status:               toolStatus,
@@ -678,6 +756,13 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	result.Cause = PatrolFailureCauseModelToolSupportUnverified
 	result.Summary = "The provider is healthy for ordinary chat, but the selected model did not demonstrate Patrol's streaming tool protocol."
 	result.Recommendation = "Keep using this route for ordinary Assistant chat, or choose a Patrol model with reliable streaming tool use."
+	// A transport-level probe failure carries a specific diagnosis; do not
+	// let the generic capability wording overwrite it (#1614).
+	if probeFailure != nil {
+		result.Cause = probeFailure.Cause
+		result.Summary = probeFailure.Summary
+		result.Recommendation = probeFailure.Recommendation
+	}
 	if contextStatus == PatrolModelReadinessFail && toolStatus == PatrolModelReadinessPass {
 		result.Cause = PatrolFailureCauseContextQualityFailed
 		result.Summary = "The selected model did not pass Patrol's context-quality evaluation."
@@ -701,8 +786,24 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 			result.Summary = "Verified for Watch only and Ask first on this install."
 		}
 	}
+	result.Details = details
 	result.DurationMs = time.Since(started).Milliseconds()
 	return result
+}
+
+// patrolReadinessStopReasonNote annotates a validation failure with the
+// provider's stop reason when it explains the failure — a "length" stop means
+// the model exhausted the generation budget (commonly on <think> reasoning)
+// before completing the tool call (#1624).
+func patrolReadinessStopReasonNote(stopReason string) string {
+	switch stopReason {
+	case "", "tool_use", "end_turn", "stop":
+		return ""
+	case "length":
+		return " (the model hit the generation cap before finishing: done_reason=length)"
+	default:
+		return fmt.Sprintf(" (done_reason=%s)", stopReason)
+	}
 }
 
 func patrolReadinessScenarios() []patrolReadinessScenario {
@@ -826,11 +927,13 @@ func runPatrolReadinessStreamProbe(ctx context.Context, provider providers.Strea
 		case "done":
 			if data, ok := event.Data.(providers.DoneEvent); ok {
 				outcome.toolCalls = append([]providers.ToolCall(nil), data.ToolCalls...)
+				outcome.stopReason = data.StopReason
 				outcome.inputTokens = data.InputTokens
 				outcome.outputTokens = data.OutputTokens
 				outcome.completionEvent = true
 			} else if data, ok := event.Data.(*providers.DoneEvent); ok && data != nil {
 				outcome.toolCalls = append([]providers.ToolCall(nil), data.ToolCalls...)
+				outcome.stopReason = data.StopReason
 				outcome.inputTokens = data.InputTokens
 				outcome.outputTokens = data.OutputTokens
 				outcome.completionEvent = true

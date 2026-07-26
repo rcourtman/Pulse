@@ -91,16 +91,27 @@ func (e ReasoningEffort) Valid() bool {
 
 // ChatRequest represents a request to the AI provider
 type ChatRequest struct {
-	Messages          []Message       `json:"messages"`
-	Model             string          `json:"model"`
-	ExecutionID       string          `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
-	MaxTokens         int             `json:"max_tokens,omitempty"`
-	ReasoningEffort   ReasoningEffort `json:"reasoning_effort,omitempty"`
-	Temperature       float64         `json:"temperature,omitempty"`
-	System            string          `json:"system,omitempty"`      // System prompt (Anthropic style)
-	Tools             []Tool          `json:"tools,omitempty"`       // Available tools
-	ToolChoice        *ToolChoice     `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
-	StreamIdleTimeout time.Duration   `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
+	Messages        []Message       `json:"messages"`
+	Model           string          `json:"model"`
+	ExecutionID     string          `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
+	MaxTokens       int             `json:"max_tokens,omitempty"`
+	ReasoningEffort ReasoningEffort `json:"reasoning_effort,omitempty"`
+	Temperature     float64         `json:"temperature,omitempty"`
+	// TemperatureSet marks Temperature as an explicit request value. Adapters
+	// treat a zero Temperature without this flag as "unset" and let the
+	// provider default apply; probes that pin temperature 0 for deterministic
+	// output (#1624) need the zero forwarded rather than dropped.
+	TemperatureSet bool `json:"-"`
+	// MinContextTokens asks providers with a runtime context-size control
+	// (Ollama num_ctx) to serve the request with at least this many context
+	// tokens. Ollama otherwise loads models at its server default (typically
+	// 4096) regardless of the model's trained window and silently truncates
+	// large prompts (#1624). Providers without such a control ignore it.
+	MinContextTokens  int           `json:"-"`
+	System            string        `json:"system,omitempty"`      // System prompt (Anthropic style)
+	Tools             []Tool        `json:"tools,omitempty"`       // Available tools
+	ToolChoice        *ToolChoice   `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
+	StreamIdleTimeout time.Duration `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
 }
 
 func (r ChatRequest) NormalizeCollections() ChatRequest {

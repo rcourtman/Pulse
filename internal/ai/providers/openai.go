@@ -343,16 +343,16 @@ func convertOpenAIResponse(openaiResp openaiResponse) (*ChatResponse, error) {
 	}
 	if len(choice.Message.ToolCalls) > 0 {
 		result.StopReason = "tool_use"
-		for _, tc := range choice.Message.ToolCalls {
-			if strings.TrimSpace(tc.ID) == "" || strings.TrimSpace(tc.Function.Name) == "" {
-				return nil, fmt.Errorf("tool call is missing an id or function name")
+		for index, tc := range choice.Message.ToolCalls {
+			if strings.TrimSpace(tc.Function.Name) == "" {
+				return nil, fmt.Errorf("tool call is missing a function name")
 			}
 			input, ok := agentcapabilities.ParseProviderToolInput(tc.Function.Arguments)
 			if !ok {
 				return nil, fmt.Errorf("tool call %q returned invalid arguments", tc.Function.Name)
 			}
 			result.ToolCalls = append(result.ToolCalls, ToolCall{
-				ID:    tc.ID,
+				ID:    openaiToolCallID(tc.ID, tc.Function.Name, index),
 				Name:  tc.Function.Name,
 				Input: input,
 			})
@@ -903,13 +903,25 @@ func finalizeOpenAIStreamToolCalls(builders map[int]*openaiStreamToolCallBuilder
 
 		input := agentcapabilities.ProviderToolInputOrRaw(builder.args.String())
 		toolCalls = append(toolCalls, ToolCall{
-			ID:    builder.id,
+			ID:    openaiToolCallID(builder.id, builder.name, index),
 			Name:  builder.name,
 			Input: input,
 		})
 	}
 
 	return toolCalls
+}
+
+// openaiToolCallID returns the server-provided tool-call ID, synthesising one
+// when the server omits it. llama.cpp's /v1/chat/completions commonly returns
+// tool_calls without an id; downstream continuation and the Patrol readiness
+// validator require a non-empty ID, so mirror the Ollama adapter's synthesis
+// instead of failing tool protocol outright (#1614).
+func openaiToolCallID(id, name string, index int) string {
+	if trimmed := strings.TrimSpace(id); trimmed != "" {
+		return trimmed
+	}
+	return fmt.Sprintf("openai_%s_%d", name, index)
 }
 
 func normalizeOpenAIStreamStopReason(finishReason string, toolCalls []ToolCall) string {

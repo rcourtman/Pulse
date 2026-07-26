@@ -28,7 +28,13 @@ type parallelToolResult struct {
 	Err    error
 }
 
-const patrolProviderStreamIdleTimeout = 60 * time.Second
+// PatrolProviderStreamIdleTimeout bounds the gap between stream chunks on
+// Patrol provider turns. Exported so the Patrol model readiness advisor can
+// probe with the same stall allowance as the loop it advises about; a stricter
+// probe fails models the real Patrol loop would run fine (#1614).
+const PatrolProviderStreamIdleTimeout = 60 * time.Second
+
+const patrolProviderStreamIdleTimeout = PatrolProviderStreamIdleTimeout
 
 func isRetryableProviderStreamError(err error) bool {
 	if err == nil {

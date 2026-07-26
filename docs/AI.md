@@ -502,6 +502,16 @@ Patrol-shaped context fixtures, a multi-turn tool-result continuation, and
 projected loop latency. Provider calls respect the configured cost budget and
 their token counts are recorded under the `patrol_readiness` usage category.
 
+Probes run with the runtime the fixtures require rather than provider server
+defaults: an explicit runtime context window sized to the haystack fixtures
+(sent as `num_ctx` on Ollama and clamped to the model's trained window), a
+pinned temperature of 0, a generation budget that absorbs `<think>` reasoning
+from thinking models, and the same inter-chunk stream stall allowance as the
+real Patrol loop. When an evaluation fails, the result carries per-scenario
+evaluation detail (probe and validator errors, including the provider's stop
+reason such as `done_reason=length`) so the failure is diagnosable from the
+UI and the API snapshot.
+
 Results are reported separately for **Watch only** and **Ask first**. A short
 synthetic evaluation never certifies **Safe auto-fix** or **Autopilot**; those
 modes remain `not_assessed` until an extended governed canary is available.

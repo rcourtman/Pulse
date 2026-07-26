@@ -1222,6 +1222,61 @@ describe('AISettings provider save failure context', () => {
     );
   });
 
+  it('surfaces per-scenario evaluation detail for a failed readiness run (issues #1624/#1614)', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      model: 'ollama:qwen3:8b',
+      patrol_model: 'ollama:qwen3:8b',
+      ollama_configured: true,
+      configured_providers: ['ollama'],
+    });
+    runPatrolModelReadinessMock.mockResolvedValue({
+      probe_version: 'patrol-readiness/v1',
+      success: false,
+      transport_healthy: true,
+      patrol_capable: false,
+      status: 'warning',
+      provider: 'ollama',
+      model: 'qwen3:8b',
+      duration_ms: 20_500,
+      summary:
+        'The provider is healthy for ordinary chat, but the selected model did not demonstrate Patrol’s streaming tool protocol.',
+      details: [
+        'Scenario "typed-tool" tool protocol: expected exactly one tool call, got 0 (the model hit the generation cap before finishing: done_reason=length)',
+        'Scenario "backup-failure" tool protocol: nonce did not match',
+      ],
+      dimensions: {
+        connectivity: { status: 'pass', summary: 'Connected.' },
+        tool_protocol: { status: 'fail', summary: 'Failed.', attempts: 3, passed: 0 },
+        context_quality: { status: 'fail', summary: 'Failed.', attempts: 2, passed: 0 },
+        latency: { status: 'pass', summary: 'Passed.', warm_p50_ms: 1_000 },
+      },
+      modes: {
+        monitor: { status: 'not_suitable', summary: 'Protocol failed.' },
+        approval: { status: 'not_suitable', summary: 'Protocol failed.' },
+        assisted: { status: 'not_assessed', summary: 'Extended canary required.' },
+        full: { status: 'not_assessed', summary: 'Governed canary required.' },
+      },
+      recorded_at: '2026-07-13T08:00:00Z',
+      recorded_at_unix: 1783929600,
+    });
+
+    renderComponent('patrol');
+    fireEvent.click(await screen.findByRole('button', { name: 'Check Patrol model' }));
+
+    expect(
+      await screen.findByText('Provider connected; Patrol capability not verified'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Evaluation detail')).toBeInTheDocument();
+    expect(
+      screen.getByText(/expected exactly one tool call, got 0/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/done_reason=length/)).toBeInTheDocument();
+    expect(screen.getByText(/nonce did not match/)).toBeInTheDocument();
+  });
+
   it('cancels an in-flight local model readiness evaluation', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
