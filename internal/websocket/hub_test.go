@@ -35,6 +35,47 @@ func TestClientSafeSendAndCloseAreSynchronized(t *testing.T) {
 	}
 }
 
+func TestClientLifecycleSignalConcurrentInitializationAndClose(t *testing.T) {
+	client := &Client{}
+	start := make(chan struct{})
+	signals := make([]chan struct{}, 32)
+	var workers sync.WaitGroup
+
+	for i := range signals {
+		workers.Add(1)
+		go func(index int) {
+			defer workers.Done()
+			<-start
+			signals[index] = client.lifecycleSignal()
+		}(i)
+	}
+	for i := 0; i < 8; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			client.closeLifecycle()
+		}()
+	}
+
+	close(start)
+	workers.Wait()
+
+	for i, signal := range signals {
+		if signal == nil {
+			t.Fatalf("lifecycle signal %d was nil", i)
+		}
+		if signal != signals[0] {
+			t.Fatalf("lifecycle signal %d did not share the client lifecycle", i)
+		}
+	}
+	select {
+	case <-signals[0]:
+	default:
+		t.Fatal("lifecycle signal remained open after closeLifecycle")
+	}
+}
+
 func TestHubDisconnectedClientsDoNotBuildInitialState(t *testing.T) {
 	var stateBuilds atomic.Int64
 	hub := NewHub(func(string) interface{} {

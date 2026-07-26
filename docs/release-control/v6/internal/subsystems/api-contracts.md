@@ -268,9 +268,13 @@ initial-client delivery, and explicit client data requests; cancel delayed or
 queued work when its client leaves; and join every state producer before
 closing client channels. Reconnect, request, or invalidation churn must not
 multiply concurrent clones of that canonical payload or race shutdown sends
-against channel closure. Ordinary unregister and slow-client eviction must use
-the same synchronized send/close ownership; recovering a send-on-closed panic
-is not a substitute for a race-free channel lifecycle.
+against channel closure. A client's lifecycle cancellation signal must be
+initialized and read through one synchronized owner before registration,
+requested-state work, delayed initial-state delivery, or disconnect may race
+over it; every path must observe the same stable signal. Ordinary unregister
+and slow-client eviction must use the same synchronized send/close ownership;
+recovering a send-on-closed panic is not a substitute for a race-free channel
+lifecycle.
 
 Docker and Podman app-container CPU payloads expose two API facts with
 different meanings: canonical resource metrics and `/api/metrics-store/history`
