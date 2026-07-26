@@ -91,6 +91,26 @@ func TestSetBackupPollingEnabledReachesLiveMonitor(t *testing.T) {
 	}
 }
 
+func TestSetPBSPollingIntervalReachesLiveMonitor(t *testing.T) {
+	base := &config.Config{PBSPollingInterval: 2 * time.Minute}
+	m := &Monitor{config: base.DeepCopy()}
+
+	if got := m.baseIntervalForInstanceType(InstanceTypePBS); got != 2*time.Minute {
+		t.Fatalf("expected 2m from config, got %v", got)
+	}
+
+	m.SetPBSPollingInterval(5 * time.Minute)
+	if got := m.baseIntervalForInstanceType(InstanceTypePBS); got != 5*time.Minute {
+		t.Fatalf("expected 5m after live update, got %v", got)
+	}
+
+	// Clamping still applies to live updates.
+	m.SetPBSPollingInterval(2 * time.Hour)
+	if got := m.baseIntervalForInstanceType(InstanceTypePBS); got != time.Hour {
+		t.Fatalf("expected live update clamped to 1h, got %v", got)
+	}
+}
+
 func TestSetPMGPollingIntervalReachesLiveMonitor(t *testing.T) {
 	base := &config.Config{PMGPollingInterval: 2 * time.Minute}
 	m := &Monitor{config: base.DeepCopy()}

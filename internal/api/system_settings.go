@@ -35,6 +35,7 @@ type SystemSettingsMonitor interface {
 	GetNotificationManager() *notifications.NotificationManager
 	SetBackupPollingEnabled(enabled bool)
 	SetBackupPollingInterval(interval time.Duration)
+	SetPBSPollingInterval(interval time.Duration)
 	SetPMGPollingInterval(interval time.Duration)
 }
 
@@ -1028,6 +1029,9 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if settings.ConnectionTimeout > 0 {
 		h.config.ConnectionTimeout = time.Duration(settings.ConnectionTimeout) * time.Second
 	}
+	if settings.PBSPollingInterval > 0 {
+		h.config.PBSPollingInterval = time.Duration(settings.PBSPollingInterval) * time.Second
+	}
 	if settings.PMGPollingInterval > 0 {
 		h.config.PMGPollingInterval = time.Duration(settings.PMGPollingInterval) * time.Second
 	}
@@ -1126,6 +1130,12 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		interval := h.config.BackupPollingInterval
 		h.forEachTenantMonitor(r, func(m SystemSettingsMonitor) {
 			m.SetBackupPollingInterval(interval)
+		})
+	}
+	if _, ok := rawRequest["pbsPollingInterval"]; ok && settings.PBSPollingInterval > 0 {
+		interval := time.Duration(settings.PBSPollingInterval) * time.Second
+		h.forEachTenantMonitor(r, func(m SystemSettingsMonitor) {
+			m.SetPBSPollingInterval(interval)
 		})
 	}
 	if _, ok := rawRequest["pmgPollingInterval"]; ok && settings.PMGPollingInterval > 0 {

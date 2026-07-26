@@ -40,6 +40,21 @@ func (m *Monitor) backupPollingIntervalSetting() time.Duration {
 	return m.config.BackupPollingInterval
 }
 
+// pbsPollingIntervalSetting returns the effective PBSPollingInterval before
+// clamping.
+func (m *Monitor) pbsPollingIntervalSetting() time.Duration {
+	if m == nil || m.config == nil {
+		return 0
+	}
+	m.runtimePollingMu.RLock()
+	override := m.pbsPollingIntervalOverride
+	m.runtimePollingMu.RUnlock()
+	if override != nil {
+		return *override
+	}
+	return m.config.PBSPollingInterval
+}
+
 // pmgPollingIntervalSetting returns the effective PMGPollingInterval before
 // clamping.
 func (m *Monitor) pmgPollingIntervalSetting() time.Duration {
@@ -102,6 +117,18 @@ func (m *Monitor) SetBackupPollingInterval(interval time.Duration) {
 	if interval > 0 && (previous <= 0 || interval < previous) {
 		m.resetBackupPollTimestamps()
 	}
+}
+
+// SetPBSPollingInterval updates the PBS polling cadence on the live monitor.
+// The scheduler re-reads the base interval every cycle, so no further action
+// is needed.
+func (m *Monitor) SetPBSPollingInterval(interval time.Duration) {
+	if m == nil || interval <= 0 {
+		return
+	}
+	m.runtimePollingMu.Lock()
+	m.pbsPollingIntervalOverride = &interval
+	m.runtimePollingMu.Unlock()
 }
 
 // SetPMGPollingInterval updates the PMG polling cadence on the live monitor.

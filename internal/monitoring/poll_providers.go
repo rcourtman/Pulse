@@ -386,7 +386,7 @@ func newPBSPollProvider() PollProvider {
 		prefix:          "pbs-",
 		configInstances: pbsInstanceConfigs,
 		clients:         pbsClientMap,
-		pollingInterval: func(m *Monitor) time.Duration { return m.config.PBSPollingInterval },
+		pollingInterval: func(m *Monitor) time.Duration { return m.pbsPollingIntervalSetting() },
 		buildPollTask: func(m *Monitor, instanceName string) (PollTask, error) {
 			if m == nil {
 				return PollTask{}, fmt.Errorf("monitor is nil")
