@@ -11,13 +11,23 @@ import "time"
 // runtimePollingMu because polling goroutines read them every cycle while
 // the settings API writes them.
 
+// runtimePollingOverrides holds the polling-cadence values the settings API
+// has pushed into this live monitor, shadowing the corresponding fields of
+// the monitor's detached config copy. nil means "use the config value".
+type runtimePollingOverrides struct {
+	backupEnabled  *bool
+	backupInterval *time.Duration
+	pbsInterval    *time.Duration
+	pmgInterval    *time.Duration
+}
+
 // backupPollingEnabledSetting returns the effective EnableBackupPolling value.
 func (m *Monitor) backupPollingEnabledSetting() bool {
 	if m == nil || m.config == nil {
 		return false
 	}
 	m.runtimePollingMu.RLock()
-	override := m.backupPollingEnabledOverride
+	override := m.runtimePollingOverride.backupEnabled
 	m.runtimePollingMu.RUnlock()
 	if override != nil {
 		return *override
@@ -32,7 +42,7 @@ func (m *Monitor) backupPollingIntervalSetting() time.Duration {
 		return 0
 	}
 	m.runtimePollingMu.RLock()
-	override := m.backupPollingIntervalOverride
+	override := m.runtimePollingOverride.backupInterval
 	m.runtimePollingMu.RUnlock()
 	if override != nil {
 		return *override
@@ -47,7 +57,7 @@ func (m *Monitor) pbsPollingIntervalSetting() time.Duration {
 		return 0
 	}
 	m.runtimePollingMu.RLock()
-	override := m.pbsPollingIntervalOverride
+	override := m.runtimePollingOverride.pbsInterval
 	m.runtimePollingMu.RUnlock()
 	if override != nil {
 		return *override
@@ -62,7 +72,7 @@ func (m *Monitor) pmgPollingIntervalSetting() time.Duration {
 		return 0
 	}
 	m.runtimePollingMu.RLock()
-	override := m.pmgPollingIntervalOverride
+	override := m.runtimePollingOverride.pmgInterval
 	m.runtimePollingMu.RUnlock()
 	if override != nil {
 		return *override
@@ -80,10 +90,10 @@ func (m *Monitor) SetBackupPollingEnabled(enabled bool) {
 	}
 	m.runtimePollingMu.Lock()
 	wasEnabled := m.config != nil && m.config.EnableBackupPolling
-	if m.backupPollingEnabledOverride != nil {
-		wasEnabled = *m.backupPollingEnabledOverride
+	if m.runtimePollingOverride.backupEnabled != nil {
+		wasEnabled = *m.runtimePollingOverride.backupEnabled
 	}
-	m.backupPollingEnabledOverride = &enabled
+	m.runtimePollingOverride.backupEnabled = &enabled
 	m.runtimePollingMu.Unlock()
 
 	if enabled && !wasEnabled {
@@ -108,10 +118,10 @@ func (m *Monitor) SetBackupPollingInterval(interval time.Duration) {
 	if m.config != nil {
 		previous = m.config.BackupPollingInterval
 	}
-	if m.backupPollingIntervalOverride != nil {
-		previous = *m.backupPollingIntervalOverride
+	if m.runtimePollingOverride.backupInterval != nil {
+		previous = *m.runtimePollingOverride.backupInterval
 	}
-	m.backupPollingIntervalOverride = &interval
+	m.runtimePollingOverride.backupInterval = &interval
 	m.runtimePollingMu.Unlock()
 
 	if interval > 0 && (previous <= 0 || interval < previous) {
@@ -127,7 +137,7 @@ func (m *Monitor) SetPBSPollingInterval(interval time.Duration) {
 		return
 	}
 	m.runtimePollingMu.Lock()
-	m.pbsPollingIntervalOverride = &interval
+	m.runtimePollingOverride.pbsInterval = &interval
 	m.runtimePollingMu.Unlock()
 }
 
@@ -139,7 +149,7 @@ func (m *Monitor) SetPMGPollingInterval(interval time.Duration) {
 		return
 	}
 	m.runtimePollingMu.Lock()
-	m.pmgPollingIntervalOverride = &interval
+	m.runtimePollingOverride.pmgInterval = &interval
 	m.runtimePollingMu.Unlock()
 }
 
