@@ -143,14 +143,13 @@ Pulse can detect and apply updates to your Docker / Podman containers directly f
 
 1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
-3. **One-Click Update**: Click the update button, confirm, and Pulse handles the rest
-4. **Batch Updates**: Use the **"Update All"** button in the filter bar to queue updates for multiple containers
+3. **Reviewed Update**: Click the update button, approve the reviewed action, and Pulse handles the rest
 
 ### Updating a Container
 
 1. Navigate to the **Workloads** page (or filter by Docker sources on **Infrastructure**)
 2. Look for containers with a blue update arrow (⬆️)
-3. Click the update button → Click **Confirm**
+3. Click the update button and approve the action in the review dialog (admin approval required)
 4. Pulse will:
    - Pull the latest image
    - Stop the current container
@@ -160,11 +159,7 @@ Pulse can detect and apply updates to your Docker / Podman containers directly f
 
 ### Batch Updates
 
-When multiple containers have updates available, an **"Update All"** button appears in the filter bar.
-1. Click **"Update All"**
-2. Click again within 3 seconds to confirm
-3. Pulse queues update commands for each container (they run on the next agent report cycle)
-4. A toast summary reports how many updates were queued or failed
+Updates run as reviewed per-container actions, so there is currently no bulk update flow: update each container individually with its own update button. The **"Update all"** button in the host drawer only points you to the per-container buttons.
 
 ### Safety Features
 
@@ -175,6 +170,7 @@ When multiple containers have updates available, an **"Update All"** button appe
 ### Requirements
 
 - **Unified agent** running on the Docker host with Docker monitoring enabled
+- **Command execution enabled** on the agent (`--enable-commands` or `PULSE_ENABLE_COMMANDS=true`) — updates run as reviewed actions through the agent's command channel, the same as [container lifecycle actions](#️-container-lifecycle-actions), and share their requirements and limitations (admin approval, authorization-plugin block)
 - Agent must have Docker socket access (`/var/run/docker.sock`)
 - Registry must be accessible for update detection (public registries work automatically)
 
