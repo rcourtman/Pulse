@@ -42,7 +42,10 @@ _This changelog describes stable `v6.1.2` compared with stable `v6.1.1`._
 - Rollback command: `./scripts/install.sh --version v6.1.1`
 - Promotion path: stable patch hotfix from `main`, using the integrated
   exact-SHA candidate and definitive release verdict
-- Windows signing decision: Authenticode is required through SignPath; no
-  unsigned-Windows exception is authorized for `v6.1.2`
+- Windows signing decision: the release owner approved a `v6.1.2`-only
+  unsigned-Windows exception while SignPath company verification is still
+  processing; Windows may show **Unknown Publisher**, while exact-SHA,
+  checksum, detached-signature, manifest, and published-digest controls remain
+  mandatory
 - Mobile decision: `no-mobile-impact`; no companion build upload or public
   store rollout is required

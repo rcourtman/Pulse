@@ -503,7 +503,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
         self.assertIn("require_macos_signing: true", workflow)
         self.assertIn(
-            "require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1') && inputs.unsigned_windows_exception) }}",
+            "require_windows_signing: ${{ !contains(inputs.version, '-') && !((inputs.version == '6.1.0' || inputs.version == '6.1.1' || inputs.version == '6.1.2') && inputs.unsigned_windows_exception) }}",
             workflow,
         )
         self.assertIn("unsigned_windows_exception:", workflow)
@@ -684,7 +684,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.require_windows_signing == 'true' }}", content)
         self.assertIn("unsigned_windows_exception:", content)
         self.assertIn("unsigned_windows_reason:", content)
-        self.assertIn('version not in {"6.1.0", "6.1.1"}', resolver)
+        self.assertIn('version not in {"6.1.0", "6.1.1", "6.1.2"}', resolver)
         self.assertIn("not Authenticode-signed", resolver)
         self.assertIn("windows_signing_backend: signpath", content)
         self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)

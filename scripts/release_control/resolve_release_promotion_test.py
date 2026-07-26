@@ -200,12 +200,45 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["require_windows_signing"], "false")
         self.assertEqual(metadata["unsigned_windows_exception"], "true")
 
+    def test_v612_owner_exception_allows_disclosed_emergency_patch(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.1.2",
+            promoted_from_tag_input="",
+            rollback_version_input="v6.1.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=True,
+            hotfix_reason_input="Active customer-impact fixes.",
+            release_notes_input=(
+                "Windows Unified Agent binaries are not Authenticode-signed for v6.1.2."
+            ),
+            unsigned_windows_exception=True,
+            unsigned_windows_reason_input=(
+                "SignPath company verification is still processing; the release owner accepts "
+                "unsigned Windows binaries for v6.1.2."
+            ),
+            list_stable_tags_fn=lambda: ["v6.1.1", "v6.1.0"],
+            list_same_version_rc_tags_fn=lambda version: [],
+            changed_paths_fn=lambda tag: ["scripts/install.sh"],
+            tag_exists_fn=lambda tag: tag == "v6.1.1",
+            tag_commit_fn=lambda tag: "v611-commit",
+            head_descends_from_fn=lambda commit: commit == "v611-commit",
+        )
+
+        self.assertEqual(metadata["promotion_mode"], "emergency-stable-patch")
+        self.assertEqual(metadata["rollback_tag"], "v6.1.1")
+        self.assertEqual(metadata["require_windows_signing"], "false")
+        self.assertEqual(metadata["unsigned_windows_exception"], "true")
+
     def test_unsigned_windows_exception_is_rejected_for_other_stable_versions(self) -> None:
-        with self.assertRaisesRegex(ValueError, "approved only for stable v6.1.0 or v6.1.1"):
+        with self.assertRaisesRegex(
+            ValueError,
+            "approved only for stable v6.1.0, v6.1.1, or v6.1.2",
+        ):
             resolver.resolve_metadata(
-                version="6.1.2",
+                version="6.1.3",
                 promoted_from_tag_input="",
-                rollback_version_input="v6.1.1",
+                rollback_version_input="v6.1.2",
                 ga_date_input="",
                 v5_eos_date_input="",
                 hotfix_exception=True,

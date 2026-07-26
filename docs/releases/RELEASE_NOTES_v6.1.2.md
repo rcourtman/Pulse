@@ -67,10 +67,13 @@ completed since the previous stable cut.
 
 Use the normal v6 install or update flow for `v6.1.2`.
 
-Windows Unified Agent binaries in `v6.1.2` are required to be
-Authenticode-signed. The governed release workflow fails closed unless the
-SignPath configuration is present and every returned executable verifies
-against the expected signer.
+Windows Unified Agent binaries in `v6.1.2` are not Authenticode-signed. The
+SignPath company-verification application is still processing, and the release
+owner approved a version-bound unsigned-Windows exception for this release.
+Windows may therefore show an **Unknown Publisher** warning during installation
+or update. The binaries remain bound to the exact release SHA and protected by
+the published checksums, detached signatures, candidate manifest, and
+post-publication digest verification.
 
 The rollback target for this patch release is `v6.1.1`. The exact rollback
 reinstall command is:

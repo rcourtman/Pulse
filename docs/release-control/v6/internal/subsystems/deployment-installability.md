@@ -383,12 +383,12 @@ TLS floor in the dynamic config.
    apply the same channel-specific native-signing policy as a publish run.
    macOS notarization remains mandatory for both prerelease and stable
    candidates. Windows Authenticode remains mandatory for stable candidates
-   except for the explicitly version-bound `v6.1.0` and `v6.1.1` owner
-   exceptions; prerelease candidates and those two stable exceptions may
+   except for the explicitly version-bound `v6.1.0`, `v6.1.1`, and `v6.1.2`
+   owner exceptions; prerelease candidates and those three stable exceptions may
    retain checksum and detached-signature verification without Authenticode
    while the release packet explicitly discloses the unknown-publisher warning.
    Prerelease promotion remains blocked on the normal stable signing
-   requirement, and stable `v6.1.2` and later restore it automatically unless
+   requirement, and stable `v6.1.3` and later restore it automatically unless
    policy records a new version-bound owner decision. A cheap
    signing-configuration job
    must report every missing secret for the platforms required by that
@@ -1070,6 +1070,11 @@ emergency patch addressing active customer update harm. The new decision must
 flow through the normal exact-SHA candidate, checksum, detached-signature,
 manifest, published-digest, and definitive-verdict controls with an explicit
 owner reason and public Unknown Publisher disclosure.
+On 2026-07-26 the owner approved the same bounded path for `v6.1.2` because the
+company's SignPath verification application remains in processing. This
+decision is limited to `v6.1.2`, retains the exact-SHA and integrity controls,
+and requires the public release notes to disclose that Windows binaries are
+not Authenticode-signed and may show Unknown Publisher.
 Every caller of the reusable release-candidate builder must delegate
 `actions: read` alongside `contents: read`; the Windows signing job reads the
 exact uploaded artifact through the GitHub Actions API, and GitHub validates
@@ -1094,9 +1099,12 @@ install-smoke, public-health, floating-tag, paid-runtime, and
 definitive-verdict lanes before the cut is complete. No mobile-facing path
 changed from `v6.1.1`, so the release decision is `no-mobile-impact` and no
 companion build or public mobile-store rollout is required. Stable `v6.1.2`
-restores mandatory Windows Authenticode signing through SignPath; no unsigned
-exception is authorized, and the release candidate must fail closed when the
-signing configuration or returned signer proof is unavailable.
+uses an owner-approved, version-bound unsigned-Windows exception while the
+SignPath company-verification application is still processing. Windows users
+must receive an Unknown Publisher disclosure, and the release candidate must
+retain exact-SHA, checksum, detached-signature, manifest, and published-digest
+verification. Stable `v6.1.3` and later restore mandatory Windows Authenticode
+unless policy records another explicit version-bound decision.
 
 The preceding stable `v6.1.1` cut used the stable hotfix path with
 `rollback_version=v6.1.0` and an owner-approved, version-bound unsigned Windows
@@ -2543,7 +2551,7 @@ discloses the unsigned Windows publisher state and the Windows binaries retain
 the exact-SHA candidate, checksum, detached-signature, and post-publication
 digest controls. Stable publication and the stable-path dry-run must continue
 to require both native signing lanes except for the recorded, version-bound
-`v6.1.0` and `v6.1.1` Windows exceptions; stable `v6.1.2` and later restore
+`v6.1.0`, `v6.1.1`, and `v6.1.2` Windows exceptions; stable `v6.1.3` and later restore
 both requirements unless policy records a new explicit version-bound owner
 decision. `scripts/build-release.sh` must replace
 only the native targets required by those independent inputs and must fail
