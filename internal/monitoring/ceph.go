@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	monerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
@@ -40,7 +41,12 @@ func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, clie
 
 	status, err := client.GetCephStatus(cephCtx)
 	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("ceph status unavailable – preserving previous ceph state")
+		if monerrors.IsAuthError(err) {
+			log.Warn().Err(err).Str("instance", instanceName).
+				Msg("ceph status request denied (401/403) – grant the Pulse token Sys.Audit on path / to enable Ceph monitoring")
+		} else {
+			log.Debug().Err(err).Str("instance", instanceName).Msg("ceph status unavailable – preserving previous ceph state")
+		}
 		return
 	}
 	if status == nil {
@@ -238,6 +244,13 @@ func countCephMonitorDaemons(status *proxmox.CephStatus) int {
 	if len(status.MonMap.Quorum) > 0 {
 		return len(status.MonMap.Quorum)
 	}
+	// Ceph places quorum membership at the top level of the status payload.
+	if len(status.QuorumNames) > 0 {
+		return len(status.QuorumNames)
+	}
+	if len(status.Quorum) > 0 {
+		return len(status.Quorum)
+	}
 	return countServiceDaemons(status.ServiceMap.Services, "mon")
 }
 
@@ -248,8 +261,15 @@ func countCephManagerDaemons(status *proxmox.CephStatus) int {
 	if status.MgrMap.NumMgrs > 0 {
 		return status.MgrMap.NumMgrs
 	}
-	if status.MgrMap.ActiveName != "" {
-		return 1 + len(status.MgrMap.Standbys)
+	// Quincy+ drops num_mgrs/active_name from mgrmap; derive the count from
+	// availability plus standbys (num_standbys on modern releases).
+	active := 0
+	if status.MgrMap.Available || status.MgrMap.ActiveName != "" {
+		active = 1
+	}
+	standbys := max(status.MgrMap.NumStandbys, len(status.MgrMap.Standbys))
+	if active+standbys > 0 {
+		return active + standbys
 	}
 	return countServiceDaemons(status.ServiceMap.Services, "mgr")
 }

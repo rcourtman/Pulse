@@ -16,6 +16,11 @@ type CephStatus struct {
 	MgrMap     CephMgrMap     `json:"mgrmap"`
 	OSDMap     CephOSDMap     `json:"osdmap"`
 	PGMap      CephPGMap      `json:"pgmap"`
+	// Ceph reports quorum membership at the top level of the status payload,
+	// not inside monmap. Quincy+ omits the monmap mons array, so these are the
+	// only per-monitor signals available there.
+	QuorumNames []string          `json:"quorum_names,omitempty"`
+	Quorum      []json.RawMessage `json:"quorum,omitempty"`
 }
 
 // CephHealth captures cluster health status and summaries.
@@ -160,18 +165,21 @@ func maxCephMonitorCount(values ...int) int {
 
 // CephMgrMap captures manager summary information.
 type CephMgrMap struct {
-	Available  bool     `json:"available"`
-	NumMgrs    int      `json:"num_mgrs"`
-	ActiveName string   `json:"active_name"`
-	Standbys   []string `json:"standbys"`
+	Available  bool   `json:"available"`
+	NumMgrs    int    `json:"num_mgrs"`
+	ActiveName string `json:"active_name"`
+	// Quincy+ reports num_standbys without a standbys array.
+	NumStandbys int      `json:"num_standbys"`
+	Standbys    []string `json:"standbys"`
 }
 
 func (m *CephMgrMap) UnmarshalJSON(data []byte) error {
 	type rawCephMgrMap struct {
-		Available  bool              `json:"available"`
-		NumMgrs    int               `json:"num_mgrs"`
-		ActiveName string            `json:"active_name"`
-		Standbys   []json.RawMessage `json:"standbys"`
+		Available   bool              `json:"available"`
+		NumMgrs     int               `json:"num_mgrs"`
+		ActiveName  string            `json:"active_name"`
+		NumStandbys int               `json:"num_standbys"`
+		Standbys    []json.RawMessage `json:"standbys"`
 	}
 
 	var raw rawCephMgrMap
@@ -204,6 +212,8 @@ func (m *CephMgrMap) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
+
+	m.NumStandbys = max(raw.NumStandbys, len(m.Standbys))
 
 	return nil
 }

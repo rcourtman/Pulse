@@ -240,9 +240,14 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 				} `json:"detail"`
 			} `json:"checks"`
 		} `json:"health"`
-		MonMap struct {
+		// quorum/quorum_names sit at the top level of `ceph status` output.
+		QuorumNames []string          `json:"quorum_names"`
+		Quorum      []json.RawMessage `json:"quorum"`
+		MonMap      struct {
 			Epoch int `json:"epoch"`
-			Mons  []struct {
+			// Quincy+ reports num_mons without a mons array.
+			NumMons int `json:"num_mons"`
+			Mons    []struct {
 				Name string `json:"name"`
 				Rank int    `json:"rank"`
 				Addr string `json:"addr"`
@@ -252,7 +257,9 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 			Available  bool   `json:"available"`
 			NumActive  int    `json:"num_active_name,omitempty"`
 			ActiveName string `json:"active_name"`
-			Standbys   []struct {
+			// Quincy+ reports num_standbys without a standbys array.
+			NumStandbys int `json:"num_standbys"`
+			Standbys    []struct {
 				Name string `json:"name"`
 			} `json:"standbys"`
 		} `json:"mgrmap"`
@@ -281,6 +288,13 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 		return nil, fmt.Errorf("ceph.parseStatus: unmarshal ceph status JSON: %w", err)
 	}
 
+	numMons := max(raw.MonMap.NumMons, len(raw.MonMap.Mons), len(raw.QuorumNames), len(raw.Quorum))
+	activeMgrs := 0
+	if raw.MgrMap.Available || raw.MgrMap.ActiveName != "" {
+		activeMgrs = 1
+	}
+	standbyMgrs := max(raw.MgrMap.NumStandbys, len(raw.MgrMap.Standbys))
+
 	status := &CephClusterStatus{
 		FSID: raw.FSID,
 		Health: CephHealthStatus{
@@ -289,13 +303,13 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 		},
 		MonMap: CephMonitorMap{
 			Epoch:   raw.MonMap.Epoch,
-			NumMons: len(raw.MonMap.Mons),
+			NumMons: numMons,
 		},
 		MgrMap: CephManagerMap{
 			Available: raw.MgrMap.Available,
-			NumMgrs:   1 + len(raw.MgrMap.Standbys),
+			NumMgrs:   activeMgrs + standbyMgrs,
 			ActiveMgr: raw.MgrMap.ActiveName,
-			Standbys:  len(raw.MgrMap.Standbys),
+			Standbys:  standbyMgrs,
 		},
 		OSDMap: CephOSDMap{
 			Epoch:   raw.OSDMap.Epoch,
@@ -347,9 +361,14 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 		}
 	}
 
-	// Build service summary
+	// Build service summary. Monitors in quorum are the ones known to be running;
+	// fall back to the total count when quorum data is absent.
+	monsRunning := max(len(raw.QuorumNames), len(raw.Quorum))
+	if monsRunning == 0 {
+		monsRunning = numMons
+	}
 	status.Services = []CephServiceInfo{
-		{Type: "mon", Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
+		{Type: "mon", Running: monsRunning, Total: numMons},
 		{Type: "mgr", Running: cephBoolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
 		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
 	}

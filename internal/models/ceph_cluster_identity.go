@@ -121,10 +121,12 @@ func supplementCephCluster(primary, supplemental CephCluster) CephCluster {
 		primary.AvailableBytes = supplemental.AvailableBytes
 		primary.UsagePercent = supplemental.UsagePercent
 	}
-	if primary.NumMons == 0 {
+	// Prefer the larger daemon counts: sources parsing legacy schemas can
+	// undercount MONs/MGRs on modern Ceph releases (issue #1626).
+	if supplemental.NumMons > primary.NumMons {
 		primary.NumMons = supplemental.NumMons
 	}
-	if primary.NumMgrs == 0 {
+	if supplemental.NumMgrs > primary.NumMgrs {
 		primary.NumMgrs = supplemental.NumMgrs
 	}
 	if primary.NumOSDs == 0 {
