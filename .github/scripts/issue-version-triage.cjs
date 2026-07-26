@@ -25,7 +25,7 @@ function extractSectionValue(body, heading) {
 
 function normalizeVersion(value) {
   if (!value) return null;
-  const match = String(value).match(/\bv?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/);
+  const match = String(value).match(/\bv?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/i);
   return match ? match[1] : null;
 }
 

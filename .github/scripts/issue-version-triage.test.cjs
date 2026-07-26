@@ -182,3 +182,28 @@ test("postRetestComment skips maintainer-authored issues", async () => {
 
   assert.equal(calls.createComment.length, 0);
 });
+
+test("normalizeVersion accepts a capitalised V prefix", () => {
+  const { normalizeVersion } = triage.internals;
+
+  // Regression: issue #1538 reported "V6.0.4" under the "Pulse version"
+  // heading and was wrongly labelled needs-version-info. The heading regexes
+  // are case-insensitive and captured "V6.0.4" correctly, but handed it to a
+  // case-sensitive normalizeVersion, so every extraction path returned null.
+  assert.equal(normalizeVersion("V6.0.4"), "6.0.4");
+  assert.equal(normalizeVersion("v6.0.4"), "6.0.4");
+  assert.equal(normalizeVersion("6.0.4"), "6.0.4");
+  assert.equal(normalizeVersion("V6.1.0-rc.4"), "6.1.0-rc.4");
+
+  assert.equal(normalizeVersion("V6"), null);
+  assert.equal(normalizeVersion("### Pulse version"), null);
+});
+
+test("extractPulseVersion reads a capitalised version under its heading", () => {
+  const { extractPulseVersion } = triage.internals;
+
+  assert.equal(
+    extractPulseVersion("[Bug]: something broke", "### Pulse version\nV6.0.4\n"),
+    "6.0.4"
+  );
+});
