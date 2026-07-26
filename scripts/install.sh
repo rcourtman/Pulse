@@ -95,6 +95,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
+AGENT_LOG_FILE="" # When set, pass --log-file so the agent's rotating log writer engages (set per platform)
 DEFAULT_STATE_DIR="/var/lib/pulse-agent"
 STATE_DIR="$DEFAULT_STATE_DIR"  # Persistent state directory (overridden per platform)
 STATE_DIR_SOURCE="default"      # default, explicit, recovered, or platform
@@ -252,6 +253,116 @@ redact_token() {
         msg="${msg//$TOKEN_FILE_PATH/[token-file]}"
     fi
     echo "$msg"
+}
+
+# Minimum free space to stage (download to temp) and install the agent binary.
+# The 6.x agent binary is ~34MiB; keep margin for growth. On appliances with a
+# RAM-backed root (QNAP, Unraid) temp and install dir share one small filesystem.
+AGENT_MIN_TEMP_FREE_BYTES=$((48 * 1024 * 1024))
+AGENT_MIN_INSTALL_FREE_BYTES=$((48 * 1024 * 1024))
+
+bytes_to_human() {
+    local bytes="${1:-0}"
+
+    if [[ ! "$bytes" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "$bytes"
+        return 0
+    fi
+
+    local units=("B" "KB" "MB" "GB" "TB")
+    local value="$bytes"
+    local unit_index=0
+
+    while (( value >= 1024 && unit_index < ${#units[@]} - 1 )); do
+        value=$((value / 1024))
+        ((unit_index += 1))
+    done
+
+    printf '%s%s\n' "$value" "${units[$unit_index]}"
+}
+
+nearest_existing_dir() {
+    local path="$1"
+
+    while [[ -n "$path" && "$path" != "/" && ! -d "$path" ]]; do
+        path=$(dirname "$path")
+    done
+
+    printf '%s\n' "${path:-/}"
+}
+
+get_available_bytes_for_path() {
+    local path="$1"
+    local available_kb=""
+
+    available_kb=$(df -Pk "$path" 2>/dev/null | awk 'NR==2 {print $4}')
+    if [[ ! "$available_kb" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    printf '%s\n' $((available_kb * 1024))
+}
+
+get_filesystem_device_for_path() {
+    local path="$1"
+    local filesystem=""
+
+    filesystem=$(df -Pk "$path" 2>/dev/null | awk 'NR==2 {print $1}')
+    if [[ -z "$filesystem" ]]; then
+        return 1
+    fi
+
+    printf '%s\n' "$filesystem"
+}
+
+ensure_agent_disk_headroom() {
+    local temp_path="${1:-${TMPDIR:-/tmp}}"
+    local install_path="${2:-$INSTALL_DIR}"
+    local temp_fs=""
+    local install_fs=""
+    local temp_free_bytes=""
+    local install_free_bytes=""
+    local combined_required_bytes=$((AGENT_MIN_TEMP_FREE_BYTES + AGENT_MIN_INSTALL_FREE_BYTES))
+
+    temp_path=$(nearest_existing_dir "$temp_path")
+    install_path=$(nearest_existing_dir "$install_path")
+
+    temp_fs=$(get_filesystem_device_for_path "$temp_path" 2>/dev/null || true)
+    install_fs=$(get_filesystem_device_for_path "$install_path" 2>/dev/null || true)
+    temp_free_bytes=$(get_available_bytes_for_path "$temp_path" 2>/dev/null || true)
+    install_free_bytes=$(get_available_bytes_for_path "$install_path" 2>/dev/null || true)
+
+    if [[ -z "$temp_free_bytes" || -z "$install_free_bytes" ]]; then
+        log_warn "Could not determine available disk space for the install preflight; continuing anyway"
+        return 0
+    fi
+
+    if [[ -n "$temp_fs" && "$temp_fs" == "$install_fs" ]]; then
+        if (( temp_free_bytes < combined_required_bytes )); then
+            log_error "Not enough free disk space to stage and install the Pulse agent"
+            log_info "The same filesystem backs $temp_path and $install_path"
+            log_info "Available: $(bytes_to_human "$temp_free_bytes"), required: $(bytes_to_human "$combined_required_bytes")"
+            log_info "If this filesystem is a small RAM-backed root (common on QNAP/Unraid), set TMPDIR to a directory on a data volume before re-running, e.g. TMPDIR=/share/CACHEDEV1_DATA/tmp"
+            return 1
+        fi
+        return 0
+    fi
+
+    if (( temp_free_bytes < AGENT_MIN_TEMP_FREE_BYTES )); then
+        log_error "Not enough free disk space in $temp_path to stage the Pulse agent download"
+        log_info "Available: $(bytes_to_human "$temp_free_bytes"), required: $(bytes_to_human "$AGENT_MIN_TEMP_FREE_BYTES")"
+        log_info "Free disk space under $temp_path, or set TMPDIR to a directory with more space, and retry"
+        return 1
+    fi
+
+    if (( install_free_bytes < AGENT_MIN_INSTALL_FREE_BYTES )); then
+        log_error "Not enough free disk space in $install_path to install the Pulse agent"
+        log_info "Available: $(bytes_to_human "$install_free_bytes"), required: $(bytes_to_human "$AGENT_MIN_INSTALL_FREE_BYTES")"
+        log_info "Free disk space under $install_path and retry"
+        return 1
+    fi
+
+    return 0
 }
 
 has_pinned_installer_signature_key() {
@@ -482,7 +593,7 @@ verify_agent_started() {
     local max_iterations=8
     local interval=2
     local iteration=0
-    local log_file="${TRUENAS_LOG_FILE:-$LOG_FILE}"
+    local log_file="${AGENT_LOG_FILE:-${TRUENAS_LOG_FILE:-$LOG_FILE}}"
 
     log_info "Verifying agent started successfully..."
 
@@ -1186,12 +1297,15 @@ write_qnap_wrapper_script() {
     local wrapper_script="$1"
     local runtime_binary="$2"
     local stored_binary="$3"
+    local log_dir="$4"
     local service_env_lines="$SHELL_EXPORT_LINES"
 
     cat > "$wrapper_script" <<EOF
 #!/bin/sh
 # Pulse Agent startup script for QNAP
 # Auto-generated by Pulse installer.
+
+WATCHDOG_LOG="${log_dir}/${AGENT_NAME}-watchdog.log"
 
 wait_for_file() {
     path="\$1"
@@ -1200,7 +1314,19 @@ wait_for_file() {
     done
 }
 
+# The watchdog log lives on the data volume but has no rotation, so cap it.
+trim_watchdog_log() {
+    [ -f "\$WATCHDOG_LOG" ] || return 0
+    _size=\$(wc -c < "\$WATCHDOG_LOG" 2>/dev/null | tr -d ' \t')
+    case "\$_size" in ''|*[!0-9]*) return 0 ;; esac
+    if [ "\$_size" -gt 5242880 ]; then
+        tail -c 1048576 "\$WATCHDOG_LOG" > "\${WATCHDOG_LOG}.tmp" 2>/dev/null && mv "\${WATCHDOG_LOG}.tmp" "\$WATCHDOG_LOG"
+    fi
+}
+
 wait_for_file "${stored_binary}"
+
+mkdir -p "${log_dir}" 2>/dev/null || true
 
 # Kill any existing pulse-agent processes before refreshing the runtime copy.
 pkill -x "pulse-agent" 2>/dev/null || true
@@ -1215,11 +1341,14 @@ RESTART_DELAY=5
 MAX_RESTART_DELAY=60
 
 while true; do
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent..." >> /var/log/${AGENT_NAME}.log
-    ${runtime_binary} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1
+    trim_watchdog_log
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent (agent log: ${log_dir}/${AGENT_NAME}.log)..." >> "\$WATCHDOG_LOG"
+    # The agent writes its own rotating log via --log-file; discard the stdout
+    # mirror so nothing accumulates on the RAM-backed root filesystem.
+    ${runtime_binary} ${EXEC_ARGS} > /dev/null 2>> "\$WATCHDOG_LOG"
     EXIT_CODE=\$?
 
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> /var/log/${AGENT_NAME}.log
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> "\$WATCHDOG_LOG"
     sleep \$RESTART_DELAY
 
     RESTART_DELAY=\$((RESTART_DELAY * 2))
@@ -1534,6 +1663,7 @@ build_exec_arg_items() {
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARG_ITEMS+=(--hostname "$HOSTNAME_OVERRIDE"); fi
     if [[ -n "$REPORT_IP" ]]; then EXEC_ARG_ITEMS+=(--report-ip "$REPORT_IP"); fi
     if [[ -n "$STATE_DIR" ]]; then EXEC_ARG_ITEMS+=(--state-dir "$STATE_DIR"); fi
+    if [[ -n "${AGENT_LOG_FILE:-}" ]]; then EXEC_ARG_ITEMS+=(--log-file "$AGENT_LOG_FILE"); fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
     for pattern in ${DISK_EXCLUDES[@]+"${DISK_EXCLUDES[@]}"}; do
         EXEC_ARG_ITEMS+=(--disk-exclude "$pattern")
@@ -3060,9 +3190,17 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         AGENT_STATUS="already_installed"
     fi
     json_event "preflight" "$AGENT_STATUS" "Agent status: ${AGENT_STATUS}"
-
-    # Check 3: Pulse URL reachability and agent binary availability
     PREFLIGHT_EXIT="$EXIT_OK"
+
+    # Check 3: Disk headroom for staging and installing the agent binary
+    if ensure_agent_disk_headroom "${TMPDIR:-/tmp}" "$INSTALL_DIR"; then
+        json_event "preflight" "disk_ok" "Sufficient disk space for agent install"
+    else
+        json_event "preflight" "disk_low" "Not enough free disk space to stage and install the agent" "$EXIT_PREFLIGHT_FAILED"
+        PREFLIGHT_EXIT="$EXIT_PREFLIGHT_FAILED"
+    fi
+
+    # Check 4: Pulse URL reachability and agent binary availability
     if [[ -n "$PULSE_URL" ]]; then
         CURL_TEST_ARGS=(-sf --connect-timeout 5 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
@@ -3129,6 +3267,12 @@ esac
 
 # Construct arch param in format expected by download endpoint (e.g., linux-amd64)
 ARCH_PARAM="${OS}-${ARCH}"
+
+# Fail before downloading if the temp and install filesystems cannot hold the
+# staged plus installed binary (mktemp below honours TMPDIR).
+if ! ensure_agent_disk_headroom "${TMPDIR:-/tmp}" "$INSTALL_DIR"; then
+    fail "Not enough free disk space to install the Pulse agent" "$EXIT_PREFLIGHT_FAILED"
+fi
 
 # Create temp file and register for cleanup
 TMP_BIN=$(mktemp)
@@ -3387,6 +3531,12 @@ if [[ -f /etc/unraid-version ]]; then
 
     log_info "Installed binary to ${UNRAID_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
 
+    # Unraid's /var/log is a small tmpfs and /boot is flash (unsuitable for
+    # logs), so use the agent's rotating writer to cap log growth (issue #1617).
+    # A subdirectory is required: the rotating writer chmods its log directory.
+    UNRAID_LOG_DIR="/var/log/${AGENT_NAME}"
+    AGENT_LOG_FILE="${UNRAID_LOG_DIR}/${AGENT_NAME}.log"
+
     # Build command line args (string for wrapper script, array for direct execution)
     ensure_runtime_token_file "$STATE_DIR"
     clear_proxmox_state_if_needed
@@ -3410,6 +3560,18 @@ if [[ -f /etc/unraid-version ]]; then
 # Auto-generated by Pulse installer
 # Includes watchdog loop to restart agent on failure
 
+WATCHDOG_LOG="/var/log/${AGENT_NAME}-watchdog.log"
+
+# The watchdog log has no rotation, so cap it (it lives on a small tmpfs).
+trim_watchdog_log() {
+    [ -f "\$WATCHDOG_LOG" ] || return 0
+    _size=\$(wc -c < "\$WATCHDOG_LOG" 2>/dev/null | tr -d ' \t')
+    case "\$_size" in ''|*[!0-9]*) return 0 ;; esac
+    if [ "\$_size" -gt 5242880 ]; then
+        tail -c 1048576 "\$WATCHDOG_LOG" > "\${WATCHDOG_LOG}.tmp" 2>/dev/null && mv "\${WATCHDOG_LOG}.tmp" "\$WATCHDOG_LOG"
+    fi
+}
+
 # Kill any existing pulse-agent processes
 pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
 sleep 2
@@ -3424,13 +3586,16 @@ RESTART_DELAY=5
 MAX_RESTART_DELAY=60
 
 while true; do
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent..." >> /var/log/${AGENT_NAME}.log
-    ${RUNTIME_BINARY} ${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log 2>&1
+    trim_watchdog_log
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] Starting pulse-agent (agent log: ${AGENT_LOG_FILE})..." >> "\$WATCHDOG_LOG"
+    # The agent writes its own rotating log via --log-file; discard the stdout
+    # mirror so unrotated output cannot fill the tmpfs-backed /var/log.
+    ${RUNTIME_BINARY} ${EXEC_ARGS} > /dev/null 2>> "\$WATCHDOG_LOG"
     EXIT_CODE=\$?
-    
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> /var/log/${AGENT_NAME}.log
+
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') [watchdog] pulse-agent exited with code \$EXIT_CODE, restarting in \${RESTART_DELAY}s..." >> "\$WATCHDOG_LOG"
     sleep \$RESTART_DELAY
-    
+
     # Exponential backoff (cap at MAX_RESTART_DELAY)
     RESTART_DELAY=\$((RESTART_DELAY * 2))
     if [ \$RESTART_DELAY -gt \$MAX_RESTART_DELAY ]; then
@@ -3468,10 +3633,11 @@ EOF
     bash "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
     disown 2>/dev/null || true  # Disown if available to prevent SIGHUP
 
-    complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"
+    complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"
     log_info "The agent will start automatically on boot."
     log_info "To check status: pgrep -a pulse-agent"
-    log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    log_info "To view logs: tail -f ${AGENT_LOG_FILE}"
+    log_info "Watchdog log: /var/log/${AGENT_NAME}-watchdog.log"
     exit 0
 fi
 
@@ -3500,6 +3666,11 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
 
     log_info "Installed binary to ${QNAP_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
 
+    # Log to the data volume with the agent's rotating writer; the RAM-backed
+    # root (/var/log) must not accumulate agent output (issue #1617).
+    QNAP_LOG_DIR="${STATE_DIR}/logs"
+    AGENT_LOG_FILE="${QNAP_LOG_DIR}/${AGENT_NAME}.log"
+
     ensure_runtime_token_file "$STATE_DIR"
     clear_proxmox_state_if_needed
     build_exec_args
@@ -3509,7 +3680,7 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     pkill -f "start-pulse-agent.sh" 2>/dev/null || true
     sleep 2
 
-    write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY"
+    write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY" "$QNAP_LOG_DIR"
 
     AUTORUN_CONFIGURED=false
     if [[ -x /etc/init.d/init_disk.sh ]]; then
@@ -3534,7 +3705,7 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     sh "${WRAPPER_SCRIPT}" >> "/var/log/${AGENT_NAME}.log" 2>&1 &
     disown 2>/dev/null || true
 
-    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"
     log_info "Persistent state: $STATE_DIR"
     if [[ "$AUTORUN_CONFIGURED" == true ]]; then
         log_info "The agent will start automatically after the QNAP data volume becomes available."
@@ -3542,7 +3713,8 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
         log_info "  in QNAP Control Panel > Hardware > General."
     fi
     log_info "To check status: pgrep -a pulse-agent"
-    log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
+    log_info "To view logs: tail -f ${AGENT_LOG_FILE}"
+    log_info "Watchdog log: ${QNAP_LOG_DIR}/${AGENT_NAME}-watchdog.log"
     exit 0
 fi
 

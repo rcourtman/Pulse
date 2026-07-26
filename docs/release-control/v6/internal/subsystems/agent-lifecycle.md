@@ -4917,6 +4917,15 @@ that waits for the persistent data volume before launching the stored wrapper,
 and `internal/agentupdate/update.go` keeps the persisted QNAP binary copy in
 sync on self-update so reboot does not roll the runtime back to an older
 binary.
+That appliance lifecycle must remain bounded by available storage. Before
+downloading or replacing an agent, `scripts/install.sh` checks the effective
+temporary and installation filesystems for enough free space, coalesces the
+check when both paths share a filesystem, honors an operator-selected
+`TMPDIR`, and exposes the same check through `--preflight-only`. QNAP and
+Unraid watchdogs must route agent output through the agent's rotating
+`--log-file` writer instead of an unbounded shell append; their own watchdog
+messages must also be size-bounded so either logging path cannot exhaust a
+RAM-backed appliance root.
 
 Unified Agent lifecycle truth is agent-authored. The host report contract now
 carries the non-secret applied managed-config fingerprint, self-updater state

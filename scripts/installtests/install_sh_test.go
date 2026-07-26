@@ -1459,9 +1459,9 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 		`write_qnap_wrapper_script() {`,
 		`append_qnap_autorun_block() {`,
 		`select_platform_state_dir "${QNAP_VOL}/.pulse-agent"`,
-		`write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY"`,
+		`write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY" "$QNAP_LOG_DIR"`,
 		`append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"`,
-		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -1487,6 +1487,176 @@ func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing QNAP uninstall continuity handling: %s", needle)
 		}
+	}
+}
+
+func TestInstallSHAgentDiskHeadroomRejectsSharedLowSpaceFilesystem(t *testing.T) {
+	script := `
+		set -euo pipefail
+		log_error() { :; }
+		log_info() { :; }
+		log_warn() { :; }
+		INSTALL_DIR="/usr/local/bin"
+		AGENT_MIN_TEMP_FREE_BYTES=$((100 * 1024))
+		AGENT_MIN_INSTALL_FREE_BYTES=$((80 * 1024))
+` + extractInstallShellFunction(t, "bytes_to_human") + `
+` + extractInstallShellFunction(t, "nearest_existing_dir") + `
+` + extractInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractInstallShellFunction(t, "get_filesystem_device_for_path") + `
+` + extractInstallShellFunction(t, "ensure_agent_disk_headroom") + `
+		df() {
+			if [[ "$1" == "-Pk" ]]; then
+				printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+				printf '/dev/shared 1000 0 150 0%% /\n'
+				return 0
+			fi
+			command df "$@"
+		}
+		if ensure_agent_disk_headroom /tmp /usr/local/bin; then
+			echo "ensure_agent_disk_headroom unexpectedly passed on a shared full filesystem" >&2
+			exit 1
+		fi
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHAgentDiskHeadroomAcceptsSeparateFilesystems(t *testing.T) {
+	script := `
+		set -euo pipefail
+		log_error() { :; }
+		log_info() { :; }
+		log_warn() { :; }
+		INSTALL_DIR="/usr/local/bin"
+		AGENT_MIN_TEMP_FREE_BYTES=$((100 * 1024))
+		AGENT_MIN_INSTALL_FREE_BYTES=$((80 * 1024))
+` + extractInstallShellFunction(t, "bytes_to_human") + `
+` + extractInstallShellFunction(t, "nearest_existing_dir") + `
+` + extractInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractInstallShellFunction(t, "get_filesystem_device_for_path") + `
+` + extractInstallShellFunction(t, "ensure_agent_disk_headroom") + `
+		df() {
+			if [[ "$1" == "-Pk" ]]; then
+				case "$2" in
+					/tmp)
+						printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+						printf '/dev/tmp 1000 0 120 0%% /tmp\n'
+						return 0
+						;;
+					*)
+						printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+						printf '/dev/root 1000 0 90 0%% /\n'
+						return 0
+						;;
+				esac
+			fi
+			command df "$@"
+		}
+		ensure_agent_disk_headroom /tmp /usr/local/bin
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHAgentDiskHeadroomResolvesMissingDirectories(t *testing.T) {
+	script := `
+		set -euo pipefail
+		log_error() { :; }
+		log_info() { :; }
+		log_warn() { :; }
+		INSTALL_DIR="/usr/local/bin"
+		AGENT_MIN_TEMP_FREE_BYTES=$((100 * 1024))
+		AGENT_MIN_INSTALL_FREE_BYTES=$((80 * 1024))
+` + extractInstallShellFunction(t, "nearest_existing_dir") + `
+		resolved=$(nearest_existing_dir /definitely/not/a/real/path/anywhere)
+		if [[ "$resolved" != "/" ]]; then
+			echo "nearest_existing_dir resolved to $resolved, want /" >&2
+			exit 1
+		fi
+		resolved=$(nearest_existing_dir /tmp)
+		if [[ "$resolved" != "/tmp" ]]; then
+			echo "nearest_existing_dir resolved to $resolved, want /tmp" >&2
+			exit 1
+		fi
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+// TestInstallSHChecksDiskHeadroomBeforeDownload pins the ENOSPC preflight from
+// issue #1617: the installer must verify temp and install-dir headroom before
+// the agent binary download stages anything, and the --preflight-only mode must
+// report the same check.
+func TestInstallSHChecksDiskHeadroomBeforeDownload(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	headroomCall := `if ! ensure_agent_disk_headroom "${TMPDIR:-/tmp}" "$INSTALL_DIR"; then`
+	stagingCall := `TMP_BIN=$(mktemp)`
+
+	headroomPos := strings.Index(script, headroomCall)
+	if headroomPos < 0 {
+		t.Fatalf("install.sh does not gate the download on ensure_agent_disk_headroom")
+	}
+	stagingPos := strings.Index(script, stagingCall)
+	if stagingPos < 0 {
+		t.Fatalf("install.sh no longer stages the download via mktemp; update this test")
+	}
+	if headroomPos > stagingPos {
+		t.Fatalf("disk headroom check happens after the download staging mktemp")
+	}
+
+	for _, needle := range []string{
+		`json_event "preflight" "disk_ok" "Sufficient disk space for agent install"`,
+		`json_event "preflight" "disk_low"`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh preflight-only mode missing disk headroom reporting: %s", needle)
+		}
+	}
+}
+
+// TestInstallSHWatchdogPathsUseRotatingAgentLog pins the logging half of issue
+// #1617: the QNAP and Unraid watchdog loops must not shell-append agent stdout
+// to an unrotated file on the RAM-backed root; the agent's own rotating writer
+// (--log-file) owns the agent log instead.
+func TestInstallSHWatchdogPathsUseRotatingAgentLog(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`if [[ -n "${AGENT_LOG_FILE:-}" ]]; then EXEC_ARG_ITEMS+=(--log-file "$AGENT_LOG_FILE"); fi`,
+		`QNAP_LOG_DIR="${STATE_DIR}/logs"`,
+		`AGENT_LOG_FILE="${QNAP_LOG_DIR}/${AGENT_NAME}.log"`,
+		`UNRAID_LOG_DIR="/var/log/${AGENT_NAME}"`,
+		`AGENT_LOG_FILE="${UNRAID_LOG_DIR}/${AGENT_NAME}.log"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing rotating agent log wiring: %s", needle)
+		}
+	}
+
+	if got := strings.Count(script, `${EXEC_ARGS} > /dev/null 2>> "\$WATCHDOG_LOG"`); got != 2 {
+		t.Fatalf("expected both watchdog loops (QNAP, Unraid) to discard the stdout mirror and capture stderr in the watchdog log, found %d", got)
+	}
+	if strings.Contains(script, `${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log`) {
+		t.Fatalf("a watchdog loop still shell-appends agent output to the unrotated /var/log/${AGENT_NAME}.log")
 	}
 }
 
@@ -1657,8 +1827,8 @@ func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 		`json_event "complete" "updated_unhealthy" "Agent updated but not responding"`,
 		`json_event "complete" "installed_unhealthy" "Agent installed but not responding"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"`,
-		`complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
-		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
+		`complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"`,
 		`complete_installation_flow "$TRUENAS_STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." ""`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"`,

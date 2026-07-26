@@ -2565,6 +2565,14 @@ for that volume before launching the wrapper, recover the same state during
 uninstall, and keep the persisted boot copy aligned with updater-owned runtime
 binary replacements instead of assuming `/usr/local/bin` survives reboot on
 QTS/QuTS hero.
+Before any agent artifact download or replacement, that boundary must also
+prove adequate space on the effective temporary and install filesystems,
+deduplicating the requirement when both paths share a filesystem and honoring
+an operator-supplied `TMPDIR`. `--preflight-only` must exercise the same
+storage check and report an actionable alternate-temporary-directory hint.
+Generated QNAP and Unraid watchdogs must use the agent's rotating `--log-file`
+path rather than an unbounded stdout append, while keeping watchdog-owned
+messages independently size-bounded.
 
 The in-app updater's apply pipeline now owns a downgrade guard on the normal
 apply path. A syntactically valid release asset URL can name a release older

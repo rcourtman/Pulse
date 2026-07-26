@@ -420,6 +420,30 @@ Set `--health-addr=""` or `PULSE_HEALTH_ADDR=off` to disable the health/metrics 
 
 ## Troubleshooting
 
+### Installer Fails With "Not enough free disk space"
+
+The installer stages the agent binary (~34 MiB) in a temporary directory before
+moving it to the install directory, and checks free space in both before
+downloading. On appliances whose root filesystem is a small RAM disk (QNAP QTS,
+Unraid), `/tmp` and `/usr/local/bin` share that filesystem, so both the staged
+and installed copy must fit at once.
+
+If the check fails because `/tmp` is on a constrained root, point `TMPDIR` at a
+directory on a data volume and re-run the installer:
+
+```bash
+TMPDIR=/share/CACHEDEV1_DATA/tmp bash install.sh --url http://pulse --token <token>
+```
+
+(`mktemp` honours `TMPDIR`, so this moves the staging copy off the RAM root.
+Create the directory first if it does not exist.)
+
+On QNAP the agent's rotating log is written to the data volume
+(`<data-volume>/.pulse-agent/logs/pulse-agent.log`); on Unraid it is written to
+`/var/log/pulse-agent/pulse-agent.log` with size-capped rotation. If an older
+install filled `/var/log/pulse-agent.log` on the root filesystem, delete that
+file and re-run the installer to pick up the rotating configuration.
+
 ### Agent Not Updating
 - Check logs: `journalctl -u pulse-agent -f`
 - Verify network connectivity to Pulse server
