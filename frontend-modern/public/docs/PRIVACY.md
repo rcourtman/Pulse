@@ -82,6 +82,8 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | VMware VMs | `35` | Understand VMware vSphere VM monitoring adoption in aggregate |
 | VMware datastores | `4` | Understand VMware datastore visibility adoption in aggregate |
 | Availability targets | `9` | Understand agentless availability-check adoption in aggregate |
+| Availability probe targets | `2` | Understand external-probe adoption in aggregate; counts only, no agent names or addresses |
+| Availability probe agents | `1` | Understand how many distinct probe agents installs deploy; counts only |
 | AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
 | Patrol enabled | `true`/`false` | See whether proactive AI health patrol is used |
 | Discovery enabled | `true`/`false` | See whether network or model-backed discovery is used |

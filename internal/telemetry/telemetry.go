@@ -25,6 +25,7 @@
 //   - Number of Pulse Agent hosts, Docker hosts/containers, and Kubernetes clusters/nodes/pods/deployments
 //   - Number of storage resources, physical disks, Ceph clusters, and network shares
 //   - Number of TrueNAS systems/VMs/apps, VMware hosts/VMs/datastores, and availability targets
+//   - Number of availability targets assigned to external probes, and of distinct probe agents
 //
 // Feature usage (booleans and counts, no content):
 //   - Whether AI features are enabled
@@ -204,6 +205,10 @@ type Ping struct {
 	VMwareVMs             int `json:"vmware_vms"`
 	VMwareDatastores      int `json:"vmware_datastores"`
 	AvailabilityTargets   int `json:"availability_targets"`
+	// Probe-assignment counts stay counts-only: no agent names, IDs, or
+	// addresses leave the install.
+	AvailabilityProbeTargets int `json:"availability_probe_targets"`
+	AvailabilityProbeAgents  int `json:"availability_probe_agents"`
 
 	// Feature usage (booleans and counts — no content)
 	AIEnabled            bool `json:"ai_enabled"`
@@ -336,6 +341,8 @@ type Snapshot struct {
 	VMwareVMs                                                      int
 	VMwareDatastores                                               int
 	AvailabilityTargets                                            int
+	AvailabilityProbeTargets                                       int
+	AvailabilityProbeAgents                                        int
 	AIEnabled                                                      bool
 	PatrolEnabled                                                  bool
 	DiscoveryEnabled                                               bool
@@ -898,6 +905,8 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.VMwareVMs = s.VMwareVMs
 	ping.VMwareDatastores = s.VMwareDatastores
 	ping.AvailabilityTargets = s.AvailabilityTargets
+	ping.AvailabilityProbeTargets = s.AvailabilityProbeTargets
+	ping.AvailabilityProbeAgents = s.AvailabilityProbeAgents
 	ping.AIEnabled = s.AIEnabled
 	ping.PatrolEnabled = s.PatrolEnabled
 	ping.DiscoveryEnabled = s.DiscoveryEnabled

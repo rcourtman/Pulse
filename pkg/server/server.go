@@ -499,6 +499,14 @@ func Run(ctx context.Context, version string) error {
 			}
 			if targets, err := telemetryPersistence.LoadAvailabilityTargets(); err == nil {
 				snap.ConfiguredConnections += len(targets)
+				probeAgents := make(map[string]struct{})
+				for _, target := range targets {
+					if agentID := strings.TrimSpace(target.ProbeAgentID); agentID != "" {
+						snap.AvailabilityProbeTargets++
+						probeAgents[agentID] = struct{}{}
+					}
+				}
+				snap.AvailabilityProbeAgents = len(probeAgents)
 			}
 
 			// Resource counts come from the tenant-aware monitor aggregate, not the

@@ -84,8 +84,33 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 - **Host Metrics**: CPU, memory, disk, network I/O, temperatures
 - **Docker Monitoring**: Container metrics, health checks, Swarm support (when enabled)
 - **Kubernetes Monitoring**: Cluster, node, pod, and deployment health (when enabled)
+- **External Probes** (Pro): runs availability checks assigned to this agent from the Pulse server and reports the results back — see below
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
+
+## External Probes (Pro)
+
+With the Pro `external_probe` entitlement, availability checks configured in
+Pulse can be assigned to run from a specific agent instead of the Pulse
+server (Settings -> Monitoring -> Availability checks -> "Run from"). This is
+how you monitor a site from the outside: deploy the agent on a machine
+elsewhere — a cloud VM, a Docker host at another location — and assign checks
+to it. Alerting still happens on the Pulse server through your normal alert
+routes.
+
+There is nothing to configure on the agent itself. Assignments arrive through
+the agent's signed remote configuration, the agent runs each check on its
+configured interval, and results are delivered with its regular reports.
+Results survive temporary connectivity loss to the Pulse server in a bounded
+in-memory queue; if the agent cannot deliver for several check intervals the
+check shows as indeterminate in Pulse until reports resume. The module
+appears as `availability` in the agent's module status when at least one
+check is assigned.
+
+Note for ICMP (ping) checks: the probe uses the system `ping` binary. In
+containers or hardened service units without `CAP_NET_RAW`, ICMP checks fail;
+prefer TCP or HTTP checks there, or grant the capability. See "ICMP probe
+privileges" in docs/CONFIGURATION.md.
 
 ## Configuration
 
