@@ -605,6 +605,18 @@ must never prevent the remaining configured hosts from being suppressed.
     CORE/FreeNAS. Unknown or current versions fail closed. The decision and
     persistent socket belong to one configured client, so reconnects or
     legacy negotiation for one appliance cannot alter another appliance.
+    A plaintext `ws://` handshake answered with a redirect is not an
+    unsupported endpoint and must never wake the REST bridge. When the
+    redirect target is an https URL on the same host — TrueNAS's HTTP to
+    HTTPS redirect, or an equivalent proxy — the dial retries once over TLS
+    with the entry's verification settings, and the upgraded `wss://`
+    endpoint becomes the client's endpoint for its remaining lifetime
+    (#1631). The upgrade is scheme-only and monotonic: cross-host redirects,
+    downgrades to plaintext, and relative targets fail closed with the
+    redirect target named in the error, so a redirect can move a connection
+    to TLS but never to another appliance or back to plaintext. Regression
+    coverage: the `Issue1631` handshake-redirect tests in
+    `internal/truenas/transport_test.go`.
     Current API-key authentication uses `auth.login_ex` with the key owner's
     username and `API_KEY_PLAIN`; password authentication uses
     `PASSWORD_PLAIN`. Username-less stored API keys may use the deprecated
