@@ -4,8 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -393,9 +395,94 @@ func TestAvailabilitySupplementalRecordsPresentStaleProbeAsIndeterminate(t *test
 	if data.LastError != availabilityProbeStaleError {
 		t.Fatalf("availability last error = %q, want %q", data.LastError, availabilityProbeStaleError)
 	}
+	if data.ProbeAgentID != "agent-1" {
+		t.Fatalf("availability probe agent = %q, want agent-1 so the UI can attribute the source", data.ProbeAgentID)
+	}
 
 	statuses := availabilityPollProvider{}.ConnectionStatuses(monitor)
 	if statuses["availability-remote"] {
 		t.Fatalf("connection statuses = %+v, want a stale probe to read as not connected", statuses)
+	}
+}
+
+func TestApplyHostReportIngestsAssignedAvailabilityResults(t *testing.T) {
+	monitor := newProbeAgentTestMonitor(t,
+		probeAgentTarget("remote", "probe-host"),
+		probeAgentTarget("foreign", "other-agent"),
+	)
+	monitor.alertManager = alerts.NewManager()
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+	monitor.config = &config.Config{}
+	monitor.rateTracker = NewRateTracker()
+	monitor.hostTokenBindings = make(map[string]string)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+
+	checkedAt := time.Now().UTC()
+	host, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "probe-host", Version: "6.0.0", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:       "probe-host",
+			Hostname: "probe-host.local",
+			Platform: "linux",
+		},
+		AvailabilityResults: []agentshost.AvailabilityProbeResult{
+			{TargetID: "remote", Outcome: "reachable", LatencyMillis: 17, CheckedAt: checkedAt},
+			{TargetID: "foreign", Outcome: "reachable", LatencyMillis: 3, CheckedAt: checkedAt},
+		},
+		Timestamp: checkedAt,
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport() error = %v", err)
+	}
+	// The ownership check compares the host ID that GetHostAgentConfig is
+	// keyed by, so the report must resolve to exactly that identity.
+	if host.ID != "probe-host" {
+		t.Fatalf("host ID = %q, want the assigned probe agent ID", host.ID)
+	}
+
+	statuses := monitor.AvailabilityStatusSnapshot()
+	status, ok := statuses["remote"]
+	if !ok {
+		t.Fatalf("statuses = %+v, want the assigned target applied", statuses)
+	}
+	if !status.Available || status.LatencyMillis != 17 {
+		t.Fatalf("status = %+v, want the reported observation", status)
+	}
+	if status.ProbeAgentID != "probe-host" {
+		t.Fatalf("probe agent attribution = %q, want probe-host", status.ProbeAgentID)
+	}
+	if !status.LastChecked.Equal(checkedAt) {
+		t.Fatalf("last checked = %v, want %v", status.LastChecked, checkedAt)
+	}
+	if _, ok := statuses["foreign"]; ok {
+		t.Fatal("a report claimed a target assigned to another agent")
+	}
+}
+
+func TestProbeAvailabilityResultsFromReportNormalizesOutcomes(t *testing.T) {
+	if got := probeAvailabilityResultsFromReport(nil); got != nil {
+		t.Fatalf("results = %+v, want nil for a report without probe work", got)
+	}
+
+	checkedAt := time.Now().UTC()
+	results := probeAvailabilityResultsFromReport([]agentshost.AvailabilityProbeResult{
+		{TargetID: " padded ", Outcome: " REACHABLE ", LatencyMillis: 4, CheckedAt: checkedAt},
+		{TargetID: "b", Outcome: "unreachable", Error: " icmp probe timed out "},
+		{TargetID: "c", Outcome: "who-knows"},
+		{TargetID: "d", Outcome: ""},
+	})
+	if len(results) != 4 {
+		t.Fatalf("results = %+v, want one per reported observation", results)
+	}
+	if results[0].TargetID != "padded" || results[0].Outcome != AvailabilityProbeReachable {
+		t.Fatalf("first result = %+v", results[0])
+	}
+	if results[1].Error != "icmp probe timed out" || results[1].Outcome != AvailabilityProbeUnreachable {
+		t.Fatalf("second result = %+v", results[1])
+	}
+	for _, result := range results[2:] {
+		if result.Outcome != AvailabilityProbeIndeterminate {
+			t.Fatalf("result %+v: unknown outcomes must read as indeterminate", result)
+		}
 	}
 }

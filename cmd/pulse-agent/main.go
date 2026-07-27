@@ -28,6 +28,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	pulseconfig "github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
@@ -387,32 +388,33 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 8. Start Host Agent (if enabled)
 	if cfg.EnableHost {
 		hostCfg := hostagent.Config{
-			PulseURL:           cfg.PulseURL,
-			APIToken:           cfg.APIToken,
-			Interval:           cfg.Interval,
-			HostnameOverride:   cfg.HostnameOverride,
-			AgentID:            cfg.AgentID,
-			AgentType:          "unified",
-			AgentVersion:       Version,
-			Tags:               cfg.Tags,
-			InsecureSkipVerify: cfg.InsecureSkipVerify,
-			CACertPath:         cfg.CACertPath,
-			ServerFingerprint:  cfg.ServerFingerprint,
-			DeploySSHUser:      cfg.DeploySSHUser,
-			LogLevel:           cfg.LogLevel,
-			Logger:             &logger,
-			EnableProxmox:      cfg.EnableProxmox,
-			ProxmoxType:        cfg.ProxmoxType,
-			EnableCommands:     cfg.EnableCommands,
-			Enroll:             cfg.Enroll,
-			DiskExclude:        cfg.DiskExclude,
-			StateDir:           cfg.StateDir,
-			ReportIP:           cfg.ReportIP,
-			DisableCeph:        cfg.DisableCeph,
-			AppliedConfig:      cfg.AppliedConfig,
-			UpdateStatus:       updater.Snapshot,
-			ModuleStatus:       runtimeStatus.moduleStatuses,
-			Observers:          hostObserverTargets(cfg.Observers),
+			PulseURL:            cfg.PulseURL,
+			APIToken:            cfg.APIToken,
+			Interval:            cfg.Interval,
+			HostnameOverride:    cfg.HostnameOverride,
+			AgentID:             cfg.AgentID,
+			AgentType:           "unified",
+			AgentVersion:        Version,
+			Tags:                cfg.Tags,
+			InsecureSkipVerify:  cfg.InsecureSkipVerify,
+			CACertPath:          cfg.CACertPath,
+			ServerFingerprint:   cfg.ServerFingerprint,
+			DeploySSHUser:       cfg.DeploySSHUser,
+			LogLevel:            cfg.LogLevel,
+			Logger:              &logger,
+			EnableProxmox:       cfg.EnableProxmox,
+			ProxmoxType:         cfg.ProxmoxType,
+			EnableCommands:      cfg.EnableCommands,
+			Enroll:              cfg.Enroll,
+			DiskExclude:         cfg.DiskExclude,
+			StateDir:            cfg.StateDir,
+			ReportIP:            cfg.ReportIP,
+			DisableCeph:         cfg.DisableCeph,
+			AvailabilityTargets: cfg.AvailabilityTargets,
+			AppliedConfig:       cfg.AppliedConfig,
+			UpdateStatus:        updater.Snapshot,
+			ModuleStatus:        runtimeStatus.moduleStatuses,
+			Observers:           hostObserverTargets(cfg.Observers),
 
 			DockerContainerUpdater: dockerUpdaterBridge,
 		}
@@ -847,6 +849,10 @@ type Config struct {
 	ReportIP    string // IP address to report (for multi-NIC systems)
 	DisableCeph bool   // Disable local Ceph status polling
 	SelfTest    bool   // Perform self-test and exit
+
+	// AvailabilityTargets are externally probed availability checks assigned to
+	// this agent by the server. Remote config is the only source.
+	AvailabilityTargets []pulseconfig.AvailabilityTarget
 
 	// Health/metrics server
 	HealthAddr    string
@@ -1530,6 +1536,7 @@ func retryLogEvent(logger *zerolog.Logger, attempt int) *zerolog.Event {
 // - interval (string/duration)
 // - report_ip (string)
 // - disable_ceph (bool)
+// - availabilityTargets (array of assigned availability checks)
 func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *zerolog.Logger) {
 	for k, v := range settings {
 		switch k {
@@ -1633,6 +1640,14 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 				cfg.DisableCeph = b
 				logger.Info().Bool("val", b).Msg("Remote config: disable_ceph")
 			}
+		case "availabilityTargets":
+			targets, err := hostagent.AvailabilityTargetsFromSetting(v)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Remote config: ignoring unreadable availabilityTargets value")
+				continue
+			}
+			cfg.AvailabilityTargets = targets
+			logger.Info().Int("count", len(targets)).Msg("Remote config: availabilityTargets")
 		}
 	}
 }

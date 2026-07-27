@@ -54,9 +54,25 @@ type Report struct {
 	Unraid         *UnraidStorage       `json:"unraid,omitempty"`
 	Ceph           *CephCluster         `json:"ceph,omitempty"`
 	ClusterSensors []ClusterNodeSensors `json:"clusterSensors,omitempty"`
-	Tags           []string             `json:"tags,omitempty"`
-	Timestamp      time.Time            `json:"timestamp"`
-	SequenceID     string               `json:"sequenceId,omitempty"`
+	// AvailabilityResults carries availability checks the agent executed on
+	// behalf of the server for targets assigned to it. The server owns failure
+	// accounting; the agent only reports what each check observed.
+	AvailabilityResults []AvailabilityProbeResult `json:"availabilityResults,omitempty"`
+	Tags                []string                  `json:"tags,omitempty"`
+	Timestamp           time.Time                 `json:"timestamp"`
+	SequenceID          string                    `json:"sequenceId,omitempty"`
+}
+
+// AvailabilityProbeResult is one completed availability check reported by a
+// remote probe agent. Outcome mirrors the shared probe vocabulary
+// ("reachable", "unreachable", "indeterminate"); anything else is treated as
+// indeterminate by the server.
+type AvailabilityProbeResult struct {
+	TargetID      string    `json:"targetId"`
+	Outcome       string    `json:"outcome"`
+	LatencyMillis int64     `json:"latencyMillis"`
+	CheckedAt     time.Time `json:"checkedAt"`
+	Error         string    `json:"error,omitempty"`
 }
 
 // ClusterNodeSensors contains temperature sensor data collected from a Proxmox

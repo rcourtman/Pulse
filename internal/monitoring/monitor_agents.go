@@ -2851,6 +2851,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	// Store cluster peer sensor data if present and evict stale entries
 	m.applyClusterSensors(report.ClusterSensors, observedAt)
+	// Availability results are ingested only once the host identity is
+	// committed, because ownership is checked against that host ID.
+	m.ApplyProbeAvailabilityResults(host.ID, probeAvailabilityResultsFromReport(report.AvailabilityResults))
 	m.persistHostContinuity(host, report, reportOrder)
 	m.refreshUnifiedResourceStoreAfterAgentReport()
 

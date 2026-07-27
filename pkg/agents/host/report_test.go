@@ -510,3 +510,54 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+func TestReportAvailabilityResultsJSONRoundTrip(t *testing.T) {
+	checkedAt := time.Date(2026, 7, 27, 10, 30, 0, 0, time.UTC)
+	report := Report{
+		Agent: AgentInfo{ID: "probe-agent"},
+		Host:  HostInfo{Hostname: "probe-agent.local"},
+		AvailabilityResults: []AvailabilityProbeResult{
+			{TargetID: "target-1", Outcome: "reachable", LatencyMillis: 12, CheckedAt: checkedAt},
+			{TargetID: "target-2", Outcome: "unreachable", CheckedAt: checkedAt, Error: "icmp probe timed out"},
+		},
+		Timestamp: checkedAt,
+	}
+
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+	if !contains(string(data), `"availabilityResults":[`) {
+		t.Fatalf("availability results missing from payload: %s", data)
+	}
+	if contains(string(data), `"error":""`) {
+		t.Fatalf("empty probe error should be omitted: %s", data)
+	}
+
+	var decoded Report
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+	if len(decoded.AvailabilityResults) != 2 {
+		t.Fatalf("availability results = %+v, want 2", decoded.AvailabilityResults)
+	}
+	first := decoded.AvailabilityResults[0]
+	if first.TargetID != "target-1" || first.Outcome != "reachable" || first.LatencyMillis != 12 {
+		t.Fatalf("first result = %+v", first)
+	}
+	if !first.CheckedAt.Equal(checkedAt) {
+		t.Fatalf("checkedAt = %v, want %v", first.CheckedAt, checkedAt)
+	}
+	if decoded.AvailabilityResults[1].Error != "icmp probe timed out" {
+		t.Fatalf("second result = %+v", decoded.AvailabilityResults[1])
+	}
+
+	// A report without probe assignments must not carry the section at all.
+	bare, err := json.Marshal(Report{Host: HostInfo{Hostname: "plain"}})
+	if err != nil {
+		t.Fatalf("Failed to marshal bare report: %v", err)
+	}
+	if contains(string(bare), "availabilityResults") {
+		t.Fatalf("empty availability results should be omitted: %s", bare)
+	}
+}

@@ -412,6 +412,7 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		Address:             target.Address,
 		Protocol:            string(target.Protocol),
 		ProbeOutcome:        status.Outcome,
+		ProbeAgentID:        status.ProbeAgentID,
 		UDPMode:             string(target.UDPMode),
 		Port:                target.Port,
 		Path:                target.Path,

@@ -26,6 +26,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
@@ -77,6 +78,11 @@ type Config struct {
 	// Network configuration
 	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
 	DisableCeph bool   // If true, disables local Ceph status polling
+
+	// AvailabilityTargets are the externally probed availability checks the
+	// server assigned to this agent at startup. Later assignments arrive
+	// through ApplyRemoteConfig.
+	AvailabilityTargets []config.AvailabilityTarget
 
 	// AppliedConfig is the non-secret fingerprint of the managed config that
 	// was applied before this runtime started. UpdateStatus supplies live
@@ -156,6 +162,7 @@ type Agent struct {
 	runCommandClient       func(*CommandClient, context.Context) error
 	packageUpdates         *packageUpdateManager
 	storageCleanup         *storageCleanupManager
+	availability           *availabilityProbeModule
 	reportStreamID         string
 	reportSequence         atomic.Uint64
 
@@ -387,6 +394,7 @@ func New(cfg Config) (*Agent, error) {
 		runCommandClient:    runCommandClientFn,
 		packageUpdates:      packageUpdates,
 		storageCleanup:      storageCleanup,
+		availability:        newAvailabilityProbeModule(logger, cfg.AvailabilityTargets),
 		reportStreamID:      reportStreamID,
 	}
 
@@ -541,6 +549,10 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.startCommandClient(commandClient)
 	}
 
+	// Externally probed availability checks run on their own schedule, not on
+	// the report interval, and queue their results for the next report.
+	go a.availability.Run(ctx)
+
 	// Load any reports buffered from a previous shutdown
 	a.loadPersistedBuffer()
 	a.loadPersistedObserverBuffers()
@@ -643,10 +655,16 @@ func (a *Agent) currentUpdateStatus() *agentshost.UpdateStatus {
 }
 
 func (a *Agent) currentModuleStatus() []agentshost.ModuleStatus {
-	if a.cfg.ModuleStatus == nil {
-		return nil
+	var statuses []agentshost.ModuleStatus
+	if a.cfg.ModuleStatus != nil {
+		statuses = append(statuses, a.cfg.ModuleStatus()...)
 	}
-	return append([]agentshost.ModuleStatus(nil), a.cfg.ModuleStatus()...)
+	// The probe module is owned by the host agent rather than the runtime
+	// supervisor, so it reports itself and only while it has work assigned.
+	if status, ok := a.availability.moduleStatus(); ok {
+		statuses = append(statuses, status)
+	}
+	return statuses
 }
 
 func (a *Agent) signalRemoteConfigChanged() {
@@ -736,13 +754,14 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 	if !a.reportBuffer.IsEmpty() {
 		a.flushBuffer(ctx)
 		if !a.reportBuffer.IsEmpty() {
-			a.reportBuffer.Push(report)
+			a.bufferPrimaryReport(report)
 			return nil
 		}
 	}
 
 	if err := a.sendReport(ctx, report); err != nil {
 		agenttarget.MarkDelivery("host", "primary", "primary", false)
+		a.availability.discardInFlight()
 		var statusErr *reportHTTPStatusError
 		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusForbidden {
 			a.logger.Error().
@@ -763,7 +782,7 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 			return nil
 		}
 
-		a.reportBuffer.Push(report)
+		a.bufferPrimaryReport(report)
 		event := a.logger.Warn().
 			Err(err).
 			Str("endpoint", agentReportEndpoint).
@@ -777,6 +796,10 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 	}
 	agenttarget.MarkDelivery("host", "primary", "primary", true)
 
+	// The server has counted every availability result in this report, so they
+	// must never be offered to it again.
+	a.availability.commitDelivered()
+
 	// A successful report means the token is accepted again; reset the auth
 	// failure throttle so a later rejection is reported promptly.
 	a.lastAuthFailureLog = time.Time{}
@@ -789,6 +812,17 @@ func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Repo
 		Str("platform", report.Host.Platform).
 		Msg("Unified Agent report sent")
 	return nil
+}
+
+// bufferPrimaryReport queues a report the primary destination has not accepted
+// yet. Availability results are stripped from the buffered copy and left in the
+// probe module's queue, so the retry carries them exactly once: a buffered copy
+// that also held them could be delivered alongside a fresh report and make the
+// server count the same observation twice.
+func (a *Agent) bufferPrimaryReport(report agentshost.Report) {
+	a.availability.discardInFlight()
+	report.AvailabilityResults = nil
+	a.reportBuffer.Push(report)
 }
 
 func (a *Agent) deliverObserverReport(ctx context.Context, observer *observerReporter, report agentshost.Report) {
@@ -1135,9 +1169,12 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Unraid:         unraidData,
 		Ceph:           cephData,
 		ClusterSensors: clusterSensors,
-		Tags:           append([]string(nil), runtimeConfig.tags...),
-		Timestamp:      a.collector.Now(),
-		SequenceID:     a.nextReportSequenceID(),
+		// Results stay queued until the primary destination accepts this
+		// report, so a delivery failure retries them instead of losing them.
+		AvailabilityResults: a.availability.snapshotForReport(),
+		Tags:                append([]string(nil), runtimeConfig.tags...),
+		Timestamp:           a.collector.Now(),
+		SequenceID:          a.nextReportSequenceID(),
 	}
 
 	return report, nil
@@ -1322,6 +1359,7 @@ func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabl
 		a.configMu.Unlock()
 		a.logger.Info().Bool("disable_ceph", disableCeph).Msg("Applied remote Ceph collection setting")
 	}
+	a.applyRemoteAvailabilityTargets(settings)
 	if remoteConfigAppliedWithoutRestart(settings) && remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
 		metadata, err := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
 		if err != nil {
@@ -1334,10 +1372,27 @@ func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabl
 	}
 }
 
+// applyRemoteAvailabilityTargets reconciles the externally probed availability
+// checks assigned to this agent. A payload the agent cannot decode leaves the
+// current assignment in place: results for targets it no longer owns are
+// rejected server-side, so keeping the schedule is safer than blindly
+// abandoning coverage over a malformed field.
+func (a *Agent) applyRemoteAvailabilityTargets(settings map[string]interface{}) {
+	targets, err := availabilityTargetsFromSettings(settings)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("Ignoring unreadable availability probe assignments")
+		return
+	}
+	if !a.availability.applyTargets(targets) {
+		return
+	}
+	a.logger.Info().Int("targets", len(targets)).Msg("Applied remote availability probe assignments")
+}
+
 func remoteConfigAppliedWithoutRestart(settings map[string]interface{}) bool {
 	for key := range settings {
 		switch key {
-		case "interval", "report_ip", "disable_ceph":
+		case "interval", "report_ip", "disable_ceph", availabilitySettingsKey:
 			continue
 		default:
 			return false

@@ -2354,3 +2354,35 @@ func TestAllowPlaintextHTTPFlagParsesAndDefaultsClosed(t *testing.T) {
 		t.Fatal("PULSE_AGENT_ALLOW_PLAINTEXT_HTTP env was not applied")
 	}
 }
+
+func TestApplyRemoteSettingsCarriesAvailabilityAssignmentsToStartup(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	cfg := &Config{}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"availabilityTargets": []interface{}{
+			map[string]interface{}{
+				"id":                  "remote-a",
+				"address":             "a.local",
+				"protocol":            "icmp",
+				"enabled":             true,
+				"pollIntervalSeconds": float64(30),
+			},
+		},
+	}, &logger)
+
+	if len(cfg.AvailabilityTargets) != 1 {
+		t.Fatalf("availability targets = %+v, want the assignment applied at boot", cfg.AvailabilityTargets)
+	}
+	if cfg.AvailabilityTargets[0].ID != "remote-a" {
+		t.Fatalf("availability target = %+v", cfg.AvailabilityTargets[0])
+	}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"availabilityTargets": "not-a-list",
+	}, &logger)
+
+	if len(cfg.AvailabilityTargets) != 1 {
+		t.Fatalf("availability targets = %+v, want an unreadable payload ignored", cfg.AvailabilityTargets)
+	}
+}

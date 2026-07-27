@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/availabilityprobe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
@@ -27,6 +28,33 @@ type ProbeAvailabilityResult struct {
 	LatencyMillis int64
 	CheckedAt     time.Time
 	Error         string
+}
+
+// probeAvailabilityResultsFromReport converts the wire results carried by a
+// host agent report. Outcome vocabulary is normalized here so the ingestion
+// path never has to trust an agent's spelling; probeResultOutcome then decides
+// what an unknown outcome means for failure accounting.
+func probeAvailabilityResultsFromReport(reported []agentshost.AvailabilityProbeResult) []ProbeAvailabilityResult {
+	if len(reported) == 0 {
+		return nil
+	}
+	results := make([]ProbeAvailabilityResult, 0, len(reported))
+	for _, entry := range reported {
+		outcome := availabilityprobe.Outcome(strings.ToLower(strings.TrimSpace(entry.Outcome)))
+		switch outcome {
+		case availabilityprobe.OutcomeReachable, availabilityprobe.OutcomeUnreachable, availabilityprobe.OutcomeIndeterminate:
+		default:
+			outcome = availabilityprobe.OutcomeIndeterminate
+		}
+		results = append(results, ProbeAvailabilityResult{
+			TargetID:      strings.TrimSpace(entry.TargetID),
+			Outcome:       outcome,
+			LatencyMillis: entry.LatencyMillis,
+			CheckedAt:     entry.CheckedAt,
+			Error:         strings.TrimSpace(entry.Error),
+		})
+	}
+	return results
 }
 
 // effectiveProbeAgentID returns the host agent that currently owns execution of

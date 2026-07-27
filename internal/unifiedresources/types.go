@@ -1686,6 +1686,7 @@ type AvailabilityData struct {
 	Address               string                             `json:"address,omitempty"`
 	Protocol              string                             `json:"protocol,omitempty"`
 	ProbeOutcome          string                             `json:"probeOutcome,omitempty"`
+	ProbeAgentID          string                             `json:"probeAgentId,omitempty"`
 	UDPMode               string                             `json:"udpMode,omitempty"`
 	Port                  int                                `json:"port,omitempty"`
 	Path                  string                             `json:"path,omitempty"`
