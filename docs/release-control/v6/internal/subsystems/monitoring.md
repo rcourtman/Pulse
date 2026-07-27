@@ -1877,8 +1877,15 @@ being mistaken for an absent field.
 Node RRD fallback caches must key on `(instance, node)`, just as guest RRD and
 guest-agent caches key on `(instance, node, vmid)`, so identically named nodes
 in different Proxmox instances cannot exchange memory evidence.
-Running LXC cluster-resource memory is cache-inclusive and therefore cannot be
-used as live usage when both RRD `memavailable` and `memused` are absent.
+Running LXC memory acknowledges a Proxmox API reality: guest RRD responses
+carry only cache-inclusive `mem`/`maxmem` columns — the cache-aware
+`memavailable`/`memused` columns exist only in node RRD — so cache-aware LXC
+evidence is structurally absent from the guest RRD endpoint. When the
+cache-aware RRD branches do not match, a running container with a non-zero
+cluster-resource listing value must fall back to that cache-inclusive value
+under the low-trust `cluster-resources` source rather than reporting the
+guest unavailable; `unavailable` is reserved for running containers with no
+listing evidence at all (#1634).
 Unified Linux and Docker agent ingest likewise must not repair a missing used
 value from total minus free alone; it may use an explicit used/percentage or
 complete free-plus-cache evidence. In every collector, known capacity with no

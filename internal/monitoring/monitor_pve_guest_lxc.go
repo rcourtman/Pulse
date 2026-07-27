@@ -79,7 +79,17 @@ func (m *Monitor) calculateLXCMemory(
 				Str("instance", instanceName).
 				Str("container", res.Name).
 				Int("vmid", res.VMID).
-				Msg("RRD memory data unavailable for LXC; memory usage remains unavailable")
+				Msg("RRD memory data unavailable for LXC; falling back to cluster resources value")
+		}
+
+		// PVE guest RRD carries only mem/maxmem columns (cgroup values, cache
+		// included) — the cache-aware memused/memavailable columns exist only
+		// in node RRD, so the branches above cannot match a real response.
+		// Without this fallback every running container reports unavailable
+		// memory (issue #1634).
+		if memorySource == "unavailable" && res.Mem > 0 {
+			memUsed = res.Mem
+			memorySource = "cluster-resources"
 		}
 	}
 

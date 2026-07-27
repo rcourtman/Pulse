@@ -175,3 +175,133 @@ func TestBuildContainerFromClusterResource_UsesContainerStatusCountersForRates(t
 		t.Fatalf("expected NetworkOut rate from container status counters, got %d", container.NetworkOut)
 	}
 }
+
+type stubPVEClientLXCRRD struct {
+	stubPVEClient
+
+	lxcRRDPoints []proxmox.GuestRRDPoint
+	lxcRRDErr    error
+}
+
+func (s *stubPVEClientLXCRRD) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return s.lxcRRDPoints, s.lxcRRDErr
+}
+
+// Issue #1634: real PVE guest RRD responses carry only mem/maxmem, never the
+// cache-aware memused/memavailable columns, so running containers must fall
+// back to the cluster-resources listing value instead of reporting memory as
+// unavailable (rendered as 0%).
+func TestIssue1634LXCMemoryFallsBackToClusterResourcesOnRealRRDShape(t *testing.T) {
+	t.Parallel()
+
+	maxMem := float64(8 * 1024 * 1024 * 1024)
+	client := &stubPVEClientLXCRRD{
+		lxcRRDPoints: []proxmox.GuestRRDPoint{
+			{Time: 1785164640, MaxMem: &maxMem},
+		},
+	}
+
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	resource := proxmox.ClusterResource{
+		Type:   "lxc",
+		Node:   "pve-a",
+		Name:   "issue1634-ct",
+		Status: "running",
+		VMID:   108,
+		MaxMem: 8 * 1024 * 1024 * 1024,
+		Mem:    335716352,
+	}
+
+	container, _, memorySource, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		resource,
+		client,
+		map[int]bool{},
+	)
+	if !ok {
+		t.Fatal("expected container sample to be built")
+	}
+	if CanonicalMemorySource(memorySource) != "cluster-resources" {
+		t.Fatalf("memory source = %q, want cluster-resources fallback", memorySource)
+	}
+	if container.Memory.UsageUnavailable {
+		t.Fatal("running LXC memory marked unavailable despite listing value")
+	}
+	if container.Memory.Used != int64(resource.Mem) {
+		t.Fatalf("memory used = %d, want listing value %d", container.Memory.Used, resource.Mem)
+	}
+	if container.Memory.Usage <= 0 {
+		t.Fatalf("memory usage = %f, want > 0", container.Memory.Usage)
+	}
+	if !container.Memory.HasKnownUsage() {
+		t.Fatal("expected fallback memory to be usable for projections")
+	}
+}
+
+func TestIssue1634LXCMemoryFallsBackWhenRRDErrors(t *testing.T) {
+	t.Parallel()
+
+	client := &stubPVEClientLXCRRD{lxcRRDErr: context.DeadlineExceeded}
+
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	resource := proxmox.ClusterResource{
+		Type:   "lxc",
+		Node:   "pve-a",
+		Name:   "issue1634-rrd-err",
+		Status: "running",
+		VMID:   109,
+		MaxMem: 512 * 1024 * 1024,
+		Mem:    113344512,
+	}
+
+	container, _, memorySource, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		resource,
+		client,
+		map[int]bool{},
+	)
+	if !ok {
+		t.Fatal("expected container sample to be built")
+	}
+	if CanonicalMemorySource(memorySource) != "cluster-resources" {
+		t.Fatalf("memory source = %q, want cluster-resources fallback", memorySource)
+	}
+	if container.Memory.Used != int64(resource.Mem) || container.Memory.UsageUnavailable {
+		t.Fatalf("memory = %+v, want listing fallback", container.Memory)
+	}
+}
+
+func TestIssue1634LXCMemoryStaysUnavailableWithoutListingValue(t *testing.T) {
+	t.Parallel()
+
+	client := &stubPVEClientLXCRRD{}
+
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	resource := proxmox.ClusterResource{
+		Type:   "lxc",
+		Node:   "pve-a",
+		Name:   "issue1634-no-mem",
+		Status: "running",
+		VMID:   110,
+		MaxMem: 512 * 1024 * 1024,
+	}
+
+	container, _, memorySource, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		resource,
+		client,
+		map[int]bool{},
+	)
+	if !ok {
+		t.Fatal("expected container sample to be built")
+	}
+	if CanonicalMemorySource(memorySource) != "unavailable" {
+		t.Fatalf("memory source = %q, want unavailable when no evidence exists", memorySource)
+	}
+	if !container.Memory.UsageUnavailable {
+		t.Fatal("expected memory to stay marked unavailable without any usage evidence")
+	}
+}

@@ -1053,7 +1053,7 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			wantStatus:   "running",
 		},
 		{
-			name: "running LXC without RRD memory stays unknown",
+			name: "running LXC without RRD memory falls back to cluster resources (#1634)",
 			res: proxmox.ClusterResource{
 				ID:     "lxc/204",
 				Type:   "lxc",
@@ -1063,6 +1063,22 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 				VMID:   204,
 				MaxMem: 8 * gib,
 				Mem:    7 * gib,
+				MaxCPU: 4,
+			},
+			wantSource: "cluster-resources",
+			wantUsed:   7 * gib,
+			wantStatus: "running",
+		},
+		{
+			name: "running LXC without RRD memory or listing value stays unknown",
+			res: proxmox.ClusterResource{
+				ID:     "lxc/206",
+				Type:   "lxc",
+				Node:   "node1",
+				Name:   "ct-206",
+				Status: "running",
+				VMID:   206,
+				MaxMem: 8 * gib,
 				MaxCPU: 4,
 			},
 			wantSource:  "unavailable",
