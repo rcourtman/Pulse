@@ -1632,3 +1632,261 @@ func TestUpdateNodesForInstanceHostnameMatchRejectedWhenIPContradicts(t *testing
 		t.Fatalf("LinkedAgentID = %q, want none (agent IPs contradict node endpoint)", state.Nodes[0].LinkedAgentID)
 	}
 }
+
+// Two different clusters at different sites can reuse the same corosync
+// cluster name, the same member hostnames, and the same RFC1918 addressing
+// (MSP support case: two "enacon" clusters both exposing pve01 on
+// 192.168.1.11). The colliding endpoint-IP alias must not merge the two node
+// slots, and the address match must not bind the second site's node to the
+// first site's host agent when the TLS fingerprint evidence contradicts.
+func TestUpdateNodesForInstanceSameNamedClustersWithCollidingIPsStayApart(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-site-a-pve01",
+				Hostname: "pve01",
+				ReportIP: "192.168.1.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.1.11/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "site-a-pve01",
+				Name:            "pve01",
+				Instance:        "site-a",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.1.11:8006",
+				TLSFingerprint:  "AA:AA:AA:AA",
+				LinkedAgentID:   "host-site-a-pve01",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("site-b", []Node{
+		{
+			ID:              "site-b-pve01",
+			Name:            "pve01",
+			Instance:        "site-b",
+			ClusterName:     "enacon",
+			IsClusterMember: true,
+			Host:            "https://192.168.1.11:8006",
+			TLSFingerprint:  "BB:BB:BB:BB",
+			Status:          "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 (one per site)", state.Nodes)
+	}
+	byID := make(map[string]Node)
+	for _, node := range state.Nodes {
+		byID[node.ID] = node
+	}
+	siteA, ok := byID["site-a-pve01"]
+	if !ok {
+		t.Fatalf("site-a-pve01 was clobbered, nodes = %#v", state.Nodes)
+	}
+	if siteA.LinkedAgentID != "host-site-a-pve01" {
+		t.Fatalf("site-a-pve01 LinkedAgentID = %q, want host-site-a-pve01", siteA.LinkedAgentID)
+	}
+	siteB, ok := byID["site-b-pve01"]
+	if !ok {
+		t.Fatalf("site-b-pve01 missing, nodes = %#v", state.Nodes)
+	}
+	if siteB.LinkedAgentID != "" {
+		t.Fatalf("site-b-pve01 LinkedAgentID = %q, want none (fingerprint contradicts the colliding-IP agent match)", siteB.LinkedAgentID)
+	}
+}
+
+// The endpoint-IP agent match must also respect the cluster-identity
+// contradiction when no fingerprints are known: an agent whose linked nodes
+// live in cluster "enacon" must not bind to a "rewo" node that presents the
+// same RFC1918 address from another site.
+func TestUpdateNodesForInstanceEndpointIPMatchRejectedWhenClusterContradicts(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-enacon-pve01",
+				Hostname: "pve01",
+				ReportIP: "192.168.1.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.1.11/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.1.11:8006",
+				LinkedAgentID:   "host-enacon-pve01",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("rewo", []Node{
+		{
+			ID:              "rewo-pve01",
+			Name:            "pve01",
+			Instance:        "rewo",
+			ClusterName:     "rewo",
+			IsClusterMember: true,
+			Host:            "https://192.168.1.11:8006",
+			Status:          "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 (one per cluster)", state.Nodes)
+	}
+	for _, node := range state.Nodes {
+		if node.ClusterName == "rewo" && node.LinkedAgentID != "" {
+			t.Fatalf("rewo pve01 LinkedAgentID = %q, want none (agent belongs to the enacon cluster)", node.LinkedAgentID)
+		}
+	}
+}
+
+// The same cluster added twice through different connection instances is the
+// legitimate duplicate: when both views carry the same TOFU-captured TLS
+// fingerprint for the same-named node, the endpoint alias must still fold
+// them into one slot even though the instances differ.
+func TestUpdateNodesForInstanceSameClusterAddedTwiceMergesWithMatchingFingerprints(t *testing.T) {
+	state := &State{
+		Nodes: []Node{
+			{
+				ID:              "enacon-a-pve01",
+				Name:            "pve01",
+				Instance:        "enacon-a",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.1.11:8006",
+				TLSFingerprint:  "AA:AA:AA:AA",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("enacon-b", []Node{
+		{
+			ID:              "enacon-b-pve01",
+			Name:            "pve01",
+			Instance:        "enacon-b",
+			ClusterName:     "enacon",
+			IsClusterMember: true,
+			Host:            "https://192.168.1.11:8006",
+			TLSFingerprint:  "aaaaaaaa",
+			Status:          "online",
+		},
+	})
+
+	if len(state.Nodes) != 1 {
+		t.Fatalf("nodes = %#v, want 1 (matching fingerprints prove one machine)", state.Nodes)
+	}
+	if state.Nodes[0].Name != "pve01" {
+		t.Fatalf("merged node = %#v, want pve01", state.Nodes[0])
+	}
+}
+
+// Without fingerprint evidence the same-named cluster from another instance
+// stays split: unknown identity must never fold two possibly-distinct
+// clusters into one (fail-safe direction).
+func TestUpdateNodesForInstanceSameNamedClustersStayApartWithoutFingerprints(t *testing.T) {
+	state := &State{
+		Nodes: []Node{
+			{
+				ID:              "enacon-a-pve01",
+				Name:            "pve01",
+				Instance:        "enacon-a",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.1.11:8006",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("enacon-b", []Node{
+		{
+			ID:              "enacon-b-pve01",
+			Name:            "pve01",
+			Instance:        "enacon-b",
+			ClusterName:     "enacon",
+			IsClusterMember: true,
+			Host:            "https://192.168.1.11:8006",
+			Status:          "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 (unknown identity must not merge)", state.Nodes)
+	}
+}
+
+// A shared agent link is the strongest cross-view merge signal, but for
+// same-named clusters from different instances it must still be gated on
+// fingerprint identity: matching fingerprints merge the duplicate views onto
+// one slot, contradicting fingerprints never do.
+func TestUpdateNodesForInstanceSharedAgentLinkMergeGatedOnFingerprint(t *testing.T) {
+	makeState := func(existingFP string) *State {
+		return &State{
+			Hosts: []Host{
+				{
+					ID:       "host-pve01",
+					Hostname: "pve01",
+					ReportIP: "192.168.1.11",
+					NetworkInterfaces: []HostNetworkInterface{
+						{Name: "eth0", Addresses: []string{"192.168.1.11/24"}},
+					},
+				},
+			},
+			Nodes: []Node{
+				{
+					ID:              "enacon-a-pve01",
+					Name:            "pve01",
+					Instance:        "enacon-a",
+					ClusterName:     "enacon",
+					IsClusterMember: true,
+					Host:            "https://pve01.site-a.internal:8006",
+					TLSFingerprint:  existingFP,
+					LinkedAgentID:   "host-pve01",
+					Status:          "online",
+				},
+			},
+		}
+	}
+	incoming := func(fp string) []Node {
+		return []Node{
+			{
+				ID:              "enacon-b-pve01",
+				Name:            "pve01",
+				Instance:        "enacon-b",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.1.11:8006",
+				TLSFingerprint:  fp,
+				LinkedAgentID:   "host-pve01",
+				Status:          "online",
+			},
+		}
+	}
+
+	merged := makeState("AA:AA:AA:AA")
+	merged.UpdateNodesForInstance("enacon-b", incoming("AA:AA:AA:AA"))
+	if len(merged.Nodes) != 1 {
+		t.Fatalf("matching fingerprints: nodes = %#v, want 1", merged.Nodes)
+	}
+
+	split := makeState("AA:AA:AA:AA")
+	split.UpdateNodesForInstance("enacon-b", incoming("BB:BB:BB:BB"))
+	if len(split.Nodes) != 2 {
+		t.Fatalf("contradicting fingerprints: nodes = %#v, want 2", split.Nodes)
+	}
+}

@@ -87,6 +87,38 @@ func (m *Monitor) pveNodeID(instanceName string, instanceCfg *config.PVEInstance
 	return m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + nativeName
 }
 
+// pveNodeTLSFingerprint resolves the TOFU-captured TLS certificate
+// fingerprint recorded in configuration for one node's API endpoint. The
+// fingerprint is per-machine identity evidence for node state aggregation, so
+// a cluster node only inherits the fingerprint of its own named endpoint -
+// never the instance-level fingerprint, which pins whichever member the
+// connection URL happens to reach. Unknown stays empty and asserts nothing.
+func pveNodeTLSFingerprint(instanceCfg *config.PVEInstance, nodeName string) string {
+	if instanceCfg == nil {
+		return ""
+	}
+	if !instanceCfg.IsCluster {
+		return strings.TrimSpace(instanceCfg.Fingerprint)
+	}
+	nodeName = strings.TrimSpace(nodeName)
+	match := ""
+	for _, endpoint := range instanceCfg.ClusterEndpoints {
+		if !strings.EqualFold(strings.TrimSpace(endpoint.NodeName), nodeName) {
+			continue
+		}
+		fingerprint := strings.TrimSpace(endpoint.Fingerprint)
+		if fingerprint == "" {
+			continue
+		}
+		if match != "" && !strings.EqualFold(match, fingerprint) {
+			// Ambiguous duplicate endpoint records fail unknown.
+			return ""
+		}
+		match = fingerprint
+	}
+	return match
+}
+
 func (m *Monitor) pveNodeUsesProviderScopedIdentity(instanceName string, instanceCfg *config.PVEInstance) bool {
 	if instanceCfg == nil || !instanceCfg.IsCluster || strings.TrimSpace(instanceCfg.ClusterName) == "" {
 		return false

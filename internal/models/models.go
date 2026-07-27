@@ -118,6 +118,11 @@ type Node struct {
 	IsClusterMember              bool         `json:"isClusterMember"` // True if part of a cluster
 	ClusterName                  string       `json:"clusterName"`     // Name of cluster (empty if standalone)
 	ProviderScopedIdentity       bool         `json:"providerScopedIdentity,omitempty"`
+	// TLSFingerprint is the TOFU-captured TLS certificate fingerprint recorded
+	// in configuration for this node's API endpoint, when known. It is machine
+	// identity evidence for state aggregation only, never a polling or trust
+	// setting, and is not published to clients.
+	TLSFingerprint string `json:"-"`
 
 	// Package updates - polled less frequently (every 30 mins)
 	PendingUpdates          int       `json:"pendingUpdates"`                    // Number of pending apt updates
@@ -3421,12 +3426,25 @@ func registerNodeAliases(
 	}
 }
 
+// normalizeNodeTLSFingerprint reduces a TLS certificate fingerprint to a
+// comparable form. Comparison-only: unknown stays empty, no validation.
+func normalizeNodeTLSFingerprint(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	normalized = strings.TrimPrefix(normalized, "sha256:")
+	normalized = strings.ReplaceAll(normalized, ":", "")
+	return strings.ReplaceAll(normalized, " ", "")
+}
+
 // nodeProviderIdentityConflicts reports whether two classified cluster nodes
 // belong to different provider scopes. Cluster names are display labels and
 // can legitimately repeat; two non-empty connection instances therefore stay
-// distinct even when the label and member hostname are identical. Empty
-// cluster identity still permits a standalone/not-yet-classified view to merge
-// into its canonical cluster view by stronger endpoint or linked-agent proof.
+// distinct even when the label and member hostname are identical, unless
+// matching TOFU-captured TLS fingerprints prove both views reach the same
+// machine (the same cluster added twice). Contradicting or unknown
+// fingerprints keep the fail-safe split: two distinct clusters must never be
+// silently folded into one. Empty cluster identity still permits a
+// standalone/not-yet-classified view to merge into its canonical cluster view
+// by stronger endpoint or linked-agent proof.
 func nodeProviderIdentityConflicts(a, b Node) bool {
 	clusterA := normalizeNodeIdentityPart(a.ClusterName)
 	clusterB := normalizeNodeIdentityPart(b.ClusterName)
@@ -3438,7 +3456,12 @@ func nodeProviderIdentityConflicts(a, b Node) bool {
 	}
 	instanceA := normalizeNodeIdentityPart(a.Instance)
 	instanceB := normalizeNodeIdentityPart(b.Instance)
-	return instanceA != "" && instanceB != "" && instanceA != instanceB
+	if instanceA == "" || instanceB == "" || instanceA == instanceB {
+		return false
+	}
+	fpA := normalizeNodeTLSFingerprint(a.TLSFingerprint)
+	fpB := normalizeNodeTLSFingerprint(b.TLSFingerprint)
+	return fpA == "" || fpA != fpB
 }
 
 func resolveNodeMergeKey(
@@ -3584,9 +3607,10 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	defer s.mu.Unlock()
 
 	// Preserve LinkedAgentID for nodes that are being updated, including when IDs churn.
-	existingNodeLinks := make(map[string]string)              // nodeID -> linkedAgentID
-	existingNodeLinksByLogicalKey := make(map[string]string)  // logical node key -> linkedAgentID
-	agentClusterHints := make(map[string]map[string]struct{}) // linkedAgentID -> normalized cluster names of its linked nodes
+	existingNodeLinks := make(map[string]string)                  // nodeID -> linkedAgentID
+	existingNodeLinksByLogicalKey := make(map[string]string)      // logical node key -> linkedAgentID
+	agentClusterHints := make(map[string]map[string]struct{})     // linkedAgentID -> normalized cluster names of its linked nodes
+	agentFingerprintHints := make(map[string]map[string]struct{}) // linkedAgentID -> normalized TLS fingerprints of its linked nodes
 	for _, node := range s.Nodes {
 		if node.LinkedAgentID == "" {
 			continue
@@ -3602,6 +3626,14 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 				agentClusterHints[node.LinkedAgentID] = hints
 			}
 			hints[cluster] = struct{}{}
+		}
+		if fingerprint := normalizeNodeTLSFingerprint(node.TLSFingerprint); fingerprint != "" {
+			hints := agentFingerprintHints[node.LinkedAgentID]
+			if hints == nil {
+				hints = make(map[string]struct{})
+				agentFingerprintHints[node.LinkedAgentID] = hints
+			}
+			hints[fingerprint] = struct{}{}
 		}
 	}
 
@@ -3724,15 +3756,24 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 		}
 	}
 
-	// Hostname matches are weak evidence: two clusters can reuse the same node
-	// names on different subnets. Reject a candidate agent when the evidence we
-	// do hold contradicts the node - the agent's linked nodes live in a different
-	// named cluster, or the node's endpoint IP is absent from the IPs the agent
+	// Hostname and address matches are weak evidence: two clusters can reuse
+	// the same node names, and sites that reuse RFC1918 ranges can present the
+	// same endpoint IP for different machines. Reject a candidate agent when
+	// the evidence we do hold contradicts the node - the agent's linked nodes
+	// live in a different named cluster, carry a different TLS certificate
+	// fingerprint, or the node's endpoint IP is absent from the IPs the agent
 	// reports.
 	hostContradictsNode := func(hostID string, node Node) bool {
 		if hints := agentClusterHints[hostID]; len(hints) > 0 {
 			if cluster := normalizeNodeIdentityPart(node.ClusterName); cluster != "" {
 				if _, sameCluster := hints[cluster]; !sameCluster {
+					return true
+				}
+			}
+		}
+		if fingerprint := normalizeNodeTLSFingerprint(node.TLSFingerprint); fingerprint != "" {
+			if hints := agentFingerprintHints[hostID]; len(hints) > 0 {
+				if _, sameMachine := hints[fingerprint]; !sameMachine {
 					return true
 				}
 			}
@@ -3770,8 +3811,13 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			endpoint := extractHostEndpoint(node.Host)
 			if ip := normalizeIPAddress(endpoint); ip != "" {
 				if ids, ok := hostAgentByIP[ip]; ok {
+					// An address match alone is not machine identity across
+					// sites that reuse RFC1918 ranges: the cluster and
+					// fingerprint evidence must not contradict.
 					for hostID := range ids {
-						endpointCandidates[hostID] = struct{}{}
+						if !hostContradictsNode(hostID, node) {
+							endpointCandidates[hostID] = struct{}{}
+						}
 					}
 				}
 			} else if endpoint != "" {

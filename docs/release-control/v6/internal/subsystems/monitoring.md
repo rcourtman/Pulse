@@ -102,9 +102,19 @@ Node state aggregation is cluster-identity-scoped beyond presentation: a
 hostname match alone must never bind a node to a host agent, and neither a
 shared linked-agent identity nor an endpoint merge alias may fold two node
 slots into one, when the two sides carry contradicting non-empty cluster
-names. A hostname-based agent match is also rejected when the node's endpoint
-IP is absent from the candidate agent's reported IPs. Nodes with empty
-cluster names keep merging into their cluster view so standalone and
+names. Cluster names shared across different connection instances are equally
+ambiguous: such views stay split unless matching TOFU-captured TLS
+fingerprints, propagated from the instance's endpoint records onto each node,
+prove both views reach the same machine — then the legitimate
+same-cluster-added-twice duplicate still folds into one slot even without
+config-level endpoint overlap. Contradicting or unknown fingerprints keep the
+fail-safe split. Agent binding follows the same doctrine: an endpoint address
+match is not machine identity across sites that reuse RFC1918 ranges, so
+every hostname- or IP-based agent match is rejected when the candidate
+agent's linked nodes live in a different named cluster or carry a different
+TLS fingerprint, and a hostname-based match is also rejected when the node's
+endpoint IP is absent from the candidate agent's reported IPs. Nodes with
+empty cluster names keep merging into their cluster view so standalone and
 not-yet-classified endpoint views of the same machine still fold together.
 Docker and Podman container CPU collection preserves the runtime-native raw
 per-core CPU percent, but monitoring-owned history and alert threshold
@@ -231,7 +241,9 @@ TOFU-captured TLS fingerprints veto consolidation whenever the instance
 authorities, a same-named endpoint, or a same-addressed endpoint carry
 contradicting non-empty fingerprints. The fail-safe direction is fixed: a
 certificate rotation may leave a genuinely duplicated cluster as two views,
-but two distinct clusters must never be silently folded into one.
+but two distinct clusters must never be silently folded into one. The same
+per-endpoint fingerprint evidence propagates onto monitored nodes so node
+state aggregation applies the identical doctrine one layer down.
 
 
 Storage risk assessment owns the wearout evidence boundary for every consumer.

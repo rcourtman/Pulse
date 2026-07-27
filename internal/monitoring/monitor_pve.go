@@ -674,6 +674,7 @@ func (m *Monitor) placeholderNodeForInstance(instanceName string, instanceCfg *c
 		IsClusterMember:              instanceCfg.IsCluster,
 		ClusterName:                  instanceCfg.ClusterName,
 		ProviderScopedIdentity:       m.pveNodeUsesProviderScopedIdentity(instanceName, instanceCfg),
+		TLSFingerprint:               pveNodeTLSFingerprint(instanceCfg, nodeName),
 		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
 	}
 }

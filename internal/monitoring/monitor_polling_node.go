@@ -75,6 +75,7 @@ func (m *Monitor) pollPVENode(
 		IsClusterMember:              instanceCfg.IsCluster,
 		ClusterName:                  instanceCfg.ClusterName,
 		ProviderScopedIdentity:       m.pveNodeUsesProviderScopedIdentity(instanceName, instanceCfg),
+		TLSFingerprint:               pveNodeTLSFingerprint(instanceCfg, node.Node),
 		TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
 	}
 	var nodeDiskSource string
