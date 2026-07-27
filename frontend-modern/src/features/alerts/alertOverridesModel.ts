@@ -200,6 +200,18 @@ export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => 
 export const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
   uniqueIds(...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`));
 
+// Kubernetes / TrueNAS / VMware resources are keyed by their unified resource
+// IDs in the overrides map (the same candidates buildProjectedOverrides
+// indexes platform alert rows under).
+export const unifiedPlatformOverrideIdCandidates = (resource: Resource): string[] =>
+  uniqueIds(
+    resource.id,
+    ...(resource.canonicalIdentity?.supersededIds ?? []),
+    resource.metricsTarget?.resourceId,
+    resource.discoveryTarget?.resourceId,
+    resource.platformId,
+  );
+
 export const buildContainerRuntimeResources = ({
   allResources,
   dockerHostResources,
@@ -281,14 +293,7 @@ export const buildProjectedOverrides = ({
     overridesList.push(override);
   };
 
-  const alertResourceIdCandidates = (resource: Resource): string[] =>
-    uniqueIds(
-      resource.id,
-      ...(resource.canonicalIdentity?.supersededIds ?? []),
-      resource.metricsTarget?.resourceId,
-      resource.discoveryTarget?.resourceId,
-      resource.platformId,
-    );
+  const alertResourceIdCandidates = unifiedPlatformOverrideIdCandidates;
 
   const isTrueNASResource = (resource: Resource): boolean =>
     isTrueNASSystemResource(resource) ||

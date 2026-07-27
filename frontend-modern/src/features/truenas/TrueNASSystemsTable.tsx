@@ -7,6 +7,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
@@ -314,6 +315,11 @@ export const TrueNASSystemsTable: Component<{
                         .filter(Boolean)
                         .join(' · ');
                     const metricsKey = () => buildMetricKeyForUnifiedResource(system);
+                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(system);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('truenas', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds('truenas', 'memory', alertResourceIds());
                     const cpuPercent = () => getPlatformTableFiniteMetric(system.cpu?.current);
                     const memoryTotal = () =>
                       getPlatformTableFiniteMetric(system.memory?.total) ?? 0;
@@ -387,6 +393,7 @@ export const TrueNASSystemsTable: Component<{
                               resourceId={metricsKey()}
                               isRunning={canRenderMetrics() && cpuPercent() !== undefined}
                               showMobile={false}
+                              thresholds={cpuThresholds()}
                             />
                           </TableCell>
                           <TableCell
@@ -400,6 +407,7 @@ export const TrueNASSystemsTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
                               />
                             </Show>
                           </TableCell>

@@ -7,6 +7,8 @@ import { getShortImageName } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   PlatformSortableTableHead,
   PlatformTableMetricFallback,
@@ -176,6 +178,7 @@ export const TrueNASAppsTable: Component<{
   emptyDescription: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const alertsActivation = useAlertsActivation();
   const tableState = createPlatformTableFilterState({
     resources: () => props.apps,
     initialStatus: 'all' as TrueNASAppStatusFilter,
@@ -303,6 +306,11 @@ export const TrueNASAppsTable: Component<{
                     const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
+                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(resource);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('truenas', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds('truenas', 'memory', alertResourceIds());
                     const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
                     const memoryTotal = () =>
                       getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
@@ -373,6 +381,7 @@ export const TrueNASAppsTable: Component<{
                                 resourceId={metricsKey()}
                                 isRunning={canRenderMetrics()}
                                 fallback={<PlatformTableMetricFallback />}
+                                thresholds={cpuThresholds()}
                               />
                             </Show>
                           </TableCell>
@@ -385,6 +394,7 @@ export const TrueNASAppsTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
                               />
                             </Show>
                           </TableCell>

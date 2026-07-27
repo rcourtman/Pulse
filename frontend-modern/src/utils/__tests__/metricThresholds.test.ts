@@ -224,6 +224,44 @@ describe('metricThresholds', () => {
       });
     });
 
+    it('resolves kubernetes, truenas, and vmware scope defaults with factory fallbacks', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        storageDefault: { trigger: 85, clear: 80 },
+        kubernetesDefaults: {
+          memory: { trigger: 92, clear: 87 },
+        },
+        overrides: {
+          'k8s:prod:node:worker-01': {
+            cpu: { trigger: 97, clear: 94 },
+          },
+        },
+      } as AlertConfig;
+
+      expect(resolveMetricDisplayThresholds(config, 'kubernetes', 'memory')).toEqual({
+        warning: 87,
+        critical: 92,
+      });
+      expect(
+        resolveMetricDisplayThresholds(config, 'kubernetes', 'cpu', ['k8s:prod:node:worker-01']),
+      ).toEqual({
+        warning: 94,
+        critical: 97,
+      });
+      // No configured defaults: factory platform defaults apply, not the
+      // hardcoded METRIC_THRESHOLDS display constants.
+      expect(resolveMetricDisplayThresholds(config, 'truenas', 'disk')).toEqual({
+        warning: 80,
+        critical: 85,
+      });
+      expect(resolveMetricDisplayThresholds(config, 'vmware', 'memory')).toEqual({
+        warning: 80,
+        critical: 85,
+      });
+    });
+
     it('does not treat external notification activation as detector state', () => {
       const config = {
         enabled: true,

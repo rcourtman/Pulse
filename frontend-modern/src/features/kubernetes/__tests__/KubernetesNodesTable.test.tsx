@@ -17,7 +17,10 @@ vi.mock('@/contexts/appRuntime', () => ({
 }));
 
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ detectionEnabled: () => true }),
+  useAlertsActivation: () => ({
+    detectionEnabled: () => true,
+    getMetricThresholds: () => ({ warning: 80, critical: 85 }),
+  }),
 }));
 
 const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({

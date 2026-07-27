@@ -303,6 +303,12 @@ export const ProxmoxNodesTable: Component<{
               const alertResourceIds = () => hostOverrideIdCandidates(node);
               const temperatureThresholds = () =>
                 alertsActivation.getMetricThresholds('node', 'temperature', alertResourceIds());
+              const cpuThresholds = () =>
+                alertsActivation.getMetricThresholds('node', 'cpu', alertResourceIds());
+              const memoryThresholds = () =>
+                alertsActivation.getMetricThresholds('node', 'memory', alertResourceIds());
+              const diskThresholds = () =>
+                alertsActivation.getMetricThresholds('node', 'disk', alertResourceIds());
               const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current) ?? 0;
               const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
               const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
@@ -432,6 +438,7 @@ export const ProxmoxNodesTable: Component<{
                                 resourceId={metricsKey()}
                                 isRunning
                                 showMobile={false}
+                                thresholds={cpuThresholds()}
                               />
                             }
                           >
@@ -466,6 +473,7 @@ export const ProxmoxNodesTable: Component<{
                                 cacheInclusiveLabel="Shown in Proxmox"
                                 swapUsed={drawerNode()?.memory?.swapUsed || 0}
                                 swapTotal={drawerNode()?.memory?.swapTotal || 0}
+                                thresholds={memoryThresholds()}
                               />
                             }
                           >
@@ -501,6 +509,7 @@ export const ProxmoxNodesTable: Component<{
                                 }
                                 disks={normalizeDiskArray(node.agent?.disks)}
                                 aggregateDisk={aggregateDisk()}
+                                thresholds={diskThresholds()}
                               />
                             }
                           >

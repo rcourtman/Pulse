@@ -13,7 +13,10 @@ vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
 }));
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ detectionEnabled: () => true }),
+  useAlertsActivation: () => ({
+    detectionEnabled: () => true,
+    getMetricThresholds: () => ({ warning: 80, critical: 85 }),
+  }),
 }));
 
 import { VsphereHostsTable } from '@/features/vmware/VsphereHostsTable';

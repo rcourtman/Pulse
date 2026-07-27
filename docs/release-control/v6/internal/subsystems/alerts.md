@@ -430,13 +430,22 @@ metadata or resource type says storage they must keep using storage threshold
 resolution and source-alias overrides instead of node defaults.
 
 Browser metric severity colors are also alert-backed. Workloads,
-Infrastructure, and Storage may pass resolved display thresholds into their
-local bars, but threshold selection must flow through the shared alert activation
+Infrastructure, Storage, and the platform-page tables (Docker hosts and
+containers, Proxmox nodes, Kubernetes clusters and nodes, TrueNAS systems and
+apps, vSphere hosts) may pass resolved display thresholds into their local
+bars, but threshold selection must flow through the shared alert activation
 store and `frontend-modern/src/utils/metricThresholds.ts`, including configured
 hysteresis, disabled thresholds, storage usage defaults, and guest/Docker
-override identity candidates. Static metric-color defaults are only fallback
-presentation behavior for callers that do not have alert configuration in
-scope.
+override identity candidates. The display resolver mirrors the runtime's
+per-platform default scopes — guest, node, pbs, agent, docker, storage, plus
+kubernetes, truenas, and vmware backed by `kubernetesDefaults`,
+`truenasDefaults`, and `vmwareDefaults` — and unified platform resources
+resolve overrides through the shared
+`unifiedPlatformOverrideIdCandidates` chain in
+`frontend-modern/src/features/alerts/alertOverridesModel.ts` (the same
+candidate set `buildProjectedOverrides` indexes platform alert rows under).
+Static metric-color defaults are only fallback presentation behavior for
+callers that do not have alert configuration in scope.
 
 Docker container image-update alerts are lifecycle-governed by the alerts
 runtime. Disabling Docker update alerts globally, disabling alerts for a

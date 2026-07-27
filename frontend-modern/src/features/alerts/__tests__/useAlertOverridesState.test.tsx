@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 
+import { unifiedPlatformOverrideIdCandidates } from '../alertOverridesModel';
 import { useAlertOverridesState } from '../useAlertOverridesState';
 
 const makeResource = (overrides: Partial<Resource>): Resource =>
@@ -271,5 +272,39 @@ describe('useAlertOverridesState', () => {
       type: 'agent',
       platformType: 'truenas',
     });
+  });
+
+  it('exposes the unified platform override candidate chain used by display threshold lookups', () => {
+    const resource = makeResource({
+      id: 'k8s:prod:node:worker-01',
+      type: 'k8s-node',
+      platformId: 'prod',
+      canonicalIdentity: {
+        supersededIds: ['k8s:prod-old:node:worker-01'],
+      },
+      metricsTarget: { resourceId: 'metrics:worker-01' },
+      discoveryTarget: { resourceId: 'discovery:worker-01' },
+    } as Partial<Resource>);
+
+    // Candidate precedence matches the buildProjectedOverrides indexing order,
+    // so a stored override binds to the same row the tables color from.
+    expect(unifiedPlatformOverrideIdCandidates(resource)).toEqual([
+      'k8s:prod:node:worker-01',
+      'k8s:prod-old:node:worker-01',
+      'metrics:worker-01',
+      'discovery:worker-01',
+      'prod',
+    ]);
+
+    // Duplicates and blank entries collapse instead of producing repeat keys.
+    expect(
+      unifiedPlatformOverrideIdCandidates(
+        makeResource({
+          id: 'truenas-main',
+          type: 'agent',
+          platformId: 'truenas-main',
+        }),
+      ),
+    ).toEqual(['truenas-main']);
   });
 });

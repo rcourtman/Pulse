@@ -3,14 +3,33 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { DockerHostsTable } from '../DockerHostsTable';
 
+const formatThresholds = (thresholds?: MetricDisplayThresholds | null): string =>
+  thresholds ? `${thresholds.warning}/${thresholds.critical}` : '';
+
+// Row bars must color from the alert-configured thresholds, not the
+// hardcoded METRIC_THRESHOLDS display defaults (memory 75/85), so a host
+// with a raised memory override stops showing red below its alert point.
+const getMetricThresholdsMock = vi.hoisted(() =>
+  vi.fn((_scope: string, metric: string) =>
+    metric === 'memory' ? { warning: 90, critical: 95 } : { warning: 80, critical: 85 },
+  ),
+);
+
 vi.mock('@/components/shared/responsive', () => ({
-  ResponsiveMetricCell: (props: { type: string; isRunning?: boolean; resourceId?: string }) => (
+  ResponsiveMetricCell: (props: {
+    type: string;
+    isRunning?: boolean;
+    resourceId?: string;
+    thresholds?: MetricDisplayThresholds | null;
+  }) => (
     <div
       data-testid={`responsive-${props.type}-metric`}
       data-resource-id={props.resourceId ?? ''}
       data-running={String(props.isRunning)}
+      data-thresholds={formatThresholds(props.thresholds)}
     />
   ),
 }));
@@ -21,7 +40,7 @@ vi.mock('@/contexts/appRuntime', () => ({
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
     detectionEnabled: () => true,
-    getMetricThresholds: () => ({ warning: 80, critical: 85 }),
+    getMetricThresholds: getMetricThresholdsMock,
   }),
 }));
 
@@ -31,6 +50,7 @@ vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
     total: number;
     unavailable?: boolean;
     percentOnly?: number;
+    thresholds?: MetricDisplayThresholds | null;
   }) => (
     <div
       data-testid="stacked-memory-bar"
@@ -38,17 +58,24 @@ vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
       data-total={String(props.total)}
       data-unavailable={String(props.unavailable === true)}
       data-percent-only={String(props.percentOnly ?? '')}
+      data-thresholds={formatThresholds(props.thresholds)}
     />
   ),
 }));
 
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
-  StackedDiskBar: (props: { disks?: Disk[]; aggregateDisk?: Disk; mode?: string }) => (
+  StackedDiskBar: (props: {
+    disks?: Disk[];
+    aggregateDisk?: Disk;
+    mode?: string;
+    thresholds?: MetricDisplayThresholds | null;
+  }) => (
     <div
       data-testid="stacked-disk-bar"
       data-mode={props.mode ?? ''}
       data-disks={String(props.disks?.length ?? 0)}
       data-aggregate-usage={String(props.aggregateDisk?.usage ?? '')}
+      data-thresholds={formatThresholds(props.thresholds)}
     />
   ),
 }));
@@ -113,6 +140,30 @@ describe('DockerHostsTable', () => {
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-total', '8000');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-mode', 'vertical-bars');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disks', '2');
+  });
+
+  it('colors row metric bars from alert-configured thresholds, not display defaults', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[makeDockerHost()]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByTestId('responsive-cpu-metric')).toHaveAttribute(
+      'data-thresholds',
+      '80/85',
+    );
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-thresholds', '90/95');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-thresholds', '80/85');
+    expect(getMetricThresholdsMock).toHaveBeenCalledWith(
+      'agent',
+      'memory',
+      expect.arrayContaining(['agent:docker-01']),
+    );
   });
 
   it('opens host details inline without route navigation or submit-style drawer controls', () => {

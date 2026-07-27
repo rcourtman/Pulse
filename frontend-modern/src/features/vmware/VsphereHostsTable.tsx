@@ -7,6 +7,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
@@ -324,6 +325,11 @@ export const VsphereHostsTable: Component<{
                     const displayStatus = () => getVmwareResourceDisplayStatus(host);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
+                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(host);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('vmware', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds('vmware', 'memory', alertResourceIds());
                     const cpuPercent = () => getPlatformTableFiniteMetric(host.cpu?.current);
                     const memoryTotal = () => getPlatformTableFiniteMetric(host.memory?.total) ?? 0;
                     const memoryUsed = () => getPlatformTableFiniteMetric(host.memory?.used) ?? 0;
@@ -418,6 +424,7 @@ export const VsphereHostsTable: Component<{
                               resourceId={metricsKey()}
                               isRunning={canRenderMetrics() && cpuPercent() !== undefined}
                               showMobile={false}
+                              thresholds={cpuThresholds()}
                             />
                           </TableCell>
                           <TableCell
@@ -431,6 +438,7 @@ export const VsphereHostsTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
                               />
                             </Show>
                           </TableCell>

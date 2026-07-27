@@ -18,15 +18,27 @@ import {
   FACTORY_DISK_TEMP_BY_TYPE,
   FACTORY_DOCKER_DEFAULTS,
   FACTORY_GUEST_DEFAULTS,
+  FACTORY_KUBERNETES_DEFAULTS,
   FACTORY_NODE_DEFAULTS,
   FACTORY_PBS_DEFAULTS,
   FACTORY_STORAGE_DEFAULT,
+  FACTORY_TRUENAS_DEFAULTS,
+  FACTORY_VMWARE_DEFAULTS,
 } from '@/utils/alertThresholdDefaults';
 
 export type MetricType = 'cpu' | 'memory' | 'disk';
 export type DisplayMetricType = MetricType | 'temperature' | 'diskTemperature' | 'usage';
 export type DisplayMetricBarType = MetricType | 'generic';
-export type AlertThresholdScope = 'guest' | 'node' | 'pbs' | 'agent' | 'docker' | 'storage';
+export type AlertThresholdScope =
+  | 'guest'
+  | 'node'
+  | 'pbs'
+  | 'agent'
+  | 'docker'
+  | 'storage'
+  | 'kubernetes'
+  | 'truenas'
+  | 'vmware';
 
 export interface MetricDisplayThresholds {
   warning: number;
@@ -66,6 +78,9 @@ const SCOPE_DEFAULTS: Record<
   pbs: FACTORY_PBS_DEFAULTS,
   agent: FACTORY_AGENT_DEFAULTS,
   docker: FACTORY_DOCKER_DEFAULTS,
+  kubernetes: FACTORY_KUBERNETES_DEFAULTS,
+  truenas: FACTORY_TRUENAS_DEFAULTS,
+  vmware: FACTORY_VMWARE_DEFAULTS,
 };
 
 const toFiniteNumber = (value: unknown): number | null => {
@@ -104,6 +119,12 @@ const getScopeThresholds = (
       return config?.dockerDefaults;
     case 'storage':
       return config?.storageDefault;
+    case 'kubernetes':
+      return config?.kubernetesDefaults;
+    case 'truenas':
+      return config?.truenasDefaults;
+    case 'vmware':
+      return config?.vmwareDefaults;
   }
 };
 

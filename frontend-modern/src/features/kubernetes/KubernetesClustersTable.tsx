@@ -7,6 +7,8 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
@@ -72,6 +74,7 @@ export const KubernetesClustersTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const alertsActivation = useAlertsActivation();
   const tableState = createPlatformTableFilterState({
     resources: () => props.clusters,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -246,6 +249,15 @@ export const KubernetesClustersTable: Component<{
                     const context = () => formatPlatformTableTextValue(cluster.kubernetes?.context);
                     const version = () => formatPlatformTableTextValue(cluster.kubernetes?.version);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(cluster);
+                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(cluster);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('kubernetes', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds(
+                        'kubernetes',
+                        'memory',
+                        alertResourceIds(),
+                      );
                     const cpuPercent = () => getPlatformTableFiniteMetric(cluster.cpu?.current);
                     const memoryTotal = () =>
                       getPlatformTableFiniteMetric(cluster.memory?.total) ?? 0;
@@ -352,6 +364,7 @@ export const KubernetesClustersTable: Component<{
                               resourceId={metricsKey()}
                               isRunning={canRenderMetrics() && cpuPercent() !== undefined}
                               showMobile={false}
+                              thresholds={cpuThresholds()}
                             />
                           </TableCell>
                           <TableCell
@@ -365,6 +378,7 @@ export const KubernetesClustersTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
                               />
                             </Show>
                           </TableCell>

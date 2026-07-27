@@ -3581,6 +3581,15 @@ Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
 must compose those helpers instead of declaring local `metricFallback` /
 `finiteMetric` helpers or inlining centered muted dash fallback markup in
 metric cells.
+Platform table metric severity coloring is alert-backed, not hardcoded. The
+Docker host and container, Proxmox node, Kubernetes cluster and node, TrueNAS
+system and app, and vSphere host tables must resolve display thresholds
+through the alerts subsystem's activation store
+(`getMetricThresholds` with the platform's runtime scope and override
+identity candidates) and pass them into the shared metric bar primitives
+(`ResponsiveMetricCell`, `StackedMemoryBar`, `StackedDiskBar`); the static
+`METRIC_THRESHOLDS` display constants remain fallback-only presentation for
+callers without alert configuration in scope.
 Canonical Linux memory usage-unavailable is a first-class metric fallback,
 not a numeric zero. Shared workload bars, platform tables, drawers, and live
 history labels must render `N/A` (while retaining known capacity where useful)

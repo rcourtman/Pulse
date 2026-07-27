@@ -10,6 +10,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
@@ -338,6 +339,13 @@ export const DockerHostsTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(host.status);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
+                    const alertResourceIds = () => hostOverrideIdCandidates(host);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('agent', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds('agent', 'memory', alertResourceIds());
+                    const diskThresholds = () =>
+                      alertsActivation.getMetricThresholds('agent', 'disk', alertResourceIds());
                     const cpuPercent = () => percentFromMetric(host.cpu);
                     const memoryUsed = () => memoryUsedFor(host);
                     const memoryTotal = () => memoryTotalFor(host);
@@ -448,6 +456,7 @@ export const DockerHostsTable: Component<{
                               resourceId={metricsKey()}
                               isRunning={canRenderMetrics() && cpuPercent() !== undefined}
                               showMobile={false}
+                              thresholds={cpuThresholds()}
                             />
                           </TableCell>
                           <TableCell
@@ -462,6 +471,7 @@ export const DockerHostsTable: Component<{
                                 total={memoryTotal()}
                                 unavailable={memoryUnavailableFor(host)}
                                 percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
                               />
                             </Show>
                           </TableCell>
@@ -476,6 +486,7 @@ export const DockerHostsTable: Component<{
                                 mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
                                 disks={disks()}
                                 aggregateDisk={aggregateDisk()}
+                                thresholds={diskThresholds()}
                               />
                             </Show>
                           </TableCell>

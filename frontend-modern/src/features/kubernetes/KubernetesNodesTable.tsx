@@ -8,6 +8,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -300,6 +301,15 @@ export const KubernetesNodesTable: Component<{
                     };
                     const indicator = () => mapKubernetesNodeStatus(node);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(node);
+                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(node);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('kubernetes', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds(
+                        'kubernetes',
+                        'memory',
+                        alertResourceIds(),
+                      );
                     const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current);
                     const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
                     const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
@@ -387,6 +397,7 @@ export const KubernetesNodesTable: Component<{
                               resourceId={metricsKey()}
                               isRunning={canRenderMetrics() && cpuPercent() !== undefined}
                               showMobile={false}
+                              thresholds={cpuThresholds()}
                             />
                           </TableCell>
                           <TableCell
@@ -400,6 +411,7 @@ export const KubernetesNodesTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
                               />
                             </Show>
                           </TableCell>

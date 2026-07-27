@@ -1,136 +1,133 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-07-19",
+  "generated": "2026-07-27",
   "defaultThresholdPercent": 15,
   "chunks": {
     "index": {
-      "baselineGzip": 133755
+      "baselineGzip": 136248
     },
     "sharedPlatformPage": {
-      "baselineGzip": 98535
+      "baselineGzip": 104842
     },
     "Alerts": {
-      "baselineGzip": 91158
+      "baselineGzip": 96254
     },
     "Settings": {
-      "baselineGzip": 86127
+      "baselineGzip": 87928
     },
     "InfrastructureWorkspace": {
-      "baselineGzip": 77860
+      "baselineGzip": 85384
     },
     "Proxmox": {
-      "baselineGzip": 68321
+      "baselineGzip": 69453
     },
     "Chat": {
-      "baselineGzip": 67685
+      "baselineGzip": 67797
     },
     "WorkloadsSurface": {
-      "baselineGzip": 53883
+      "baselineGzip": 53812
     },
     "AIIntelligence": {
-      "baselineGzip": 52309
+      "baselineGzip": 53154
     },
     "Docker": {
-      "baselineGzip": 25183
+      "baselineGzip": 25483
     },
     "vendor-ai": {
-      "baselineGzip": 22826
+      "baselineGzip": 23030
     },
     "Standalone": {
-      "baselineGzip": 17923
+      "baselineGzip": 18590
     },
     "vendor-solid": {
       "baselineGzip": 17620
     },
     "Kubernetes": {
-      "baselineGzip": 16467
+      "baselineGzip": 16636
     },
     "TrueNAS": {
-      "baselineGzip": 15774
+      "baselineGzip": 15979
     },
     "vendor-highlight": {
       "baselineGzip": 13743
     },
     "ReportingPanel": {
-      "baselineGzip": 12514
+      "baselineGzip": 12501
     },
     "vendor-icons": {
-      "baselineGzip": 11105
+      "baselineGzip": 11148
     },
     "vendor": {
       "baselineGzip": 9857
     },
     "Vmware": {
-      "baselineGzip": 9716
+      "baselineGzip": 9757
     },
     "aiControlLevelPresentation": {
-      "baselineGzip": 9644
+      "baselineGzip": 9643
     },
     "UpdatesSettingsPanel": {
-      "baselineGzip": 9565
+      "baselineGzip": 9307
     },
     "messages.de": {
-      "baselineGzip": 8937
+      "baselineGzip": 9198
     },
     "messages.es": {
-      "baselineGzip": 8753
+      "baselineGzip": 8991
     },
     "AuditLogPanel": {
-      "baselineGzip": 8537
+      "baselineGzip": 8701
     },
     "APIAccessPanel": {
-      "baselineGzip": 8423
+      "baselineGzip": 8399
     },
     "DrawerDiskListCard": {
-      "baselineGzip": 8043
+      "baselineGzip": 8047
     },
     "FormTextarea": {
-      "baselineGzip": 7336
-    },
-    "ActionReviewDialog": {
-      "baselineGzip": 6712
+      "baselineGzip": 7337
     },
     "AvailabilitySettingsPanel": {
-      "baselineGzip": 7250
+      "baselineGzip": 7240
     },
-    "SecurityAuthPanel": {
-      "baselineGzip": 5836
-    },
-    "FilterBar": {
-      "baselineGzip": 5641
+    "ActionReviewDialog": {
+      "baselineGzip": 6711
     },
     "DiagnosticsPanel": {
-      "baselineGzip": 5567
+      "baselineGzip": 5840
     },
-    "SetupWizard": {
-      "baselineGzip": 5558
+    "SecurityAuthPanel": {
+      "baselineGzip": 5833
     },
     "useUnifiedResources": {
-      "baselineGzip": 5539
+      "baselineGzip": 5790
+    },
+    "FilterBar": {
+      "baselineGzip": 5636
+    },
+    "SetupWizard": {
+      "baselineGzip": 5532
     },
     "HelpIcon": {
-      "baselineGzip": 5518
-    },
-    "RelaySettingsPanel": {
-      "baselineGzip": 5325
+      "baselineGzip": 5516
     },
     "truenasPageModel": {
-      "baselineGzip": 5292
+      "baselineGzip": 5413
     },
-    "alertOverridesModel": {
-      "baselineGzip": 5236
+    "RelaySettingsPanel": {
+      "baselineGzip": 5295
     },
     "OrganizationSharingPanel": {
-      "baselineGzip": 5185
+      "baselineGzip": 5183
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 1159293
+      "baselineGzip": 1182853
     },
     "css": {
-      "baselineGzip": 26579
+      "baselineGzip": 26751
     }
   }
 }

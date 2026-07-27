@@ -337,6 +337,14 @@ Alert decoration on those platform rows consumes the canonical active-alert
 read model and the detector-enabled accessor. External notification activation
 is not a resource-health field and must never suppress row alerts, change
 resource filtering, or create a parallel platform-local alert truth.
+Metric severity coloring on those platform rows is alert-threshold-backed:
+platform tables resolve display thresholds through the alerts activation
+store using the platform's runtime scope (agent for Docker hosts, docker for
+containers, node for Proxmox nodes, kubernetes / truenas / vmware for their
+platform rows) and the resource's override identity candidates (host,
+docker-container, or unified-platform candidate chains) rather than
+platform-local threshold constants, so row bars agree with the alert runtime
+about when a resource is in a warning or critical band.
 The standalone Machines monitor keeps resource-specific health on the canonical
 table row and resource detail surface rather than duplicating row warnings in a
 page-wide posture banner. Its row indicator must use the same canonical resource

@@ -22,6 +22,8 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { dockerContainerOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -262,6 +264,7 @@ const DOCKER_CONTAINER_SEARCH_TIPS = {
 };
 
 export const DockerContainersTable: Component<DockerContainersTableProps> = (props) => {
+  const alertsActivation = useAlertsActivation();
   const breakpoint = useBreakpoint();
   const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   // Search and status live in the URL, like the host scope below, so the
@@ -445,6 +448,18 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
+    // Overrides are keyed as docker:<hostId>/<shortId>; without the backing
+    // host resource only the docker-scope defaults can apply.
+    const alertResourceIds = () => {
+      const hostResource = hostResourceByName().get(host());
+      if (!hostResource) return [];
+      const shortId = resource.id.includes('/') ? resource.id.split('/').pop()! : resource.id;
+      return dockerContainerOverrideIdCandidates(hostResource, shortId);
+    };
+    const cpuThresholds = () =>
+      alertsActivation.getMetricThresholds('docker', 'cpu', alertResourceIds());
+    const memoryThresholds = () =>
+      alertsActivation.getMetricThresholds('docker', 'memory', alertResourceIds());
     const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
     const memoryUsed = () => getPlatformTableFiniteMetric(resource.memory?.used) ?? 0;
     const memoryTotal = () => getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
@@ -519,6 +534,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                 resourceId={metricsKey()}
                 isRunning={running() && cpuPercent() !== undefined}
                 showMobile={false}
+                thresholds={cpuThresholds()}
               />
             </TableCell>
           );
@@ -533,6 +549,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                   used={memoryUsed()}
                   total={memoryTotal()}
                   percentOnly={memoryPercentOnly()}
+                  thresholds={memoryThresholds()}
                 />
               </Show>
             </TableCell>
