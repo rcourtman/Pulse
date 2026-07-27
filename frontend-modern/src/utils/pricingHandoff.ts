@@ -67,6 +67,7 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   audit_logging: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   advanced_reporting: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  external_probe: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   long_term_metrics: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
 };
 

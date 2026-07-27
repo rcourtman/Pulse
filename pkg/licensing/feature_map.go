@@ -17,6 +17,7 @@ var DefaultFeatureKeys = []string{
 	FeatureRBAC,
 	FeatureAuditLogging,
 	FeatureAdvancedReporting,
+	FeatureExternalProbe,
 	FeatureMultiTenant,
 }
 

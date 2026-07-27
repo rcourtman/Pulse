@@ -201,6 +201,7 @@ describe('selfHostedPlans', () => {
       'audit_logging',
       'advanced_reporting',
       'agent_profiles',
+      'external_probe',
     ]);
     expect(
       SELF_HOSTED_PLAN_DEFINITIONS.map((plan) => ({

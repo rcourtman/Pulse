@@ -7639,7 +7639,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -7694,7 +7694,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 			{"key":"ai_alerts","reason":"Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
 			{"key":"agent_profiles","reason":"Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=agent_profiles"},
-			{"key":"audit_logging","reason":"Upgrade to Pro to keep a trustworthy action trail for incident review, accountability, and compliance.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=audit_logging"},
+			{"key":"external_probe","reason":"Upgrade to Pro to run availability checks from a probe outside the monitored site, with independent alerting.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=external_probe"},{"key":"audit_logging","reason":"Upgrade to Pro to keep a trustworthy action trail for incident review, accountability, and compliance.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=audit_logging"},
 			{"key":"advanced_reporting","reason":"Upgrade to Pro to turn live infrastructure state into shareable reports without manual screenshot work.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=advanced_reporting"}
 		],
 		"tier":"free",
@@ -7780,7 +7780,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
@@ -7822,7 +7822,7 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting"],
+		"capabilities":["update_alerts","sso","advanced_sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","rbac","audit_logging","advanced_reporting","external_probe"],
 		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],

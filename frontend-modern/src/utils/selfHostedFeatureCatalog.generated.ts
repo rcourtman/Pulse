@@ -262,6 +262,23 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
     },
   },
   {
+    key: 'external_probe',
+    displayName: 'External Probes',
+    comparisonName: 'External Probes',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'included_extra',
+    },
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
+  },
+  {
     key: 'kubernetes_ai',
     displayName: 'Kubernetes AI Analysis (Compatibility)',
     comparisonName: 'Kubernetes AI Analysis (Compatibility)',

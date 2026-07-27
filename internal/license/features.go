@@ -17,6 +17,7 @@ const (
 	FeatureSSO               = licensing.FeatureSSO
 	FeatureAdvancedSSO       = licensing.FeatureAdvancedSSO
 	FeatureAdvancedReporting = licensing.FeatureAdvancedReporting
+	FeatureExternalProbe     = licensing.FeatureExternalProbe
 	FeatureLongTermMetrics   = licensing.FeatureLongTermMetrics
 	FeatureRelay             = licensing.FeatureRelay
 	FeatureMobileApp         = licensing.FeatureMobileApp

@@ -44,6 +44,7 @@ var orderedFeatureMetadataKeys = []string{
 	FeatureAuditLogging,
 	FeatureAdvancedReporting,
 	FeatureAgentProfiles,
+	FeatureExternalProbe,
 	FeatureKubernetesAI,
 	FeatureMultiUser,
 	FeatureWhiteLabel,
@@ -252,6 +253,20 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 		},
 		UpgradeReason:   "Upgrade to Pro to turn live infrastructure state into shareable reports without manual screenshot work.",
 		UpgradePriority: 9,
+	},
+	FeatureExternalProbe: {
+		Key:                   FeatureExternalProbe,
+		DisplayName:           "External Probes",
+		ComparisonName:        "External Probes",
+		ShowInComparisonTable: true,
+		DisplayableInPlanUI:   true,
+		SelfHostedRoles: SelfHostedFeatureRoles{
+			Community: SelfHostedFeatureRoleHidden,
+			Relay:     SelfHostedFeatureRoleHidden,
+			Pro:       SelfHostedFeatureRoleIncludedExtra,
+		},
+		UpgradeReason:   "Upgrade to Pro to run availability checks from a probe outside the monitored site, with independent alerting.",
+		UpgradePriority: 7,
 	},
 	FeatureMultiUser: {
 		Key:                 FeatureMultiUser,

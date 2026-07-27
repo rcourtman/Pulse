@@ -81,6 +81,7 @@ describe('pricingHandoff', () => {
       'audit_logging',
       'advanced_reporting',
       'agent_profiles',
+      'external_probe',
     ]);
     for (const key of paidCatalogFeatureKeys) {
       expect(getUpgradeFallbackDestination(key)).toBe(

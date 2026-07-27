@@ -58,6 +58,7 @@ const (
 	featureAuditLoggingValue       = pkglicensing.FeatureAuditLogging
 	featureRBACValue               = pkglicensing.FeatureRBAC
 	featureAdvancedReportingValue  = pkglicensing.FeatureAdvancedReporting
+	featureExternalProbeValue      = pkglicensing.FeatureExternalProbe
 	featureWhiteLabelValue         = pkglicensing.FeatureWhiteLabel
 	featureLongTermMetricsValue    = pkglicensing.FeatureLongTermMetrics
 	featureDemoFixturesValue       = pkglicensing.FeatureDemoFixtures

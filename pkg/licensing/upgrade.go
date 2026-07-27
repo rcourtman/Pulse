@@ -93,6 +93,8 @@ func UpgradeURLForFeature(feature string) string {
 		return DefaultUpgradeURL + "&feature=audit_logging"
 	case FeatureAdvancedReporting:
 		return DefaultUpgradeURL + "&feature=advanced_reporting"
+	case FeatureExternalProbe:
+		return DefaultUpgradeURL + "&feature=external_probe"
 	default:
 		return DefaultUpgradeURL
 	}

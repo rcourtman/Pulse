@@ -33,6 +33,7 @@ const (
 	FeatureRBAC              = "rbac"               // Role-Based Access Control
 	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
 	FeatureAdvancedReporting = "advanced_reporting" // PDF/CSV reporting engine
+	FeatureExternalProbe     = "external_probe"     // Availability checks run from outside the monitored site
 
 	// MSP/Enterprise tier features
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
@@ -249,6 +250,7 @@ var proFeatures = appendFeatures(relayFeatures,
 	FeatureRBAC,
 	FeatureAuditLogging,
 	FeatureAdvancedReporting,
+	FeatureExternalProbe,
 )
 
 // mspFeatures adds multi-tenant policy on top of pro.
