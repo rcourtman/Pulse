@@ -1111,6 +1111,34 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
+The active support prerelease `v6.2.0-rc.1` cut sets the repo-root `VERSION`,
+repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
+fallback, and Helm chart release metadata to the same `6.2.0-rc.1` release
+version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
+versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
+does not move stable/latest install pointers or stable semver aliases. Stable
+install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
+continues to govern the stable line until this candidate is promoted. The first
+`v6.2.0` candidate introduces the Pulse Pro External Probes feature that runs
+assigned availability checks from a connected agent outside the monitored site,
+completes the multi-site Proxmox identity-isolation trilogy across connection
+consolidation, same-name node aggregation, and the first-poll unclassified-node
+window, adds host-agent identity-collapse detection for cloned machine-ids,
+restores service availability after a failed unattended update, follows
+same-host TrueNAS handshake redirects, and makes Pulse Intelligence outcome
+telemetry verified and complete. The exact `main` SHA must pass the integrated
+release checks and immutable-candidate build before the single-build workflow
+crosses its public mutation boundary.
+The `v6.2.0-rc.1` server cut is classified `no-mobile-impact`; no companion
+build upload is part of this cut. The existing mobile candidate programme
+remains separate, and the release packet must not describe a public store
+rollout.
+Authenticode signing through SignPath is the canonical Windows signing backend
+for the `v6.2.0` line. The owner-approved unsigned-Windows exception is bounded
+to `v6.1.0`, `v6.1.1`, and `v6.1.2` and does not extend to any `v6.2.0`
+release, so stable `v6.2.0` promotion must fail closed when the SignPath
+configuration or the returned signer proof is unavailable.
+
 The active stable `v6.1.2` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
 Helm chart release metadata to the same `6.1.2` release version. This patch
@@ -1251,9 +1279,14 @@ Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
 For the active stable `v6.1.2` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.1.2` until the next
-governed stable cut moves them forward. The stable promotion guard remains in
+`scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
+governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
+For the active support prerelease `v6.2.0-rc.1` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.1`
+until the next governed stable cut moves them forward. The stable promotion
+guard remains in force and must reject leftover `-rc.` defaults when the
+governed `VERSION` returns to a stable release.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
 as the current validation-risk commit. That head includes the earlier
 Docker-default correction plus the follow-on capacity-forecast and Patrol

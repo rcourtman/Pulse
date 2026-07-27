@@ -128,7 +128,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		want    string
 	}{
 		{version: "6.0.5-rc.4", want: "6.0.4"},
-		{version: "6.1.0-rc.5", want: "6.0.5"},
+		{version: "6.2.0-rc.1", want: "6.1.2"},
 	}
 
 	for _, test := range tests {
@@ -336,8 +336,9 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"the expanded Pulse Intelligence action and verification lifecycle, the operator-facing Actions inbox, monitor-first product workflows, governed host and storage operations, native-agent update safety, Windows logged-readiness and recovery proof, OIDC callback recovery, and fail-closed security hardening behind RC validation",
-		"The rc.5 server cut is classified `no-mobile-impact`; no companion build upload is part of this cut. The existing mobile candidate programme remains separate, and the release packet must not describe a public store rollout.",
+		"introduces the Pulse Pro External Probes feature that runs assigned availability checks from a connected agent outside the monitored site, completes the multi-site Proxmox identity-isolation trilogy across connection consolidation, same-name node aggregation, and the first-poll unclassified-node window, adds host-agent identity-collapse detection for cloned machine-ids, restores service availability after a failed unattended update, follows same-host TrueNAS handshake redirects, and makes Pulse Intelligence outcome telemetry verified and complete",
+		"The `v"+version+"` server cut is classified `no-mobile-impact`; no companion build upload is part of this cut. The existing mobile candidate programme remains separate, and the release packet must not describe a public store rollout.",
+		"Authenticode signing through SignPath is the canonical Windows signing backend for the `v6.2.0` line.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 }
