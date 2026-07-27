@@ -2120,10 +2120,49 @@ func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
 	if c == nil {
 		return nil, fmt.Errorf("truenas client is nil")
 	}
+	conn, err := c.dialRPCEndpoint(ctx, c.rpcURL, c.config.UseHTTPS)
+	if err == nil {
+		return conn, nil
+	}
+
+	// A plaintext handshake that answers with a redirect is almost always
+	// TrueNAS's HTTP -> HTTPS redirect (or an equivalent proxy) in front of
+	// the middleware. The REST transport used before v6.1.2 followed that
+	// redirect transparently, so http-configured appliances worked; a
+	// websocket handshake cannot follow it (issue #1631). When the redirect
+	// stays on the same host and upgrades to https, retry once over TLS and
+	// keep the upgraded endpoint for the rest of the client's lifetime.
+	var handshake *RPCHandshakeError
+	if !errors.As(err, &handshake) || !isRedirectStatus(handshake.StatusCode) {
+		return nil, err
+	}
+	upgraded, ok := httpsUpgradeTarget(c.rpcURL, handshake.Location)
+	if !ok {
+		if strings.TrimSpace(handshake.Location) != "" {
+			return nil, fmt.Errorf("truenas websocket endpoint redirected to %q; update the configured TrueNAS host to the address it redirects to: %w", handshake.Location, err)
+		}
+		return nil, fmt.Errorf("truenas websocket endpoint answered the handshake with a redirect; update the configured TrueNAS host to its https address: %w", err)
+	}
+
+	conn, retryErr := c.dialRPCEndpoint(ctx, upgraded, true)
+	if retryErr != nil {
+		return nil, fmt.Errorf("truenas endpoint redirects to https but the TLS retry against %s failed; configure the https endpoint explicitly and pin the certificate fingerprint or enable skip-verify for self-signed certificates: %w", upgraded, retryErr)
+	}
+
+	c.rpcURL = upgraded
+	c.config.UseHTTPS = true
+	c.updateTransportStatus(func(status *TransportStatus) {
+		status.Endpoint = upgraded
+		status.TLS = true
+	})
+	return conn, nil
+}
+
+func (c *Client) dialRPCEndpoint(ctx context.Context, rpcURL string, useTLS bool) (*websocket.Conn, error) {
 	dialer := websocket.Dialer{
 		Proxy: http.ProxyFromEnvironment,
 	}
-	if c.config.UseHTTPS {
+	if useTLS {
 		tlsConfig, err := buildTLSConfig(c.config.InsecureSkipVerify, c.config.Fingerprint)
 		if err != nil {
 			return nil, err
@@ -2137,15 +2176,53 @@ func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
 		}
 	}
 
-	conn, response, err := dialer.DialContext(ctx, c.rpcURL, nil)
+	conn, response, err := dialer.DialContext(ctx, rpcURL, nil)
 	if err != nil {
 		statusCode := 0
+		location := ""
 		if response != nil {
 			statusCode = response.StatusCode
+			location = response.Header.Get("Location")
 		}
-		return nil, &RPCHandshakeError{StatusCode: statusCode, Err: err}
+		return nil, &RPCHandshakeError{StatusCode: statusCode, Location: location, Err: err}
 	}
 	return conn, nil
+}
+
+func isRedirectStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return true
+	default:
+		return false
+	}
+}
+
+// httpsUpgradeTarget maps a redirect answered to a plaintext ws:// handshake
+// onto the equivalent wss:// endpoint. Only a same-host upgrade to https is
+// accepted: scheme downgrades and cross-host redirects never are, so a
+// redirect can move the connection to TLS but never to another appliance.
+func httpsUpgradeTarget(currentURL, location string) (string, bool) {
+	current, err := url.Parse(currentURL)
+	if err != nil || current.Scheme != "ws" {
+		return "", false
+	}
+	target, err := url.Parse(strings.TrimSpace(location))
+	if err != nil || target.Hostname() == "" {
+		return "", false
+	}
+	scheme := strings.ToLower(target.Scheme)
+	if scheme != "https" && scheme != "wss" {
+		return "", false
+	}
+	if !strings.EqualFold(target.Hostname(), current.Hostname()) {
+		return "", false
+	}
+	port := target.Port()
+	if port == "" {
+		port = "443"
+	}
+	return fmt.Sprintf("wss://%s/api/current", net.JoinHostPort(target.Hostname(), port)), true
 }
 
 func (c *trueNASRPCClient) authenticate(ctx context.Context, config ClientConfig) (string, error) {

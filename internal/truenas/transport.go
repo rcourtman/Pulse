@@ -106,7 +106,10 @@ func transportPhaseNoun(phase string) string {
 
 type RPCHandshakeError struct {
 	StatusCode int
-	Err        error
+	// Location is the redirect target from the handshake response, when the
+	// endpoint answered with a 3xx instead of upgrading the connection.
+	Location string
+	Err      error
 }
 
 func (e *RPCHandshakeError) Error() string {
