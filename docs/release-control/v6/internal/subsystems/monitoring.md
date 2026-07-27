@@ -156,6 +156,22 @@ downstream surfaces can warn, and it must clear on its own once only one
 machine keeps reporting for the window. Monitoring must not auto-split the
 collapsed identity: the machine ID is the identity key, and the remedy
 (regenerating the clone's machine-id) belongs to the operator.
+Host-agent identity collapse follows the same doctrine. Host report ingest
+keys agent identity on the machine-derived agent ID, so template deployments
+that still share `/etc/machine-id` fold two physical machines into one
+`models.Host` whose reports alternately overwrite each other (hostname, report
+IP, and interfaces flapping between sites), which also poisons node-agent
+linking. Ingest must watch each resolved host identity for identity-field
+revisits: a reported hostname or report IP that switches away and returns to a
+value already observed inside the monitoring-owned flap window proves two
+machines share the identity, while a one-time hostname rename never revisits
+and must not be flagged. The report IP is tracked alongside the hostname
+because template fleets often reuse hostnames across sites, leaving the
+address as the only field that betrays the clone. An active conflict is
+published as `models.Host.IdentityConflict` carrying the flapping values so
+downstream surfaces can warn, and it must clear on its own once only one
+machine keeps reporting for the window. Monitoring must not auto-split the
+collapsed identity here either; the remedy belongs to the operator.
 Unified Agent module projection is report-authored and additive. When one
 agent sends host and Docker reports for the same machine identity, monitoring
 must refresh one canonical machine carrying both facets so the Hosts and

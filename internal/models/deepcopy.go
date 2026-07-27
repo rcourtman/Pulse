@@ -388,7 +388,18 @@ func cloneHost(src Host) Host {
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	dest.Tags = append([]string(nil), src.Tags...)
 	dest.DiskExclude = append([]string(nil), src.DiskExclude...)
+	dest.IdentityConflict = cloneHostIdentityConflict(src.IdentityConflict)
 	return dest.NormalizeCollections()
+}
+
+func cloneHostIdentityConflict(src *HostIdentityConflict) *HostIdentityConflict {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.Hostnames = append([]string(nil), src.Hostnames...)
+	dest.ReportIPs = append([]string(nil), src.ReportIPs...)
+	return &dest
 }
 
 func cloneHosts(src []Host) []Host {

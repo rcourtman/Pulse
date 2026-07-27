@@ -941,6 +941,10 @@ type AgentData struct {
 	ReportIP                string                   `json:"reportIp,omitempty"`
 	DiskExclude             []string                 `json:"diskExclude,omitempty"`
 	IsLegacy                bool                     `json:"isLegacy,omitempty"`
+	// IdentityConflict is set while the server sees reports from more than one
+	// machine folded into this host identity (usually template-cloned machines
+	// sharing the same /etc/machine-id).
+	IdentityConflict *models.HostIdentityConflict `json:"identityConflict,omitempty"`
 	NetInRate               float64                  `json:"netInRate,omitempty"`
 	NetOutRate              float64                  `json:"netOutRate,omitempty"`
 	DiskReadRate            float64                  `json:"diskReadRate,omitempty"`

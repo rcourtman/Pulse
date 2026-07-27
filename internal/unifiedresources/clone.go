@@ -253,6 +253,17 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.PackageUpdates = cloneAgentPackageUpdateMeta(in.PackageUpdates)
 	out.StorageCleanup = cloneAgentStorageCleanupMeta(in.StorageCleanup)
 	out.DiskExclude = cloneStringSlice(in.DiskExclude)
+	out.IdentityConflict = cloneHostIdentityConflict(in.IdentityConflict)
+	return &out
+}
+
+func cloneHostIdentityConflict(in *models.HostIdentityConflict) *models.HostIdentityConflict {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Hostnames = append([]string(nil), in.Hostnames...)
+	out.ReportIPs = append([]string(nil), in.ReportIPs...)
 	return &out
 }
 

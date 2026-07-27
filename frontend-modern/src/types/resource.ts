@@ -673,6 +673,15 @@ export interface ResourceAgentMeta {
   tokenName?: string;
   tokenHint?: string;
   tokenLastUsedAt?: number;
+  // Set while the server sees reports from more than one machine folded into
+  // this host identity (usually template-cloned machines sharing the same
+  // /etc/machine-id).
+  identityConflict?: {
+    hostnames?: string[];
+    reportIps?: string[];
+    firstSeen?: string;
+    lastSeen?: string;
+  };
 }
 
 export interface ResourceProxmoxMeta {

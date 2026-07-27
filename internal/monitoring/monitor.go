@@ -1126,6 +1126,7 @@ type Monitor struct {
 	kubernetesTokenBindings    map[string]string                     // Track token ID -> agent ID bindings to enforce uniqueness
 	removedHostAgents          map[string]time.Time                  // Track deliberately removed host agents (ID -> removal time)
 	hostTokenBindings          map[string]string                     // Track tokenID:hostname -> host identity bindings
+	hostIdentityFlaps          map[string]*hostIdentityFlapTracker   // Track per-host-agent identity flapping (cloned machines sharing machine-id)
 	hostReportApplyLocksMu     sync.Mutex
 	hostReportApplyLocks       map[string]*hostReportApplyLock
 	hostReportOrderMu          sync.Mutex
@@ -1767,6 +1768,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		kubernetesTokenBindings:    make(map[string]string),
 		removedHostAgents:          make(map[string]time.Time),
 		hostTokenBindings:          make(map[string]string),
+		hostIdentityFlaps:          make(map[string]*hostIdentityFlapTracker),
 		hostReportApplyLocks:       make(map[string]*hostReportApplyLock),
 		hostReportOrders:           make(map[string]hostReportOrder),
 		clusterSensorsCache:        make(map[string]clusterSensorsCacheEntry),

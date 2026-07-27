@@ -190,6 +190,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		ReportIP:                host.ReportIP,
 		DiskExclude:             append([]string(nil), host.DiskExclude...),
 		IsLegacy:                host.IsLegacy,
+		IdentityConflict:        cloneHostIdentityConflict(host.IdentityConflict),
 		NetInRate:               host.NetInRate,
 		NetOutRate:              host.NetOutRate,
 		DiskReadRate:            host.DiskReadRate,

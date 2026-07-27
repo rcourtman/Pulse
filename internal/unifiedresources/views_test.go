@@ -813,6 +813,38 @@ func TestView_HostViewAccessors(t *testing.T) {
 	}
 }
 
+func TestView_HostViewIdentityConflictAccessor(t *testing.T) {
+	r := &Resource{
+		ID:   "host-1",
+		Type: ResourceTypeAgent,
+		Agent: &AgentData{
+			AgentID: "host-1",
+			IdentityConflict: &models.HostIdentityConflict{
+				Hostnames: []string{"pve01"},
+				ReportIPs: []string{"10.0.0.10", "192.168.1.10"},
+			},
+		},
+	}
+
+	v := NewHostView(r)
+	conflict := v.IdentityConflict()
+	if conflict == nil || len(conflict.ReportIPs) != 2 || conflict.ReportIPs[0] != "10.0.0.10" {
+		t.Fatalf("expected identity conflict evidence, got %+v", conflict)
+	}
+	conflict.ReportIPs[0] = "mutated"
+	if r.Agent.IdentityConflict.ReportIPs[0] != "10.0.0.10" {
+		t.Fatal("IdentityConflict accessor must return an independent copy")
+	}
+
+	if healthy := NewHostView(&Resource{ID: "h2", Type: ResourceTypeAgent, Agent: &AgentData{}}); healthy.IdentityConflict() != nil {
+		t.Fatal("healthy host must report nil identity conflict")
+	}
+	var nilView HostView
+	if nilView.IdentityConflict() != nil {
+		t.Fatal("nil-backed view must report nil identity conflict")
+	}
+}
+
 func TestView_HostViewIntegrationSource(t *testing.T) {
 	agentBacked := NewHostView(&Resource{
 		ID:      "host-agent",

@@ -31,6 +31,8 @@ import { formatRelativeTime } from '@/utils/format';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import { AvailabilityChecksTable } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
+import { collectHostIdentityConflictHosts } from './hostIdentityConflict';
+import { HostIdentityConflictNotice } from './HostIdentityConflictNotice';
 import {
   buildStandalonePageModel,
   buildStandalonePostureSummary,
@@ -161,6 +163,9 @@ export function StandalonePageSurface() {
   const outdatedAgentHosts = createMemo(() =>
     collectOutdatedAgentHosts(model().machines, agentUpdateTargetVersion()),
   );
+  const identityConflictHosts = createMemo(() =>
+    collectHostIdentityConflictHosts(model().machines),
+  );
   const outdatedAgentUpdatePath = createMemo(() =>
     buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
@@ -273,6 +278,7 @@ export function StandalonePageSurface() {
               }
             >
               <div class="space-y-4">
+                <HostIdentityConflictNotice hosts={identityConflictHosts()} />
                 <PlatformOutdatedAgentNotice
                   hosts={outdatedAgentHosts()}
                   targetVersion={serverVersionDisplay()}

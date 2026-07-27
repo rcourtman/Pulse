@@ -538,6 +538,34 @@ func TestCloneResourceClonesDockerIdentityConflict(t *testing.T) {
 	}
 }
 
+func TestCloneResourceClonesHostAgentIdentityConflict(t *testing.T) {
+	original := Resource{
+		ID:   "agent:host-1",
+		Type: ResourceTypeAgent,
+		Agent: &AgentData{
+			AgentID: "host-1",
+			IdentityConflict: &models.HostIdentityConflict{
+				Hostnames: []string{"pve01"},
+				ReportIPs: []string{"192.168.1.10", "10.0.0.10"},
+			},
+		},
+	}
+
+	cloned := cloneResource(&original)
+	if cloned.Agent == nil || cloned.Agent.IdentityConflict == nil {
+		t.Fatalf("clone lost host agent identity conflict evidence: %#v", cloned.Agent)
+	}
+	if !reflect.DeepEqual(cloned.Agent.IdentityConflict, original.Agent.IdentityConflict) {
+		t.Fatalf("identity conflict clone = %#v, want %#v",
+			cloned.Agent.IdentityConflict, original.Agent.IdentityConflict)
+	}
+
+	cloned.Agent.IdentityConflict.ReportIPs[0] = "changed"
+	if got := original.Agent.IdentityConflict.ReportIPs[0]; got != "192.168.1.10" {
+		t.Fatalf("identity conflict was aliased through clone, original report IP = %q", got)
+	}
+}
+
 func TestCloneResourcePreservesDockerCPUCapacityMetadata(t *testing.T) {
 	original := Resource{
 		ID:   "app-container:docker-host-1:web",

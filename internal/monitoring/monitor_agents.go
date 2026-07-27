@@ -367,6 +367,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		m.removedHostAgents = make(map[string]time.Time)
 	}
 	m.removedHostAgents[hostID] = removedAt
+	m.clearHostAgentIdentityTrackingLocked(hostID)
 	m.mu.Unlock()
 	m.state.AddRemovedHostAgent(removedEntry)
 
@@ -1535,6 +1536,7 @@ func (m *Monitor) ClearUnauthenticatedAgents() (int, int) {
 	m.dockerTokenBindings = make(map[string]string)
 	m.hostTokenBindings = make(map[string]string)
 	m.dockerIdentityFlaps = make(map[string]*dockerIdentityFlapTracker)
+	m.hostIdentityFlaps = make(map[string]*hostIdentityFlapTracker)
 	m.mu.Unlock()
 
 	if hostCount > 0 || dockerCount > 0 {
@@ -2594,6 +2596,19 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		observedAt,
 	)
 
+	// Detect distinct machines flapping under one identity (e.g. template
+	// deployments still sharing /etc/machine-id, the host-agent shape of
+	// #1584) so the UI can warn instead of silently letting the reports
+	// overwrite each other.
+	identityConflict := m.trackHostAgentIdentity(identifier, hostname, strings.TrimSpace(report.Host.ReportIP), receivedAt)
+	if identityConflict != nil {
+		log.Warn().
+			Str("hostID", identifier).
+			Strs("hostnames", identityConflict.Hostnames).
+			Strs("reportIPs", identityConflict.ReportIPs).
+			Msg("Multiple machines appear to report under one host agent identity (cloned machines sharing /etc/machine-id?)")
+	}
+
 	host := models.Host{
 		ID:                identifier,
 		Hostname:          hostname,
@@ -2639,6 +2654,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		PackageUpdates:          convertHostPackageUpdateStatus(report.Host.PackageUpdates, observedAt),
 		StorageCleanup:          convertHostStorageCleanupStatus(report.Host.StorageCleanup, observedAt),
 		IsLegacy:                isLegacyAgent(report.Agent.Type),
+		IdentityConflict:        identityConflict,
 	}
 
 	// Normalize vendor-managed internal RAID arrays out of host state so they do

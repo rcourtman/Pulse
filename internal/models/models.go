@@ -304,6 +304,10 @@ type Host struct {
 	PackageUpdates    *HostPackageUpdateStatus  `json:"packageUpdates,omitempty"`
 	StorageCleanup    *HostStorageCleanupStatus `json:"storageCleanup,omitempty"`
 	IsLegacy          bool                      `json:"isLegacy,omitempty"`
+	// IdentityConflict is set while multiple distinct machines appear to be
+	// reporting under this host's identity (e.g. template-cloned machines
+	// sharing the same /etc/machine-id). Nil when no conflict is active.
+	IdentityConflict *HostIdentityConflict `json:"identityConflict,omitempty"`
 
 	// Computed I/O rates (bytes/sec), populated from cumulative counters by rate tracker
 	NetInRate     float64 `json:"netInRate,omitempty"`
@@ -408,7 +412,29 @@ func (h Host) NormalizeCollections() Host {
 	if h.DiskExclude == nil {
 		h.DiskExclude = []string{}
 	}
+	if h.IdentityConflict != nil {
+		conflict := h.IdentityConflict.NormalizeCollections()
+		h.IdentityConflict = &conflict
+	}
 	return h
+}
+
+// HostIdentityConflict records evidence that reports from more than one
+// physical machine are being folded into a single host agent record. The
+// usual cause is template-deployed machines that still share the same
+// /etc/machine-id, which the agent uses as its identity.
+type HostIdentityConflict struct {
+	Hostnames []string  `json:"hostnames"`
+	ReportIPs []string  `json:"reportIps,omitempty"`
+	FirstSeen time.Time `json:"firstSeen"`
+	LastSeen  time.Time `json:"lastSeen"`
+}
+
+func (c HostIdentityConflict) NormalizeCollections() HostIdentityConflict {
+	if c.Hostnames == nil {
+		c.Hostnames = []string{}
+	}
+	return c
 }
 
 // HostNetworkInterface describes a host network adapter summary.

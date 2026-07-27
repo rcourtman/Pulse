@@ -65,6 +65,33 @@ func TestCloneDockerHost_PreservesIndependentIdentityConflict(t *testing.T) {
 	}
 }
 
+func TestCloneHost_PreservesIndependentIdentityConflict(t *testing.T) {
+	src := Host{
+		ID: "host-1",
+		IdentityConflict: &HostIdentityConflict{
+			Hostnames: []string{"clone-a", "clone-b"},
+			ReportIPs: []string{"192.168.1.10", "10.0.0.10"},
+		},
+	}
+
+	got := cloneHost(src)
+	if got.IdentityConflict == nil {
+		t.Fatal("clone dropped identity conflict evidence")
+	}
+	if len(got.IdentityConflict.Hostnames) != 2 || got.IdentityConflict.Hostnames[0] != "clone-a" {
+		t.Fatalf("hostnames = %v, want [clone-a clone-b]", got.IdentityConflict.Hostnames)
+	}
+	src.IdentityConflict.Hostnames[0] = "mutated"
+	src.IdentityConflict.ReportIPs[0] = "mutated"
+	if got.IdentityConflict.Hostnames[0] != "clone-a" || got.IdentityConflict.ReportIPs[0] != "192.168.1.10" {
+		t.Fatal("cloned host must own its identity conflict slices")
+	}
+
+	if clean := cloneHost(Host{ID: "healthy"}); clean.IdentityConflict != nil {
+		t.Fatalf("healthy host should clone with nil conflict, got %+v", clean.IdentityConflict)
+	}
+}
+
 func TestCloneFloat64Ptr_Nil(t *testing.T) {
 	if cloneFloat64Ptr(nil) != nil {
 		t.Error("nil should clone to nil")

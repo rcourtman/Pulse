@@ -1185,6 +1185,13 @@ func (v HostView) IsLegacy() bool {
 	return v.r.Agent.IsLegacy
 }
 
+func (v HostView) IdentityConflict() *models.HostIdentityConflict {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return cloneHostIdentityConflict(v.r.Agent.IdentityConflict)
+}
+
 func (v HostView) Status() ResourceStatus {
 	if v.r == nil {
 		return ""
