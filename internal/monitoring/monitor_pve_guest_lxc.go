@@ -2,7 +2,6 @@ package monitoring
 
 import (
 	"context"
-	"math"
 	"strings"
 	"time"
 
@@ -12,14 +11,14 @@ import (
 )
 
 func (m *Monitor) calculateLXCMemory(
-	ctx context.Context,
-	instanceName string,
 	res proxmox.ClusterResource,
-	client PVEClientInterface,
 ) (uint64, uint64, string, VMMemoryRaw) {
-	// Calculate cache-aware memory for LXC containers
-	// The cluster resources API returns mem from cgroup which includes cache/buffers (inflated).
-	// Try to get more accurate memory metrics from RRD data.
+	// The cluster resources API returns mem from cgroup which includes
+	// cache/buffers (inflated). PVE guest RRD offers nothing better: it
+	// carries only the same cache-inclusive mem/maxmem columns — the
+	// cache-aware memused/memavailable columns exist only in node RRD — so
+	// the listing value is the best evidence available for running
+	// containers (issue #1634).
 	memTotal := res.MaxMem
 	memUsed := uint64(0)
 	memorySource := "powered-off"
@@ -28,66 +27,9 @@ func (m *Monitor) calculateLXCMemory(
 		ListingMaxMem: res.MaxMem,
 	}
 
-	// For running containers, try to get RRD data for cache-aware memory calculation
 	if res.Status == "running" {
 		memorySource = "unavailable"
-		rrdCtx, rrdCancel := context.WithTimeout(ctx, 5*time.Second)
-		rrdPoints, err := client.GetLXCRRDData(rrdCtx, res.Node, res.VMID, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
-		rrdCancel()
-
-		if err == nil && len(rrdPoints) > 0 {
-			// Use the most recent RRD point
-			point := rrdPoints[len(rrdPoints)-1]
-
-			if point.MaxMem != nil && !math.IsNaN(*point.MaxMem) && !math.IsInf(*point.MaxMem, 0) && *point.MaxMem > 0 && *point.MaxMem <= math.MaxUint64 {
-				guestRaw.RRDMaxMem = uint64(*point.MaxMem)
-				if memTotal == 0 {
-					memTotal = uint64(*point.MaxMem)
-				}
-			}
-
-			// Prefer memavailable-based calculation (excludes cache/buffers)
-			if point.MemAvailable != nil && !math.IsNaN(*point.MemAvailable) && !math.IsInf(*point.MemAvailable, 0) && *point.MemAvailable >= 0 && *point.MemAvailable <= math.MaxUint64 && memTotal > 0 && *point.MemAvailable <= float64(memTotal) {
-				memAvailable := uint64(*point.MemAvailable)
-				memUsed = memTotal - memAvailable
-				memorySource = "rrd-memavailable"
-				guestRaw.RRDMemAvailable = memAvailable
-				log.Debug().
-					Str("container", res.Name).
-					Str("node", res.Node).
-					Uint64("total", memTotal).
-					Uint64("available", memAvailable).
-					Uint64("used", memUsed).
-					Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
-					Msg("LXC memory: using RRD memavailable (excludes reclaimable cache)")
-			} else if point.MemUsed != nil && !math.IsNaN(*point.MemUsed) && !math.IsInf(*point.MemUsed, 0) && *point.MemUsed >= 0 && *point.MemUsed <= math.MaxUint64 && memTotal > 0 && *point.MemUsed <= float64(memTotal) {
-				// Fall back to memused from RRD if available
-				memUsed = uint64(*point.MemUsed)
-				memorySource = "rrd-memused"
-				guestRaw.RRDMemUsed = memUsed
-				log.Debug().
-					Str("container", res.Name).
-					Str("node", res.Node).
-					Uint64("total", memTotal).
-					Uint64("used", memUsed).
-					Float64("usage", safePercentage(float64(memUsed), float64(memTotal))).
-					Msg("LXC memory: using RRD memused (excludes reclaimable cache)")
-			}
-		} else if err != nil {
-			log.Debug().
-				Err(err).
-				Str("instance", instanceName).
-				Str("container", res.Name).
-				Int("vmid", res.VMID).
-				Msg("RRD memory data unavailable for LXC; falling back to cluster resources value")
-		}
-
-		// PVE guest RRD carries only mem/maxmem columns (cgroup values, cache
-		// included) — the cache-aware memused/memavailable columns exist only
-		// in node RRD, so the branches above cannot match a real response.
-		// Without this fallback every running container reports unavailable
-		// memory (issue #1634).
-		if memorySource == "unavailable" && res.Mem > 0 {
+		if res.Mem > 0 {
 			memUsed = res.Mem
 			memorySource = "cluster-resources"
 		}
@@ -145,7 +87,7 @@ func (m *Monitor) buildContainerFromClusterResource(
 		netOutRate,
 	)
 
-	memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(ctx, instanceName, res, client)
+	memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(res)
 	memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
 		m.previousGuestSnapshot(instanceName, "lxc", res.Node, res.VMID),
 		res.Status,

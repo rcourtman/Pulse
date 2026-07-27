@@ -682,7 +682,6 @@ func TestPollVMsWithNodesCompletesDiskQueriesWithinPollBudget(t *testing.T) {
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
 		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
 		guestAgentWorkSlots:      make(chan struct{}, 3),
 	}
@@ -1401,7 +1400,6 @@ func TestPollVMsAndContainersEfficient_ContinuesGuestAgentQueriesAfterTransientS
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
 		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 
@@ -1505,7 +1503,6 @@ func TestPollVMsWithNodes_PreservesCachedGuestMetadataWhenStatusUnavailable(t *t
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
 		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 
@@ -1575,7 +1572,6 @@ func TestPollVMsWithNodes_ContinuesGuestAgentQueriesAfterTransientStatusFailure(
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
 		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 
@@ -1988,7 +1984,6 @@ func TestPollVMsWithNodes_CarriesForwardPreviousDiskSnapshot(t *testing.T) {
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
 		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 
@@ -2066,7 +2061,6 @@ func TestPollVMsWithNodes_PrefersLinkedHostAgentDiskInventoryOverGuestAgentFiles
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
 		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 

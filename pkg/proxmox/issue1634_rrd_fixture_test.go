@@ -19,17 +19,6 @@ import (
 // the real client and fail whenever a parsing struct references a column
 // absent from every recorded response.
 
-// knownDeadGuestRRDFields are GuestRRDPoint columns that no recorded guest
-// response (PVE 8 or PVE 9) contains. They only ever decode to nil; the
-// consumers in internal/monitoring treat them as absent evidence (#1634).
-// Removing them from GuestRRDPoint is a monitoring-subsystem runtime change
-// (governance guard) tracked separately. Do not add entries here — a new
-// struct field must reference a column present in the recorded fixtures.
-var knownDeadGuestRRDFields = map[string]string{
-	"memused":      "exists only in node RRD; guest responses report cache-inclusive mem/maxmem",
-	"memavailable": "exists only in PVE 9 node RRD; never present for guests",
-}
-
 func rrdFixturePath(name string) string {
 	return filepath.Join("testdata", "rrd", name)
 }
@@ -133,29 +122,9 @@ func TestGuestRRDPointColumnsExistInRecordedResponses(t *testing.T) {
 		}
 	}
 
-	tags := jsonFieldTags(t, reflect.TypeOf(GuestRRDPoint{}))
-	for _, tag := range tags {
-		if recorded[tag] {
-			continue
-		}
-		if _, dead := knownDeadGuestRRDFields[tag]; dead {
-			continue
-		}
-		t.Errorf("GuestRRDPoint field %q is absent from every recorded guest rrddata response; do not parse columns the PVE API does not send (#1634)", tag)
-	}
-
-	// Keep the allowlist honest: entries must still be struct fields, and
-	// must still be absent from the recordings.
-	tagSet := make(map[string]bool, len(tags))
-	for _, tag := range tags {
-		tagSet[tag] = true
-	}
-	for column := range knownDeadGuestRRDFields {
-		if !tagSet[column] {
-			t.Errorf("knownDeadGuestRRDFields entry %q is no longer a GuestRRDPoint field; remove it from the allowlist", column)
-		}
-		if recorded[column] {
-			t.Errorf("knownDeadGuestRRDFields entry %q now appears in recorded responses; remove it from the allowlist and re-record fixtures", column)
+	for _, tag := range jsonFieldTags(t, reflect.TypeOf(GuestRRDPoint{})) {
+		if !recorded[tag] {
+			t.Errorf("GuestRRDPoint field %q is absent from every recorded guest rrddata response; do not parse columns the PVE API does not send (#1634)", tag)
 		}
 	}
 }
@@ -206,14 +175,6 @@ func TestGuestRRDDecodeAgainstRecordedResponses(t *testing.T) {
 				}
 				if p.MaxMem != nil && *p.MaxMem > 0 {
 					sawMaxMem = true
-				}
-				// The #1634 mechanism: these columns never arrive for
-				// guests, so the fields can only ever be nil.
-				if p.MemUsed != nil {
-					t.Fatalf("MemUsed decoded from a recorded guest response (time=%d); guest RRD does not carry memused", p.Time)
-				}
-				if p.MemAvailable != nil {
-					t.Fatalf("MemAvailable decoded from a recorded guest response (time=%d); guest RRD does not carry memavailable", p.Time)
 				}
 			}
 			if !sawMaxMem {

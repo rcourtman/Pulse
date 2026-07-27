@@ -16,7 +16,7 @@ func TestStabilizeGuestLowTrustMemoryCarriesForwardTrustedSnapshot(t *testing.T)
 	prev := &GuestMemorySnapshot{
 		Status:       "running",
 		RetrievedAt:  now.Add(-time.Minute),
-		MemorySource: "rrd-memavailable",
+		MemorySource: "guest-agent-meminfo",
 		Memory: models.Memory{
 			Total: 8 * int64(gib),
 			Used:  3 * int64(gib),

@@ -145,7 +145,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					cpuUsage = 0
 				}
 
-				memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(ctx, instanceName, proxmox.ClusterResource{
+				memTotal, memUsed, memorySource, guestRaw := m.calculateLXCMemory(proxmox.ClusterResource{
 					Type:   "lxc",
 					Node:   n.Node,
 					Name:   container.Name,
@@ -153,7 +153,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					VMID:   int(container.VMID),
 					MaxMem: container.MaxMem,
 					Mem:    container.Mem,
-				}, client)
+				})
 				memUsed, memorySource, _ = stabilizeGuestLowTrustMemory(
 					m.previousGuestSnapshot(instanceName, "lxc", n.Node, int(container.VMID)),
 					container.Status,

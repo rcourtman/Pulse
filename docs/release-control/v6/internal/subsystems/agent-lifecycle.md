@@ -2201,6 +2201,19 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Monitor housekeeping prunes only live memory-evidence caches
+
+The shared monitor housekeeping pass in `internal/monitoring/monitor_agents.go`
+(`cleanupRRDCache`) prunes exactly two short-lived memory-evidence caches: the
+node RRD cache and the guest-agent meminfo cache keyed by
+`(instance, node, vmid)`. The former per-VM guest RRD memory cache was removed
+along with `GuestRRDPoint`'s fictional `memused`/`memavailable` columns —
+recorded PVE 8/9 guest `rrddata` responses never carry them (#1634) — so
+monitor construction in `internal/monitoring/monitor.go` no longer initializes
+a guest RRD cache and housekeeping must not regrow one. Stale guest-agent
+entries age out under `vmAgentMemCleanupMaxAge` so removed or re-enrolled
+guests cannot replay old agent memory evidence.
+
 ### Command-channel token binding is one decision consumed by every surface
 
 Agent exec token binding is evaluated by a single decision function

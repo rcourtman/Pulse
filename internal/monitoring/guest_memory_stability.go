@@ -20,7 +20,7 @@ const (
 func guestMemorySourceReliability(source string) int {
 	switch CanonicalMemorySource(source) {
 	case "available-field", "derived-free-buffers-cached",
-		"guest-agent-meminfo", "guest-agent-meminfo-derived", "rrd-memavailable", "rrd-memused", "agent":
+		"guest-agent-meminfo", "guest-agent-meminfo-derived", "agent":
 		return guestMemoryReliabilityTrusted
 	case "derived-total-minus-used", "previous-snapshot":
 		return guestMemoryReliabilityFallback

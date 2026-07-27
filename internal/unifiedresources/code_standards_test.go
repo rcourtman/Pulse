@@ -69,6 +69,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestMetricValueAlwaysCarriesNumericValueWhenObjectExists(t *testing.T) {
@@ -2759,6 +2760,25 @@ func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("%s: VMware clone isolation must include %q", filepath.ToSlash(clonePath), snippet)
+		}
+	}
+}
+
+func TestGuestRRDPointCarriesOnlyRecordedGuestColumns(t *testing.T) {
+	// Issue #1634: GuestRRDPoint once declared memused/memavailable columns
+	// that real PVE guest rrddata responses never contain — they exist only
+	// in node RRD — so every consumer branch reading them was dead and guest
+	// memory silently fell through. The struct must not regrow columns that
+	// are absent from the recorded fixtures in pkg/proxmox/testdata/rrd/.
+	allowed := map[string]bool{"time": true, "maxmem": true}
+	typ := reflect.TypeOf(proxmox.GuestRRDPoint{})
+	for i := 0; i < typ.NumField(); i++ {
+		tag := typ.Field(i).Tag.Get("json")
+		if comma := strings.IndexByte(tag, ','); comma >= 0 {
+			tag = tag[:comma]
+		}
+		if !allowed[tag] {
+			t.Errorf("GuestRRDPoint field %s (json %q) is not a recorded guest rrddata column; add fixture evidence under pkg/proxmox/testdata/rrd before parsing it (#1634)", typ.Field(i).Name, tag)
 		}
 	}
 }

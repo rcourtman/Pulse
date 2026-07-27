@@ -70,8 +70,6 @@ type PVEClientInterface interface {
 	GetNodes(ctx context.Context) ([]proxmox.Node, error)
 	GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error)
 	GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error)
-	GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error)
-	GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error)
 	GetVMs(ctx context.Context, node string) ([]proxmox.VM, error)
 	GetContainers(ctx context.Context, node string) ([]proxmox.Container, error)
 	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
@@ -1117,7 +1115,6 @@ type Monitor struct {
 	guestSnapshots             map[string]GuestMemorySnapshot
 	rrdCacheMu                 sync.RWMutex // Protects short-lived guest memory caches.
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
-	vmRRDMemCache              map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
 	removedDockerHosts         map[string]time.Time                  // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string                     // Track token ID -> Docker host identity bindings to enforce uniqueness
@@ -1402,100 +1399,6 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	return entry, nil
 }
 
-// getVMRRDMetrics fetches Proxmox RRD memavailable for a single VM with a
-// short-lived cache to avoid a live API call on every poll for VMs that
-// consistently lack guest-agent memory data (e.g. Windows VMs).
-func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {
-	entry, err := m.getVMRRDMemory(ctx, client, instanceName, node, vmid)
-	if err != nil {
-		return 0, err
-	}
-	if !entry.hasAvail {
-		return 0, fmt.Errorf("rrd memavailable not present for VM %s/%d", node, vmid)
-	}
-	return entry.available, nil
-}
-
-func (m *Monitor) getVMRRDMemory(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (rrdMemCacheEntry, error) {
-	if client == nil || node == "" || vmid <= 0 {
-		return rrdMemCacheEntry{}, fmt.Errorf("invalid arguments for VM RRD lookup")
-	}
-
-	cacheKey := guestMemoryCacheKey(instanceName, node, vmid)
-	now := time.Now()
-
-	m.rrdCacheMu.RLock()
-	if entry, ok := m.vmRRDMemCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
-		m.rrdCacheMu.RUnlock()
-		return entry, nil
-	}
-	m.rrdCacheMu.RUnlock()
-
-	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
-	defer cancel()
-
-	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable", "memused", "maxmem"})
-	if err != nil {
-		return rrdMemCacheEntry{}, err
-	}
-	if len(points) == 0 {
-		return rrdMemCacheEntry{}, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
-	}
-
-	var memAvailable uint64
-	var memUsed uint64
-	var memTotal uint64
-	var hasAvail bool
-	var hasUsed bool
-	var hasTotal bool
-	for i := len(points) - 1; i >= 0; i-- {
-		p := points[i]
-		if !hasAvail && p.MemAvailable != nil && !math.IsNaN(*p.MemAvailable) && !math.IsInf(*p.MemAvailable, 0) && *p.MemAvailable >= 0 && *p.MemAvailable <= math.MaxUint64 {
-			memAvailable = uint64(math.Round(*p.MemAvailable))
-			hasAvail = true
-		}
-		if !hasUsed && p.MemUsed != nil && !math.IsNaN(*p.MemUsed) && !math.IsInf(*p.MemUsed, 0) && *p.MemUsed >= 0 && *p.MemUsed <= math.MaxUint64 {
-			memUsed = uint64(math.Round(*p.MemUsed))
-			hasUsed = true
-		}
-		if !hasTotal && p.MaxMem != nil && !math.IsNaN(*p.MaxMem) && !math.IsInf(*p.MaxMem, 0) && *p.MaxMem > 0 && *p.MaxMem <= math.MaxUint64 {
-			memTotal = uint64(math.Round(*p.MaxMem))
-			hasTotal = true
-		}
-	}
-	if hasTotal {
-		if hasAvail && memAvailable > memTotal {
-			hasAvail = false
-			memAvailable = 0
-		}
-		if hasUsed && memUsed > memTotal {
-			hasUsed = false
-			memUsed = 0
-		}
-	}
-	if !hasAvail && !hasUsed {
-		return rrdMemCacheEntry{}, fmt.Errorf("rrd memory fields not present for VM %s/%d", node, vmid)
-	}
-
-	entry := rrdMemCacheEntry{
-		available: memAvailable,
-		used:      memUsed,
-		total:     memTotal,
-		hasAvail:  hasAvail,
-		hasUsed:   hasUsed,
-		hasTotal:  hasTotal,
-		fetchedAt: now,
-	}
-	m.rrdCacheMu.Lock()
-	if m.vmRRDMemCache == nil {
-		m.vmRRDMemCache = make(map[string]rrdMemCacheEntry)
-	}
-	m.vmRRDMemCache[cacheKey] = entry
-	m.rrdCacheMu.Unlock()
-
-	return entry, nil
-}
-
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.
 func (m *Monitor) GetConnectionStatuses() map[string]bool {
 	if m == nil {
@@ -1759,7 +1662,6 @@ func New(cfg *config.Config) (*Monitor, error) {
 		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
-		vmRRDMemCache:              make(map[string]rrdMemCacheEntry),
 		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),

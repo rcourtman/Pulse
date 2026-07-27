@@ -891,17 +891,16 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 			"func shouldPreferGuestAgentMemAvailable(status *proxmox.VMStatus, memTotal uint64) bool {",
 			"func (m *Monitor) tryGuestAgentMemAvailable(",
 			"if !hasMemAvailable && shouldPreferGuestAgentMemAvailable(status, memTotal) {",
-			"if rrdMemory, rrdErr := m.getVMRRDMemory(ctx, client, instanceName, node, vmid); rrdErr == nil {",
-			"case rrdMemory.hasUsed && rrdMemory.used <= memTotal:",
+			// Guest rrddata carries no cache-aware memory columns (#1634):
+			// the resolver must not consult guest RRD between the preferred
+			// guest-agent pass and the retry pass.
+			"// No RRD fallback here: PVE guest rrddata carries only cache-inclusive",
 			"if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {",
 			"memorySource = agentSource",
 			"guestRaw.GuestAgentMemAvailable = agentAvailable",
 			`memorySource = "unavailable"`,
 		},
 		"monitor.go": {
-			"func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {",
-			"func (m *Monitor) getVMRRDMemory(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (rrdMemCacheEntry, error) {",
-			"cacheKey := guestMemoryCacheKey(instanceName, node, vmid)",
 			"vmAgentMemCache            map[string]agentMemCacheEntry",
 		},
 		"monitor_agents.go": {

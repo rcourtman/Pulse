@@ -179,27 +179,27 @@ func TestBuildContainerFromClusterResource_UsesContainerStatusCountersForRates(t
 type stubPVEClientLXCRRD struct {
 	stubPVEClient
 
-	lxcRRDPoints []proxmox.GuestRRDPoint
-	lxcRRDErr    error
+	lxcRRDCalls int
 }
 
+// GetLXCRRDData tracks lookups of the guest RRD endpoint. It is intentionally
+// not part of PVEClientInterface anymore: guest rrddata carries only the
+// cache-inclusive mem/maxmem columns (#1634), so the LXC memory path must not
+// consult it.
 func (s *stubPVEClientLXCRRD) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
-	return s.lxcRRDPoints, s.lxcRRDErr
+	s.lxcRRDCalls++
+	return nil, nil
 }
 
 // Issue #1634: real PVE guest RRD responses carry only mem/maxmem, never the
-// cache-aware memused/memavailable columns, so running containers must fall
-// back to the cluster-resources listing value instead of reporting memory as
-// unavailable (rendered as 0%).
+// cache-aware memused/memavailable columns, so running containers use the
+// cluster-resources listing value instead of reporting memory as unavailable
+// (rendered as 0%). The guest RRD lookup is gone entirely — it could never
+// produce memory evidence.
 func TestIssue1634LXCMemoryFallsBackToClusterResourcesOnRealRRDShape(t *testing.T) {
 	t.Parallel()
 
-	maxMem := float64(8 * 1024 * 1024 * 1024)
-	client := &stubPVEClientLXCRRD{
-		lxcRRDPoints: []proxmox.GuestRRDPoint{
-			{Time: 1785164640, MaxMem: &maxMem},
-		},
-	}
+	client := &stubPVEClientLXCRRD{}
 
 	monitor := &Monitor{rateTracker: NewRateTracker()}
 	resource := proxmox.ClusterResource{
@@ -237,39 +237,8 @@ func TestIssue1634LXCMemoryFallsBackToClusterResourcesOnRealRRDShape(t *testing.
 	if !container.Memory.HasKnownUsage() {
 		t.Fatal("expected fallback memory to be usable for projections")
 	}
-}
-
-func TestIssue1634LXCMemoryFallsBackWhenRRDErrors(t *testing.T) {
-	t.Parallel()
-
-	client := &stubPVEClientLXCRRD{lxcRRDErr: context.DeadlineExceeded}
-
-	monitor := &Monitor{rateTracker: NewRateTracker()}
-	resource := proxmox.ClusterResource{
-		Type:   "lxc",
-		Node:   "pve-a",
-		Name:   "issue1634-rrd-err",
-		Status: "running",
-		VMID:   109,
-		MaxMem: 512 * 1024 * 1024,
-		Mem:    113344512,
-	}
-
-	container, _, memorySource, _, ok := monitor.buildContainerFromClusterResource(
-		context.Background(),
-		"cluster-a",
-		resource,
-		client,
-		map[int]bool{},
-	)
-	if !ok {
-		t.Fatal("expected container sample to be built")
-	}
-	if CanonicalMemorySource(memorySource) != "cluster-resources" {
-		t.Fatalf("memory source = %q, want cluster-resources fallback", memorySource)
-	}
-	if container.Memory.Used != int64(resource.Mem) || container.Memory.UsageUnavailable {
-		t.Fatalf("memory = %+v, want listing fallback", container.Memory)
+	if client.lxcRRDCalls != 0 {
+		t.Fatalf("expected no guest RRD lookups for LXC memory, got %d", client.lxcRRDCalls)
 	}
 }
 

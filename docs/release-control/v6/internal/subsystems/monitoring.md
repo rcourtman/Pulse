@@ -1853,39 +1853,42 @@ against the effective balloon total and prefer that fallback over `status-mem`
 when Proxmox reports a saturated or materially inconsistent used figure, so
 Windows and ballooned guests do not get pinned to false 100% usage samples.
 That same guest-memory boundary also owns fallback order and cache scoping for
-Proxmox VMs when `MemInfo` is absent. Monitoring must try instance-scoped RRD
-`memavailable`, RRD `memused`, guest-agent `/proc/meminfo` via the shared
-Proxmox client, and only then linked host-agent memory. Saturated Linux VM
-status is the narrow exception: a queryable guest agent's cache-aware
-`/proc/meminfo` evidence is tried before RRD because the saturated status is
-the known Proxmox failure mode. Both RRD and guest-agent fallback caches must
-key on `(instance, node, vmid)` instead of raw `node/vmid`, so separate
-Proxmox instances cannot leak stale or foreign memory evidence into each other
-just because they reuse the same node name and VMID.
+Proxmox VMs when `MemInfo` is absent. Guest RRD is not a memory evidence
+source: recorded PVE 8 and PVE 9 guest `rrddata` responses (fixtures under
+`pkg/proxmox/testdata/rrd/`) prove the cache-aware `memavailable`/`memused`
+columns exist only in node RRD, so `GuestRRDPoint` parses only the recorded
+guest columns (`time`, `maxmem`), `PVEClientInterface` exposes no guest RRD
+lookups, and the VM memory resolver must not consult the guest RRD endpoint
+(#1634). Monitoring must try guest-agent `/proc/meminfo` via the shared
+Proxmox client, and only then linked host-agent memory. Guest-agent fallback
+caches must key on `(instance, node, vmid)` instead of raw `node/vmid`, so
+separate Proxmox instances cannot leak stale or foreign memory evidence into
+each other just because they reuse the same node name and VMID.
 Linux memory availability must never be inferred from `MemTotal-MemFree`.
 Nodes and guests prefer a valid explicit `MemAvailable`/`available` field,
-then a complete reclaimable-component estimate, then valid RRD availability or
-used evidence. The conservative old-kernel guest-agent estimate is
+then a complete reclaimable-component estimate, then — for nodes, where the
+columns actually exist — valid node RRD availability or used evidence. The
+conservative old-kernel guest-agent estimate is
 `MemFree + Buffers + Cached + SReclaimable - Shmem`; it is valid without swap
 but not from truncated or total/free-only meminfo. A material `total-used`
 gap may remain a lower-trust estimate only when it supplies independent
 evidence that the reported used value already excludes cache. Invalid,
 overflowed, non-finite, over-total, or conflicting candidates must be rejected
-before the next source is considered; an explicitly present zero RRD used or
-zero available value remains a valid idle or full-pressure sample rather than
-being mistaken for an absent field.
-Node RRD fallback caches must key on `(instance, node)`, just as guest RRD and
-guest-agent caches key on `(instance, node, vmid)`, so identically named nodes
-in different Proxmox instances cannot exchange memory evidence.
-Running LXC memory acknowledges a Proxmox API reality: guest RRD responses
-carry only cache-inclusive `mem`/`maxmem` columns — the cache-aware
-`memavailable`/`memused` columns exist only in node RRD — so cache-aware LXC
-evidence is structurally absent from the guest RRD endpoint. When the
-cache-aware RRD branches do not match, a running container with a non-zero
-cluster-resource listing value must fall back to that cache-inclusive value
-under the low-trust `cluster-resources` source rather than reporting the
-guest unavailable; `unavailable` is reserved for running containers with no
-listing evidence at all (#1634).
+before the next source is considered; an explicitly present zero node RRD used
+or zero available value remains a valid idle or full-pressure sample rather
+than being mistaken for an absent field.
+Node RRD fallback caches must key on `(instance, node)`, just as guest-agent
+caches key on `(instance, node, vmid)`, so identically named nodes in
+different Proxmox instances cannot exchange memory evidence.
+Running LXC memory acknowledges the same Proxmox API reality: guest RRD
+responses carry only cache-inclusive `mem`/`maxmem` columns, so the LXC
+memory path performs no guest RRD lookup at all. A running container with a
+non-zero cluster-resource listing value must report that cache-inclusive
+value under the low-trust `cluster-resources` source rather than reporting
+the guest unavailable; `unavailable` is reserved for running containers with
+no listing evidence at all (#1634). The guest sources `rrd-memavailable` and
+`rrd-memused` are node-only labels now; guest reliability scoring must not
+treat them as trusted guest evidence.
 Unified Linux and Docker agent ingest likewise must not repair a missing used
 value from total minus free alone; it may use an explicit used/percentage or
 complete free-plus-cache evidence. In every collector, known capacity with no

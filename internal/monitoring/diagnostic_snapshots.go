@@ -70,9 +70,6 @@ type VMMemoryRaw struct {
 	GuestAgentSReclaimable uint64 `json:"guestAgentSReclaimable,omitempty"`
 	GuestAgentShmem        uint64 `json:"guestAgentShmem,omitempty"`
 	GuestAgentDerived      bool   `json:"guestAgentDerived,omitempty"`
-	RRDMemAvailable        uint64 `json:"rrdMemAvailable,omitempty"`
-	RRDMemUsed             uint64 `json:"rrdMemUsed,omitempty"`
-	RRDMaxMem              uint64 `json:"rrdMaxMem,omitempty"`
 	HostAgentTotal         uint64 `json:"hostAgentTotal,omitempty"`
 	HostAgentUsed          uint64 `json:"hostAgentUsed,omitempty"`
 	Agent                  int    `json:"agent,omitempty"`
@@ -267,12 +264,6 @@ func (m *Monitor) logGuestMemorySource(instance, guestType, node string, vmid in
 	}
 	if snapshot.Raw.GuestAgentDerived {
 		evt = evt.Bool("guestAgentDerived", true)
-	}
-	if snapshot.Raw.RRDMemAvailable > 0 {
-		evt = evt.Uint64("rrdMemAvailable", snapshot.Raw.RRDMemAvailable)
-	}
-	if snapshot.Raw.RRDMemUsed > 0 {
-		evt = evt.Uint64("rrdMemUsed", snapshot.Raw.RRDMemUsed)
 	}
 	if snapshot.Raw.MemInfoBuffers > 0 {
 		evt = evt.Uint64("memInfoBuffers", snapshot.Raw.MemInfoBuffers)

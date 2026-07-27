@@ -306,46 +306,10 @@ func (m *Monitor) resolveGuestStatusMemory(
 		}
 	}
 
-	if !hasMemAvailable {
-		if rrdMemory, rrdErr := m.getVMRRDMemory(ctx, client, instanceName, node, vmid); rrdErr == nil {
-			if guestRaw != nil {
-				guestRaw.RRDMemAvailable = rrdMemory.available
-				guestRaw.RRDMemUsed = rrdMemory.used
-				guestRaw.RRDMaxMem = rrdMemory.total
-			}
-			switch {
-			case rrdMemory.hasAvail && rrdMemory.available <= memTotal:
-				memAvailable = rrdMemory.available
-				hasMemAvailable = true
-				memorySource = "rrd-memavailable"
-				log.Debug().
-					Str("vm", guestName).
-					Str("node", node).
-					Int("vmid", vmid).
-					Uint64("total", memTotal).
-					Uint64("available", memAvailable).
-					Msg("QEMU memory: using RRD memavailable fallback")
-			case rrdMemory.hasUsed && rrdMemory.used <= memTotal:
-				selectedUsed = rrdMemory.used
-				hasSelectedUsed = true
-				memorySource = "rrd-memused"
-				log.Debug().
-					Str("vm", guestName).
-					Str("node", node).
-					Int("vmid", vmid).
-					Uint64("total", memTotal).
-					Uint64("used", rrdMemory.used).
-					Msg("QEMU memory: using RRD memused fallback")
-			}
-		} else if rrdErr != nil {
-			log.Debug().
-				Err(rrdErr).
-				Str("instance", instanceName).
-				Str("vm", guestName).
-				Int("vmid", vmid).
-				Msg("RRD memory data unavailable for VM, using status/cluster resources values")
-		}
-	}
+	// No RRD fallback here: PVE guest rrddata carries only cache-inclusive
+	// mem/maxmem columns — the cache-aware memused/memavailable columns exist
+	// only in node RRD, so a guest RRD lookup can never yield memory evidence
+	// (#1634).
 
 	if !hasMemAvailable && !hasSelectedUsed && status.Agent.IsAvailable() && !triedGuestAgentMemAvailable {
 		if agentAvailable, agentSource, ok := m.tryGuestAgentMemAvailable(ctx, client, instanceName, guestName, node, vmid, memTotal, guestRaw); ok {

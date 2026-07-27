@@ -633,11 +633,11 @@ type NodeRRDPoint struct {
 }
 
 // GuestRRDPoint represents a single RRD datapoint for a VM or LXC container.
+// Guest RRD carries only cache-inclusive mem/maxmem columns; the cache-aware
+// memused/memavailable columns exist only in node RRD (#1634).
 type GuestRRDPoint struct {
-	Time         int64    `json:"time"`
-	MaxMem       *float64 `json:"maxmem,omitempty"`
-	MemUsed      *float64 `json:"memused,omitempty"`
-	MemAvailable *float64 `json:"memavailable,omitempty"`
+	Time   int64    `json:"time"`
+	MaxMem *float64 `json:"maxmem,omitempty"`
 }
 
 // NodeStatus represents detailed node status from /nodes/{node}/status endpoint

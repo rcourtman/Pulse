@@ -15,8 +15,6 @@ type vmMemoryTrustStubClient struct {
 	vms                 []proxmox.VM
 	containers          []proxmox.Container
 	vmStatus            *proxmox.VMStatus
-	vmRRDPoints         []proxmox.GuestRRDPoint
-	lxcRRDPoints        []proxmox.GuestRRDPoint
 	vmAgentMemAvailable uint64
 	vmRRDCalls          int
 	vmAgentMemCalls     int
@@ -66,13 +64,12 @@ func (s *vmMemoryTrustStubClient) GetVMStatus(ctx context.Context, node string, 
 	return s.vmStatus, nil
 }
 
+// GetVMRRDData tracks lookups of the guest RRD endpoint. It is intentionally
+// not part of PVEClientInterface anymore: guest rrddata carries no cache-aware
+// memory columns (#1634), so the memory resolvers must never consult it.
 func (s *vmMemoryTrustStubClient) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
 	s.vmRRDCalls++
-	return s.vmRRDPoints, nil
-}
-
-func (s *vmMemoryTrustStubClient) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
-	return s.lxcRRDPoints, nil
+	return nil, nil
 }
 
 func (s *vmMemoryTrustStubClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
@@ -364,17 +361,14 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 	tests := []struct {
 		name           string
 		status         *proxmox.VMStatus
-		rrdAvailable   uint64
-		rrdUsed        uint64
 		agentAvailable uint64
 		wantSource     string
 		wantUsed       uint64
-		wantAvailable  uint64
 		wantGap        uint64
 		wantUnknown    bool
 	}{
 		{
-			name: "cache inflated Linux VM usage prefers RRD memavailable fallback",
+			name: "cache inflated Linux VM with bare meminfo total stays unknown",
 			status: &proxmox.VMStatus{
 				Status: "running",
 				MaxMem: 8 * gib,
@@ -384,10 +378,8 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 				},
 				Agent: proxmox.VMAgentField{Value: 1},
 			},
-			rrdAvailable:  4 * gib,
-			wantSource:    "rrd-memavailable",
-			wantUsed:      4 * gib,
-			wantAvailable: 4 * gib,
+			wantSource:  "unavailable",
+			wantUnknown: true,
 		},
 		{
 			name: "missing MemAvailable derives from free buffers cached",
@@ -422,22 +414,6 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			wantSource: "derived-total-minus-used",
 			wantUsed:   5 * gib,
 			wantGap:    3 * gib,
-		},
-		{
-			name: "partial Linux meminfo uses RRD memused",
-			status: &proxmox.VMStatus{
-				Status: "running",
-				MaxMem: 8 * gib,
-				Mem:    7 * gib,
-				MemInfo: &proxmox.VMMemInfo{
-					Total: 8 * gib,
-					Free:  gib / 2,
-				},
-				Agent: proxmox.VMAgentField{Value: 1},
-			},
-			rrdUsed:    5 * gib,
-			wantSource: "rrd-memused",
-			wantUsed:   5 * gib,
 		},
 		{
 			name: "partial Linux meminfo without cache aware fallback stays unknown",
@@ -501,25 +477,6 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			wantUnknown:    true,
 		},
 		{
-			name: "RRD available wins over delayed total minus used estimate",
-			status: &proxmox.VMStatus{
-				Status: "running",
-				MaxMem: 8 * gib,
-				Mem:    7 * gib,
-				MemInfo: &proxmox.VMMemInfo{
-					Total: 8 * gib,
-					Used:  5 * gib,
-					Free:  gib / 2,
-				},
-				Agent: proxmox.VMAgentField{Value: 1},
-			},
-			rrdAvailable:  4 * gib,
-			wantSource:    "rrd-memavailable",
-			wantUsed:      4 * gib,
-			wantAvailable: 4 * gib,
-			wantGap:       3 * gib,
-		},
-		{
 			name: "materially inconsistent status memory prefers freemem fallback",
 			status: &proxmox.VMStatus{
 				Status:  "running",
@@ -569,11 +526,6 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 				vmStatus:            tt.status,
 				vmAgentMemAvailable: tt.agentAvailable,
 			}
-			if tt.rrdAvailable > 0 {
-				client.vmRRDPoints = []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(tt.rrdAvailable))}}
-			} else if tt.rrdUsed > 0 {
-				client.vmRRDPoints = []proxmox.GuestRRDPoint{{MemUsed: floatPtr(float64(tt.rrdUsed))}}
-			}
 
 			res := proxmox.ClusterResource{
 				ID:     "qemu/101",
@@ -605,12 +557,6 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			if tt.wantSource == "derived-total-minus-used" && snap.FallbackReason != "derived-total-minus-used" {
 				t.Fatalf("snapshot.FallbackReason = %q, want derived-total-minus-used", snap.FallbackReason)
 			}
-			if tt.wantAvailable > 0 && snap.Raw.RRDMemAvailable != tt.wantAvailable {
-				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvailable)
-			}
-			if tt.rrdUsed > 0 && snap.Raw.RRDMemUsed != tt.rrdUsed {
-				t.Fatalf("snapshot.Raw.RRDMemUsed = %d, want %d", snap.Raw.RRDMemUsed, tt.rrdUsed)
-			}
 			if tt.wantGap > 0 && snap.Raw.MemInfoTotalMinusUsed != tt.wantGap {
 				t.Fatalf("snapshot.Raw.MemInfoTotalMinusUsed = %d, want %d", snap.Raw.MemInfoTotalMinusUsed, tt.wantGap)
 			}
@@ -635,7 +581,6 @@ func TestHandleClusterVMResourcePrefersGuestAgentMemAvailableForSaturatedIssue13
 			Mem:    16*gib + 512*1024*1024,
 			Agent:  proxmox.VMAgentField{Value: 1},
 		},
-		vmRRDPoints:         []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(512 * 1024 * 1024))}},
 		vmAgentMemAvailable: 4 * gib,
 	}
 	res := proxmox.ClusterResource{
@@ -769,15 +714,13 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 
 	tests := []struct {
-		name          string
-		status        *proxmox.VMStatus
-		rrdAvailable  uint64
-		wantSource    string
-		wantUsed      uint64
-		wantAvailable uint64
+		name       string
+		status     *proxmox.VMStatus
+		wantSource string
+		wantUsed   uint64
 	}{
 		{
-			name: "cache inflated Linux VM usage prefers RRD memavailable fallback",
+			name: "cache inflated Linux VM with bare meminfo total stays unknown",
 			status: &proxmox.VMStatus{
 				Status: "running",
 				MaxMem: 8 * gib,
@@ -787,10 +730,8 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 				},
 				Agent: proxmox.VMAgentField{Value: 1},
 			},
-			rrdAvailable:  4 * gib,
-			wantSource:    "rrd-memavailable",
-			wantUsed:      4 * gib,
-			wantAvailable: 4 * gib,
+			wantSource: "unavailable",
+			wantUsed:   0,
 		},
 		{
 			name: "missing Buffers and Cached derives from total minus used gap",
@@ -852,9 +793,6 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 				}},
 				vmStatus: tt.status,
 			}
-			if tt.rrdAvailable > 0 {
-				client.vmRRDPoints = []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(tt.rrdAvailable))}}
-			}
 
 			nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
 			nodeEffectiveStatus := map[string]string{"node1": "online"}
@@ -870,9 +808,6 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 			}
 			if got := uint64(snap.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("snapshot.Memory.Used = %d, want %d", got, tt.wantUsed)
-			}
-			if tt.wantAvailable > 0 && snap.Raw.RRDMemAvailable != tt.wantAvailable {
-				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvailable)
 			}
 			if tt.wantSource == "derived-total-minus-used" && snap.FallbackReason != "derived-total-minus-used" {
 				t.Fatalf("snapshot.FallbackReason = %q, want derived-total-minus-used", snap.FallbackReason)
@@ -988,72 +923,15 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 	const gib = uint64(1024 * 1024 * 1024)
 
 	tests := []struct {
-		name         string
-		res          proxmox.ClusterResource
-		lxcRRDPoints []proxmox.GuestRRDPoint
-		wantSource   string
-		wantUsed     uint64
-		wantAvail    uint64
-		wantStatus   string
-		wantUnknown  bool
+		name        string
+		res         proxmox.ClusterResource
+		wantSource  string
+		wantUsed    uint64
+		wantStatus  string
+		wantUnknown bool
 	}{
 		{
-			name: "cache inflated LXC usage prefers RRD memavailable fallback",
-			res: proxmox.ClusterResource{
-				ID:     "lxc/201",
-				Type:   "lxc",
-				Node:   "node1",
-				Name:   "ct-201",
-				Status: "running",
-				VMID:   201,
-				MaxMem: 8 * gib,
-				Mem:    7 * gib,
-				MaxCPU: 4,
-			},
-			lxcRRDPoints: []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(3 * gib))}},
-			wantSource:   "rrd-memavailable",
-			wantUsed:     5 * gib,
-			wantAvail:    3 * gib,
-			wantStatus:   "running",
-		},
-		{
-			name: "missing memavailable falls back to RRD memused",
-			res: proxmox.ClusterResource{
-				ID:     "lxc/202",
-				Type:   "lxc",
-				Node:   "node1",
-				Name:   "ct-202",
-				Status: "running",
-				VMID:   202,
-				MaxMem: 8 * gib,
-				Mem:    7 * gib,
-				MaxCPU: 4,
-			},
-			lxcRRDPoints: []proxmox.GuestRRDPoint{{MemUsed: floatPtr(float64(6 * gib))}},
-			wantSource:   "rrd-memused",
-			wantUsed:     6 * gib,
-			wantStatus:   "running",
-		},
-		{
-			name: "explicit zero RRD memavailable is valid full usage",
-			res: proxmox.ClusterResource{
-				ID:     "lxc/205",
-				Type:   "lxc",
-				Node:   "node1",
-				Name:   "ct-205",
-				Status: "running",
-				VMID:   205,
-				MaxMem: 8 * gib,
-				Mem:    7 * gib,
-				MaxCPU: 4,
-			},
-			lxcRRDPoints: []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(0)}},
-			wantSource:   "rrd-memavailable",
-			wantUsed:     8 * gib,
-			wantStatus:   "running",
-		},
-		{
-			name: "running LXC without RRD memory falls back to cluster resources (#1634)",
+			name: "running LXC uses the cache-inclusive cluster resources listing (#1634)",
 			res: proxmox.ClusterResource{
 				ID:     "lxc/204",
 				Type:   "lxc",
@@ -1070,7 +948,7 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			wantStatus: "running",
 		},
 		{
-			name: "running LXC without RRD memory or listing value stays unknown",
+			name: "running LXC without a listing memory value stays unknown",
 			res: proxmox.ClusterResource{
 				ID:     "lxc/206",
 				Type:   "lxc",
@@ -1113,7 +991,6 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			client := &vmMemoryTrustStubClient{
 				stubPVEClient: &stubPVEClient{},
 			}
-			client.lxcRRDPoints = tt.lxcRRDPoints
 
 			container, ok := mon.handleClusterContainerResource(
 				context.Background(),
@@ -1146,9 +1023,6 @@ func TestHandleClusterContainerResourceMemoryTrustCharacterization(t *testing.T)
 			}
 			if got := uint64(snap.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("snapshot.Memory.Used = %d, want %d", got, tt.wantUsed)
-			}
-			if tt.wantAvail > 0 && snap.Raw.RRDMemAvailable != tt.wantAvail {
-				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvail)
 			}
 		})
 	}
@@ -1194,15 +1068,13 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 	const gib = uint64(1024 * 1024 * 1024)
 
 	tests := []struct {
-		name         string
-		container    proxmox.Container
-		lxcRRDPoints []proxmox.GuestRRDPoint
-		wantSource   string
-		wantUsed     uint64
-		wantAvail    uint64
+		name       string
+		container  proxmox.Container
+		wantSource string
+		wantUsed   uint64
 	}{
 		{
-			name: "running LXC prefers RRD memavailable in node polling",
+			name: "running LXC uses the cluster resources listing in node polling (#1634)",
 			container: proxmox.Container{
 				VMID:   301,
 				Name:   "ct-301",
@@ -1212,10 +1084,8 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 				Mem:    7 * gib,
 				CPUs:   2,
 			},
-			lxcRRDPoints: []proxmox.GuestRRDPoint{{MemAvailable: floatPtr(float64(3 * gib))}},
-			wantSource:   "rrd-memavailable",
-			wantUsed:     5 * gib,
-			wantAvail:    3 * gib,
+			wantSource: "cluster-resources",
+			wantUsed:   7 * gib,
 		},
 		{
 			name: "stopped LXC reports powered off memory in node polling",
@@ -1242,7 +1112,6 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 			client := &vmMemoryTrustStubClient{
 				stubPVEClient: &stubPVEClient{},
 				containers:    []proxmox.Container{tt.container},
-				lxcRRDPoints:  tt.lxcRRDPoints,
 			}
 
 			nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
@@ -1259,9 +1128,6 @@ func TestPollContainersWithNodesMemoryTrustCharacterization(t *testing.T) {
 			}
 			if got := uint64(snap.Memory.Used); got != tt.wantUsed {
 				t.Fatalf("snapshot.Memory.Used = %d, want %d", got, tt.wantUsed)
-			}
-			if tt.wantAvail > 0 && snap.Raw.RRDMemAvailable != tt.wantAvail {
-				t.Fatalf("snapshot.Raw.RRDMemAvailable = %d, want %d", snap.Raw.RRDMemAvailable, tt.wantAvail)
 			}
 		})
 	}

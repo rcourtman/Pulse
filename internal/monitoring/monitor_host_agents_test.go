@@ -4295,3 +4295,37 @@ func TestConfiguredHostIPs_UnresolvableHostDoesNotDropOthers(t *testing.T) {
 		t.Fatalf("configured host IPs = %v, want only the resolvable host [192.0.2.30]", ips)
 	}
 }
+
+// cleanupRRDCache is part of monitor housekeeping for agent-derived memory
+// evidence. After the dead guest RRD memory cache was removed (#1634), the
+// short-lived caches it prunes are the node RRD cache and the guest-agent
+// meminfo cache; stale guest-agent entries must age out so removed or
+// re-enrolled guests cannot replay old agent memory evidence.
+func TestCleanupRRDCachePrunesStaleGuestAgentMemCache(t *testing.T) {
+	now := time.Now()
+	m := &Monitor{
+		nodeRRDMemCache: map[string]rrdMemCacheEntry{
+			"inst/node-stale": {fetchedAt: now.Add(-3 * nodeRRDCacheTTL)},
+			"inst/node-fresh": {fetchedAt: now},
+		},
+		vmAgentMemCache: map[string]agentMemCacheEntry{
+			"inst/node/100": {fetchedAt: now.Add(-vmAgentMemCleanupMaxAge - time.Second)},
+			"inst/node/101": {fetchedAt: now},
+		},
+	}
+
+	m.cleanupRRDCache(now)
+
+	if _, ok := m.nodeRRDMemCache["inst/node-stale"]; ok {
+		t.Error("stale node RRD cache entry not pruned")
+	}
+	if _, ok := m.nodeRRDMemCache["inst/node-fresh"]; !ok {
+		t.Error("fresh node RRD cache entry pruned")
+	}
+	if _, ok := m.vmAgentMemCache["inst/node/100"]; ok {
+		t.Error("stale guest-agent meminfo cache entry not pruned")
+	}
+	if _, ok := m.vmAgentMemCache["inst/node/101"]; !ok {
+		t.Error("fresh guest-agent meminfo cache entry pruned")
+	}
+}

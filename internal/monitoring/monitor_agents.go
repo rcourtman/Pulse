@@ -3838,12 +3838,6 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 		}
 	}
 
-	for key, entry := range m.vmRRDMemCache {
-		if now.Sub(entry.fetchedAt) > maxAge {
-			delete(m.vmRRDMemCache, key)
-		}
-	}
-
 	for key, entry := range m.vmAgentMemCache {
 		if now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge {
 			delete(m.vmAgentMemCache, key)
