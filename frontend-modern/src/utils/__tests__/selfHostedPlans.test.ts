@@ -144,6 +144,7 @@ describe('selfHostedPlans', () => {
       'Audit Logging',
       'PDF/CSV Reporting',
       'Centralized Agent Profiles',
+      'External Probes',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
       expect.arrayContaining(['Real-time monitoring', 'Watch-only Patrol']),

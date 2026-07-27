@@ -21,6 +21,11 @@ export interface AvailabilityProbeStatus {
   consecutiveFailures?: number;
   lastError?: string;
   failureThreshold?: number;
+  /**
+   * Set when the latest observation was reported by a remote probe agent.
+   * Absent (omitempty) when the local Pulse server ran the check.
+   */
+  probeAgentId?: string;
 }
 
 export interface AvailabilityTarget {
@@ -39,6 +44,13 @@ export interface AvailabilityTarget {
   pollIntervalSeconds?: number;
   timeoutMillis?: number;
   failureThreshold?: number;
+  /**
+   * Host agent that runs this check. Empty string means the local Pulse
+   * server. Assigning a non-empty value requires the `external_probe`
+   * entitlement. Clearing an assignment requires sending an explicit empty
+   * string because the server decodes updates onto the existing record.
+   */
+  probeAgentId?: string;
   status?: AvailabilityProbeStatus;
 }
 
@@ -61,6 +73,11 @@ export class AvailabilityTargetsAPI {
     });
   }
 
+  /**
+   * Partial update. The server decodes the body onto the existing record, so
+   * omitted keys keep their stored value. Send `probeAgentId: ''` explicitly to
+   * clear a probe assignment and move the check back to the local Pulse server.
+   */
   static async update(
     id: string,
     target: Partial<AvailabilityTarget>,

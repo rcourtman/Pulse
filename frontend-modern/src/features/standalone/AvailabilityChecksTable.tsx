@@ -2,6 +2,7 @@ import { A } from '@solidjs/router';
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import PlusIcon from 'lucide-solid/icons/plus';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -22,6 +23,7 @@ import {
   getAvailabilityProbeEndpointLabel,
   getAvailabilityProbePresentation,
 } from '@/utils/availabilityProbePresentation';
+import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabilityProbeAgents';
 import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
@@ -59,6 +61,8 @@ export const AvailabilityChecksTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
+  /** Connected agent hosts, used to name the source of probe-reported results. */
+  probeAgentOptions?: readonly ProbeAgentOption[];
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
@@ -181,6 +185,11 @@ export const AvailabilityChecksTable: Component<{
                       probe()?.methodLabel ?? availability()?.protocol ?? 'Probe';
                     const result = () => probe()?.resultLabel ?? indicator().label;
                     const target = () => formatTarget(check);
+                    const probeSource = () =>
+                      getProbeSourceChipLabel(
+                        props.probeAgentOptions ?? [],
+                        availability()?.probeAgentId,
+                      );
 
                     return (
                       <TableRow
@@ -226,6 +235,19 @@ export const AvailabilityChecksTable: Component<{
                           <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
                             {result()}
                           </span>
+                          <Show when={probeSource()}>
+                            {(sourceLabel) => (
+                              <MetadataBadge
+                                tone="muted"
+                                size="xs"
+                                appearance="outline"
+                                class="mt-0.5 flex"
+                                data-availability-probe-source={availability()?.probeAgentId}
+                              >
+                                {sourceLabel()}
+                              </MetadataBadge>
+                            )}
+                          </Show>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}

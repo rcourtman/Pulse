@@ -1,4 +1,10 @@
 import type { AvailabilityTarget, AvailabilityTargetKind } from '@/api/availabilityTargets';
+import {
+  PROBE_AGENT_STALE_LABEL,
+  getProbeSourceChipLabel,
+  isProbeAgentStaleStatus,
+  type ProbeAgentOption,
+} from '@/utils/availabilityProbeAgents';
 
 export const AVAILABILITY_SETTINGS_PATH = '/settings/monitoring/availability';
 export const AVAILABILITY_ADD_QUERY_PARAM = 'add';
@@ -102,6 +108,10 @@ export function getAvailabilityTargetStatusLabel(target: AvailabilityTarget): st
   if (!target.enabled) return 'Paused';
   const status = target.status;
   if (!status) return 'Not checked yet';
+  // A probe-assigned check whose agent stopped reporting derives to
+  // indeterminate at read time. It shares the warning treatment with the UDP
+  // open-or-filtered case but needs its own copy.
+  if (isProbeAgentStaleStatus(status)) return PROBE_AGENT_STALE_LABEL;
   if (status.outcome === 'indeterminate') return 'Open or filtered';
   if (status.available) {
     return typeof status.latencyMillis === 'number'
@@ -121,6 +131,17 @@ export function getAvailabilityTargetStatusClass(target: AvailabilityTarget): st
     return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300';
   }
   return 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300';
+}
+
+/**
+ * Source attribution for the latest observation. Returns null when the check
+ * ran locally, so the chip only appears for probe-reported results.
+ */
+export function getAvailabilityTargetProbeSourceLabel(
+  target: AvailabilityTarget,
+  probeAgentOptions: readonly ProbeAgentOption[],
+): string | null {
+  return getProbeSourceChipLabel(probeAgentOptions, target.status?.probeAgentId);
 }
 
 export function getAvailabilityTargetsSummary(targets: readonly AvailabilityTarget[]): string {

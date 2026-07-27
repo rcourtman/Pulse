@@ -28,6 +28,7 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { STANDALONE_PATH, buildStandalonePath } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import { formatRelativeTime } from '@/utils/format';
+import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import { AvailabilityChecksTable } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
 import {
@@ -229,6 +230,7 @@ export function StandalonePageSurface() {
               </Show>
               <AvailabilityChecksTable
                 resources={model().availabilityChecks}
+                probeAgentOptions={buildProbeAgentOptions(model().machines)}
                 emptyIcon={availabilityIcon()}
                 emptyTitle="No availability checks"
                 emptyDescription="Add ping, TCP, MQTT, ESPHome, or HTTP checks for devices and services that cannot run Pulse Agent."

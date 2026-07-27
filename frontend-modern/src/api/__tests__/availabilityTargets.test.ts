@@ -64,6 +64,51 @@ describe('AvailabilityTargetsAPI', () => {
     );
   });
 
+  it('round-trips a probe agent assignment through list and create', async () => {
+    const target: AvailabilityTarget = {
+      id: 'sensor-1',
+      name: 'Remote MQTT',
+      address: 'mqtt.remote.local',
+      protocol: 'tcp',
+      port: 1883,
+      enabled: true,
+      probeAgentId: 'host-agent-7',
+      status: {
+        targetId: 'sensor-1',
+        name: 'Remote MQTT',
+        address: 'mqtt.remote.local',
+        protocol: 'tcp',
+        enabled: true,
+        available: true,
+        outcome: 'reachable',
+        probeAgentId: 'host-agent-7',
+      },
+    };
+
+    mockedApiFetchJSON.mockResolvedValueOnce([target]);
+    const listed = await AvailabilityTargetsAPI.list();
+    expect(listed[0].probeAgentId).toBe('host-agent-7');
+    expect(listed[0].status?.probeAgentId).toBe('host-agent-7');
+
+    mockedApiFetchJSON.mockResolvedValueOnce(target);
+    await AvailabilityTargetsAPI.create(target);
+    expect(mockedApiFetchJSON).toHaveBeenLastCalledWith('/api/availability-targets', {
+      method: 'POST',
+      body: JSON.stringify(target),
+    });
+  });
+
+  it('sends an explicit empty probe agent id when clearing an assignment', async () => {
+    mockedApiFetchJSON.mockResolvedValueOnce({});
+    await AvailabilityTargetsAPI.update('sensor-1', { probeAgentId: '' });
+
+    const [, init] = mockedApiFetchJSON.mock.calls.at(-1) as [string, { body: string }];
+    // The server decodes onto the existing record, so an omitted key would keep
+    // the stored assignment. The empty string has to survive serialization.
+    expect(JSON.parse(init.body)).toEqual({ probeAgentId: '' });
+    expect(init.body).toContain('"probeAgentId":""');
+  });
+
   it('accepts https protocol for secure web services', async () => {
     const target: AvailabilityTarget = {
       id: '',

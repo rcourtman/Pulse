@@ -375,6 +375,7 @@ describe('licensePresentation', () => {
         'Audit Logging',
         'PDF/CSV Reporting',
         'Centralized Agent Profiles',
+        'External Probes',
       ],
       supplementalBadges: [],
       supplementalSummary: '',
@@ -673,6 +674,7 @@ describe('licensePresentation', () => {
         'Audit Logging',
         'PDF/CSV Reporting',
         'Centralized Agent Profiles',
+        'External Probes',
       ],
       supplementalBadges: ['Grandfathered price'],
       supplementalSummary:
@@ -1260,6 +1262,7 @@ describe('licensePresentation', () => {
         'Audit Logging',
         'PDF/CSV Reporting',
         'Centralized Agent Profiles',
+        'External Probes',
       ],
       actionLabel: 'Choose Patrol mode',
       actionUrl: PATROL_CONTROL_STARTER_URL,

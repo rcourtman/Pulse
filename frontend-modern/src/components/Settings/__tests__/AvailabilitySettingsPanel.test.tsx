@@ -29,6 +29,16 @@ vi.mock('@/api/availabilityTargets', () => ({
   },
 }));
 
+const resourceMocks = vi.hoisted(() => ({
+  resources: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({
+    resources: () => resourceMocks.resources,
+  }),
+}));
+
 vi.mock('../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot', () => ({
   AvailabilityTargetSlot: (props: {
     editingTargetId?: string | null;
@@ -79,6 +89,7 @@ const targets: AvailabilityTarget[] = [
 describe('AvailabilitySettingsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resourceMocks.resources = [];
     routeState.pathname = '/settings/monitoring/availability';
     routeState.search = '';
     vi.mocked(AvailabilityTargetsAPI.list).mockResolvedValue(targets);
@@ -99,6 +110,53 @@ describe('AvailabilitySettingsPanel', () => {
     expect(screen.getByText('TCP 1883')).toBeInTheDocument();
     expect(screen.getByText('http://service.local/health')).toBeInTheDocument();
     expect(screen.getByText('Online · 8 ms')).toBeInTheDocument();
+  });
+
+  it('attributes probe-reported checks to the agent host that ran them', async () => {
+    resourceMocks.resources = [
+      {
+        id: 'agent:edge-01',
+        type: 'agent',
+        name: 'edge-01',
+        displayName: 'Edge 01',
+        platformId: 'edge-01',
+        platformType: 'agent',
+        sourceType: 'agent',
+        sources: ['agent'],
+        status: 'online',
+        lastSeen: 1_700_000_000_000,
+        agent: { agentId: 'host-edge-01' },
+      },
+    ];
+    vi.mocked(AvailabilityTargetsAPI.list).mockResolvedValue([
+      {
+        ...targets[0],
+        probeAgentId: 'host-edge-01',
+        status: { ...targets[0].status!, probeAgentId: 'host-edge-01' },
+      },
+      {
+        ...targets[0],
+        id: 'stale-probe',
+        name: 'Stale probe',
+        probeAgentId: 'host-gone',
+        status: {
+          ...targets[0].status!,
+          targetId: 'stale-probe',
+          available: false,
+          outcome: 'indeterminate',
+          lastError: 'no recent report from probe agent',
+          probeAgentId: 'host-gone',
+        },
+      },
+    ]);
+
+    render(() => <AvailabilitySettingsPanel />);
+
+    await waitFor(() => expect(screen.getByText('via Edge 01')).toBeInTheDocument());
+    // Unknown host ids still get attributed, by raw id.
+    expect(screen.getByText('via host-gone')).toBeInTheDocument();
+    // Stale probe reports reuse the existing indeterminate warning treatment.
+    expect(screen.getByText('No recent probe report')).toBeInTheDocument();
   });
 
   it('opens add and edit dialogs from the canonical availability route', async () => {

@@ -16,6 +16,9 @@ import { Button } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { useResources } from '@/hooks/useResources';
+import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import {
   AvailabilityTargetsAPI,
   type AvailabilityTarget,
@@ -29,6 +32,7 @@ import {
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
+  getAvailabilityTargetProbeSourceLabel,
   getAvailabilityTargetStatusClass,
   getAvailabilityTargetStatusLabel,
   getAvailabilityTargetsSummary,
@@ -46,6 +50,8 @@ const sortTargets = (targets: readonly AvailabilityTarget[]): AvailabilityTarget
 export const AvailabilitySettingsPanel: Component = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { resources } = useResources();
+  const probeAgentOptions = createMemo(() => buildProbeAgentOptions(resources()));
   const [targets, setTargets] = createSignal<AvailabilityTarget[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -272,6 +278,20 @@ export const AvailabilitySettingsPanel: Component = () => {
                         >
                           {getAvailabilityTargetStatusLabel(target)}
                         </span>
+                        <Show
+                          when={getAvailabilityTargetProbeSourceLabel(target, probeAgentOptions())}
+                        >
+                          {(sourceLabel) => (
+                            <MetadataBadge
+                              tone="muted"
+                              size="xs"
+                              appearance="outline"
+                              data-availability-probe-source={target.status?.probeAgentId}
+                            >
+                              {sourceLabel()}
+                            </MetadataBadge>
+                          )}
+                        </Show>
                       </div>
                       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                         <span>{getAvailabilityTargetKindLabel(target)}</span>

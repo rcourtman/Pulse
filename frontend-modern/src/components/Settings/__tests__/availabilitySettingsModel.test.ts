@@ -6,6 +6,7 @@ import {
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
+  getAvailabilityTargetProbeSourceLabel,
   getAvailabilityTargetStatusClass,
   getAvailabilityTargetStatusLabel,
   getAvailabilityTargetsSummary,
@@ -158,5 +159,75 @@ describe('availabilitySettingsModel', () => {
         target({ status: { ...target(), targetId: 'mqtt-broker', available: false } }),
       ),
     ).toBe('bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300');
+  });
+
+  it('attributes probe-reported results to the assigned agent host', () => {
+    const options = [{ id: 'host-edge-01', label: 'Edge 01' }];
+    const probed = target({
+      probeAgentId: 'host-edge-01',
+      status: {
+        ...target(),
+        targetId: 'mqtt-broker',
+        available: true,
+        latencyMillis: 12,
+        probeAgentId: 'host-edge-01',
+      },
+    });
+
+    expect(getAvailabilityTargetProbeSourceLabel(probed, options)).toBe('via Edge 01');
+    // A locally executed check carries no attribution chip.
+    expect(
+      getAvailabilityTargetProbeSourceLabel(
+        target({ status: { ...target(), targetId: 'mqtt-broker', available: true } }),
+        options,
+      ),
+    ).toBeNull();
+    // Unknown hosts degrade to the raw id rather than disappearing.
+    expect(
+      getAvailabilityTargetProbeSourceLabel(
+        target({
+          status: {
+            ...target(),
+            targetId: 'mqtt-broker',
+            available: true,
+            probeAgentId: 'host-gone',
+          },
+        }),
+        options,
+      ),
+    ).toBe('via host-gone');
+  });
+
+  it('renders a stale probe assignment with the existing indeterminate treatment', () => {
+    const stale = target({
+      probeAgentId: 'host-edge-01',
+      status: {
+        ...target(),
+        targetId: 'mqtt-broker',
+        available: false,
+        outcome: 'indeterminate',
+        lastError: 'no recent report from probe agent',
+        probeAgentId: 'host-edge-01',
+      },
+    });
+
+    expect(getAvailabilityTargetStatusLabel(stale)).toBe('No recent probe report');
+    // No new visual language: it reuses the amber indeterminate badge.
+    expect(getAvailabilityTargetStatusClass(stale)).toBe(
+      'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+    );
+    // The UDP open-or-filtered case keeps its own copy.
+    expect(
+      getAvailabilityTargetStatusLabel(
+        target({
+          status: {
+            ...target(),
+            targetId: 'mqtt-broker',
+            available: true,
+            outcome: 'indeterminate',
+          },
+        }),
+      ),
+    ).toBe('Open or filtered');
   });
 });

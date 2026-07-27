@@ -502,6 +502,22 @@ Example API payload for simple ping monitoring:
 Pulse stores and returns that target as `protocol: "icmp"` so dashboards,
 alerts, and resource projections keep one canonical protocol value.
 
+### External probes (Pro)
+
+By default every availability check runs from the Pulse server itself, which
+means a check cannot report the one failure that matters most: the site
+running Pulse losing its connectivity. With the Pro `external_probe`
+entitlement, a check can instead be assigned to any connected Pulse agent
+(`probeAgentId` in the API, "Run from" in the UI) — for example an agent on a
+cloud VM or at another site. The assigned agent receives the check through
+its signed agent configuration, runs it on the configured interval, and
+reports results back with its reports; results are only accepted from the
+currently assigned agent. An assigned check is not also run locally. If no
+report arrives for several intervals the check shows as indeterminate
+("no recent report from probe agent"), and if the entitlement lapses the
+check automatically resumes running from the Pulse server. Checks without an
+assignment are unaffected and remain available in every edition.
+
 ### ICMP probe privileges
 
 ICMP probes run the system `ping` binary, which needs the `CAP_NET_RAW`

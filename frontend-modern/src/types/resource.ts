@@ -1451,6 +1451,11 @@ export interface ResourceAvailabilityMeta {
   failureThreshold?: number;
   pollIntervalSeconds?: number;
   timeoutMillis?: number;
+  /**
+   * Host agent that produced the latest observation. Absent when the check ran
+   * on the Pulse server itself.
+   */
+  probeAgentId?: string;
   correlationState?: 'attached' | 'standalone' | 'ambiguous' | 'unresolved';
   correlationRule?: string;
   correlationReason?: string;

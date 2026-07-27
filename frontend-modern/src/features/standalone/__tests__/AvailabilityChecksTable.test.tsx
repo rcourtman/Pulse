@@ -2,6 +2,7 @@ import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
+import type { ProbeAgentOption } from '@/utils/availabilityProbeAgents';
 import { AvailabilityChecksTable } from '../AvailabilityChecksTable';
 
 const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
@@ -32,7 +33,7 @@ const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
     ...overrides,
   }) as Resource;
 
-const renderTable = (resources: Resource[]) =>
+const renderTable = (resources: Resource[], probeAgentOptions?: ProbeAgentOption[]) =>
   render(() => (
     <Router>
       <Route
@@ -43,6 +44,7 @@ const renderTable = (resources: Resource[]) =>
             emptyIcon={<span />}
             emptyTitle="No checks"
             emptyDescription="Add checks"
+            probeAgentOptions={probeAgentOptions}
           />
         )}
       />
@@ -97,6 +99,58 @@ describe('AvailabilityChecksTable', () => {
       'offline',
       'healthy',
     ]);
+  });
+
+  it('chips probe-reported results with the agent host that produced them', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
+
+    renderTable(
+      [
+        availabilityResource({
+          availability: {
+            targetId: 'mock-availability-mqtt-meter',
+            protocol: 'tcp',
+            address: 'power-meter-01.lab.local',
+            port: 1883,
+            enabled: true,
+            available: true,
+            latencyMillis: 7,
+            lastChecked: '2023-11-14T22:18:20.000Z',
+            pollIntervalSeconds: 90,
+            probeAgentId: 'host-edge-01',
+          },
+        }),
+      ],
+      [{ id: 'host-edge-01', label: 'Edge 01' }],
+    );
+
+    expect(screen.getByText('via Edge 01')).toBeInTheDocument();
+  });
+
+  it('falls back to the raw agent id when the host list does not contain it', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
+
+    renderTable([
+      availabilityResource({
+        availability: {
+          targetId: 'mock-availability-mqtt-meter',
+          protocol: 'tcp',
+          address: 'power-meter-01.lab.local',
+          enabled: true,
+          available: true,
+          lastChecked: '2023-11-14T22:18:20.000Z',
+          probeAgentId: 'host-gone',
+        },
+      }),
+    ]);
+
+    expect(screen.getByText('via host-gone')).toBeInTheDocument();
+  });
+
+  it('shows no source chip for locally executed checks', () => {
+    renderTable([availabilityResource()]);
+
+    expect(screen.queryByText(/^via /)).not.toBeInTheDocument();
   });
 
   it('links the empty state back to the availability check add flow', () => {

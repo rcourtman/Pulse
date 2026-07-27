@@ -1,6 +1,7 @@
 import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
+import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import {
   formCheckbox,
   formControl,
@@ -28,6 +29,19 @@ import { useResources } from '@/hooks/useResources';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
+import {
+  EXTERNAL_PROBE_FEATURE,
+  LOCAL_PROBE_AGENT_LABEL,
+  buildProbeAgentOptions,
+  getExternalProbeGateBody,
+  getExternalProbeGateTitle,
+  getExternalProbeLockedHelpText,
+  isExternalProbeLicenseError,
+  isProbeAgentMissing,
+} from '@/utils/availabilityProbeAgents';
+import { hasFeature, loadRuntimeCapabilities, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { Resource } from '@/types/resource';
 
 interface AvailabilityForm {
@@ -42,6 +56,7 @@ interface AvailabilityForm {
   udpRequest: string;
   udpExpectedResponse: string;
   linkedResourceId: string;
+  probeAgentId: string;
   enabled: boolean;
   pollIntervalSeconds: string;
   timeoutMillis: string;
@@ -76,6 +91,7 @@ const newAvailabilityForm = (
   udpRequest: '',
   udpExpectedResponse: '',
   linkedResourceId: '',
+  probeAgentId: '',
   enabled: true,
   pollIntervalSeconds: '60',
   timeoutMillis: '2000',
@@ -94,6 +110,7 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
   udpRequest: target.udpRequest ?? '',
   udpExpectedResponse: target.udpExpectedResponse ?? '',
   linkedResourceId: target.linkedResourceId ?? '',
+  probeAgentId: target.probeAgentId ?? '',
   enabled: target.enabled ?? true,
   pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
   timeoutMillis: String(target.timeoutMillis ?? 2000),
@@ -119,6 +136,10 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     udpRequest: form.protocol === 'udp' ? form.udpRequest : undefined,
     udpExpectedResponse: form.protocol === 'udp' ? form.udpExpectedResponse : undefined,
     linkedResourceId: form.linkedResourceId.trim() || undefined,
+    // Always serialized, never `undefined`: the server decodes updates onto the
+    // existing record, so an explicit empty string is what clears a probe
+    // assignment and moves the check back to the local Pulse server.
+    probeAgentId: form.probeAgentId.trim(),
     enabled: form.enabled,
     pollIntervalSeconds: parsePositiveInt(form.pollIntervalSeconds),
     timeoutMillis: parsePositiveInt(form.timeoutMillis),
@@ -182,6 +203,21 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   const [testing, setTesting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [testResult, setTestResult] = createSignal<AvailabilityTestResponse | null>(null);
+  // Set when the server rejects a probe assignment with the canonical 402, so a
+  // stale cached capability set still lands on the upgrade gate.
+  const [probeLicenseRejected, setProbeLicenseRejected] = createSignal(false);
+
+  const probeAgentOptions = createMemo(() => buildProbeAgentOptions(resources()));
+  const probeAgentMissing = createMemo(() =>
+    isProbeAgentMissing(probeAgentOptions(), form().probeAgentId),
+  );
+  const externalProbeLicensed = createMemo(
+    () =>
+      !probeLicenseRejected() && runtimeCapabilitiesLoaded() && hasFeature(EXTERNAL_PROBE_FEATURE),
+  );
+  const externalProbeLocked = createMemo(
+    () => probeLicenseRejected() || (runtimeCapabilitiesLoaded() && !externalProbeLicensed()),
+  );
 
   const linkedResourceMissing = createMemo(() => {
     const id = form().linkedResourceId.trim();
@@ -240,6 +276,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   };
 
   onMount(async () => {
+    void loadRuntimeCapabilities();
     const targetId = props.editingTargetId?.trim();
     if (!targetId) return;
     setLoading(true);
@@ -287,6 +324,11 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
       }
       props.onSaved();
     } catch (err) {
+      if (payload.probeAgentId && isExternalProbeLicenseError(err)) {
+        setProbeLicenseRejected(true);
+        setError(getExternalProbeGateBody());
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to save availability target.');
     } finally {
       setSaving(false);
@@ -402,6 +444,39 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             )}
           </For>
         </FormSelect>
+        <div class="space-y-3 sm:col-span-2">
+          <FormSelect
+            label="Run from"
+            value={form().probeAgentId}
+            disabled={externalProbeLocked()}
+            onChange={(event) => updateForm({ probeAgentId: event.currentTarget.value })}
+            help={
+              externalProbeLocked()
+                ? getExternalProbeLockedHelpText()
+                : 'Run this check from the Pulse server, or hand it to a connected Pulse Agent host so it is probed from that network.'
+            }
+          >
+            <option value="">{LOCAL_PROBE_AGENT_LABEL}</option>
+            <Show when={probeAgentMissing()}>
+              <option value={form().probeAgentId}>
+                {form().probeAgentId} (not currently connected)
+              </option>
+            </Show>
+            <For each={probeAgentOptions()}>
+              {(option) => <option value={option.id}>{option.label}</option>}
+            </For>
+          </FormSelect>
+          <Show when={externalProbeLocked()}>
+            <div class="rounded-md border border-border bg-surface-alt p-4">
+              <FeatureGateSection
+                title={getExternalProbeGateTitle()}
+                body={getExternalProbeGateBody()}
+                upgradeDestination={getUpgradeActionDestination(EXTERNAL_PROBE_FEATURE)}
+                showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
+              />
+            </div>
+          </Show>
+        </div>
         <Show when={form().protocol !== 'icmp'}>
           <label class={formField}>
             <span class={formLabel}>Port</span>
