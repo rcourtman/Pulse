@@ -3464,6 +3464,40 @@ func nodeProviderIdentityConflicts(a, b Node) bool {
 	return fpA == "" || fpA != fpB
 }
 
+// nodeCrossViewMergeProven reports whether two node views carry positive
+// same-machine evidence: the same connection instance, a matching non-empty
+// cluster identity that survives the provider-conflict check, or matching
+// TOFU-captured TLS fingerprints. Weak-evidence folds across instances - a
+// bare-hostname endpoint alias or a shared agent identity - require this
+// proof, because node names repeat across sites, private address ranges
+// collide, and cloned template deployments reuse /etc/machine-id, which is
+// exactly the identity host agents key on. A cluster connection's first polls
+// can also land before membership detection classifies its nodes, and that
+// empty-cluster-name window must not let another site's same-named node fold
+// into (and overwrite) an established slot.
+func nodeCrossViewMergeProven(a, b Node) bool {
+	if normalizeNodeIdentityPart(a.Instance) == normalizeNodeIdentityPart(b.Instance) {
+		return true
+	}
+	if nodeProviderIdentityConflicts(a, b) {
+		return false
+	}
+	clusterA := normalizeNodeIdentityPart(a.ClusterName)
+	clusterB := normalizeNodeIdentityPart(b.ClusterName)
+	if clusterA == "" && clusterB == "" {
+		// Two unclassified standalone views still dedup on the shared
+		// evidence alone: with no cluster identity in play there is no
+		// established cluster slot to steal.
+		return true
+	}
+	if clusterA == clusterB {
+		return true
+	}
+	fpA := normalizeNodeTLSFingerprint(a.TLSFingerprint)
+	fpB := normalizeNodeTLSFingerprint(b.TLSFingerprint)
+	return fpA != "" && fpA == fpB
+}
+
 func resolveNodeMergeKey(
 	primaryKey string,
 	node Node,
@@ -3489,9 +3523,18 @@ func resolveNodeMergeKey(
 		}
 		// Two clusters can reuse node names (pve01 in cluster A and cluster B),
 		// so an endpoint alias is only trustworthy when the cluster identities
-		// don't contradict each other.
-		if existing, exists := nodeMap[key]; exists && nodeProviderIdentityConflicts(existing, node) {
-			continue
+		// don't contradict each other. A hostname-based alias is weaker still -
+		// bare node names repeat across sites - so across instances it only
+		// folds with positive same-machine proof; an address-based alias keeps
+		// folding on the contradiction check alone so standalone views still
+		// reach their cluster node.
+		if existing, exists := nodeMap[key]; exists {
+			if nodeProviderIdentityConflicts(existing, node) {
+				continue
+			}
+			if strings.HasPrefix(alias, "endpoint-host:") && !nodeCrossViewMergeProven(existing, node) {
+				continue
+			}
 		}
 		if resolved != "" && resolved != key {
 			return primaryKey
@@ -3880,8 +3923,12 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			if _, ambiguous := ambiguousLinkedHosts[node.LinkedAgentID]; !ambiguous {
 				if linkedKey := linkedHostToKey[node.LinkedAgentID]; linkedKey != "" {
 					// A shared agent identity must never collapse two different
-					// named clusters into one node slot.
-					if existing, ok := nodeMap[linkedKey]; !ok || !nodeProviderIdentityConflicts(existing, node) {
+					// named clusters into one node slot - and because agents
+					// key on /etc/machine-id, which cloned deployments reuse
+					// across unrelated machines, a cross-instance fold needs
+					// positive same-machine proof, not just the absence of a
+					// contradiction.
+					if existing, ok := nodeMap[linkedKey]; !ok || nodeCrossViewMergeProven(existing, node) {
 						targetKey = linkedKey
 					}
 				}

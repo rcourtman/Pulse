@@ -1402,6 +1402,18 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	client = updatedClient
 	m.refreshPVETagColors(ctx, instanceName, client)
 
+	// Detect cluster membership BEFORE the first node-state commit. A newly
+	// added connection whose add-time detection failed (#437) would otherwise
+	// publish its nodes with an empty cluster name, and unclassified nodes are
+	// exactly what the aggregation guards must treat as weak identity - the
+	// window let a second site's same-named node bind to (and overwrite) an
+	// established cluster's slot. Re-fetch the config afterwards because
+	// detection persists onto m.config while getInstanceConfig returns a copy.
+	m.detectClusterMembership(ctx, instanceName, instanceCfg, client)
+	if refreshedCfg := m.getInstanceConfig(instanceName); refreshedCfg != nil {
+		instanceCfg = refreshedCfg
+	}
+
 	// Check if client is a ClusterClient to determine health status
 	connectionHealthStr := m.updatePVEConnectionHealth(ctx, instanceName, client)
 
@@ -1470,9 +1482,9 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 
 	modelNodes = m.applyStorageFallbackAndRecordNodeMetrics(instanceName, client, modelNodes, nodeDiskSources, localStorageByNode)
 
-	// Periodically re-check cluster status for nodes marked as standalone
-	// This addresses issue #437 where clusters aren't detected on first attempt
-	m.detectClusterMembership(ctx, instanceName, instanceCfg, client)
+	// Cluster membership detection runs earlier in this cycle, before the
+	// node-state commit, so newly detected identity applies to this poll's
+	// nodes rather than the next one's.
 
 	// Update cluster endpoint online status if this is a cluster
 	m.updateClusterEndpointStatus(instanceName, instanceCfg, client, modelNodes)

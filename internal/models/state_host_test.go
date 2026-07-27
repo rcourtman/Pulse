@@ -1890,3 +1890,176 @@ func TestUpdateNodesForInstanceSharedAgentLinkMergeGatedOnFingerprint(t *testing
 		t.Fatalf("contradicting fingerprints: nodes = %#v, want 2", split.Nodes)
 	}
 }
+
+// A cluster connection's first polls can commit nodes before membership
+// detection classifies them (ClusterName ""), and cloned template
+// deployments reuse /etc/machine-id, collapsing two sites' agents into one
+// identity (MSP support case: clusters enacon and rewo, both with pve01, on
+// reused RFC1918 ranges). During that window the shared agent identity must
+// not fold the unclassified node into the established cluster's slot.
+func TestUpdateNodesForInstanceUnclassifiedNodeSharedAgentMustNotStealClusterSlot(t *testing.T) {
+	state := &State{
+		Hosts: []Host{
+			{
+				// One host row standing in for two physical pve01 machines
+				// whose cloned machine-id collapsed them into one agent
+				// identity; it currently reports the second site's address.
+				ID:       "host-cloned-machine-id",
+				Hostname: "pve01",
+				ReportIP: "192.168.1.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.1.11/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.16.11:8006",
+				LinkedAgentID:   "host-cloned-machine-id",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("rewo", []Node{
+		{
+			ID:       "rewo-pve01",
+			Name:     "pve01",
+			Instance: "rewo",
+			// Membership detection has not classified this connection yet.
+			ClusterName: "",
+			Host:        "https://192.168.1.11:8006",
+			Status:      "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 (unclassified node must not fold into the enacon slot)", state.Nodes)
+	}
+	byID := make(map[string]Node)
+	for _, node := range state.Nodes {
+		byID[node.ID] = node
+	}
+	enacon, ok := byID["enacon-pve01"]
+	if !ok {
+		t.Fatalf("enacon-pve01 was clobbered, nodes = %#v", state.Nodes)
+	}
+	if enacon.ClusterName != "enacon" {
+		t.Fatalf("enacon-pve01 ClusterName = %q, want enacon", enacon.ClusterName)
+	}
+	if _, ok := byID["rewo-pve01"]; !ok {
+		t.Fatalf("rewo-pve01 missing, nodes = %#v", state.Nodes)
+	}
+}
+
+// When TLS settings degrade both connections' node endpoints to the bare
+// node name, the endpoint-host alias is identical across sites. An
+// unclassified node (empty cluster name, e.g. during the first-poll
+// membership window) must not ride that weak alias into another instance's
+// established cluster slot.
+func TestUpdateNodesForInstanceEndpointHostAliasRequiresProofForUnclassifiedNodes(t *testing.T) {
+	state := &State{
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://pve01:8006",
+				Status:          "online",
+			},
+		},
+	}
+
+	state.UpdateNodesForInstance("rewo", []Node{
+		{
+			ID:          "rewo-pve01",
+			Name:        "pve01",
+			Instance:    "rewo",
+			ClusterName: "",
+			Host:        "https://pve01:8006",
+			Status:      "online",
+		},
+	})
+
+	if len(state.Nodes) != 2 {
+		t.Fatalf("nodes = %#v, want 2 (bare-hostname alias must not fold an unclassified cross-instance node)", state.Nodes)
+	}
+}
+
+// The legitimate standalone-into-cluster fold must survive the weak-evidence
+// tightening: a standalone connection view dialing the same address as the
+// cluster's endpoint record still folds via the address alias, and a
+// fingerprint-proven view still folds via the shared agent link.
+func TestUpdateNodesForInstanceStandaloneViewStillFoldsIntoClusterNode(t *testing.T) {
+	byAddress := &State{
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://192.168.16.11:8006",
+				Status:          "online",
+			},
+		},
+	}
+	byAddress.UpdateNodesForInstance("pve01-direct", []Node{
+		{
+			ID:       "direct-pve01",
+			Name:     "pve01",
+			Instance: "pve01-direct",
+			Host:     "https://192.168.16.11:8006",
+			Status:   "online",
+		},
+	})
+	if len(byAddress.Nodes) != 1 {
+		t.Fatalf("address alias: nodes = %#v, want 1 (same-address standalone view folds)", byAddress.Nodes)
+	}
+
+	byAgent := &State{
+		Hosts: []Host{
+			{
+				ID:       "host-pve01",
+				Hostname: "pve01",
+				ReportIP: "192.168.16.11",
+				NetworkInterfaces: []HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.16.11/24"}},
+				},
+			},
+		},
+		Nodes: []Node{
+			{
+				ID:              "enacon-pve01",
+				Name:            "pve01",
+				Instance:        "enacon",
+				ClusterName:     "enacon",
+				IsClusterMember: true,
+				Host:            "https://pve01:8006",
+				TLSFingerprint:  "AA:AA:AA:AA",
+				LinkedAgentID:   "host-pve01",
+				Status:          "online",
+			},
+		},
+	}
+	byAgent.UpdateNodesForInstance("pve01-direct", []Node{
+		{
+			ID:             "direct-pve01",
+			Name:           "pve01",
+			Instance:       "pve01-direct",
+			Host:           "https://192.168.16.11:8006",
+			TLSFingerprint: "aaaaaaaa",
+			Status:         "online",
+		},
+	})
+	if len(byAgent.Nodes) != 1 {
+		t.Fatalf("agent link: nodes = %#v, want 1 (fingerprint-proven view folds via shared agent)", byAgent.Nodes)
+	}
+}

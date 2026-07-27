@@ -113,9 +113,22 @@ match is not machine identity across sites that reuse RFC1918 ranges, so
 every hostname- or IP-based agent match is rejected when the candidate
 agent's linked nodes live in a different named cluster or carry a different
 TLS fingerprint, and a hostname-based match is also rejected when the node's
-endpoint IP is absent from the candidate agent's reported IPs. Nodes with
-empty cluster names keep merging into their cluster view so standalone and
-not-yet-classified endpoint views of the same machine still fold together.
+endpoint IP is absent from the candidate agent's reported IPs. Weak-evidence
+folds across connection instances — a bare-hostname endpoint alias or a
+shared linked-agent identity — additionally require positive same-machine
+proof (matching non-empty cluster identity or matching TLS fingerprints)
+whenever cluster identity is in play on either side, because node names
+repeat across sites and host agents key on /etc/machine-id, which cloned
+template deployments reuse across unrelated machines. An unclassified node
+(empty cluster name) must never displace or fold into an established named
+cluster slot on such evidence alone. Two views that are both unclassified
+still dedup freely, and address-based endpoint aliases keep folding on the
+contradiction checks alone, so standalone and not-yet-classified endpoint
+views of the same machine still fold together. PVE polling must run cluster
+membership detection before the cycle's node-state commit so a newly added
+connection's nodes carry their cluster identity from the first state write
+whenever detection succeeds, instead of transiting the aggregation layer
+unclassified.
 Docker and Podman container CPU collection preserves the runtime-native raw
 per-core CPU percent, but monitoring-owned history and alert threshold
 evaluation use host-capacity-normalized CPU percent when host CPU capacity is
