@@ -802,6 +802,16 @@ func (m *Monitor) GetHostAgentConfig(hostID string) HostAgentConfig {
 		}
 	}
 
+	// 3. Externally probed availability targets assigned to this agent. Each
+	// agent only ever sees its own assignments because the payload is built
+	// from this hostID.
+	if targets := m.availabilityProbeTargetsForAgent(hostID); len(targets) > 0 {
+		if cfg.Settings == nil {
+			cfg.Settings = map[string]interface{}{}
+		}
+		cfg.Settings["availabilityTargets"] = targets
+	}
+
 	return attachDesiredConfigMetadata(cfg)
 }
 

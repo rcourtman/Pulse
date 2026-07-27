@@ -943,6 +943,19 @@ the frontend-primitives-owned Standalone surface may read the same
 `network-endpoint` projection to show current reachability, latency, check age,
 and failure state without creating another monitoring provider or top-level
 availability route.
+Availability targets may also be assigned to a remote host agent. While the
+`external_probe` entitlement is active, a probe-assigned target is executed
+exclusively by its assigned agent: monitoring must not schedule or run it
+locally, so the check never executes twice. The assignment is effective only for
+as long as the entitlement holds; on lapse the effective assignment collapses to
+local and the normal poll provider resumes the target on its next planning
+cycle, without a restart. Reported results are accepted only from the agent that
+currently owns the target, and results for any other target or from any other
+agent are dropped. Failure accounting, thresholds, and incident projection stay
+server-side. When an assigned agent stops reporting, monitoring derives
+indeterminate with a stale-report explanation at read time through the shared
+probe-status snapshot rather than mutating stored state, so every availability
+consumer sees the same staleness verdict.
 Mock-mode Discovery context follows the same fixture-graph rule. Demo service
 details such as detected version, config/data/log paths, Docker bind mounts,
 ports, and suggested web URLs may be authored in mock fixtures, but consumers

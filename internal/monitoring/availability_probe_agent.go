@@ -1,0 +1,204 @@
+package monitoring
+
+import (
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/availabilityprobe"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rs/zerolog/log"
+)
+
+// availabilityProbeStaleFloor is the shortest window after which a probe-assigned
+// target without a fresh report reads as indeterminate.
+const availabilityProbeStaleFloor = 5 * time.Minute
+
+// availabilityProbeStaleError is the single read-time explanation shown when an
+// assigned agent stops reporting.
+const availabilityProbeStaleError = "no recent report from probe agent"
+
+// ProbeAvailabilityResult is one availability observation reported by a remote
+// host agent that owns the target's execution.
+type ProbeAvailabilityResult struct {
+	TargetID      string
+	Outcome       availabilityprobe.Outcome
+	LatencyMillis int64
+	CheckedAt     time.Time
+	Error         string
+}
+
+// effectiveProbeAgentID returns the host agent that currently owns execution of
+// the target. It collapses to local execution ("") whenever the external probe
+// entitlement is absent, so a license lapse resumes local polling instead of
+// stranding the check on an agent that is no longer allowed to run it.
+func (m *Monitor) effectiveProbeAgentID(target config.AvailabilityTarget) string {
+	assigned := strings.TrimSpace(target.ProbeAgentID)
+	if assigned == "" {
+		return ""
+	}
+	if !m.hasLicensedFeature(pkglicensing.FeatureExternalProbe) {
+		return ""
+	}
+	return assigned
+}
+
+// ApplyProbeAvailabilityResults ingests availability results reported by a host
+// agent. Results are accepted only for targets currently assigned to that agent.
+func (m *Monitor) ApplyProbeAvailabilityResults(hostID string, results []ProbeAvailabilityResult) {
+	if m == nil {
+		return
+	}
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" || len(results) == 0 {
+		return
+	}
+
+	applied := 0
+	for _, result := range results {
+		targetID := strings.TrimSpace(result.TargetID)
+		if targetID == "" {
+			continue
+		}
+		target, ok := m.availabilityTargetByID(targetID)
+		if !ok {
+			log.Debug().
+				Str("hostID", hostID).
+				Str("targetID", targetID).
+				Msg("Rejecting probe availability result for unknown target")
+			continue
+		}
+		if m.effectiveProbeAgentID(target) != hostID {
+			log.Debug().
+				Str("hostID", hostID).
+				Str("targetID", targetID).
+				Msg("Rejecting probe availability result from an agent that does not own the target")
+			continue
+		}
+
+		checkedAt := result.CheckedAt
+		if checkedAt.IsZero() {
+			checkedAt = time.Now()
+		}
+		latency := time.Duration(result.LatencyMillis) * time.Millisecond
+		if latency < 0 {
+			latency = 0
+		}
+		outcome, probeErr := probeResultOutcome(result)
+		m.applyAvailabilityObservation(target, checkedAt.UTC(), latency, outcome, probeErr, hostID)
+		applied++
+	}
+
+	if applied == 0 {
+		return
+	}
+	m.updateResourceStore(m.GetState())
+}
+
+// probeResultOutcome normalizes a reported outcome and derives the failure
+// signal. An unreachable report without a message still has to fail, otherwise
+// remote checks would never accumulate consecutive failures.
+func probeResultOutcome(result ProbeAvailabilityResult) (AvailabilityProbeOutcome, error) {
+	outcome := AvailabilityProbeOutcome(strings.ToLower(strings.TrimSpace(string(result.Outcome))))
+	message := strings.TrimSpace(result.Error)
+	switch outcome {
+	case AvailabilityProbeReachable, AvailabilityProbeUnreachable, AvailabilityProbeIndeterminate:
+	default:
+		if message != "" {
+			outcome = AvailabilityProbeUnreachable
+		} else {
+			outcome = AvailabilityProbeIndeterminate
+		}
+	}
+	if outcome == AvailabilityProbeUnreachable {
+		if message == "" {
+			message = "probe agent reported the target unreachable"
+		}
+		return outcome, errors.New(message)
+	}
+	if message != "" {
+		return AvailabilityProbeUnreachable, errors.New(message)
+	}
+	return outcome, nil
+}
+
+// deriveAvailabilityProbeStaleness reports the status a reader should see for a
+// probe-assigned target. Stored state is never mutated: an agent that stops
+// reporting must read as indeterminate without erasing its last observation.
+func (m *Monitor) deriveAvailabilityProbeStaleness(
+	target config.AvailabilityTarget,
+	status AvailabilityProbeStatus,
+	now time.Time,
+) AvailabilityProbeStatus {
+	if m.effectiveProbeAgentID(target) == "" {
+		return status
+	}
+	if !availabilityProbeReportIsStale(target, status.LastChecked, now) {
+		return status
+	}
+	status.Outcome = string(AvailabilityProbeIndeterminate)
+	status.Available = false
+	status.LastError = availabilityProbeStaleError
+	status.LatencyMillis = 0
+	return status
+}
+
+func availabilityProbeReportIsStale(target config.AvailabilityTarget, lastChecked time.Time, now time.Time) bool {
+	if lastChecked.IsZero() {
+		return true
+	}
+	window := time.Duration(target.EffectivePollIntervalSecs()) * 3 * time.Second
+	if window < availabilityProbeStaleFloor {
+		window = availabilityProbeStaleFloor
+	}
+	return now.Sub(lastChecked) > window
+}
+
+// availabilityProbeTargetsForAgent returns the probe payload for the targets the
+// given agent currently owns.
+func (m *Monitor) availabilityProbeTargetsForAgent(hostID string) []map[string]interface{} {
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return nil
+	}
+	var assigned []map[string]interface{}
+	for _, target := range m.availabilityTargets() {
+		if m.effectiveProbeAgentID(target) != hostID {
+			continue
+		}
+		assigned = append(assigned, availabilityProbeAgentTargetPayload(target))
+	}
+	return assigned
+}
+
+// availabilityProbeAgentTargetPayload carries only what the agent needs to run
+// the check. Failure accounting and resource linkage stay server-side.
+func availabilityProbeAgentTargetPayload(target config.AvailabilityTarget) map[string]interface{} {
+	payload := map[string]interface{}{
+		"id":                  target.ID,
+		"name":                target.DisplayName(),
+		"targetKind":          string(target.TargetKind),
+		"address":             target.Address,
+		"protocol":            string(target.Protocol),
+		"enabled":             target.Enabled,
+		"pollIntervalSeconds": target.EffectivePollIntervalSecs(),
+		"timeoutMillis":       target.EffectiveTimeoutMillis(),
+	}
+	if target.Port > 0 {
+		payload["port"] = target.Port
+	}
+	if path := strings.TrimSpace(target.Path); path != "" {
+		payload["path"] = path
+	}
+	if target.UDPMode != "" {
+		payload["udpMode"] = string(target.UDPMode)
+	}
+	if target.UDPRequest != "" {
+		payload["udpRequest"] = target.UDPRequest
+	}
+	if target.UDPExpected != "" {
+		payload["udpExpectedResponse"] = target.UDPExpected
+	}
+	return payload
+}

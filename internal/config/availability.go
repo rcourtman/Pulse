@@ -64,6 +64,10 @@ type AvailabilityTarget struct {
 	TimeoutMillis    int                       `json:"timeoutMillis,omitempty"`
 	FailureThreshold int                       `json:"failureThreshold,omitempty"`
 	LinkedResourceID string                    `json:"linkedResourceId,omitempty"`
+	// ProbeAgentID assigns execution to a remote host agent. Empty means the
+	// check runs from the local Pulse instance. Agent existence is validated at
+	// the API layer, not here, because config has no view of monitor state.
+	ProbeAgentID string `json:"probeAgentId,omitempty"`
 }
 
 // NewAvailabilityTarget returns a new target with generated ID and defaults.
@@ -265,6 +269,7 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 		target.UDPExpected = ""
 	}
 	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
+	target.ProbeAgentID = strings.TrimSpace(target.ProbeAgentID)
 	target.ApplyDefaults()
 	return target
 }

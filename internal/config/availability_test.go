@@ -161,3 +161,73 @@ func TestAvailabilityTargetsRoundTripThroughPersistence(t *testing.T) {
 		t.Fatalf("poll interval = %d, want default", loaded[0].PollIntervalSecs)
 	}
 }
+
+func TestNormalizeAvailabilityTargetTrimsProbeAgentID(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:      "device.local",
+		Protocol:     AvailabilityProbeICMP,
+		Enabled:      true,
+		ProbeAgentID: "  agent-remote-1  ",
+	})
+
+	if target.ProbeAgentID != "agent-remote-1" {
+		t.Fatalf("ProbeAgentID = %q, want agent-remote-1", target.ProbeAgentID)
+	}
+
+	local := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:      "device.local",
+		Protocol:     AvailabilityProbeICMP,
+		Enabled:      true,
+		ProbeAgentID: "   ",
+	})
+	if local.ProbeAgentID != "" {
+		t.Fatalf("ProbeAgentID = %q, want empty for a locally executed target", local.ProbeAgentID)
+	}
+	if err := local.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want probe assignment to stay an API-layer concern", err)
+	}
+}
+
+func TestAvailabilityTargetProbeAgentIDRoundTripsThroughPersistence(t *testing.T) {
+	persistence := NewConfigPersistence(t.TempDir())
+	targets := []AvailabilityTarget{
+		{
+			ID:           "endpoint-remote",
+			Name:         "Remote branch gateway",
+			TargetKind:   AvailabilityTargetDevice,
+			Address:      "gateway.branch.local",
+			Protocol:     AvailabilityProbeICMP,
+			Enabled:      true,
+			ProbeAgentID: " agent-branch ",
+		},
+		{
+			ID:       "endpoint-local",
+			Name:     "Local gateway",
+			Address:  "gateway.local",
+			Protocol: AvailabilityProbeICMP,
+			Enabled:  true,
+		},
+	}
+
+	if err := persistence.SaveAvailabilityTargets(targets); err != nil {
+		t.Fatalf("SaveAvailabilityTargets() error = %v", err)
+	}
+
+	loaded, err := persistence.LoadAvailabilityTargets()
+	if err != nil {
+		t.Fatalf("LoadAvailabilityTargets() error = %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("LoadAvailabilityTargets() length = %d, want 2", len(loaded))
+	}
+	byID := map[string]AvailabilityTarget{}
+	for _, target := range loaded {
+		byID[target.ID] = target
+	}
+	if got := byID["endpoint-remote"].ProbeAgentID; got != "agent-branch" {
+		t.Fatalf("persisted ProbeAgentID = %q, want agent-branch", got)
+	}
+	if got := byID["endpoint-local"].ProbeAgentID; got != "" {
+		t.Fatalf("local target ProbeAgentID = %q, want empty", got)
+	}
+}

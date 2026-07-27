@@ -32,6 +32,7 @@ type AvailabilityProbeStatus struct {
 	ConsecutiveFailures int       `json:"consecutiveFailures,omitempty"`
 	LastError           string    `json:"lastError,omitempty"`
 	FailureThreshold    int       `json:"failureThreshold,omitempty"`
+	ProbeAgentID        string    `json:"probeAgentId,omitempty"`
 }
 
 // AvailabilityProbeOutcome and its values are aliases for the shared probe
@@ -59,6 +60,12 @@ func (availabilityPollProvider) ListInstances(m *Monitor) []string {
 	names := make([]string, 0, len(targets))
 	for _, target := range targets {
 		if !target.Enabled {
+			continue
+		}
+		// A licensed probe assignment moves execution to the agent. When the
+		// entitlement lapses the effective assignment collapses to local, and
+		// the next polling cycle re-plans this instance without a restart.
+		if m.effectiveProbeAgentID(target) != "" {
 			continue
 		}
 		names = append(names, target.ID)
@@ -95,6 +102,11 @@ func (availabilityPollProvider) BuildPollTask(m *Monitor, instanceName string) (
 	if !ok || !target.Enabled {
 		return PollTask{}, fmt.Errorf("availability target %q is not enabled", instanceName)
 	}
+	// Refuse the local run even for a queue entry scheduled before the target
+	// was assigned, so a probe-assigned target never executes twice.
+	if agentID := m.effectiveProbeAgentID(target); agentID != "" {
+		return PollTask{}, fmt.Errorf("availability target %q is assigned to probe agent %q", instanceName, agentID)
+	}
 	return PollTask{
 		InstanceName: target.ID,
 		InstanceType: string(InstanceTypeAvailability),
@@ -125,7 +137,7 @@ func (availabilityPollProvider) DescribeInstances(m *Monitor) []PollProviderInst
 }
 
 func (availabilityPollProvider) ConnectionStatuses(m *Monitor) map[string]bool {
-	statuses := m.AvailabilityStatusSnapshot()
+	statuses := m.availabilityStatusSnapshotForTargets(m.availabilityTargets(), time.Now())
 	out := make(map[string]bool, len(statuses))
 	for targetID, status := range statuses {
 		out[availabilityConnectionKey(targetID)] = status.Enabled && status.Available
@@ -143,13 +155,13 @@ func (availabilityPollProvider) SupplementalSource() unifiedresources.DataSource
 
 func (availabilityPollProvider) SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord {
 	targets := m.availabilityTargets()
-	statuses := m.AvailabilityStatusSnapshot()
-	records := make([]unifiedresources.IngestRecord, 0, len(targets))
 	now := time.Now().UTC()
+	statuses := m.availabilityStatusSnapshotForTargets(targets, now)
+	records := make([]unifiedresources.IngestRecord, 0, len(targets))
 	for _, target := range targets {
 		status := statuses[target.ID]
 		if status.TargetID == "" {
-			status = availabilityStatusFromTarget(target)
+			status = m.deriveAvailabilityProbeStaleness(target, availabilityStatusFromTarget(target), now)
 		}
 		resource, identity := availabilityResourceFromTarget(target, status, orgID, now)
 		records = append(records, unifiedresources.IngestRecord{
@@ -201,15 +213,33 @@ func (m *Monitor) availabilityTargetByID(id string) (config.AvailabilityTarget, 
 	return config.AvailabilityTarget{}, false
 }
 
+// AvailabilityStatusSnapshot is the single read path every availability
+// consumer flows through, so probe staleness is derived here once instead of
+// being re-implemented per reader.
 func (m *Monitor) AvailabilityStatusSnapshot() map[string]AvailabilityProbeStatus {
 	if m == nil {
 		return nil
 	}
+	return m.availabilityStatusSnapshotForTargets(m.availabilityTargets(), time.Now())
+}
+
+func (m *Monitor) availabilityStatusSnapshotForTargets(targets []config.AvailabilityTarget, now time.Time) map[string]AvailabilityProbeStatus {
+	if m == nil {
+		return nil
+	}
 	m.mu.RLock()
-	defer m.mu.RUnlock()
 	out := make(map[string]AvailabilityProbeStatus, len(m.availabilityStatuses))
 	for id, status := range m.availabilityStatuses {
 		out[id] = status
+	}
+	m.mu.RUnlock()
+
+	for _, target := range targets {
+		status, ok := out[target.ID]
+		if !ok {
+			continue
+		}
+		out[target.ID] = m.deriveAvailabilityProbeStaleness(target, status, now)
 	}
 	return out
 }
@@ -232,7 +262,7 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 			NextRun:      now,
 			Interval:     clampInterval(time.Duration(target.EffectivePollIntervalSecs())*time.Second, 10*time.Second, time.Hour),
 		}
-		if target.Enabled {
+		if target.Enabled && m.effectiveProbeAgentID(target) == "" {
 			m.taskQueue.Upsert(task)
 		} else {
 			m.taskQueue.Remove(InstanceTypeAvailability, target.ID)
@@ -263,30 +293,45 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 	outcome, err := ProbeAvailabilityTargetResult(ctx, target)
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.setAvailabilityStatus(target, checkedAt, latency, outcome, err)
+	m.applyAvailabilityObservation(target, checkedAt, latency, outcome, err, "")
+	m.updateResourceStore(m.GetState())
+}
 
-	if err == nil {
+// applyAvailabilityObservation records one availability observation regardless of
+// where it executed, so remote probe results and local polls share failure
+// accounting, connection health, and task bookkeeping.
+func (m *Monitor) applyAvailabilityObservation(
+	target config.AvailabilityTarget,
+	checkedAt time.Time,
+	latency time.Duration,
+	outcome AvailabilityProbeOutcome,
+	probeErr error,
+	probeAgentID string,
+) {
+	m.setAvailabilityStatus(target, checkedAt, latency, outcome, probeErr, probeAgentID)
+
+	if probeErr == nil {
 		if m.stalenessTracker != nil {
 			m.stalenessTracker.UpdateSuccess(InstanceTypeAvailability, target.ID, nil)
 		}
 		m.setProviderConnectionHealth(InstanceTypeAvailability, target.ID, true)
 	} else {
 		if m.stalenessTracker != nil {
-			m.stalenessTracker.UpdateSuccess(InstanceTypeAvailability, target.ID, []byte(err.Error()))
+			m.stalenessTracker.UpdateSuccess(InstanceTypeAvailability, target.ID, []byte(probeErr.Error()))
 		}
 		m.setProviderConnectionHealth(InstanceTypeAvailability, target.ID, false)
 	}
 	m.recordTaskResult(InstanceTypeAvailability, target.ID, nil)
-	m.updateResourceStore(m.GetState())
 }
 
-func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checkedAt time.Time, latency time.Duration, outcome AvailabilityProbeOutcome, probeErr error) {
+func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checkedAt time.Time, latency time.Duration, outcome AvailabilityProbeOutcome, probeErr error, probeAgentID string) {
 	if m == nil {
 		return
 	}
 	status := availabilityStatusFromTarget(target)
 	status.Outcome = string(outcome)
 	status.LastChecked = checkedAt
+	status.ProbeAgentID = strings.TrimSpace(probeAgentID)
 	latencyMs := latency.Milliseconds()
 	if probeErr == nil && latencyMs == 0 {
 		latencyMs = 1

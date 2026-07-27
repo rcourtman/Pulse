@@ -496,6 +496,19 @@ func (r *Router) setupRoutes() {
 	r.availabilityHandlers = NewAvailabilityHandlers(
 		r.configHandlers.getPersistence,
 		r.configHandlers.getMonitor,
+		// Resolved lazily: license handlers are constructed after this point.
+		availabilityFeatureResolverFunc(func(ctx context.Context) licenseFeatureChecker {
+			if r.licenseHandlers == nil {
+				return nil
+			}
+			// Service() rather than FeatureService() so an absent tenant
+			// service stays a nil interface instead of a typed nil.
+			service := r.licenseHandlers.Service(ctx)
+			if service == nil {
+				return nil
+			}
+			return service
+		}),
 	)
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
@@ -948,6 +961,16 @@ func (r *Router) setupRoutes() {
 				return licSvc.HasFeature(feature)
 			})
 		}
+		// Wire license checker for monitoring Pro features (external probes).
+		// The checker is consulted per read, so an entitlement lapse converges
+		// on the next polling cycle without a restart.
+		monitorLicSvc := r.licenseHandlers.Service(context.Background())
+		r.monitor.SetLicenseChecker(func(feature string) bool {
+			if monitorLicSvc == nil {
+				return false
+			}
+			return monitorLicSvc.HasFeature(feature)
+		})
 	}
 
 	// Initialize recovery token store and capture the exact worker this router owns.

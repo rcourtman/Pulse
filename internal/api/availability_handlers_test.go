@@ -17,6 +17,7 @@ func TestAvailabilityHandlersCRUDPersistsTargets(t *testing.T) {
 	handler := NewAvailabilityHandlers(
 		func(_ context.Context) *config.ConfigPersistence { return persistence },
 		nil,
+		nil,
 	)
 
 	createBody := availabilityRequestBody(t, config.AvailabilityTarget{
@@ -96,6 +97,7 @@ func TestAvailabilityHandlersCreateNormalizesPingAlias(t *testing.T) {
 	handler := NewAvailabilityHandlers(
 		func(_ context.Context) *config.ConfigPersistence { return persistence },
 		nil,
+		nil,
 	)
 
 	createBody := availabilityRequestBody(t, config.AvailabilityTarget{
@@ -159,6 +161,7 @@ func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
 	handler := NewAvailabilityHandlers(
 		func(_ context.Context) *config.ConfigPersistence { return persistence },
 		nil,
+		nil,
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/availability-targets/status-page/test", nil)
@@ -189,6 +192,7 @@ func TestAvailabilityHandlersListReturnsMockTargetsInMockMode(t *testing.T) {
 			t.Fatal("mock availability list should not load persistence")
 			return nil
 		},
+		nil,
 		nil,
 	)
 
@@ -246,7 +250,7 @@ func TestAvailabilityHandlersTestSavedMockTargetUsesSyntheticStatus(t *testing.T
 	}
 	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
 
-	handler := NewAvailabilityHandlers(nil, nil)
+	handler := NewAvailabilityHandlers(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/availability-targets/mock-availability-door-controller/test", nil)
 	rec := httptest.NewRecorder()
@@ -280,6 +284,7 @@ func TestAvailabilityTargetLinkedResourceIDRoundTrip(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	handler := NewAvailabilityHandlers(
 		func(_ context.Context) *config.ConfigPersistence { return persistence },
+		nil,
 		nil,
 	)
 

@@ -86,7 +86,7 @@ func TestAvailabilityUDPIndeterminateDoesNotClaimReachabilityOrAccumulateFailure
 	}}
 
 	checkedAt := time.Now().UTC()
-	monitor.setAvailabilityStatus(target, checkedAt, 250*time.Millisecond, AvailabilityProbeIndeterminate, nil)
+	monitor.setAvailabilityStatus(target, checkedAt, 250*time.Millisecond, AvailabilityProbeIndeterminate, nil, "")
 	status := monitor.AvailabilityStatusSnapshot()[target.ID]
 	if status.Available {
 		t.Fatal("indeterminate UDP result must not be reported as reachable")

@@ -1179,6 +1179,11 @@ type Monitor struct {
 	clusterSensorsCache map[string]clusterSensorsCacheEntry
 	mockChartCacheMu    sync.RWMutex
 	mockChartMapCache   map[mockChartMetricMapCacheKey]map[string][]MetricPoint
+	// Commercial feature gate for monitoring-owned Pro behaviour (external
+	// availability probes). Guarded by its own mutex so read-time derivations
+	// that already hold m.mu can consult it without lock re-entrancy.
+	licenseCheckerMu sync.RWMutex
+	licenseChecker   func(feature string) bool
 }
 
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
@@ -4418,6 +4423,31 @@ func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSou
 	m.mu.Unlock()
 
 	m.updateResourceStore(m.GetState())
+}
+
+// SetLicenseChecker wires the commercial feature gate used by monitoring-owned
+// Pro behaviour. It mirrors the alert manager's checker so entitlement lookups
+// stay request-free inside the polling loop.
+func (m *Monitor) SetLicenseChecker(checker func(feature string) bool) {
+	if m == nil {
+		return
+	}
+	m.licenseCheckerMu.Lock()
+	m.licenseChecker = checker
+	m.licenseCheckerMu.Unlock()
+}
+
+func (m *Monitor) hasLicensedFeature(feature string) bool {
+	if m == nil {
+		return false
+	}
+	m.licenseCheckerMu.RLock()
+	checker := m.licenseChecker
+	m.licenseCheckerMu.RUnlock()
+	if checker == nil {
+		return false
+	}
+	return checker(feature)
 }
 
 // SetRecoveryManager wires the recovery store manager for best-effort ingestion of

@@ -15,8 +15,9 @@ import (
 const availabilityTargetsPathPrefix = "/api/availability-targets/"
 
 type AvailabilityHandlers struct {
-	getPersistence func(ctx context.Context) *config.ConfigPersistence
-	getMonitor     func(ctx context.Context) *monitoring.Monitor
+	getPersistence  func(ctx context.Context) *config.ConfigPersistence
+	getMonitor      func(ctx context.Context) *monitoring.Monitor
+	licenseResolver licenseFeatureServiceResolver
 }
 
 type availabilityTargetResponse struct {
@@ -34,11 +35,70 @@ type availabilityTestResponse struct {
 func NewAvailabilityHandlers(
 	getPersistence func(ctx context.Context) *config.ConfigPersistence,
 	getMonitor func(ctx context.Context) *monitoring.Monitor,
+	licenseResolver licenseFeatureServiceResolver,
 ) *AvailabilityHandlers {
 	return &AvailabilityHandlers{
-		getPersistence: getPersistence,
-		getMonitor:     getMonitor,
+		getPersistence:  getPersistence,
+		getMonitor:      getMonitor,
+		licenseResolver: licenseResolver,
 	}
+}
+
+// availabilityFeatureResolverFunc adapts a closure to the licensing
+// FeatureServiceResolver so the router can resolve handlers that are
+// constructed before the license handlers exist.
+type availabilityFeatureResolverFunc func(ctx context.Context) licenseFeatureChecker
+
+func (f availabilityFeatureResolverFunc) FeatureService(ctx context.Context) licenseFeatureChecker {
+	if f == nil {
+		return nil
+	}
+	return f(ctx)
+}
+
+// requireProbeAssignment gates only targets that carry a probe assignment.
+// Unassigned targets are the community behaviour and must never consult the
+// license path.
+func (h *AvailabilityHandlers) requireProbeAssignment(w http.ResponseWriter, r *http.Request, target config.AvailabilityTarget) bool {
+	if strings.TrimSpace(target.ProbeAgentID) == "" {
+		return true
+	}
+	if h == nil || h.licenseResolver == nil {
+		WriteLicenseRequired(w, featureExternalProbeValue, "license service unavailable")
+		return false
+	}
+	service := h.licenseResolver.FeatureService(r.Context())
+	if service == nil {
+		WriteLicenseRequired(w, featureExternalProbeValue, "license service unavailable")
+		return false
+	}
+	if err := service.RequireFeature(featureExternalProbeValue); err != nil {
+		WriteLicenseRequired(w, featureExternalProbeValue, err.Error())
+		return false
+	}
+	if !h.probeAgentExists(r.Context(), target.ProbeAgentID) {
+		writeErrorResponse(w, http.StatusBadRequest, "unknown_probe_agent",
+			"Probe agent "+target.ProbeAgentID+" is not a registered host agent", nil)
+		return false
+	}
+	return true
+}
+
+func (h *AvailabilityHandlers) probeAgentExists(ctx context.Context, agentID string) bool {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return false
+	}
+	monitor := h.monitorForRequest(ctx)
+	if monitor == nil {
+		return false
+	}
+	for _, host := range monitor.GetLiveHostsSnapshot() {
+		if strings.TrimSpace(host.ID) == agentID {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *AvailabilityHandlers) HandleList(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +145,9 @@ func (h *AvailabilityHandlers) HandleAdd(w http.ResponseWriter, r *http.Request)
 	target = config.NormalizeAvailabilityTarget(target)
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+	if !h.requireProbeAssignment(w, r, target) {
 		return
 	}
 
@@ -152,6 +215,9 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 	target = config.NormalizeAvailabilityTarget(target)
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+	if !h.requireProbeAssignment(w, r, target) {
 		return
 	}
 	targets[index] = target
