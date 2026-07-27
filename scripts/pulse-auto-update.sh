@@ -346,6 +346,35 @@ wait_for_service_active() {
     return 1
 }
 
+# Guarantee the Pulse service is left running after an update attempt if (and
+# only if) it was running beforehand. Invoked from perform_update's RETURN trap
+# so that no exit path — present or future — can leave Pulse stopped (#1630:
+# the install-failed rollback branch restored the backup but never restarted
+# the service). This matters doubly because the generated pulse-update.service
+# uses ExecCondition=systemctl is-active pulse.service: once Pulse is down,
+# every subsequent timer run is skipped and the install stays down until
+# someone intervenes. Always returns 0 (it runs under set -e in a trap).
+ensure_service_restarted() {
+    local service_name=$1
+    local service_was_active=$2
+
+    if [[ "$service_was_active" != "true" ]]; then
+        return 0
+    fi
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        return 0
+    fi
+
+    log warn "Pulse service is not active after update attempt; starting it"
+    systemctl start "$service_name" 2>/dev/null || true
+    if wait_for_service_active "$service_name" 20; then
+        log info "Pulse service is running again"
+    else
+        log error "Pulse service could not be started after update attempt; manual intervention required (systemctl start $service_name)"
+    fi
+    return 0
+}
+
 perform_update() {
     local new_version=$1
     local service_name=$(detect_service_name)
@@ -359,6 +388,11 @@ perform_update() {
     if systemctl is-active --quiet "$service_name" 2>/dev/null; then
         service_was_active="true"
     fi
+
+    # Whatever way this function exits, never leave Pulse stopped when it was
+    # running before the update (#1630). Extended below once the installer
+    # tempfiles exist.
+    trap 'ensure_service_restarted "$service_name" "$service_was_active"' RETURN
 
     # Refuse to install a prerelease via the unattended updater. The stable
     # channel must never cross onto a tag like v6.0.0-rc.2, even if every
@@ -406,7 +440,7 @@ perform_update() {
 
     installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX)
     signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
-    trap 'rm -f "$installer_tmp" "$signature_tmp"' RETURN
+    trap 'rm -f "$installer_tmp" "$signature_tmp"; ensure_service_restarted "$service_name" "$service_was_active"' RETURN
 
     if ! curl -fsSL "$install_script_url" -o "$installer_tmp"; then
         log error "Failed to download installer from $install_script_url"
@@ -510,10 +544,18 @@ perform_update() {
         if [[ -f "$backup_dir/VERSION" ]]; then
             cp -f "$backup_dir/VERSION" "$INSTALL_DIR/VERSION"
         fi
-        
+
+        # Restart the restored binary if Pulse was running before the update.
+        # The installer stops the service before it can fail, so skipping this
+        # left Pulse down indefinitely (#1630); the RETURN trap above is the
+        # backstop if this path ever changes.
+        if [[ "$service_was_active" == "true" ]]; then
+            systemctl restart "$service_name" || true
+        fi
+
         # Clean up backup
         rm -rf "$backup_dir"
-        
+
         return 1
     fi
 }

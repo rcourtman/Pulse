@@ -199,12 +199,170 @@ INSTALLER
   return "${status}"
 }
 
+test_ensure_service_restarted_noops_when_service_was_inactive() {
+  ENSURE_TEST_STARTS=0
+  systemctl() {
+    if [[ "$1" == "start" ]] || [[ "$1" == "restart" ]]; then
+      ((ENSURE_TEST_STARTS += 1))
+    fi
+    return 1
+  }
+  sleep() { :; }
+
+  ensure_service_restarted pulse "false" || return 1
+  if (( ENSURE_TEST_STARTS != 0 )); then
+    echo "expected no start attempts when the service was inactive before the update, got ${ENSURE_TEST_STARTS}" >&2
+    return 1
+  fi
+  return 0
+}
+
+test_ensure_service_restarted_starts_stopped_service() {
+  ENSURE_TEST_STARTS=0
+  ENSURE_TEST_UP="no"
+  systemctl() {
+    case "$1" in
+      is-active)
+        [[ "$ENSURE_TEST_UP" == "yes" ]] && return 0 || return 1
+        ;;
+      start|restart)
+        ((ENSURE_TEST_STARTS += 1))
+        ENSURE_TEST_UP="yes"
+        return 0
+        ;;
+    esac
+    return 1
+  }
+  sleep() { :; }
+
+  ensure_service_restarted pulse "true" || return 1
+  if (( ENSURE_TEST_STARTS != 1 )); then
+    echo "expected exactly one start attempt, got ${ENSURE_TEST_STARTS}" >&2
+    return 1
+  fi
+  if [[ "$ENSURE_TEST_UP" != "yes" ]]; then
+    echo "expected the service to be running afterwards" >&2
+    return 1
+  fi
+  return 0
+}
+
+test_perform_update_restarts_service_when_installer_fails() {
+  # Regression for #1630: the installer stops the service and can then exit
+  # non-zero (e.g. a write to a read-only path aborts it). perform_update's
+  # rollback branch must restart Pulse — previously it restored the backup
+  # and returned 1 with the service left stopped, which also disabled every
+  # future timer run via pulse-update.service's ExecCondition.
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  local status=0
+  # perform_update installs a RETURN trap referencing these; declare them here
+  # so the trap is safe under set -u if it surfaces in this calling scope.
+  local installer_tmp="" signature_tmp=""
+  local service_name="pulse" service_was_active="false"
+
+  INSTALL_DIR="${tmpdir}/opt/pulse"
+  CONFIG_DIR="${tmpdir}/etc/pulse"
+  mkdir -p "${INSTALL_DIR}/bin" "${CONFIG_DIR}"
+
+  printf 'v5.1.24\n' > "${INSTALL_DIR}/VERSION"
+  cat > "${INSTALL_DIR}/bin/pulse" <<'EOF'
+#!/usr/bin/env bash
+echo "v5.1.24"
+EOF
+  chmod +x "${INSTALL_DIR}/bin/pulse"
+
+  export INSTALL_DIR
+
+  is_prerelease_tag() { return 1; }
+  detect_service_name() { echo "pulse"; }
+  resolve_install_script_url() { echo "http://localhost/install.sh"; }
+  verify_release_signature() { return 0; }
+  get_current_version() { tr -d '\r\n' < "${INSTALL_DIR}/VERSION"; }
+
+  # curl writes the installer / signature to the -o target. The fake installer
+  # fails outright, like the /bin/update heredoc aborting on a read-only
+  # filesystem after the real installer has already stopped the service.
+  curl() {
+    local out="" prev=""
+    local arg
+    for arg in "$@"; do
+      if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+      prev="$arg"
+    done
+    if [[ -n "$out" ]]; then
+      case "$out" in
+        *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+        *)
+          cat > "$out" <<'INSTALLER'
+#!/usr/bin/env bash
+exit 1
+INSTALLER
+          ;;
+      esac
+    fi
+    return 0
+  }
+
+  # Service is running when perform_update checks (was-active capture), then
+  # down (the real installer stops it before failing) until start/restart.
+  AUTOUPDATE_TEST_IS_ACTIVE_CALLS=0
+  AUTOUPDATE_TEST_UP="no"
+  AUTOUPDATE_TEST_STARTS=0
+  systemctl() {
+    case "$1" in
+      is-active)
+        ((AUTOUPDATE_TEST_IS_ACTIVE_CALLS += 1))
+        if (( AUTOUPDATE_TEST_IS_ACTIVE_CALLS == 1 )); then
+          return 0
+        fi
+        [[ "$AUTOUPDATE_TEST_UP" == "yes" ]] && return 0 || return 1
+        ;;
+      start|restart)
+        ((AUTOUPDATE_TEST_STARTS += 1))
+        AUTOUPDATE_TEST_UP="yes"
+        return 0
+        ;;
+    esac
+    return 1
+  }
+
+  sleep() { :; }
+
+  if perform_update "v5.1.25"; then
+    echo "perform_update unexpectedly succeeded when the installer failed" >&2
+    status=1
+  fi
+  # perform_update installs a RETURN trap; clear it so it does not leak into
+  # subsequent function returns in this sourced test harness.
+  trap - RETURN 2>/dev/null || true
+
+  if (( AUTOUPDATE_TEST_STARTS < 1 )); then
+    echo "expected the service to be restarted after installer failure, got ${AUTOUPDATE_TEST_STARTS} start attempts" >&2
+    status=1
+  fi
+  if [[ "$AUTOUPDATE_TEST_UP" != "yes" ]]; then
+    echo "expected the service to be running after the failed update" >&2
+    status=1
+  fi
+  if [[ "$(tr -d '\r\n' < "${INSTALL_DIR}/VERSION")" != "v5.1.24" ]]; then
+    echo "expected VERSION to remain v5.1.24 after failed install" >&2
+    status=1
+  fi
+
+  rm -rf "${tmpdir}"
+  return "${status}"
+}
+
 main() {
   assert_success "wait_for_service_active retries until active" test_wait_for_service_active_succeeds_after_retry
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
   assert_success "pick_highest_stable_tag ignores list order and prereleases" test_pick_highest_stable_tag_ignores_list_order_and_prereleases
   assert_success "get_latest_stable_version prefers highest version over created order" test_get_latest_stable_version_prefers_highest_over_created_order
   assert_success "perform_update restores backup when service stays down" test_perform_update_restores_backup_when_service_stays_down
+  assert_success "ensure_service_restarted no-ops when service was inactive" test_ensure_service_restarted_noops_when_service_was_inactive
+  assert_success "ensure_service_restarted starts a stopped service" test_ensure_service_restarted_starts_stopped_service
+  assert_success "perform_update restarts service when installer fails" test_perform_update_restarts_service_when_installer_fails
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2

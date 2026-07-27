@@ -604,8 +604,8 @@ func TestRootInstallScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
 		`UPDATE_SERVICE_PATH="${PULSE_UPDATE_SERVICE_PATH:-$(default_update_service_path_for_service "$SERVICE_NAME")}"`,
 		`UPDATE_TIMER_PATH="${PULSE_UPDATE_TIMER_PATH:-$(default_update_timer_path_for_service "$SERVICE_NAME")}"`,
 		`if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then`,
-		`mkdir -p "$(dirname "$BINARY_LINK_PATH")"`,
-		`ln -sf "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"`,
+		`install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"`,
+		`ln -sf "$target" "$link_path"`,
 		`safe_systemctl enable "$update_timer_unit" || true`,
 		`safe_systemctl start "$update_timer_unit" || true`,
 		`Environment="PULSE_SERVICE_NAME=$service_name"`,
@@ -1348,5 +1348,96 @@ func TestRootInstallServiceGrantsIcmpProbeCapability(t *testing.T) {
 	}
 	if !strings.Contains(hardening, "AmbientCapabilities=CAP_NET_RAW") {
 		t.Fatal("AmbientCapabilities=CAP_NET_RAW is not in the unit's security hardening block")
+	}
+}
+
+// TestRootInstallScriptUpdateHelperWriteIsNonFatalOnReadOnlyPath asserts the
+// #1630 guarantee: setup_update_command's write of the /bin/update helper
+// (and its PATH appends) must not abort the installer under errexit when the
+// destination is unwritable. The stock pulse-update.service runs the
+// unattended updater with ProtectSystem=strict, leaving /bin and
+// /usr/local/bin read-only; the old behavior killed the installer after the
+// new binary was installed and the service stopped, and the auto-update
+// rollback then left Pulse down. A regular file as the "parent directory"
+// makes writes beneath it fail with ENOTDIR, which also fails when the test
+// runs as root (unlike chmod 555).
+func TestRootInstallScriptUpdateHelperWriteIsNonFatalOnReadOnlyPath(t *testing.T) {
+	script := `
+set -euo pipefail
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+touch "$TMP/blocker"
+GITHUB_REPO="rcourtman/Pulse"
+INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+PINNED_RELEASE_SSH_PUBLIC_KEY="test-key"
+print_warn() { echo "WARN: $*"; }
+print_success() { echo "OK: $*"; }
+release_signature_key_available() { :; }
+require_release_signature_verifier() { :; }
+verify_release_signature() { :; }
+` + extractRootInstallShellFunction(t, "setup_update_command") + `
+UPDATE_HELPER_PATH="$TMP/blocker/update" \
+PULSE_PROFILE_PATH="$TMP/profile" \
+PULSE_BASHRC_PATH="$TMP/bashrc" \
+setup_update_command
+echo "SURVIVED_UNWRITABLE"
+UPDATE_HELPER_PATH="$TMP/bin/update" \
+PULSE_PROFILE_PATH="$TMP/profile" \
+PULSE_BASHRC_PATH="$TMP/bashrc" \
+setup_update_command
+[[ -x "$TMP/bin/update" ]] && echo "HELPER_WRITTEN"
+grep -q "Pulse update command" "$TMP/bin/update" && echo "HELPER_BODY_OK"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("setup_update_command aborted the installer on an unwritable helper path: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, want := range []string{"SURVIVED_UNWRITABLE", "WARN:", "HELPER_WRITTEN", "HELPER_BODY_OK"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in setup_update_command output:\n%s", want, got)
+		}
+	}
+}
+
+// TestRootInstallScriptBinarySymlinkIsIdempotentAndNonFatal asserts the
+// companion #1630 guarantee for the /usr/local/bin/pulse convenience
+// symlink: an unwritable link path only warns, a writable one creates the
+// link, and an already-correct link is kept without needing ln at all
+// (the update-run case where the link survives but the fs is read-only).
+func TestRootInstallScriptBinarySymlinkIsIdempotentAndNonFatal(t *testing.T) {
+	script := `
+set -euo pipefail
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+touch "$TMP/blocker"
+mkdir -p "$TMP/bin"
+touch "$TMP/bin/pulse-binary"
+print_warn() { echo "WARN: $*"; }
+print_success() { echo "OK: $*"; }
+` + extractRootInstallShellFunction(t, "install_binary_symlink") + `
+install_binary_symlink "$TMP/bin/pulse-binary" "$TMP/blocker/pulse"
+echo "SURVIVED_UNWRITABLE"
+install_binary_symlink "$TMP/bin/pulse-binary" "$TMP/bin/pulse"
+[[ "$(readlink "$TMP/bin/pulse")" == "$TMP/bin/pulse-binary" ]] && echo "LINK_CREATED"
+ln() { echo "LN_CALLED_AGAIN"; return 1; }
+install_binary_symlink "$TMP/bin/pulse-binary" "$TMP/bin/pulse"
+echo "SURVIVED_EXISTING_LINK"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("install_binary_symlink aborted under errexit: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, want := range []string{"SURVIVED_UNWRITABLE", "WARN:", "LINK_CREATED", "already in place", "SURVIVED_EXISTING_LINK"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in install_binary_symlink output:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "LN_CALLED_AGAIN") {
+		t.Fatalf("install_binary_symlink should not invoke ln when the correct link already exists:\n%s", got)
 	}
 }

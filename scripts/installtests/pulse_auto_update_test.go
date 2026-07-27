@@ -387,3 +387,141 @@ func TestInstalledBinaryIsPulseProGuard(t *testing.T) {
 		}
 	})
 }
+
+// TestPerformUpdateRestartsServiceWhenInstallerFails asserts the #1630
+// guarantee: when the downloaded installer exits non-zero (for example a
+// write to a read-only path aborting it under errexit) after it has already
+// stopped the service, perform_update must restore the backup AND leave the
+// service running. The generated pulse-update.service gates on
+// ExecCondition=systemctl is-active, so a service left stopped would also
+// disable every future unattended run.
+func TestPerformUpdateRestartsServiceWhenInstallerFails(t *testing.T) {
+	script := `
+set -uo pipefail
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+GITHUB_REPO="rcourtman/Pulse"
+INSTALL_DIR="$TMP/opt/pulse"
+CONFIG_DIR="$TMP/etc/pulse"
+mkdir -p "$INSTALL_DIR/bin" "$CONFIG_DIR"
+printf 'v5.1.24\n' > "$INSTALL_DIR/VERSION"
+printf '#!/usr/bin/env bash\necho v5.1.24\n' > "$INSTALL_DIR/bin/pulse"
+chmod +x "$INSTALL_DIR/bin/pulse"
+export INSTALL_DIR
+
+log() { echo "[$1] ${*:2}"; }
+detect_service_name() { echo pulse; }
+get_current_version() { tr -d '\r\n' < "$INSTALL_DIR/VERSION"; }
+verify_release_signature() { return 0; }
+sleep() { :; }
+
+# curl writes the installer / signature to the -o target; the fake installer
+# fails outright, like the real one aborting on a read-only filesystem after
+# it has stopped the service.
+curl() {
+  local out="" prev="" arg
+  for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then out="$arg"; fi
+    prev="$arg"
+  done
+  if [[ -n "$out" ]]; then
+    case "$out" in
+      *.sig.*) printf 'dummy-signature\n' > "$out" ;;
+      *) printf '#!/usr/bin/env bash\nexit 1\n' > "$out" ;;
+    esac
+  fi
+  return 0
+}
+
+# Service is running at the was-active capture, then down (the installer
+# stopped it before failing) until an explicit start/restart.
+IS_ACTIVE_CALLS=0
+SERVICE_UP="no"
+STARTS=0
+systemctl() {
+  case "$1" in
+    is-active)
+      ((IS_ACTIVE_CALLS += 1))
+      if (( IS_ACTIVE_CALLS == 1 )); then return 0; fi
+      [[ "$SERVICE_UP" == "yes" ]] && return 0 || return 1
+      ;;
+    start|restart)
+      ((STARTS += 1))
+      SERVICE_UP="yes"
+      return 0
+      ;;
+  esac
+  return 1
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
+` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
+` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+` + extractAutoUpdateFunction(t, "perform_update") + `
+if perform_update v5.1.25; then
+  echo "RESULT:succeeded"
+else
+  echo "RESULT:failed"
+fi
+echo "STARTS:$STARTS"
+echo "SERVICE:$SERVICE_UP"
+echo "VERSION:$(tr -d '\r\n' < "$INSTALL_DIR/VERSION")"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, want := range []string{"RESULT:failed", "SERVICE:yes", "VERSION:v5.1.24"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in perform_update installer-failure output:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "STARTS:0") {
+		t.Fatalf("service was never restarted after installer failure:\n%s", got)
+	}
+}
+
+// TestEnsureServiceRestartedHonorsPriorServiceState asserts the RETURN-trap
+// backstop behind the #1630 fix: a service that was inactive before the
+// update is left alone, and a service that was active is started again.
+func TestEnsureServiceRestartedHonorsPriorServiceState(t *testing.T) {
+	script := `
+set -uo pipefail
+SERVICE_UP="no"
+STARTS=0
+systemctl() {
+  case "$1" in
+    is-active) [[ "$SERVICE_UP" == "yes" ]] && return 0 || return 1 ;;
+    start|restart) ((STARTS += 1)); SERVICE_UP="yes"; return 0 ;;
+  esac
+  return 1
+}
+sleep() { :; }
+log() { echo "[$1] ${*:2}"; }
+` + extractAutoUpdateFunction(t, "wait_for_service_active") + `
+` + extractAutoUpdateFunction(t, "ensure_service_restarted") + `
+ensure_service_restarted pulse false || echo "INACTIVE_PATH_FAILED"
+echo "STARTS_AFTER_INACTIVE:$STARTS"
+ensure_service_restarted pulse true || echo "ACTIVE_PATH_FAILED"
+echo "STARTS_AFTER_ACTIVE:$STARTS"
+echo "SERVICE:$SERVICE_UP"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, want := range []string{"STARTS_AFTER_INACTIVE:0", "STARTS_AFTER_ACTIVE:1", "SERVICE:yes"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in ensure_service_restarted output:\n%s", want, got)
+		}
+	}
+	for _, reject := range []string{"INACTIVE_PATH_FAILED", "ACTIVE_PATH_FAILED"} {
+		if strings.Contains(got, reject) {
+			t.Fatalf("ensure_service_restarted must always return 0 (it runs in a RETURN trap under set -e):\n%s", got)
+		}
+	}
+}

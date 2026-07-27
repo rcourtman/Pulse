@@ -3173,6 +3173,30 @@ download_release_archive() {
     return 0
 }
 
+# Create (or refresh) the convenience symlink to the installed binary.
+# Never fatal and idempotent: the link path can be unwritable — the generated
+# pulse-update.service runs the unattended updater with ProtectSystem=strict
+# (only the install dir, config dir and /tmp are writable), and transient
+# read-only filesystems hit the same error (#1630). The symlink is a
+# nice-to-have; an existing correct link is kept and a failure only warns.
+install_binary_symlink() {
+    local target="$1"
+    local link_path="$2"
+
+    if [[ "$(readlink "$link_path" 2>/dev/null)" == "$target" ]]; then
+        print_success "Symlink already in place at $link_path"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$link_path")" 2>/dev/null || true
+    if ln -sf "$target" "$link_path" 2>/dev/null; then
+        print_success "Symlink created at $link_path"
+    else
+        print_warn "Could not create symlink at $link_path (read-only filesystem?); pulse remains available at $target"
+    fi
+    return 0
+}
+
 install_pulse_archive() {
     local archive_path="$1"
     local expected_release="${2:-}"
@@ -3263,10 +3287,8 @@ install_pulse_archive() {
     chown -R pulse:pulse "$INSTALL_DIR"
 
     rm -f "$INSTALL_DIR/bin/pulse.old"
-    mkdir -p "$(dirname "$BINARY_LINK_PATH")"
-    ln -sf "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
-    print_success "Symlink created at $BINARY_LINK_PATH"
+    install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
     if [[ -f "$temp_extract/VERSION" ]]; then
         cp "$temp_extract/VERSION" "$INSTALL_DIR/VERSION"
@@ -3730,8 +3752,7 @@ build_from_source() {
         fi
     done
 
-    mkdir -p "$(dirname "$BINARY_LINK_PATH")"
-    ln -sf "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
+    install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
     echo "$branch-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
     echo "$branch" > "$BUILD_FROM_SOURCE_MARKER"
@@ -3816,7 +3837,14 @@ setup_update_command() {
     local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
     local profile_path="${PULSE_PROFILE_PATH:-/etc/profile}"
     local bashrc_path="${PULSE_BASHRC_PATH:-/etc/bash.bashrc}"
-    cat > "$update_helper_path" <<EOF
+
+    # Writing the helper must never abort the installer: with errexit active a
+    # failed redirect here used to kill the run after the new binary was
+    # already installed and the service stopped (#1630). The path can
+    # legitimately be unwritable — the unattended updater runs under
+    # ProtectSystem=strict, and transient read-only filesystems hit this too.
+    mkdir -p "$(dirname "$update_helper_path")" 2>/dev/null || true
+    if ! cat 2>/dev/null > "$update_helper_path" <<EOF
 #!/usr/bin/env bash
 # Pulse update command
 # This script re-runs the Pulse installer using the configured manual channel
@@ -3910,17 +3938,24 @@ fi
 echo ""
 echo "Update complete! Pulse will restart automatically."
 EOF
+    then
+        print_warn "Could not write the 'update' helper to $update_helper_path (read-only filesystem?); skipping optional update command setup"
+        return 0
+    fi
 
-    chmod +x "$update_helper_path"
+    chmod +x "$update_helper_path" 2>/dev/null || \
+        print_warn "Could not mark $update_helper_path executable"
 
     # Ensure /usr/local/bin is in PATH for all users
     if ! grep -q '/usr/local/bin' "$profile_path" 2>/dev/null; then
-        echo 'export PATH="/usr/local/bin:$PATH"' >> "$profile_path"
+        echo 'export PATH="/usr/local/bin:$PATH"' 2>/dev/null >> "$profile_path" || \
+            print_warn "Could not update PATH in $profile_path"
     fi
 
     # Also add to bash profile if it exists
     if [[ -f "$bashrc_path" ]] && ! grep -q '/usr/local/bin' "$bashrc_path" 2>/dev/null; then
-        echo 'export PATH="/usr/local/bin:$PATH"' >> "$bashrc_path"
+        echo 'export PATH="/usr/local/bin:$PATH"' 2>/dev/null >> "$bashrc_path" || \
+            print_warn "Could not update PATH in $bashrc_path"
     fi
 }
 

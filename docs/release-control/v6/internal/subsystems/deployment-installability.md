@@ -458,6 +458,32 @@ TLS floor in the dynamic config.
    (`TestRootInstallServiceGrantsIcmpProbeCapability`) pins the pairing, and
    `docs/CONFIGURATION.md` documents the `systemctl edit` override for units
    written before the grant existed.
+   Unattended update execution must fail closed on service availability
+   (#1630): `scripts/pulse-auto-update.sh` `perform_update` must leave the
+   service running on every exit path when it was active before the attempt,
+   including the installer-exits-nonzero rollback branch. The generated
+   `pulse-update.service` gates on `ExecCondition=systemctl is-active`, so a
+   service left stopped also silently disables every future unattended run.
+   This is enforced by a `service_was_active`-guarded restart in each rollback
+   branch plus the `ensure_service_restarted` RETURN-trap backstop, and pinned
+   by `scripts/installtests/pulse_auto_update_test.go`
+   (`TestPerformUpdateRestartsServiceWhenInstallerFails`,
+   `TestEnsureServiceRestartedHonorsPriorServiceState`) and
+   `scripts/tests/test-pulse-auto-update.sh`. For the same reason, root
+   `install.sh` writes outside the hardened update unit's writable set
+   (`ProtectSystem=strict` leaves only the install dir, config dir and `/tmp`
+   writable) must be idempotent and non-fatal warnings rather than errexit
+   aborts: the `/bin/update` helper heredoc, the PATH appends to
+   `/etc/profile` and `/etc/bash.bashrc`, and the `/usr/local/bin/pulse`
+   convenience symlink (`install_binary_symlink`, which must also keep an
+   already-correct link without rewriting it). An abort in any of these kills
+   the installer after the new binary is installed and the service is
+   stopped, landing in the rollback branch above; transient read-only
+   remounts hit the same paths on unhardened installs. Pinned by
+   `scripts/installtests/root_install_sh_test.go`
+   (`TestRootInstallScriptUpdateHelperWriteIsNonFatalOnReadOnlyPath`,
+   `TestRootInstallScriptBinarySymlinkIsIdempotentAndNonFatal`) and
+   `scripts/tests/test-install-update-resilience.sh`.
    The top-level `install.sh` asset published on GitHub Releases must be the
    root Pulse SERVER installer (the LXC / systemd / Proxmox VE installer that
    accepts `--version vX.Y.Z`, `--rc`, `--stable`, and friends). The rendered

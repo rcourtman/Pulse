@@ -68,4 +68,68 @@ fi
 [[ "$START_ATTEMPTS" -ge 1 ]] || fail "should attempt an explicit restart, got $START_ATTEMPTS"
 [[ "$PRINT_BUF" == *"did not come back up"* ]] || fail "should surface a clear error, got: $PRINT_BUF"
 
-echo "PASS: install.sh update-resilience helpers (#1323)"
+# --- Cases 5+: read-only-filesystem resilience (#1630) -----------------------
+# The unattended updater runs the installer under pulse-update.service, whose
+# ProtectSystem=strict leaves /bin and /usr/local/bin read-only; transient
+# read-only remounts hit the same paths. Writes outside the install dir must
+# be non-fatal: aborting used to kill the installer with errexit active after
+# the new binary was installed and the service stopped.
+TMPDIR_RO="$(mktemp -d)"
+# A regular file as the "parent directory" makes any write beneath it fail
+# with ENOTDIR — unlike chmod 555, this also fails when running as root.
+touch "$TMPDIR_RO/blocker"
+
+# --- Case 5: setup_update_command must not abort the installer (errexit) ----
+out=$(
+    set -e
+    PRINT_BUF=""
+    UPDATE_HELPER_PATH="$TMPDIR_RO/blocker/update"
+    PULSE_PROFILE_PATH="$TMPDIR_RO/profile"
+    PULSE_BASHRC_PATH="$TMPDIR_RO/bashrc"
+    setup_update_command
+    printf '%s' "$PRINT_BUF"
+)
+rc=$?
+[[ "$rc" -eq 0 ]] || fail "setup_update_command must not abort the installer when the helper path is unwritable (rc=$rc)"
+[[ "$out" == *"WARN:"*"$TMPDIR_RO/blocker/update"* ]] || fail "should warn about the unwritable helper path, got: $out"
+
+# --- Case 6: setup_update_command still writes the helper when it can -------
+out=$(
+    set -e
+    PRINT_BUF=""
+    UPDATE_HELPER_PATH="$TMPDIR_RO/bin/update"
+    PULSE_PROFILE_PATH="$TMPDIR_RO/profile"
+    PULSE_BASHRC_PATH="$TMPDIR_RO/bashrc"
+    setup_update_command
+    printf '%s' "$PRINT_BUF"
+)
+rc=$?
+[[ "$rc" -eq 0 ]] || fail "setup_update_command should succeed on a writable path (rc=$rc)"
+[[ -x "$TMPDIR_RO/bin/update" ]] || fail "should create an executable update helper at a writable path"
+grep -q "Pulse update command" "$TMPDIR_RO/bin/update" || fail "helper should contain the expected script body"
+
+# --- Case 7: install_binary_symlink is non-fatal on an unwritable path ------
+PRINT_BUF=""
+install_binary_symlink "$TMPDIR_RO/bin/update" "$TMPDIR_RO/blocker/pulse" || \
+    fail "install_binary_symlink must not fail on an unwritable link path"
+[[ "$PRINT_BUF" == *"WARN:"* ]] || fail "should warn when the symlink cannot be created, got: $PRINT_BUF"
+
+# --- Case 8: install_binary_symlink creates and keeps the link ---------------
+PRINT_BUF=""
+install_binary_symlink "$TMPDIR_RO/bin/update" "$TMPDIR_RO/bin/pulse" || \
+    fail "install_binary_symlink should succeed on a writable path"
+[[ "$(readlink "$TMPDIR_RO/bin/pulse")" == "$TMPDIR_RO/bin/update" ]] || \
+    fail "symlink should point at the installed binary"
+# Idempotence: with the correct link already present it must not need ln at
+# all (matches an update run where the link survives but the fs is read-only).
+ln() { return 1; }
+PRINT_BUF=""
+install_binary_symlink "$TMPDIR_RO/bin/update" "$TMPDIR_RO/bin/pulse" || \
+    fail "install_binary_symlink should succeed when the correct link already exists"
+[[ "$PRINT_BUF" == *"already in place"* ]] || \
+    fail "should recognise an existing correct link, got: $PRINT_BUF"
+unset -f ln
+
+rm -rf "$TMPDIR_RO"
+
+echo "PASS: install.sh update-resilience helpers (#1323, #1630)"
