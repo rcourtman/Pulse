@@ -30,16 +30,24 @@ var bannedSnapshotResourceAccessPatterns = []struct {
 }
 
 func TestAvailabilityTLSUsesSharedCertificateCaptureBoundary(t *testing.T) {
-	source, err := os.ReadFile("availability_poller.go")
-	if err != nil {
-		t.Fatalf("read availability_poller.go: %v", err)
+	// The probe execution core moved to internal/availabilityprobe so the host
+	// agent can share it; the TLS boundary guardrail follows the code and still
+	// covers the monitoring poller that schedules the probes.
+	const probeCore = "../availabilityprobe/probe.go"
+	sources := make(map[string]string, 2)
+	for _, path := range []string{"availability_poller.go", probeCore} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(data)
+		sources[path] = text
+		if strings.Contains(text, "InsecureSkipVerify: true") {
+			t.Fatalf("%s must not define a local skip-verification TLS config", path)
+		}
 	}
-	text := string(source)
-	if !strings.Contains(text, "tlsutil.UnverifiedPeerCertificateCaptureTLSConfig()") {
+	if !strings.Contains(sources[probeCore], "tlsutil.UnverifiedPeerCertificateCaptureTLSConfig()") {
 		t.Fatal("availability probes must use the shared peer-certificate capture boundary")
-	}
-	if strings.Contains(text, "InsecureSkipVerify: true") {
-		t.Fatal("availability probes must not define a local skip-verification TLS config")
 	}
 }
 
