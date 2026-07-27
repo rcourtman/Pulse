@@ -98,10 +98,51 @@ For persistent sessions that don't require frequent re-authentication:
 - **Valid Redirect URIs**: `https://pulse.example.com/api/oidc/<provider-id>/callback`
 - **Issuer URL**: `https://keycloak.example.com/realms/myrealm`
 
-### Azure AD
-- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback` (Web)
-- **Issuer URL**: `https://login.microsoftonline.com/<tenant-id>/v2.0`
-- **Note**: Enable "ID tokens" in Authentication settings.
+### Microsoft Entra ID (Azure AD)
+
+#### 1. Entra ID Configuration
+
+1. **Create App Registration:**
+   * In Microsoft Entra Admin Center, navigate to **Identity > Applications > App registrations**.
+   * Click **New registration**.
+   * Enter a name (e.g. `Pulse SSO`) and select **Accounts in this organizational directory only** (Single tenant).
+   * Click **Register**.
+
+2. **Configure Authentication:**
+   * Go to **Authentication** > **Add a platform** > **Web**.
+   * Set **Redirect URI** to: `https://pulse.yourdomain.com/api/oidc/callback`
+   * Click **Configure**.
+
+3. **Configure Group Claims:**
+   * Go to **Token configuration** > **Add groups claim**.
+   * Select **Security groups** or **Groups assigned to the application**.
+   * Under **ID**, select **Group ID**.
+   * Click **Add**.
+
+4. **Restrict Access & Assign Groups (Enterprise Application):**
+   * Go to **Identity > Applications > Enterprise applications** and select your Pulse application.
+   * Under **Properties**, set **Assignment required?** to **Yes** *(restricts SSO login strictly to assigned users/groups)*.
+   * Under **Users and groups**, click **Add user/group** and assign your designated admin group (e.g., `Pulse-Admins`).
+   * Copy the group's **Object ID** (GUID, e.g. `a1b2c3d4-e5f6-7890-abcd-123456789abc`).
+
+#### 2. Pulse Environment Variables / Configuration
+
+Configure Pulse with the following settings:
+
+| Parameter | Value | Description / Note |
+| :--- | :--- | :--- |
+| **Issuer URL** | `https://login.microsoftonline.com/<TENANT_ID>/v2.0` | Replace `<TENANT_ID>` with your Entra ID Directory (tenant) ID. |
+| **Client ID** | `<CLIENT_ID>` | Application (client) ID from the App Registration overview. |
+| **Client Secret** | `<CLIENT_SECRET>` | Generated under **Certificates & secrets**. |
+| **Redirect URI** | `https://pulse.yourdomain.com/api/oidc/callback` | Must match the Redirect URI configured in Entra ID. |
+| **Scopes** | `openid profile email` | **Do NOT include `groups`**. Entra ID handles group claims via token configuration, not OIDC scopes. Requesting `groups` will cause an `AADSTS650053` error. |
+| **Groups Claim** | `groups` | JSON key in the ID Token where Entra ID returns group Object IDs. |
+| **Allowed Groups** | `<GROUP_OBJECT_ID>` | Entra Group Object ID (e.g. `a1b2c3d4-e5f6-7890-abcd-123456789abc`). |
+| **Group Role Mappings** | `<GROUP_OBJECT_ID>=admin` | Maps the group Object ID to the `admin` role in Pulse. |
+
+> **Note on Best Practices:**
+> * **Overage Prevention:** Selecting *Groups assigned to the application* in Entra ID ensures only relevant group Object IDs are included in the ID Token, preventing JWT bloat.
+> * **Group Renames:** Role mappings use the persistent **Group Object ID (GUID)**, making authorization resilient against group display name changes.
 
 ## 🔧 Troubleshooting
 
