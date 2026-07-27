@@ -2201,6 +2201,25 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Command-channel token binding is one decision consumed by every surface
+
+Agent exec token binding is evaluated by a single decision function
+(`evaluateAgentExecBinding` in `internal/api/agent_exec_token_binding.go`)
+that both command-channel admission (`admitAgentExecToken`) and the agent
+config gate (`commandConfigAllowedForToken`) consume. The two surfaces may
+never diverge: an agent is told commands are enabled only when its channel
+registration would be admitted, because a divergent gate leaves the host
+reporting `CommandsEnabled=true` against a channel that is always rejected — the
+permanent "Remote control blocked" state shipped in v6.1.2. The immutable
+machine-derived agent ID is the primary binding identity: an exact ID match
+re-binds a drifted (renamed) `bound_hostname` in place rather than stranding
+the host, while a hostname match alone never satisfies a version-2 identity
+binding. Hostname comparison uses the system-wide equivalence rule
+(`unifiedresources.HostnamesEquivalent`, plus case-insensitive exact match
+for IP literals), so short-name vs fully-qualified drift does not break
+admission. Legacy pre-v6.1.1 hostname-bound records still migrate exactly
+once on hostname match.
+
 ### PBS connection health does not create agent lifecycle evidence
 
 The shared API connections ledger and diagnostics now project PBS health from

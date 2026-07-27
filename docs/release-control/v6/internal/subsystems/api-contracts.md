@@ -3668,6 +3668,22 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Connections command-channel liveness tolerates stale host token IDs
+
+The `/api/connections` ledger's `RemoteControl` and `CommandPolicy` signals
+derive command-channel liveness through a three-stage lookup: the host's
+recorded enrollment token ID first, then the agent ID, then the hostname
+(`Router.agentCommandSessionConnected`). A miss on the token-scoped lookup is
+never authoritative because `host.TokenID` is sticky across token revocation
+and rotation — monitoring retains the last-seen token on the host record — and
+because a single token may front more than one live session, which the
+token-scoped lookup deliberately fails closed on. Only after all three lookups
+miss may the ledger report an enabled host as `blocked`. The agent config
+payload gate (`commandConfigAllowedForToken`) mirrors the command-channel
+admission decision exactly via the shared binding evaluation in
+`internal/api/agent_exec_token_binding.go`, so the config payload never
+advertises command execution that admission would reject.
+
 ### Agent update target responses are reconciliation-safe
 
 `GET` and `HEAD /api/agent/version` project

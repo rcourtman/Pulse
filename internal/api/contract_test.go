@@ -21763,3 +21763,175 @@ func TestAdminRecoverySurvivesFailedLegacyRBACMigration(t *testing.T) {
 		t.Fatalf("legacy source was not preserved for a retry: %v", err)
 	}
 }
+
+// TestContract_AgentCommandConfigGateMirrorsChannelAdmission pins the v6.1.2
+// regression where the agent config gate (commandConfigAllowedForToken) and
+// command-channel admission (admitAgentExecToken) evaluated token bindings
+// under different policies: the gate admitted on bound-hostname OR bound-ID
+// while the channel required both, so an agent could be told commands were
+// enabled while every channel registration was rejected — the host surfaced
+// as "Remote control blocked" permanently, with reinstall as the only exit.
+// Both surfaces must return the same verdict for the same agent identity.
+func TestContract_AgentCommandConfigGateMirrorsChannelAdmission(t *testing.T) {
+	const rawToken = "gate-parity-token-123.12345678"
+	cases := []struct {
+		name     string
+		metadata map[string]string
+		agentID  string
+		hostname string
+		want     bool
+	}{
+		{
+			name: "exact identity match admits",
+			metadata: map[string]string{
+				"bound_agent_id":           "agent-1",
+				"bound_hostname":           "docker01",
+				agentExecBindingVersionKey: agentExecBindingVersion,
+			},
+			agentID:  "agent-1",
+			hostname: "docker01",
+			want:     true,
+		},
+		{
+			name: "immutable id match re-binds a renamed hostname",
+			metadata: map[string]string{
+				"bound_agent_id":           "agent-1",
+				"bound_hostname":           "docker01",
+				agentExecBindingVersionKey: agentExecBindingVersion,
+			},
+			agentID:  "agent-1",
+			hostname: "docker01-renamed",
+			want:     true,
+		},
+		{
+			name: "short bound hostname matches fully-qualified variant",
+			metadata: map[string]string{
+				"bound_agent_id":           "agent-1",
+				"bound_hostname":           "docker01",
+				agentExecBindingVersionKey: agentExecBindingVersion,
+			},
+			agentID:  "agent-1",
+			hostname: "docker01.lan",
+			want:     true,
+		},
+		{
+			name: "hostname match alone does not satisfy an immutable identity binding",
+			metadata: map[string]string{
+				"bound_agent_id":           "agent-1",
+				"bound_hostname":           "docker01",
+				agentExecBindingVersionKey: agentExecBindingVersion,
+			},
+			agentID:  "agent-2",
+			hostname: "docker01",
+			want:     false,
+		},
+		{
+			name: "legacy hostname-bound record migrates on hostname match",
+			metadata: map[string]string{
+				"bound_agent_id": "agent-docker01",
+				"bound_hostname": "docker01",
+			},
+			agentID:  "f0c1b2a3e4d5f60718293a4b5c6d7e8f",
+			hostname: "docker01",
+			want:     true,
+		},
+		{
+			name: "unbound install token binds on first use",
+			metadata: map[string]string{
+				"install_type": agentInstallTypeHost,
+				"issued_via":   agentInstallIssuedViaConfig,
+			},
+			agentID:  "agent-1",
+			hostname: "docker01",
+			want:     true,
+		},
+		{
+			name:     "unbound token without install provenance stays rejected",
+			metadata: map[string]string{},
+			agentID:  "agent-1",
+			hostname: "docker01",
+			want:     false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, tc.metadata)
+			cfg := newTestConfigWithTokens(t, record)
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+			gate := commandConfigAllowedForToken(&cfg.APITokens[0], models.Host{
+				ID:       tc.agentID,
+				Hostname: tc.hostname,
+			})
+			if gate != tc.want {
+				t.Fatalf("commandConfigAllowedForToken = %v, want %v", gate, tc.want)
+			}
+
+			_, admitted := router.admitAgentExecToken(rawToken, tc.agentID, tc.hostname)
+			if admitted != tc.want {
+				t.Fatalf("admitAgentExecToken = %v, want %v", admitted, tc.want)
+			}
+			if gate != admitted {
+				t.Fatalf("config gate (%v) diverged from channel admission (%v)", gate, admitted)
+			}
+		})
+	}
+}
+
+// TestContract_AgentCommandSessionLookupSurvivesStaleHostTokenID pins the
+// connectivity-lookup contract behind the connections ledger's RemoteControl
+// and CommandPolicy signals. host.TokenID is sticky across token revocation
+// and rotation, so a miss on the token-scoped lookup must fall through to the
+// agent-ID and hostname lookups instead of reporting a live, admitted command
+// channel as blocked.
+func TestContract_AgentCommandSessionLookupSurvivesStaleHostTokenID(t *testing.T) {
+	rawToken := "stale-lookup-agent-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
+		"bound_agent_id":           "agent-1",
+		"bound_hostname":           "host-1",
+		agentExecBindingVersionKey: agentExecBindingVersion,
+	})
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	if reg := readRegisteredPayload(t, conn); !reg.Success {
+		t.Fatalf("expected registration to succeed, got %q", reg.Message)
+	}
+
+	tokenID := cfg.APITokens[0].ID
+	if !router.agentCommandSessionConnected("default", tokenID, "agent-1", "host-1") {
+		t.Fatal("live session not found via its canonical token ID")
+	}
+	if !router.agentCommandSessionConnected("default", "rotated-away-token-id", "agent-1", "host-1") {
+		t.Fatal("stale host token ID hid a live command session from the agent-ID fallback")
+	}
+	if !router.agentCommandSessionConnected("default", "rotated-away-token-id", "", "host-1") {
+		t.Fatal("stale host token ID hid a live command session from the hostname fallback")
+	}
+	if router.agentCommandSessionConnected("default", "rotated-away-token-id", "agent-x", "host-x") {
+		t.Fatal("unknown agent reported as connected")
+	}
+}

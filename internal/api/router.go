@@ -689,17 +689,7 @@ func (r *Router) setupRoutes() {
 	r.agentExecServer = agentexec.NewServerWithAdmissionValidator(r.admitAgentExecToken, r.validateAgentExecSession)
 	r.agentExecServer.SetCommandAuthorizationVerifier(verifyAndConsumeCommandAuthorization)
 	if r.connectionsHandlers != nil {
-		r.connectionsHandlers.SetAgentCommandSessionProvider(func(organizationID, tokenID, agentID, hostname string) bool {
-			if strings.TrimSpace(tokenID) != "" {
-				_, connected := r.agentExecServer.GetAgentForTokenForOrganization(organizationID, tokenID)
-				return connected
-			}
-			if strings.TrimSpace(agentID) != "" && r.agentExecServer.IsAgentConnectedForOrganization(organizationID, agentID) {
-				return true
-			}
-			_, connected := r.agentExecServer.GetAgentForHostForOrganization(organizationID, hostname)
-			return connected
-		})
+		r.connectionsHandlers.SetAgentCommandSessionProvider(r.agentCommandSessionConnected)
 	}
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.SetActionExecutor(newRoutedActionExecutor(

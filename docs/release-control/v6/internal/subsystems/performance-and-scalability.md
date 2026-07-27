@@ -877,6 +877,16 @@ still remove an authoritatively deleted guest. These rules preserve sort,
 selection, drawer, and virtualized viewport state without adding another
 resource scan, websocket subscription, or browser-local source of truth.
 
+### Command-session liveness lookup stays bounded and in-memory
+
+The connections ledger's command-channel liveness check
+(`Router.agentCommandSessionConnected`) is at most three in-memory scans of
+the live agent registry per agent row — token ID, then agent ID, then
+hostname — each under a read lock with no network I/O, persistence reads, or
+background fan-out. The fallback stages exist for correctness against stale
+recorded token IDs and must not grow into per-request enumeration of token
+stores or durable state.
+
 ### Canonical mutation-plane dependency
 
 Router wiring now exposes only typed action planning for model-originated

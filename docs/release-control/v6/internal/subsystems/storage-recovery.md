@@ -1985,6 +1985,17 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
 
+### Agent exec token binding repairs are fail-closed durable writes
+
+Command-token binding metadata (`bound_agent_id`, `bound_hostname`,
+`bound_at`, binding version) is repaired only through one-shot migrations
+inside admission — first-use bind, legacy identity migration, backfill, and
+hostname re-bind after a host rename. Each repair persists through
+`SaveAPITokens` before admission succeeds; a failed persistence write
+restores the prior in-memory metadata and denies the registration rather
+than admitting a session whose binding would not survive a restart. Steady
+state registrations perform no token-store writes.
+
 ### Proxmox runtime continuity is not protection evidence
 
 The additive `ProxmoxData.RuntimeStatus` field preserves VM/LXC power-state

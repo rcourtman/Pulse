@@ -864,8 +864,17 @@ Proxmox install-command tokens. `internal/api/agent_exec_token_binding.go` may
 persist `bound_agent_id`, `bound_hostname`, and `bound_at` only for
 Pulse-minted PVE/PBS install-command tokens when the command agent first
 registers. Generic unbound `agent:exec` tokens, or tokens already bound to a
-different hostname or agent ID, must fail closed so command execution cannot
-cross hosts through reusable bearer credentials.
+different agent, must fail closed so command execution cannot cross hosts
+through reusable bearer credentials. Within that boundary the immutable
+machine-derived agent ID is the binding identity: a version-2 binding whose
+agent ID does not match fails closed even when the hostname matches, while a
+token whose agent ID matches exactly may re-bind a drifted `bound_hostname`
+in place, because a hostname is an operator-renamable label, not a second
+credential. Hostname comparison follows the system-wide short-name vs
+fully-qualified equivalence rule rather than ad-hoc case folding. The
+accept/reject decision is single-sourced (`evaluateAgentExecBinding`) and the
+agent config gate must consume the same decision, so no surface can advertise
+command execution that channel admission would refuse.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

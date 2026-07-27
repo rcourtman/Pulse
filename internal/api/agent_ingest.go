@@ -539,19 +539,11 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 		return false
 	}
 
-	requestedID := strings.TrimSpace(host.ID)
-	requestedHost := strings.TrimSpace(host.Hostname)
-	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
-	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
-
-	if boundHost != "" && requestedHost != "" && strings.EqualFold(boundHost, requestedHost) {
-		return true
-	}
-	if boundID != "" && requestedID != "" && boundID == requestedID {
-		return true
-	}
-
-	return boundID == "" && boundHost == "" && canBindAgentInstallExecToken(record, requestedID, requestedHost)
+	// Mirror the command-channel admission decision exactly. Telling an agent
+	// commands are enabled when its channel registration would be rejected
+	// strands the host on "Remote control blocked" (the agent reports
+	// CommandsEnabled=true forever while no channel can be admitted).
+	return evaluateAgentExecBinding(record, host.ID, host.Hostname).admit
 }
 
 func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {

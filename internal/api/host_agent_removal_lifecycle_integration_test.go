@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
@@ -317,5 +318,51 @@ func TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart(t *testin
 	}
 	if oldConfigBody.AgentID != keeperID {
 		t.Fatalf("shared token resolved config for %q, want active keeper %q", oldConfigBody.AgentID, keeperID)
+	}
+}
+
+// TestHostAgentRenameKeepsCommandGateAlignedWithChannelAdmission covers the
+// host-rename leg of the agent lifecycle: a host that renames itself (or
+// starts reporting a fully-qualified hostname) after its exec token was bound
+// must keep its command channel. v6.1.2 rejected the drifted hostname at
+// channel admission while the config gate kept telling the agent commands
+// were enabled, so renamed hosts were stranded on "Remote control blocked"
+// until the agent was reinstalled.
+func TestHostAgentRenameKeepsCommandGateAlignedWithChannelAdmission(t *testing.T) {
+	const rawToken = "rename-lifecycle-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
+		"bound_agent_id":           "agent-1",
+		"bound_hostname":           "docker01",
+		agentExecBindingVersionKey: agentExecBindingVersion,
+	})
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	tokenRecord := &cfg.APITokens[0]
+
+	// The same machine starts reporting its fully-qualified name.
+	if !commandConfigAllowedForToken(tokenRecord, models.Host{ID: "agent-1", Hostname: "docker01.lan"}) {
+		t.Fatal("config gate rejected the fully-qualified variant of the bound hostname")
+	}
+	if _, ok := router.admitAgentExecToken(rawToken, "agent-1", "docker01.lan"); !ok {
+		t.Fatal("channel admission rejected the fully-qualified variant of the bound hostname")
+	}
+
+	// The host is renamed outright; the immutable agent ID still matches.
+	if !commandConfigAllowedForToken(tokenRecord, models.Host{ID: "agent-1", Hostname: "web01"}) {
+		t.Fatal("config gate rejected a renamed host with a matching immutable agent ID")
+	}
+	if _, ok := router.admitAgentExecToken(rawToken, "agent-1", "web01"); !ok {
+		t.Fatal("channel admission rejected a renamed host with a matching immutable agent ID")
+	}
+	if got := tokenRecord.Metadata["bound_hostname"]; got != "web01" {
+		t.Fatalf("admission did not re-bind the drifted hostname: bound_hostname = %q", got)
+	}
+
+	// A different machine presenting the original hostname stays rejected.
+	if commandConfigAllowedForToken(tokenRecord, models.Host{ID: "agent-2", Hostname: "web01"}) {
+		t.Fatal("config gate admitted a different agent ID on a matching hostname")
+	}
+	if _, ok := router.admitAgentExecToken(rawToken, "agent-2", "web01"); ok {
+		t.Fatal("channel admission admitted a different agent ID on a matching hostname")
 	}
 }
