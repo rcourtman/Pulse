@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/format"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -50,7 +51,7 @@ func main() {
 		"pro":       append([]string(nil), licensing.TierFeatures[licensing.TierPro]...),
 	}
 
-	if err := writeFrontendModule(filepath.Join(repoRoot, "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts"), entries); err != nil {
+	if err := writeFrontendModule(filepath.Join(repoRoot, "frontend-modern"), entries); err != nil {
 		fail(err)
 	}
 
@@ -89,7 +90,8 @@ func buildGeneratedEntries() []generatedFeatureEntry {
 	return entries
 }
 
-func writeFrontendModule(path string, entries []generatedFeatureEntry) error {
+func writeFrontendModule(frontendDir string, entries []generatedFeatureEntry) error {
+	path := filepath.Join(frontendDir, "src/utils/selfHostedFeatureCatalog.generated.ts")
 	payload, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
 		return err
@@ -150,7 +152,29 @@ func writeFrontendModule(path string, entries []generatedFeatureEntry) error {
 	buf.WriteString("  return SELF_HOSTED_FEATURE_CATALOG.filter((entry) => entry.roles[tier] === role);\n")
 	buf.WriteString("}\n")
 
-	return os.WriteFile(path, buf.Bytes(), 0o644)
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	return formatWithPrettier(frontendDir, path)
+}
+
+// formatWithPrettier rewrites the generated module with the frontend's own
+// prettier setup so generator runs stay byte-identical to the committed,
+// prettier-formatted file.
+func formatWithPrettier(frontendDir, path string) error {
+	prettier := filepath.Join(frontendDir, "node_modules", ".bin", "prettier")
+	var cmd *exec.Cmd
+	if _, err := os.Stat(prettier); err == nil {
+		cmd = exec.Command(prettier, "--write", path)
+	} else {
+		cmd = exec.Command("npx", "--yes", "prettier", "--write", path)
+	}
+	cmd.Dir = frontendDir
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("prettier %s: %w", path, err)
+	}
+	return nil
 }
 
 func writePulseProModule(path string, entries []generatedFeatureEntry, tierFeatures map[string][]string) error {
