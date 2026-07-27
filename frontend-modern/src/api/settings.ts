@@ -132,6 +132,13 @@ export interface TelemetryPingPreview {
   pulse_intelligence_approved_action_failures_execution_30d: number;
   pulse_intelligence_approved_action_failures_unverified_30d: number;
   pulse_intelligence_approved_action_stuck_executing_30d: number;
+  pulse_intelligence_approved_action_in_flight_30d: number;
+  pulse_intelligence_approved_action_unclassified_30d: number;
+  pulse_intelligence_approved_action_refusals_plan_stale_30d: number;
+  pulse_intelligence_approved_action_refusals_policy_30d: number;
+  pulse_intelligence_approved_action_refusals_capability_30d: number;
+  pulse_intelligence_approved_action_refusals_other_30d: number;
+  pulse_intelligence_verified_finding_resolutions_30d: number;
   pulse_intelligence_approved_action_last_failure_reason_30d?: string;
 }
 

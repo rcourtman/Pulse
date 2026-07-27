@@ -133,8 +133,9 @@ const (
 
 	// TelemetrySchemaVersion identifies the exact outbound payload contract.
 	// Schema v3 makes notification_failures_7d a terminal-delivery count;
-	// schema v2 counted every unsuccessful retry attempt.
-	TelemetrySchemaVersion = 3
+	// schema v4 adds complete approved-action outcome accounting, fixed
+	// pre-dispatch refusal categories, and verified finding-resolution linkage.
+	TelemetrySchemaVersion = 4
 )
 
 type installIDRecord struct {
@@ -298,6 +299,13 @@ type Ping struct {
 	PulseIntelligenceApprovedActionFailuresExecution30d   int    `json:"pulse_intelligence_approved_action_failures_execution_30d"`
 	PulseIntelligenceApprovedActionFailuresUnverified30d  int    `json:"pulse_intelligence_approved_action_failures_unverified_30d"`
 	PulseIntelligenceApprovedActionStuckExecuting30d      int    `json:"pulse_intelligence_approved_action_stuck_executing_30d"`
+	PulseIntelligenceApprovedActionInFlight30d            int    `json:"pulse_intelligence_approved_action_in_flight_30d"`
+	PulseIntelligenceApprovedActionUnclassified30d        int    `json:"pulse_intelligence_approved_action_unclassified_30d"`
+	PulseIntelligenceApprovedActionRefusalsPlanStale30d   int    `json:"pulse_intelligence_approved_action_refusals_plan_stale_30d"`
+	PulseIntelligenceApprovedActionRefusalsPolicy30d      int    `json:"pulse_intelligence_approved_action_refusals_policy_30d"`
+	PulseIntelligenceApprovedActionRefusalsCapability30d  int    `json:"pulse_intelligence_approved_action_refusals_capability_30d"`
+	PulseIntelligenceApprovedActionRefusalsOther30d       int    `json:"pulse_intelligence_approved_action_refusals_other_30d"`
+	PulseIntelligenceVerifiedFindingResolutions30d        int    `json:"pulse_intelligence_verified_finding_resolutions_30d"`
 	PulseIntelligenceApprovedActionLastFailureReason30d   string `json:"pulse_intelligence_approved_action_last_failure_reason_30d,omitempty"`
 }
 
@@ -412,6 +420,13 @@ type Snapshot struct {
 	PulseIntelligenceApprovedActionFailuresExecution30d            int
 	PulseIntelligenceApprovedActionFailuresUnverified30d           int
 	PulseIntelligenceApprovedActionStuckExecuting30d               int
+	PulseIntelligenceApprovedActionInFlight30d                     int
+	PulseIntelligenceApprovedActionUnclassified30d                 int
+	PulseIntelligenceApprovedActionRefusalsPlanStale30d            int
+	PulseIntelligenceApprovedActionRefusalsPolicy30d               int
+	PulseIntelligenceApprovedActionRefusalsCapability30d           int
+	PulseIntelligenceApprovedActionRefusalsOther30d                int
+	PulseIntelligenceVerifiedFindingResolutions30d                 int
 	PulseIntelligenceApprovedActionLastFailureReason30d            string
 }
 
@@ -441,6 +456,22 @@ type PulseIntelligenceActionSnapshot struct {
 	// ApprovedActionStuckExecuting30d counts approved attempts still in the
 	// executing state well past any legitimate dispatch window.
 	ApprovedActionStuckExecuting30d int
+	// ApprovedActionInFlight30d counts approved attempts still inside the
+	// legitimate dispatch window.
+	ApprovedActionInFlight30d int
+	// ApprovedActionUnclassified30d counts approved attempts whose
+	// authoritative audit is missing or cannot be mapped to a terminal class.
+	ApprovedActionUnclassified30d int
+	// The refusal category counters partition ApprovedActionFailuresPreDispatch30d
+	// into stable, content-free operator diagnostics.
+	ApprovedActionRefusalsPlanStale30d  int
+	ApprovedActionRefusalsPolicy30d     int
+	ApprovedActionRefusalsCapability30d int
+	ApprovedActionRefusalsOther30d      int
+	// VerifiedFindingResolutions30d counts completed, approved Patrol-origin
+	// actions whose postcondition was independently confirmed. No finding or
+	// action identity leaves the runtime.
+	VerifiedFindingResolutions30d int
 	// ApprovedActionLastFailureReason30d is the machine reason code of the
 	// most recent approved-action failure, sanitized to a closed code shape.
 	ApprovedActionLastFailureReason30d string
@@ -950,6 +981,13 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceApprovedActionFailuresExecution30d = s.PulseIntelligenceApprovedActionFailuresExecution30d
 	ping.PulseIntelligenceApprovedActionFailuresUnverified30d = s.PulseIntelligenceApprovedActionFailuresUnverified30d
 	ping.PulseIntelligenceApprovedActionStuckExecuting30d = s.PulseIntelligenceApprovedActionStuckExecuting30d
+	ping.PulseIntelligenceApprovedActionInFlight30d = s.PulseIntelligenceApprovedActionInFlight30d
+	ping.PulseIntelligenceApprovedActionUnclassified30d = s.PulseIntelligenceApprovedActionUnclassified30d
+	ping.PulseIntelligenceApprovedActionRefusalsPlanStale30d = s.PulseIntelligenceApprovedActionRefusalsPlanStale30d
+	ping.PulseIntelligenceApprovedActionRefusalsPolicy30d = s.PulseIntelligenceApprovedActionRefusalsPolicy30d
+	ping.PulseIntelligenceApprovedActionRefusalsCapability30d = s.PulseIntelligenceApprovedActionRefusalsCapability30d
+	ping.PulseIntelligenceApprovedActionRefusalsOther30d = s.PulseIntelligenceApprovedActionRefusalsOther30d
+	ping.PulseIntelligenceVerifiedFindingResolutions30d = s.PulseIntelligenceVerifiedFindingResolutions30d
 	ping.PulseIntelligenceApprovedActionLastFailureReason30d = s.PulseIntelligenceApprovedActionLastFailureReason30d
 	return ping
 }

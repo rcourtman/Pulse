@@ -163,6 +163,13 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence approved action failures (execution) 30d | `1` | Count approved governed actions whose dispatched execution failed in the current 30-day telemetry window without sending action output, error text, command text, resource IDs, or actors |
 | Pulse Intelligence approved action failures (unverified) 30d | `1` | Count approved governed actions that executed but whose outcome verification was not confirmed in the current 30-day telemetry window without sending verification evidence, action output, command text, resource IDs, or actors |
 | Pulse Intelligence approved action stuck executing 30d | `1` | Count approved governed actions abandoned in the executing state in the current 30-day telemetry window without sending action output, command text, resource IDs, or actors |
+| Pulse Intelligence approved action in flight 30d | `1` | Count approved governed actions still inside the legitimate execution window so the action-attempt total reconciles without sending action details |
+| Pulse Intelligence approved action unclassified 30d | `1` | Count approved governed action attempts whose authoritative audit could not be classified so accounting gaps remain visible without sending action IDs or content |
+| Pulse Intelligence approved action refusals plan stale 30d | `1` | Count pre-dispatch refusals caused by an expired, drifted, or legacy-unbound plan without sending plan or resource details |
+| Pulse Intelligence approved action refusals: policy 30d | `1` | Count pre-dispatch refusals caused by an operator or policy safety control without sending policy, actor, resource, or command details |
+| Pulse Intelligence approved action refusals: capability 30d | `1` | Count pre-dispatch refusals caused by a dry-run-only or unavailable capability without sending capability names, targets, or command details |
+| Pulse Intelligence approved action refusals: other 30d | `1` | Count pre-dispatch refusals not covered by the fixed categories without sending raw error or action content |
+| Pulse Intelligence verified finding resolutions 30d | `1` | Count approved Patrol-origin actions whose execution succeeded and whose linked finding postcondition was independently confirmed, without sending finding IDs, action IDs, evidence, resources, or fix details |
 | Pulse Intelligence approved action last failure reason 30d | `plan_drift` | See one fixed machine reason code for the most recent approved-action failure in the current 30-day telemetry window without sending error text, action output, command text, resource IDs, or actors |
 
 Telemetry schema v3 corrects the meaning of `notification_failures_7d`: v2
@@ -171,6 +178,11 @@ succeeded on retry; v3 counts only terminal `failed` or dead-letter outcomes.
 The adoption report keeps those schema cohorts separate, so legacy retry noise
 is not compared with current terminal-delivery failures. This correction adds
 no notification content or identity fields.
+
+Telemetry schema v4 adds complete approved-action outcome accounting, fixed
+pre-dispatch refusal categories, and an independently verified
+action-to-finding resolution count. These remain aggregate counters and do not
+send action, finding, resource, evidence, actor, or command identity or content.
 
 #### Server-side handling and retention
 

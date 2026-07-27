@@ -328,10 +328,72 @@ func TestGetPulseIntelligenceActionTelemetry_AttributesApprovedActionFailureCaus
 	if got.ApprovedActionStuckExecuting30d != 1 {
 		t.Fatalf("ApprovedActionStuckExecuting30d = %d, want 1", got.ApprovedActionStuckExecuting30d)
 	}
+	if got.ApprovedActionInFlight30d != 1 {
+		t.Fatalf("ApprovedActionInFlight30d = %d, want 1", got.ApprovedActionInFlight30d)
+	}
+	if got.ApprovedActionUnclassified30d != 0 {
+		t.Fatalf("ApprovedActionUnclassified30d = %d, want 0", got.ApprovedActionUnclassified30d)
+	}
+	if got.ApprovedActionRefusalsPlanStale30d != 1 ||
+		got.ApprovedActionRefusalsPolicy30d != 0 ||
+		got.ApprovedActionRefusalsCapability30d != 0 ||
+		got.ApprovedActionRefusalsOther30d != 0 {
+		t.Fatalf(
+			"refusal categories = %d/%d/%d/%d, want 1/0/0/0",
+			got.ApprovedActionRefusalsPlanStale30d,
+			got.ApprovedActionRefusalsPolicy30d,
+			got.ApprovedActionRefusalsCapability30d,
+			got.ApprovedActionRefusalsOther30d,
+		)
+	}
 	// The completed-unverified record is the most recent failure; the legacy
 	// row carries no canonical reason code, so the sanitized fallback applies.
 	if got.ApprovedActionLastFailureReason30d != "verification_unconfirmed" {
 		t.Fatalf("ApprovedActionLastFailureReason30d = %q, want %q", got.ApprovedActionLastFailureReason30d, "verification_unconfirmed")
+	}
+}
+
+func TestGetPulseIntelligenceActionTelemetry_CountsOnlyIndependentPatrolFindingResolutions(t *testing.T) {
+	now := time.Now().UTC()
+	since := now.Add(-telemetry.PulseIntelligenceTelemetryWindow)
+	router := &Router{
+		resourceHandlers: NewResourceHandlers(&config.Config{DataPath: t.TempDir()}),
+	}
+	store, err := router.resourceHandlers.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	approved := []unifiedresources.ActionApprovalRecord{{
+		Outcome: unifiedresources.OutcomeApproved, Method: unifiedresources.MethodUI,
+		Timestamp: now.Add(-time.Hour), Actor: "operator",
+	}}
+	makeCompleted := func(id string, evidenceClass unifiedresources.ActionEvidenceClass, origin *unifiedresources.ActionOrigin) unifiedresources.ActionAuditRecord {
+		record := pulseTelemetryActionRecord(id, now.Add(-time.Hour), unifiedresources.ActionStateCompleted, true, approved)
+		truth := apiActionResultTruth(t, unifiedresources.ActionExecutionSucceeded, unifiedresources.ActionVerificationConfirmed, evidenceClass)
+		record.Result = &unifiedresources.ExecutionResult{ActionResultV2: &truth}
+		record.Origin = origin
+		return record
+	}
+	for _, record := range []unifiedresources.ActionAuditRecord{
+		makeCompleted("linked-independent", unifiedresources.ActionEvidenceIndependent, &unifiedresources.ActionOrigin{
+			Surface: "patrol", FindingID: "finding-1", InvestigationID: "investigation-1",
+		}),
+		makeCompleted("linked-agent-attested", unifiedresources.ActionEvidenceAgentAttested, &unifiedresources.ActionOrigin{
+			Surface: "patrol", FindingID: "finding-2", InvestigationID: "investigation-2",
+		}),
+		makeCompleted("independent-without-finding", unifiedresources.ActionEvidenceIndependent, nil),
+	} {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatalf("RecordActionAudit(%s): %v", record.ID, err)
+		}
+	}
+
+	got := router.GetPulseIntelligenceActionTelemetry(since)
+	if got.ApprovedActionAttempts30d != 3 || got.ApprovedActionSuccesses30d != 3 {
+		t.Fatalf("attempts/successes = %d/%d, want 3/3", got.ApprovedActionAttempts30d, got.ApprovedActionSuccesses30d)
+	}
+	if got.VerifiedFindingResolutions30d != 1 {
+		t.Fatalf("VerifiedFindingResolutions30d = %d, want 1", got.VerifiedFindingResolutions30d)
 	}
 }
 
@@ -368,6 +430,25 @@ func TestGetPulseIntelligenceActionTelemetry_LastFailureReasonUsesCanonicalReaso
 	}
 	if got.ApprovedActionLastFailureReason30d != "plan_drift" {
 		t.Fatalf("ApprovedActionLastFailureReason30d = %q, want %q", got.ApprovedActionLastFailureReason30d, "plan_drift")
+	}
+}
+
+func TestPulseIntelligenceApprovedActionRefusalCategory(t *testing.T) {
+	tests := map[string]string{
+		"plan_drift":                   "plan_stale",
+		"action_plan_expired":          "plan_stale",
+		"action_replan_required":       "plan_stale",
+		"resource_remediation_locked":  "policy",
+		"policy_authorization_expired": "policy",
+		"action_emergency_stop":        "policy",
+		"action_dry_run_only":          "capability",
+		"action_execution_unavailable": "capability",
+		"future_reason":                "other",
+	}
+	for reason, want := range tests {
+		if got := pulseIntelligenceApprovedActionRefusalCategory(reason); got != want {
+			t.Errorf("reason %q category = %q, want %q", reason, got, want)
+		}
 	}
 }
 

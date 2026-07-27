@@ -314,6 +314,34 @@ PULSE_INTELLIGENCE_COUNT_FIELDS = (
         "pulse_intelligence_approved_action_stuck_executing_30d",
         "Approved action attempts stuck executing 30d",
     ),
+    (
+        "pulse_intelligence_approved_action_in_flight_30d",
+        "Approved action attempts still in flight 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_unclassified_30d",
+        "Approved action attempts unclassified 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_refusals_plan_stale_30d",
+        "Pre-dispatch refusals: stale or expired plan 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_refusals_policy_30d",
+        "Pre-dispatch refusals: policy or operator safety control 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_refusals_capability_30d",
+        "Pre-dispatch refusals: capability unavailable 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_refusals_other_30d",
+        "Pre-dispatch refusals: other 30d",
+    ),
+    (
+        "pulse_intelligence_verified_finding_resolutions_30d",
+        "Independently verified action-to-finding resolutions 30d",
+    ),
 )
 PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     (
@@ -1232,6 +1260,20 @@ def latest_rc_version(releases: Iterable[dict[str, Any]]) -> str | None:
     return str(latest["version"])
 
 
+def latest_target_release_version(releases: Iterable[dict[str, Any]]) -> str | None:
+    release_list = list(releases)
+    stable_releases = [
+        release
+        for release in release_list
+        if not release.get("is_prerelease")
+        and version_channel(str(release.get("version") or "")) == "stable"
+    ]
+    if stable_releases:
+        latest = max(stable_releases, key=lambda release: str(release.get("published_at") or ""))
+        return str(latest["version"])
+    return latest_rc_version(release_list)
+
+
 def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1506,13 +1548,49 @@ def summarize_pulse_intelligence_value_loop(
                 signal["free_installs"] += 1
                 signal["free_total"] += value
 
+    count_signal_list = list(count_signals.values())
+    totals = {signal["field"]: int(signal["total"]) for signal in count_signal_list}
+    attempts = totals["pulse_intelligence_approved_action_attempts_30d"]
+    accounted = sum(
+        totals[field]
+        for field in (
+            "pulse_intelligence_approved_action_successes_30d",
+            "pulse_intelligence_approved_action_failures_pre_dispatch_30d",
+            "pulse_intelligence_approved_action_failures_execution_30d",
+            "pulse_intelligence_approved_action_failures_unverified_30d",
+            "pulse_intelligence_approved_action_stuck_executing_30d",
+            "pulse_intelligence_approved_action_in_flight_30d",
+            "pulse_intelligence_approved_action_unclassified_30d",
+        )
+    )
+    pre_dispatch = totals["pulse_intelligence_approved_action_failures_pre_dispatch_30d"]
+    refusal_accounted = sum(
+        totals[field]
+        for field in (
+            "pulse_intelligence_approved_action_refusals_plan_stale_30d",
+            "pulse_intelligence_approved_action_refusals_policy_30d",
+            "pulse_intelligence_approved_action_refusals_capability_30d",
+            "pulse_intelligence_approved_action_refusals_other_30d",
+        )
+    )
+
     return {
         "window": "7d",
         "active_installs": active_installs,
         "paid_installs": paid_installs,
         "free_installs": free_installs,
         "boolean_signals": list(bool_signals.values()),
-        "count_signals": list(count_signals.values()),
+        "count_signals": count_signal_list,
+        "approved_action_outcome_accounting": {
+            "attempts": attempts,
+            "accounted": accounted,
+            "gap": max(0, attempts - accounted),
+            "overflow": max(0, accounted - attempts),
+            "pre_dispatch_refusals": pre_dispatch,
+            "refusal_categories_accounted": refusal_accounted,
+            "refusal_category_gap": max(0, pre_dispatch - refusal_accounted),
+            "refusal_category_overflow": max(0, refusal_accounted - pre_dispatch),
+        },
     }
 
 
@@ -2351,6 +2429,24 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
             lines.extend(f"  - {entry['label']}: {format_paid_count_split(entry)}" for entry in count_signals)
         else:
             lines.append("  - none")
+        accounting = pulse_loop.get("approved_action_outcome_accounting", {})
+        lines.extend(
+            [
+                "- approved-action outcome accounting:",
+                "  - "
+                f"attempts {accounting.get('attempts', 0)}, "
+                f"accounted {accounting.get('accounted', 0)}, "
+                f"gap {accounting.get('gap', 0)}, "
+                f"overflow {accounting.get('overflow', 0)}",
+                "  - "
+                f"pre-dispatch refusals {accounting.get('pre_dispatch_refusals', 0)}, "
+                f"categorized {accounting.get('refusal_categories_accounted', 0)}, "
+                f"gap {accounting.get('refusal_category_gap', 0)}, "
+                f"overflow {accounting.get('refusal_category_overflow', 0)}",
+                "  - interpretation: non-zero gaps are expected from pre-schema-v4 rows; "
+                "schema v4 installs must reconcile exactly",
+            ]
+        )
 
     pulse_cohorts = summary.get("pulse_intelligence_outcome_cohorts")
     if pulse_cohorts:
@@ -2453,7 +2549,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--target-version",
-        help="release version to highlight for per-signal coverage; defaults to the latest published RC",
+        help=(
+            "release version to highlight for per-signal coverage; defaults to "
+            "the latest published stable release, falling back to the latest RC"
+        ),
     )
     parser.add_argument(
         "--include-mock-fleet",
@@ -2479,7 +2578,7 @@ def main(argv: list[str] | None = None) -> int:
 
     published_releases = fetch_published_releases(args.github_repo)
     published_versions = {release["version"] for release in published_releases}
-    target_version = args.target_version or latest_rc_version(published_releases)
+    target_version = args.target_version or latest_target_release_version(published_releases)
     source = (
         fetch_rows_remote(args.ssh_host, args.db_path, args.since_days)
         if args.ssh_host

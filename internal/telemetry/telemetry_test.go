@@ -415,6 +415,13 @@ func TestApplySnapshot(t *testing.T) {
 			PulseIntelligenceApprovedActionDecisions30d:                    1,
 			PulseIntelligenceApprovedActionAttempts30d:                     1,
 			PulseIntelligenceApprovedActionSuccesses30d:                    1,
+			PulseIntelligenceApprovedActionInFlight30d:                     2,
+			PulseIntelligenceApprovedActionUnclassified30d:                 3,
+			PulseIntelligenceApprovedActionRefusalsPlanStale30d:            4,
+			PulseIntelligenceApprovedActionRefusalsPolicy30d:               5,
+			PulseIntelligenceApprovedActionRefusalsCapability30d:           6,
+			PulseIntelligenceApprovedActionRefusalsOther30d:                7,
+			PulseIntelligenceVerifiedFindingResolutions30d:                 8,
 		}
 	}
 
@@ -501,7 +508,14 @@ func TestApplySnapshot(t *testing.T) {
 		ping.PulseIntelligenceRejectedActionDecisions30d != 1 ||
 		ping.PulseIntelligenceApprovedActionDecisions30d != 1 ||
 		ping.PulseIntelligenceApprovedActionAttempts30d != 1 ||
-		ping.PulseIntelligenceApprovedActionSuccesses30d != 1 {
+		ping.PulseIntelligenceApprovedActionSuccesses30d != 1 ||
+		ping.PulseIntelligenceApprovedActionInFlight30d != 2 ||
+		ping.PulseIntelligenceApprovedActionUnclassified30d != 3 ||
+		ping.PulseIntelligenceApprovedActionRefusalsPlanStale30d != 4 ||
+		ping.PulseIntelligenceApprovedActionRefusalsPolicy30d != 5 ||
+		ping.PulseIntelligenceApprovedActionRefusalsCapability30d != 6 ||
+		ping.PulseIntelligenceApprovedActionRefusalsOther30d != 7 ||
+		ping.PulseIntelligenceVerifiedFindingResolutions30d != 8 {
 		t.Fatalf("Pulse Intelligence counters not applied: %#v", ping)
 	}
 	if !ping.PulseIntelligenceExternalAgentEnabled || !ping.PulseIntelligenceExternalAgentUsed30d ||

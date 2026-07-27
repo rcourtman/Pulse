@@ -41,6 +41,13 @@ func applyPulseIntelligenceTelemetrySnapshot(
 	snap.PulseIntelligenceApprovedActionFailuresExecution30d = actionSnapshot.ApprovedActionFailuresExecution30d
 	snap.PulseIntelligenceApprovedActionFailuresUnverified30d = actionSnapshot.ApprovedActionFailuresUnverified30d
 	snap.PulseIntelligenceApprovedActionStuckExecuting30d = actionSnapshot.ApprovedActionStuckExecuting30d
+	snap.PulseIntelligenceApprovedActionInFlight30d = actionSnapshot.ApprovedActionInFlight30d
+	snap.PulseIntelligenceApprovedActionUnclassified30d = actionSnapshot.ApprovedActionUnclassified30d
+	snap.PulseIntelligenceApprovedActionRefusalsPlanStale30d = actionSnapshot.ApprovedActionRefusalsPlanStale30d
+	snap.PulseIntelligenceApprovedActionRefusalsPolicy30d = actionSnapshot.ApprovedActionRefusalsPolicy30d
+	snap.PulseIntelligenceApprovedActionRefusalsCapability30d = actionSnapshot.ApprovedActionRefusalsCapability30d
+	snap.PulseIntelligenceApprovedActionRefusalsOther30d = actionSnapshot.ApprovedActionRefusalsOther30d
+	snap.PulseIntelligenceVerifiedFindingResolutions30d = actionSnapshot.VerifiedFindingResolutions30d
 	snap.PulseIntelligenceApprovedActionLastFailureReason30d = actionSnapshot.ApprovedActionLastFailureReason30d
 
 	applyPulseIntelligenceAdoptionSnapshot(snap)
@@ -90,14 +97,14 @@ func applyPulseIntelligenceAdoptionSnapshot(snap *telemetry.Snapshot) {
 		snap.PulseIntelligenceApprovedActionAttempts30d > 0
 	approvedExecutionActive := snap.PulseIntelligenceApprovedActionAttempts30d > 0
 	approvedSuccessActive := snap.PulseIntelligenceApprovedActionSuccesses30d > 0
-	resolutionOutcomeActive := snap.PulseIntelligencePatrolResolvedFindings30d > 0
+	verifiedFindingResolutionActive := snap.PulseIntelligenceVerifiedFindingResolutions30d > 0
 	patrolControlProof := telemetry.ClassifyPulseIntelligencePatrolControlProof(telemetry.PulseIntelligencePatrolControlProofInput{
 		PatrolControlStarterCount:    snap.PulseIntelligencePatrolControlOperationsLoopStarterRequests30d,
 		PatrolIssueEvidenceCount:     patrolIssueEvidenceCount,
 		ContextualCollaborationCount: contextualCollaborationCount,
 		ApprovedDecisionCount:        snap.PulseIntelligenceApprovedActionDecisions30d,
 		RejectedDecisionCount:        snap.PulseIntelligenceRejectedActionDecisions30d,
-		VerifiedOutcomeCount:         snap.PulseIntelligenceApprovedActionSuccesses30d,
+		VerifiedOutcomeCount:         snap.PulseIntelligenceVerifiedFindingResolutions30d,
 	})
 	snap.PulseIntelligenceCompleteOperationsLoop30d =
 		patrolIssueEvidenceActive &&
@@ -108,9 +115,7 @@ func applyPulseIntelligenceAdoptionSnapshot(snap *telemetry.Snapshot) {
 			contextualCollaborationActive &&
 			approvedExecutionActive
 	snap.PulseIntelligenceResolvedOperationsLoop30d =
-		resolutionOutcomeActive &&
-			contextualCollaborationActive &&
-			approvedSuccessActive
+		verifiedFindingResolutionActive
 	snap.PulseIntelligencePatrolControlCompletedOperationsLoop30d = patrolControlProof.Completed
 	snap.PulseIntelligencePatrolControlResolvedOperationsLoop30d = patrolControlProof.Resolved
 	snap.PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d =
@@ -137,9 +142,8 @@ func applyPulseIntelligenceAdoptionSnapshot(snap *telemetry.Snapshot) {
 			assistantCollaborationActive &&
 			approvedSuccessActive
 	snap.PulseIntelligenceAssistantResolvedOperationsLoop30d =
-		resolutionOutcomeActive &&
-			assistantCollaborationActive &&
-			approvedSuccessActive
+		verifiedFindingResolutionActive &&
+			assistantCollaborationActive
 	snap.PulseIntelligenceExternalAgentOperationsLoop30d =
 		patrolIssueEvidenceActive &&
 			externalAgentCollaborationActive &&
@@ -153,9 +157,8 @@ func applyPulseIntelligenceAdoptionSnapshot(snap *telemetry.Snapshot) {
 			externalAgentCollaborationActive &&
 			approvedSuccessActive
 	snap.PulseIntelligenceExternalAgentResolvedOperationsLoop30d =
-		resolutionOutcomeActive &&
-			externalAgentCollaborationActive &&
-			approvedSuccessActive
+		verifiedFindingResolutionActive &&
+			externalAgentCollaborationActive
 	snap.PulseIntelligenceMCPAdapterOperationsLoop30d =
 		patrolIssueEvidenceActive &&
 			mcpAdapterCollaborationActive &&
@@ -169,9 +172,8 @@ func applyPulseIntelligenceAdoptionSnapshot(snap *telemetry.Snapshot) {
 			mcpAdapterCollaborationActive &&
 			approvedSuccessActive
 	snap.PulseIntelligenceMCPAdapterResolvedOperationsLoop30d =
-		resolutionOutcomeActive &&
-			mcpAdapterCollaborationActive &&
-			approvedSuccessActive
+		verifiedFindingResolutionActive &&
+			mcpAdapterCollaborationActive
 
 	snap.PulseIntelligenceLoopActive30d =
 		snap.PulseIntelligenceAssistantAICalls30d > 0 ||

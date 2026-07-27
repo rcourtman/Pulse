@@ -132,6 +132,76 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             "6.0.0-rc.2",
         )
 
+    def test_latest_target_release_version_prefers_latest_stable_release(self) -> None:
+        self.assertEqual(
+            report.latest_target_release_version(
+                [
+                    {
+                        "version": "6.1.2",
+                        "is_prerelease": False,
+                        "published_at": "2026-07-26T22:11:46Z",
+                    },
+                    {
+                        "version": "6.2.0-rc.1",
+                        "is_prerelease": True,
+                        "published_at": "2026-07-27T08:00:00Z",
+                    },
+                    {
+                        "version": "helm-chart-6.1.2",
+                        "is_prerelease": False,
+                        "published_at": "2026-07-27T09:00:00Z",
+                    },
+                ]
+            ),
+            "6.1.2",
+        )
+
+    def test_latest_target_release_version_falls_back_to_latest_rc(self) -> None:
+        self.assertEqual(
+            report.latest_target_release_version(
+                [
+                    {
+                        "version": "6.2.0-rc.1",
+                        "is_prerelease": True,
+                        "published_at": "2026-07-27T08:00:00Z",
+                    }
+                ]
+            ),
+            "6.2.0-rc.1",
+        )
+
+    def test_value_loop_reconciles_schema_v4_action_outcomes_and_refusals(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        summary = report.summarize_pulse_intelligence_value_loop(
+            {
+                "install-a": {
+                    "install_id": "install-a",
+                    "received_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+                    "schema_version": 4,
+                    "pulse_intelligence_approved_action_attempts_30d": 7,
+                    "pulse_intelligence_approved_action_successes_30d": 1,
+                    "pulse_intelligence_approved_action_failures_pre_dispatch_30d": 2,
+                    "pulse_intelligence_approved_action_failures_execution_30d": 1,
+                    "pulse_intelligence_approved_action_failures_unverified_30d": 1,
+                    "pulse_intelligence_approved_action_stuck_executing_30d": 1,
+                    "pulse_intelligence_approved_action_in_flight_30d": 1,
+                    "pulse_intelligence_approved_action_unclassified_30d": 0,
+                    "pulse_intelligence_approved_action_refusals_plan_stale_30d": 1,
+                    "pulse_intelligence_approved_action_refusals_policy_30d": 1,
+                    "pulse_intelligence_verified_finding_resolutions_30d": 1,
+                }
+            },
+            now=now,
+        )
+        accounting = summary["approved_action_outcome_accounting"]
+        self.assertEqual(accounting["attempts"], 7)
+        self.assertEqual(accounting["accounted"], 7)
+        self.assertEqual(accounting["gap"], 0)
+        self.assertEqual(accounting["overflow"], 0)
+        self.assertEqual(accounting["pre_dispatch_refusals"], 2)
+        self.assertEqual(accounting["refusal_categories_accounted"], 2)
+        self.assertEqual(accounting["refusal_category_gap"], 0)
+
     def test_security_docs_use_current_agent_install_surface(self) -> None:
         security_docs = (
             REPO_ROOT / "SECURITY.md",

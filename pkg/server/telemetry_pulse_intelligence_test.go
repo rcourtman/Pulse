@@ -110,12 +110,19 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 
 	snap := telemetry.Snapshot{PaidLicense: true}
 	actions := telemetry.PulseIntelligenceActionSnapshot{
-		ActionPlans30d:             4,
-		ApprovalRequests30d:        2,
-		RejectedActionDecisions30d: 1,
-		ApprovedActionDecisions30d: 1,
-		ApprovedActionAttempts30d:  1,
-		ApprovedActionSuccesses30d: 1,
+		ActionPlans30d:                      4,
+		ApprovalRequests30d:                 2,
+		RejectedActionDecisions30d:          1,
+		ApprovedActionDecisions30d:          1,
+		ApprovedActionAttempts30d:           1,
+		ApprovedActionSuccesses30d:          1,
+		ApprovedActionInFlight30d:           2,
+		ApprovedActionUnclassified30d:       3,
+		ApprovedActionRefusalsPlanStale30d:  4,
+		ApprovedActionRefusalsPolicy30d:     5,
+		ApprovedActionRefusalsCapability30d: 6,
+		ApprovedActionRefusalsOther30d:      7,
+		VerifiedFindingResolutions30d:       1,
 	}
 	applyPulseIntelligenceTelemetrySnapshot(&snap, persistence, cfg, actions, now)
 
@@ -168,8 +175,15 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		snap.PulseIntelligenceRejectedActionDecisions30d != 1 ||
 		snap.PulseIntelligenceApprovedActionDecisions30d != 1 ||
 		snap.PulseIntelligenceApprovedActionAttempts30d != 1 ||
-		snap.PulseIntelligenceApprovedActionSuccesses30d != 1 {
-		t.Fatalf("action telemetry = %#v, want action plans 4, approval requests 2, rejected decisions 1, approved decisions 1, approved attempts 1, approved successes 1", snap)
+		snap.PulseIntelligenceApprovedActionSuccesses30d != 1 ||
+		snap.PulseIntelligenceApprovedActionInFlight30d != 2 ||
+		snap.PulseIntelligenceApprovedActionUnclassified30d != 3 ||
+		snap.PulseIntelligenceApprovedActionRefusalsPlanStale30d != 4 ||
+		snap.PulseIntelligenceApprovedActionRefusalsPolicy30d != 5 ||
+		snap.PulseIntelligenceApprovedActionRefusalsCapability30d != 6 ||
+		snap.PulseIntelligenceApprovedActionRefusalsOther30d != 7 ||
+		snap.PulseIntelligenceVerifiedFindingResolutions30d != 1 {
+		t.Fatalf("action telemetry counters were not copied: %#v", snap)
 	}
 	if snap.PulseIntelligenceOperationsLoopStarterRequests30d != 6 ||
 		snap.PulseIntelligenceAssistantOperationsLoopStarterRequests30d != 1 ||
@@ -192,7 +206,7 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		t.Fatalf("Pulse Intelligence approved-execution loop should be active when the complete loop includes an approved action attempt: %#v", snap)
 	}
 	if !snap.PulseIntelligenceResolvedOperationsLoop30d {
-		t.Fatalf("Pulse Intelligence resolved operations loop should be active when contextual collaboration, approved success, and Patrol resolution all exist: %#v", snap)
+		t.Fatalf("Pulse Intelligence resolved operations loop should be active when a Patrol finding has a linked, independently verified action resolution: %#v", snap)
 	}
 	if !snap.PulseIntelligencePatrolControlResolvedOperationsLoop30d {
 		t.Fatalf("Patrol-control resolved operations loop should be active when Patrol-control starter, issue evidence, contextual collaboration, approved decision, and verified outcome all exist: %#v", snap)
@@ -289,6 +303,7 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_PatrolControlResolvedRequiresSta
 		PulseIntelligenceAssistantContextAICalls30d:                    1,
 		PulseIntelligenceApprovedActionDecisions30d:                    1,
 		PulseIntelligenceApprovedActionSuccesses30d:                    1,
+		PulseIntelligenceVerifiedFindingResolutions30d:                 1,
 		PulseIntelligenceExternalAgentEnabled:                          true,
 		PulseIntelligenceExternalAgentOperationsLoopReady:              true,
 	}
@@ -327,9 +342,9 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_PatrolControlResolvedRequiresSta
 			},
 		},
 		{
-			name: "approved decision without verified outcome",
+			name: "approved decision without linked verified outcome",
 			mut: func(snap *telemetry.Snapshot) {
-				snap.PulseIntelligenceApprovedActionSuccesses30d = 0
+				snap.PulseIntelligenceVerifiedFindingResolutions30d = 0
 			},
 		},
 		{
@@ -396,6 +411,7 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_PatrolControlCompletedIncludesRe
 				snap.PulseIntelligenceRejectedActionDecisions30d = 0
 				snap.PulseIntelligenceApprovedActionDecisions30d = 1
 				snap.PulseIntelligenceApprovedActionSuccesses30d = 1
+				snap.PulseIntelligenceVerifiedFindingResolutions30d = 1
 			},
 			want: true,
 		},
@@ -459,6 +475,7 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_PaidPatrolControlCohortsRequireP
 		PulseIntelligenceAssistantContextAICalls30d:                    1,
 		PulseIntelligenceApprovedActionDecisions30d:                    1,
 		PulseIntelligenceApprovedActionSuccesses30d:                    1,
+		PulseIntelligenceVerifiedFindingResolutions30d:                 1,
 		PulseIntelligenceExternalAgentEnabled:                          true,
 		PulseIntelligenceExternalAgentOperationsLoopReady:              true,
 	}
@@ -711,13 +728,14 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_SourceSpecificLoopEvidence(t *te
 		{
 			name: "assistant collaboration stays first party",
 			snap: telemetry.Snapshot{
-				PulseIntelligencePatrolNewFindings30d:       1,
-				PulseIntelligencePatrolResolvedFindings30d:  1,
-				PulseIntelligenceAssistantContextAICalls30d: 1,
-				PulseIntelligenceApprovalRequests30d:        1,
-				PulseIntelligenceApprovedActionDecisions30d: 1,
-				PulseIntelligenceApprovedActionAttempts30d:  1,
-				PulseIntelligenceApprovedActionSuccesses30d: 1,
+				PulseIntelligencePatrolNewFindings30d:          1,
+				PulseIntelligencePatrolResolvedFindings30d:     1,
+				PulseIntelligenceAssistantContextAICalls30d:    1,
+				PulseIntelligenceApprovalRequests30d:           1,
+				PulseIntelligenceApprovedActionDecisions30d:    1,
+				PulseIntelligenceApprovedActionAttempts30d:     1,
+				PulseIntelligenceApprovedActionSuccesses30d:    1,
+				PulseIntelligenceVerifiedFindingResolutions30d: 1,
 			},
 			wantAssistantLoop:     true,
 			wantAssistantResolved: true,
@@ -732,6 +750,7 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_SourceSpecificLoopEvidence(t *te
 				PulseIntelligenceApprovedActionDecisions30d:      1,
 				PulseIntelligenceApprovedActionAttempts30d:       1,
 				PulseIntelligenceApprovedActionSuccesses30d:      1,
+				PulseIntelligenceVerifiedFindingResolutions30d:   1,
 			},
 			wantExternalLoop:     true,
 			wantExternalResolved: true,
@@ -739,13 +758,14 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_SourceSpecificLoopEvidence(t *te
 		{
 			name: "pulse mcp is the mcp subset and external-agent umbrella",
 			snap: telemetry.Snapshot{
-				PulseIntelligencePatrolNewFindings30d:       1,
-				PulseIntelligencePatrolResolvedFindings30d:  1,
-				PulseIntelligenceMCPAdapterUsed30d:          true,
-				PulseIntelligenceApprovalRequests30d:        1,
-				PulseIntelligenceApprovedActionDecisions30d: 1,
-				PulseIntelligenceApprovedActionAttempts30d:  1,
-				PulseIntelligenceApprovedActionSuccesses30d: 1,
+				PulseIntelligencePatrolNewFindings30d:          1,
+				PulseIntelligencePatrolResolvedFindings30d:     1,
+				PulseIntelligenceMCPAdapterUsed30d:             true,
+				PulseIntelligenceApprovalRequests30d:           1,
+				PulseIntelligenceApprovedActionDecisions30d:    1,
+				PulseIntelligenceApprovedActionAttempts30d:     1,
+				PulseIntelligenceApprovedActionSuccesses30d:    1,
+				PulseIntelligenceVerifiedFindingResolutions30d: 1,
 			},
 			wantExternalLoop:     true,
 			wantExternalResolved: true,
@@ -941,7 +961,21 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_CompleteLoopRequiresIssueEvidenc
 			wantResolved: false,
 		},
 		{
-			name: "resolved operations loop requires patrol resolution collaboration and approved success",
+			name: "resolved operations loop requires linked independently verified finding resolution",
+			snap: telemetry.Snapshot{
+				PulseIntelligencePatrolResolvedFindings30d:     1,
+				PulseIntelligenceAssistantContextAICalls30d:    1,
+				PulseIntelligenceApprovedActionAttempts30d:     1,
+				PulseIntelligenceApprovedActionSuccesses30d:    1,
+				PulseIntelligenceVerifiedFindingResolutions30d: 1,
+			},
+			wantActive:   true,
+			wantComplete: true,
+			wantApproved: true,
+			wantResolved: true,
+		},
+		{
+			name: "unlinked finding resolution and action success do not resolve",
 			snap: telemetry.Snapshot{
 				PulseIntelligencePatrolResolvedFindings30d:  1,
 				PulseIntelligenceAssistantContextAICalls30d: 1,
@@ -951,7 +985,7 @@ func TestApplyPulseIntelligenceAdoptionSnapshot_CompleteLoopRequiresIssueEvidenc
 			wantActive:   true,
 			wantComplete: true,
 			wantApproved: true,
-			wantResolved: true,
+			wantResolved: false,
 		},
 		{
 			name: "patrol resolution without governed action decision does not complete or resolve the operations loop",

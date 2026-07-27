@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
 )
 
@@ -76,7 +77,7 @@ func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.
 		snapshot.ApprovedActionDecisions30d += len(approvedDecisionIDs)
 		snapshot.ApprovedActionAttempts30d += len(approvedAttemptIDs)
 		snapshot.ApprovedActionSuccesses30d += len(approvedSuccessIDs)
-		accumulatePulseIntelligenceApprovedActionFailures(&snapshot, store, orgID, approvedAttemptIDs, approvedSuccessIDs, recordsByID, time.Now().UTC())
+		accumulatePulseIntelligenceApprovedActionOutcomes(&snapshot, store, orgID, approvedAttemptIDs, approvedSuccessIDs, recordsByID, time.Now().UTC())
 	}
 
 	return snapshot
@@ -92,15 +93,14 @@ const pulseIntelligenceStuckExecutingThreshold = time.Hour
 // executor misuses the reason-code field.
 var pulseIntelligenceReasonCodePattern = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
 
-// accumulatePulseIntelligenceApprovedActionFailures attributes every approved
-// attempt that is not a success to one cause bucket, and records the machine
-// reason code of the most recent failure.
-func accumulatePulseIntelligenceApprovedActionFailures(snapshot *telemetry.PulseIntelligenceActionSnapshot, store unifiedresources.ResourceStore, orgID string, attemptIDs, successIDs map[string]struct{}, recordsByID map[string]unifiedresources.ActionAuditRecord, now time.Time) {
+// accumulatePulseIntelligenceApprovedActionOutcomes attributes every approved
+// attempt to exactly one success, failure, stuck, in-flight, or unclassified
+// bucket. It also records fixed refusal categories and the machine reason code
+// of the most recent failure.
+func accumulatePulseIntelligenceApprovedActionOutcomes(snapshot *telemetry.PulseIntelligenceActionSnapshot, store unifiedresources.ResourceStore, orgID string, attemptIDs, successIDs map[string]struct{}, recordsByID map[string]unifiedresources.ActionAuditRecord, now time.Time) {
 	var lastFailureAt time.Time
 	for actionID := range attemptIDs {
-		if _, ok := successIDs[actionID]; ok {
-			continue
-		}
+		_, isSuccess := successIDs[actionID]
 		record, ok := recordsByID[actionID]
 		if !ok {
 			fetched, found, err := store.GetActionAudit(actionID)
@@ -108,21 +108,46 @@ func accumulatePulseIntelligenceApprovedActionFailures(snapshot *telemetry.Pulse
 				if err != nil {
 					log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to resolve action audit for failure-cause telemetry summary")
 				}
+				// A success outcome is already accounted by its lifecycle event;
+				// only unresolved non-success attempts belong in unclassified.
+				if !isSuccess {
+					snapshot.ApprovedActionUnclassified30d++
+				}
 				continue
 			}
 			record = fetched
+		}
+		if isSuccess {
+			if pulseIntelligenceVerifiedFindingResolution(record) {
+				snapshot.VerifiedFindingResolutions30d++
+			}
+			continue
 		}
 		cause, reason := pulseIntelligenceApprovedActionFailureCause(record, now)
 		switch cause {
 		case "pre_dispatch":
 			snapshot.ApprovedActionFailuresPreDispatch30d++
+			switch pulseIntelligenceApprovedActionRefusalCategory(reason) {
+			case "plan_stale":
+				snapshot.ApprovedActionRefusalsPlanStale30d++
+			case "policy":
+				snapshot.ApprovedActionRefusalsPolicy30d++
+			case "capability":
+				snapshot.ApprovedActionRefusalsCapability30d++
+			default:
+				snapshot.ApprovedActionRefusalsOther30d++
+			}
 		case "execution":
 			snapshot.ApprovedActionFailuresExecution30d++
 		case "unverified":
 			snapshot.ApprovedActionFailuresUnverified30d++
 		case "stuck_executing":
 			snapshot.ApprovedActionStuckExecuting30d++
+		case "in_flight":
+			snapshot.ApprovedActionInFlight30d++
+			continue
 		default:
+			snapshot.ApprovedActionUnclassified30d++
 			continue
 		}
 		if record.UpdatedAt.After(lastFailureAt) {
@@ -134,15 +159,15 @@ func accumulatePulseIntelligenceApprovedActionFailures(snapshot *telemetry.Pulse
 
 // pulseIntelligenceApprovedActionFailureCause classifies an approved attempt
 // that is not a verified success into a coarse cause bucket plus the specific
-// machine reason code. A recently-executing record returns no cause: it is
-// still in flight and may yet succeed.
+// machine reason code. A recently-executing record is explicitly classified as
+// in flight because it may yet succeed.
 func pulseIntelligenceApprovedActionFailureCause(record unifiedresources.ActionAuditRecord, now time.Time) (string, string) {
 	switch record.State {
 	case unifiedresources.ActionStateExecuting:
 		if record.UpdatedAt.IsZero() || now.Sub(record.UpdatedAt) >= pulseIntelligenceStuckExecutingThreshold {
 			return "stuck_executing", "stuck_executing"
 		}
-		return "", ""
+		return "in_flight", ""
 	case unifiedresources.ActionStateFailed:
 		truth := unifiedresources.CanonicalActionResultV2(record)
 		if truth.Execution.Status == unifiedresources.ActionExecutionNotRun {
@@ -155,6 +180,26 @@ func pulseIntelligenceApprovedActionFailureCause(record unifiedresources.ActionA
 	default:
 		return "", ""
 	}
+}
+
+func pulseIntelligenceApprovedActionRefusalCategory(reason string) string {
+	switch reason {
+	case "plan_drift", "action_plan_expired", "action_replan_required":
+		return "plan_stale"
+	case "resource_remediation_locked", "policy_authorization_expired",
+		"policy_authorization_invalid", "policy_authorization_revoked", "action_emergency_stop":
+		return "policy"
+	case "action_dry_run_only", "action_execution_unavailable":
+		return "capability"
+	default:
+		return "other"
+	}
+}
+
+func pulseIntelligenceVerifiedFindingResolution(record unifiedresources.ActionAuditRecord) bool {
+	return isPatrolActionOrigin(record.Origin) &&
+		pulseIntelligenceApprovedActionSuccess(record) &&
+		patrolOutcomeForActionAudit(record) == aicontracts.OutcomeFixVerified
 }
 
 func pulseIntelligenceSanitizedReasonCode(code, fallback string) string {

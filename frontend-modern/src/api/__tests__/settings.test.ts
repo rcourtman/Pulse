@@ -7,7 +7,7 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 const mockTelemetryPreviewPayload = {
-  schema_version: 3,
+  schema_version: 4,
   sent_at: '2026-07-23T08:30:00Z',
   install_id: 'preview-install-id',
   version: '6.0.0',
@@ -131,6 +131,13 @@ const mockTelemetryPreviewPayload = {
   pulse_intelligence_approved_action_failures_execution_30d: 0,
   pulse_intelligence_approved_action_failures_unverified_30d: 0,
   pulse_intelligence_approved_action_stuck_executing_30d: 0,
+  pulse_intelligence_approved_action_in_flight_30d: 0,
+  pulse_intelligence_approved_action_unclassified_30d: 0,
+  pulse_intelligence_approved_action_refusals_plan_stale_30d: 0,
+  pulse_intelligence_approved_action_refusals_policy_30d: 0,
+  pulse_intelligence_approved_action_refusals_capability_30d: 0,
+  pulse_intelligence_approved_action_refusals_other_30d: 0,
+  pulse_intelligence_verified_finding_resolutions_30d: 0,
   pulse_intelligence_approved_action_last_failure_reason_30d: undefined,
 } satisfies TelemetryPingPreview;
 
