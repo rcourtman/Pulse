@@ -225,6 +225,13 @@ uncertainty into removal. A newly reported member is admitted immediately.
 Cluster display names are not global identity: config consolidation requires
 overlapping endpoint authority, and different provider instances with the same
 cluster/member names stay distinct in node and storage identity.
+Endpoint address overlap is not sufficient identity either: sites that reuse
+RFC1918 ranges can present colliding member IPs for different machines, so
+TOFU-captured TLS fingerprints veto consolidation whenever the instance
+authorities, a same-named endpoint, or a same-addressed endpoint carry
+contradicting non-empty fingerprints. The fail-safe direction is fixed: a
+certificate rotation may leave a genuinely duplicated cluster as two views,
+but two distinct clusters must never be silently folded into one.
 
 
 Storage risk assessment owns the wearout evidence boundary for every consumer.

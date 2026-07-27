@@ -203,3 +203,63 @@ func TestConsolidatePVEInstancesMergesDuplicateClusterAuthIntoPrimary(t *testing
 		t.Fatalf("expected 2 endpoints after consolidation, got %d", len(instances[0].ClusterEndpoints))
 	}
 }
+
+func TestConsolidatePVEInstancesKeepsSameNameClustersWithCollidingPrivateIPs(t *testing.T) {
+	// Two customer sites reuse the same corosync cluster name and the same
+	// RFC1918 addressing, so discovered member IPs collide. The TOFU-captured
+	// TLS fingerprints are the evidence that these are different machines.
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{
+		{
+			Name:        "site-a",
+			Host:        "https://site-a.example:8006",
+			ClusterName: "production",
+			IsCluster:   true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "pve01", Host: "https://192.168.1.10:8006", IP: "192.168.1.10", Fingerprint: "fp-site-a"},
+			},
+		},
+		{
+			Name:        "site-b",
+			Host:        "https://site-b.example:8006",
+			ClusterName: "production",
+			IsCluster:   true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "pve01", Host: "https://192.168.1.10:8006", IP: "192.168.1.10", Fingerprint: "fp-site-b"},
+			},
+		},
+	})
+
+	if changed {
+		t.Fatalf("same-name clusters with contradicting endpoint fingerprints must not be consolidated")
+	}
+	if len(instances) != 2 {
+		t.Fatalf("instances = %d, want 2 distinct clusters", len(instances))
+	}
+}
+
+func TestConsolidatePVEInstancesKeepsStandaloneWithContradictingFingerprint(t *testing.T) {
+	// A standalone whose address collides with a cluster endpoint at another
+	// site must not fold into that cluster when its TLS fingerprint disagrees.
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{
+		{
+			Name:        "site-a",
+			ClusterName: "cluster-A",
+			IsCluster:   true,
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "pve01", Host: "https://192.168.1.10:8006", Fingerprint: "fp-cluster"},
+			},
+		},
+		{
+			Name:        "other-site-standalone",
+			Host:        "192.168.1.10",
+			Fingerprint: "fp-standalone",
+		},
+	})
+
+	if changed {
+		t.Fatalf("standalone with contradicting fingerprint must not be consolidated into the cluster")
+	}
+	if len(instances) != 2 {
+		t.Fatalf("expected both instances to remain, got %d", len(instances))
+	}
+}

@@ -62,6 +62,69 @@ func (instance PVEInstance) DeepCopy() PVEInstance {
 	return clonePVEInstances([]PVEInstance{instance})[0]
 }
 
+// normalizePVEFingerprint reduces a TLS certificate fingerprint to a
+// comparable form. Comparison-only: unknown stays empty, no validation.
+func normalizePVEFingerprint(raw string) string {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	normalized = strings.TrimPrefix(normalized, "sha256:")
+	normalized = strings.ReplaceAll(normalized, ":", "")
+	return strings.ReplaceAll(normalized, " ", "")
+}
+
+// pveFingerprintsConflict reports whether two TLS fingerprints are both known
+// and disagree. Contradicting fingerprints identify two different machines,
+// which outweighs any name or address coincidence between sites that reuse
+// node hostnames and RFC1918 ranges.
+func pveFingerprintsConflict(a, b string) bool {
+	fpA := normalizePVEFingerprint(a)
+	fpB := normalizePVEFingerprint(b)
+	return fpA != "" && fpB != "" && fpA != fpB
+}
+
+// pveClusterInstancesHaveFingerprintConflict reports whether two cluster
+// instances carry TOFU-captured TLS evidence that they are different clusters:
+// the instance authorities, a same-named endpoint, or a same-addressed
+// endpoint present contradicting certificate fingerprints. A conflict vetoes
+// consolidation even when cluster names and member addresses coincide. The
+// fail-safe direction is deliberate: a genuinely duplicated cluster whose
+// certificate rotated between discoveries stays as two views rather than two
+// distinct clusters being silently folded into one.
+func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
+	if pveFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
+		return true
+	}
+	indexEndpoints := func(instance PVEInstance) (byNode, byKey map[string]string) {
+		byNode = make(map[string]string)
+		byKey = make(map[string]string)
+		for _, endpoint := range instance.ClusterEndpoints {
+			fp := normalizePVEFingerprint(endpoint.Fingerprint)
+			if fp == "" {
+				continue
+			}
+			if node := strings.TrimSpace(strings.ToLower(endpoint.NodeName)); node != "" {
+				byNode[node] = fp
+			}
+			for _, key := range clusterEndpointIdentityKeys(endpoint) {
+				byKey[key] = fp
+			}
+		}
+		return byNode, byKey
+	}
+	aByNode, aByKey := indexEndpoints(a)
+	bByNode, bByKey := indexEndpoints(b)
+	for node, fp := range bByNode {
+		if existing, ok := aByNode[node]; ok && existing != fp {
+			return true
+		}
+	}
+	for key, fp := range bByKey {
+		if existing, ok := aByKey[key]; ok && existing != fp {
+			return true
+		}
+	}
+	return false
+}
+
 func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, bool) {
 	removed := make(map[int]struct{})
 	mergedAny := false
@@ -85,6 +148,7 @@ func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, boo
 			duplicate := instances[dupIdx]
 			if !duplicate.IsCluster ||
 				!strings.EqualFold(strings.TrimSpace(primary.ClusterName), strings.TrimSpace(duplicate.ClusterName)) ||
+				pveClusterInstancesHaveFingerprintConflict(*primary, duplicate) ||
 				!pveClusterInstancesHaveStrongOverlap(*primary, duplicate) {
 				continue
 			}
@@ -446,6 +510,9 @@ func mergeStandalonePVEIntoClusters(instances []PVEInstance) bool {
 		}
 
 		endpoint := &instances[ref.clusterIdx].ClusterEndpoints[ref.endpointIdx]
+		if pveFingerprintsConflict(instances[idx].Fingerprint, endpoint.Fingerprint) {
+			continue
+		}
 		mergeClusterEndpointData(endpoint, ClusterEndpoint{
 			Host:        instances[idx].Host,
 			GuestURL:    instances[idx].GuestURL,
