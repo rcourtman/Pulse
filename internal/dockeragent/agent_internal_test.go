@@ -1,11 +1,19 @@
 package dockeragent
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"math"
 	"math/big"
+	"path/filepath"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1329,5 +1337,211 @@ func TestDetectHostRemovedError(t *testing.T) {
 				t.Errorf("detectHostRemovedError() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAgentHookSeamsArePerAgentFields pins the shape of the two indirection
+// seams the Docker agent exposes for tests: the timer constructor read by
+// waitForAsyncDelay and the JSON marshaller read by acknowledgement delivery
+// and update-payload decoding. Both used to be package-level vars in deps.go,
+// which raced with async goroutines leaked from earlier tests. They are now
+// fields on Agent, injected at construction and never reassigned afterwards.
+func TestAgentHookSeamsArePerAgentFields(t *testing.T) {
+	agentType := reflect.TypeOf(Agent{})
+
+	for _, tc := range []struct {
+		field string
+		want  reflect.Type
+	}{
+		{field: "newTimerFn", want: reflect.TypeOf((func(time.Duration) *time.Timer)(nil))},
+		{field: "jsonMarshalFn", want: reflect.TypeOf((func(any) ([]byte, error))(nil))},
+	} {
+		field, ok := agentType.FieldByName(tc.field)
+		if !ok {
+			t.Fatalf("Agent is missing the %s test seam field; the hook must stay per-Agent, not a package global", tc.field)
+		}
+		if field.Type != tc.want {
+			t.Fatalf("Agent.%s has type %s, want %s", tc.field, field.Type, tc.want)
+		}
+		if field.PkgPath == "" {
+			t.Fatalf("Agent.%s must stay unexported; it is an internal test seam, not a configuration surface", tc.field)
+		}
+	}
+}
+
+// TestAgentHookSeamsHaveNoPackageGlobals fails if either seam is reintroduced
+// as a package-level var in the non-test sources of internal/dockeragent. A
+// package global is reachable from every leaked goroutine in the package, which
+// is exactly the race the per-Agent fields removed.
+func TestAgentHookSeamsHaveNoPackageGlobals(t *testing.T) {
+	forbidden := map[string]struct{}{
+		"newTimerFn":    {},
+		"jsonMarshalFn": {},
+	}
+
+	sources, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("glob package sources: %v", err)
+	}
+	if len(sources) == 0 {
+		t.Fatal("no package sources found; the global scan would vacuously pass")
+	}
+
+	scanned := 0
+	for _, source := range sources {
+		if strings.HasSuffix(source, "_test.go") {
+			continue
+		}
+		scanned++
+
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, source, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", source, err)
+		}
+
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				valueSpec, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range valueSpec.Names {
+					if _, bad := forbidden[name.Name]; bad {
+						t.Errorf(
+							"%s declares package-level var %s; the timer and JSON-marshal seams must stay Agent fields so async goroutines never read shared state",
+							source, name.Name,
+						)
+					}
+				}
+			}
+		}
+	}
+
+	if scanned == 0 {
+		t.Fatal("scanned no non-test sources; the global scan would vacuously pass")
+	}
+}
+
+// TestAgentHookSeamsDefaultToStdlib proves a zero-value Agent — the production
+// shape, where nothing injects a hook — runs the standard library behind both
+// seams.
+func TestAgentHookSeamsDefaultToStdlib(t *testing.T) {
+	agent := &Agent{}
+
+	body, err := agent.jsonMarshal(map[string]string{"k": "v"})
+	if err != nil {
+		t.Fatalf("nil jsonMarshalFn should fall back to json.Marshal: %v", err)
+	}
+	if string(body) != `{"k":"v"}` {
+		t.Fatalf("nil jsonMarshalFn produced %q, want json.Marshal output", body)
+	}
+
+	timer := agent.newTimer(time.Millisecond)
+	if timer == nil {
+		t.Fatal("nil newTimerFn should fall back to time.NewTimer")
+	}
+	defer stopTimer(timer)
+	select {
+	case <-timer.C:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fallback timer never fired")
+	}
+}
+
+// TestAgentHookSeamsAreIsolatedPerAgent is the regression proof for the race
+// the per-Agent seams fixed. Two Agents constructed with different hooks are
+// exercised concurrently; with a package global, one Agent's injection would be
+// visible to the other and the swap would race the reads. Run under -race.
+func TestAgentHookSeamsAreIsolatedPerAgent(t *testing.T) {
+	marshalErr := errors.New("injected marshal failure")
+
+	failing := &Agent{
+		hostID: "failing",
+		jsonMarshalFn: func(any) ([]byte, error) {
+			return nil, marshalErr
+		},
+		newTimerFn: func(time.Duration) *time.Timer {
+			return time.NewTimer(0)
+		},
+	}
+	plain := &Agent{hostID: "plain"}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 64)
+
+	for range 16 {
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			if _, err := failing.jsonMarshal(struct{}{}); !errors.Is(err, marshalErr) {
+				errs <- fmt.Errorf("injected agent should use its own marshaller, got %v", err)
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			body, err := plain.jsonMarshal(map[string]int{"n": 1})
+			if err != nil {
+				errs <- fmt.Errorf("sibling agent must not observe the injected marshaller: %v", err)
+				return
+			}
+			if string(body) != `{"n":1}` {
+				errs <- fmt.Errorf("sibling agent produced %q, want json.Marshal output", body)
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+
+	// The injected timer fires immediately; the sibling's nil field must still
+	// resolve to a real time.NewTimer rather than the injected constructor.
+	injected := failing.newTimer(time.Hour)
+	defer stopTimer(injected)
+	select {
+	case <-injected.C:
+	case <-time.After(5 * time.Second):
+		t.Fatal("injected newTimerFn was not used by its own Agent")
+	}
+
+	sibling := plain.newTimer(time.Hour)
+	defer stopTimer(sibling)
+	select {
+	case <-sibling.C:
+		t.Fatal("sibling agent observed the injected immediate timer; the seam is not per-Agent")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// TestSendCommandAckUsesReceiverMarshaller proves the acknowledgement transport
+// path in agent.go marshals through the receiver's own seam, so an injected
+// failure stays scoped to the Agent under test.
+func TestSendCommandAckUsesReceiverMarshaller(t *testing.T) {
+	marshalErr := errors.New("injected ack marshal failure")
+	agent := &Agent{
+		hostID: "host1",
+		jsonMarshalFn: func(any) ([]byte, error) {
+			return nil, marshalErr
+		},
+	}
+
+	err := agent.sendCommandAck(context.Background(), TargetConfig{URL: "http://example"}, "cmd", "status", "msg")
+	if err == nil {
+		t.Fatal("expected the injected marshaller to fail the acknowledgement")
+	}
+	if !errors.Is(err, marshalErr) {
+		t.Fatalf("acknowledgement error %v does not wrap the injected failure; the ack path is not using a.jsonMarshal", err)
+	}
+	if !strings.Contains(err.Error(), "marshal command acknowledgement") {
+		t.Fatalf("acknowledgement error %v lost its marshal context", err)
 	}
 }

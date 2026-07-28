@@ -2322,6 +2322,41 @@ manual host-local update command only for a timestamped update attempt inside
 the bounded in-flight window; a missing timestamp or a stale attempt restores
 the manual recovery handoff.
 
+### Docker agent test seams are per-Agent fields, never package globals
+
+The Docker / Podman module owns two indirection seams that exist only so tests
+can drive timing and encoding failures: the timer constructor used by
+`waitForAsyncDelay` and the JSON marshaller used by command acknowledgement
+delivery and by update-command payload decoding. Both are unexported fields on
+the `Agent` struct — `newTimerFn func(time.Duration) *time.Timer` and
+`jsonMarshalFn func(any) ([]byte, error)` — reached through the `newTimer` and
+`jsonMarshal` methods, and both fall back to the standard library
+(`time.NewTimer`, `json.Marshal`) when the field is nil. No package-level
+`newTimerFn` or `jsonMarshalFn` variable exists in `internal/dockeragent`.
+
+Ownership is per-Agent because the seams are read from goroutines the agent
+itself started. `runAsync` work such as command-acknowledgement retry outlives
+the test that scheduled it, so a package global swapped by a later test was a
+genuine data race between that swap and the leaked goroutine's read, not merely
+a test-isolation smell. Making the seam a field the goroutine's own `Agent`
+already carries removes the shared location: an injected hook can only ever be
+observed by the Agent it was constructed with, and two Agents running
+concurrently with different hooks stay independent. The injection point is
+construction only — nothing reassigns either field after an Agent is in use, so
+the fields need no mutex and take part in no locking order.
+
+This is an internal test-seam shape with no public contract delta. Agent
+enrollment, transport trust, command admission, acknowledgement semantics, and
+the Docker recreate/rollback result contract are all unchanged by it; a
+production Agent leaves both fields nil and runs the standard-library
+implementations. The seams remain unexported and must not be promoted into
+`NewAgent` options, agent profiles, or any server-facing configuration surface.
+`internal/dockeragent/agent_internal_test.go` proves the field shape, the nil
+defaults, the absence of package-level hook globals, and per-Agent isolation
+under the race detector;
+`internal/dockeragent/container_update_test.go` proves the update-command
+decode path routes through the receiver's own marshaller.
+
 ### vSphere system members carry no agent semantics
 
 ESXi host rows that now compose under their owning vCenter connection in the

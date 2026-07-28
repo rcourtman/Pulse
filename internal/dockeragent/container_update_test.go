@@ -748,3 +748,89 @@ func TestUpdateContainer_SharedNamespaceCreateConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestDecodeUpdateContainerPayloadUsesReceiverMarshaller pins the update-command
+// decode path to the receiver's own JSON seam. decodeUpdateContainerPayload was
+// a package function reading a package-level jsonMarshalFn; a test swapping that
+// global raced with async goroutines leaked from earlier tests. It is now an
+// Agent method reading a per-Agent field injected at construction, so a failure
+// injected into one Agent can never be observed by another.
+func TestDecodeUpdateContainerPayloadUsesReceiverMarshaller(t *testing.T) {
+	t.Run("injected marshaller fails only its own Agent", func(t *testing.T) {
+		marshalErr := errors.New("injected update marshal failure")
+		failing := &Agent{
+			jsonMarshalFn: func(any) ([]byte, error) {
+				return nil, marshalErr
+			},
+		}
+
+		if _, err := failing.decodeUpdateContainerPayload(map[string]any{"containerId": "abc"}); err == nil {
+			t.Fatal("expected the injected marshaller to fail the decode")
+		} else if !errors.Is(err, marshalErr) {
+			t.Fatalf("decode error %v does not wrap the injected failure; the decode is not using a.jsonMarshal", err)
+		} else if !strings.Contains(err.Error(), "marshal update command payload") {
+			t.Fatalf("decode error %v lost its marshal context", err)
+		}
+
+		plain := &Agent{}
+		decoded, err := plain.decodeUpdateContainerPayload(map[string]any{"containerId": "abc"})
+		if err != nil {
+			t.Fatalf("sibling Agent must not observe the injected marshaller: %v", err)
+		}
+		if decoded.ContainerID != "abc" {
+			t.Fatalf("sibling Agent decoded %q, want %q", decoded.ContainerID, "abc")
+		}
+	})
+
+	t.Run("concurrent Agents keep their own marshaller", func(t *testing.T) {
+		marshalErr := errors.New("injected update marshal failure")
+		failing := &Agent{
+			jsonMarshalFn: func(any) ([]byte, error) {
+				return nil, marshalErr
+			},
+		}
+		plain := &Agent{}
+
+		var wg sync.WaitGroup
+		problems := make(chan string, 64)
+
+		for range 16 {
+			wg.Add(2)
+
+			go func() {
+				defer wg.Done()
+				if _, err := failing.decodeUpdateContainerPayload(map[string]any{"containerId": "abc"}); !errors.Is(err, marshalErr) {
+					problems <- "injected Agent lost its marshaller"
+				}
+			}()
+
+			go func() {
+				defer wg.Done()
+				decoded, err := plain.decodeUpdateContainerPayload(map[string]any{"containerId": "abc"})
+				if err != nil || decoded.ContainerID != "abc" {
+					problems <- "sibling Agent observed the injected marshaller"
+				}
+			}()
+		}
+
+		wg.Wait()
+		close(problems)
+		for problem := range problems {
+			t.Error(problem)
+		}
+	})
+
+	t.Run("decodeUpdateContainerPayload is an Agent method", func(t *testing.T) {
+		// A compile-time pin: if the decode is ever hoisted back to a package
+		// function reading a package global, this assignment stops building.
+		var decode func(*Agent, map[string]any) (updateContainerCommandPayload, error) = (*Agent).decodeUpdateContainerPayload
+
+		decoded, err := decode(&Agent{}, map[string]any{"containerId": " abc "})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if decoded.ContainerID != "abc" {
+			t.Fatalf("decoded %q, want %q", decoded.ContainerID, "abc")
+		}
+	})
+}
