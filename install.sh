@@ -4067,6 +4067,112 @@ configure_auto_update_script_repo() {
     chmod +x "$dest"
 }
 
+# Probes whether new entries can be created in a directory. This is exactly
+# the capability the staged-rename swaps below need (rename creates and
+# unlinks entries in the target directory), and unlike `test -w` it gives an
+# unambiguous answer for root under a ProtectSystem= sandbox.
+auto_update_dir_writable() {
+    local dir="$1"
+    local probe=""
+    [[ -d "$dir" ]] || return 1
+    probe=$(mktemp "${dir}/.pulse-write-probe.XXXXXX" 2>/dev/null) || return 1
+    rm -f "$probe"
+    return 0
+}
+
+# Guards the helper swap: a truncated or shebang-less helper would replace a
+# working one with a file systemd cannot execute as the update unit's
+# ExecStart. This matters because configure_auto_update_script_repo's awk
+# happily emits a lone GITHUB_REPO= line from empty input, so a silently
+# failed copy would otherwise produce a plausible-looking one-line "helper"
+# whose only effect is to return success and never update anything.
+auto_update_helper_is_sane() {
+    local path="$1"
+    [[ -s "$path" ]] || return 1
+    local first_line=""
+    IFS= read -r first_line < "$path" || true
+    [[ "$first_line" == '#!'* ]]
+}
+
+# Migration for boxes installed before the update sandbox was widened.
+#
+# Unattended updates run this installer from pulse-update.service, and on a box
+# whose unit predates the widened ReadWritePaths that sandbox covers only the
+# install dir, config dir and /tmp. The corrected unit therefore cannot be
+# written by the very run that would install it (EROFS), so without an escape
+# no deployed box ever receives the single-schedule timer or the widened
+# sandbox through auto-update — updater fixes reach only manually reinstalled
+# boxes. The in-app Go update pipeline cannot carry the migration either:
+# pulse.service runs as User=pulse under its own ProtectSystem=strict with
+# ReadWritePaths limited to the install and config dirs, so it cannot write
+# /etc/systemd/system or /usr/local/bin.
+#
+# systemd-run asks PID 1 to fork the repair, so the transient unit starts in
+# the host mount namespace rather than inheriting this unit's sandbox. The
+# system bus stays reachable from inside the sandbox because ProtectSystem=
+# only remounts the hierarchy read-only and a read-only mount does not block
+# connect() on an AF_UNIX socket (the same reason the unit's own
+# ExecCondition=systemctl call works). The installer is copied into the
+# install dir rather than run from its current path because the helper stages
+# it under /tmp and PrivateTmp=yes hides that from PID 1; re-execing this
+# already-signature-verified file also avoids a second unverified download.
+migrate_auto_update_assets_outside_sandbox() {
+    local blocked_dir="$1"
+
+    # The escaped run writes with no sandbox; if it still cannot write, a
+    # second escape would loop forever.
+    if [[ "${PULSE_AUTO_UPDATE_ASSET_REPAIR:-}" == "1" ]]; then
+        return 1
+    fi
+    if [[ "$(id -u)" -ne 0 ]]; then
+        return 1
+    fi
+    # Absent on hosts without systemd (and inside Docker), where there is no
+    # timer driving this path in the first place.
+    if ! command -v systemd-run >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local installer_src="${BASH_SOURCE[0]:-}"
+    if [[ -z "$installer_src" || ! -r "$installer_src" ]]; then
+        # curl | bash leaves no file to re-exec.
+        return 1
+    fi
+
+    local install_dir="${INSTALL_DIR:-${PULSE_INSTALL_DIR:-/opt/pulse}}"
+    local repair_copy="${install_dir}/.pulse-update-asset-repair.sh"
+    if ! cp "$installer_src" "$repair_copy" 2>/dev/null; then
+        return 1
+    fi
+    chmod 0700 "$repair_copy" 2>/dev/null || true
+
+    print_info "The auto-update sandbox blocks ${blocked_dir}; refreshing the update assets through a transient systemd unit."
+
+    local status=0
+    systemd-run --quiet --collect --wait \
+        --unit="pulse-update-asset-repair-$$" \
+        --description="Refresh Pulse auto-update helper and units outside the update sandbox" \
+        --property=Type=oneshot \
+        --setenv=PULSE_AUTO_UPDATE_ASSET_REPAIR=1 \
+        --setenv="PULSE_SERVICE_NAME=${SERVICE_NAME:-${PULSE_SERVICE_NAME:-pulse}}" \
+        --setenv="PULSE_INSTALL_DIR=${install_dir}" \
+        --setenv="PULSE_CONFIG_DIR=${CONFIG_DIR:-${PULSE_CONFIG_DIR:-/etc/pulse}}" \
+        --setenv="PULSE_AUTO_UPDATE_DEST=${AUTO_UPDATE_DEST:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}" \
+        --setenv="PULSE_UPDATE_SERVICE_PATH=${UPDATE_SERVICE_PATH:-${PULSE_UPDATE_SERVICE_PATH:-/etc/systemd/system/pulse-update.service}}" \
+        --setenv="PULSE_UPDATE_TIMER_PATH=${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/pulse-update.timer}}" \
+        /usr/bin/env bash "$repair_copy" --repair-auto-update-units || status=$?
+
+    rm -f "$repair_copy"
+
+    if [[ "$status" -ne 0 ]]; then
+        print_warn "Could not refresh the auto-update assets outside the sandbox (systemd-run exited ${status})."
+        return 1
+    fi
+
+    print_success "Auto-update helper and units refreshed outside the update sandbox."
+    return 0
+}
+
 # Installs the auto-update helper script and rewrites the systemd
 # service/timer units. Shared by setup_auto_updates (first-time enable) and
 # refresh_auto_updates (updates/reinstalls where the timer already exists).
@@ -4089,6 +4195,22 @@ install_auto_update_assets() {
         unit_write_dirs="$unit_write_dirs $update_timer_dir"
     fi
 
+    # Everything below stages into these directories and commits with a
+    # rename, so check up front that entries can be created in each of them.
+    # A box whose update unit predates the widened sandbox fails here, and the
+    # migration escapes that sandbox to write the corrected assets instead.
+    local asset_dir
+    for asset_dir in "$auto_update_bin_dir" $unit_write_dirs; do
+        if auto_update_dir_writable "$asset_dir"; then
+            continue
+        fi
+        if migrate_auto_update_assets_outside_sandbox "$asset_dir"; then
+            return 0
+        fi
+        print_warn "Cannot write to ${asset_dir} to refresh the auto-update assets."
+        return 1
+    done
+
     # Stage the helper next to its destination and only swap it in once it is
     # fully configured. During unattended updates install.sh runs under the
     # pulse-update.service sandbox, where the file being replaced is the very
@@ -4102,8 +4224,15 @@ install_auto_update_assets() {
         return 1
     fi
     if [[ -f "$install_dir/scripts/pulse-auto-update.sh" ]]; then
-        # Copy auto-update script if it exists in the release
-        cp "$install_dir/scripts/pulse-auto-update.sh" "$staged_helper"
+        # Copy auto-update script if it exists in the release. Both callers
+        # invoke this function under `if !`, which suppresses errexit for the
+        # whole body, so an unchecked cp (ENOSPC, EIO) would fall through and
+        # swap a zero-byte "helper" over the working one.
+        if ! cp "$install_dir/scripts/pulse-auto-update.sh" "$staged_helper"; then
+            print_warn "Could not copy the bundled auto-update helper into ${auto_update_bin_dir}."
+            rm -f "$staged_helper"
+            return 1
+        fi
     else
         print_info "Downloading auto-update script..."
         if ! AUTO_UPDATE_DEST="$staged_helper" download_auto_update_script; then
@@ -4118,14 +4247,20 @@ install_auto_update_assets() {
         rm -f "$staged_helper"
         return 1
     fi
-    chmod +x "$staged_helper"
-    mv "$staged_helper" "$auto_update_dest"
 
-    # Install systemd timer and service. The heredoc is unquoted so the
-    # installer substitutes paths/names; the rendered unit must contain no
-    # unexpanded $ (in particular never $$, which bash expands to the
-    # installer's PID and which broke ExecCondition before v6.0.0).
-    cat > "$update_service_path" <<EOF
+    # Render both units beside their destinations before committing anything.
+    # A bare truncating `cat > "$unit"` with no status check could leave a
+    # half-written unit behind and still report success, because the only
+    # thing left in this function is safe_systemctl daemon-reload, which
+    # deliberately returns 0 even when it fails.
+    local staged_service="${update_service_path}.tmp"
+    local staged_timer="${update_timer_path}.tmp"
+
+    # The heredoc is unquoted so the installer substitutes paths/names; the
+    # rendered unit must contain no unexpanded $ (in particular never $$,
+    # which bash expands to the installer's PID and which broke ExecCondition
+    # before v6.0.0).
+    if ! cat > "$staged_service" <<EOF
 [Unit]
 Description=Automatic Pulse update check and install
 Documentation=$(repo_web_url)
@@ -4154,6 +4289,14 @@ ProtectSystem=strict
 # The helper and unit directories are writable on purpose: the installer this
 # service runs refreshes the auto-update helper and rewrites these units, and
 # without write access updater fixes only ever reach boxes via manual installs.
+# These are directory grants rather than the four individual file paths
+# because every one of those writes commits with a rename from a sibling
+# staging file (so the previously working helper survives a failed refresh),
+# and rename needs write access on the containing directory. The tradeoff is
+# that this unit can write any unit file: it already runs the installer as
+# root, so the grant does not widen what a compromised installer could do,
+# but it does mean the sandbox no longer contains a buggy installer's writes
+# to /etc/systemd/system.
 ReadWritePaths=$install_dir $config_dir /tmp $auto_update_bin_dir $unit_write_dirs
 PrivateNetwork=no
 Nice=10
@@ -4161,8 +4304,13 @@ Nice=10
 [Install]
 WantedBy=multi-user.target
 EOF
+    then
+        print_warn "Could not write ${update_service_path}."
+        rm -f "$staged_helper" "$staged_service"
+        return 1
+    fi
 
-    cat > "$update_timer_path" <<EOF
+    if ! cat > "$staged_timer" <<EOF
 [Unit]
 Description=Daily check for Pulse updates
 Documentation=$(repo_web_url)
@@ -4181,6 +4329,44 @@ AccuracySec=1h
 [Install]
 WantedBy=timers.target
 EOF
+    then
+        print_warn "Could not write ${update_timer_path}."
+        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        return 1
+    fi
+
+    if ! auto_update_helper_is_sane "$staged_helper"; then
+        print_warn "The staged auto-update helper is empty or has no interpreter line; keeping the previously installed helper."
+        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        return 1
+    fi
+
+    # Explicit mode, not chmod +x: mktemp creates the staging file 0600, and
+    # the installed helper should keep the 0755 a plain copy would have had.
+    if ! chmod 0755 "$staged_helper"; then
+        print_warn "Could not make the staged auto-update helper executable."
+        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        return 1
+    fi
+
+    # Commit. Each rename is atomic and same-filesystem, so no consumer ever
+    # observes a partial file — including the timer's ExecStart, which on the
+    # unattended path is the very helper being replaced.
+    if ! mv "$staged_helper" "$auto_update_dest"; then
+        print_warn "Could not install the auto-update helper at ${auto_update_dest}."
+        rm -f "$staged_helper" "$staged_service" "$staged_timer"
+        return 1
+    fi
+    if ! mv "$staged_service" "$update_service_path"; then
+        print_warn "Could not install ${update_service_path}."
+        rm -f "$staged_service" "$staged_timer"
+        return 1
+    fi
+    if ! mv "$staged_timer" "$update_timer_path"; then
+        print_warn "Could not install ${update_timer_path}."
+        rm -f "$staged_timer"
+        return 1
+    fi
 
     # Reload systemd daemon
     safe_systemctl daemon-reload
@@ -5289,6 +5475,16 @@ while [[ $# -gt 0 ]]; do
         --skip-upgrade-preflight)
             SKIP_UPGRADE_PREFLIGHT=true
             shift
+            ;;
+        --repair-auto-update-units)
+            # Internal re-entry point for migrate_auto_update_assets_outside_sandbox:
+            # rewrite the auto-update helper and units, nothing else. Deliberately
+            # undocumented in --help; it exists so the transient systemd unit can
+            # run this installer outside the update sandbox that blocks those writes.
+            if install_auto_update_assets; then
+                exit 0
+            fi
+            exit 1
             ;;
         --source|--from-source|--branch)
             BUILD_FROM_SOURCE=true

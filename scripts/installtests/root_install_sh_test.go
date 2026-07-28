@@ -1217,7 +1217,7 @@ func TestRefreshAutoUpdatesReplacesStaleHelperWithoutChangingEnablement(t *testi
 		safe_systemctl() { printf '%s\n' "$*" >> "` + callsPath + `"; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
 ` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
-` + extractRootInstallShellFunction(t, "install_auto_update_assets") + `
+` + extractInstallAutoUpdateAssetsShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "refresh_auto_updates") + `
 		refresh_auto_updates
 	`
@@ -1355,10 +1355,12 @@ func TestRootInstallServiceGrantsIcmpProbeCapability(t *testing.T) {
 // #1630 guarantee: setup_update_command's write of the /bin/update helper
 // (and its PATH appends) must not abort the installer under errexit when the
 // destination is unwritable. The stock pulse-update.service runs the
-// unattended updater with ProtectSystem=strict, leaving /bin and
-// /usr/local/bin read-only; the old behavior killed the installer after the
-// new binary was installed and the service stopped, and the auto-update
-// rollback then left Pulse down. A regular file as the "parent directory"
+// unattended updater with ProtectSystem=strict; its ReadWritePaths covers the
+// install dir, config dir, /tmp and the auto-update helper and unit
+// directories, so /bin (the default helper path) and /etc/profile stay
+// read-only. The old behavior killed the installer after the new binary was
+// installed and the service stopped, and the auto-update rollback then left
+// Pulse down. A regular file as the "parent directory"
 // makes writes beneath it fail with ENOTDIR, which also fails when the test
 // runs as root (unlike chmod 555).
 func TestRootInstallScriptUpdateHelperWriteIsNonFatalOnReadOnlyPath(t *testing.T) {
@@ -1475,7 +1477,7 @@ func renderAutoUpdateUnits(t *testing.T) (string, string, string, string) {
 		safe_systemctl() { :; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
 ` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
-` + extractRootInstallShellFunction(t, "install_auto_update_assets") + `
+` + extractInstallAutoUpdateAssetsShellFunctions(t) + `
 		install_auto_update_assets
 	`
 
@@ -1597,7 +1599,7 @@ func TestInstallAutoUpdateAssetsKeepsWorkingHelperWhenConfigureFails(t *testing.
 		print_warn() { :; }
 		safe_systemctl() { :; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
-` + extractRootInstallShellFunction(t, "install_auto_update_assets") + `
+` + extractInstallAutoUpdateAssetsShellFunctions(t) + `
 		configure_auto_update_script_repo() { return 1; }
 		if install_auto_update_assets; then
 			echo "UNEXPECTED_SUCCESS"
@@ -1633,4 +1635,403 @@ func TestInstallAutoUpdateAssetsKeepsWorkingHelperWhenConfigureFails(t *testing.
 			t.Fatalf("failed configure left staging litter behind: %s", entry.Name())
 		}
 	}
+}
+
+// autoUpdateAssetsHarness builds a bash harness that runs the real
+// install_auto_update_assets against temp paths, with a seeded release helper
+// and a previously installed working helper. extra is appended after the
+// extracted functions so it can override them with stubs.
+func autoUpdateAssetsHarness(t *testing.T, tmpDir string, autoUpdateDest, servicePath, timerPath, extra string) string {
+	t.Helper()
+
+	configDir := filepath.Join(tmpDir, "config")
+	installDir := filepath.Join(tmpDir, "install")
+	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(autoUpdateSrc), 0755); err != nil {
+		t.Fatalf("mkdir auto-update src dir: %v", err)
+	}
+	if err := os.WriteFile(autoUpdateSrc, []byte("#!/usr/bin/env bash\necho new-helper\n"), 0755); err != nil {
+		t.Fatalf("write auto-update src: %v", err)
+	}
+
+	return `
+		CONFIG_DIR="` + configDir + `"
+		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
+		GITHUB_REPO="rcourtman/Pulse"
+		print_info() { :; }
+		print_warn() { echo "WARN: $*"; }
+		print_success() { :; }
+		safe_systemctl() { :; }
+` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
+` + extractInstallAutoUpdateAssetsShellFunctions(t) + `
+` + extra + `
+		if install_auto_update_assets; then
+			echo "UNEXPECTED_SUCCESS"
+		else
+			echo "FAILED_AS_EXPECTED"
+		fi
+	`
+}
+
+// assertNoAutoUpdateStagingLitter fails when a staged helper or a staged unit
+// file survived a run. `.service.tmp` is not a unit suffix systemd loads, but
+// leaving one behind still means the function abandoned a partial write.
+func assertNoAutoUpdateStagingLitter(t *testing.T, dirs ...string) {
+	t.Helper()
+
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read %s: %v", dir, err)
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if strings.Contains(name, ".staged.") || strings.HasSuffix(name, ".tmp") {
+				t.Fatalf("run left staging litter behind in %s: %s", dir, name)
+			}
+		}
+	}
+}
+
+// Regression test for the unchecked staging copy in install_auto_update_assets:
+// the bundled helper was copied into the staged mktemp file with a bare `cp`,
+// and because both call sites invoke the function under `if !` errexit is
+// suppressed for its whole body. A cp that failed (ENOSPC) therefore fell
+// through to configure_auto_update_script_repo, whose awk happily emits a lone
+// GITHUB_REPO= line for empty input, and the resulting one-line shebang-less
+// stub replaced the working helper with a "script" whose only behaviour is to
+// exit 0 — silently disabling unattended updates on the box. A failed or
+// truncated copy must leave the installed helper and the units untouched.
+func TestInstallAutoUpdateAssetsKeepsWorkingHelperWhenStagingCopyFails(t *testing.T) {
+	workingHelper := "#!/usr/bin/env bash\necho working-helper\n"
+
+	for _, tc := range []struct {
+		name string
+		stub string
+	}{
+		{
+			name: "copy reports failure",
+			stub: `cp() { return 1; }`,
+		},
+		{
+			// cp that "succeeds" having written nothing: the shape the awk
+			// rewrite turns into a plausible-looking one-line helper.
+			name: "copy silently produces an empty file",
+			stub: `cp() { : > "$2"; }`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+			if err := os.WriteFile(autoUpdateDest, []byte(workingHelper), 0755); err != nil {
+				t.Fatalf("write installed helper: %v", err)
+			}
+
+			script := autoUpdateAssetsHarness(t, tmpDir, autoUpdateDest, servicePath, timerPath, tc.stub)
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), "FAILED_AS_EXPECTED") {
+				t.Fatalf("install_auto_update_assets should report failure when the staging copy fails:\n%s", out)
+			}
+
+			helper, err := os.ReadFile(autoUpdateDest)
+			if err != nil {
+				t.Fatalf("installed helper is gone after a failed staging copy: %v", err)
+			}
+			if string(helper) != workingHelper {
+				t.Fatalf("failed staging copy replaced the working helper:\n%s", helper)
+			}
+			if _, err := os.Stat(servicePath); !os.IsNotExist(err) {
+				t.Fatalf("failed staging copy still rewrote the service unit (stat err %v)", err)
+			}
+			if _, err := os.Stat(timerPath); !os.IsNotExist(err) {
+				t.Fatalf("failed staging copy still rewrote the timer unit (stat err %v)", err)
+			}
+			assertNoAutoUpdateStagingLitter(t, filepath.Dir(autoUpdateDest), filepath.Dir(servicePath))
+		})
+	}
+}
+
+// Regression test for the unit writes in install_auto_update_assets: both units
+// were rendered with a bare truncating `cat > "$unit"` whose status was never
+// checked, and the function's last statement is safe_systemctl daemon-reload,
+// which returns 0 by design even when systemctl fails. A failing write
+// therefore truncated a working unit and still reported success. Each unit is
+// now rendered beside its destination and committed with a rename, so a failure
+// at either step must be reported and must leave the installed unit intact.
+func TestInstallAutoUpdateAssetsWritesUnitsAtomically(t *testing.T) {
+	workingHelper := "#!/usr/bin/env bash\necho working-helper\n"
+	workingUnit := "[Service]\nExecStart=/usr/local/bin/pulse-auto-update.sh\n"
+
+	for _, tc := range []struct {
+		name string
+		stub string
+	}{
+		{
+			// The render itself fails (a full disk hitting the heredoc).
+			name: "unit render fails",
+			stub: `cat() { return 1; }`,
+		},
+		{
+			// The render succeeds but the commit does not; the live unit must
+			// still hold its previous contents rather than a truncated file.
+			name: "unit commit fails",
+			stub: `mv() { if [[ "${2:-}" == "` + "SERVICE_PATH_PLACEHOLDER" + `" ]]; then return 1; fi; command mv "$@"; }`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+			if err := os.WriteFile(autoUpdateDest, []byte(workingHelper), 0755); err != nil {
+				t.Fatalf("write installed helper: %v", err)
+			}
+			if err := os.WriteFile(servicePath, []byte(workingUnit), 0644); err != nil {
+				t.Fatalf("write installed service unit: %v", err)
+			}
+
+			stub := strings.ReplaceAll(tc.stub, "SERVICE_PATH_PLACEHOLDER", servicePath)
+			script := autoUpdateAssetsHarness(t, tmpDir, autoUpdateDest, servicePath, timerPath, stub)
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), "FAILED_AS_EXPECTED") {
+				t.Fatalf("install_auto_update_assets should report failure when a unit write fails:\n%s", out)
+			}
+
+			unit, err := os.ReadFile(servicePath)
+			if err != nil {
+				t.Fatalf("installed service unit is gone after a failed write: %v", err)
+			}
+			if string(unit) != workingUnit {
+				t.Fatalf("failed unit write clobbered the installed unit:\n%s", unit)
+			}
+			if _, err := os.Stat(timerPath); !os.IsNotExist(err) {
+				t.Fatalf("failed service unit write still installed the timer (stat err %v)", err)
+			}
+			assertNoAutoUpdateStagingLitter(t, filepath.Dir(autoUpdateDest), filepath.Dir(servicePath))
+		})
+	}
+}
+
+// A successful run must commit through renames and leave nothing staged.
+func TestInstallAutoUpdateAssetsLeavesNoStagingFilesOnSuccess(t *testing.T) {
+	_, _, autoUpdateDest, servicePath := renderAutoUpdateUnits(t)
+	assertNoAutoUpdateStagingLitter(t, filepath.Dir(autoUpdateDest), filepath.Dir(servicePath))
+}
+
+// Migration coverage for deployed boxes (the EROFS chicken-and-egg): a box
+// installed before the sandbox was widened runs this installer from a
+// pulse-update.service whose ReadWritePaths excludes /etc/systemd/system and
+// /usr/local/bin, so the run that would install the corrected unit cannot write
+// it. install_auto_update_assets must detect the unwritable directory up front
+// and hand off to the sandbox escape rather than failing the refresh.
+func TestInstallAutoUpdateAssetsMigratesWhenSandboxBlocksUnitDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	autoUpdateDest, _, _ := prepareAutoUpdatePaths(t, tmpDir)
+
+	// A regular file standing in for the unit directory makes it unwritable in
+	// a way that also holds when the test runs as root (unlike chmod 555).
+	blocker := filepath.Join(tmpDir, "blocker")
+	if err := os.WriteFile(blocker, nil, 0644); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	servicePath := filepath.Join(blocker, "pulse-update.service")
+	timerPath := filepath.Join(blocker, "pulse-update.timer")
+	recordPath := filepath.Join(tmpDir, "migrated-dir")
+
+	stub := `migrate_auto_update_assets_outside_sandbox() { printf '%s' "$1" > "` + recordPath + `"; return 0; }`
+	script := autoUpdateAssetsHarness(t, tmpDir, autoUpdateDest, servicePath, timerPath, stub)
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "UNEXPECTED_SUCCESS") {
+		t.Fatalf("a successful sandbox escape must be reported as success:\n%s", out)
+	}
+
+	recorded, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("unwritable unit directory did not trigger the sandbox escape: %v\n%s", err, out)
+	}
+	if string(recorded) != blocker {
+		t.Fatalf("sandbox escape was told %q was blocked, want %q", recorded, blocker)
+	}
+	assertNoAutoUpdateStagingLitter(t, filepath.Dir(autoUpdateDest))
+}
+
+// The sandbox escape itself: systemd-run asks PID 1 to fork the repair, so the
+// transient unit runs in the host mount namespace instead of inheriting the
+// update unit's ProtectSystem=strict. The installer is copied into the install
+// dir first because the calling unit's PrivateTmp=yes hides the helper's /tmp
+// copy of it from PID 1, and the escaped run must be handed the same service,
+// helper and unit paths or it would repair the defaults instead.
+func TestMigrateAutoUpdateAssetsOutsideSandboxReExecsInstallerViaSystemdRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "install")
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		t.Fatalf("mkdir install dir: %v", err)
+	}
+	argsPath := filepath.Join(tmpDir, "systemd-run-args")
+
+	harness := `#!/usr/bin/env bash
+set -uo pipefail
+INSTALL_DIR="` + installDir + `"
+CONFIG_DIR="` + tmpDir + `/config"
+SERVICE_NAME="pulse"
+AUTO_UPDATE_DEST="` + tmpDir + `/bin/pulse-auto-update.sh"
+UPDATE_SERVICE_PATH="` + tmpDir + `/systemd/pulse-update.service"
+UPDATE_TIMER_PATH="` + tmpDir + `/systemd/pulse-update.timer"
+print_info() { :; }
+print_warn() { echo "WARN: $*"; }
+print_success() { echo "MIGRATED"; }
+id() { echo 0; }
+systemd-run() { printf '%s\n' "$@" > "` + argsPath + `"; return 0; }
+` + extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + `
+if migrate_auto_update_assets_outside_sandbox /etc/systemd/system; then
+	echo "ESCAPED"
+else
+	echo "DID_NOT_ESCAPE"
+fi
+# The escape must refuse to recurse: the escaped run has no sandbox, so if it
+# still cannot write, escaping again would loop forever.
+rm -f "` + argsPath + `.recursion"
+systemd-run() { printf '%s\n' "$@" > "` + argsPath + `.recursion"; return 0; }
+if PULSE_AUTO_UPDATE_ASSET_REPAIR=1 migrate_auto_update_assets_outside_sandbox /etc/systemd/system; then
+	echo "RECURSED"
+fi
+[[ -e "` + argsPath + `.recursion" ]] && echo "RECURSION_INVOKED_SYSTEMD_RUN"
+exit 0
+`
+	harnessPath := filepath.Join(tmpDir, "installer-harness.sh")
+	if err := os.WriteFile(harnessPath, []byte(harness), 0755); err != nil {
+		t.Fatalf("write harness: %v", err)
+	}
+
+	out, err := exec.Command("bash", harnessPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "ESCAPED") || !strings.Contains(got, "MIGRATED") {
+		t.Fatalf("sandbox escape did not report success:\n%s", got)
+	}
+	for _, unwanted := range []string{"RECURSED", "RECURSION_INVOKED_SYSTEMD_RUN"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("sandbox escape recursed inside the escaped run (%s):\n%s", unwanted, got)
+		}
+	}
+
+	argsBytes, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("sandbox escape never invoked systemd-run: %v\n%s", err, got)
+	}
+	args := strings.Split(strings.TrimRight(string(argsBytes), "\n"), "\n")
+	joined := strings.Join(args, " ")
+	for _, want := range []string{
+		"--wait",
+		"--property=Type=oneshot",
+		"--setenv=PULSE_AUTO_UPDATE_ASSET_REPAIR=1",
+		"--repair-auto-update-units",
+		"--setenv=PULSE_UPDATE_SERVICE_PATH=" + tmpDir + "/systemd/pulse-update.service",
+		"--setenv=PULSE_UPDATE_TIMER_PATH=" + tmpDir + "/systemd/pulse-update.timer",
+		"--setenv=PULSE_AUTO_UPDATE_DEST=" + tmpDir + "/bin/pulse-auto-update.sh",
+		"--setenv=PULSE_INSTALL_DIR=" + installDir,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("systemd-run invocation missing %q:\n%s", want, joined)
+		}
+	}
+
+	// The re-exec target must be the copy inside the install dir: PrivateTmp
+	// hides the helper's /tmp copy of the installer from PID 1.
+	repairCopy := filepath.Join(installDir, ".pulse-update-asset-repair.sh")
+	if !strings.Contains(joined, repairCopy) {
+		t.Fatalf("systemd-run was not pointed at the install-dir copy %q:\n%s", repairCopy, joined)
+	}
+	if _, err := os.Stat(repairCopy); !os.IsNotExist(err) {
+		t.Fatalf("sandbox escape left the installer copy behind (stat err %v)", err)
+	}
+}
+
+// The other half of the migration: install.sh must expose the re-entry point
+// the transient unit invokes, and it must rewrite the helper and both units
+// without running a full install. This runs the real installer file.
+func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "install")
+	configDir := filepath.Join(tmpDir, "config")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+
+	if err := os.MkdirAll(filepath.Join(installDir, "scripts"), 0755); err != nil {
+		t.Fatalf("mkdir install scripts dir: %v", err)
+	}
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(installDir, "scripts", "pulse-auto-update.sh"),
+		[]byte("#!/usr/bin/env bash\necho repaired-helper\n"), 0755); err != nil {
+		t.Fatalf("write release helper: %v", err)
+	}
+
+	installer, err := filepath.Abs(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("resolve install.sh: %v", err)
+	}
+	cmd := exec.Command("bash", installer, "--repair-auto-update-units")
+	cmd.Env = append(os.Environ(),
+		"PULSE_INSTALL_DIR="+installDir,
+		"PULSE_CONFIG_DIR="+configDir,
+		"PULSE_AUTO_UPDATE_DEST="+autoUpdateDest,
+		"PULSE_UPDATE_SERVICE_PATH="+servicePath,
+		"PULSE_UPDATE_TIMER_PATH="+timerPath,
+		"PULSE_AUTO_UPDATE_ASSET_REPAIR=1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("install.sh --repair-auto-update-units failed: %v\n%s", err, out)
+	}
+
+	helper, err := os.ReadFile(autoUpdateDest)
+	if err != nil {
+		t.Fatalf("repair did not install the helper: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(helper), "repaired-helper") {
+		t.Fatalf("repair installed the wrong helper:\n%s", helper)
+	}
+	if info, err := os.Stat(autoUpdateDest); err != nil {
+		t.Fatalf("stat repaired helper: %v", err)
+	} else if info.Mode().Perm() != 0755 {
+		t.Fatalf("repaired helper mode = %v, want 0755 (the update unit's ExecStart)", info.Mode().Perm())
+	}
+
+	unit, err := os.ReadFile(servicePath)
+	if err != nil {
+		t.Fatalf("repair did not write the service unit: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(unit), "ReadWritePaths=") ||
+		!strings.Contains(string(unit), filepath.Dir(servicePath)) ||
+		!strings.Contains(string(unit), filepath.Dir(autoUpdateDest)) {
+		t.Fatalf("repaired unit did not carry the widened sandbox:\n%s", unit)
+	}
+
+	timer, err := os.ReadFile(timerPath)
+	if err != nil {
+		t.Fatalf("repair did not write the timer unit: %v\n%s", err, out)
+	}
+	if strings.Count(string(timer), "\nOnCalendar=") != 1 {
+		t.Fatalf("repaired timer does not hold exactly one schedule:\n%s", timer)
+	}
+	assertNoAutoUpdateStagingLitter(t, filepath.Dir(autoUpdateDest), filepath.Dir(servicePath))
 }

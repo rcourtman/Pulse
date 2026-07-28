@@ -70,8 +70,10 @@ fi
 
 # --- Cases 5+: read-only-filesystem resilience (#1630) -----------------------
 # The unattended updater runs the installer under pulse-update.service, whose
-# ProtectSystem=strict leaves /bin and /usr/local/bin read-only; transient
-# read-only remounts hit the same paths. Writes outside the install dir must
+# ProtectSystem=strict grants ReadWritePaths only for the install dir, config
+# dir, /tmp and the auto-update helper and unit directories — so /bin (the
+# default update-helper path) and /etc/profile stay read-only; transient
+# read-only remounts hit the same paths. Writes outside the writable set must
 # be non-fatal: aborting used to kill the installer with errexit active after
 # the new binary was installed and the service stopped.
 TMPDIR_RO="$(mktemp -d)"

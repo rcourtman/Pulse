@@ -2185,8 +2185,20 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 	return extractSelectedUpdateChannelShellFunctions(t) + "\n" +
 		extractRootInstallShellFunction(t, "repo_web_url") + "\n" +
 		extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + "\n" +
-		extractRootInstallShellFunction(t, "install_auto_update_assets") + "\n" +
+		extractInstallAutoUpdateAssetsShellFunctions(t) + "\n" +
 		extractRootInstallShellFunction(t, "setup_auto_updates")
+}
+
+// install_auto_update_assets delegates its writability probe, its staged-helper
+// sanity check and the sandbox-escape migration to sibling functions, so every
+// harness that executes it has to pull those in alongside it.
+func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
+	t.Helper()
+
+	return extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
+		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
+		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
+		extractRootInstallShellFunction(t, "install_auto_update_assets")
 }
 
 func prepareAutoUpdatePaths(t *testing.T, tmpDir string) (string, string, string) {

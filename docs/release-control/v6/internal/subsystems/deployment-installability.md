@@ -483,8 +483,10 @@ TLS floor in the dynamic config.
    `TestEnsureServiceRestartedHonorsPriorServiceState`) and
    `scripts/tests/test-pulse-auto-update.sh`. For the same reason, root
    `install.sh` writes outside the hardened update unit's writable set
-   (`ProtectSystem=strict` leaves only the install dir, config dir and `/tmp`
-   writable) must be idempotent and non-fatal warnings rather than errexit
+   (`ProtectSystem=strict` with `ReadWritePaths` covering the install dir,
+   config dir, `/tmp`, the auto-update helper's directory and the unit
+   directory — everything else, including `/bin` and `/etc/profile`, stays
+   read-only) must be idempotent and non-fatal warnings rather than errexit
    aborts: the `/bin/update` helper heredoc, the PATH appends to
    `/etc/profile` and `/etc/bash.bashrc`, and the `/usr/local/bin/pulse`
    convenience symlink (`install_binary_symlink`, which must also keep an
@@ -1916,17 +1918,60 @@ timer must schedule exactly one update attempt per day — a single
 and the unit directory inside `ReadWritePaths`: unattended updates run
 `install.sh` (and therefore `refresh_auto_updates`) under that very sandbox,
 and a sandbox that excludes those paths freezes every installed helper and
-unit at whatever a manual install last wrote (issue #1637 triage). Because
+unit at whatever a manual install last wrote (issue #1637 triage). Those two
+`ReadWritePaths` entries are deliberately directory grants rather than the
+four individual file paths: every write commits with a rename from a sibling
+staging file, and rename needs write access on the containing directory. The
+tradeoff — the update unit can write any file under `/etc/systemd/system` —
+is accepted because the unit already runs the full installer as root, so the
+grant does not widen what a compromised installer could reach; it only means
+the sandbox no longer contains a *buggy* installer's unit writes. Because
 the unattended path replaces the helper script that bash is currently
 executing, `install_auto_update_assets` must stage the new helper in the
 destination directory and swap it in with an atomic same-filesystem rename
 only after repo configuration succeeds; no failure path may delete or
 truncate a previously working helper (the old `rm -f` on configure failure
-left the enabled timer with a dangling `ExecStart`). The generated units are
+left the enabled timer with a dangling `ExecStart`). Every step that produces
+one of those three files must be status-checked and must fail the function:
+the staging copy of the bundled helper (both call sites invoke
+`install_auto_update_assets` under `if !`, which suppresses errexit for its
+whole body, so an unchecked `cp` fell through and
+`configure_auto_update_script_repo`'s awk turned the empty file into a
+plausible one-line shebang-less "helper" that silently disabled updates), and
+both unit renders, which are staged to `${path}.tmp` and committed by rename
+rather than written with a truncating `cat >` — the function's last statement
+is `safe_systemctl daemon-reload`, which returns 0 by design, so an unchecked
+write reported success over a truncated unit. The staged helper must also be
+rejected before the swap unless it is non-empty and begins with `#!`.
+
+Changes to the generated units must be able to reach already-deployed boxes.
+A box installed before the sandbox was widened runs the installer from a
+`pulse-update.service` whose `ReadWritePaths` excludes the helper and unit
+directories, so the very run that would install the corrected unit cannot
+write it (EROFS) and auto-update alone would never migrate it — the
+corrected unit would reach only manually reinstalled boxes. The in-app Go
+update pipeline (`internal/updates` `ApplyUpdate`) cannot carry the migration
+either: `pulse.service` runs as `User=pulse` under its own
+`ProtectSystem=strict` with `ReadWritePaths` limited to the install and
+config dirs. `install_auto_update_assets` therefore probes each destination
+directory for writability up front and, when one is blocked, hands off to
+`migrate_auto_update_assets_outside_sandbox`, which re-execs this same
+already-signature-verified installer under `systemd-run` with the internal
+`--repair-auto-update-units` entry point. PID 1 forks the transient unit, so
+it starts in the host mount namespace instead of inheriting the update unit's
+sandbox; the system bus stays reachable from inside that sandbox because
+`ProtectSystem=` only remounts the hierarchy read-only and a read-only mount
+does not block `connect()` on an `AF_UNIX` socket. The installer is copied
+into the install dir before the escape because the calling unit's
+`PrivateTmp=yes` hides the auto-update helper's `/tmp` copy of it from PID 1.
+The escape must be inert unless it can work and must not recurse: it requires
+root and a `systemd-run` on `PATH`, and the escaped run (marked by
+`PULSE_AUTO_UPDATE_ASSET_REPAIR=1`) never escapes again. The generated units are
 the only unit source — no checked-in reference copies of
 `pulse-update.service` / `pulse-update.timer` may exist to drift from the
 heredocs. The rendered-unit execution, schedule, sandbox-writability,
-failure-preservation, refresh-behavior, and call-site wiring tests in
+failure-preservation, staging-guard, atomic-unit-write, sandbox-escape
+migration, refresh-behavior, and call-site wiring tests in
 `scripts/installtests/root_install_sh_test.go` are the owned proof surface
 for these invariants.
 That same server-installer uninstall must also leave no legacy companion
