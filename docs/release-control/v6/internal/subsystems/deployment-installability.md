@@ -1896,8 +1896,25 @@ already-installed auto-update assets unconditionally via
 helper script and rewriting the units so a version-pinned helper from a
 previous major (which never selects newer releases and reports "Already
 running latest version" forever) cannot survive an upgrade — while leaving
-`system.json` and the timer's enabled/started state untouched. The
-rendered-unit execution, refresh-behavior, and call-site wiring tests in
+`system.json` and the timer's enabled/started state untouched. The rendered
+timer must schedule exactly one update attempt per day — a single
+`OnCalendar` entry at 02:00 with the 4h randomized spread — because a second
+`OnCalendar=daily` line silently doubled every box's daily update attempts
+(issue #1643). The rendered service sandbox must keep the helper's directory
+and the unit directory inside `ReadWritePaths`: unattended updates run
+`install.sh` (and therefore `refresh_auto_updates`) under that very sandbox,
+and a sandbox that excludes those paths freezes every installed helper and
+unit at whatever a manual install last wrote (issue #1637 triage). Because
+the unattended path replaces the helper script that bash is currently
+executing, `install_auto_update_assets` must stage the new helper in the
+destination directory and swap it in with an atomic same-filesystem rename
+only after repo configuration succeeds; no failure path may delete or
+truncate a previously working helper (the old `rm -f` on configure failure
+left the enabled timer with a dangling `ExecStart`). The generated units are
+the only unit source — no checked-in reference copies of
+`pulse-update.service` / `pulse-update.timer` may exist to drift from the
+heredocs. The rendered-unit execution, schedule, sandbox-writability,
+failure-preservation, refresh-behavior, and call-site wiring tests in
 `scripts/installtests/root_install_sh_test.go` are the owned proof surface
 for these invariants.
 That same server-installer uninstall must also leave no legacy companion

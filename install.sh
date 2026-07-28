@@ -4080,24 +4080,46 @@ install_auto_update_assets() {
     local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
     local update_timer_unit
     update_timer_unit="$(basename "$update_timer_path")"
+    local auto_update_bin_dir update_unit_dir update_timer_dir
+    auto_update_bin_dir="$(dirname "$auto_update_dest")"
+    update_unit_dir="$(dirname "$update_service_path")"
+    update_timer_dir="$(dirname "$update_timer_path")"
+    local unit_write_dirs="$update_unit_dir"
+    if [[ "$update_timer_dir" != "$update_unit_dir" ]]; then
+        unit_write_dirs="$unit_write_dirs $update_timer_dir"
+    fi
 
-    # Copy auto-update script if it exists in the release
+    # Stage the helper next to its destination and only swap it in once it is
+    # fully configured. During unattended updates install.sh runs under the
+    # pulse-update.service sandbox, where the file being replaced is the very
+    # script bash is executing — the same-directory mv keeps the swap an
+    # atomic rename — and a failed download or configure must leave the
+    # previously working helper in place rather than deleting it out from
+    # under the timer's ExecStart.
+    local staged_helper
+    if ! staged_helper=$(mktemp "${auto_update_dest}.staged.XXXXXX"); then
+        print_warn "Cannot write to ${auto_update_bin_dir} to stage the auto-update helper."
+        return 1
+    fi
     if [[ -f "$install_dir/scripts/pulse-auto-update.sh" ]]; then
-        cp "$install_dir/scripts/pulse-auto-update.sh" "$auto_update_dest"
-        chmod +x "$auto_update_dest"
+        # Copy auto-update script if it exists in the release
+        cp "$install_dir/scripts/pulse-auto-update.sh" "$staged_helper"
     else
         print_info "Downloading auto-update script..."
-        if ! download_auto_update_script; then
+        if ! AUTO_UPDATE_DEST="$staged_helper" download_auto_update_script; then
             print_warn "Could not download the auto-update helper after multiple attempts."
+            rm -f "$staged_helper"
             return 1
         fi
     fi
 
-    if ! configure_auto_update_script_repo "$auto_update_dest"; then
+    if ! configure_auto_update_script_repo "$staged_helper"; then
         print_warn "Could not configure the auto-update helper for the selected release repo."
-        rm -f "$auto_update_dest"
+        rm -f "$staged_helper"
         return 1
     fi
+    chmod +x "$staged_helper"
+    mv "$staged_helper" "$auto_update_dest"
 
     # Install systemd timer and service. The heredoc is unquoted so the
     # installer substitutes paths/names; the rendered unit must contain no
@@ -4129,7 +4151,10 @@ Environment="PULSE_UPDATE_TIMER_UNIT=$update_timer_unit"
 PrivateTmp=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=$install_dir $config_dir /tmp
+# The helper and unit directories are writable on purpose: the installer this
+# service runs refreshes the auto-update helper and rewrites these units, and
+# without write access updater fixes only ever reach boxes via manual installs.
+ReadWritePaths=$install_dir $config_dir /tmp $auto_update_bin_dir $unit_write_dirs
 PrivateNetwork=no
 Nice=10
 
@@ -4145,8 +4170,10 @@ After=network-online.target
 Wants=network-online.target
 
 [Timer]
-OnCalendar=daily
-OnCalendar=02:00
+# One update attempt per day, landing in the 02:00-06:00 window. A second
+# OnCalendar=daily line here used to double the schedule with an extra
+# midnight trigger (issue #1643).
+OnCalendar=*-*-* 02:00:00
 RandomizedDelaySec=4h
 Persistent=true
 AccuracySec=1h
@@ -4210,7 +4237,7 @@ setup_auto_updates() {
     # Start the timer
     safe_systemctl start "$update_timer_unit" || true
 
-    print_success "Automatic updates enabled (daily check with 2-6 hour random delay)"
+    print_success "Automatic updates enabled (daily check between 02:00 and 06:00)"
 }
 
 # Updates and reinstalls only run setup_auto_updates when the user opts in,

@@ -1441,3 +1441,196 @@ echo "SURVIVED_EXISTING_LINK"
 		t.Fatalf("install_binary_symlink should not invoke ln when the correct link already exists:\n%s", got)
 	}
 }
+
+// renderAutoUpdateUnits runs install_auto_update_assets against a seeded
+// release helper and returns the rendered service and timer unit contents.
+func renderAutoUpdateUnits(t *testing.T) (string, string, string, string) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "config")
+	installDir := filepath.Join(tmpDir, "install")
+	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(autoUpdateSrc), 0755); err != nil {
+		t.Fatalf("mkdir auto-update src dir: %v", err)
+	}
+	if err := os.WriteFile(autoUpdateSrc, []byte("#!/usr/bin/env bash\n"), 0755); err != nil {
+		t.Fatalf("write auto-update src: %v", err)
+	}
+
+	script := `
+		CONFIG_DIR="` + configDir + `"
+		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
+		GITHUB_REPO="rcourtman/Pulse"
+		print_info() { :; }
+		print_warn() { :; }
+		safe_systemctl() { :; }
+` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
+` + extractRootInstallShellFunction(t, "install_auto_update_assets") + `
+		install_auto_update_assets
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	serviceBytes, err := os.ReadFile(servicePath)
+	if err != nil {
+		t.Fatalf("read rendered service unit: %v", err)
+	}
+	timerBytes, err := os.ReadFile(timerPath)
+	if err != nil {
+		t.Fatalf("read rendered timer unit: %v", err)
+	}
+	return string(serviceBytes), string(timerBytes), autoUpdateDest, servicePath
+}
+
+// Regression test for the doubled auto-update schedule (issue #1643): the
+// rendered timer carried both OnCalendar=daily and OnCalendar=02:00, so with
+// RandomizedDelaySec=4h every box attempted two updates per day, one in the
+// 00:00-04:00 window and one in 02:00-06:00. Exactly one OnCalendar line may
+// survive, and it must be the documented 02:00 schedule.
+func TestAutoUpdateTimerSchedulesSingleDailyRun(t *testing.T) {
+	_, timer, _, _ := renderAutoUpdateUnits(t)
+
+	var schedules []string
+	for _, line := range strings.Split(timer, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "OnCalendar=") {
+			schedules = append(schedules, strings.TrimSpace(line))
+		}
+	}
+	if len(schedules) != 1 {
+		t.Fatalf("rendered timer must hold exactly one OnCalendar line, got %d:\n%s", len(schedules), timer)
+	}
+	if schedules[0] != "OnCalendar=*-*-* 02:00:00" {
+		t.Fatalf("rendered timer schedule = %q, want the documented 02:00 daily run:\n%s", schedules[0], timer)
+	}
+	if !strings.Contains(timer, "RandomizedDelaySec=4h\n") {
+		t.Fatalf("rendered timer lost the 4h random spread:\n%s", timer)
+	}
+}
+
+// Regression test for the sandbox that froze updater fixes (issue #1637
+// triage): pulse-update.service runs install.sh with ProtectSystem=strict and
+// ReadWritePaths that excluded the helper and unit directories, so
+// refresh_auto_updates could never replace /usr/local/bin/pulse-auto-update.sh
+// or rewrite the units during an unattended update — helper fixes only reached
+// boxes via manual installs. The rendered sandbox must grant write access to
+// both directories.
+func TestAutoUpdateServiceSandboxAllowsHelperAndUnitRefresh(t *testing.T) {
+	service, _, autoUpdateDest, servicePath := renderAutoUpdateUnits(t)
+
+	var rwLine string
+	for _, line := range strings.Split(service, "\n") {
+		if strings.HasPrefix(line, "ReadWritePaths=") {
+			rwLine = line
+		}
+	}
+	if rwLine == "" {
+		t.Fatalf("rendered service unit lost its ReadWritePaths line:\n%s", service)
+	}
+	paths := strings.Fields(strings.TrimPrefix(rwLine, "ReadWritePaths="))
+	want := map[string]bool{
+		filepath.Dir(autoUpdateDest): false,
+		filepath.Dir(servicePath):    false,
+	}
+	for _, p := range paths {
+		if _, ok := want[p]; ok {
+			want[p] = true
+		}
+	}
+	for dir, found := range want {
+		if !found {
+			t.Fatalf("ReadWritePaths %q is missing %q; unattended refreshes cannot write there:\n%s", rwLine, dir, service)
+		}
+	}
+}
+
+// Regression test for the destructive failure path in
+// install_auto_update_assets (issue #1637 triage): a failed
+// configure_auto_update_script_repo used to rm -f the installed helper,
+// leaving the still-enabled timer with a dangling ExecStart. The helper is now
+// staged in its destination directory and swapped in with an atomic rename
+// only after configuration succeeds, so any failure must leave the previously
+// working helper untouched, the units unwritten, and no staging litter behind.
+func TestInstallAutoUpdateAssetsKeepsWorkingHelperWhenConfigureFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "config")
+	installDir := filepath.Join(tmpDir, "install")
+	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
+	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(autoUpdateSrc), 0755); err != nil {
+		t.Fatalf("mkdir auto-update src dir: %v", err)
+	}
+	if err := os.WriteFile(autoUpdateSrc, []byte("#!/usr/bin/env bash\necho new-helper\n"), 0755); err != nil {
+		t.Fatalf("write auto-update src: %v", err)
+	}
+	workingHelper := "#!/usr/bin/env bash\necho working-helper\n"
+	if err := os.WriteFile(autoUpdateDest, []byte(workingHelper), 0755); err != nil {
+		t.Fatalf("write installed helper: %v", err)
+	}
+
+	// The failing configure stub is defined after the extracted functions so
+	// it overrides the real implementation.
+	script := `
+		CONFIG_DIR="` + configDir + `"
+		INSTALL_DIR="` + installDir + `"
+		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
+		PULSE_UPDATE_SERVICE_PATH="` + servicePath + `"
+		PULSE_UPDATE_TIMER_PATH="` + timerPath + `"
+		GITHUB_REPO="rcourtman/Pulse"
+		print_info() { :; }
+		print_warn() { :; }
+		safe_systemctl() { :; }
+` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "install_auto_update_assets") + `
+		configure_auto_update_script_repo() { return 1; }
+		if install_auto_update_assets; then
+			echo "UNEXPECTED_SUCCESS"
+		else
+			echo "FAILED_AS_EXPECTED"
+		fi
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "FAILED_AS_EXPECTED") {
+		t.Fatalf("install_auto_update_assets should report failure when configure fails:\n%s", out)
+	}
+
+	helper, err := os.ReadFile(autoUpdateDest)
+	if err != nil {
+		t.Fatalf("installed helper is gone after failed configure: %v", err)
+	}
+	if string(helper) != workingHelper {
+		t.Fatalf("failed configure replaced the working helper:\n%s", helper)
+	}
+	if _, err := os.Stat(servicePath); !os.IsNotExist(err) {
+		t.Fatalf("failed configure still rewrote the service unit (stat err %v)", err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(autoUpdateDest))
+	if err != nil {
+		t.Fatalf("read helper dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".staged.") {
+			t.Fatalf("failed configure left staging litter behind: %s", entry.Name())
+		}
+	}
+}
