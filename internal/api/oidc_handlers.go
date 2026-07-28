@@ -310,45 +310,7 @@ func buildSSOOIDCCallbackURL(req *http.Request, providerID string, configuredURL
 		return configured
 	}
 
-	scheme := "http"
-	if req.TLS != nil {
-		scheme = "https"
-	}
-
-	peerIP := extractRemoteIP(req.RemoteAddr)
-	trustedProxy := isTrustedProxyIP(peerIP)
-
-	if trustedProxy {
-		if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Proto")); proto != "" {
-			scheme = proto
-		} else if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Scheme")); proto != "" {
-			scheme = proto
-		}
-	}
-	scheme = strings.ToLower(strings.TrimSpace(scheme))
-	switch scheme {
-	case "https", "http":
-	default:
-		if req.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-
-	rawHost := ""
-	if trustedProxy {
-		rawHost = firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
-	}
-	if rawHost == "" {
-		rawHost = req.Host
-	}
-	host, _ := sanitizeForwardedHost(rawHost)
-	if host == "" {
-		host = req.Host
-	}
-
-	return fmt.Sprintf("%s://%s/api/oidc/%s/callback", scheme, host, providerID)
+	return fmt.Sprintf("%s://%s/api/oidc/%s/callback", requestForwardedScheme(req), requestForwardedHost(req), providerID)
 }
 
 // handleSSOOIDCLogin handles login for a multi-provider SSO OIDC provider.

@@ -4713,6 +4713,74 @@ func firstForwardedValue(header string) string {
 	return strings.TrimSpace(parts[0])
 }
 
+// requestForwardedScheme resolves the scheme the client used to reach Pulse.
+// X-Forwarded-Proto / X-Forwarded-Scheme are only honored when the immediate
+// peer is a trusted proxy, so untrusted clients cannot spoof "https".
+func requestForwardedScheme(req *http.Request) string {
+	scheme := "http"
+	if req == nil {
+		return scheme
+	}
+	if req.TLS != nil {
+		scheme = "https"
+	}
+
+	if isTrustedProxyIP(extractRemoteIP(req.RemoteAddr)) {
+		if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Proto")); proto != "" {
+			scheme = proto
+		} else if proto := firstForwardedValue(req.Header.Get("X-Forwarded-Scheme")); proto != "" {
+			scheme = proto
+		}
+	}
+
+	scheme = strings.ToLower(strings.TrimSpace(scheme))
+	switch scheme {
+	case "http", "https":
+		return scheme
+	default:
+		if req.TLS != nil {
+			return "https"
+		}
+		return "http"
+	}
+}
+
+// requestForwardedHost resolves the host:port the client used to reach Pulse.
+// X-Forwarded-Host is only honored when the immediate peer is a trusted proxy.
+// Returns "" when no host can be resolved.
+func requestForwardedHost(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+
+	rawHost := ""
+	if isTrustedProxyIP(extractRemoteIP(req.RemoteAddr)) {
+		rawHost = firstForwardedValue(req.Header.Get("X-Forwarded-Host"))
+	}
+	if rawHost == "" {
+		rawHost = req.Host
+	}
+
+	host, _ := sanitizeForwardedHost(rawHost)
+	if host == "" {
+		host = strings.TrimSpace(req.Host)
+	}
+	return host
+}
+
+// requestOriginBaseURL derives the scheme://host base URL the admin's browser
+// used to reach Pulse. It is the fallback for building absolute URLs (OIDC
+// callbacks, SAML metadata/ACS) when no public URL has been configured — the
+// request necessarily arrived over a reachable address, unlike a hardcoded
+// localhost guess. Returns "" when the host cannot be resolved.
+func requestOriginBaseURL(req *http.Request) string {
+	host := requestForwardedHost(req)
+	if host == "" {
+		return ""
+	}
+	return requestForwardedScheme(req) + "://" + host
+}
+
 func sanitizeForwardedHost(raw string) (string, string) {
 	host := strings.TrimSpace(raw)
 	if host == "" {

@@ -2069,3 +2069,12 @@ The public agent-version reconciliation path on `internal/api/router.go`
 remains an O(1) target projection. Cache-prevention headers and the
 agent-supplied non-secret cache key add no inventory scan, persistence read,
 metrics fan-out, or background work to `GET /api/agent/version`.
+
+### Request-origin URL helpers on internal/api/router.go stay O(1)
+
+The `requestForwardedScheme`, `requestForwardedHost` and `requestOriginBaseURL`
+helpers added to `internal/api/router.go` perform only header reads and string
+manipulation on the request already in hand. They add no inventory scan,
+persistence read, lock acquisition, metrics fan-out, or background work, and
+their cost is constant per SSO provider entry rendered in the admin settings
+response.

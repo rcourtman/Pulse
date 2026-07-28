@@ -5401,3 +5401,17 @@ split. `internal/hostagent/proxmox_setup_test.go`,
 `internal/api/issue1644_host_install_token_proxmox_test.go` prove the recurring
 health, first-install, type/host binding, one-time consumption, rejection,
 host-token bootstrap, and concurrent-completion contracts.
+
+### Shared internal/api request-origin helpers are read-only URL derivation
+
+The shared `internal/api` boundary this subsystem consumes gained
+`requestOriginBaseURL`, `requestForwardedScheme` and `requestForwardedHost` in
+`internal/api/router.go`, factored out of the existing SSO OIDC callback URL
+builder so SSO provider responses can derive endpoint URLs from the inbound
+request instead of guessing `http://localhost:7655`. The helpers only read the
+request; they honor forwarded headers under the same trusted-proxy gate the
+callback builder already applied, and they neither mutate nor persist
+`config.PublicURL`. No agent registration, token issuance, command admission,
+update targeting, or fleet-lifecycle authority is touched, and the
+extension-point expectations on `internal/api/` and `internal/api/router.go`
+are otherwise unchanged.

@@ -136,3 +136,81 @@ describe('SSOProvidersPanel OIDC scopes', () => {
     });
   });
 });
+
+describe('SSOProvidersPanel IdP endpoint URLs', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    notificationSuccessMock.mockReset();
+    notificationErrorMock.mockReset();
+    loggerErrorMock.mockReset();
+    loggerWarnMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+    document.cookie = 'pulse_csrf=test-csrf-token';
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('offers the server-supplied callback URL for copying', async () => {
+    setupFetch([
+      { ...corpProvider, oidcCallbackUrl: 'https://pulse.example.com/api/oidc/corp-oidc/callback' },
+    ]);
+    render(() => <SSOProvidersPanel />);
+
+    expect(
+      await screen.findByText('https://pulse.example.com/api/oidc/corp-oidc/callback'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy callback / redirect URL' })).toBeTruthy();
+  });
+
+  it('guides the admin to set a public URL instead of offering a copyable OIDC URL', async () => {
+    setupFetch([{ ...corpProvider, oidcCallbackUrl: '' }]);
+    render(() => <SSOProvidersPanel />);
+
+    expect(
+      await screen.findByText(
+        'Set the public URL in Settings > System to generate the correct Callback / Redirect URL.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy callback / redirect URL' })).toBeNull();
+  });
+
+  it('guides the admin to set a public URL instead of offering copyable SAML URLs', async () => {
+    setupFetch([
+      {
+        id: 'corp-saml',
+        name: 'Corporate SAML',
+        type: 'saml' as const,
+        enabled: true,
+        priority: 0,
+        samlMetadataUrl: '',
+        samlAcsUrl: '',
+      },
+    ]);
+    render(() => <SSOProvidersPanel />);
+
+    expect(
+      await screen.findByText(
+        'Set the public URL in Settings > System to generate the correct SP metadata and ACS URLs.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy SP metadata URL' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy ACS URL' })).toBeNull();
+  });
+
+  it('tells a new OIDC provider where the callback URL appears after saving', async () => {
+    setupFetch([]);
+    render(() => <SSOProvidersPanel />);
+
+    const addButton = await screen.findByRole('button', { name: /Add OIDC/i });
+    fireEvent.click(addButton);
+
+    expect(
+      screen.getByText(
+        'The Callback / Redirect URL is generated when the provider is saved. Save this provider, then copy it from the provider card.',
+      ),
+    ).toBeTruthy();
+  });
+});

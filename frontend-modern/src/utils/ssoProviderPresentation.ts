@@ -141,6 +141,14 @@ export function getSSOTestResultPresentation(success: boolean) {
   };
 }
 
+// getSSOEndpointUnavailableHint explains why a server-generated SSO endpoint URL
+// is missing. The backend derives these URLs from the configured public URL, or
+// from the request when none is set, so an empty value means neither source
+// resolved a host and the admin has to configure one explicitly.
+export function getSSOEndpointUnavailableHint(endpointLabel: string): string {
+  return `Set the public URL in Settings > System to generate the correct ${endpointLabel}.`;
+}
+
 export function getSSOCertificatePresentation(isExpired: boolean) {
   return {
     containerClass: isExpired

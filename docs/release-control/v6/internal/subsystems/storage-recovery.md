@@ -4742,3 +4742,17 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+
+### Shared internal/api request-origin helpers persist nothing
+
+The shared `internal/api` boundary this subsystem consumes gained
+`requestOriginBaseURL`, `requestForwardedScheme` and `requestForwardedHost` in
+`internal/api/router.go`, used by `internal/api/identity_sso_handlers.go` to
+derive SSO endpoint URLs from the inbound request when no public URL is
+configured. The derivation is per-response and read-only: nothing is written to
+`system.json`, the SSO config, or any other persisted artifact, and the
+separate `capturePublicURLFromRequest` detection path that does persist a
+detected public URL is unchanged. Tenant workspace preservation, recovery flows
+that copy `system.json` forward, and backup or restore attribution are
+unaffected, and the extension-point expectations on `internal/api/` and
+`internal/api/router.go` are otherwise unchanged.

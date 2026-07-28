@@ -1716,3 +1716,18 @@ runtime tokens remain in protected request headers and redirects remain
 rejected. The target-version query on `/download/pulse-agent` is cache identity,
 not trust evidence: checksum, embedded-key signature, self-test, and atomic
 replacement validation remain mandatory and fail closed.
+
+### Request-derived SSO endpoint URLs keep the trusted-proxy gate
+
+`internal/api/router.go` gained `requestForwardedScheme`,
+`requestForwardedHost` and `requestOriginBaseURL`, extracted verbatim from the
+SSO OIDC callback URL builder so SSO provider responses can derive endpoint
+URLs from the inbound request instead of returning a hardcoded
+`http://localhost:7655`. The trust boundary is unchanged and fail-closed:
+`X-Forwarded-Proto`, `X-Forwarded-Scheme` and `X-Forwarded-Host` are honored
+only when the immediate peer matches `PULSE_TRUSTED_PROXY_CIDRS`, which is
+empty by default, so an untrusted client cannot steer a returned URL to a host
+or scheme of its choosing — it can only reach the same `Host` header handling
+the request already depends on. The derived value is returned in an
+admin-authenticated settings response and is never persisted, never used as a
+redirect target, and never used to make an authorization decision.

@@ -6,6 +6,7 @@ import {
   getSSOConnectionTestErrorMessage,
   getSSOConnectionTestFailureMessage,
   getSSOConnectionTestSuccessMessage,
+  getSSOEndpointUnavailableHint,
   getSSOProviderCardClass,
   getSSOProviderDeleteErrorMessage,
   getSSOProviderDeleteSuccessMessage,
@@ -91,6 +92,15 @@ describe('ssoProviderPresentation', () => {
     expect(getSSOConnectionTestErrorMessage()).toBe('Unable to run the connection test.');
     expect(getSSOMetadataUrlRequiredMessage()).toBe('Enter an IdP metadata URL.');
     expect(getSSOMetadataFetchErrorMessage('timeout')).toBe('Unable to fetch metadata: timeout');
+  });
+
+  it('points admins at the public URL setting when an endpoint URL is unavailable', () => {
+    expect(getSSOEndpointUnavailableHint('Callback / Redirect URL')).toBe(
+      'Set the public URL in Settings > System to generate the correct Callback / Redirect URL.',
+    );
+    expect(getSSOEndpointUnavailableHint('SP metadata and ACS URLs')).toBe(
+      'Set the public URL in Settings > System to generate the correct SP metadata and ACS URLs.',
+    );
   });
 
   it('formats certificate tone and expired label canonically', () => {

@@ -8572,3 +8572,32 @@ checks, and lifecycle counts are additive.
 
 `internal/api/resources_pool_health_contract_test.go` and the frontend
 type-check are the focused wire compatibility proofs.
+
+### SSO provider endpoint URLs derive from the request, never from localhost
+
+`providerToResponse` / `providerToDetailResponse` in
+`internal/api/identity_sso_handlers.go` build `oidcLoginUrl`,
+`oidcCallbackUrl`, `samlSpEntityId`, `samlMetadataUrl` and `samlAcsUrl` from a
+base URL that is now resolved in this order: the configured public URL when set
+(still authoritative, trailing slash trimmed), otherwise the scheme and host of
+the inbound request. The previous `http://localhost:7655` fallback is gone. The
+SSO settings panel presents these values as the URLs to register with the
+Identity Provider, so a localhost guess was copied straight into an IdP where
+it fails with no diagnosable cause; the admin's own request, by contrast,
+necessarily arrived over an address that reaches Pulse.
+
+The request-derived base URL uses the shared
+`requestOriginBaseURL` / `requestForwardedScheme` / `requestForwardedHost`
+helpers in `internal/api/router.go`, which honor `X-Forwarded-Proto`,
+`X-Forwarded-Scheme` and `X-Forwarded-Host` only when the immediate peer is a
+trusted proxy (`PULSE_TRUSTED_PROXY_CIDRS`). `buildSSOOIDCCallbackURL` in
+`internal/api/oidc_handlers.go` now shares those helpers; its output is
+unchanged.
+
+All five fields are `omitempty` and are now omitted entirely when neither
+source resolves a host, rather than carrying a wrong absolute URL. Clients must
+treat an absent value as "no registerable URL available" and tell the operator
+to configure a public URL. `TestContract_SSOProviderResponseBaseURLNeverGuessesLocalhost`
+in `internal/api/contract_test.go` pins the precedence, the request fallback,
+the trusted-proxy gate on forwarded headers, and the empty-rather-than-wrong
+behavior.

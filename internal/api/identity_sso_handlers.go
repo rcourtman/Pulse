@@ -268,7 +268,7 @@ func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request
 	response.AllowMultipleProviders = r.ssoConfig.AllowMultipleProviders
 
 	for _, p := range r.ssoConfig.Providers {
-		response.Providers = append(response.Providers, providerToResponse(&p, r.config.PublicURL))
+		response.Providers = append(response.Providers, providerToResponse(&p, r.config.PublicURL, req))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -285,7 +285,7 @@ func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providerToDetailResponse(provider, r.config.PublicURL).NormalizeCollections())
+	json.NewEncoder(w).Encode(providerToDetailResponse(provider, r.config.PublicURL, req).NormalizeCollections())
 }
 
 func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Request) {
@@ -418,7 +418,7 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(providerToResponse(&provider, r.config.PublicURL))
+	json.NewEncoder(w).Encode(providerToResponse(&provider, r.config.PublicURL, req))
 }
 
 func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
@@ -571,7 +571,7 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_updated", "", GetClientIP(req), req.URL.Path, true, "Updated provider: "+updated.Name)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providerToResponse(&updated, r.config.PublicURL))
+	json.NewEncoder(w).Encode(providerToResponse(&updated, r.config.PublicURL, req))
 }
 
 func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
@@ -631,7 +631,20 @@ func (r *Router) saveSSOConfig() error {
 	return nil
 }
 
-func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResponse {
+// ssoResponseBaseURL resolves the base URL used to build the callback, login,
+// metadata and ACS URLs handed to administrators for registration with their
+// IdP. A configured public URL stays authoritative; otherwise the URL is
+// derived from the inbound request, which by definition arrived over an address
+// that reaches Pulse. Returns "" when neither source yields a host, so callers
+// emit no URL at all rather than a localhost guess that fails at the IdP.
+func ssoResponseBaseURL(publicURL string, req *http.Request) string {
+	if configured := strings.TrimRight(strings.TrimSpace(publicURL), "/"); configured != "" {
+		return configured
+	}
+	return requestOriginBaseURL(req)
+}
+
+func providerToResponse(p *config.SSOProvider, publicURL string, req *http.Request) SSOProviderResponse {
 	resp := EmptySSOProviderResponse()
 	resp.ID = p.ID
 	resp.Name = p.Name
@@ -650,17 +663,16 @@ func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResp
 		resp.DisplayName = p.Name
 	}
 
-	baseURL := publicURL
-	if baseURL == "" {
-		baseURL = "http://localhost:7655"
-	}
+	baseURL := ssoResponseBaseURL(publicURL, req)
 
 	if p.Type == config.SSOProviderTypeOIDC && p.OIDC != nil {
 		resp.OIDCIssuerURL = p.OIDC.IssuerURL
 		resp.OIDCClientID = p.OIDC.ClientID
 		resp.OIDCClientSecretSet = p.OIDC.ClientSecretSet || p.OIDC.ClientSecret != ""
-		resp.OIDCLoginURL = baseURL + "/api/oidc/" + p.ID + "/login"
-		resp.OIDCCallbackURL = baseURL + "/api/oidc/" + p.ID + "/callback"
+		if baseURL != "" {
+			resp.OIDCLoginURL = baseURL + "/api/oidc/" + p.ID + "/login"
+			resp.OIDCCallbackURL = baseURL + "/api/oidc/" + p.ID + "/callback"
+		}
 	}
 
 	if p.Type == config.SSOProviderTypeSAML && p.SAML != nil {
@@ -669,18 +681,20 @@ func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResp
 			resp.SAMLIDPEntityID = p.SAML.IDPIssuer
 		}
 		resp.SAMLSPEntityID = p.SAML.SPEntityID
-		if resp.SAMLSPEntityID == "" {
+		if resp.SAMLSPEntityID == "" && baseURL != "" {
 			resp.SAMLSPEntityID = baseURL + "/saml/" + p.ID
 		}
-		resp.SAMLMetadataURL = baseURL + "/api/saml/" + p.ID + "/metadata"
-		resp.SAMLACSURL = baseURL + "/api/saml/" + p.ID + "/acs"
+		if baseURL != "" {
+			resp.SAMLMetadataURL = baseURL + "/api/saml/" + p.ID + "/metadata"
+			resp.SAMLACSURL = baseURL + "/api/saml/" + p.ID + "/acs"
+		}
 	}
 
 	return resp.NormalizeCollections()
 }
 
-func providerToDetailResponse(p *config.SSOProvider, publicURL string) SSOProviderResponse {
-	resp := providerToResponse(p, publicURL)
+func providerToDetailResponse(p *config.SSOProvider, publicURL string, req *http.Request) SSOProviderResponse {
+	resp := providerToResponse(p, publicURL, req)
 
 	if p.Type == config.SSOProviderTypeOIDC && p.OIDC != nil {
 		resp.OIDC = &SSOProviderOIDCResponse{

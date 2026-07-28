@@ -5418,3 +5418,24 @@ and
 are the focused presentation proofs. The governed browser proof must open the
 shared resource detail surface and verify the same evidence labels in rendered
 UI.
+
+### SSO endpoint URLs are presented as copyable only when the server supplied one
+
+`frontend-modern/src/components/Settings/SSOProvidersPanel.tsx` renders the
+OIDC Callback / Redirect URL and the SAML SP metadata and ACS URLs as
+`CopyValueButton` chips that admins are told to register with their Identity
+Provider. The backend may now legitimately omit those values when it cannot
+resolve a public URL for the deployment, so each block falls back to guidance
+text from `getSSOEndpointUnavailableHint` in
+`frontend-modern/src/utils/ssoProviderPresentation.ts` instead of rendering a
+copy affordance around an empty or wrong value. The panel must never embed a
+`localhost` endpoint URL of its own.
+
+The OIDC edit modal distinguishes the two reasons the URL can be missing: for a
+provider being created it explains the URL is generated on save and copied from
+the provider card afterwards (the modal closes on save, so it cannot show the
+URL itself), and for an existing provider it shows the same public-URL guidance
+as the card. `settingsArchitecture.test.ts` pins the guidance owner, the absent
+localhost literal, and the corrected post-save copy; the rendered fallbacks and
+copy affordances are covered by
+`frontend-modern/src/components/Settings/__tests__/SSOProvidersPanel.test.tsx`.

@@ -22013,3 +22013,107 @@ func TestContract_AutoRegisteredInstallTokenTakesCleanExecFirstBind(t *testing.T
 		t.Fatalf("an already-versioned binding was replayed as a first use: %+v", bound)
 	}
 }
+
+// TestContract_SSOProviderResponseBaseURLNeverGuessesLocalhost pins the base URL
+// used for the OIDC callback/login and SAML metadata/ACS URLs that the SSO
+// settings panel tells admins to register with their IdP. A configured public
+// URL stays authoritative. When none is set the URL is derived from the inbound
+// request, which by construction reached Pulse — a hardcoded localhost guess
+// would be copied into the IdP and fail there with no hint why. Forwarded
+// headers only count when the peer is a trusted proxy.
+func TestContract_SSOProviderResponseBaseURLNeverGuessesLocalhost(t *testing.T) {
+	oidcProvider := &config.SSOProvider{
+		ID:      "corp-oidc",
+		Name:    "Corporate OIDC",
+		Type:    config.SSOProviderTypeOIDC,
+		Enabled: true,
+		OIDC:    &config.OIDCProviderConfig{IssuerURL: "https://idp.example.com", ClientID: "pulse"},
+	}
+	samlProvider := &config.SSOProvider{
+		ID:      "corp-saml",
+		Name:    "Corporate SAML",
+		Type:    config.SSOProviderTypeSAML,
+		Enabled: true,
+		SAML:    &config.SAMLProviderConfig{IDPSSOURL: "https://idp.example.com/sso"},
+	}
+
+	t.Run("configured public url stays authoritative", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		req := httptest.NewRequest(http.MethodGet, "http://pulse.local:7655/api/security/sso/providers", nil)
+		resp := providerToResponse(oidcProvider, "https://pulse.example.com/", req)
+
+		if got, want := resp.OIDCCallbackURL, "https://pulse.example.com/api/oidc/corp-oidc/callback"; got != want {
+			t.Fatalf("OIDCCallbackURL = %q, want %q", got, want)
+		}
+		if got, want := resp.OIDCLoginURL, "https://pulse.example.com/api/oidc/corp-oidc/login"; got != want {
+			t.Fatalf("OIDCLoginURL = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("falls back to the request host instead of localhost", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		req := httptest.NewRequest(http.MethodGet, "http://pulse.lan:7655/api/security/sso/providers", nil)
+		resp := providerToResponse(oidcProvider, "", req)
+
+		if got, want := resp.OIDCCallbackURL, "http://pulse.lan:7655/api/oidc/corp-oidc/callback"; got != want {
+			t.Fatalf("OIDCCallbackURL = %q, want %q", got, want)
+		}
+		if strings.Contains(resp.OIDCCallbackURL, "localhost:7655") {
+			t.Fatalf("OIDCCallbackURL fell back to a hardcoded localhost guess: %q", resp.OIDCCallbackURL)
+		}
+
+		samlResp := providerToResponse(samlProvider, "", req)
+		if got, want := samlResp.SAMLMetadataURL, "http://pulse.lan:7655/api/saml/corp-saml/metadata"; got != want {
+			t.Fatalf("SAMLMetadataURL = %q, want %q", got, want)
+		}
+		if got, want := samlResp.SAMLACSURL, "http://pulse.lan:7655/api/saml/corp-saml/acs"; got != want {
+			t.Fatalf("SAMLACSURL = %q, want %q", got, want)
+		}
+		if got, want := samlResp.SAMLSPEntityID, "http://pulse.lan:7655/saml/corp-saml"; got != want {
+			t.Fatalf("SAMLSPEntityID = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("honors forwarded headers only from a trusted proxy", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "192.0.2.1/32")
+		resetTrustedProxyCIDRsForTests()
+
+		trusted := httptest.NewRequest(http.MethodGet, "http://pulse.lan:7655/api/security/sso/providers", nil)
+		trusted.RemoteAddr = "192.0.2.1:5555"
+		trusted.Header.Set("X-Forwarded-Proto", "https")
+		trusted.Header.Set("X-Forwarded-Host", "sso.example.com")
+
+		if got, want := providerToResponse(oidcProvider, "", trusted).OIDCCallbackURL, "https://sso.example.com/api/oidc/corp-oidc/callback"; got != want {
+			t.Fatalf("trusted proxy OIDCCallbackURL = %q, want %q", got, want)
+		}
+
+		untrusted := httptest.NewRequest(http.MethodGet, "http://pulse.lan:7655/api/security/sso/providers", nil)
+		untrusted.RemoteAddr = "198.51.100.7:5555"
+		untrusted.Header.Set("X-Forwarded-Proto", "https")
+		untrusted.Header.Set("X-Forwarded-Host", "attacker.example.com")
+
+		if got, want := providerToResponse(oidcProvider, "", untrusted).OIDCCallbackURL, "http://pulse.lan:7655/api/oidc/corp-oidc/callback"; got != want {
+			t.Fatalf("untrusted forwarded headers were honored: %q, want %q", got, want)
+		}
+	})
+
+	t.Run("emits no url when neither source resolves a host", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyCIDRsForTests()
+
+		resp := providerToResponse(oidcProvider, "", nil)
+		if resp.OIDCCallbackURL != "" || resp.OIDCLoginURL != "" {
+			t.Fatalf("expected empty OIDC URLs, got callback=%q login=%q", resp.OIDCCallbackURL, resp.OIDCLoginURL)
+		}
+
+		samlResp := providerToResponse(samlProvider, "", nil)
+		if samlResp.SAMLMetadataURL != "" || samlResp.SAMLACSURL != "" || samlResp.SAMLSPEntityID != "" {
+			t.Fatalf("expected empty SAML URLs, got metadata=%q acs=%q spEntityID=%q",
+				samlResp.SAMLMetadataURL, samlResp.SAMLACSURL, samlResp.SAMLSPEntityID)
+		}
+	})
+}

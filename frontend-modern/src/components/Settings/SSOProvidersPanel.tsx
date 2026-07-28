@@ -19,6 +19,7 @@ import { SSOProviderTypeIcon } from './SSOProviderTypeIcon';
 import {
   getSSOProviderAddButtonLabel,
   getSSOCertificatePresentation,
+  getSSOEndpointUnavailableHint,
   getSSOProviderCardClass,
   getSSOProviderEmptyStateDescription,
   getSSOProviderEmptyStateTitle,
@@ -189,57 +190,75 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </div>
 
                   {/* OIDC callback info */}
-                  <Show when={provider.type === 'oidc' && provider.oidcCallbackUrl}>
+                  <Show when={provider.type === 'oidc'}>
                     <div class="mt-3 pt-3 border-t border-border-subtle">
-                      <div class="flex flex-wrap gap-4 text-xs">
-                        <div class="flex items-center gap-1">
-                          <span class="text-slate-500">Callback / Redirect URL:</span>
-                          <CopyValueButton
-                            value={provider.oidcCallbackUrl}
-                            onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
-                            label="Copy callback / redirect URL"
-                            variant="accent"
-                            size="chip"
-                            class="max-w-[18rem] text-xs"
-                          >
-                            <span class="min-w-0 truncate">{provider.oidcCallbackUrl}</span>
-                          </CopyValueButton>
+                      <Show
+                        when={provider.oidcCallbackUrl}
+                        fallback={
+                          <p class="text-xs text-muted">
+                            {getSSOEndpointUnavailableHint('Callback / Redirect URL')}
+                          </p>
+                        }
+                      >
+                        <div class="flex flex-wrap gap-4 text-xs">
+                          <div class="flex items-center gap-1">
+                            <span class="text-slate-500">Callback / Redirect URL:</span>
+                            <CopyValueButton
+                              value={provider.oidcCallbackUrl}
+                              onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                              label="Copy callback / redirect URL"
+                              variant="accent"
+                              size="chip"
+                              class="max-w-[18rem] text-xs"
+                            >
+                              <span class="min-w-0 truncate">{provider.oidcCallbackUrl}</span>
+                            </CopyValueButton>
+                          </div>
                         </div>
-                      </div>
+                      </Show>
                     </div>
                   </Show>
 
                   {/* SAML metadata info */}
                   <Show when={provider.type === 'saml' && provider.enabled}>
                     <div class="mt-3 pt-3 border-t border-border-subtle">
-                      <div class="flex flex-wrap gap-4 text-xs">
-                        <div class="flex items-center gap-1">
-                          <span class="text-slate-500">SP Metadata:</span>
-                          <CopyValueButton
-                            value={provider.samlMetadataUrl}
-                            onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
-                            label="Copy SP metadata URL"
-                            variant="accent"
-                            size="chip"
-                            class="max-w-[18rem] text-xs"
-                          >
-                            <span class="min-w-0 truncate">{provider.samlMetadataUrl}</span>
-                          </CopyValueButton>
+                      <Show
+                        when={provider.samlMetadataUrl && provider.samlAcsUrl}
+                        fallback={
+                          <p class="text-xs text-muted">
+                            {getSSOEndpointUnavailableHint('SP metadata and ACS URLs')}
+                          </p>
+                        }
+                      >
+                        <div class="flex flex-wrap gap-4 text-xs">
+                          <div class="flex items-center gap-1">
+                            <span class="text-slate-500">SP Metadata:</span>
+                            <CopyValueButton
+                              value={provider.samlMetadataUrl}
+                              onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
+                              label="Copy SP metadata URL"
+                              variant="accent"
+                              size="chip"
+                              class="max-w-[18rem] text-xs"
+                            >
+                              <span class="min-w-0 truncate">{provider.samlMetadataUrl}</span>
+                            </CopyValueButton>
+                          </div>
+                          <div class="flex items-center gap-1">
+                            <span class="text-slate-500">ACS URL:</span>
+                            <CopyValueButton
+                              value={provider.samlAcsUrl}
+                              onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
+                              label="Copy ACS URL"
+                              variant="accent"
+                              size="chip"
+                              class="max-w-[18rem] text-xs"
+                            >
+                              <span class="min-w-0 truncate">{provider.samlAcsUrl}</span>
+                            </CopyValueButton>
+                          </div>
                         </div>
-                        <div class="flex items-center gap-1">
-                          <span class="text-slate-500">ACS URL:</span>
-                          <CopyValueButton
-                            value={provider.samlAcsUrl}
-                            onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
-                            label="Copy ACS URL"
-                            variant="accent"
-                            size="chip"
-                            class="max-w-[18rem] text-xs"
-                          >
-                            <span class="min-w-0 truncate">{provider.samlAcsUrl}</span>
-                          </CopyValueButton>
-                        </div>
-                      </div>
+                      </Show>
                     </div>
                   </Show>
                 </div>
@@ -304,8 +323,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       when={editingProvider()?.oidcCallbackUrl}
                       fallback={
                         <p class="mt-2 text-xs text-muted">
-                          The Callback / Redirect URL is generated when the provider is saved and
-                          shown here and on the provider card.
+                          {editingProvider()
+                            ? getSSOEndpointUnavailableHint('Callback / Redirect URL')
+                            : 'The Callback / Redirect URL is generated when the provider is saved. Save this provider, then copy it from the provider card.'}
                         </p>
                       }
                     >
@@ -411,7 +431,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       configure SSO URL + Certificate manually. Use the SP Metadata URL below to
                       configure your Identity Provider.
                     </p>
-                    <Show when={publicUrl()}>
+                    <Show
+                      when={publicUrl()}
+                      fallback={
+                        <p class="mt-2 text-xs text-muted">
+                          {getSSOEndpointUnavailableHint('SP metadata URL')}
+                        </p>
+                      }
+                    >
                       <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <span class="text-xs text-muted">SP Metadata:</span>
                         <code class="inline-block max-w-full break-all rounded bg-surface-hover px-2 py-0.5 text-xs">

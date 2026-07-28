@@ -97,6 +97,7 @@ import useInfrastructureInstallStateSource from '../useInfrastructureInstallStat
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
+import ssoProviderPresentationSource from '../../../utils/ssoProviderPresentation.ts?raw';
 import aiSettingsPresentationSource from '../../../utils/aiSettingsPresentation.ts?raw';
 import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
 import statusIndicatorBadgeSource from '../../shared/StatusIndicatorBadge.tsx?raw';
@@ -979,6 +980,23 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersStateSource).not.toContain('advanced_sso');
     expect(ssoProvidersStateSource).not.toContain('getUpgradeActionDestination');
     expect(ssoProvidersStateSource).not.toContain('loadRuntimeCapabilities');
+  });
+
+  it('never offers a localhost SSO endpoint URL as if it were registerable with an IdP', () => {
+    // The panel tells admins to register these URLs with their IdP, so a
+    // hardcoded localhost guess would be copied out and fail at the IdP. The
+    // backend derives them from the configured public URL or the request; when
+    // neither resolves, the panel must guide instead of offering a copy button.
+    expect(ssoProvidersPanelSource).not.toContain('localhost:7655');
+    expect(ssoProvidersPanelSource).toContain('getSSOEndpointUnavailableHint');
+    expect(ssoProviderPresentationSource).toContain('getSSOEndpointUnavailableHint');
+    expect(ssoProviderPresentationSource).toContain(
+      'Set the public URL in Settings > System to generate the correct',
+    );
+    // The add-provider modal closes on save, so it must not promise the URL
+    // will appear in the modal itself.
+    expect(ssoProvidersPanelSource).not.toContain('shown here and on the provider card');
+    expect(ssoProvidersPanelSource).toContain('then copy it from the provider card');
   });
 
   it('keeps Docker and Podman update-action copy on the system settings presentation owner', () => {
