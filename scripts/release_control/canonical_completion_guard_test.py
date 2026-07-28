@@ -2579,6 +2579,7 @@ None yet.
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/patrolReadinessBanner.issue1640.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
@@ -2605,6 +2606,7 @@ None yet.
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/patrolReadinessBanner.issue1640.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
@@ -2631,6 +2633,7 @@ None yet.
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/patrolReadinessBanner.issue1640.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
@@ -2663,6 +2666,7 @@ None yet.
                     "test_prefixes": [],
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                        "frontend-modern/src/components/Settings/__tests__/patrolReadinessBanner.issue1640.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
                     ],
@@ -2733,6 +2737,7 @@ None yet.
             "settings-shell-and-framing",
             [
                 "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/patrolReadinessBanner.issue1640.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                 "frontend-modern/src/components/Settings/__tests__/useAuditLogPanelState.test.tsx",
             ],

@@ -41,7 +41,11 @@ const (
 	// a provider fault: an interrupted run carries no evidence about the
 	// provider or model (#1640).
 	PatrolFailureCauseInterrupted PatrolFailureCause = "interrupted"
-	PatrolFailureCauseCircuitOpen PatrolFailureCause = "circuit_open"
+	// PatrolFailureCauseInternalError marks a failure inside Pulse itself (a
+	// recovered panic on the evaluation path) rather than anything the provider
+	// or model did. It must never be presented as a model verdict (#1640).
+	PatrolFailureCauseInternalError PatrolFailureCause = "internal_error"
+	PatrolFailureCauseCircuitOpen   PatrolFailureCause = "circuit_open"
 )
 
 type PatrolConfigReadiness struct {

@@ -3667,13 +3667,26 @@ can diagnose a failure from the snapshot alone.
 
 The readiness response is a keepalive-padded JSON document. Because a full
 advisor run makes multiple sequential provider calls and can legitimately run
-for minutes on slow local hardware, the handler commits a 200 status with
-`Content-Type: application/json` up front and writes flushed newline
-keepalives while the evaluation runs, then appends the ordinary JSON payload.
-Leading newlines are insignificant JSON whitespace, so any standard JSON
-parser consumes the response unchanged; clients must not depend on the first
-response byte being `{`, and evaluation failures stay in-band in the payload
-rather than becoming non-200 statuses after the first keepalive (#1640).
+for minutes on slow local hardware, the handler writes and flushes the 200
+status line with `Content-Type: application/json`, `Cache-Control: no-store`,
+and `X-Accel-Buffering: no` before the evaluation starts, not merely before
+the first keepalive: an intermediary whose time-to-first-byte budget is
+shorter than the keepalive interval must still see the response begin
+immediately. It then writes flushed newline keepalives while the evaluation
+runs and appends the ordinary JSON payload. Leading newlines are
+insignificant JSON whitespace, so any standard JSON parser consumes the
+response unchanged; clients must not depend on the first response byte being
+`{`, and evaluation failures stay in-band in the payload rather than becoming
+non-200 statuses after the first keepalive (#1640).
+
+The evaluation runs on its own goroutine, outside the reach of the server's
+per-request panic recovery, so the readiness transport must recover panics
+itself and answer with the ordinary 200 readiness payload carrying an
+`internal_error` cause. A defect on the evaluation path must never take the
+Pulse process down, and it must never be reported as a model or provider
+verdict. A response writer that does not implement `http.Flusher` degrades the
+keepalives rather than failing the request: the handler logs the degradation
+and still completes the response.
 
 Every mobile-facing contract change must update the canonical manifest,
 regenerate both repositories, keep the mobile consumer minimum compatible, and

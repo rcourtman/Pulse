@@ -3940,18 +3940,33 @@ verified independently, while Safe auto-fix and Autopilot remain explicitly
 unassessed until deterministic remediation evals exist.
 
 A cancelled run is not provider evidence. The runtime failure classifier
-(`internal/ai/patrol_runtime_failure.go`) must classify mid-run cancellation
-(`context.Canceled`, whether wrapped or surfaced as provider error text) as
+(`internal/ai/patrol_runtime_failure.go`) must classify mid-run cancellation as
 `interrupted`, never as a provider connection or analysis fault;
-`context.DeadlineExceeded` keeps its provider-path timeout classification. An
-interrupted readiness evaluation reports the overall status and every
-unfinished dimension and autonomy mode as not assessed while preserving the
-per-scenario evidence completed before the interruption, and it must not
-overwrite the last completed evaluation in the readiness cache. The readiness
-handler streams insignificant JSON-whitespace keepalives while the evaluation
-runs so intermediaries with short read timeouts do not sever slow local-model
-runs; severed or operator-cancelled runs surface as interrupted, not as model
-verdicts (#1640).
+`context.DeadlineExceeded` keeps its provider-path timeout classification.
+Cancellation is established from the run itself, never from error wording: an
+error that wraps `context.Canceled`, or a run whose own context is cancelled.
+A raw `context canceled` substring in a provider error body is not evidence of
+anything, because providers embed that phrase when they abort an upstream
+request of their own while the Pulse run is healthy, and treating it as
+cancellation would persist a genuine provider failure as not assessed. Callers
+holding the run context must classify through the context-aware entry point so
+a torn-down request is not blamed on the provider, and the detail rewrite
+follows the same rule as the cause. An interrupted readiness evaluation reports
+the overall status and every unfinished dimension and autonomy mode as not
+assessed while preserving the per-scenario evidence completed before the
+interruption, and it must not overwrite the last completed evaluation in the
+readiness cache. The readiness handler streams insignificant JSON-whitespace
+keepalives while the evaluation runs so intermediaries with short read timeouts
+do not sever slow local-model runs; severed or operator-cancelled runs surface
+as interrupted, not as model verdicts (#1640).
+
+A Pulse-side defect is not a model verdict either. A panic recovered on the
+readiness evaluation path produces a readiness result with the
+`internal_error` cause and every dimension and autonomy mode reported as not
+assessed, because nothing about the model was measured. `internal_error`
+carries the same non-evidence status as `interrupted`: neither may be
+presented, cached, or reasoned about as a statement about the provider or the
+selected model.
 
 ## Current State
 

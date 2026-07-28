@@ -909,6 +909,22 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('presents a readiness run that was never assessed neutrally instead of as a model failure', () => {
+    // An operator cancel or a proxy severing a slow local evaluation measures
+    // nothing about the model. Rendering that in the red "Patrol model not
+    // verified" treatment is the blame-the-model presentation #1640 removed
+    // from the backend, so the banner needs its own neutral branch. Tone and
+    // headline are exported pure functions so the presentation is provable
+    // without mounting the settings shell.
+    expect(aiModelSelectionSectionSource).toContain('export const patrolReadinessBannerTone');
+    expect(aiModelSelectionSectionSource).toContain('export const patrolReadinessBannerHeadline');
+    expect(aiModelSelectionSectionSource).toContain('isPatrolReadinessUnassessed');
+    expect(aiModelSelectionSectionSource).toContain("'not_assessed'");
+    expect(aiModelSelectionSectionSource).toContain("'interrupted'");
+    expect(aiModelSelectionSectionSource).toContain('Patrol model check did not complete');
+    expect(aiModelSelectionSectionSource).toContain("case 'neutral':");
+  });
+
   it('keeps contextual settings feature gates free of retired commercial telemetry wrappers', () => {
     for (const source of [
       agentProfilesPanelSource,

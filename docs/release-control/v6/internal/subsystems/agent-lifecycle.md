@@ -2154,9 +2154,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
     it must not request `agent:exec`, dispatch an agent command, inspect agent
     inventory, or turn a successful model probe into command authority. The
     advisor's keepalive-streaming response transport changes request pacing
-    only: keepalive bytes, interrupted-run classification, and preserved
+    only: keepalive bytes, the up-front status commit, interrupted-run
+    classification, panic recovery on the evaluation goroutine, and preserved
     partial probe evidence grant no agent capability and must not be read as
-    agent lifecycle signals.
+    agent lifecycle signals. A readiness result carrying the `interrupted` or
+    `internal_error` cause is an absence of evidence, so it must never be
+    treated as an agent-readiness verdict in either direction.
 20. Keep Docker container-update proof on the production recreate path. Unit
     coverage must include standalone and Compose-shaped host, shared-service,
     shared-container, bridge, and custom-network plans, generated and explicit

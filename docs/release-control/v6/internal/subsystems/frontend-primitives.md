@@ -1883,7 +1883,16 @@ default` instead of fusing provider and badge text such as
    operator's unsaved dropdown selection rather than whatever was
    previously saved, and must surface a stale-cache warning when the
    form's selection differs from the cached result's model so the
-   green badge cannot silently mislead)
+   green badge cannot silently mislead). The readiness banner's tone and
+   headline are pure functions exported from
+   `AIModelSelectionSection.tsx` so this presentation is provable without
+   mounting the settings shell, and a result that was never assessed —
+   `status: not_assessed`, or the `interrupted` cause left by an operator
+   cancel or a severed request — must render in a neutral "check did not
+   complete" treatment. It must not use the failure treatment or the
+   "model not verified" headline, because a run that measured nothing is
+   not a verdict on the model, and it must not claim verification from a
+   `max_verified_mode` recorded before the interruption (#1640)
 2. Keep top-level settings surfaces routed through the canonical settings shell
    and maintain both `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
    plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`

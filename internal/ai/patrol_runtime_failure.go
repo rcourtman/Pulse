@@ -124,11 +124,21 @@ func patrolMalformedToolHistory(lower string) bool {
 // checked before every provider-fault pattern because a cancelled run says
 // nothing about the provider or model (#1640). context.DeadlineExceeded is
 // deliberately excluded: a deadline is a real timeout on the provider path.
-func patrolRunCancelled(err error, lower string) bool {
+//
+// The error text alone is never enough, so a raw "context canceled" substring
+// is not a signal on its own. Providers embed that exact phrase in their own
+// error bodies when they abort an upstream request while our run is perfectly
+// healthy (Ollama does), and misreading it as our cancellation makes the
+// readiness path persist a genuine provider failure as "not assessed". The
+// wording only counts once the run's own context is cancelled, at which point
+// the cancelled context is itself the signal: nothing that surfaces out of a
+// torn-down request (a bare EOF, a reset, a truncated stream) is evidence
+// about the provider either.
+func patrolRunCancelled(ctx context.Context, err error) bool {
 	if errors.Is(err, context.Canceled) {
 		return true
 	}
-	return strings.Contains(lower, "context canceled")
+	return ctx != nil && errors.Is(ctx.Err(), context.Canceled)
 }
 
 func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
@@ -213,12 +223,22 @@ func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic
 	return diagnostic
 }
 
+// patrolRuntimeFailureFromError classifies an error with no knowledge of the
+// run context. Cancellation is then recognised only when the error actually
+// wraps context.Canceled. Callers that hold the run's context should use
+// patrolRuntimeFailureFromErrorCtx so a torn-down run is not blamed on the
+// provider (#1640).
 func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
+	return patrolRuntimeFailureFromErrorCtx(context.Background(), err)
+}
+
+func patrolRuntimeFailureFromErrorCtx(ctx context.Context, err error) patrolRuntimeFailure {
 	raw := ""
 	if err != nil {
 		raw = strings.TrimSpace(err.Error())
 	}
-	detail := truncateString(summarizePatrolRuntimeFailureDetail(raw), patrolRuntimeFailureDetailLimit)
+	cancelled := patrolRunCancelled(ctx, err)
+	detail := truncateString(summarizePatrolRuntimeFailureDetail(raw, cancelled), patrolRuntimeFailureDetailLimit)
 	lower := strings.ToLower(raw)
 
 	failure := patrolRuntimeFailure{
@@ -232,7 +252,7 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	}
 
 	switch {
-	case patrolRunCancelled(err, lower):
+	case cancelled:
 		failure.Title = "Pulse Patrol: Analysis interrupted"
 		failure.Summary = "Analysis interrupted before completion"
 		failure.Cause = PatrolFailureCauseInterrupted
@@ -349,14 +369,18 @@ func redactPatrolRuntimeFailureDetail(raw string) string {
 	return redacted
 }
 
-func summarizePatrolRuntimeFailureDetail(raw string) string {
+// summarizePatrolRuntimeFailureDetail rewrites a raw provider error into
+// operator-facing detail. cancelled must be the caller's decision about whether
+// the run was actually cancelled: the "context canceled" wording on its own is
+// not proof, because providers put it in their own error bodies (#1640).
+func summarizePatrolRuntimeFailureDetail(raw string, cancelled bool) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
 	lower := strings.ToLower(raw)
 	switch {
-	case strings.Contains(lower, "context canceled"):
+	case cancelled:
 		return "The run was cancelled before the provider finished. This is not evidence of a provider or model fault."
 	case patrolMalformedToolHistory(lower):
 		return "Pulse sent a malformed tool-call conversation. Each Patrol run should be stateless; restart Pulse if the failure persists."

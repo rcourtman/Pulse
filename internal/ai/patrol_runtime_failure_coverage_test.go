@@ -194,7 +194,7 @@ func TestSummarizePatrolRuntimeFailureDetail(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := summarizePatrolRuntimeFailureDetail(tc.raw)
+			got := summarizePatrolRuntimeFailureDetail(tc.raw, false)
 			if got != tc.want {
 				t.Fatalf("summarizePatrolRuntimeFailureDetail(%q) = %q, want %q", tc.raw, got, tc.want)
 			}

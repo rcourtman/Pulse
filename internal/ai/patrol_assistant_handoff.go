@@ -118,7 +118,7 @@ func patrolRunAssistantHandoffResources(run PatrolRunRecord) []chat.HandoffResou
 
 func patrolRunRuntimeFailureSummary(run PatrolRunRecord) string {
 	summary := strings.TrimSpace(redactPatrolRuntimeFailureDetail(run.ErrorSummary))
-	detail := strings.TrimSpace(summarizePatrolRuntimeFailureDetail(run.ErrorDetail))
+	detail := strings.TrimSpace(summarizePatrolRuntimeFailureDetail(run.ErrorDetail, false))
 	if summary != "" && detail != "" && summary != detail {
 		return summary + ": " + truncatePatrolRunContextText(detail, 260)
 	}

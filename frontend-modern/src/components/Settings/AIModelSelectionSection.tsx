@@ -4,6 +4,7 @@ import { AIProviderConfigurationSection } from '@/components/Settings/AIProvider
 import { isModelProviderConfigured } from '@/components/Settings/aiSettingsModel';
 import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
+import type { PatrolModelReadinessSnapshot } from '@/types/ai';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import {
@@ -58,6 +59,51 @@ const stripModelProvider = (modelId: string) => {
   return colon === -1 ? trimmed : trimmed.slice(colon + 1);
 };
 
+export type PatrolReadinessBannerTone = 'idle' | 'success' | 'warning' | 'neutral' | 'error';
+
+// An interrupted run — an operator cancel, or a proxy cutting a slow local
+// evaluation — measured nothing, so it is not a verdict on the model. The
+// backend already reports it as not assessed rather than a provider fault
+// (#1640); the banner has to match, because rendering it in the failure
+// treatment is the same blame-the-model presentation with a different coat of
+// paint.
+export const isPatrolReadinessUnassessed = (result: PatrolModelReadinessSnapshot) =>
+  result.status === 'not_assessed' || result.cause === 'interrupted';
+
+export const patrolReadinessBannerTone = (
+  result: PatrolModelReadinessSnapshot | null | undefined,
+  isStale: boolean,
+): PatrolReadinessBannerTone => {
+  if (!result) return 'idle';
+  if (isStale) return 'warning';
+  if (isPatrolReadinessUnassessed(result)) return 'neutral';
+  if (result.status === 'pass') return 'success';
+  if (result.transport_healthy && !result.patrol_capable) return 'warning';
+  if (result.status === 'warning') return 'warning';
+  return 'error';
+};
+
+export const patrolReadinessBannerHeadline = (
+  result: PatrolModelReadinessSnapshot | null | undefined,
+  options: { isStale: boolean; pendingModel: string; cachedModel: string },
+): string => {
+  if (!result) return '';
+  if (options.isStale) {
+    return `Evaluation result is for ${options.cachedModel}, your current selection is ${options.pendingModel}`;
+  }
+  if (isPatrolReadinessUnassessed(result)) {
+    return result.cause === 'interrupted'
+      ? 'Patrol model check did not complete'
+      : 'Patrol model not assessed';
+  }
+  if (result.max_verified_mode === 'approval') return 'Verified for Watch only and Ask first';
+  if (result.max_verified_mode === 'monitor') return 'Verified for Watch only';
+  if (result.transport_healthy && !result.patrol_capable)
+    return 'Provider connected; Patrol capability not verified';
+  if (result.status === 'warning') return 'Patrol model needs attention';
+  return 'Patrol model not verified';
+};
+
 export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> = (
   controlProps,
 ) => {
@@ -74,15 +120,7 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
     return pending !== '' && cached !== '' && pending !== cached;
   };
 
-  const tone = () => {
-    const r = result();
-    if (!r) return 'idle';
-    if (isStaleAgainstFormSelection()) return 'warning';
-    if (r.status === 'pass') return 'success';
-    if (r.transport_healthy && !r.patrol_capable) return 'warning';
-    if (r.status === 'warning') return 'warning';
-    return 'error';
-  };
+  const tone = () => patrolReadinessBannerTone(result(), isStaleAgainstFormSelection());
 
   const toneClasses = () => {
     switch (tone()) {
@@ -90,6 +128,8 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
         return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300';
       case 'warning':
         return 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300';
+      case 'neutral':
+        return 'border-border bg-surface-alt text-base-content';
       case 'error':
         return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300';
       default:
@@ -97,25 +137,25 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
     }
   };
 
-  const headline = () => {
-    const r = result();
-    if (!r) return '';
-    if (isStaleAgainstFormSelection()) {
-      return `Evaluation result is for ${cachedResultModel()}, your current selection is ${pendingFormModel()}`;
-    }
-    if (r.max_verified_mode === 'approval') return 'Verified for Watch only and Ask first';
-    if (r.max_verified_mode === 'monitor') return 'Verified for Watch only';
-    if (r.transport_healthy && !r.patrol_capable)
-      return 'Provider connected; Patrol capability not verified';
-    if (r.status === 'warning') return 'Patrol model needs attention';
-    return 'Patrol model not verified';
-  };
+  const headline = () =>
+    patrolReadinessBannerHeadline(result(), {
+      isStale: isStaleAgainstFormSelection(),
+      pendingModel: pendingFormModel(),
+      cachedModel: cachedResultModel(),
+    });
 
   const detail = () => {
     const r = result();
     if (!r) return '';
     if (isStaleAgainstFormSelection()) {
       return 'Click Check Patrol model to test the pending selection.';
+    }
+    if (isPatrolReadinessUnassessed(r) && r.cause === 'interrupted') {
+      // The backend summary already explains the interruption without blaming
+      // the model; append the retry prompt rather than a failure recommendation.
+      return r.summary
+        ? `${r.summary} Run the check again when you are ready.`
+        : 'The check was interrupted before it finished. Run it again when you are ready.';
     }
     return r.summary || '';
   };

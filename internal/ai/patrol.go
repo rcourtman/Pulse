@@ -248,7 +248,7 @@ func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	record.FindingAssessments = append([]PatrolFindingAssessment(nil), record.FindingAssessments...)
 	record.ErrorSummary = strings.TrimSpace(redactPatrolRuntimeFailureDetail(record.ErrorSummary))
 	if strings.TrimSpace(record.ErrorDetail) != "" {
-		record.ErrorDetail = truncateString(summarizePatrolRuntimeFailureDetail(record.ErrorDetail), patrolRuntimeFailureDetailLimit)
+		record.ErrorDetail = truncateString(summarizePatrolRuntimeFailureDetail(record.ErrorDetail, false), patrolRuntimeFailureDetailLimit)
 	}
 	return record
 }

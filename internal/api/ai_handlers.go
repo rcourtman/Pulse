@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -6209,16 +6210,62 @@ func patrolModelReadinessBudget(cfg *config.AIConfig) time.Duration {
 // inside common proxy read-timeout defaults.
 const patrolModelReadinessKeepaliveInterval = 10 * time.Second
 
-// streamPatrolModelReadinessKeepalives runs evaluate in the background and
-// writes a newline to w on every keepalive tick until the evaluation
-// completes, flushing each one so intermediaries see bytes flowing. A leading
-// newline is insignificant JSON whitespace: every JSON parser skips it, so the
-// final payload appended after the padding still parses as ordinary JSON and
-// existing clients need no protocol change (#1640).
+// streamPatrolModelReadinessKeepalives commits the readiness response headers,
+// runs evaluate in the background, and writes a newline to w on every keepalive
+// tick until the evaluation completes, flushing each one so intermediaries see
+// bytes flowing. A leading newline is insignificant JSON whitespace: every JSON
+// parser skips it, so the final payload appended after the padding still parses
+// as ordinary JSON and existing clients need no protocol change (#1640).
+//
+// The status line and headers are written and flushed before the ticker starts,
+// so the client sees a 200 immediately rather than at the first keepalive: a
+// proxy with a sub-keepalive time-to-first-byte timeout would otherwise still
+// sever the request. The status is always 200 because evaluation failures
+// travel in the result payload.
 func streamPatrolModelReadinessKeepalives(w http.ResponseWriter, interval time.Duration, evaluate func() ai.PatrolModelReadinessResult) ai.PatrolModelReadinessResult {
-	flusher, _ := w.(http.Flusher)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	// Ask nginx-style proxies not to buffer the keepalives back out of existence.
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// Without a flusher the keepalives sit in the response buffer and this
+		// whole mechanism silently degrades back to the original bug. The
+		// response still completes, so warn and carry on rather than failing a
+		// readiness run over the writer type.
+		log.Warn().Msg("Patrol model readiness: response writer is not an http.Flusher, keepalives may be buffered")
+	}
+	commit := func() {
+		if ok {
+			flusher.Flush()
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	commit()
+
 	resultCh := make(chan ai.PatrolModelReadinessResult, 1)
-	go func() { resultCh <- evaluate() }()
+	go func() {
+		// The evaluation runs on its own goroutine, outside the reach of the
+		// server's per-request panic recovery: an unrecovered panic in provider
+		// streaming or validation would take the whole Pulse process down. Turn
+		// it into a failed readiness result instead (#1640).
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Error().
+					Interface("panic", recovered).
+					Str("stack", string(debug.Stack())).
+					Msg("Patrol model readiness evaluation panicked")
+				resultCh <- ai.FailedPatrolModelReadinessResult(
+					ai.PatrolFailureCauseInternalError,
+					"The Patrol model readiness evaluation failed unexpectedly inside Pulse.",
+					"This is a Pulse defect rather than a provider or model verdict. Retry the check, and report the failure with the Pulse logs from this run if it repeats.",
+				)
+			}
+		}()
+		resultCh <- evaluate()
+	}()
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -6230,9 +6277,7 @@ func streamPatrolModelReadinessKeepalives(w http.ResponseWriter, interval time.D
 			// A failed write means the client is gone; the request context
 			// cancellation already unwinds the evaluation, so keep draining.
 			_, _ = w.Write([]byte("\n"))
-			if flusher != nil {
-				flusher.Flush()
-			}
+			commit()
 		}
 	}
 }
@@ -6278,12 +6323,8 @@ func (h *AISettingsHandler) HandlePatrolModelReadiness(w http.ResponseWriter, r 
 	ctx, cancel := context.WithTimeout(r.Context(), patrolModelReadinessBudget(aiService.GetConfig()))
 	defer cancel()
 
-	// Headers must be committed before the first keepalive byte. The status is
-	// always 200: evaluation failures travel in the result payload.
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	// Ask nginx-style proxies not to buffer the keepalives back out of existence.
-	w.Header().Set("X-Accel-Buffering", "no")
+	// streamPatrolModelReadinessKeepalives commits the proxy-friendly headers
+	// and the 200 status line before the evaluation starts.
 	result := streamPatrolModelReadinessKeepalives(w, patrolModelReadinessKeepaliveInterval, func() ai.PatrolModelReadinessResult {
 		return aiService.RunPatrolModelReadiness(ctx, body.Provider, body.Model)
 	})

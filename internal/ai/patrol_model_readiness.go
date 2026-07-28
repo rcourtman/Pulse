@@ -167,6 +167,18 @@ func emptyPatrolModelReadinessResult() PatrolModelReadinessResult {
 	}
 }
 
+// FailedPatrolModelReadinessResult builds a fully-formed failed readiness
+// result for a failure the evaluation itself could not report, such as a panic
+// recovered on the transport goroutine. Every dimension and mode reads "not
+// assessed" because nothing about the model was actually measured (#1640).
+func FailedPatrolModelReadinessResult(cause PatrolFailureCause, summary, recommendation string) PatrolModelReadinessResult {
+	result := emptyPatrolModelReadinessResult()
+	result.Cause = cause
+	result.Summary = summary
+	result.Recommendation = recommendation
+	return result
+}
+
 func clonePatrolModelReadinessResult(result *PatrolModelReadinessResult) *PatrolModelReadinessResult {
 	if result == nil {
 		return nil
@@ -423,7 +435,7 @@ func (s *Service) RunPatrolModelReadiness(ctx context.Context, providerName, mod
 
 	releaseSlot, err := s.acquireExecutionSlot(ctx, "patrol")
 	if err != nil {
-		failure := patrolRuntimeFailureFromError(err)
+		failure := patrolRuntimeFailureFromErrorCtx(ctx, err)
 		result.Cause = failure.Cause
 		if failure.Cause == PatrolFailureCauseInterrupted {
 			result.Status = PatrolModelReadinessNotAssessed
@@ -478,7 +490,7 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 
 	connectionStarted := time.Now()
 	if err := provider.TestConnection(ctx); err != nil {
-		failure := patrolRuntimeFailureFromError(err)
+		failure := patrolRuntimeFailureFromErrorCtx(ctx, err)
 		result.Cause = failure.Cause
 		// A cancelled run carries no connectivity evidence: report it as not
 		// assessed instead of blaming the provider (#1640).
@@ -694,7 +706,7 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	}
 	var probeFailure *patrolRuntimeFailure
 	if probeErr != nil {
-		failure := patrolRuntimeFailureFromError(probeErr)
+		failure := patrolRuntimeFailureFromErrorCtx(ctx, probeErr)
 		probeFailure = &failure
 		toolSummary = failure.Summary
 	}

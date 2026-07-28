@@ -142,15 +142,19 @@ async function createAPIErrorFromResponse(
   } catch {
     // Non-JSON body. Only surface it when it reads as a short plain-text
     // message; anything with markup or excessive length (proxy/gateway HTML
-    // error pages) falls through to the generic status message.
-    if (text.includes('<pre>') && text.includes('</pre>')) {
-      const match = text.match(/<pre>(.*?)<\/pre>/s);
-      const extracted = match ? match[1].trim() : '';
-      if (extracted && !extracted.includes('<') && extracted.length < 200) {
-        errorMessage = extracted;
+    // error pages) is dropped. A body-derived message never displaces an
+    // explicit caller fallback either: the caller knows what it was asking
+    // for, an anonymous intermediary does not (#1640).
+    if (!errorMessage) {
+      if (text.includes('<pre>') && text.includes('</pre>')) {
+        const match = text.match(/<pre>(.*?)<\/pre>/s);
+        const extracted = match ? match[1].trim() : '';
+        if (extracted && !extracted.includes('<') && extracted.length < 200) {
+          errorMessage = extracted;
+        }
+      } else if (!text.includes('<') && text.trim() && text.length < 200) {
+        errorMessage = text.trim();
       }
-    } else if (!text.includes('<') && text.trim() && text.length < 200) {
-      errorMessage = text.trim();
     }
 
     if (!errorMessage) {
