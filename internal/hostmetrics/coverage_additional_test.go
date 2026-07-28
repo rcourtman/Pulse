@@ -11,14 +11,23 @@ import (
 	"testing"
 	"time"
 
+	gocpu "github.com/shirou/gopsutil/v4/cpu"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 )
 
 func TestCollectCPUUsageBranches(t *testing.T) {
 	origCPUPercent := cpuPercent
+	origCPUTimes := cpuTimes
 	t.Cleanup(func() {
 		cpuPercent = origCPUPercent
+		cpuTimes = origCPUTimes
 	})
+
+	// Force the spot-sample fallback so the branches below stay deterministic
+	// regardless of the cross-interval delta state (issue #1648).
+	cpuTimes = func(ctx context.Context, percpu bool) ([]gocpu.TimesStat, error) {
+		return nil, errors.New("times unavailable")
+	}
 
 	cpuPercent = func(ctx context.Context, interval time.Duration, percpu bool) ([]float64, error) {
 		return nil, errors.New("boom")

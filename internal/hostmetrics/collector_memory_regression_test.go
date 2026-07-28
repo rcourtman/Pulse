@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	gocpu "github.com/shirou/gopsutil/v4/cpu"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 	goload "github.com/shirou/gopsutil/v4/load"
 	gomem "github.com/shirou/gopsutil/v4/mem"
@@ -20,6 +21,7 @@ func TestCollectMemoryStability(t *testing.T) {
 
 	origCPUCounts := cpuCounts
 	origCPUPercent := cpuPercent
+	origCPUTimes := cpuTimes
 	origLoadAvg := loadAvg
 	origVirtualMemory := virtualMemory
 	origDiskPartitions := diskPartitions
@@ -31,6 +33,9 @@ func TestCollectMemoryStability(t *testing.T) {
 	cpuCounts = func(ctx context.Context, logical bool) (int, error) { return 4, nil }
 	cpuPercent = func(ctx context.Context, interval time.Duration, percpu bool) ([]float64, error) {
 		return []float64{5.0}, nil
+	}
+	cpuTimes = func(ctx context.Context, percpu bool) ([]gocpu.TimesStat, error) {
+		return []gocpu.TimesStat{{CPU: "cpu-total", User: 100, System: 50, Idle: 1000}}, nil
 	}
 	loadAvg = func(ctx context.Context) (*goload.AvgStat, error) {
 		return &goload.AvgStat{Load1: 0.1, Load5: 0.2, Load15: 0.3}, nil
@@ -78,6 +83,7 @@ func TestCollectMemoryStability(t *testing.T) {
 	t.Cleanup(func() {
 		cpuCounts = origCPUCounts
 		cpuPercent = origCPUPercent
+		cpuTimes = origCPUTimes
 		loadAvg = origLoadAvg
 		virtualMemory = origVirtualMemory
 		diskPartitions = origDiskPartitions

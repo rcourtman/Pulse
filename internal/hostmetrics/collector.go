@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -21,6 +22,7 @@ import (
 var (
 	cpuCounts      = gocpu.CountsWithContext
 	cpuPercent     = gocpu.PercentWithContext
+	cpuTimes       = gocpu.TimesWithContext
 	loadAvg        = goload.AvgWithContext
 	virtualMemory  = gomem.VirtualMemoryWithContext
 	diskPartitions = godisk.PartitionsWithContext
@@ -146,7 +148,66 @@ func memoryUsagePercent(usedBytes, totalBytes uint64) float64 {
 	return percent
 }
 
+// cpuUsageTracker computes CPU usage as the busy/total delta of the cumulative
+// CPU time counters between consecutive collections, so the reported value
+// averages over the whole report interval instead of a 1-second spot sample.
+// Short spot samples badly overstate CPU on mostly-idle guests and block the
+// collect path for a full second (issue #1648).
+type cpuUsageTracker struct {
+	mu      sync.Mutex
+	prev    gocpu.TimesStat
+	hasPrev bool
+}
+
+// defaultCPUUsage backs Collect. The state is process-wide by design: every
+// consumer of Collect reports a busy average over the window since the
+// previous collection, which stays correct even if collections interleave.
+var defaultCPUUsage = &cpuUsageTracker{}
+
 func collectCPUUsage(ctx context.Context) (float64, error) {
+	return defaultCPUUsage.collect(ctx)
+}
+
+func (t *cpuUsageTracker) collect(ctx context.Context) (float64, error) {
+	times, err := cpuTimes(ctx, false)
+	if err != nil || len(times) == 0 {
+		return spotCPUUsage(ctx)
+	}
+	cur := times[0]
+
+	t.mu.Lock()
+	prev, hasPrev := t.prev, t.hasPrev
+	t.prev, t.hasPrev = cur, true
+	t.mu.Unlock()
+
+	if !hasPrev {
+		// No baseline yet on the very first collection.
+		return spotCPUUsage(ctx)
+	}
+
+	prevTotal, prevBusy := cpuBusyTotal(prev)
+	curTotal, curBusy := cpuBusyTotal(cur)
+	if curBusy < prevBusy || curTotal <= prevTotal {
+		// Counters went backwards (reboot, VM migration) or did not advance.
+		return spotCPUUsage(ctx)
+	}
+
+	return clampPercent((curBusy - prevBusy) / (curTotal - prevTotal) * 100), nil
+}
+
+// cpuBusyTotal mirrors gopsutil's getAllBusy: guest time is already folded
+// into user/nice by the Linux kernel, so it is subtracted from the total to
+// avoid double counting (it is zero on other platforms), and iowait counts
+// as idle.
+func cpuBusyTotal(t gocpu.TimesStat) (total, busy float64) {
+	total = t.Total() - t.Guest - t.GuestNice
+	busy = total - t.Idle - t.Iowait
+	return total, busy
+}
+
+// spotCPUUsage is the legacy blocking 1-second sample, kept as the fallback
+// when no cross-interval delta is available.
+func spotCPUUsage(ctx context.Context) (float64, error) {
 	percentages, err := cpuPercent(ctx, time.Second, false)
 	if err != nil {
 		return 0, err
@@ -154,15 +215,7 @@ func collectCPUUsage(ctx context.Context) (float64, error) {
 	if len(percentages) == 0 {
 		return 0, nil
 	}
-
-	usage := percentages[0]
-	if usage < 0 {
-		usage = 0
-	}
-	if usage > 100 {
-		usage = 100
-	}
-	return usage, nil
+	return clampPercent(percentages[0]), nil
 }
 
 func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
