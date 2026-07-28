@@ -21940,3 +21940,76 @@ func TestContract_AgentCommandSessionLookupSurvivesStaleHostTokenID(t *testing.T
 		t.Fatal("unknown agent reported as connected")
 	}
 }
+
+// The one-shot Proxmox source-creation grant carried by an agent-install token
+// is time-bounded independently of the token itself. Install tokens are minted
+// without an expiry because the agent reports with them forever, so without
+// this bound every host install token sitting on a Proxmox box would keep a
+// live create-a-source capability for the life of the install (#1644).
+func TestContract_ProxmoxInstallBootstrapGrantIsTimeBounded(t *testing.T) {
+	if proxmoxInstallBootstrapGrantTTL != 24*time.Hour {
+		t.Fatalf("Proxmox install bootstrap grant TTL = %s, want 24h", proxmoxInstallBootstrapGrantTTL)
+	}
+	if strings.TrimSpace(proxmoxInstallGrantExpiredMessage) == "" {
+		t.Fatal("expired bootstrap grants must have their own denial message")
+	}
+
+	record := newTokenRecord(t, "contract-install-grant-ttl.12345678", []string{config.ScopeAgentReport}, map[string]string{
+		"install_type": agentInstallTypeHost,
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	req := &AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve-contract.local:8006",
+		ServerName: "pve-contract",
+		Source:     "agent",
+	}
+	mintedAt := record.CreatedAt.UTC()
+
+	if !canBootstrapProxmoxInstallRegistrationAt(&record, req, mintedAt) {
+		t.Fatal("a freshly minted install token did not hold its bootstrap grant")
+	}
+	if !canBootstrapProxmoxInstallRegistrationAt(&record, req, mintedAt.Add(proxmoxInstallBootstrapGrantTTL-time.Minute)) {
+		t.Fatal("bootstrap grant expired before its TTL elapsed")
+	}
+	if canBootstrapProxmoxInstallRegistrationAt(&record, req, mintedAt.Add(proxmoxInstallBootstrapGrantTTL)) {
+		t.Fatal("bootstrap grant survived its TTL")
+	}
+	if !proxmoxInstallGrantEligible(&record, req) {
+		t.Fatal("TTL assertions were vacuous: the fixture is not otherwise grant eligible")
+	}
+}
+
+// An install token whose bound_hostname was written by the Proxmox
+// auto-register bootstrap still takes the clean first-use exec bind. That
+// record shape (bound_hostname, no bound_agent_id, no binding version) is
+// indistinguishable from a pre-v6.1.1 deploy token, and command enrollment for
+// a freshly installed Proxmox host must not depend on the legacy repair branch
+// (#1644).
+func TestContract_AutoRegisteredInstallTokenTakesCleanExecFirstBind(t *testing.T) {
+	record := newTokenRecord(t, "contract-autoreg-exec-bind.12345678", []string{config.ScopeAgentExec}, map[string]string{
+		"install_type":   agentInstallTypeHost,
+		"issued_via":     agentInstallIssuedViaConfig,
+		"bound_hostname": "pve-contract",
+	})
+
+	decision := evaluateAgentExecBinding(&record, "agent-machine-id", "pve-contract")
+	if !decision.admit || !decision.firstBind {
+		t.Fatalf("auto-registered install token exec decision = %+v, want a clean first bind", decision)
+	}
+	if decision.legacyMigrate {
+		t.Fatal("auto-registered install token was admitted through the legacy migration branch")
+	}
+
+	// The binding is still hostname-gated: a different host holding the same
+	// token gets no first-use bind.
+	if other := evaluateAgentExecBinding(&record, "agent-machine-id", "pve-elsewhere"); other.firstBind {
+		t.Fatalf("install token first-bound an unrelated hostname: %+v", other)
+	}
+
+	// A record already carrying a binding version is not a first use.
+	record.Metadata[agentExecBindingVersionKey] = agentExecBindingVersion
+	if bound := evaluateAgentExecBinding(&record, "agent-machine-id", "pve-contract"); bound.firstBind {
+		t.Fatalf("an already-versioned binding was replayed as a first use: %+v", bound)
+	}
+}

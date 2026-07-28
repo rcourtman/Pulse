@@ -90,6 +90,16 @@ func evaluateAgentExecBinding(record *config.APITokenRecord, requestedID, reques
 		return agentExecBindingDecision{}
 	}
 
+	// An install token that already auto-registered a Proxmox source carries a
+	// bound_hostname written by the registration bootstrap, with no
+	// bound_agent_id and no binding version (#1644). That is still a clean
+	// first use of the command channel, not a legacy pre-v6.1.1 record, so bind
+	// it here with the fresh runtime agent ID instead of letting it fall
+	// through to the legacy-migration branch.
+	if canBindAutoRegisteredAgentInstallExecToken(record, requestedID, requestedHost) {
+		return agentExecBindingDecision{admit: true, firstBind: true}
+	}
+
 	// Pre-v6.1.1 deploy tokens could carry a server-synthesized agent ID even
 	// though the runtime derives its ID from machine-id. Migrate that
 	// hostname-bound legacy record exactly once, then enforce identity.
@@ -181,7 +191,13 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 			agentExecBindingVersionKey,
 		)
 		record.Metadata["bound_agent_id"] = requestedID
-		record.Metadata["bound_hostname"] = requestedHost
+		// A bound_hostname already written by the Proxmox auto-register
+		// bootstrap is authoritative: it is what the still-unconsumed install
+		// grant compares against, so an equivalent-but-different spelling
+		// reported by the agent must not overwrite it.
+		if strings.TrimSpace(record.Metadata["bound_hostname"]) == "" {
+			record.Metadata["bound_hostname"] = requestedHost
+		}
 		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
 		record.Metadata[agentExecBindingVersionKey] = agentExecBindingVersion
 		if r.persistence != nil {
@@ -378,6 +394,43 @@ func canBindAgentInstallExecToken(record *config.APITokenRecord, agentID string,
 	}
 	if strings.TrimSpace(record.Metadata["bound_agent_id"]) != "" ||
 		strings.TrimSpace(record.Metadata["bound_hostname"]) != "" {
+		return false
+	}
+
+	switch strings.TrimSpace(record.Metadata["install_type"]) {
+	case proxmoxInstallTypePVE, proxmoxInstallTypePBS, agentInstallTypeHost:
+	default:
+		return false
+	}
+
+	switch strings.TrimSpace(record.Metadata["issued_via"]) {
+	case agentInstallIssuedViaConfig, agentInstallIssuedViaHosted:
+		return true
+	default:
+		return false
+	}
+}
+
+// canBindAutoRegisteredAgentInstallExecToken reports whether an install token
+// whose bound_hostname was populated by the Proxmox auto-register bootstrap may
+// take the clean first-use exec bind. The registration path writes
+// bound_hostname without bound_agent_id or a binding version, so the record
+// looks identical to a pre-v6.1.1 deploy token; without this the first command
+// enrollment of a freshly installed Proxmox host is admitted by the
+// legacy-migration branch, which exists to repair old records and is not the
+// contract this flow should depend on. Hostname equivalence is still required.
+func canBindAutoRegisteredAgentInstallExecToken(record *config.APITokenRecord, agentID string, hostname string) bool {
+	if record == nil || strings.TrimSpace(agentID) == "" || strings.TrimSpace(hostname) == "" {
+		return false
+	}
+	if strings.TrimSpace(record.Metadata["bound_agent_id"]) != "" {
+		return false
+	}
+	if strings.TrimSpace(record.Metadata[agentExecBindingVersionKey]) != "" {
+		return false
+	}
+	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
+	if boundHost == "" || !agentExecHostnamesMatch(boundHost, strings.TrimSpace(hostname)) {
 		return false
 	}
 

@@ -4135,6 +4135,14 @@ invalid-setup-token branch off a 401/403 status, and that their manual
 completion and rerun guidance names the live Settings → Infrastructure page,
 so adjacent setup flows surface reachable auth-failure guidance instead of a
 dead server-string grep and a retired page name (#1644).
+That same dependency also owns the write ordering between the API token store
+and the nodes store during an install-token bootstrap: the one-shot grant is
+consumed and persisted to the token store before the created source is written
+to the nodes store, and a failed nodes write rolls the consumption back. A
+token-store write that fails after the nodes write would otherwise leave a
+persisted source next to a still-live one-shot grant, so a persistently failing
+token store becomes a repeatable source-creation primitive. Either both stores
+advanced or neither did.
 That same shared dependency also assumes generated setup scripts preserve
 setup-token auth guidance, so adjacent setup flows do not regress back to
 stale API-token instructions after the backend has already standardized on the

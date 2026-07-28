@@ -890,6 +890,16 @@ fully-qualified equivalence rule rather than ad-hoc case folding. The
 accept/reject decision is single-sourced (`evaluateAgentExecBinding`) and the
 agent config gate must consume the same decision, so no surface can advertise
 command execution that channel admission would refuse.
+That binding boundary also covers install tokens that auto-registered a Proxmox
+source before their agent ever reached the command channel. The registration
+bootstrap writes `bound_hostname` with no `bound_agent_id` and no binding
+version (#1644), which is the record shape the legacy pre-v6.1.1 migration
+branch exists to repair. Such a token is a clean first use instead: an
+equivalent hostname binds the fresh machine-derived agent ID and the current
+binding version through the first-use path, an unrelated hostname still fails
+closed, and the registration-bound hostname is never overwritten by an
+equivalent spelling the agent reports, because the install grant compares
+against it.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

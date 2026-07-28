@@ -5342,6 +5342,33 @@ credentials are mutated, serialized completion, and one-shot consumption — a
 host token that completes a PVE bootstrap cannot later bootstrap PBS, and
 non-Proxmox request types never hold a grant.
 
+The grant is time-bounded independently of the token that carries it. Install
+tokens are minted without an expiry because the agent reports with them for the
+life of the install, so the bootstrap grant carries its own 24-hour clock from
+mint (`install_issued_at`, falling back to the token's creation time; a record
+with neither fails the grant closed). Past that window the token keeps
+reporting and stays update-only, the denial takes the same 403 path as any
+other ungranted token, and the server logs the expiry distinctly so an operator
+running a stale install command sees why source creation was refused.
+
+Grant consumption and source creation must fail together. The one-shot grant is
+consumed and durably persisted BEFORE the created source is written, and a
+failed source save rolls the consumption back. The opposite order leaves a
+persistently failing token store able to write a source while the grant stays
+live, which is a repeatable create-a-source primitive under one install token.
+Either the source is persisted and the grant is spent, or neither happened and
+the install can be retried.
+
+A host install token that has already auto-registered its Proxmox source
+carries a `bound_hostname` written by the registration bootstrap, with no
+`bound_agent_id` and no exec binding version. That is still a clean first use
+of the command channel: the first command enrollment whose hostname matches the
+bound one binds the fresh runtime agent ID and the current binding version,
+rather than being admitted by the legacy pre-v6.1.1 identity-migration branch.
+The registration-bound hostname is authoritative and is not rewritten by an
+equivalent spelling the agent reports, because the still-unconsumed install
+grant compares against it.
+
 A blocked registration is not a silent skip. When the pre-registration check
 reports `canRegister=false`, the agent must log at error level, return a setup
 error to its caller, and record the operator-facing reason in a

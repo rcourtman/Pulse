@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -98,6 +99,15 @@ func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.Co
 	if err := mergeAPITokenMetadata(record, opts.Metadata); err != nil {
 		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenRecord, err)
 	}
+
+	// Install tokens are minted without an expiry because the agent reports
+	// with them for the life of the install. Stamp the mint time so the
+	// one-shot Proxmox bootstrap grant they carry can expire on its own clock
+	// (proxmoxInstallBootstrapGrantTTL) instead of staying live forever.
+	if record.Metadata == nil {
+		record.Metadata = make(map[string]string)
+	}
+	record.Metadata[agentInstallTokenIssuedAtKey] = record.CreatedAt.UTC().Format(time.RFC3339)
 
 	config.Mu.Lock()
 	defer config.Mu.Unlock()

@@ -56,7 +56,51 @@ const (
 	proxmoxInstallRegistrationHostKey      = "proxmox_registration_host"
 	proxmoxInstallRegistrationNodeKey      = "proxmox_registration_node"
 	proxmoxInstallRegistrationAtKey        = "proxmox_registration_at"
+	// agentInstallTokenIssuedAtKey records when an install token was minted so
+	// the one-shot source-creation grant can expire independently of the
+	// token's own (unbounded) reporting lifetime.
+	agentInstallTokenIssuedAtKey = "install_issued_at"
 )
+
+// proxmoxInstallBootstrapGrantTTL bounds how long after mint the one-shot
+// Proxmox source-creation grant stays exercisable. Install tokens are minted
+// without an expiry because the agent keeps reporting with them forever, so
+// without this bound every host install token on a Proxmox box would carry a
+// live create-a-source capability for the lifetime of the install. The window
+// only has to cover copy-paste-and-run of the installer command.
+const proxmoxInstallBootstrapGrantTTL = 24 * time.Hour
+
+// proxmoxInstallGrantExpiredMessage is the distinct denial log for a grant
+// that was otherwise valid but is past proxmoxInstallBootstrapGrantTTL. The
+// request still takes the ordinary update-only path and its 403.
+const proxmoxInstallGrantExpiredMessage = "Proxmox install bootstrap grant expired; install token stays update-only"
+
+// proxmoxInstallGrantIssuedAt resolves the grant clock for a token record.
+// Tokens minted after #1644 carry an explicit install_issued_at; older records
+// fall back to the token's own creation timestamp. A record with neither is
+// treated as having no grant clock at all, which fails the grant closed.
+func proxmoxInstallGrantIssuedAt(record *config.APITokenRecord) (time.Time, bool) {
+	if record == nil {
+		return time.Time{}, false
+	}
+	if raw := strings.TrimSpace(record.Metadata[agentInstallTokenIssuedAtKey]); raw != "" {
+		if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	if !record.CreatedAt.IsZero() {
+		return record.CreatedAt.UTC(), true
+	}
+	return time.Time{}, false
+}
+
+func proxmoxInstallGrantExpiredAt(record *config.APITokenRecord, now time.Time) bool {
+	issuedAt, ok := proxmoxInstallGrantIssuedAt(record)
+	if !ok {
+		return true
+	}
+	return now.UTC().Sub(issuedAt) >= proxmoxInstallBootstrapGrantTTL
+}
 
 // installTokenTypeGrantsBootstrap decides whether an install token minted for
 // installType may bootstrap a source of requestedType. Proxmox-typed tokens
@@ -72,7 +116,11 @@ func installTokenTypeGrantsBootstrap(installType, requestedType string) bool {
 	return installType == agentInstallTypeHost && isCanonicalAutoRegisterType(requestedType)
 }
 
-func canBootstrapProxmoxInstallRegistration(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
+// proxmoxInstallGrantEligible applies every bootstrap-grant bound except the
+// mint-age TTL. It is split out so an expired-but-otherwise-valid grant can be
+// reported with its own denial log instead of being indistinguishable from a
+// token that never held a grant.
+func proxmoxInstallGrantEligible(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
 	if record == nil || req == nil || strings.TrimSpace(req.Source) != "agent" {
 		return false
 	}
@@ -95,6 +143,21 @@ func canBootstrapProxmoxInstallRegistration(record *config.APITokenRecord, req *
 		return strings.EqualFold(boundHostname, requestedHostname)
 	}
 	return true
+}
+
+// proxmoxInstallGrantExpiredForRequest reports a grant that would have been
+// exercisable but for the mint-age TTL.
+func proxmoxInstallGrantExpiredForRequest(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
+	return proxmoxInstallGrantEligible(record, req) &&
+		proxmoxInstallGrantExpiredAt(record, time.Now().UTC())
+}
+
+func canBootstrapProxmoxInstallRegistration(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
+	return canBootstrapProxmoxInstallRegistrationAt(record, req, time.Now().UTC())
+}
+
+func canBootstrapProxmoxInstallRegistrationAt(record *config.APITokenRecord, req *AutoRegisterRequest, now time.Time) bool {
+	return proxmoxInstallGrantEligible(record, req) && !proxmoxInstallGrantExpiredAt(record, now)
 }
 
 func completedProxmoxInstallRegistrationMatches(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
@@ -177,10 +240,21 @@ func (h *ConfigHandlers) proxmoxInstallBootstrapAvailable(ctx context.Context, r
 	return false
 }
 
-func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, req *AutoRegisterRequest, host, node string) error {
+// proxmoxInstallBootstrapConsumption records a grant consumption that can be
+// undone when the work it authorized fails to persist. Consumption is durable
+// before the source is written, so an unrecoverable SaveNodesConfig must put
+// the grant back rather than leave a consumed grant with no source (or, worse,
+// leave the grant live next to a persisted source).
+type proxmoxInstallBootstrapConsumption struct {
+	tokenID          string
+	previousMetadata map[string]string
+	consumed         bool
+}
+
+func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, req *AutoRegisterRequest, host, node string) (*proxmoxInstallBootstrapConsumption, error) {
 	auth, ok := getAgentAutoRegAuth(ctx)
 	if !ok || !auth.installBootstrap || strings.TrimSpace(auth.tokenID) == "" {
-		return nil
+		return nil, nil
 	}
 
 	persistence := h.getPersistence(ctx)
@@ -189,7 +263,7 @@ func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, re
 
 	cfg := h.getConfig(ctx)
 	if cfg == nil {
-		return fmt.Errorf("configuration unavailable")
+		return nil, fmt.Errorf("configuration unavailable")
 	}
 	for i := range cfg.APITokens {
 		record := &cfg.APITokens[i]
@@ -197,10 +271,10 @@ func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, re
 			continue
 		}
 		if completedProxmoxInstallRegistrationMatches(record, req) {
-			return nil
+			return nil, nil
 		}
 		if !canBootstrapProxmoxInstallRegistration(record, req) {
-			return fmt.Errorf("Proxmox install registration grant is no longer available")
+			return nil, fmt.Errorf("Proxmox install registration grant is no longer available")
 		}
 		if record.Metadata == nil {
 			record.Metadata = make(map[string]string)
@@ -218,12 +292,59 @@ func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, re
 		if persistence != nil {
 			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
 				record.Metadata = previousMetadata
-				return fmt.Errorf("persist Proxmox install registration grant: %w", err)
+				return nil, fmt.Errorf("persist Proxmox install registration grant: %w", err)
 			}
 		}
-		return nil
+		return &proxmoxInstallBootstrapConsumption{
+			tokenID:          record.ID,
+			previousMetadata: previousMetadata,
+			consumed:         true,
+		}, nil
 	}
-	return fmt.Errorf("Proxmox install token no longer exists")
+	return nil, fmt.Errorf("Proxmox install token no longer exists")
+}
+
+// rollbackProxmoxInstallBootstrap restores a grant consumed by
+// completeProxmoxInstallBootstrap. It is best effort by necessity — the token
+// store just failed us once — but it keeps the common case atomic: either the
+// source is persisted and the grant is spent, or neither happened.
+func (h *ConfigHandlers) rollbackProxmoxInstallBootstrap(ctx context.Context, consumption *proxmoxInstallBootstrapConsumption) {
+	if consumption == nil || !consumption.consumed {
+		return
+	}
+
+	persistence := h.getPersistence(ctx)
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return
+	}
+	for i := range cfg.APITokens {
+		record := &cfg.APITokens[i]
+		if record.ID != consumption.tokenID {
+			continue
+		}
+		restored := make(map[string]string, len(consumption.previousMetadata))
+		for key, value := range consumption.previousMetadata {
+			restored[key] = value
+		}
+		record.Metadata = restored
+		if persistence != nil {
+			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+				log.Error().
+					Err(err).
+					Str("token_id", consumption.tokenID).
+					Msg("Failed to restore Proxmox install registration grant after a failed source save")
+				return
+			}
+		}
+		log.Warn().
+			Str("token_id", consumption.tokenID).
+			Msg("Restored Proxmox install registration grant after a failed source save")
+		return
+	}
 }
 
 // HandleSetupScript serves the setup script for Proxmox/PBS nodes
@@ -1514,6 +1635,14 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 						record.OrgID != "" && record.OrgID != requestOrgID
 					if !orgMismatch {
 						installBootstrap := canBootstrapProxmoxInstallRegistration(record, &req)
+						if !installBootstrap && proxmoxInstallGrantExpiredForRequest(record, &req) {
+							log.Warn().
+								Str("token_id", record.ID).
+								Str("type", req.Type).
+								Str("host", req.Host).
+								Str("grant_ttl", proxmoxInstallBootstrapGrantTTL.String()).
+								Msg(proxmoxInstallGrantExpiredMessage)
+						}
 						authenticated = true
 						r = r.WithContext(context.WithValue(r.Context(), agentAutoRegContextKey{}, agentAutoRegAuth{
 							tokenID:          record.ID,
@@ -1663,7 +1792,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if actualName == "" {
 				actualName = req.ServerName
 			}
-			if err := h.completeProxmoxInstallBootstrap(r.Context(), req, normalizedCandidates[0], actualName); err != nil {
+			if _, err := h.completeProxmoxInstallBootstrap(r.Context(), req, normalizedCandidates[0], actualName); err != nil {
 				log.Error().
 					Err(err).
 					Str("type", req.Type).
@@ -1918,9 +2047,32 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	afterFingerprint := nodesConfigFingerprint(postCfg.PVEInstances, postCfg.PBSInstances, postCfg.PMGInstances)
 	configChanged := beforeFingerprint != afterFingerprint
 
+	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
+	if actualName == "" {
+		actualName = serverName
+	}
+
+	// Consume the one-shot install grant BEFORE the source is persisted. The
+	// other order leaves a repeatable create-a-source primitive whenever the
+	// token store write fails persistently: the node lands on disk while the
+	// grant stays unconsumed, so the same install token can be replayed. If
+	// the node save then fails, the consumption is rolled back so the failure
+	// stays atomic and a genuine retry still works.
+	consumption, err := h.completeProxmoxInstallBootstrap(r.Context(), req, host, actualName)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("type", req.Type).
+			Str("host", host).
+			Msg("Failed to consume Proxmox install registration grant")
+		http.Error(w, "Failed to finalize Proxmox install registration authorization", http.StatusInternalServerError)
+		return
+	}
+
 	if configChanged {
 		if err := h.getPersistence(r.Context()).SaveNodesConfig(postCfg.PVEInstances, postCfg.PBSInstances, postCfg.PMGInstances); err != nil {
 			log.Error().Err(err).Msg("Failed to save auto-registered node")
+			h.rollbackProxmoxInstallBootstrap(r.Context(), consumption)
 			http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 			return
 		}
@@ -1931,19 +2083,6 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			Msg("Auto-register resulted in no persisted-config change; skipping SaveNodesConfig and monitor reload")
 	}
 
-	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
-	if actualName == "" {
-		actualName = serverName
-	}
-	if err := h.completeProxmoxInstallBootstrap(r.Context(), req, host, actualName); err != nil {
-		log.Error().
-			Err(err).
-			Str("type", req.Type).
-			Str("host", host).
-			Msg("Failed to consume Proxmox install registration grant")
-		http.Error(w, "Failed to finalize Proxmox install registration authorization", http.StatusInternalServerError)
-		return
-	}
 	h.markAutoRegistered(req.Type, actualName)
 
 	// Reload monitor only when the persisted state actually changed. A full

@@ -1628,6 +1628,22 @@ payload shape change when the portal presents compact client rows.
     Non-canonical request types never hold the grant, and the grant keeps its
     settings-authorized `issued_via` requirement, first-hostname binding,
     serialized completion, and single consumption across types.
+    That grant is also time-bounded on its own clock: install tokens are minted
+    without an expiry, so the bootstrap capability expires 24 hours after mint
+    (`install_issued_at`, falling back to the record's creation time, and fails
+    closed with neither). An expired grant answers `canRegister:false` and the
+    same 403 as any ungranted token while the token keeps reporting, and the
+    denial is logged distinctly from a token that never held a grant.
+    Consumption ordering is part of the contract: the grant is consumed and
+    persisted before the created source is written, and a failed source save
+    rolls the consumption back, so a failing token store can never leave a
+    persisted source next to a live grant.
+    The exec binding contract follows from that grant: a `bound_hostname`
+    written by auto-register (no `bound_agent_id`, no binding version) is a
+    clean first use of the command channel, so a matching hostname binds the
+    fresh runtime agent ID through the first-use path rather than the legacy
+    identity-migration branch, and the registration-bound hostname is not
+    rewritten by an equivalent spelling the agent reports.
     That same contract owns auto-register WebSocket event intent: a successful
     completion that creates a new PVE/PBS node may broadcast
     `node_auto_registered`, but successful idempotent matches or credential
