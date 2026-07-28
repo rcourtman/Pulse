@@ -3968,6 +3968,22 @@ carries the same non-evidence status as `interrupted`: neither may be
 presented, cached, or reasoned about as a statement about the provider or the
 selected model.
 
+Readiness is claimed from the completed overall verdict, never from a single
+dimension. An interrupted run keeps its tool-protocol dimension at `pass` when
+every tool scenario finished before the cancellation, so any gate that reads
+`Dimensions.ToolProtocol` alone reports "Patrol ready" from an evaluation that
+never completed; the `tools` readiness check must require the snapshot's own
+overall verdict (`Success`) before reporting ready. A snapshot carrying no
+verdict — overall status `not_assessed`, or the `interrupted` or
+`internal_error` cause — is not a failure either. It falls back to the same
+base-config classifier an absent snapshot uses, capped at a warning so an
+unfinished run can neither claim readiness nor block Patrol: a not-ready
+readiness status disables the Patrol run control, and a severed or cancelled
+check must leave Watch-mode Patrol runnable (#1640). A completed run whose tool
+protocol passed while the overall verdict fell short warns on the tools check
+rather than blocking, because the dimension that actually failed carries the
+verdict on its own check.
+
 ## Current State
 
 ### Agent surfaces expose execution-time readiness refusal

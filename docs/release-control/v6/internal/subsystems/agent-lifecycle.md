@@ -2159,7 +2159,11 @@ Agent` secondary handoff against the live setup wizard instead of relying
     partial probe evidence grant no agent capability and must not be read as
     agent lifecycle signals. A readiness result carrying the `interrupted` or
     `internal_error` cause is an absence of evidence, so it must never be
-    treated as an agent-readiness verdict in either direction.
+    treated as an agent-readiness verdict in either direction. The readiness
+    checks derived from that snapshot follow the same rule: a passing
+    tool-protocol dimension on an evaluation that never completed is not a
+    readiness verdict, and no readiness check may promote a synthetic probe
+    dimension into agent command authority.
 20. Keep Docker container-update proof on the production recreate path. Unit
     coverage must include standalone and Compose-shaped host, shared-service,
     shared-container, bridge, and custom-network plans, generated and explicit

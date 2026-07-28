@@ -5316,24 +5316,16 @@ func resolvePatrolToolsCheck(aiService *ai.Service, provider, model string) (sta
 	if staticStatus != patrolReadinessReady {
 		staticAction = "open_provider_settings"
 	}
+	static := patrolToolsCheck{Status: staticStatus, Cause: staticCause, Message: staticMessage, Action: staticAction}
 
 	if aiService == nil {
-		return staticStatus, staticCause, staticMessage, staticAction
+		return static.Status, static.Cause, static.Message, static.Action
 	}
 	if advisor, recordedAt := aiService.CachedPatrolModelReadiness(); advisor != nil && !recordedAt.IsZero() {
 		_, bareModel := config.ParseModelString(model)
 		if strings.EqualFold(advisor.Provider, provider) && advisor.Model == bareModel {
-			age := formatPatrolPreflightAge(time.Since(recordedAt))
-			if advisor.Dimensions.ToolProtocol.Status == ai.PatrolModelReadinessPass {
-				return patrolReadinessReady, ai.PatrolFailureCauseNone,
-					fmt.Sprintf("Exact streaming tool protocol passed %d/%d scenarios %s.", advisor.Dimensions.ToolProtocol.Passed, advisor.Dimensions.ToolProtocol.Attempts, age), ""
-			}
-			cause := advisor.Cause
-			if cause == ai.PatrolFailureCauseNone || cause == "" {
-				cause = ai.PatrolFailureCauseModelToolSupportUnverified
-			}
-			return patrolReadinessNotReady, cause,
-				fmt.Sprintf("%s (last readiness evaluation %s).", advisor.Dimensions.ToolProtocol.Summary, age), "open_provider_settings"
+			resolved := patrolToolsCheckFromModelReadiness(advisor, formatPatrolPreflightAge(time.Since(recordedAt)), static)
+			return resolved.Status, resolved.Cause, resolved.Message, resolved.Action
 		}
 	}
 	cached, recordedAt := aiService.CachedPatrolPreflight()
@@ -5368,6 +5360,97 @@ func resolvePatrolToolsCheck(aiService *ai.Service, provider, model string) (sta
 		msg = staticMessage
 	}
 	return resolvedStatus, cached.Cause, fmt.Sprintf("%s (last preflight %s).", msg, age), "open_provider_settings"
+}
+
+// patrolToolsCheck is the resolved "Patrol tools" readiness check: the shape
+// `resolvePatrolToolsCheck` returns, named so the snapshot gate can be tested
+// without standing up an AI service and its readiness cache.
+type patrolToolsCheck struct {
+	Status  string
+	Cause   ai.PatrolFailureCause
+	Message string
+	Action  string
+}
+
+// patrolToolsCheckFromModelReadiness maps a cached model-readiness snapshot
+// onto the tools check. Readiness is claimed only from a completed evaluation
+// whose overall verdict passed: an interrupted run keeps the tool-protocol
+// dimension at pass when every scenario completed before the interruption
+// (`internal/ai/patrol_model_readiness.go`) while the overall status is
+// not assessed, so reading the dimension alone reported "Patrol ready" from a
+// check that never finished.
+//
+// An inconclusive snapshot is not a verdict in either direction. It must not
+// record a failure either, because a not-ready tools check blocks the Patrol
+// run control in the UI — #1640 promises an interrupted or cancelled check
+// never blames the model and never blocks Patrol from running in Watch mode.
+// So an inconclusive snapshot falls back to the base-config classifier exactly
+// as an absent snapshot does (mirroring `PatrolRuntimeReadiness` with a nil
+// snapshot), capped at a warning so an unfinished run cannot claim readiness.
+func patrolToolsCheckFromModelReadiness(advisor *ai.PatrolModelReadinessResult, age string, static patrolToolsCheck) patrolToolsCheck {
+	if advisor == nil {
+		return static
+	}
+	tool := advisor.Dimensions.ToolProtocol
+	if patrolModelReadinessInconclusive(advisor) {
+		// A config-level block stands on its own evidence: the incomplete run
+		// says nothing that could clear it.
+		if static.Status == patrolReadinessNotReady {
+			return static
+		}
+		return patrolToolsCheck{
+			Status:  patrolReadinessWarning,
+			Cause:   patrolToolsCheckCause(advisor),
+			Message: fmt.Sprintf("The last Patrol readiness evaluation did not complete (%s), so Patrol's tool protocol is unverified. %s", age, strings.TrimSpace(tool.Summary)),
+			Action:  "open_provider_settings",
+		}
+	}
+	if advisor.Success && tool.Status == ai.PatrolModelReadinessPass {
+		return patrolToolsCheck{
+			Status:  patrolReadinessReady,
+			Cause:   ai.PatrolFailureCauseNone,
+			Message: fmt.Sprintf("Exact streaming tool protocol passed %d/%d scenarios %s.", tool.Passed, tool.Attempts, age),
+		}
+	}
+	if tool.Status == ai.PatrolModelReadinessPass {
+		// The evaluation finished and the tool protocol itself passed, but the
+		// run did not verify the model. Whichever dimension failed carries the
+		// verdict on its own check (context quality blocks, latency warns), so
+		// the tools check reports what it measured without double-blocking.
+		return patrolToolsCheck{
+			Status:  patrolReadinessWarning,
+			Cause:   patrolToolsCheckCause(advisor),
+			Message: fmt.Sprintf("%s The evaluation did not verify the model for Patrol (last readiness evaluation %s).", strings.TrimSpace(tool.Summary), age),
+			Action:  "open_provider_settings",
+		}
+	}
+	return patrolToolsCheck{
+		Status:  patrolReadinessNotReady,
+		Cause:   patrolToolsCheckCause(advisor),
+		Message: fmt.Sprintf("%s (last readiness evaluation %s).", strings.TrimSpace(tool.Summary), age),
+		Action:  "open_provider_settings",
+	}
+}
+
+// patrolModelReadinessInconclusive reports whether a snapshot carries no
+// verdict about the model at all: a run that was cut short (interrupted) or a
+// Pulse-side defect on the evaluation path (internal_error). Both leave the
+// overall status at not assessed or blame Pulse rather than the model (#1640).
+func patrolModelReadinessInconclusive(advisor *ai.PatrolModelReadinessResult) bool {
+	if advisor == nil {
+		return false
+	}
+	return advisor.Status == ai.PatrolModelReadinessNotAssessed ||
+		advisor.Cause == ai.PatrolFailureCauseInterrupted ||
+		advisor.Cause == ai.PatrolFailureCauseInternalError
+}
+
+func patrolToolsCheckCause(advisor *ai.PatrolModelReadinessResult) ai.PatrolFailureCause {
+	cause := advisor.Cause
+	if cause == ai.PatrolFailureCauseNone || cause == "" {
+		return ai.PatrolFailureCauseModelToolSupportUnverified
+	}
+	return cause
 }
 
 func formatPatrolPreflightAge(age time.Duration) string {

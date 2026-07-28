@@ -1975,7 +1975,10 @@ readiness run keeps the same isolation: preserved partial scenario evidence is
 synthetic probe output only, and the keepalive response transport, its up-front
 status commit, and its panic recovery introduce no storage or recovery side
 channel. A result recovered from a panic reports every dimension as not
-assessed and carries no storage or backup state at all.
+assessed and carries no storage or backup state at all. Readiness checks read
+that snapshot's completed overall verdict rather than a single dimension, so a
+tool-protocol pass on an unfinished run cannot be presented as verified Patrol
+capability over storage or recovery data.
 
 26. Storage row presentation resolves its topology label from
     `storage.vdevLayout` first and falls back to `storage.topology`, so a

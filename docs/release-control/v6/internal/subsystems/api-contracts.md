@@ -3688,6 +3688,20 @@ verdict. A response writer that does not implement `http.Flusher` degrades the
 keepalives rather than failing the request: the handler logs the degradation
 and still completes the response.
 
+The `patrol_readiness` payload on `/api/settings/ai` and `/api/ai/patrol/status`
+derives its `tools` check from that snapshot's completed overall verdict, not
+from the tool-protocol dimension alone: an interrupted evaluation keeps the
+dimension at `pass` when the scenarios finished before the cancellation, so a
+dimension-only gate reports `status: ready` for a check that never completed.
+A snapshot with no verdict — overall status `not_assessed`, or the
+`interrupted` or `internal_error` cause — carries no failure either: the check
+falls back to the same base-config classifier an absent snapshot uses, capped
+at `warning`. `not_ready` is a blocking status in this payload (`ready: false`
+suppresses the Patrol run control), so an unfinished or Pulse-side-failed check
+must never produce it, and a completed run whose tool protocol passed while the
+overall verdict fell short warns here while the dimension that failed carries
+the verdict on its own check (#1640).
+
 Every mobile-facing contract change must update the canonical manifest,
 regenerate both repositories, keep the mobile consumer minimum compatible, and
 pass `generate_mobile_compatibility.py --check` plus
