@@ -140,26 +140,24 @@ async function createAPIErrorFromResponse(
     errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
     errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
   } catch {
-    // Non-JSON body. Only surface it when it reads as a short plain-text
+    // Non-JSON body. Surface it only when it reads as a short plain-text
     // message; anything with markup or excessive length (proxy/gateway HTML
-    // error pages) is dropped. A body-derived message never displaces an
-    // explicit caller fallback either: the caller knows what it was asking
-    // for, an anonymous intermediary does not (#1640).
-    if (!errorMessage) {
-      if (text.includes('<pre>') && text.includes('</pre>')) {
-        const match = text.match(/<pre>(.*?)<\/pre>/s);
-        const extracted = match ? match[1].trim() : '';
-        if (extracted && !extracted.includes('<') && extracted.length < 200) {
-          errorMessage = extracted;
-        }
-      } else if (!text.includes('<') && text.trim() && text.length < 200) {
-        errorMessage = text.trim();
+    // error pages) is dropped so it can never become Error.message (#1640).
+    // A sane server-provided body outranks the caller's generic fallback —
+    // that has always been the precedence here, and call sites rely on it to
+    // surface server detail on retryable errors.
+    let bodyMessage = '';
+    if (text.includes('<pre>') && text.includes('</pre>')) {
+      const match = text.match(/<pre>(.*?)<\/pre>/s);
+      const extracted = match ? match[1].trim() : '';
+      if (extracted && !extracted.includes('<') && extracted.length < 200) {
+        bodyMessage = extracted;
       }
+    } else if (!text.includes('<') && text.trim() && text.length < 200) {
+      bodyMessage = text.trim();
     }
 
-    if (!errorMessage) {
-      errorMessage = `Request failed with status ${response.status}`;
-    }
+    errorMessage = bodyMessage || errorMessage || `Request failed with status ${response.status}`;
   }
 
   const err = new Error(

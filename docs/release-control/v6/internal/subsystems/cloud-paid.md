@@ -2828,10 +2828,11 @@ body as the thrown error message. Only short plain-text bodies without markup
 may pass through; anything else collapses to a generic status-derived message
 so hosted intermediary HTML never reaches tenant-facing UI (#1640). Message
 precedence on that path is fixed: canonical JSON `error` / `message` first, a
-caller-supplied fallback next, and a non-JSON body last. A caller that passes
-a fallback knows which tenant-scoped operation it was performing, while a
-non-JSON body may have been written by an intermediary that has no idea, so a
-body-derived message must never displace an explicit fallback.
+sane short plain-text body next, and the caller-supplied fallback last. A
+short markup-free body is server-provided detail that call sites have always
+relied on for retryable errors; what #1640 excludes is markup and oversized
+bodies, which are dropped so an intermediary's HTML error page can never
+become the displayed message and the caller fallback covers those cases.
 That same boundary now also owns stable structured error metadata on the shared
 browser client. When backend routes return canonical JSON `code` plus
 string-valued `details`, `frontend-modern/src/utils/apiClient.ts` must preserve

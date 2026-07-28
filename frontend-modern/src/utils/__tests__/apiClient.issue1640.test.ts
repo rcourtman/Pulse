@@ -62,27 +62,28 @@ describe('apiErrorFromResponse never surfaces raw HTML (#1640)', () => {
     expect(error.message).toBe('Pulse could not run the Patrol model readiness evaluation.');
   });
 
-  // Precedence, pinned end to end. A caller that passes a fallback knows what
-  // it was asking for; a plain-text body from an anonymous intermediary does
-  // not, so the fallback wins over any non-JSON body. Canonical JSON still
-  // outranks both, because that message came from Pulse itself.
+  // Precedence, pinned end to end. A sane short plain-text body outranks the
+  // caller fallback -- server-provided detail on retryable errors has always
+  // won here and call sites rely on it. Markup and oversized bodies are
+  // dropped (#1640) so the fallback covers them, and canonical JSON outranks
+  // everything because that message came from Pulse itself.
   describe('message precedence', () => {
     const FALLBACK = 'Pulse could not run the Patrol model readiness evaluation.';
 
-    it('prefers the caller fallback over a short plain-text body', async () => {
+    it('prefers a short plain-text body over the caller fallback', async () => {
       const error = await apiErrorFromResponse(
         new Response('upstream unavailable', { status: 503 }),
         FALLBACK,
       );
-      expect(error.message).toBe(FALLBACK);
+      expect(error.message).toBe('upstream unavailable');
     });
 
-    it('prefers the caller fallback over text extracted from a <pre> block', async () => {
+    it('prefers text extracted from a <pre> block over the caller fallback', async () => {
       const error = await apiErrorFromResponse(
         new Response('<html><body><pre>proxy read timeout</pre></body></html>', { status: 504 }),
         FALLBACK,
       );
-      expect(error.message).toBe(FALLBACK);
+      expect(error.message).toBe('proxy read timeout');
     });
 
     it('prefers the caller fallback over the generic status message', async () => {
@@ -101,7 +102,7 @@ describe('apiErrorFromResponse never surfaces raw HTML (#1640)', () => {
       expect(error.message).toBe('Patrol model readiness failed');
     });
 
-    it('falls back to the plain-text body only when no fallback was supplied', async () => {
+    it('surfaces the plain-text body when no fallback was supplied', async () => {
       const error = await apiErrorFromResponse(
         new Response('upstream unavailable', { status: 503 }),
       );

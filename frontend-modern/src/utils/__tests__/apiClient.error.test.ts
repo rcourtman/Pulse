@@ -16,17 +16,17 @@ describe('apiClient structured error extraction', () => {
   // path is unattributed text from whatever answered the request — often a
   // proxy rather than Pulse — while the caller knows what it was asking for
   // (#1640). Canonical JSON still outranks both.
-  it('prefers caller fallback copy over a non-JSON body', async () => {
+  it('prefers a short plain-text body over caller fallback copy', async () => {
     const error = await apiErrorFromResponse(
       new Response('temporary failure', { status: 500 }),
       'Fallback message',
     );
 
-    expect(error.message).toBe('Fallback message');
+    expect(error.message).toBe('temporary failure');
     expect(error.status).toBe(500);
   });
 
-  it('falls back to plain text when the response is not JSON and no fallback was given', async () => {
+  it('falls back to plain text when the response is not JSON', async () => {
     const error = await apiErrorFromResponse(new Response('temporary failure', { status: 500 }));
 
     expect(error.message).toBe('temporary failure');
