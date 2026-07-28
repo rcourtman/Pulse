@@ -98,7 +98,7 @@ export function getAlertThresholdsHelpDismissLabel() {
 export function getAlertThresholdsHelpBanner() {
   return {
     title: 'Quick tips:',
-    disableValue: '0',
+    disableValue: '-1',
     reenableLabel: 'Off',
     customBadgeLabel: 'Custom',
     collapseHint: 'Click sections to collapse/expand.',

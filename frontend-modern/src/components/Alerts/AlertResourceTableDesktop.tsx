@@ -31,6 +31,7 @@ import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEmptyState,
   getAlertResourceTableMetricInputTitle,
+  getAlertResourceTableMetricOffToggleProps,
   getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableOfflineStateOrder,
   getAlertResourceTableOfflineStatePresentation,
@@ -228,46 +229,59 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                     <TableCell
                       class={`${getPlatformTableCellClassForKind(getAlertResourceColumnKind(column))} align-middle`}
                     >
-                      <div class="relative flex justify-center w-full">
-                        <input
-                          type="number"
-                          min={bounds.min}
-                          max={bounds.max}
-                          step={getAlertResourceMetricStep(metric)}
-                          value={isOff() ? '' : value()}
-                          placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
-                          disabled={isOff()}
-                          onInput={(e) => {
-                            const nextValue = parseFloat(e.currentTarget.value);
-                            props.table.setGlobalDefaults?.((prev) => ({
-                              ...prev,
-                              [metric]: Number.isNaN(nextValue) ? 0 : nextValue,
-                            }));
-                            props.table.setHasUnsavedChanges?.(true);
-                          }}
-                          class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
-                            isOff()
-                              ? 'border-border bg-surface-alt text-muted italic placeholder: dark:placeholder: placeholder:opacity-60 pointer-events-none'
-                              : 'border-border text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                          }`}
-                          title={getAlertResourceTableMetricInputTitle(isOff())}
-                        />
-                        <Show when={isOff()}>
-                          <button
-                            type="button"
-                            class="absolute inset-0 w-full rounded cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                            onClick={() => {
+                      <div class="flex items-center justify-center gap-1.5 w-full">
+                        <div class="relative">
+                          <input
+                            type="number"
+                            min={bounds.min}
+                            max={bounds.max}
+                            step={getAlertResourceMetricStep(metric)}
+                            value={isOff() ? '' : value()}
+                            placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
+                            disabled={isOff()}
+                            onInput={(e) => {
+                              const nextValue = parseFloat(e.currentTarget.value);
                               props.table.setGlobalDefaults?.((prev) => ({
                                 ...prev,
-                                [metric]: getAlertResourceEnabledDefault(metric),
+                                [metric]: Number.isNaN(nextValue) ? 0 : nextValue,
                               }));
                               props.table.setHasUnsavedChanges?.(true);
                             }}
-                            title={getAlertResourceTableMetricInputTitle(true)}
-                          >
-                            <span class="sr-only">Enable {column} default</span>
-                          </button>
-                        </Show>
+                            class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
+                              isOff()
+                                ? 'border-border bg-surface-alt text-muted italic placeholder: dark:placeholder: placeholder:opacity-60 pointer-events-none'
+                                : 'border-border text-base-content focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                            }`}
+                            title={getAlertResourceTableMetricInputTitle(isOff())}
+                          />
+                          <Show when={isOff()}>
+                            <button
+                              type="button"
+                              class="absolute inset-0 w-full rounded cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                              onClick={() => {
+                                props.table.setGlobalDefaults?.((prev) => ({
+                                  ...prev,
+                                  [metric]: getAlertResourceEnabledDefault(metric),
+                                }));
+                                props.table.setHasUnsavedChanges?.(true);
+                              }}
+                              title={getAlertResourceTableMetricInputTitle(true)}
+                            >
+                              <span class="sr-only">Enable {column} default</span>
+                            </button>
+                          </Show>
+                        </div>
+                        <StatusBadge
+                          isEnabled={!isOff()}
+                          onToggle={() => {
+                            props.table.setGlobalDefaults?.((prev) => ({
+                              ...prev,
+                              [metric]: isOff() ? getAlertResourceEnabledDefault(metric) : -1,
+                            }));
+                            props.table.setHasUnsavedChanges?.(true);
+                          }}
+                          {...getAlertResourceTableMetricOffToggleProps()}
+                        />
                       </div>
                     </TableCell>
                   );

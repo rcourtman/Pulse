@@ -1309,7 +1309,7 @@ describe('ResourceTable', () => {
 
       // Find the editing input with the "Set to -1" title (unique to resource editing inputs)
       const editInputs = document.querySelectorAll(
-        'input[type="number"][title="Set to -1 to disable alerts for this metric"]',
+        'input[type="number"][title="Set to -1 or use the Off toggle to disable alerts for this metric"]',
       );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
       fireEvent.input(editInputs[0], { target: { value: '95' } });
@@ -1332,7 +1332,7 @@ describe('ResourceTable', () => {
       render(() => <ResourceTable {...props} />);
 
       const editInputs = document.querySelectorAll(
-        'input[type="number"][title="Set to -1 to disable alerts for this metric"]',
+        'input[type="number"][title="Set to -1 or use the Off toggle to disable alerts for this metric"]',
       );
       expect(editInputs.length).toBeGreaterThanOrEqual(1);
       fireEvent.blur(editInputs[0]);

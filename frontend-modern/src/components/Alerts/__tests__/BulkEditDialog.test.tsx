@@ -230,6 +230,49 @@ describe('BulkEditDialog', () => {
     expect(saved.restartCount).toBeUndefined();
   });
 
+  it('off toggle stages -1 for the metric and shows the Off state', () => {
+    const props = defaultProps();
+    props.columns = ['Restart Count'];
+    render(() => <BulkEditDialog {...props} />);
+
+    const toggle = screen.getByRole('button', { name: 'On' });
+    fireEvent.click(toggle);
+
+    // Badge flips to Off and the staged value reads Off, not -1
+    expect(screen.getByRole('button', { name: 'Off' })).toBeInTheDocument();
+    expect(screen.getByText('Off', { selector: 'span' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Apply to 3 items/));
+    expect(props.onSave).toHaveBeenCalledWith({ restartCount: -1 });
+  });
+
+  it('off toggle returns the metric to Unchanged when clicked again', () => {
+    const props = defaultProps();
+    props.columns = ['Restart Count'];
+    render(() => <BulkEditDialog {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Off' }));
+
+    expect(screen.getByText('Unchanged')).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/Apply to 3 items/));
+    const saved = props.onSave.mock.calls[0][0] as Record<string, number | undefined>;
+    expect(saved.restartCount).toBeUndefined();
+  });
+
+  it('typing a value after turning a metric off replaces the staged -1', () => {
+    const props = defaultProps();
+    props.columns = ['Restart Count'];
+    render(() => <BulkEditDialog {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    const input = screen.getByRole('spinbutton');
+    fireEvent.input(input, { target: { value: '7' } });
+
+    fireEvent.click(screen.getByText(/Apply to 3 items/));
+    expect(props.onSave).toHaveBeenCalledWith({ restartCount: 7 });
+  });
+
   it('displays Unchanged when threshold is not set, value when it is', () => {
     const props = defaultProps();
     props.columns = ['Restart Count'];

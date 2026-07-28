@@ -15,6 +15,7 @@ import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditMetricTitle,
   getAlertResourceTableMetricInputTitle,
+  getAlertResourceTableMetricOffToggleProps,
   getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableOfflineStateOrder,
   getAlertResourceTableOfflineStatePresentation,
@@ -438,13 +439,13 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         );
                       })()}
                     </Show>
-                    <div class="flex items-center justify-center">
+                    <div class="flex items-center justify-center gap-1.5">
                       <input
                         type="number"
                         min={bounds.min}
                         max={bounds.max}
                         step={getAlertResourceMetricStep(metric)}
-                        value={getThresholds()?.[metric] ?? ''}
+                        value={isDisabled() ? '' : (getThresholds()?.[metric] ?? '')}
                         placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
                         title={getAlertResourceTableMetricInputTitle(isDisabled())}
                         ref={(el) => {
@@ -481,6 +482,17 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                             : ' text-base-content border-border'
                         }`}
                       />
+                      {/* mousedown would blur the input, which saves and closes
+                          the editor before this toggle's click can land */}
+                      <div onMouseDown={(event) => event.preventDefault()}>
+                        <StatusBadge
+                          isEnabled={!isDisabled()}
+                          onToggle={() =>
+                            updateEditingThreshold(metric, isDisabled() ? undefined : -1)
+                          }
+                          {...getAlertResourceTableMetricOffToggleProps()}
+                        />
+                      </div>
                     </div>
                   </div>
                 </Show>

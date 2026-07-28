@@ -70,7 +70,7 @@ Pulse v6 organises the UI by **task** instead of **platform**:
 Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) redirect automatically. See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the full mapping.
 
 ### Can I disable alerts for specific metrics?
-Yes. Go to **Alerts → Thresholds** and set any value to `-1` to disable it. You can do this globally or per-resource (VM/Node).
+Yes. Go to **Alerts → Thresholds** and use the On/Off toggle next to any metric while editing, or set the value to `-1`. You can do this globally or per-resource (VM/Node).
 
 ### How do I monitor temperature?
 Recommended: install the unified agent on your Proxmox hosts with Proxmox integration enabled:

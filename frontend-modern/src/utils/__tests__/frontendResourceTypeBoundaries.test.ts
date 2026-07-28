@@ -4123,7 +4123,9 @@ describe('frontend resource type boundaries', () => {
     expect(alertResourceTableSource).not.toContain('Reset to factory defaults');
     expect(alertResourceTableSource).not.toContain('Alert Delay (s)');
     expect(alertResourceTableSource).not.toContain('Click to edit this metric');
-    expect(alertResourceTableSource).not.toContain('Set to -1 to disable alerts for this metric');
+    expect(alertResourceTableSource).not.toContain(
+      'Set to -1 or use the Off toggle to disable alerts for this metric',
+    );
     expect(alertResourceTableSource).not.toContain(
       "if (resource.type === 'agent' && ['diskRead', 'diskWrite', 'networkIn', 'networkOut'].includes(",
     );

@@ -95,7 +95,10 @@ describe('alertThresholdsPresentation', () => {
     expect(getAlertThresholdsHelpDismissLabel()).toBe('Dismiss tips');
     expect(getAlertThresholdsHelpBanner()).toEqual({
       title: 'Quick tips:',
-      disableValue: '0',
+      // Must match the value the backend and docs/FAQ.md treat as "off";
+      // the banner told users to type 0, which edit-state off detection
+      // (=== -1) never recognised.
+      disableValue: '-1',
       reenableLabel: 'Off',
       customBadgeLabel: 'Custom',
       collapseHint: 'Click sections to collapse/expand.',

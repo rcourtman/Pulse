@@ -18,8 +18,14 @@ export const ALERT_RESOURCE_TABLE_OFFLINE_STATE_CRITICAL_TITLE =
   'Offline alerts will raise critical-level notifications.';
 export const ALERT_RESOURCE_TABLE_ENABLE_METRIC_TITLE = 'Click to enable this metric';
 export const ALERT_RESOURCE_TABLE_DISABLE_METRIC_TITLE =
-  'Set to -1 to disable alerts for this metric';
+  'Set to -1 or use the Off toggle to disable alerts for this metric';
 export const ALERT_RESOURCE_TABLE_EDIT_METRIC_TITLE = 'Click to edit this metric';
+export const ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_LABEL_ON = 'On';
+export const ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_LABEL_OFF = 'Off';
+export const ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_TITLE_ON =
+  'Alerts enabled for this metric. Click to turn off.';
+export const ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_TITLE_OFF =
+  'Alerts turned off for this metric. Click to re-enable.';
 
 export function getAlertResourceTableEmptyState(emptyMessage?: string) {
   return emptyMessage || ALERT_RESOURCE_TABLE_EMPTY_STATE;
@@ -99,4 +105,13 @@ export function getAlertResourceTableMetricInputTitle(isDisabled: boolean) {
 
 export function getAlertResourceTableEditMetricTitle() {
   return ALERT_RESOURCE_TABLE_EDIT_METRIC_TITLE;
+}
+
+export function getAlertResourceTableMetricOffToggleProps() {
+  return {
+    labelEnabled: ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_LABEL_ON,
+    labelDisabled: ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_LABEL_OFF,
+    titleEnabled: ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_TITLE_ON,
+    titleDisabled: ALERT_RESOURCE_TABLE_METRIC_OFF_TOGGLE_TITLE_OFF,
+  } as const;
 }

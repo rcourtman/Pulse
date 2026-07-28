@@ -8,11 +8,13 @@ import { ActionIconButton } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import {
   getAlertResourceTableCustomBadgeLabel,
   getAlertResourceTableEditNotePlaceholder,
   getAlertResourceTableEmptyState,
+  getAlertResourceTableMetricOffToggleProps,
   getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
@@ -155,39 +157,52 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                 return (
                   <div class="p-2 bg-surface rounded border border-border-subtle flex flex-col gap-1">
                     <span class="text-[10px] uppercase text-slate-500 font-medium">{column}</span>
-                    <div class="relative">
-                      <input
-                        type="number"
-                        min={bounds.min}
-                        max={bounds.max}
-                        step={getAlertResourceMetricStep(metric)}
-                        value={isOff() ? '' : value()}
-                        placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
-                        disabled={isOff()}
-                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
-                        onInput={(e) => {
-                          const nextValue = parseFloat(e.currentTarget.value);
-                          props.table.setGlobalDefaults?.((prev) => ({
-                            ...prev,
-                            [metric]: Number.isNaN(nextValue) ? 0 : nextValue,
-                          }));
-                          props.table.setHasUnsavedChanges?.(true);
-                        }}
-                      />
-                      <Show when={isOff()}>
-                        <button
-                          type="button"
-                          class="absolute inset-0 w-full"
-                          onClick={() => {
+                    <div class="flex items-center gap-1.5">
+                      <div class="relative flex-1">
+                        <input
+                          type="number"
+                          min={bounds.min}
+                          max={bounds.max}
+                          step={getAlertResourceMetricStep(metric)}
+                          value={isOff() ? '' : value()}
+                          placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
+                          disabled={isOff()}
+                          class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
+                          onInput={(e) => {
+                            const nextValue = parseFloat(e.currentTarget.value);
                             props.table.setGlobalDefaults?.((prev) => ({
                               ...prev,
-                              [metric]: getAlertResourceEnabledDefault(metric),
+                              [metric]: Number.isNaN(nextValue) ? 0 : nextValue,
                             }));
                             props.table.setHasUnsavedChanges?.(true);
                           }}
-                          aria-label={`Enable ${column} default`}
                         />
-                      </Show>
+                        <Show when={isOff()}>
+                          <button
+                            type="button"
+                            class="absolute inset-0 w-full"
+                            onClick={() => {
+                              props.table.setGlobalDefaults?.((prev) => ({
+                                ...prev,
+                                [metric]: getAlertResourceEnabledDefault(metric),
+                              }));
+                              props.table.setHasUnsavedChanges?.(true);
+                            }}
+                            aria-label={`Enable ${column} default`}
+                          />
+                        </Show>
+                      </div>
+                      <StatusBadge
+                        isEnabled={!isOff()}
+                        onToggle={() => {
+                          props.table.setGlobalDefaults?.((prev) => ({
+                            ...prev,
+                            [metric]: isOff() ? getAlertResourceEnabledDefault(metric) : -1,
+                          }));
+                          props.table.setHasUnsavedChanges?.(true);
+                        }}
+                        {...getAlertResourceTableMetricOffToggleProps()}
+                      />
                     </div>
                   </div>
                 );
@@ -350,21 +365,35 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                                   </button>
                                 }
                               >
-                                <input
-                                  type="number"
-                                  min={bounds.min}
-                                  max={bounds.max}
-                                  value={thresholds()?.[metric] ?? ''}
-                                  placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
-                                  class="w-16 text-right text-xs p-1 rounded border border-border bg-surface"
-                                  onInput={(e) => {
-                                    const nextValue = parseFloat(e.currentTarget.value);
-                                    props.table.setEditingThresholds({
-                                      ...props.table.editingThresholds(),
-                                      [metric]: Number.isNaN(nextValue) ? undefined : nextValue,
-                                    });
-                                  }}
-                                />
+                                <div class="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min={bounds.min}
+                                    max={bounds.max}
+                                    value={isDisabled() ? '' : (thresholds()?.[metric] ?? '')}
+                                    placeholder={getAlertResourceTableMetricPlaceholder(
+                                      isDisabled(),
+                                    )}
+                                    class="w-16 text-right text-xs p-1 rounded border border-border bg-surface"
+                                    onInput={(e) => {
+                                      const nextValue = parseFloat(e.currentTarget.value);
+                                      props.table.setEditingThresholds({
+                                        ...props.table.editingThresholds(),
+                                        [metric]: Number.isNaN(nextValue) ? undefined : nextValue,
+                                      });
+                                    }}
+                                  />
+                                  <StatusBadge
+                                    isEnabled={!isDisabled()}
+                                    onToggle={() =>
+                                      props.table.setEditingThresholds({
+                                        ...props.table.editingThresholds(),
+                                        [metric]: isDisabled() ? undefined : -1,
+                                      })
+                                    }
+                                    {...getAlertResourceTableMetricOffToggleProps()}
+                                  />
+                                </div>
                               </Show>
                             </div>
                           );

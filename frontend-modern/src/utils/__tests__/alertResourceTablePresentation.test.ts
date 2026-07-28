@@ -20,6 +20,7 @@ import {
   getAlertResourceTableEditNotePlaceholder,
   getAlertResourceTableEmptyState,
   getAlertResourceTableMetricInputTitle,
+  getAlertResourceTableMetricOffToggleProps,
   getAlertResourceTableMetricPlaceholder,
   getAlertResourceTableNoResultsState,
   getAlertResourceTableOfflineStateOrder,
@@ -95,8 +96,17 @@ describe('alertResourceTablePresentation', () => {
     });
     expect(getAlertResourceTableMetricInputTitle(true)).toBe('Click to enable this metric');
     expect(getAlertResourceTableMetricInputTitle(false)).toBe(
-      'Set to -1 to disable alerts for this metric',
+      'Set to -1 or use the Off toggle to disable alerts for this metric',
     );
     expect(getAlertResourceTableEditMetricTitle()).toBe('Click to edit this metric');
+  });
+
+  it('exports the per-metric off-toggle badge props', () => {
+    expect(getAlertResourceTableMetricOffToggleProps()).toEqual({
+      labelEnabled: 'On',
+      labelDisabled: 'Off',
+      titleEnabled: 'Alerts enabled for this metric. Click to turn off.',
+      titleDisabled: 'Alerts turned off for this metric. Click to re-enable.',
+    });
   });
 });

@@ -1,6 +1,11 @@
 import { Show, For, createSignal, createEffect } from 'solid-js';
 import { Dialog } from '../shared/Dialog';
+import { StatusBadge } from '../shared/StatusBadge';
 import { ThresholdSlider } from '../Workloads/ThresholdSlider';
+import {
+  getAlertResourceTableMetricOffToggleProps,
+  getAlertResourceTableMetricPlaceholder,
+} from '@/utils/alertResourceTablePresentation';
 import {
   ALERT_BULK_EDIT_CANCEL_LABEL,
   ALERT_BULK_EDIT_CLEAR_LABEL,
@@ -102,14 +107,31 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                 if (metric === 'backup' || metric === 'snapshot') return null;
                 const bounds = getMetricBounds(metric);
                 const val = () => thresholds()[metric];
+                const isOff = () => val() === -1;
 
                 return (
                   <div class="space-y-2 pb-4 border-b border-border-subtle last:border-0">
                     <div class="flex items-center justify-between mb-2">
                       <label class="text-sm font-medium text-base-content">{column}</label>
-                      <span class="text-xs text-slate-500 font-mono">
-                        {val() !== undefined ? val() : ALERT_BULK_EDIT_UNCHANGED_LABEL}
-                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-500 font-mono">
+                          {isOff()
+                            ? getAlertResourceTableMetricPlaceholder(true)
+                            : val() !== undefined
+                              ? val()
+                              : ALERT_BULK_EDIT_UNCHANGED_LABEL}
+                        </span>
+                        <StatusBadge
+                          isEnabled={!isOff()}
+                          onToggle={() =>
+                            setThresholds((prev) => ({
+                              ...prev,
+                              [metric]: isOff() ? undefined : -1,
+                            }))
+                          }
+                          {...getAlertResourceTableMetricOffToggleProps()}
+                        />
+                      </div>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                       <div class="flex-1">
@@ -119,7 +141,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                               type={metric as 'cpu' | 'memory' | 'disk' | 'temperature'}
                               min={bounds.min}
                               max={bounds.max}
-                              value={val() !== undefined ? val()! : bounds.min}
+                              value={val() !== undefined && !isOff() ? val()! : bounds.min}
                               onChange={(v) => {
                                 setThresholds((prev) => ({ ...prev, [metric]: v }));
                               }}
@@ -132,8 +154,12 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                             min={bounds.min}
                             max={bounds.max}
                             step={bounds.step}
-                            value={val() ?? ''}
-                            placeholder={ALERT_BULK_EDIT_UNCHANGED_LABEL}
+                            value={isOff() ? '' : (val() ?? '')}
+                            placeholder={
+                              isOff()
+                                ? getAlertResourceTableMetricPlaceholder(true)
+                                : ALERT_BULK_EDIT_UNCHANGED_LABEL
+                            }
                             onInput={(e) => {
                               const v = parseFloat(e.currentTarget.value);
                               setThresholds((prev) => ({
