@@ -144,7 +144,6 @@ Controls runtime behavior like logging, polling intervals, and UI preferences. L
 ```
 
 > **Note**: `logFormat` is only configurable via the `LOG_FORMAT` environment variable, not in `system.json`.
-> **Note**: `autoUpdateTime` is stored by the UI, but the systemd timer uses its own schedule.
 </details>
 
 ### Supported system.json Keys
@@ -170,8 +169,6 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `webhookAllowedPrivateCIDRs` | Allowlist for private webhook targets |
 | `updateChannel` | Update channel (`stable` or `rc`) |
 | `autoUpdateEnabled` | Allow one-click updates |
-| `autoUpdateCheckInterval` | Update check interval (hours) |
-| `autoUpdateTime` | UI-stored preferred update time |
 | `publicURL` | Public URL used in links/notifications |
 | `hideLocalLogin` | Hide username/password login form |
 | `temperatureMonitoringEnabled` | Enable temperature monitoring (where supported) |
@@ -354,10 +351,8 @@ These are stored in `system.json` and managed via the UI.
 | ----- | ------------- | --------- |
 | `updateChannel` | Update channel (`stable` or `rc`) | `stable` |
 | `autoUpdateEnabled` | Allow one-click updates | `false` |
-| `autoUpdateCheckInterval` | Background update check interval in hours (`0` disables) | `24` |
-| `autoUpdateTime` | Stored UI preference (systemd timer has its own schedule) | `03:00` |
 
-> **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`, `AUTO_UPDATE_CHECK_INTERVAL`, `AUTO_UPDATE_TIME`) are kept in sync for backwards compatibility but are not read at runtime.
+> **Note**: Update settings are stored in `system.json`. Legacy `.env` entries (`UPDATE_CHANNEL`, `AUTO_UPDATE_ENABLED`) are kept in sync for backwards compatibility but are not read at runtime. The former `autoUpdateCheckInterval` / `autoUpdateTime` fields were never consumed and are ignored if present; the update schedule lives in the systemd timer.
 >
 > `stable` is the default and recommended production channel. `rc` is an
 > opt-in preview channel. In v6, unattended systemd auto-updates remain

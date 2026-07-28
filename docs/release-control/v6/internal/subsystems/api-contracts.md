@@ -3668,6 +3668,21 @@ auto-register mutation boundary.
 
 ## Current State
 
+### System settings shed the dead auto-update schedule fields
+
+The system settings payload (`internal/config.SystemSettings`, projected by
+`internal/api/config_system_handlers.go` and mutated through
+`internal/api/system_settings.go`) no longer includes
+`autoUpdateCheckInterval` or `autoUpdateTime`. Nothing ever consumed the
+fields — the unattended update schedule is owned entirely by the
+install.sh-rendered systemd timer, and no UI control set them — so the API
+accepted, validated, and persisted a schedule preference that could never
+take effect. Legacy clients may still send the keys: the update endpoint
+ignores them without a validation error and never writes them back into
+`system.json`. `TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored` in
+`internal/api/system_settings_telemetry_test.go` and the response snapshot in
+`internal/api/contract_test.go` pin that payload shape.
+
 ### Connections command-channel liveness tolerates stale host token IDs
 
 The `/api/connections` ledger's `RemoteControl` and `CommandPolicy` signals

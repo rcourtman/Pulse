@@ -480,23 +480,6 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 		}
 	}
 
-	// Validate auto-update check interval (min 1 hour, max 7 days)
-	if val, ok := rawRequest["autoUpdateCheckInterval"]; ok {
-		if interval, ok := val.(float64); ok {
-			if interval < 0 {
-				return fmt.Errorf("auto-update check interval cannot be negative")
-			}
-			if interval > 0 && interval < 1 {
-				return fmt.Errorf("auto-update check interval must be at least 1 hour")
-			}
-			if interval > 168 {
-				return fmt.Errorf("auto-update check interval cannot exceed 168 hours (7 days)")
-			}
-		} else {
-			return fmt.Errorf("auto-update check interval must be a number")
-		}
-	}
-
 	if cfgMap, cfgProvided := discoveryConfigMap(rawRequest); cfgProvided {
 		if cfgMap == nil {
 			return fmt.Errorf("discoveryConfig must be an object")
@@ -899,12 +882,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if updates.UpdateChannel != "" {
 		settings.UpdateChannel = updates.UpdateChannel
 	}
-	if _, ok := rawRequest["autoUpdateCheckInterval"]; ok {
-		settings.AutoUpdateCheckInterval = updates.AutoUpdateCheckInterval
-	}
-	if updates.AutoUpdateTime != "" {
-		settings.AutoUpdateTime = updates.AutoUpdateTime
-	}
 	if updates.Theme != "" {
 		settings.Theme = updates.Theme
 	}
@@ -1047,12 +1024,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 	h.config.UpdateChannel = settings.UpdateChannel
 	h.config.AutoUpdateEnabled = config.EffectiveAutoUpdateEnabled(settings.UpdateChannel, settings.AutoUpdateEnabled)
-	if settings.AutoUpdateCheckInterval > 0 {
-		h.config.AutoUpdateCheckInterval = time.Duration(settings.AutoUpdateCheckInterval) * time.Hour
-	}
-	if settings.AutoUpdateTime != "" {
-		h.config.AutoUpdateTime = settings.AutoUpdateTime
-	}
 	h.config.DiscoveryEnabled = settings.DiscoveryEnabled
 	if settings.DiscoverySubnet != "" {
 		h.config.DiscoverySubnet = settings.DiscoverySubnet

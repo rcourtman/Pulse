@@ -2201,6 +2201,15 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Shared system-settings boundary dropped dead auto-update schedule fields
+
+The shared `internal/api` system-settings surface this subsystem consumes
+(`internal/api/system_settings.go`, `internal/api/config_system_handlers.go`)
+removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
+fields. No agent-lifecycle behavior keyed off them — agent update targeting
+and command admission are unaffected — and the extension-point expectations
+on the system-settings boundary are otherwise unchanged.
+
 ### Monitor housekeeping prunes only live memory-evidence caches
 
 The shared monitor housekeeping pass in `internal/monitoring/monitor_agents.go`

@@ -400,8 +400,6 @@ func TestHandleGetSystemSettings_ConfigOverrides(t *testing.T) {
 		ConnectionTimeout:            15 * time.Second,
 		UpdateChannel:                "stable",
 		AutoUpdateEnabled:            true,
-		AutoUpdateCheckInterval:      6 * time.Hour,
-		AutoUpdateTime:               "03:30",
 		LogLevel:                     "debug",
 		DiscoveryEnabled:             true,
 		DiscoverySubnet:              "10.0.0.0/24",

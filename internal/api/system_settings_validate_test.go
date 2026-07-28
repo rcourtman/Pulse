@@ -284,50 +284,6 @@ func TestValidateSystemSettings(t *testing.T) {
 		},
 
 		// =================================================================
-		// autoUpdateCheckInterval validation
-		// NOTE: Like backupPollingInterval, this allows 0 to disable.
-		// =================================================================
-		{
-			name:        "autoUpdateCheckInterval: zero is valid (disables check)",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": float64(0)},
-			expectError: false,
-		},
-		{
-			name:        "autoUpdateCheckInterval: valid minimum positive (1)",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": float64(1)},
-			expectError: false,
-		},
-		{
-			name:        "autoUpdateCheckInterval: valid maximum (168)",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": float64(168)},
-			expectError: false,
-		},
-		{
-			name:        "autoUpdateCheckInterval: negative is invalid",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": float64(-1)},
-			expectError: true,
-			errorText:   "negative",
-		},
-		{
-			name:        "autoUpdateCheckInterval: below minimum if positive (0.5)",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": float64(0.5)},
-			expectError: true,
-			errorText:   "1 hour",
-		},
-		{
-			name:        "autoUpdateCheckInterval: above maximum (169)",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": float64(169)},
-			expectError: true,
-			errorText:   "168",
-		},
-		{
-			name:        "autoUpdateCheckInterval: string instead of number",
-			input:       map[string]interface{}{"autoUpdateCheckInterval": "24"},
-			expectError: true,
-			errorText:   "number",
-		},
-
-		// =================================================================
 		// discoveryConfig validation - field name variants (camelCase and snake_case)
 		// =================================================================
 		{
@@ -962,14 +918,13 @@ func TestValidateSystemSettings(t *testing.T) {
 		{
 			name: "multiple valid fields together",
 			input: map[string]interface{}{
-				"pvePollingInterval":      float64(60),
-				"pbsPollingInterval":      float64(120),
-				"autoUpdateEnabled":       true,
-				"theme":                   "dark",
-				"connectionTimeout":       float64(30),
-				"backupPollingInterval":   float64(3600),
-				"backupPollingEnabled":    true,
-				"autoUpdateCheckInterval": float64(24),
+				"pvePollingInterval":    float64(60),
+				"pbsPollingInterval":    float64(120),
+				"autoUpdateEnabled":     true,
+				"theme":                 "dark",
+				"connectionTimeout":     float64(30),
+				"backupPollingInterval": float64(3600),
+				"backupPollingEnabled":  true,
 			},
 			expectError: false,
 		},
@@ -1063,12 +1018,6 @@ func TestValidateSystemSettings_BoundaryConditions(t *testing.T) {
 		{name: "backupPollingInterval: 10.001", input: map[string]interface{}{"backupPollingInterval": 10.001}, expectError: false},
 		{name: "backupPollingInterval: 604799.999", input: map[string]interface{}{"backupPollingInterval": 604799.999}, expectError: false},
 		{name: "backupPollingInterval: 604800.001", input: map[string]interface{}{"backupPollingInterval": 604800.001}, expectError: true},
-
-		// Auto-update check interval boundaries
-		{name: "autoUpdateCheckInterval: 0.999", input: map[string]interface{}{"autoUpdateCheckInterval": 0.999}, expectError: true},
-		{name: "autoUpdateCheckInterval: 1.001", input: map[string]interface{}{"autoUpdateCheckInterval": 1.001}, expectError: false},
-		{name: "autoUpdateCheckInterval: 167.999", input: map[string]interface{}{"autoUpdateCheckInterval": 167.999}, expectError: false},
-		{name: "autoUpdateCheckInterval: 168.001", input: map[string]interface{}{"autoUpdateCheckInterval": 168.001}, expectError: true},
 
 		// Connection timeout boundaries
 		{name: "connectionTimeout: 0.999", input: map[string]interface{}{"connectionTimeout": 0.999}, expectError: true},

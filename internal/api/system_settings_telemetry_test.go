@@ -443,3 +443,62 @@ func TestCIDRUpdate_ValidCIDRPersisted(t *testing.T) {
 		t.Errorf("persisted CIDRs should be updated, got %q", saved.WebhookAllowedPrivateCIDRs)
 	}
 }
+
+// The autoUpdateCheckInterval and autoUpdateTime settings were removed as dead
+// surface: nothing ever consumed them (the systemd timer schedule is rendered
+// by install.sh) and no UI control set them, so accepting and persisting them
+// only pretended a schedule preference existed (#1643/#1637 triage). Legacy
+// clients may still send the fields; the update endpoint must ignore them
+// without erroring — including values the retired validation used to reject —
+// and must not write them back into system.json.
+func TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:     tempDir,
+		ConfigPath:   tempDir,
+		EnvOverrides: map[string]bool{},
+	}
+	handler, persistence, token := setupTelemetryTest(t, cfg)
+
+	initial := config.DefaultSystemSettings()
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"autoUpdateCheckInterval": float64(9999), // rejected by the retired validation
+		"autoUpdateTime":          "99:99",
+		"connectionTimeout":       float64(30),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("legacy auto-update fields must be ignored, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	raw, err := os.ReadFile(filepath.Join(tempDir, "system.json"))
+	if err != nil {
+		t.Fatalf("read persisted system.json: %v", err)
+	}
+	var persisted map[string]interface{}
+	if err := json.Unmarshal(raw, &persisted); err != nil {
+		t.Fatalf("parse persisted system.json: %v", err)
+	}
+	for _, key := range []string{"autoUpdateCheckInterval", "autoUpdateTime"} {
+		if _, ok := persisted[key]; ok {
+			t.Fatalf("persisted system.json still carries dead setting %q:\n%s", key, raw)
+		}
+	}
+
+	saved, err := persistence.LoadSystemSettings()
+	if err != nil {
+		t.Fatalf("load persisted settings: %v", err)
+	}
+	if saved.ConnectionTimeout != 30 {
+		t.Fatalf("real setting alongside legacy fields was dropped: connectionTimeout=%d", saved.ConnectionTimeout)
+	}
+}

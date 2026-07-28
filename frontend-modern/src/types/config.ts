@@ -31,8 +31,6 @@ export interface SystemConfig {
   connectionTimeout?: number; // Seconds before timeout (default: 10)
   autoUpdateEnabled: boolean; // Enable auto-updates
   updateChannel?: UpdateChannel; // Update channel: 'stable' | 'rc'
-  autoUpdateCheckInterval?: number; // Hours between update checks
-  autoUpdateTime?: string; // Time for updates (HH:MM format)
   backupPollingInterval?: number; // Backup polling interval in seconds (0 = default cadence)
   backupPollingEnabled?: boolean; // Enable backup polling of PVE/PBS data
   temperatureMonitoringEnabled?: boolean; // Collect CPU/NVMe temperatures via SSH

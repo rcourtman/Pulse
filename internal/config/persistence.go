@@ -1456,8 +1456,6 @@ type SystemSettings struct {
 	ConnectionTimeout            int                  `json:"connectionTimeout,omitempty"`
 	UpdateChannel                string               `json:"updateChannel,omitempty"`
 	AutoUpdateEnabled            bool                 `json:"autoUpdateEnabled"` // Removed omitempty so false is saved
-	AutoUpdateCheckInterval      int                  `json:"autoUpdateCheckInterval,omitempty"`
-	AutoUpdateTime               string               `json:"autoUpdateTime,omitempty"`
 	LogLevel                     string               `json:"logLevel,omitempty"`
 	DiscoveryEnabled             bool                 `json:"discoveryEnabled"`
 	DiscoverySubnet              string               `json:"discoverySubnet,omitempty"`
@@ -3527,8 +3525,6 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		} else if strings.HasPrefix(line, "AUTO_UPDATE_ENABLED=") {
 			// Always update AUTO_UPDATE_ENABLED when the line exists
 			lines = append(lines, fmt.Sprintf("AUTO_UPDATE_ENABLED=%t", settings.AutoUpdateEnabled))
-		} else if strings.HasPrefix(line, "AUTO_UPDATE_CHECK_INTERVAL=") && settings.AutoUpdateCheckInterval > 0 {
-			lines = append(lines, fmt.Sprintf("AUTO_UPDATE_CHECK_INTERVAL=%d", settings.AutoUpdateCheckInterval))
 		} else {
 			lines = append(lines, line)
 		}

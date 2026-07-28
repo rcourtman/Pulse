@@ -28,9 +28,8 @@ OTHER_VAR=value
 
 	// 2. Save settings that should update .env
 	settings := SystemSettings{
-		UpdateChannel:           "stable",
-		AutoUpdateEnabled:       false,
-		AutoUpdateCheckInterval: 7200,
+		UpdateChannel:     "stable",
+		AutoUpdateEnabled: false,
 	}
 
 	err = cp.SaveSystemSettings(settings)
@@ -44,8 +43,12 @@ OTHER_VAR=value
 	// Check updates
 	assert.Contains(t, content, "UPDATE_CHANNEL=stable")
 	assert.Contains(t, content, "AUTO_UPDATE_ENABLED=false")
-	assert.Contains(t, content, "AUTO_UPDATE_CHECK_INTERVAL=7200")
 	assert.Contains(t, content, "OTHER_VAR=value")
+
+	// A legacy AUTO_UPDATE_CHECK_INTERVAL line is preserved verbatim; the
+	// setting was removed as dead (nothing ever consumed it) so saves no
+	// longer rewrite it.
+	assert.Contains(t, content, "AUTO_UPDATE_CHECK_INTERVAL=3600")
 
 	// Check removal of deprecated
 	assert.NotContains(t, content, "POLLING_INTERVAL=")
@@ -53,7 +56,6 @@ OTHER_VAR=value
 	// Check original values are gone
 	assert.NotContains(t, content, "UPDATE_CHANNEL=beta")
 	assert.NotContains(t, content, "AUTO_UPDATE_ENABLED=true")
-	assert.NotContains(t, content, "AUTO_UPDATE_CHECK_INTERVAL=3600")
 }
 
 func TestSaveSystemSettings_UpdateEnvFile_NoUpdate(t *testing.T) {
@@ -65,7 +67,7 @@ func TestSaveSystemSettings_UpdateEnvFile_NoUpdate(t *testing.T) {
 	// Based on code:
 	// UPDATE_CHANNEL replaced if settings.UpdateChannel != ""
 	// AUTO_UPDATE_ENABLED always replaced
-	// AUTO_UPDATE_CHECK_INTERVAL replaced if > 0
+	// AUTO_UPDATE_CHECK_INTERVAL is legacy and always preserved verbatim
 
 	initialContent := `
 UPDATE_CHANNEL=beta
@@ -75,8 +77,7 @@ AUTO_UPDATE_CHECK_INTERVAL=3600
 	require.NoError(t, err)
 
 	settings := SystemSettings{
-		UpdateChannel:           "", // Empty, should not replace
-		AutoUpdateCheckInterval: 0,  // Zero, should not replace
+		UpdateChannel: "", // Empty, should not replace
 	}
 
 	err = cp.SaveSystemSettings(settings)

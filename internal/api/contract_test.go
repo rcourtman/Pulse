@@ -10053,8 +10053,6 @@ func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 		BackupPollingInterval:        3600,
 		UpdateChannel:                "rc",
 		AutoUpdateEnabled:            false,
-		AutoUpdateCheckInterval:      24,
-		AutoUpdateTime:               "03:00",
 		DiscoveryEnabled:             true,
 		DiscoverySubnet:              "10.0.0.0/24",
 		DiscoveryConfig:              config.DefaultDiscoveryConfig(),
@@ -10078,8 +10076,6 @@ func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 		"backupPollingInterval":3600,
 		"updateChannel":"rc",
 		"autoUpdateEnabled":false,
-		"autoUpdateCheckInterval":24,
-		"autoUpdateTime":"03:00",
 		"discoveryEnabled":true,
 		"discoverySubnet":"10.0.0.0/24",
 		"discoveryConfig":{

@@ -200,9 +200,8 @@ CUSTOM_VAR=value`
 	cp := config.NewConfigPersistence(tempDir)
 
 	settings := config.SystemSettings{
-		UpdateChannel:           "beta",
-		AutoUpdateEnabled:       true,
-		AutoUpdateCheckInterval: 3600,
+		UpdateChannel:     "beta",
+		AutoUpdateEnabled: true,
 	}
 
 	if err := cp.SaveSystemSettings(settings); err != nil {

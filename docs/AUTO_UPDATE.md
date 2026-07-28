@@ -58,7 +58,7 @@ In **Settings → System → Updates**:
 | Setting | Description |
 |---------|-------------|
 | **Update Channel** | Stable (recommended for production) or Pre-release (opt-in preview) |
-| **Auto-Check** | Background update check interval (hours); `0` disables |
+| **Auto-Check** | Enable or disable automatic updates |
 
 ### Stored Settings (system.json)
 
@@ -67,13 +67,11 @@ Auto-update preferences are stored in `system.json` and edited via the UI.
 ```json
 {
   "autoUpdateEnabled": false,
-  "updateChannel": "stable",
-  "autoUpdateCheckInterval": 24,
-  "autoUpdateTime": "03:00"
+  "updateChannel": "stable"
 }
 ```
 
-**Note:** `autoUpdateTime` is stored for UI reference. The systemd timer still runs on its own schedule (02:00 + jitter). Background update checks follow `autoUpdateCheckInterval`.
+**Note:** The update schedule itself lives in the systemd timer (daily at 02:00 plus up to 4 hours of random delay), not in `system.json`. The legacy `autoUpdateCheckInterval` and `autoUpdateTime` fields were never consumed by anything and are ignored if present in older files.
 
 **Channel policy note:** `stable` is the default and only recommended channel for paid or production environments. `rc` remains the internal channel key, but the user-facing meaning is an explicit pre-release preview path. In v6, unattended systemd auto-updates remain `stable`-only even if `updateChannel` is set to `rc`.
 

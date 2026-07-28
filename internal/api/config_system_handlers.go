@@ -47,8 +47,6 @@ func (h *ConfigHandlers) handleGetSystemSettings(w http.ResponseWriter, r *http.
 		settings.ConnectionTimeout = int(cfg.ConnectionTimeout.Seconds())
 		settings.UpdateChannel = cfg.UpdateChannel
 		settings.AutoUpdateEnabled = cfg.AutoUpdateEnabled
-		settings.AutoUpdateCheckInterval = int(cfg.AutoUpdateCheckInterval.Hours())
-		settings.AutoUpdateTime = cfg.AutoUpdateTime
 		settings.LogLevel = cfg.LogLevel
 		settings.DiscoveryEnabled = cfg.DiscoveryEnabled
 		settings.DiscoverySubnet = cfg.DiscoverySubnet

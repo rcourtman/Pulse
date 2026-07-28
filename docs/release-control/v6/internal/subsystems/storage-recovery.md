@@ -1985,6 +1985,15 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
 
+### Shared system-settings boundary dropped dead auto-update schedule fields
+
+The shared `internal/api` system-settings surface this subsystem consumes
+(`internal/api/system_settings.go`, `internal/api/config_system_handlers.go`)
+removed the never-consumed `autoUpdateCheckInterval` / `autoUpdateTime`
+fields. Persisted `system.json` files that still carry the legacy keys load
+cleanly with the keys ignored, so tenant workspace preservation and recovery
+flows that copy `system.json` forward are unaffected.
+
 ### Agent exec token binding repairs are fail-closed durable writes
 
 Command-token binding metadata (`bound_agent_id`, `bound_hostname`,

@@ -575,6 +575,21 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### System settings mutation surface no longer accepts dead schedule inputs
+
+The governed system-settings write path in `internal/api/system_settings.go`
+and the runtime config in `internal/config/config.go` dropped the
+`autoUpdateCheckInterval` / `autoUpdateTime` fields, which were stored but
+never consumed by any runtime. Dead accepted-but-unread input is surface the
+security review has to reason about for no benefit, so the fields, their
+validation, and their persistence were removed together. Legacy keys in a
+POSTed settings body are ignored rather than rejected, and a `system.json`
+written before the removal still loads cleanly with the legacy keys ignored
+(`TestLoad_IgnoresLegacyAutoUpdateScheduleFields` in
+`internal/config/config_load_test.go`,
+`TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored` in
+`internal/api/system_settings_telemetry_test.go`).
+
 ### Canonical mutation-plane dependency
 
 Raw command, file-write, arbitrary pod-exec, and legacy remediation authority

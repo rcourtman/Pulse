@@ -228,10 +228,8 @@ type Config struct {
 	HTTPRedirectPort int    `envconfig:"HTTP_REDIRECT_PORT" default:"0"` // When HTTPS is enabled, start an HTTP listener on this port that redirects to HTTPS (0 = disabled)
 
 	// Update settings
-	UpdateChannel           string
-	AutoUpdateEnabled       bool
-	AutoUpdateCheckInterval time.Duration
-	AutoUpdateTime          string
+	UpdateChannel     string
+	AutoUpdateEnabled bool
 
 	// Discovery settings
 	DiscoveryEnabled bool            `envconfig:"DISCOVERY_ENABLED" default:"false"`
@@ -882,12 +880,6 @@ func load(initLogging bool) (*Config, error) {
 
 			cfg.UpdateChannel = EffectiveUpdateChannel(systemSettings.UpdateChannel, cfg.UpdateChannel)
 			cfg.AutoUpdateEnabled = EffectiveAutoUpdateEnabled(cfg.UpdateChannel, systemSettings.AutoUpdateEnabled)
-			if systemSettings.AutoUpdateCheckInterval > 0 {
-				cfg.AutoUpdateCheckInterval = time.Duration(systemSettings.AutoUpdateCheckInterval) * time.Hour
-			}
-			if systemSettings.AutoUpdateTime != "" {
-				cfg.AutoUpdateTime = systemSettings.AutoUpdateTime
-			}
 			if systemSettings.AllowedOrigins != "" {
 				cfg.AllowedOrigins = systemSettings.AllowedOrigins
 			}

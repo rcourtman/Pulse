@@ -521,3 +521,22 @@ func TestLoad_Persistence_InvalidFiles(t *testing.T) {
 	// Should not crash, just empty/defailts
 	assert.Empty(t, cfg.PVEInstances)
 }
+
+// The dead autoUpdateCheckInterval / autoUpdateTime settings were removed from
+// SystemSettings (#1643/#1637 triage): nothing ever consumed them — the
+// update schedule is owned by the install.sh-rendered systemd timer. Boxes
+// that persisted the fields before the removal must keep loading cleanly,
+// with the legacy keys ignored and the real update settings still honored.
+func TestLoad_IgnoresLegacyAutoUpdateScheduleFields(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+
+	systemJSON := `{"autoUpdateEnabled":true,"updateChannel":"stable","autoUpdateCheckInterval":24,"autoUpdateTime":"03:00"}`
+	require.NoError(t, os.WriteFile(filepath.Join(dataDir, "system.json"), []byte(systemJSON), 0600))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.True(t, cfg.AutoUpdateEnabled, "autoUpdateEnabled from a legacy system.json must still apply")
+	assert.Equal(t, "stable", cfg.UpdateChannel)
+}
