@@ -25,7 +25,7 @@ Users can hold multiple roles. Their effective permissions are combined across a
 
 ### OIDC Group Mapping
 
-When using OIDC/SSO, roles can be automatically assigned based on group membership. See [OIDC Group-to-Role Mapping](OIDC.md#group-to-role-mapping-pro) for configuration.
+When using OIDC/SSO, roles can be automatically assigned based on group membership. See [OIDC Group-to-Role Mapping](OIDC.md#group-to-role-mapping-pro-and-above) for configuration.
 
 ---
 
@@ -134,7 +134,7 @@ If you use an OIDC identity provider, Pulse can automatically assign roles based
 
 **UI:** Settings → Security → Single Sign-On → Group Role Mappings
 
-**Environment variable:**
+**Environment variable** (legacy env-configured OIDC provider only — it does not apply to providers created through the UI or the SSO provider API):
 ```bash
 # Format: group1=role1,group2=role2
 OIDC_GROUP_ROLE_MAPPINGS="oidc-admins=admin,oidc-operators=operator,oidc-viewers=viewer"
@@ -144,10 +144,10 @@ How it works:
 - On each login, Pulse reads the user's groups from the OIDC groups claim.
 - Matching groups are mapped to Pulse roles.
 - A user can receive multiple roles from multiple group mappings.
-- When at least one mapped role is found, role assignments are updated to match. Note: logins with zero matching groups do not clear existing role assignments.
+- Once a provider has any group role mappings configured, the mapping is authoritative: on every login the user's role assignments are replaced with whatever the mapping resolves to. A login that matches no mapped group resolves to an empty set, which clears the user's existing role assignments. Watch for identity providers that silently drop the groups claim (see the Entra ID group overage warning in [OIDC.md](OIDC.md#microsoft-entra-id-formerly-azure-ad)) — to Pulse that looks the same as losing every group.
 - Role changes are logged to the [audit log](AUDIT_LOGGING.md) as `oidc_role_assignment` events.
 
-See [OIDC documentation](OIDC.md#group-to-role-mapping-pro) for full configuration details.
+See [OIDC documentation](OIDC.md#group-to-role-mapping-pro-and-above) for full configuration details.
 
 ---
 

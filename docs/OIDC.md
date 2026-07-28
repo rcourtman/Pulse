@@ -1,6 +1,6 @@
 # 🔐 OIDC Single Sign-On
 
-Enable Single Sign-On (SSO) with providers like Authentik, Keycloak, Okta, and Azure AD.
+Enable Single Sign-On (SSO) with providers like Authentik, Keycloak, Okta, and Microsoft Entra ID.
 
 ## 🚀 Quick Start
 
@@ -40,9 +40,9 @@ Automatically assign Pulse roles based on OIDC group membership. When a user log
 
 **Configuration:**
 Group-role mappings are configured per SSO provider through the UI (or the
-SSO provider API for automated setup) — there is no environment-variable
-override. Go to **Settings → Security → Single Sign-On**, edit the provider,
-and populate **Group Role Mappings** with entries like:
+SSO provider API for automated setup). Go to **Settings → Security → Single
+Sign-On**, edit the provider, and populate **Group Role Mappings** with
+entries like:
 - `oidc-admins` → `admin`
 - `oidc-operators` → `operator`
 - `oidc-viewers` → `viewer`
@@ -50,6 +50,11 @@ and populate **Group Role Mappings** with entries like:
 The mappings persist on the provider record as a `groupRoleMappings` JSON
 field. Provider-level config (including this field) can be PUT through the
 SSO provider API for automated setup.
+
+`OIDC_GROUP_ROLE_MAPPINGS` populates the same field, but only for the legacy
+single-provider OIDC configuration built from `OIDC_*` environment variables —
+it has no effect on providers created through the UI or the SSO provider API.
+See [CONFIGURATION.md](CONFIGURATION.md).
 
 **How it works:**
 - On each login, Pulse reads the user's groups from the configured groups claim.
@@ -98,10 +103,33 @@ For persistent sessions that don't require frequent re-authentication:
 - **Valid Redirect URIs**: `https://pulse.example.com/api/oidc/<provider-id>/callback`
 - **Issuer URL**: `https://keycloak.example.com/realms/myrealm`
 
-### Azure AD
-- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback` (Web)
+### Microsoft Entra ID (formerly Azure AD)
+
+Create the provider in Pulse first (**Settings → Security → Single Sign-On → Add Provider**) so it gets its ID — Pulse generates a UUID per provider and shows the resulting callback URL. You need that URL for the Entra redirect URI below.
+
+**In the Entra admin center:**
+
+1. **App registrations → New registration**: give it a name (e.g. `Pulse SSO`) and choose *Accounts in this organizational directory only (Single tenant)*.
+2. **Authentication → Add a platform → Web**: set the redirect URI to `https://pulse.example.com/api/oidc/<provider-id>/callback` and tick **ID tokens**.
+3. **Certificates & secrets → New client secret**: copy the secret **Value** (not the Secret ID) — it is only shown once.
+4. **Token configuration → Add groups claim**: select **Groups assigned to the application**, expand **ID**, and choose **Group ID**.
+5. **Enterprise applications → (your app) → Properties**: set **Assignment required?** to `Yes`, so only assigned users and groups can sign in.
+6. **Enterprise applications → (your app) → Users and groups**: assign the security group (e.g. `Pulse-Admins`) and copy its **Object ID** — a GUID like `a1b2c3d4-e5f6-7890-abcd-123456789abc`.
+
+**In Pulse:**
+
 - **Issuer URL**: `https://login.microsoftonline.com/<tenant-id>/v2.0`
-- **Note**: Enable "ID tokens" in Authentication settings.
+- **Client ID**: the app registration's *Application (client) ID*.
+- **Client Secret**: the secret value from step 3.
+- **Redirect URI**: `https://pulse.example.com/api/oidc/<provider-id>/callback`, matching the app registration exactly. The bare `/api/oidc/callback` is a v5 compatibility path that only serves the legacy env-configured provider — don't use it for a new provider.
+- **Scopes**: exactly `openid profile email`. Do **not** add `groups`. Entra has no `groups` scope and fails the whole authorization request with `AADSTS650053`; group membership arrives in the ID token from the Token configuration step, not from a scope.
+- **Groups Claim**: `groups`
+- **Allowed Groups**: the group's Object ID (GUID), not its display name.
+- **Group Role Mappings**: `<guid>=admin`. Keying on the Object ID means the mapping survives a group rename in Entra.
+
+> **Warning — group overage**: if a user belongs to more groups than Entra will fit in a token, Entra omits the `groups` claim entirely and sends a `_claim_names` / `_claim_sources` overage marker pointing at Microsoft Graph instead. Pulse does not follow that marker, so it sees the user as having no groups — and because a configured group-role mapping is authoritative, that login **clears** the user's role assignments instead of leaving them alone. Selecting **Groups assigned to the application** rather than **Security groups** in Token configuration keeps the claim small and avoids the overage.
+
+> **Note**: Group-to-role mapping requires a Pro (or above) license. Plain SSO login and **Allowed Groups** gating work on any plan.
 
 ## 🔧 Troubleshooting
 
