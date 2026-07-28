@@ -456,7 +456,7 @@ func TestPVESetupScript_UsesFailFastRetryGuidance(t *testing.T) {
 	if containsString(script, `echo "  curl -sSL \"$SETUP_SCRIPT_URL\" | bash"`) || containsString(script, `echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"`) {
 		t.Fatalf("expected stale non-fail-fast guidance to be removed, got: %s", truncate(script, 900))
 	}
-	if containsString(script, `echo "Manual setup steps:"`) || containsString(script, `echo "  2. In Pulse: Settings → Nodes → Add Node (enter token from above)"`) {
+	if containsString(script, `echo "Manual setup steps:"`) || containsString(script, `echo "  2. In Pulse: Settings → Infrastructure → Add Node (enter token from above)"`) {
 		t.Fatalf("expected stale off-host manual token flow to be removed from setup script, got: %s", truncate(script, 900))
 	}
 }
@@ -780,8 +780,20 @@ func TestPVESetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	}
 
 	script := rr.Body.String()
-	if !containsString(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
-		t.Fatalf("expected fail-fast auto-register transport in setup script, got: %s", truncate(script, 900))
+	if !containsString(script, `curl -sS -w $'\n%{http_code}' -X POST "$PULSE_URL/api/auto-register"`) {
+		t.Fatalf("expected status-capturing auto-register transport in setup script, got: %s", truncate(script, 900))
+	}
+	if containsString(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
+		t.Fatalf("expected body-suppressing fail-fast auto-register transport to be removed, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `REGISTER_STATUS="${REGISTER_OUTPUT##*$'\n'}"`) {
+		t.Fatalf("expected auto-register HTTP status extraction in setup script, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then`) {
+		t.Fatalf("expected reachable auth-failure status branch in setup script, got: %s", truncate(script, 900))
+	}
+	if containsString(script, `grep -q "Authentication required"`) {
+		t.Fatalf("expected unreachable Authentication required grep branch to be removed, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `"source":"script"`) {
 		t.Fatalf("expected PVE setup script to use canonical /api/auto-register source marker, got: %s", truncate(script, 900))
@@ -801,7 +813,7 @@ func TestPVESetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `echo "The provided Pulse setup token was invalid or expired"`) {
 		t.Fatalf("expected invalid setup-token guidance in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."`) {
+	if !containsString(script, `echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."`) {
 		t.Fatalf("expected fresh setup-token rerun guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `SETUP_TOKEN_INVALID=true`) {
@@ -813,13 +825,13 @@ func TestPVESetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `echo "Pulse setup token authentication failed."`) {
 		t.Fatalf("expected PVE auth-failure completion guidance in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."`) {
+	if !containsString(script, `echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."`) {
 		t.Fatalf("expected canonical PVE auto-register failure continuation guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then`) {
 		t.Fatalf("expected PVE manual footer to stay disabled on auth failure, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Nodes."`) {
+	if !containsString(script, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."`) {
 		t.Fatalf("expected canonical PVE auto-register failure summary guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if containsString(script, `echo "To enable auto-registration, add your API token to the setup URL"`) {
@@ -876,7 +888,7 @@ func TestPVESetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `echo "Add this server to Pulse with:"`) {
 		t.Fatalf("expected canonical PVE manual-add heading in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "Use these details in Pulse Settings → Nodes to finish registration."`) {
+	if !containsString(script, `echo "Use these details in Pulse Settings → Infrastructure to finish registration."`) {
 		t.Fatalf("expected canonical PVE manual registration continuation guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `echo "  Host URL: $SERVER_HOST"`) {
@@ -1295,8 +1307,20 @@ func TestPBSSetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	}
 
 	script := rr.Body.String()
-	if !containsString(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
-		t.Fatalf("expected fail-fast PBS auto-register transport in setup script, got: %s", truncate(script, 900))
+	if !containsString(script, `curl -sS -w $'\n%{http_code}' -X POST "$PULSE_URL/api/auto-register"`) {
+		t.Fatalf("expected status-capturing PBS auto-register transport in setup script, got: %s", truncate(script, 900))
+	}
+	if containsString(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
+		t.Fatalf("expected body-suppressing fail-fast PBS auto-register transport to be removed, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `REGISTER_STATUS="${REGISTER_OUTPUT##*$'\n'}"`) {
+		t.Fatalf("expected PBS auto-register HTTP status extraction in setup script, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then`) {
+		t.Fatalf("expected reachable PBS auth-failure status branch in setup script, got: %s", truncate(script, 900))
+	}
+	if containsString(script, `grep -q "Authentication required"`) {
+		t.Fatalf("expected unreachable PBS Authentication required grep branch to be removed, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `"source":"script"`) {
 		t.Fatalf("expected PBS setup script to use canonical /api/auto-register source marker, got: %s", truncate(script, 900))
@@ -1349,7 +1373,7 @@ func TestPBSSetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `echo "The provided Pulse setup token was invalid or expired"`) {
 		t.Fatalf("expected invalid PBS setup-token guidance in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."`) {
+	if !containsString(script, `echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."`) {
 		t.Fatalf("expected fresh PBS setup-token rerun guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `SETUP_TOKEN_INVALID=true`) {
@@ -1361,16 +1385,16 @@ func TestPBSSetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `echo "Pulse setup token authentication failed."`) {
 		t.Fatalf("expected PBS auth-failure completion guidance in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."`) {
+	if !containsString(script, `echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."`) {
 		t.Fatalf("expected canonical PBS auto-register failure continuation guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then`) {
 		t.Fatalf("expected PBS manual footer to stay disabled on auth failure, got: %s", truncate(script, 900))
 	}
-	if strings.Count(script, `echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."`) < 2 {
+	if strings.Count(script, `echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."`) < 2 {
 		t.Fatalf("expected PBS request-failure and response-failure branches to share canonical manual continuation guidance, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Nodes."`) {
+	if !containsString(script, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."`) {
 		t.Fatalf("expected canonical PBS auto-register failure summary guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if containsString(script, `echo "To enable auto-registration, add your API token to the setup URL"`) {
@@ -1421,7 +1445,7 @@ func TestPBSSetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 	if !containsString(script, `echo "Finish registration in Pulse using the manual setup details below."`) {
 		t.Fatalf("expected truthful PBS manual registration guidance in setup script, got: %s", truncate(script, 900))
 	}
-	if !containsString(script, `echo "Use these details in Pulse Settings → Nodes to finish registration."`) {
+	if !containsString(script, `echo "Use these details in Pulse Settings → Infrastructure to finish registration."`) {
 		t.Fatalf("expected canonical PBS manual registration continuation guidance in setup script, got: %s", truncate(script, 900))
 	}
 	if !containsString(script, `echo "  Host URL: $HOST_URL"`) {

@@ -4115,6 +4115,12 @@ That same dependency also assumes those generated setup scripts fail closed on
 auto-register HTTP and transport failures, so adjacent setup flows do not
 reinterpret shared backend stderr or HTTP-failure output as a successful
 registration payload.
+That same dependency also assumes those generated setup scripts capture the
+auto-register HTTP status alongside the response body and key the
+invalid-setup-token branch off a 401/403 status, and that their manual
+completion and rerun guidance names the live Settings → Infrastructure page,
+so adjacent setup flows surface reachable auth-failure guidance instead of a
+dead server-string grep and a retired page name (#1644).
 That same shared dependency also assumes generated setup scripts preserve
 setup-token auth guidance, so adjacent setup flows do not regress back to
 stale API-token instructions after the backend has already standardized on the

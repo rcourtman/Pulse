@@ -18,7 +18,7 @@ func TestSetupBootstrapDocsStayOnCanonicalArtifactContract(t *testing.T) {
 	pbsDoc := readRepoFile(t, pbsRel)
 	assertContainsAll(t, pbsRel, pbsDoc, []string{
 		`curl -fsSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | { if [ "$(id -u)" -eq 0 ]; then PULSE_SETUP_TOKEN="<setup-token>" bash; elif command -v sudo >/dev/null 2>&1; then sudo env PULSE_SETUP_TOKEN="<setup-token>" bash; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi; }`,
-		"Pulse generates that full command for you from **Settings → Nodes**",
+		"Pulse generates that full command for you from **Settings → Infrastructure**",
 	})
 	assertContainsNone(t, pbsRel, pbsDoc, []string{
 		`curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip>:8007&pulse_url=http://<pulse-ip>:7655" | bash`,

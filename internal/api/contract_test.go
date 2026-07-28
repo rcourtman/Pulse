@@ -6673,7 +6673,7 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if strings.Contains(script, `echo "  curl -sSL \"$SETUP_SCRIPT_URL\" | bash"`) || strings.Contains(script, `echo "   curl -sSL \"$PULSE_URL/api/setup-script?type=pve&host=YOUR_PVE_URL&pulse_url=$PULSE_URL\" | bash"`) {
 		t.Fatalf("setup script preserved stale non-fail-fast guidance: %s", script)
 	}
-	if strings.Contains(script, `echo "Manual setup steps:"`) || strings.Contains(script, `echo "  2. In Pulse: Settings → Nodes → Add Node (enter token from above)"`) {
+	if strings.Contains(script, `echo "Manual setup steps:"`) || strings.Contains(script, `echo "  2. In Pulse: Settings → Infrastructure → Add Node (enter token from above)"`) {
 		t.Fatalf("setup script preserved stale off-host manual token flow: %s", script)
 	}
 	if !strings.Contains(script, `done <<< "$OLD_TOKENS_PVE"`) {
@@ -6762,8 +6762,17 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if strings.Contains(script, `grep -q "success"`) {
 		t.Fatalf("setup script preserved broad success substring detection: %s", script)
 	}
-	if !strings.Contains(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
-		t.Fatalf("setup script missing fail-fast auto-register transport: %s", script)
+	if !strings.Contains(script, `curl -sS -w $'\n%{http_code}' -X POST "$PULSE_URL/api/auto-register"`) {
+		t.Fatalf("setup script missing status-capturing auto-register transport: %s", script)
+	}
+	if strings.Contains(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
+		t.Fatalf("setup script preserved body-suppressing fail-fast auto-register transport: %s", script)
+	}
+	if !strings.Contains(script, `elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then`) {
+		t.Fatalf("setup script missing reachable auth-failure status branch: %s", script)
+	}
+	if strings.Contains(script, `grep -q "Authentication required"`) {
+		t.Fatalf("setup script preserved unreachable Authentication required grep branch: %s", script)
 	}
 	if !strings.Contains(script, `curl -fsS -X POST "$PULSE_URL/api/auto-unregister"`) {
 		t.Fatalf("setup script missing fail-fast auto-unregister transport: %s", script)
@@ -6786,7 +6795,7 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if !strings.Contains(script, `echo "The provided Pulse setup token was invalid or expired"`) {
 		t.Fatalf("setup script missing invalid setup-token guidance: %s", script)
 	}
-	if !strings.Contains(script, `echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."`) {
+	if !strings.Contains(script, `echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."`) {
 		t.Fatalf("setup script missing fresh setup-token rerun guidance: %s", script)
 	}
 	if !strings.Contains(script, `SETUP_TOKEN_INVALID=true`) {
@@ -6798,7 +6807,7 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if !strings.Contains(script, `if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then`) {
 		t.Fatalf("setup script missing PVE auth-failure footer guard: %s", script)
 	}
-	if !strings.Contains(script, `echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."`) {
+	if !strings.Contains(script, `echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."`) {
 		t.Fatalf("setup script missing canonical auto-register failure continuation guidance: %s", script)
 	}
 	if strings.Contains(script, `echo "To enable auto-registration, add your API token to the setup URL"`) {
@@ -6843,10 +6852,10 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if !strings.Contains(script, `echo "Add this server to Pulse with:"`) {
 		t.Fatalf("setup script missing canonical manual-add heading: %s", script)
 	}
-	if !strings.Contains(script, `echo "Use these details in Pulse Settings → Nodes to finish registration."`) {
+	if !strings.Contains(script, `echo "Use these details in Pulse Settings → Infrastructure to finish registration."`) {
 		t.Fatalf("setup script missing canonical manual-add continuation guidance: %s", script)
 	}
-	if !strings.Contains(script, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Nodes."`) {
+	if !strings.Contains(script, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."`) {
 		t.Fatalf("setup script missing canonical auto-register failure summary: %s", script)
 	}
 	if !strings.Contains(script, `echo "  Host URL: $SERVER_HOST"`) {
@@ -6943,7 +6952,7 @@ fi`) {
 	if !strings.Contains(pbsScript, `echo "The provided Pulse setup token was invalid or expired"`) {
 		t.Fatalf("setup script missing invalid PBS setup-token guidance: %s", pbsScript)
 	}
-	if !strings.Contains(pbsScript, `echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."`) {
+	if !strings.Contains(pbsScript, `echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."`) {
 		t.Fatalf("setup script missing fresh PBS setup-token rerun guidance: %s", pbsScript)
 	}
 	if !strings.Contains(pbsScript, `SETUP_TOKEN_INVALID=true`) {
@@ -7032,10 +7041,10 @@ fi`) {
 	if strings.Contains(pbsScript, `echo "To enable auto-registration, rerun with a valid Pulse setup token"`) {
 		t.Fatalf("setup script preserved stale split PBS setup-token auth guidance: %s", pbsScript)
 	}
-	if !strings.Contains(pbsScript, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Nodes."`) {
+	if !strings.Contains(pbsScript, `echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."`) {
 		t.Fatalf("setup script missing canonical PBS auto-register failure summary: %s", pbsScript)
 	}
-	if strings.Count(pbsScript, `echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."`) < 2 {
+	if strings.Count(pbsScript, `echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."`) < 2 {
 		t.Fatalf("setup script missing canonical PBS request-failure/manual-response continuity: %s", pbsScript)
 	}
 	if strings.Contains(pbsScript, `echo "⚠️  Auto-registration failed. Manual configuration may be needed."`) {

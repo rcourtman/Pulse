@@ -2158,9 +2158,13 @@ Agent` secondary handoff against the live setup wizard instead of relying
 21. Keep Proxmox runtime health and bootstrap authority separate. Agent-token
     startup and periodic registration checks must call `/api/auto-register`
     directly; `/api/setup-script-url` remains `settings:write`. Ordinary agent
-    tokens stay update-only, while a server-minted PVE/PBS install token may
-    consume one declared-type initial registration after durable first-host
-    binding and serialized completion.
+    tokens stay update-only, while a server-minted install token may consume
+    one initial registration after durable first-host binding and serialized
+    completion: a PVE/PBS-typed token for its declared type, and a generic
+    `host` install token for one detected canonical Proxmox type (#1644). A
+    denied registration grant must fail loudly on the agent side through an
+    error-level log, a returned setup error, and an installer-readable
+    `proxmox-<type>-registration-blocked` state marker.
 
 22. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the
@@ -5317,11 +5321,33 @@ A positive registration preflight for an already-existing source consumes the
 fresh-install grant without rotating local credentials; a negative preflight
 keeps it available for the immediately following initial completion.
 
+The bootstrap exception covers both install-token shapes the settings-write
+control plane actually mints. A PVE/PBS-typed agent-install token stays pinned
+to its declared type. A generic `host` install token minted by the Settings →
+Infrastructure installer additionally holds the same bounded grant for one
+canonical Proxmox type, because the unified installer auto-detects PVE/PBS on
+the target machine and the agent presents the detected type at registration
+(#1644). The host-token grant keeps every existing bound: settings-authorized
+mint via `issued_via`, first-presenting-hostname binding before local Proxmox
+credentials are mutated, serialized completion, and one-shot consumption — a
+host token that completes a PVE bootstrap cannot later bootstrap PBS, and
+non-Proxmox request types never hold a grant.
+
+A blocked registration is not a silent skip. When the pre-registration check
+reports `canRegister=false`, the agent must log at error level, return a setup
+error to its caller, and record the operator-facing reason in a
+`proxmox-<type>-registration-blocked` marker in its state directory; the
+marker is cleared once a later run finds the source registered or proceeds to
+register. The shell installer reads that marker after agent health
+verification and surfaces the denial with remediation in its own output, so
+the failure is visible at install time instead of buried in the agent journal.
+
 Token-optional installations retain the setup-token bootstrap path. Ordinary
 hosts never enter this Proxmox registration loop, while PVE, PBS, mixed-product
 hosts, restarts, and hosted-tenant install tokens retain the same authority
 split. `internal/hostagent/proxmox_setup_test.go`,
-`internal/api/config_handlers_auto_register_test.go`, and
-`internal/api/proxmox_install_registration_test.go` prove the recurring health,
-first-install, type/host binding, one-time consumption, rejection, and
-concurrent-completion contracts.
+`internal/api/config_handlers_auto_register_test.go`,
+`internal/api/proxmox_install_registration_test.go`, and
+`internal/api/issue1644_host_install_token_proxmox_test.go` prove the recurring
+health, first-install, type/host binding, one-time consumption, rejection,
+host-token bootstrap, and concurrent-completion contracts.

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -386,6 +387,7 @@ func TestRunAllLeavesCredentialsUnchangedWhenAgentCannotCreateMissingSource(t *t
 			return "", nil
 		},
 	}
+	stateDir := t.TempDir()
 	setup := NewProxmoxSetup(
 		logger,
 		server.Client(),
@@ -395,12 +397,15 @@ func TestRunAllLeavesCredentialsUnchangedWhenAgentCannotCreateMissingSource(t *t
 		"pve",
 		"node-1",
 		"10.0.0.9",
-		t.TempDir(),
+		stateDir,
 		false,
 	)
 	results, err := setup.RunAll(context.Background())
-	if err != nil {
-		t.Fatalf("RunAll(): %v", err)
+	if err == nil {
+		t.Fatal("RunAll() returned nil error for a blocked registration; the denial must be loud (#1644)")
+	}
+	if !strings.Contains(err.Error(), "registration blocked") {
+		t.Fatalf("RunAll() error = %v, want blocked-registration diagnostic", err)
 	}
 	if len(results) != 0 {
 		t.Fatalf("missing source returned setup results %#v", results)
@@ -411,8 +416,15 @@ func TestRunAllLeavesCredentialsUnchangedWhenAgentCannotCreateMissingSource(t *t
 	if setupArtifactRequests != 0 {
 		t.Fatalf("setup-script-url requests = %d, want 0", setupArtifactRequests)
 	}
-	if got := logs.String(); !strings.Contains(got, "leaving local credentials unchanged") {
+	if got := logs.String(); !strings.Contains(got, "Proxmox registration blocked") {
 		t.Fatalf("missing-source diagnostic absent from logs: %s", got)
+	}
+	marker, readErr := os.ReadFile(filepath.Join(stateDir, "proxmox-pve-registration-blocked"))
+	if readErr != nil {
+		t.Fatalf("read registration-blocked marker: %v", readErr)
+	}
+	if !strings.Contains(string(marker), "Settings -> Infrastructure") {
+		t.Fatalf("registration-blocked marker lacks operator remediation: %s", marker)
 	}
 }
 

@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -4530,6 +4531,170 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 			}
 		})
 	}
+}
+
+// TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle verifies that
+// the post-install registration check polls for a window instead of warning
+// after a single lookup: /readyz flips before the agent's first report cycle
+// completes, so an immediate one-shot lookup routinely misses a healthy
+// registration (issue #1644). A rejected token still short-circuits because
+// more polling cannot change a definitive 401/403.
+func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) {
+	urlEncode := extractInstallShellFunction(t, "url_encode")
+	curlWithPulseToken := extractInstallShellFunction(t, "curl_with_pulse_token")
+	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
+	retryFn := extractInstallShellFunction(t, "verify_agent_server_registration_with_retry")
+
+	verifyStarted := extractInstallShellFunction(t, "verify_agent_started")
+	if !strings.Contains(verifyStarted, "verify_agent_server_registration_with_retry") {
+		t.Fatal("verify_agent_started does not use the registration retry window")
+	}
+
+	cases := []struct {
+		name string
+		// statuses is consumed one per lookup; the last value repeats.
+		statuses []int
+		wantRC   string
+	}{
+		{"registered after report cycle", []int{http.StatusNotFound, http.StatusNotFound, http.StatusOK}, "rc=0"},
+		{"rejected token short-circuits", []int{http.StatusUnauthorized}, "rc=2"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			lookups := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasPrefix(r.URL.Path, "/api/agents/agent/lookup") {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				mu.Lock()
+				idx := lookups
+				lookups++
+				mu.Unlock()
+				if idx >= len(tc.statuses) {
+					idx = len(tc.statuses) - 1
+				}
+				w.WriteHeader(tc.statuses[idx])
+				if tc.statuses[idx] == http.StatusOK {
+					_, _ = w.Write([]byte(`{"success":true,"agent":{"id":"agent-1644"}}`))
+				} else {
+					_, _ = w.Write([]byte(`{"error":"agent_not_found"}`))
+				}
+			}))
+			defer server.Close()
+
+			script := `
+				PULSE_URL="` + server.URL + `"
+				PULSE_TOKEN="install-token"
+				HOSTNAME_OVERRIDE="pve-1644"
+				INSECURE="false"
+				CURL_CA_BUNDLE=""
+				sleep() { :; }
+` + curlWithPulseToken + `
+` + urlEncode + `
+` + verifyFn + `
+` + retryFn + `
+				verify_agent_server_registration_with_retry
+				echo "rc=$?"
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), tc.wantRC) {
+				t.Fatalf("case %q: want %s, got:\n%s", tc.name, tc.wantRC, out)
+			}
+			if tc.wantRC == "rc=2" {
+				mu.Lock()
+				got := lookups
+				mu.Unlock()
+				if got != 1 {
+					t.Fatalf("rejected token was retried %d times, want 1 lookup", got)
+				}
+			}
+		})
+	}
+}
+
+// TestInstallSHSurfacesBlockedProxmoxRegistration verifies the installer reads
+// the agent's proxmox-<type>-registration-blocked marker and prints the denial
+// in its own output instead of leaving it buried in the agent journal (#1644).
+func TestInstallSHSurfacesBlockedProxmoxRegistration(t *testing.T) {
+	logInfo := extractInstallShellFunction(t, "log_info")
+	logWarn := extractInstallShellFunction(t, "log_warn")
+	logError := extractInstallShellFunction(t, "log_error")
+	reportFn := extractInstallShellFunction(t, "report_proxmox_registration_outcome")
+
+	completeFlow := extractInstallShellFunction(t, "complete_installation_flow")
+	if !strings.Contains(completeFlow, `report_proxmox_registration_outcome "$state_dir"`) {
+		t.Fatal("complete_installation_flow does not report the Proxmox registration outcome")
+	}
+	clearFn := extractInstallShellFunction(t, "clear_proxmox_state_if_needed")
+	for _, marker := range []string{"proxmox-pve-registration-blocked", "proxmox-pbs-registration-blocked"} {
+		if !strings.Contains(clearFn, marker) {
+			t.Fatalf("clear_proxmox_state_if_needed does not clear %s", marker)
+		}
+	}
+
+	runReport := func(t *testing.T, stateDir string) (string, int) {
+		t.Helper()
+		script := `
+			NON_INTERACTIVE="false"
+			ENABLE_PROXMOX="true"
+			redact_token() { printf '%s' "$1"; }
+			sleep() { :; }
+` + logInfo + `
+` + logWarn + `
+` + logError + `
+` + reportFn + `
+			report_proxmox_registration_outcome "` + stateDir + `"
+		`
+		out, err := exec.Command("bash", "-c", script).CombinedOutput()
+		rc := 0
+		if err != nil {
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			rc = exitErr.ExitCode()
+		}
+		return string(out), rc
+	}
+
+	t.Run("blocked marker surfaces reason", func(t *testing.T) {
+		stateDir := t.TempDir()
+		reason := "Pulse at https://pulse.local has no PVE source for https://pve.local:8006 and this agent's token cannot create one."
+		if err := os.WriteFile(filepath.Join(stateDir, "proxmox-pve-registration-blocked"), []byte(reason+"\n"), 0o600); err != nil {
+			t.Fatalf("write blocked marker: %v", err)
+		}
+		out, rc := runReport(t, stateDir)
+		if rc == 0 {
+			t.Fatalf("blocked registration reported success:\n%s", out)
+		}
+		if !strings.Contains(out, "[ERROR]") || !strings.Contains(out, "registration failed") {
+			t.Fatalf("blocked registration not surfaced as an error:\n%s", out)
+		}
+		if !strings.Contains(out, reason) {
+			t.Fatalf("blocked registration output missing agent-recorded reason:\n%s", out)
+		}
+	})
+
+	t.Run("registered marker reports success", func(t *testing.T) {
+		stateDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(stateDir, "proxmox-pve-registered"), []byte("ok\n"), 0o600); err != nil {
+			t.Fatalf("write registered marker: %v", err)
+		}
+		out, rc := runReport(t, stateDir)
+		if rc != 0 {
+			t.Fatalf("registered marker returned rc=%d:\n%s", rc, out)
+		}
+		if !strings.Contains(out, "Proxmox node registered with Pulse.") {
+			t.Fatalf("registered marker did not report success:\n%s", out)
+		}
+	})
 }
 
 // TestInstallSHWarnAgentTokenRejectedIsActionable pins the actionable recovery

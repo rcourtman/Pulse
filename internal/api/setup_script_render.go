@@ -696,7 +696,7 @@ smoke_test_pve_token() {
         echo "⚠️  Created API token, but the local Proxmox API smoke check failed."
         echo "   Response: $SMOKE_OUTPUT"
         echo ""
-        echo "📝 Use the token details below in Pulse Settings → Nodes after resolving the API connectivity issue."
+        echo "📝 Use the token details below in Pulse Settings → Infrastructure after resolving the API connectivity issue."
         TOKEN_READY=false
         AUTO_REG_SUCCESS=false
         return 1
@@ -741,34 +741,37 @@ attempt_auto_registration() {
 
     REGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$PULSE_SETUP_TOKEN"'","source":"script"}'
 
-    REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -fsS -X POST "$PULSE_URL/api/auto-register" \
+    # No -f: the response body and HTTP status are both needed so a rejected
+    # setup token (401/403) can be told apart from other failures.
+    REGISTER_OUTPUT=$(echo "$REGISTER_JSON" | curl -sS -w $'\n%%{http_code}' -X POST "$PULSE_URL/api/auto-register" \
         -H "Content-Type: application/json" \
         -d @- 2>&1)
     REGISTER_RC=$?
+    REGISTER_STATUS="${REGISTER_OUTPUT##*$'\n'}"
+    REGISTER_RESPONSE="${REGISTER_OUTPUT%%$'\n'*}"
 
     AUTO_REG_SUCCESS=false
     if [ "$REGISTER_RC" -ne 0 ]; then
         echo "⚠️  Auto-registration request failed before success confirmation."
         echo "   Response: $REGISTER_RESPONSE"
         echo ""
-        echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."
+        echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
+    elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then
+        SETUP_TOKEN_INVALID=true
+        echo "Error: Auto-registration failed - authentication required"
+        echo "   Response: $REGISTER_RESPONSE"
+        echo ""
+        echo "The provided Pulse setup token was invalid or expired"
+        echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."
     elif echo "$REGISTER_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"success"'; then
         AUTO_REG_SUCCESS=true
         echo "Successfully registered with Pulse monitoring."
         echo ""
     else
-        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
-            SETUP_TOKEN_INVALID=true
-            echo "Error: Auto-registration failed - authentication required"
-            echo ""
-            echo "The provided Pulse setup token was invalid or expired"
-            echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."
-        else
-            echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Nodes."
-            echo "   Response: $REGISTER_RESPONSE"
-            echo ""
-            echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."
-        fi
+        echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."
+        echo "   Response: $REGISTER_RESPONSE"
+        echo ""
+        echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
     fi
 }
 
@@ -1488,7 +1491,7 @@ elif [ "$TOKEN_CREATED" != true ]; then
     echo ""
 elif [ "$SETUP_TOKEN_INVALID" = true ]; then
     echo "Pulse setup token authentication failed."
-    echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."
+    echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."
     echo ""
 elif [ "$TOKEN_READY" != true ]; then
     echo "Pulse monitoring token setup could not be completed."
@@ -1512,7 +1515,7 @@ if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then
         fi
         echo "  Host URL: $SERVER_HOST"
         echo ""
-        echo "Use these details in Pulse Settings → Nodes to finish registration."
+        echo "Use these details in Pulse Settings → Infrastructure to finish registration."
         echo ""
     fi
 fi
@@ -1706,12 +1709,16 @@ else
             # Construct registration request with setup token
             REGISTER_JSON='{"type":"pbs","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","tokenValue":"'"$TOKEN_VALUE"'","authToken":"'"$PULSE_SETUP_TOKEN"'","source":"script"}'
             
-            # Send registration with setup token
+            # Send registration with setup token. No -f: the response body and
+            # HTTP status are both needed so a rejected setup token (401/403)
+            # can be told apart from other failures.
             REGISTER_ATTEMPTED=true
-            REGISTER_RESPONSE=$(echo "$REGISTER_JSON" | curl -fsS -X POST "$PULSE_URL/api/auto-register" \
+            REGISTER_OUTPUT=$(echo "$REGISTER_JSON" | curl -sS -w $'\n%%{http_code}' -X POST "$PULSE_URL/api/auto-register" \
                 -H "Content-Type: application/json" \
                 -d @- 2>&1)
             REGISTER_RC=$?
+            REGISTER_STATUS="${REGISTER_OUTPUT##*$'\n'}"
+            REGISTER_RESPONSE="${REGISTER_OUTPUT%%$'\n'*}"
         else
             echo "⚠️  Auto-registration skipped: no setup token provided"
             AUTO_REG_SUCCESS=false
@@ -1726,23 +1733,22 @@ else
         echo "⚠️  Auto-registration request failed before success confirmation."
         echo "   Response: $REGISTER_RESPONSE"
         echo ""
-        echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."
+        echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
+    elif [ "$REGISTER_STATUS" = "401" ] || [ "$REGISTER_STATUS" = "403" ]; then
+        SETUP_TOKEN_INVALID=true
+        echo "Error: Auto-registration failed - authentication required"
+        echo "   Response: $REGISTER_RESPONSE"
+        echo ""
+        echo "The provided Pulse setup token was invalid or expired"
+        echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."
     elif echo "$REGISTER_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"success"'; then
         AUTO_REG_SUCCESS=true
         echo "Successfully registered with Pulse monitoring."
     else
-        if echo "$REGISTER_RESPONSE" | grep -q "Authentication required"; then
-            SETUP_TOKEN_INVALID=true
-            echo "Error: Auto-registration failed - authentication required"
-            echo ""
-            echo "The provided Pulse setup token was invalid or expired"
-            echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."
-        else
-            echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Nodes."
-            echo "   Response: $REGISTER_RESPONSE"
-            echo ""
-            echo "📝 Use the token details below in Pulse Settings → Nodes to finish registration."
-        fi
+        echo "⚠️  Auto-registration failed. Finish registration manually in Pulse Settings → Infrastructure."
+        echo "   Response: $REGISTER_RESPONSE"
+        echo ""
+        echo "📝 Use the token details below in Pulse Settings → Infrastructure to finish registration."
     fi
     echo ""
 fi
@@ -1766,7 +1772,7 @@ elif [ "$TOKEN_CREATED" != true ]; then
     echo ""
 elif [ "$SETUP_TOKEN_INVALID" = true ]; then
     echo "Pulse setup token authentication failed."
-    echo "Get a fresh setup token from Pulse Settings → Nodes and rerun this script."
+    echo "Get a fresh setup token from Pulse Settings → Infrastructure and rerun this script."
     echo ""
 elif [ "$TOKEN_READY" != true ]; then
     echo "Pulse monitoring token setup could not be completed."
@@ -1790,7 +1796,7 @@ if [ "$AUTO_REG_SUCCESS" != true ] && [ "$SETUP_TOKEN_INVALID" != true ]; then
         fi
         echo "  Host URL: $HOST_URL"
         echo ""
-        echo "Use these details in Pulse Settings → Nodes to finish registration."
+        echo "Use these details in Pulse Settings → Infrastructure to finish registration."
         echo ""
     fi
 fi

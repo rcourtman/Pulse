@@ -322,6 +322,29 @@ func (p *ProxmoxSetup) pbsStateFilePath() string {
 	return filepath.Join(p.stateDir, "proxmox-pbs-registered")
 }
 
+// registrationBlockedFilePath is the marker the installer reads to surface a
+// denied registration grant in its own output instead of leaving the failure
+// buried in the agent journal (#1644).
+func (p *ProxmoxSetup) registrationBlockedFilePath(ptype proxmoxProductType) string {
+	return filepath.Join(p.stateDir, fmt.Sprintf("proxmox-%s-registration-blocked", ptype))
+}
+
+func (p *ProxmoxSetup) writeRegistrationBlockedMarker(ptype proxmoxProductType, reason string) {
+	if err := os.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
+		p.logger.Debug().Err(err).Str("dir", p.stateDir).Msg("Failed to create state dir for registration-blocked marker")
+		return
+	}
+	if err := os.WriteFile(p.registrationBlockedFilePath(ptype), []byte(reason+"\n"), proxmoxStateFilePerm); err != nil {
+		p.logger.Debug().Err(err).Str("type", string(ptype)).Msg("Failed to write registration-blocked marker")
+	}
+}
+
+func (p *ProxmoxSetup) clearRegistrationBlockedMarker(ptype proxmoxProductType) {
+	if err := os.Remove(p.registrationBlockedFilePath(ptype)); err != nil && !os.IsNotExist(err) {
+		p.logger.Debug().Err(err).Str("type", string(ptype)).Msg("Failed to remove registration-blocked marker")
+	}
+}
+
 func parseProxmoxProductType(rawType string) proxmoxProductType {
 	switch strings.ToLower(strings.TrimSpace(rawType)) {
 	case string(proxmoxProductPVE):
@@ -567,17 +590,24 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 		if !p.isTypeRegistered(ptype) {
 			p.markTypeAsRegistered(ptype)
 		}
+		p.clearRegistrationBlockedMarker(ptype)
 		p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
 		return nil, nil
 	}
 	if !registration.canRegister {
-		p.logger.Warn().
+		reason := fmt.Sprintf(
+			"Pulse at %s has no %s source for %s and this agent's token cannot create one. Local Proxmox credentials were left unchanged. Generate a fresh agent install command in Pulse Settings -> Infrastructure and re-run it on this host.",
+			p.pulseURL, strings.ToUpper(string(ptype)), hostURL,
+		)
+		p.writeRegistrationBlockedMarker(ptype, reason)
+		p.logger.Error().
 			Str("type", string(ptype)).
 			Str("host", hostURL).
 			Bool("source_exists", registration.sourceExists).
-			Msg("Pulse has no matching Proxmox source and this agent token cannot create one; leaving local credentials unchanged and requiring a fresh install command")
-		return nil, nil
+			Msg("Proxmox registration blocked: Pulse has no matching source and this agent token cannot create one")
+		return nil, fmt.Errorf("proxmox %s registration blocked: %s", ptype, reason)
 	}
+	p.clearRegistrationBlockedMarker(ptype)
 	if p.isTypeRegistered(ptype) {
 		p.logger.Info().
 			Str("type", string(ptype)).

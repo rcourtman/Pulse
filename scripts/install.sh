@@ -548,6 +548,37 @@ verify_agent_server_registration() {
     return 1
 }
 
+# verify_agent_server_registration_with_retry polls the server-side lookup for
+# a short window before declaring registration unconfirmed. The local /readyz
+# endpoint flips before the agent's first report cycle completes, so a single
+# immediate lookup routinely misses a perfectly healthy registration (#1644).
+# Return codes mirror verify_agent_server_registration.
+verify_agent_server_registration_with_retry() {
+    local max_attempts=10
+    local interval=3
+    local attempt=0
+    local reg_rc=1
+
+    if [[ -z "$PULSE_URL" ]]; then
+        return 1
+    fi
+
+    while [ $attempt -lt $max_attempts ]; do
+        verify_agent_server_registration
+        reg_rc=$?
+        # 0 = confirmed; 2 = token rejected, which is definitive and will not
+        # change with more polling.
+        if [[ $reg_rc -eq 0 || $reg_rc -eq 2 ]]; then
+            return $reg_rc
+        fi
+        attempt=$((attempt + 1))
+        if [ $attempt -lt $max_attempts ]; then
+            sleep $interval
+        fi
+    done
+    return 1
+}
+
 resolve_agent_health_url() {
     if [[ "$HEALTH_ADDR_SET" == "true" && -z "$HEALTH_ADDR" ]]; then
         return 1
@@ -604,7 +635,7 @@ verify_agent_started() {
     if [[ -z "$health_url" ]]; then
         while [ $iteration -lt $max_iterations ]; do
             if agent_process_running; then
-                verify_agent_server_registration
+                verify_agent_server_registration_with_retry
                 local reg_rc=$?
                 if [[ $reg_rc -eq 0 ]]; then
                     log_info "Agent process is running and registered with Pulse."
@@ -630,7 +661,7 @@ verify_agent_started() {
     while [ $iteration -lt $max_iterations ]; do
         # Check the readiness endpoint first — this is the definitive signal
         if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
-            verify_agent_server_registration
+            verify_agent_server_registration_with_retry
             local reg_rc=$?
             if [[ $reg_rc -eq 0 ]]; then
                 log_info "Agent is running, healthy, and registered with Pulse."
@@ -1157,6 +1188,45 @@ EOF
     chmod +x "$script_path"
 }
 
+# report_proxmox_registration_outcome surfaces the agent's Proxmox
+# registration result in installer output. The agent records a denied
+# registration grant in a proxmox-<type>-registration-blocked marker file so
+# the failure is not buried in its journal (#1644).
+report_proxmox_registration_outcome() {
+    local state_dir="$1"
+    local max_iterations=15
+    local interval=2
+    local iteration=0
+    local blocked_file=""
+    local ptype=""
+
+    if [[ "$ENABLE_PROXMOX" != "true" || -z "$state_dir" ]]; then
+        return 0
+    fi
+
+    log_info "Waiting for Proxmox registration result..."
+    while [ $iteration -lt $max_iterations ]; do
+        for ptype in pve pbs; do
+            blocked_file="${state_dir}/proxmox-${ptype}-registration-blocked"
+            if [ -f "$blocked_file" ]; then
+                log_error "Proxmox ${ptype} registration failed:"
+                while IFS= read -r line; do log_error "  $line"; done < "$blocked_file"
+                return 1
+            fi
+        done
+        if [ -f "${state_dir}/proxmox-pve-registered" ] || [ -f "${state_dir}/proxmox-pbs-registered" ]; then
+            log_info "Proxmox node registered with Pulse."
+            return 0
+        fi
+        sleep $interval
+        iteration=$((iteration + 1))
+    done
+
+    log_warn "Proxmox registration was not confirmed within ~$((max_iterations * interval))s. The agent keeps retrying in the background."
+    log_warn "Check the agent logs for Proxmox registration status if the node does not appear in Pulse."
+    return 0
+}
+
 complete_installation_flow() {
     local state_dir="$1"
     local install_success_message="$2"
@@ -1165,6 +1235,7 @@ complete_installation_flow() {
 
     save_connection_info "$state_dir"
     if verify_agent_started; then
+        report_proxmox_registration_outcome "$state_dir" || true
         if [[ "$UPGRADE_MODE" == "true" ]]; then
             log_info "$upgrade_success_message"
             json_event "complete" "updated" "Installation updated"
@@ -1789,6 +1860,8 @@ clear_proxmox_state_if_needed() {
     rm -f "${STATE_DIR}/proxmox-registered" 2>/dev/null || true
     rm -f "${STATE_DIR}/proxmox-pve-registered" 2>/dev/null || true
     rm -f "${STATE_DIR}/proxmox-pbs-registered" 2>/dev/null || true
+    rm -f "${STATE_DIR}/proxmox-pve-registration-blocked" 2>/dev/null || true
+    rm -f "${STATE_DIR}/proxmox-pbs-registration-blocked" 2>/dev/null || true
 }
 
 write_connection_state_value() {

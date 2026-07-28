@@ -303,6 +303,18 @@ TLS floor in the dynamic config.
    and token-file paths without storing the token value, update rewrites the
    same secure service shape, and uninstall removes the discovered canonical
    directory rather than only `/var/lib/pulse-agent`.
+   Post-install verification must not declare server registration
+   unconfirmed from a single lookup: the local `/readyz` gate flips before the
+   agent's first report cycle completes, so the installer polls the server
+   lookup for a bounded retry window before warning, while a definitive
+   401/403 token rejection still short-circuits immediately (#1644).
+   When Proxmox integration is enabled, the installer must also report the
+   agent's Proxmox registration outcome in its own output: it waits a bounded
+   window on the agent state directory, surfaces the reason recorded in a
+   `proxmox-<type>-registration-blocked` marker as an installer error with
+   remediation, reports success on a `proxmox-<type>-registered` marker, and
+   clears both marker families when resetting Proxmox state for a fresh
+   registration.
    Existing-agent update commands copied from the settings UI must use the
    installer-owned `--update` mode rather than serializing a fresh enrollment
    token into platform notice links. In `--update` mode, `scripts/install.sh`

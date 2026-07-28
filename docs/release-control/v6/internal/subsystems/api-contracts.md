@@ -1619,6 +1619,15 @@ payload shape change when the portal presents compact client rows.
     match the primary configured endpoint may still drive disconnected-source
     repair.
     That same contract now owns stale-marker verification as well: setup-token-authenticated `checkRegistration` requests may omit token completion fields and must answer `{registered:boolean}` from canonical candidate-host matching so runtime repair can distinguish real registrations from stale local marker files without rotating tokens first.
+    That same shared boundary owns the install-token bootstrap type rule: the
+    one-shot Proxmox source-creation grant carried by agent-install tokens
+    accepts either a matching declared `install_type` of `pve`/`pbs` or a
+    generic `host` install token presenting one canonical Proxmox type
+    (#1644), because the Settings → Infrastructure installer mints `host`
+    tokens while the unified installer auto-detects PVE/PBS on the target.
+    Non-canonical request types never hold the grant, and the grant keeps its
+    settings-authorized `issued_via` requirement, first-hostname binding,
+    serialized completion, and single consumption across types.
     That same contract owns auto-register WebSocket event intent: a successful
     completion that creates a new PVE/PBS node may broadcast
     `node_auto_registered`, but successful idempotent matches or credential
@@ -1727,6 +1736,13 @@ payload shape change when the portal presents compact client rows.
     `${HOST_URL%/}/api2/json/nodes` with `PVEAPIToken` authentication before
     it posts the canonical `/api/auto-register` payload. Smoke-check failure is
     a manual-completion state, not a successful auto-registration response.
+    Rendered auto-register transport must capture the response body and HTTP
+    status together (no `-f` body suppression), and the invalid-setup-token
+    branch must key off a 401/403 status instead of grepping for server error
+    strings the backend does not emit, so the auth-failure guidance is actually
+    reachable (#1644). Operator-facing manual-completion and rerun guidance in
+    the rendered scripts must name the live `Settings → Infrastructure` page,
+    not the retired Nodes page.
 82. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 83. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 84. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.

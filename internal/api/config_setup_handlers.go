@@ -58,6 +58,20 @@ const (
 	proxmoxInstallRegistrationAtKey        = "proxmox_registration_at"
 )
 
+// installTokenTypeGrantsBootstrap decides whether an install token minted for
+// installType may bootstrap a source of requestedType. Proxmox-typed tokens
+// stay pinned to their declared type. A generic host-agent install token may
+// bootstrap either canonical Proxmox type: the unified installer auto-detects
+// PVE/PBS on the target machine (#1644), and the token is still bounded by the
+// same settings:write mint requirement, one-shot completion marker, and
+// first-use hostname binding as a typed token.
+func installTokenTypeGrantsBootstrap(installType, requestedType string) bool {
+	if installType == requestedType && isCanonicalAutoRegisterType(requestedType) {
+		return true
+	}
+	return installType == agentInstallTypeHost && isCanonicalAutoRegisterType(requestedType)
+}
+
 func canBootstrapProxmoxInstallRegistration(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
 	if record == nil || req == nil || strings.TrimSpace(req.Source) != "agent" {
 		return false
@@ -65,7 +79,7 @@ func canBootstrapProxmoxInstallRegistration(record *config.APITokenRecord, req *
 	if strings.EqualFold(strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationCompletedKey]), "true") {
 		return false
 	}
-	if strings.TrimSpace(record.Metadata["install_type"]) != strings.TrimSpace(req.Type) {
+	if !installTokenTypeGrantsBootstrap(strings.TrimSpace(record.Metadata["install_type"]), strings.TrimSpace(req.Type)) {
 		return false
 	}
 	switch strings.TrimSpace(record.Metadata["issued_via"]) {
