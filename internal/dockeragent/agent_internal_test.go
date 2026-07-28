@@ -19,7 +19,10 @@ import (
 
 	containertypes "github.com/moby/moby/api/types/container"
 	systemtypes "github.com/moby/moby/api/types/system"
+	"github.com/moby/moby/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	"github.com/rs/zerolog"
 )
 
 func TestNormalizeTargets(t *testing.T) {
@@ -941,11 +944,20 @@ func TestDetectRuntime(t *testing.T) {
 		want       RuntimeKind
 	}{
 		{
-			name:       "preference podman returns podman",
+			name:       "preference podman with unlabeled endpoint returns podman",
+			info:       systemtypes.Info{},
+			endpoint:   "unix:///custom/container.sock",
+			preference: RuntimePodman,
+			want:       RuntimePodman,
+		},
+		{
+			// Issue #1647: a podman preference must not mislabel a connection
+			// that actually landed on the Docker socket.
+			name:       "preference podman with docker socket endpoint returns docker",
 			info:       systemtypes.Info{},
 			endpoint:   "unix:///var/run/docker.sock",
 			preference: RuntimePodman,
-			want:       RuntimePodman,
+			want:       RuntimeDocker,
 		},
 		{
 			name:       "podman in endpoint lowercase",
@@ -1543,5 +1555,126 @@ func TestSendCommandAckUsesReceiverMarshaller(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "marshal command acknowledgement") {
 		t.Fatalf("acknowledgement error %v lost its marshal context", err)
+	}
+}
+
+// TestIssue1647ConnectRuntimePodmanPreferenceFallsBackToDockerSocket pins the
+// runtime-labeling half of issue #1647: when the pinned rootless podman socket
+// is gone (it is socket-activated and dies with the login session) and the
+// connection falls through to the system Docker socket, the agent must report
+// docker — not the preference — so Swarm collection stays available.
+func TestIssue1647ConnectRuntimePodmanPreferenceFallsBackToDockerSocket(t *testing.T) {
+	docker := &fakeDockerClient{daemonHost: "unix:///var/run/docker.sock"}
+
+	swap(t, &buildRuntimeCandidatesFn, func(preference RuntimeKind) []runtimeCandidate {
+		if preference != RuntimePodman {
+			t.Fatalf("expected podman preference, got %v", preference)
+		}
+		return []runtimeCandidate{
+			{label: "podman rootless socket", host: "unix:///run/user/0/podman/podman.sock"},
+			{label: "environment defaults", applyDockerEnv: true},
+		}
+	})
+
+	calls := 0
+	swap(t, &tryRuntimeCandidateFn, func(_ []client.Opt) (dockerClient, systemtypes.Info, error) {
+		calls++
+		if calls == 1 {
+			return nil, systemtypes.Info{}, errors.New("dial unix /run/user/0/podman/podman.sock: connect: no such file or directory")
+		}
+		return docker, systemtypes.Info{ServerVersion: "24.0.5", InitBinary: "docker-init"}, nil
+	})
+
+	cli, info, runtimeKind, err := connectRuntime(RuntimePodman, nil)
+	if err != nil {
+		t.Fatalf("expected fallback connection to succeed, got %v", err)
+	}
+	if cli != docker {
+		t.Fatalf("expected the docker fallback client to be returned")
+	}
+	if runtimeKind != RuntimeDocker {
+		t.Fatalf("runtime = %v, want %v (podman preference must not mislabel a Docker connection)", runtimeKind, RuntimeDocker)
+	}
+	if info.ServerVersion != "24.0.5" {
+		t.Fatalf("expected docker info to be returned, got %+v", info)
+	}
+}
+
+// TestIssue1647ReconnectAfterPersistentDaemonGone pins the reconnect half of
+// issue #1647: when the bound socket disappears mid-run, the agent re-runs
+// runtime discovery after persistent daemon-unavailable collects instead of
+// erroring forever until a process restart.
+func TestIssue1647ReconnectAfterPersistentDaemonGone(t *testing.T) {
+	failing := &fakeDockerClient{
+		daemonHost: "unix:///run/user/0/podman/podman.sock",
+		infoFunc: func(context.Context) (systemtypes.Info, error) {
+			return systemtypes.Info{}, errors.New("Cannot connect to the Docker daemon at unix:///run/user/0/podman/podman.sock. Is the docker daemon running?")
+		},
+	}
+	healthy := &fakeDockerClient{
+		daemonHost: "unix:///var/run/docker.sock",
+		infoFunc: func(context.Context) (systemtypes.Info, error) {
+			return systemtypes.Info{ServerVersion: "24.0.5", InitBinary: "docker-init"}, nil
+		},
+		containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
+			return nil, nil
+		},
+		closeFn: func() error { return nil },
+	}
+
+	reconnects := 0
+	swap(t, &connectRuntimeFn, func(preference RuntimeKind, _ *zerolog.Logger) (dockerClient, systemtypes.Info, RuntimeKind, error) {
+		reconnects++
+		if preference != RuntimePodman {
+			t.Errorf("reconnect preference = %v, want %v", preference, RuntimePodman)
+		}
+		return healthy, systemtypes.Info{ServerVersion: "24.0.5", InitBinary: "docker-init"}, RuntimeDocker, nil
+	})
+	swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {
+		return hostmetrics.Snapshot{}, nil
+	})
+
+	agent := &Agent{
+		cfg:         Config{IncludeContainers: true},
+		logger:      zerolog.Nop(),
+		docker:      newSwappableDockerClient(failing),
+		runtime:     RuntimePodman,
+		runtimePref: RuntimePodman,
+	}
+
+	ctx := context.Background()
+	for i := 0; i < runtimeReconnectFailureThreshold-1; i++ {
+		if err := agent.collectOnce(ctx); err == nil {
+			t.Fatalf("collect %d: expected daemon-unavailable error", i+1)
+		}
+		if reconnects != 0 {
+			t.Fatalf("collect %d: reconnect attempted before failure threshold", i+1)
+		}
+	}
+
+	if err := agent.collectOnce(ctx); err != nil {
+		t.Fatalf("collect at threshold should reconnect and succeed, got %v", err)
+	}
+	if reconnects != 1 {
+		t.Fatalf("reconnects = %d, want 1", reconnects)
+	}
+	if agent.runtime != RuntimeDocker {
+		t.Fatalf("runtime after reconnect = %v, want %v", agent.runtime, RuntimeDocker)
+	}
+	if !agent.supportsSwarm {
+		t.Fatalf("expected Swarm support after reconnecting to Docker")
+	}
+	if agent.daemonHost != "unix:///var/run/docker.sock" {
+		t.Fatalf("daemonHost after reconnect = %q, want the docker socket", agent.daemonHost)
+	}
+	if agent.runtimeGoneStreak != 0 {
+		t.Fatalf("failure streak not reset after successful reconnect: %d", agent.runtimeGoneStreak)
+	}
+
+	if err := agent.collectOnce(ctx); err != nil {
+		t.Fatalf("follow-up collect on reconnected client failed: %v", err)
+	}
+	if reconnects != 1 {
+		t.Fatalf("healthy collects must not trigger further reconnects, got %d", reconnects)
 	}
 }

@@ -1693,9 +1693,13 @@ func TestInstallSHPersistsRootlessContainerRuntimeServiceEnvironment(t *testing.
 	script := string(content)
 	required := []string{
 		`ROOTLESS_RUNTIME_SOCKET_URI=""`,
+		`system_docker_runtime_is_active() {`,
 		`discover_rootless_container_runtime() {`,
-		`discover_single_socket_match "/run/user/*/docker.sock"`,
-		`discover_single_socket_match "/run/user/*/podman/podman.sock"`,
+		// Issue #1647: a live rootful Docker must win before any rootless
+		// socket discovery pins podman variables into the service environment.
+		`if system_docker_runtime_is_active; then`,
+		`discover_single_socket_match "${rootless_root}/*/docker.sock"`,
+		`discover_single_socket_match "${rootless_root}/*/podman/podman.sock"`,
 		`append_service_env "DOCKER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
 		`append_service_env "PULSE_DOCKER_RUNTIME" "podman"`,
 		`append_service_env "CONTAINER_HOST" "$ROOTLESS_RUNTIME_SOCKET_URI"`,
@@ -1731,6 +1735,9 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 		append_service_env "DOCKER_HOST" "unix:///run/user/1000/docker.sock"
 		append_service_env "XDG_RUNTIME_DIR" "/run/user/1000"
 		append_service_env "DOCKER_HOST" "unix:///run/user/2000/docker.sock"
+		append_service_env "PULSE_DOCKER_RUNTIME" "podman"
+		append_service_env "CONTAINER_HOST" "unix:///run/user/1000/podman/podman.sock"
+		append_service_env "PODMAN_HOST" "unix:///run/user/1000/podman/podman.sock"
 		finalize_plist_env_block
 		printf '%s\n---shell---\n%s\n---sed---\n%s\n---plist---\n%s\n' "$SYSTEMD_ENV_LINES" "$SHELL_EXPORT_LINES" "$SED_EXPORT_LINES" "$PLIST_ENV_BLOCK"
 	`
@@ -1748,6 +1755,9 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 		`export DOCKER_HOST="unix:///run/user/1000/docker.sock"; export XDG_RUNTIME_DIR="/run/user/1000"`,
 		`<key>DOCKER_HOST</key>`,
 		`<string>unix:///run/user/1000/docker.sock</string>`,
+		`Environment="PULSE_DOCKER_RUNTIME=podman"`,
+		`Environment="CONTAINER_HOST=unix:///run/user/1000/podman/podman.sock"`,
+		`Environment="PODMAN_HOST=unix:///run/user/1000/podman/podman.sock"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(got, needle) {
@@ -1756,6 +1766,74 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 	}
 	if strings.Contains(got, "unix:///run/user/2000/docker.sock") {
 		t.Fatalf("service env accumulator did not ignore duplicate key:\n%s", got)
+	}
+}
+
+// TestInstallSHIssue1647RootfulDockerOutranksRootlessPodmanSocket pins the fix
+// for issue #1647: a transient rootless Podman API socket (socket-activated for
+// a login session) must not win runtime discovery while a rootful Docker daemon
+// is alive, or the agent service gets podman variables pinned to a socket that
+// disappears when the session ends.
+func TestInstallSHIssue1647RootfulDockerOutranksRootlessPodmanSocket(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("/tmp", "pulse-1647-*")
+	if err != nil {
+		t.Fatalf("mktemp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	podmanDir := filepath.Join(tmpDir, "run", "user", "1000", "podman")
+	if err := os.MkdirAll(podmanDir, 0o755); err != nil {
+		t.Fatalf("mkdir podman socket dir: %v", err)
+	}
+	socketPath := filepath.Join(podmanDir, "podman.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen unix socket: %v", err)
+	}
+	defer listener.Close()
+
+	common := `
+		set -uo pipefail
+		log_warn() { :; }
+		log_info() { :; }
+		uname() { echo Linux; }
+		PULSE_ROOTLESS_RUNTIME_ROOT="` + filepath.Join(tmpDir, "run", "user") + `"
+		PULSE_SYSTEM_DOCKER_SOCKET="` + filepath.Join(tmpDir, "absent", "docker.sock") + `"
+` + extractInstallShellFunction(t, "system_docker_runtime_is_active") + `
+` + extractInstallShellFunction(t, "discover_single_socket_match") + `
+` + extractInstallShellFunction(t, "discover_rootless_container_runtime") + `
+	`
+
+	liveDocker := common + `
+		docker() { return 0; }
+		if discover_rootless_container_runtime; then
+			echo "rootless podman socket must not outrank a live rootful docker" >&2
+			exit 1
+		fi
+	`
+	out, err := exec.Command("bash", "-c", liveDocker).CombinedOutput()
+	if err != nil {
+		t.Fatalf("live rootful docker case: %v\n%s", err, out)
+	}
+
+	deadDocker := common + `
+		docker() { return 1; }
+		if ! discover_rootless_container_runtime; then
+			echo "expected rootless podman discovery when no rootful docker answers" >&2
+			exit 1
+		fi
+		if [[ "$ROOTLESS_RUNTIME_KIND" != "podman" ]]; then
+			echo "kind=$ROOTLESS_RUNTIME_KIND, want podman" >&2
+			exit 1
+		fi
+		if [[ "$ROOTLESS_RUNTIME_SOCKET_URI" != "unix://` + socketPath + `" ]]; then
+			echo "uri=$ROOTLESS_RUNTIME_SOCKET_URI" >&2
+			exit 1
+		fi
+	`
+	out, err = exec.Command("bash", "-c", deadDocker).CombinedOutput()
+	if err != nil {
+		t.Fatalf("no rootful docker case: %v\n%s", err, out)
 	}
 }
 

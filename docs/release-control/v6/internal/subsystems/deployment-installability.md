@@ -1107,6 +1107,20 @@ TLS floor in the dynamic config.
 
 ## Current State
 
+The shell installer's container-runtime discovery prefers a working rootful
+Docker daemon over any rootless socket (#1647).
+`discover_rootless_container_runtime` in `scripts/install.sh` first calls
+`system_docker_runtime_is_active` — a `docker info` check with
+`DOCKER_HOST`/`CONTAINER_HOST` stripped, falling back to probing
+`/var/run/docker.sock` directly — and returns without discovering anything
+when the system daemon answers. Only when no rootful Docker is live does it
+glob `/run/user/*` for rootless docker/podman sockets and pin
+`PULSE_DOCKER_RUNTIME`/`CONTAINER_HOST`/`PODMAN_HOST`/`XDG_RUNTIME_DIR` into
+the agent service environment. This applies to auto-detection and explicit
+`--enable-docker` runs alike, so a transient socket-activated rootless Podman
+API socket can no longer capture the agent unit on hosts whose real runtime is
+rootful Docker.
+
 Stable and stable-dry-run callers now select SignPath as the canonical Windows
 Authenticode backend. The reusable builder fails fast on missing configuration,
 submits the GitHub-hosted unsigned artifact through the pinned official action,

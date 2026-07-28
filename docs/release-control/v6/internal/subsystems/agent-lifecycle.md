@@ -2233,6 +2233,36 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Rootful Docker outranks rootless socket discovery and runtime labels are truthful
+
+Installer container-runtime discovery
+(`discover_rootless_container_runtime` in `scripts/install.sh`) consults a
+working system Docker first: when `system_docker_runtime_is_active` confirms a
+rootful daemon (a `docker info` success with `DOCKER_HOST`/`CONTAINER_HOST`
+stripped, or a live `/var/run/docker.sock` probe), rootless socket discovery
+returns nothing and no `PULSE_DOCKER_RUNTIME=podman` /
+`CONTAINER_HOST`/`PODMAN_HOST`/`XDG_RUNTIME_DIR` pin is written into the agent
+service environment. This holds for auto-detection and for explicit
+`--enable-docker` alike (#1647) — previously a transient rootless Podman API
+socket (socket-activated for root's login session on Debian/OMV) outranked a
+healthy rootful Docker and pinned the agent to a socket that vanished with the
+session.
+
+On the agent side (`internal/dockeragent/agent.go`), the podman runtime
+preference is an ordering hint, not an identity override: `detectRuntime` no
+longer short-circuits to podman on preference alone, so a podman-preferred
+connection that falls through to a docker-named endpoint reports `docker` and
+keeps Swarm collection enabled, while an unlabeled endpoint with no runtime
+signals still honors the preference. `connectRuntime` accepts that fallback
+(only an explicit docker preference still hard-rejects a podman endpoint). When
+the bound socket disappears mid-run, the agent counts consecutive
+daemon-unavailable collect cycles and after `runtimeReconnectFailureThreshold`
+re-runs runtime discovery against the original preference, swapping the
+connection through `swappableDockerClient`
+(`internal/dockeragent/runtime_reconnect.go`) so concurrent cleanup and
+container-update goroutines keep a stable handle, and refreshing the reported
+runtime, daemon host, and Swarm capability from the new connection.
+
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes

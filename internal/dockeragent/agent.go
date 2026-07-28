@@ -111,6 +111,8 @@ type Agent struct {
 	daemonHost          string
 	daemonID            string // Cached at init; Podman can return unstable IDs across calls
 	runtime             RuntimeKind
+	runtimePref         RuntimeKind // user-requested runtime preference, kept for reconnects
+	runtimeGoneStreak   int         // consecutive daemon-unavailable collects; guarded by collectMu
 	runtimeVer          string
 	agentVersion        string
 	supportsSwarm       bool
@@ -339,10 +341,11 @@ func New(cfg Config) (*Agent, error) {
 
 	agent := &Agent{
 		cfg:                cfg,
-		docker:             dockerClient,
+		docker:             newSwappableDockerClient(dockerClient),
 		daemonHost:         dockerClient.DaemonHost(),
 		daemonID:           info.ID, // Cache at init for stable agent ID
 		runtime:            runtimeKind,
+		runtimePref:        runtimePref,
 		runtimeVer:         info.ServerVersion,
 		agentVersion:       agentVersion,
 		supportsSwarm:      runtimeKind == RuntimeDocker,
@@ -533,12 +536,22 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClien
 		endpoint := cli.DaemonHost()
 		runtime := detectRuntime(info, endpoint, preference)
 
-		if preference != RuntimeAuto && runtime != preference {
+		if preference == RuntimeDocker && runtime != preference {
 			attempts = append(attempts, fmt.Sprintf("%s: detected %s runtime", candidate.label, runtime))
 			if closeErr := cli.Close(); closeErr != nil {
 				attempts = append(attempts, fmt.Sprintf("%s: close client after runtime mismatch: %v", candidate.label, closeErr))
 			}
 			continue
+		}
+
+		// A podman preference is an ordering hint, not a hard requirement: the
+		// pin usually comes from install-time socket discovery, and a rootless
+		// podman API socket can be gone by the time the agent starts (#1647).
+		// If every podman candidate failed and the connection landed on a real
+		// Docker daemon, keep it and report the runtime truthfully so Swarm
+		// collection stays available.
+		if preference == RuntimePodman && runtime != preference && logger != nil {
+			logger.Warn().Str("host", endpoint).Msg("Podman runtime preferred but connected endpoint is Docker; reporting docker runtime")
 		}
 
 		if logger != nil {
@@ -682,10 +695,6 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 }
 
 func detectRuntime(info systemtypes.Info, endpoint string, preference RuntimeKind) RuntimeKind {
-	if preference == RuntimePodman {
-		return RuntimePodman
-	}
-
 	lowerEndpoint := strings.ToLower(endpoint)
 	if strings.Contains(lowerEndpoint, "podman") || strings.Contains(lowerEndpoint, "libpod") {
 		return RuntimePodman
@@ -711,8 +720,17 @@ func detectRuntime(info systemtypes.Info, endpoint string, preference RuntimeKin
 		}
 	}
 
-	if preference == RuntimeDocker {
+	// No podman signal anywhere. A docker-named endpoint is authoritative even
+	// under a podman preference: the connection fell through to a real Docker
+	// daemon, and labeling it podman would disable Swarm collection (#1647).
+	if strings.Contains(lowerEndpoint, "docker") {
 		return RuntimeDocker
+	}
+
+	// Unlabeled endpoint with no signals either way: trust the preference so an
+	// explicit podman pin on a custom socket path keeps its podman semantics.
+	if preference == RuntimePodman {
+		return RuntimePodman
 	}
 
 	return RuntimeDocker
@@ -854,9 +872,13 @@ func (a *Agent) collectOnceWithReport(ctx context.Context) (agentsdocker.Report,
 	defer a.collectMu.Unlock()
 
 	report, err := a.buildReport(ctx)
+	if err != nil && a.maybeReconnectRuntime(err) {
+		report, err = a.buildReport(ctx)
+	}
 	if err != nil {
 		return agentsdocker.Report{}, fmt.Errorf("build docker report: %w", err)
 	}
+	a.runtimeGoneStreak = 0
 
 	if err := a.deliverReport(ctx, report); err != nil {
 		return report, err

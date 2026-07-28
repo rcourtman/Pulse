@@ -1581,9 +1581,39 @@ discover_single_socket_match() {
     esac
 }
 
+system_docker_runtime_is_active() {
+    # True when a rootful/system Docker daemon is actually answering. Checked
+    # before any rootless socket discovery (issue #1647): a transient rootless
+    # Podman API socket (socket-activated for a login session) must never
+    # outrank a working system Docker, or the agent service gets pinned to a
+    # socket that disappears when the session ends.
+    local socket_path="${PULSE_SYSTEM_DOCKER_SOCKET:-/var/run/docker.sock}"
+
+    if command -v docker &>/dev/null; then
+        # Strip DOCKER_HOST/CONTAINER_HOST so only the default system daemon counts.
+        if (unset DOCKER_HOST CONTAINER_HOST; docker info &>/dev/null); then
+            return 0
+        fi
+    fi
+
+    if [[ -S "$socket_path" ]]; then
+        if command -v curl &>/dev/null; then
+            if curl -sf --max-time 3 --unix-socket "$socket_path" http://localhost/_ping &>/dev/null; then
+                return 0
+            fi
+            return 1
+        fi
+        # Socket exists but no way to probe it; assume the daemon owns it.
+        return 0
+    fi
+
+    return 1
+}
+
 discover_rootless_container_runtime() {
     local docker_match=""
     local podman_match=""
+    local rootless_root="${PULSE_ROOTLESS_RUNTIME_ROOT:-/run/user}"
 
     ROOTLESS_RUNTIME_KIND=""
     ROOTLESS_RUNTIME_SOCKET_PATH=""
@@ -1594,8 +1624,13 @@ discover_rootless_container_runtime() {
         return 1
     fi
 
-    docker_match=$(discover_single_socket_match "/run/user/*/docker.sock" || true)
-    podman_match=$(discover_single_socket_match "/run/user/*/podman/podman.sock" || true)
+    if system_docker_runtime_is_active; then
+        # A live rootful Docker outranks any rootless socket (issue #1647).
+        return 1
+    fi
+
+    docker_match=$(discover_single_socket_match "${rootless_root}/*/docker.sock" || true)
+    podman_match=$(discover_single_socket_match "${rootless_root}/*/podman/podman.sock" || true)
 
     if [[ "$docker_match" == "__AMBIGUOUS__" ]]; then
         log_warn "Multiple rootless Docker sockets found under /run/user; not auto-selecting one."
@@ -3003,6 +3038,9 @@ else
     log_info "    Command execution is off; enable only when Patrol actions or Proxmox LXC Docker inventory are needed."
 fi
 
+# discover_rootless_container_runtime returns non-zero when a rootful Docker
+# daemon is live, so an explicit --enable-docker with working system Docker
+# never gets the rootless podman socket pinned into the service environment.
 if [[ "$ENABLE_DOCKER" == "true" ]] && discover_rootless_container_runtime; then
     if [[ "$ROOTLESS_RUNTIME_KIND" == "docker" ]]; then
         if ! service_env_has_key "DOCKER_HOST"; then
