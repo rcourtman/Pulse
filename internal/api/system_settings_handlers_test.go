@@ -22,10 +22,11 @@ import (
 
 // MockMonitor implementation
 type mockMonitor struct {
-	backupPollingEnabledCalls  []bool
-	backupPollingIntervalCalls []time.Duration
-	pbsPollingIntervalCalls    []time.Duration
-	pmgPollingIntervalCalls    []time.Duration
+	backupPollingEnabledCalls   []bool
+	backupPollingIntervalCalls  []time.Duration
+	pbsPollingIntervalCalls     []time.Duration
+	pmgPollingIntervalCalls     []time.Duration
+	resetSSHFailureBackoffCalls int
 }
 
 func (m *mockMonitor) GetDiscoveryService() *discovery.Service { return nil }
@@ -46,6 +47,9 @@ func (m *mockMonitor) SetPBSPollingInterval(interval time.Duration) {
 }
 func (m *mockMonitor) SetPMGPollingInterval(interval time.Duration) {
 	m.pmgPollingIntervalCalls = append(m.pmgPollingIntervalCalls, interval)
+}
+func (m *mockMonitor) ResetSSHFailureBackoff() {
+	m.resetSSHFailureBackoffCalls++
 }
 
 type mockTenantMonitorProvider struct {

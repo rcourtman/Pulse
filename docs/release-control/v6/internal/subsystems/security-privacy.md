@@ -590,6 +590,23 @@ written before the removal still loads cleanly with the legacy keys ignored
 `TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored` in
 `internal/api/system_settings_telemetry_test.go`).
 
+### Settings save resets only SSH retry timing, never SSH trust state
+
+The governed system-settings write path in `internal/api/system_settings.go`
+now clears the temperature SSH failure backoff on every live tenant monitor
+after a successful save (#1638). The reset touches retry *timing* state only —
+in-memory per-host backoff windows and the knownhosts keyscan backoff — and
+never SSH trust state: it does not remove pinned host keys, does not relax
+known-hosts verification, and discloses nothing in the response. It runs
+behind the same authenticated write access as the rest of the settings
+mutation surface and adds no new accepted input — no request field enables,
+disables, or targets it, so there is no new attacker-controllable surface
+beyond the already-governed ability to save settings. The worst an authorized
+save can do is advance an SSH retry that the poll cycle would have run anyway
+once the window expired.
+`TestIssue1638SettingsSaveResetsSSHFailureBackoff` in
+`internal/api/system_settings_telemetry_test.go` pins the trigger.
+
 ### Canonical mutation-plane dependency
 
 Raw command, file-write, arbitrary pod-exec, and legacy remediation authority

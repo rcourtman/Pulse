@@ -153,6 +153,19 @@ func (m *Monitor) SetPMGPollingInterval(interval time.Duration) {
 	m.runtimePollingMu.Unlock()
 }
 
+// ResetSSHFailureBackoff clears the temperature collector's per-host SSH
+// backoff and the knownhosts keyscan backoff. A system-settings save is an
+// operator touchpoint that often follows repairing SSH access, and the
+// on-disk key-change check only notices key file replacement, so the save
+// itself also drops the backoff windows rather than making the operator wait
+// one out (#1638).
+func (m *Monitor) ResetSSHFailureBackoff() {
+	if m == nil {
+		return
+	}
+	m.tempCollector.ResetSSHFailures()
+}
+
 // resetBackupPollTimestamps clears the per-instance backup poll timestamps
 // so the next cycle polls immediately.
 func (m *Monitor) resetBackupPollTimestamps() {

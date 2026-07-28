@@ -3738,6 +3738,21 @@ ignores them without a validation error and never writes them back into
 `internal/api/system_settings_telemetry_test.go` and the response snapshot in
 `internal/api/contract_test.go` pin that payload shape.
 
+### System settings save clears the temperature SSH failure backoff
+
+A successful `POST /api/system-settings` save now also calls
+`ResetSSHFailureBackoff` on every live tenant monitor (through the same
+`forEachTenantMonitor` fan-out the polling-cadence setters use), clearing the
+temperature collector's per-host SSH backoff and the knownhosts keyscan
+backoff (#1638). This is a save side effect, not payload surface: no request
+field controls it, it fires on any successful save regardless of which
+settings changed, and the request and response shapes are unchanged. The
+`SystemSettingsMonitor` interface gained the corresponding
+`ResetSSHFailureBackoff()` method.
+`TestIssue1638SettingsSaveResetsSSHFailureBackoff` in
+`internal/api/system_settings_telemetry_test.go` pins that a save touching no
+SSH-related field still triggers exactly one reset per monitor.
+
 ### Connections command-channel liveness tolerates stale host token IDs
 
 The `/api/connections` ledger's `RemoteControl` and `CommandPolicy` signals

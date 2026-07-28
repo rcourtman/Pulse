@@ -505,3 +505,43 @@ func TestIssue1638TemperatureDeadlineDoesNotCompound(t *testing.T) {
 		t.Fatalf("deadline handling ran %d ssh commands, want 3 (one per cycle, no fallback, no compounding)", runner.runs)
 	}
 }
+
+// TestIssue1638MonitorResetSSHFailureBackoffDelegates pins the settings-save
+// escape hatch: Monitor.ResetSSHFailureBackoff must clear the temperature
+// collector's per-host SSH backoff (the settings API calls it on every live
+// tenant monitor after a save), and must be safe on a nil monitor or a monitor
+// without a temperature collector.
+func TestIssue1638MonitorResetSSHFailureBackoffDelegates(t *testing.T) {
+	issue1638UseFakeClock(t)
+	tc, runner := issue1638TemperatureCollector(t)
+
+	// Open a backoff window with a failing first cycle (sensors + fallback).
+	if _, err := tc.CollectTemperature(context.Background(), "node1.local", "node1"); err != nil {
+		t.Fatalf("CollectTemperature: %v", err)
+	}
+	if runner.runs != 2 {
+		t.Fatalf("first cycle ran %d ssh commands, want 2", runner.runs)
+	}
+	if _, err := tc.CollectTemperature(context.Background(), "node1.local", "node1"); err != nil {
+		t.Fatalf("CollectTemperature inside window: %v", err)
+	}
+	if runner.runs != 2 {
+		t.Fatalf("backoff window still ran ssh, total %d commands, want 2", runner.runs)
+	}
+
+	m := &Monitor{tempCollector: tc}
+	m.ResetSSHFailureBackoff()
+
+	if _, err := tc.CollectTemperature(context.Background(), "node1.local", "node1"); err != nil {
+		t.Fatalf("CollectTemperature after reset: %v", err)
+	}
+	if runner.runs != 4 {
+		t.Fatalf("reset did not retry ssh, total %d commands, want 4", runner.runs)
+	}
+
+	// Nil receiver and nil collector must both be no-ops, not panics: the
+	// settings API calls this on whatever monitor the tenant lookup returns.
+	var nilMonitor *Monitor
+	nilMonitor.ResetSSHFailureBackoff()
+	(&Monitor{}).ResetSSHFailureBackoff()
+}

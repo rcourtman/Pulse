@@ -37,6 +37,7 @@ type SystemSettingsMonitor interface {
 	SetBackupPollingInterval(interval time.Duration)
 	SetPBSPollingInterval(interval time.Duration)
 	SetPMGPollingInterval(interval time.Duration)
+	ResetSSHFailureBackoff()
 }
 
 // SystemSettingsHandler handles system settings
@@ -1115,6 +1116,13 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 			m.SetPMGPollingInterval(interval)
 		})
 	}
+
+	// A settings save is an operator touchpoint that often follows repairing
+	// SSH access; clear the temperature SSH backoff windows so the next poll
+	// cycle retries instead of waiting one out (#1638).
+	h.forEachTenantMonitor(r, func(m SystemSettingsMonitor) {
+		m.ResetSSHFailureBackoff()
+	})
 
 	// Reload cached system settings after successful save
 	if h.reloadSystemSettingsFunc != nil {

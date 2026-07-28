@@ -2506,10 +2506,13 @@ it at the floor when the collection deadline expired rather than compounding on
 evidence about Pulse's own budget rather than the host. Both backoffs decay: a
 failure whose retry deadline passed more than one window ago restarts at the
 floor instead of resuming the ceiling. Neither backoff may be a trap the
-operator cannot leave: replacing the temperature SSH key on disk clears both
-maps (`TemperatureCollector.ResetSSHFailures`, triggered from the per-cycle key
-change check), so repairing the key is retried on the next cycle rather than
-after a window that has compounded to fifteen minutes.
+operator cannot leave: `TemperatureCollector.ResetSSHFailures` clears both
+maps, and it is triggered both from the per-cycle key change check (replacing
+the temperature SSH key on disk) and from every system-settings save
+(`Monitor.ResetSSHFailureBackoff`, pushed into each live tenant monitor by the
+settings API), so repairing the key — or saving settings after repairing SSH
+access any other way — is retried on the next cycle rather than after a window
+that has compounded to fifteen minutes.
 `internal/monitoring/issue1638_dns_cache_test.go` is the registered proof that
 repeat polls stay on the DNS cache, that the link-local blocklist still rejects
 hostname endpoints resolving into it, and that the SSH backoffs suppress,

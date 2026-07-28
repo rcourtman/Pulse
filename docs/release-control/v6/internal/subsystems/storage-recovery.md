@@ -2013,6 +2013,16 @@ fields. Persisted `system.json` files that still carry the legacy keys load
 cleanly with the keys ignored, so tenant workspace preservation and recovery
 flows that copy `system.json` forward are unaffected.
 
+### Shared system-settings boundary gained an SSH backoff reset side effect
+
+The shared `internal/api` system-settings surface this subsystem consumes
+(`internal/api/system_settings.go`) now clears the temperature collector's
+in-memory SSH failure backoff on every live tenant monitor after a successful
+save (#1638). Nothing is persisted by the reset — `system.json` shape and the
+settings persistence path are unchanged — so tenant workspace preservation,
+recovery flows that copy `system.json` forward, and backup or restore
+attribution are unaffected.
+
 ### Agent exec token binding repairs are fail-closed durable writes
 
 Command-token binding metadata (`bound_agent_id`, `bound_hostname`,

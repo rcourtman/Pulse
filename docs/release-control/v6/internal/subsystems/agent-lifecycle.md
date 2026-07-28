@@ -2230,6 +2230,17 @@ fields. No agent-lifecycle behavior keyed off them — agent update targeting
 and command admission are unaffected — and the extension-point expectations
 on the system-settings boundary are otherwise unchanged.
 
+### Shared system-settings boundary gained an SSH backoff reset side effect
+
+The shared `internal/api` system-settings surface this subsystem consumes
+(`internal/api/system_settings.go`) now clears the temperature collector's
+SSH failure backoff on every live tenant monitor after a successful save
+(#1638). That backoff belongs to monitor-owned direct SSH temperature
+collection, not to the agent command transport: no agent registration, token,
+command admission, update, or fleet-lifecycle authority is touched, and the
+extension-point expectations on the system-settings boundary are otherwise
+unchanged.
+
 ### Monitor housekeeping prunes only live memory-evidence caches
 
 The shared monitor housekeeping pass in `internal/monitoring/monitor_agents.go`

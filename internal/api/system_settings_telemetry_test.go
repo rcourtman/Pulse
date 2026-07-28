@@ -502,3 +502,49 @@ func TestSystemSettingsUpdate_LegacyAutoUpdateFieldsIgnored(t *testing.T) {
 		t.Fatalf("real setting alongside legacy fields was dropped: connectionTimeout=%d", saved.ConnectionTimeout)
 	}
 }
+
+// TestIssue1638SettingsSaveResetsSSHFailureBackoff pins that saving system
+// settings clears the temperature SSH failure backoff on every live monitor.
+// A settings save is an operator touchpoint that often follows repairing SSH
+// access, and the on-disk key-change check only notices key file replacement,
+// so without this the operator waits out a backoff window that may have
+// compounded to fifteen minutes before Pulse retries (#1638).
+func TestIssue1638SettingsSaveResetsSSHFailureBackoff(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:     tempDir,
+		ConfigPath:   tempDir,
+		EnvOverrides: make(map[string]bool),
+	}
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+
+	tokenVal := "ssh-reset-test-token-123.12345678"
+	tokenHash := internalauth.HashAPIToken(tokenVal)
+	cfg.APITokens = []config.APITokenRecord{
+		{ID: "tok1", Hash: tokenHash, Name: "Test Token"},
+	}
+
+	monitor := &mockMonitor{}
+	handler := newTestSystemSettingsHandler(cfg, persistence, monitor, func() {}, func() error { return nil })
+
+	initial := config.DefaultSystemSettings()
+	if err := persistence.SaveSystemSettings(*initial); err != nil {
+		t.Fatal(err)
+	}
+
+	// A save that touches no SSH-related field must still clear the backoff:
+	// the reset is tied to the save itself, not to any particular setting.
+	body, _ := json.Marshal(map[string]interface{}{"connectionTimeout": 30})
+	req := httptest.NewRequest(http.MethodPost, "/api/system-settings", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", tokenVal)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if monitor.resetSSHFailureBackoffCalls != 1 {
+		t.Fatalf("settings save called ResetSSHFailureBackoff %d times, want 1", monitor.resetSSHFailureBackoffCalls)
+	}
+}
