@@ -308,13 +308,17 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				isPBSStorage := storage.Type == "pbs"
 				if isPBSStorage && hasPBSDirectConnection {
 					// The direct PBS connection is authoritative for the
-					// backup list, but which cluster listed a snapshot is
-					// evidence only this storage view has: it attributes a
-					// snapshot whose VMID exists on several clusters to the
-					// cluster that made it (#1639). Keep that association
-					// even though the raw entry is dropped.
+					// backup list, but which storage view listed a snapshot
+					// is evidence only this connection has: it helps
+					// attribute a snapshot whose VMID exists on several
+					// clusters (#1639). Keep that association, tagged with
+					// the storage it came from, even though the raw entry is
+					// dropped - a listing only proves this connection can see
+					// the snapshot, so consumers need the storage to tell an
+					// exclusive view from a shared or synced datastore.
 					if confirmationType := pbsGuestConfirmationType(backupType); confirmationType != "" && content.VMID > 0 && content.CTime > 0 {
 						pbsConfirmations = append(pbsConfirmations, models.PBSGuestConfirmation{
+							Storage:    storage.Storage,
 							BackupType: confirmationType,
 							VMID:       content.VMID,
 							Time:       content.CTime,
@@ -376,6 +380,15 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			Str("instance", instanceName).
 			Strs("storages", preservedStorages).
 			Msg("Preserving previous storage backup data due to partial failures")
+	}
+
+	pbsConfirmations, preservedConfirmationStorages := preserveFailedPBSGuestConfirmations(
+		m.state.PBSGuestConfirmationsForInstance(instanceName), storagePreserveNeeded, pbsConfirmations)
+	if len(preservedConfirmationStorages) > 0 {
+		log.Warn().
+			Str("instance", instanceName).
+			Strs("storages", preservedConfirmationStorages).
+			Msg("Preserving previous PBS guest confirmation evidence due to partial failures")
 	}
 
 	// Decide whether to keep existing backups when every query failed
@@ -556,6 +569,46 @@ func storageNamesForNode(readState unifiedresources.ReadState, instanceName, nod
 	}
 
 	return storages
+}
+
+// preserveFailedPBSGuestConfirmations carries forward the PBS guest
+// confirmation evidence of storages whose content query failed this cycle,
+// mirroring preserveFailedStorageBackups. Publishing the partial (possibly
+// empty) set instead would evict attribution evidence on a transient poll
+// failure and flip collision-VMID guests between cycles (#1639).
+func preserveFailedPBSGuestConfirmations(previous []models.PBSGuestConfirmation, storagesToPreserve map[string]struct{}, current []models.PBSGuestConfirmation) ([]models.PBSGuestConfirmation, []string) {
+	if len(storagesToPreserve) == 0 || len(previous) == 0 {
+		return current, nil
+	}
+
+	existing := make(map[models.PBSGuestConfirmation]struct{}, len(current))
+	for _, confirmation := range current {
+		existing[confirmation] = struct{}{}
+	}
+
+	preserved := make(map[string]struct{})
+	for _, confirmation := range previous {
+		if _, ok := storagesToPreserve[confirmation.Storage]; !ok {
+			continue
+		}
+		if _, duplicate := existing[confirmation]; duplicate {
+			continue
+		}
+		current = append(current, confirmation)
+		existing[confirmation] = struct{}{}
+		preserved[confirmation.Storage] = struct{}{}
+	}
+
+	if len(preserved) == 0 {
+		return current, nil
+	}
+
+	storages := make([]string, 0, len(preserved))
+	for storage := range preserved {
+		storages = append(storages, storage)
+	}
+	sort.Strings(storages)
+	return current, storages
 }
 
 func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[string]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {

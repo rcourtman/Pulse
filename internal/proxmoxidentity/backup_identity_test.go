@@ -86,6 +86,8 @@ func TestLocationLabelsEqualRequiresExactNormalizedMatch(t *testing.T) {
 
 func TestPBSSourceLearnerResolvesOwnerBeforeWeakerComponents(t *testing.T) {
 	l := NewPBSSourceLearner()
+	l.RegisterCandidate("pbs-main", "cluster-a")
+	l.RegisterCandidate("pbs-main", "cluster-b")
 	l.Observe("pbs-main", "backups", "cluster-a@pbs!token", "cluster-a")
 	l.Observe("pbs-main", "backups", "cluster-b@pbs!token", "cluster-b")
 
@@ -101,6 +103,8 @@ func TestPBSSourceLearnerResolvesOwnerBeforeWeakerComponents(t *testing.T) {
 
 func TestPBSSourceLearnerSharedSourceIsNotDecisive(t *testing.T) {
 	l := NewPBSSourceLearner()
+	l.RegisterCandidate("pbs-main", "cluster-a")
+	l.RegisterCandidate("pbs-main", "cluster-b")
 	l.Observe("pbs-main", "backups", "shared@pbs!token", "cluster-a")
 	l.Observe("pbs-main", "backups", "shared@pbs!token", "cluster-b")
 
@@ -111,7 +115,10 @@ func TestPBSSourceLearnerSharedSourceIsNotDecisive(t *testing.T) {
 
 func TestPBSSourceLearnerUnfamiliarComponentStopsResolution(t *testing.T) {
 	l := NewPBSSourceLearner()
+	l.RegisterCandidate("pbs-main", "cluster-a")
+	l.RegisterCandidate("pbs-main", "cluster-b")
 	l.Observe("pbs-main", "backups", "cluster-a@pbs!token", "cluster-a")
+	l.Observe("pbs-main", "store-b", "cluster-b@pbs!token", "cluster-b")
 
 	// The datastore alone would resolve to cluster-a, but an owner token
 	// that was never observed means the backup may come from a cluster we
@@ -125,8 +132,66 @@ func TestPBSSourceLearnerUnfamiliarComponentStopsResolution(t *testing.T) {
 	}
 }
 
+// TestPBSSourceLearnerUnobservedCandidateBlocksResolution covers the
+// asymmetry that made a singleton source set unsafe: clusters only become
+// visible through snapshots that were already attributable, so a cluster with
+// none looks like it does not exist. A source shared with that cluster then
+// maps to a single observed cluster and hands it the other cluster's
+// snapshots (#1639).
+func TestPBSSourceLearnerUnobservedCandidateBlocksResolution(t *testing.T) {
+	l := NewPBSSourceLearner()
+	l.RegisterCandidate("pbs-main", "cluster-a")
+	l.RegisterCandidate("pbs-main", "cluster-b")
+	l.Observe("pbs-main", "backups", "shared@pbs!token", "cluster-a")
+
+	if inst, ok := l.Resolve("pbs-main", "backups", "shared@pbs!token"); ok {
+		t.Fatalf("resolved to %q while cluster-b had no attributed snapshot, want inconclusive", inst)
+	}
+
+	// Once cluster-b is visible with a source of its own, the singleton is
+	// backed by evidence that the token is not shared.
+	l.Observe("pbs-main", "store-b", "cluster-b@pbs!token", "cluster-b")
+	if inst, ok := l.Resolve("pbs-main", "backups", "shared@pbs!token"); !ok || inst != "cluster-a" {
+		t.Fatalf("resolution with full coverage = %q,%v, want cluster-a,true", inst, ok)
+	}
+}
+
+// TestPBSSourceLearnerCandidateVisibleOnOtherPBSInstanceResolves covers the
+// reported topology: each cluster owns a PBS server, so the PBS instance is
+// itself the discriminator. cluster-b never submits to pbs-one, but it is
+// visible on pbs-two, which is what makes pbs-one's singleton meaningful.
+func TestPBSSourceLearnerCandidateVisibleOnOtherPBSInstanceResolves(t *testing.T) {
+	l := NewPBSSourceLearner()
+	l.RegisterCandidate("pbs-one", "cluster-a")
+	l.RegisterCandidate("pbs-one", "cluster-b")
+	l.RegisterCandidate("pbs-two", "cluster-a")
+	l.RegisterCandidate("pbs-two", "cluster-b")
+	l.Observe("pbs-one", "backups", "", "cluster-a")
+	l.Observe("pbs-two", "backups", "", "cluster-b")
+
+	if inst, ok := l.Resolve("pbs-one", "backups", ""); !ok || inst != "cluster-a" {
+		t.Fatalf("pbs-one resolution = %q,%v, want cluster-a,true", inst, ok)
+	}
+	if inst, ok := l.Resolve("pbs-two", "backups", ""); !ok || inst != "cluster-b" {
+		t.Fatalf("pbs-two resolution = %q,%v, want cluster-b,true", inst, ok)
+	}
+}
+
+// TestPBSSourceLearnerWithoutCandidatesIsInert guards the fail-closed
+// default: a caller that never declares the candidate clusters gets no
+// resolution rather than one drawn from whatever it happened to observe.
+func TestPBSSourceLearnerWithoutCandidatesIsInert(t *testing.T) {
+	l := NewPBSSourceLearner()
+	l.Observe("pbs-main", "backups", "cluster-a@pbs!token", "cluster-a")
+
+	if inst, ok := l.Resolve("pbs-main", "backups", "cluster-a@pbs!token"); ok {
+		t.Fatalf("resolved to %q without declared candidates, want inconclusive", inst)
+	}
+}
+
 func TestPBSSourceLearnerNilReceiverIsInert(t *testing.T) {
 	var l *PBSSourceLearner
+	l.RegisterCandidate("pbs-main", "cluster-a")
 	l.Observe("pbs-main", "backups", "owner", "cluster-a")
 	if _, ok := l.Resolve("pbs-main", "backups", "owner"); ok {
 		t.Fatal("nil learner must never be decisive")

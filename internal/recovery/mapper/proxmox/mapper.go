@@ -407,7 +407,20 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 	// First pass: learn each PBS submission source's cluster from the
 	// backups that are attributable on their own evidence, so the second
 	// pass can resolve collision VMIDs with no evidence of their own (#1639).
+	// Every connection owning a candidate guest is registered first, so a
+	// connection that contributes no attributable backup keeps the learner
+	// inconclusive instead of letting a source it may share resolve to the
+	// connections that happened to be attributable.
 	learner := proxmoxidentity.NewPBSSourceLearner()
+	for _, b := range backups {
+		if strings.TrimSpace(b.ID) == "" {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(b.BackupType)) + ":" + strings.TrimSpace(b.VMID)
+		for _, candidate := range candidatesByKey[key] {
+			learner.RegisterCandidate(b.Instance, candidate.InstanceName)
+		}
+	}
 	for _, b := range backups {
 		if strings.TrimSpace(b.ID) == "" {
 			continue

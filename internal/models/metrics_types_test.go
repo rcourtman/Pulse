@@ -218,8 +218,11 @@ func TestNativePoolHealthEvidenceNormalizesWithoutChangingIdentity(t *testing.T)
 func TestPBSGuestConfirmationEvidenceStaysOutOfSerializedState(t *testing.T) {
 	state := NewState()
 	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []PBSGuestConfirmation{
-		{BackupType: "vm", VMID: 173, Time: time.Now().Unix()},
+		{Storage: "pbs-store", BackupType: "vm", VMID: 173, Time: time.Now().Unix()},
 	})
+	if len(state.PBSGuestConfirmationsForInstance("cluster-a")) != 1 {
+		t.Fatal("precondition: confirmation should be retained as internal evidence")
+	}
 
 	payload, err := json.Marshal(state)
 	if err != nil {

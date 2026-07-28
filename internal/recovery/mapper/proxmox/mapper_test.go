@@ -551,10 +551,24 @@ func TestFromPBSBackups_DisambiguatesCollisionVMIDBySubmissionSource(t *testing.
 				BackupTypeKey: "vm",
 			},
 		},
+		"vm:150": {
+			{
+				ResourceID:    "vm-dddddddddddddddd",
+				SourceID:      "cluster-b:pve-b1:150",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "db-b",
+				InstanceName:  "cluster-b",
+				NodeName:      "pve-b1",
+				VMID:          150,
+				BackupTypeKey: "vm",
+			},
+		},
 	}
 
 	backups := []models.PBSBackup{
-		// Teaching snapshot: unique VMID attributes cluster-a's owner token.
+		// Teaching snapshots: unique VMIDs attribute each cluster's owner
+		// token, which is also what makes both clusters visible — a cluster
+		// with no attributable backup would keep the learner inconclusive.
 		{
 			ID:         "pbs-a-100",
 			VMID:       "100",
@@ -563,6 +577,15 @@ func TestFromPBSBackups_DisambiguatesCollisionVMIDBySubmissionSource(t *testing.
 			Owner:      "cluster-a@pbs!token",
 			BackupType: "vm",
 			BackupTime: time.Date(2026, 7, 26, 1, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:         "pbs-b-150",
+			VMID:       "150",
+			Instance:   "pbs-main",
+			Datastore:  "store-b",
+			Owner:      "cluster-b@pbs!token",
+			BackupType: "vm",
+			BackupTime: time.Date(2026, 7, 26, 2, 0, 0, 0, time.UTC),
 		},
 		// Collision snapshot: no namespace, no comment, cluster-a's source.
 		{
@@ -588,8 +611,8 @@ func TestFromPBSBackups_DisambiguatesCollisionVMIDBySubmissionSource(t *testing.
 	}
 
 	result := FromPBSBackups(backups, candidatesByKey)
-	if len(result) != 3 {
-		t.Fatalf("expected 3 points, got %d", len(result))
+	if len(result) != 4 {
+		t.Fatalf("expected 4 points, got %d", len(result))
 	}
 
 	byID := map[string]int{}
@@ -605,5 +628,84 @@ func TestFromPBSBackups_DisambiguatesCollisionVMIDBySubmissionSource(t *testing.
 	unlinked := result[byID["pbs-backup:pbs-x-173"]]
 	if unlinked.SubjectResourceID != "" {
 		t.Fatalf("unattributable snapshot linked to %q, want unlinked", unlinked.SubjectResourceID)
+	}
+}
+
+// Issue #1639 hardening: the learner only ever sees clusters that already had
+// a backup attributed to them, so a cluster with no attributable backup is
+// invisible and a source it shares looks exclusive to the cluster that was
+// visible. The collision snapshot must stay unlinked rather than be handed to
+// the visible cluster.
+func TestFromPBSBackups_InvisibleClusterKeepsCollisionSnapshotUnlinked(t *testing.T) {
+	candidatesByKey := map[string][]GuestCandidate{
+		"vm:173": {
+			{
+				ResourceID:    "vm-aaaaaaaaaaaaaaaa",
+				SourceID:      "cluster-a:pve-a1:173",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "web-a",
+				InstanceName:  "cluster-a",
+				NodeName:      "pve-a1",
+				VMID:          173,
+				BackupTypeKey: "vm",
+			},
+			{
+				ResourceID:    "vm-bbbbbbbbbbbbbbbb",
+				SourceID:      "cluster-b:pve-b1:173",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "web-b",
+				InstanceName:  "cluster-b",
+				NodeName:      "pve-b1",
+				VMID:          173,
+				BackupTypeKey: "vm",
+			},
+		},
+		"vm:100": {
+			{
+				ResourceID:    "vm-cccccccccccccccc",
+				SourceID:      "cluster-a:pve-a1:100",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "db-a",
+				InstanceName:  "cluster-a",
+				NodeName:      "pve-a1",
+				VMID:          100,
+				BackupTypeKey: "vm",
+			},
+		},
+	}
+
+	backups := []models.PBSBackup{
+		{
+			ID:         "pbs-a-100",
+			VMID:       "100",
+			Instance:   "pbs-main",
+			Datastore:  "backups",
+			Owner:      "shared@pbs!token",
+			BackupType: "vm",
+			BackupTime: time.Date(2026, 7, 26, 1, 0, 0, 0, time.UTC),
+		},
+		// Authored by cluster-b, which owns no attributable guest here.
+		{
+			ID:         "pbs-b-173",
+			VMID:       "173",
+			Instance:   "pbs-main",
+			Datastore:  "backups",
+			Owner:      "shared@pbs!token",
+			BackupType: "vm",
+			BackupTime: time.Date(2026, 7, 27, 1, 0, 0, 0, time.UTC),
+		},
+	}
+
+	result := FromPBSBackups(backups, candidatesByKey)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 points, got %d", len(result))
+	}
+	for _, point := range result {
+		if point.ID != "pbs-backup:pbs-b-173" {
+			continue
+		}
+		if point.SubjectResourceID != "" {
+			t.Fatalf("collision snapshot linked to %q, want unlinked while cluster-b is invisible", point.SubjectResourceID)
+		}
 	}
 }

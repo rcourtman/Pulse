@@ -57,7 +57,12 @@ learned from the same batch's attributable snapshots. A source component
 never positively attributed stops resolution instead of deferring to weaker
 components, and a snapshot whose source decisively belongs to a connection
 with no matching guest stays unlinked; it must never be linked to another
-cluster's guest with the same VMID.
+cluster's guest with the same VMID. The learned mapping is positive evidence
+only, so a source resolving to a single connection proves nothing while some
+other connection owning a candidate guest has had no snapshot attributed to
+it: that connection is invisible to the mapping rather than absent from the
+source, and resolution stays inconclusive for the PBS instance until every
+candidate connection has been observed.
 
 
 Physical-disk to node association is evidence-directional. A disk reported by a

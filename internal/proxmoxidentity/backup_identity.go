@@ -113,12 +113,53 @@ const (
 // with a per-cluster token and often a per-cluster datastore, so evidence
 // learned from unambiguous guests can attribute root-namespace,
 // comment-less snapshots whose VMID exists on more than one cluster (#1639).
+//
+// Evidence is only ever positive: a cluster becomes visible to the learner
+// by having a snapshot attributed to it. A source key mapping to exactly one
+// visible cluster therefore proves nothing on its own, because a cluster
+// with no attributable snapshot at all is indistinguishable from a cluster
+// that does not use that source. Callers must declare every cluster that
+// could have authored a backup on a PBS instance with RegisterCandidate, and
+// resolution stays inconclusive until each of them has been observed.
 type PBSSourceLearner struct {
 	instancesByKey map[string]map[string]struct{}
+	// candidatesByPBS lists, per PBS instance, the PVE connections that own
+	// a guest one of that instance's backups could belong to.
+	candidatesByPBS map[string]map[string]struct{}
+	// observed is every PVE connection that has had at least one snapshot
+	// positively attributed to it, from any PBS instance.
+	observed map[string]struct{}
 }
 
 func NewPBSSourceLearner() *PBSSourceLearner {
-	return &PBSSourceLearner{instancesByKey: make(map[string]map[string]struct{})}
+	return &PBSSourceLearner{
+		instancesByKey:  make(map[string]map[string]struct{}),
+		candidatesByPBS: make(map[string]map[string]struct{}),
+		observed:        make(map[string]struct{}),
+	}
+}
+
+// RegisterCandidate declares that pveInstance owns a guest that a backup on
+// pbsInstance could belong to. Resolve refuses to be decisive for that PBS
+// instance until every registered candidate has been observed, so a cluster
+// that contributes no attributable snapshot cannot be silently written out of
+// the candidate set and have its backups handed to a cluster that shares its
+// owner token or datastore (#1639).
+func (l *PBSSourceLearner) RegisterCandidate(pbsInstance, pveInstance string) {
+	if l == nil {
+		return
+	}
+	pveInstance = strings.TrimSpace(pveInstance)
+	if pveInstance == "" {
+		return
+	}
+	key := strings.TrimSpace(pbsInstance)
+	set, ok := l.candidatesByPBS[key]
+	if !ok {
+		set = make(map[string]struct{})
+		l.candidatesByPBS[key] = set
+	}
+	set[pveInstance] = struct{}{}
 }
 
 func pbsSourceKeys(pbsInstance, datastore, owner string) []string {
@@ -149,6 +190,7 @@ func (l *PBSSourceLearner) Observe(pbsInstance, datastore, owner, pveInstance st
 	if pveInstance == "" {
 		return
 	}
+	l.observed[pveInstance] = struct{}{}
 	for _, key := range pbsSourceKeys(pbsInstance, datastore, owner) {
 		set, ok := l.instancesByKey[key]
 		if !ok {
@@ -159,6 +201,31 @@ func (l *PBSSourceLearner) Observe(pbsInstance, datastore, owner, pveInstance st
 	}
 }
 
+// candidatesAllObserved reports whether every PVE connection that could have
+// authored a backup on this PBS instance has had at least one snapshot
+// positively attributed to it. Until that holds, a source key mapping to a
+// single connection is not evidence the source is exclusive to it — the
+// unobserved connection may be pushing through the very same owner token or
+// datastore, and its snapshots would be handed to the observed one (#1639).
+//
+// Observation is not scoped to the PBS instance on purpose: a cluster seen
+// submitting to a different PBS instance is visible evidence about where its
+// backups land, which is exactly what distinguishes clusters that each own a
+// PBS server. A cluster with no attributed snapshot anywhere is invisible and
+// blocks resolution.
+func (l *PBSSourceLearner) candidatesAllObserved(pbsInstance string) bool {
+	candidates := l.candidatesByPBS[strings.TrimSpace(pbsInstance)]
+	if len(candidates) == 0 {
+		return false
+	}
+	for candidate := range candidates {
+		if _, ok := l.observed[candidate]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // Resolve reports the single PVE connection the backup's source evidence
 // identifies. Evidence is consulted strongest-first; a source component that
 // maps to several connections is not a discriminator and defers to the next
@@ -166,8 +233,16 @@ func (l *PBSSourceLearner) Observe(pbsInstance, datastore, owner, pveInstance st
 // an unfamiliar owner or datastore means the backup may belong to a cluster
 // we have no evidence for, and guessing from weaker components would
 // attribute it to the wrong cluster.
+//
+// Resolution is inconclusive for the whole PBS instance while any registered
+// candidate cluster is still unobserved, because a singleton mapping then
+// only reflects which clusters happened to be attributable, not that the
+// source is exclusive to one of them.
 func (l *PBSSourceLearner) Resolve(pbsInstance, datastore, owner string) (string, bool) {
 	if l == nil {
+		return "", false
+	}
+	if !l.candidatesAllObserved(pbsInstance) {
 		return "", false
 	}
 	for _, key := range pbsSourceKeys(pbsInstance, datastore, owner) {

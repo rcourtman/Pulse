@@ -49,22 +49,27 @@ type State struct {
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
 	PVETagStyles                 map[string]PVETagStyle     `json:"pveTagStyles,omitempty"`
 
-	// pbsGuestConfirmations records, per PVE connection, the (type, vmid,
-	// time) triples that connection's own pbs-type storage listings
+	// pbsGuestConfirmations records, per PVE connection, the (storage, type,
+	// vmid, time) tuples that connection's own pbs-type storage listings
 	// reported. When direct PBS polling is authoritative the raw storage
-	// contents are not kept as StorageBackups, but which cluster listed a
-	// snapshot is the only deterministic way to attribute a PBS snapshot
-	// whose VMID exists on several clusters (#1639). Internal evidence only:
-	// never serialized and never part of snapshots.
+	// contents are not kept as StorageBackups, but which storage view listed
+	// a snapshot is corroborating evidence for attributing a PBS snapshot
+	// whose VMID exists on several clusters (#1639). A listing proves the
+	// connection can see the snapshot, not that it authored it, so the
+	// storage name is retained and views that overlap another connection's
+	// are discarded as decisive evidence. Internal evidence only: never
+	// serialized and never part of snapshots.
 	pbsGuestConfirmations map[string]map[PBSGuestConfirmation]struct{}
 }
 
 // PBSGuestConfirmation identifies one PBS snapshot as seen through a PVE
-// connection's own pbs-type storage content listing. BackupType uses PBS
-// nomenclature ("vm" or "ct") and Time is the snapshot's backup time in
-// unix seconds, which matches PBSBackup.BackupTime exactly because both
-// derive from the snapshot identifier.
+// connection's own pbs-type storage content listing. Storage is the PVE
+// storage the listing came from, BackupType uses PBS nomenclature ("vm" or
+// "ct") and Time is the snapshot's backup time in unix seconds, which
+// matches PBSBackup.BackupTime exactly because both derive from the snapshot
+// identifier.
 type PBSGuestConfirmation struct {
+	Storage    string
 	BackupType string
 	VMID       int
 	Time       int64
@@ -4145,6 +4150,12 @@ func (s *State) UpdatePBSGuestConfirmationsForInstance(instanceName string, conf
 	set := make(map[PBSGuestConfirmation]struct{}, len(confirmations))
 	for _, confirmation := range confirmations {
 		confirmation.BackupType = strings.ToLower(strings.TrimSpace(confirmation.BackupType))
+		confirmation.Storage = strings.TrimSpace(confirmation.Storage)
+		if confirmation.Storage == "" {
+			// Without the originating storage the evidence cannot be tested
+			// for exclusivity or preserved across a partial poll failure.
+			continue
+		}
 		if (confirmation.BackupType != "vm" && confirmation.BackupType != "ct") || confirmation.VMID <= 0 || confirmation.Time <= 0 {
 			continue
 		}
@@ -4155,6 +4166,38 @@ func (s *State) UpdatePBSGuestConfirmationsForInstance(instanceName string, conf
 		return
 	}
 	s.pbsGuestConfirmations[instanceName] = set
+}
+
+// PBSGuestConfirmationsForInstance returns the PVE-side PBS snapshot evidence
+// currently held for one connection. Callers use it to carry forward the
+// evidence of storages whose content query failed this cycle, so a partial
+// poll failure cannot evict attribution and flip guests between cycles
+// (#1639).
+func (s *State) PBSGuestConfirmationsForInstance(instanceName string) []PBSGuestConfirmation {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	set, ok := s.pbsGuestConfirmations[instanceName]
+	if !ok || len(set) == 0 {
+		return nil
+	}
+	out := make([]PBSGuestConfirmation, 0, len(set))
+	for confirmation := range set {
+		out = append(out, confirmation)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Storage != out[j].Storage {
+			return out[i].Storage < out[j].Storage
+		}
+		if out[i].BackupType != out[j].BackupType {
+			return out[i].BackupType < out[j].BackupType
+		}
+		if out[i].VMID != out[j].VMID {
+			return out[i].VMID < out[j].VMID
+		}
+		return out[i].Time < out[j].Time
+	})
+	return out
 }
 
 // SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
@@ -4239,20 +4282,56 @@ func (s *State) SyncGuestBackupTimes() {
 		}
 	}
 
-	// PVE-side confirmations deterministically attribute a PBS snapshot to
-	// the connection whose own pbs-type storage listed it. Index them by
-	// snapshot identity, keeping the set of confirming connections so a
-	// snapshot listed by several connections (shouldn't happen, but trust
-	// nothing) stays inconclusive.
-	confirmingInstances := make(map[PBSGuestConfirmation]map[string]struct{})
+	// PVE-side confirmations say a connection's own pbs-type storage listed a
+	// snapshot. That is visibility, not authorship: a shared token, a synced
+	// datastore, or an offsite copy all make another cluster's snapshots
+	// appear in this cluster's listing. Only a storage view that never lists
+	// a snapshot some other connection also lists can be treated as
+	// authorship evidence; an overlapping view has demonstrated it sees other
+	// clusters' snapshots, so nothing it lists attributes anything (#1639).
+	type pbsSnapshotKey struct {
+		backupType string
+		vmid       int
+		unixTime   int64
+	}
+	type pbsStorageView struct {
+		instance string
+		storage  string
+	}
+	viewsBySnapshot := make(map[pbsSnapshotKey][]pbsStorageView)
 	for instanceName, confirmations := range s.pbsGuestConfirmations {
 		for confirmation := range confirmations {
-			set, ok := confirmingInstances[confirmation]
-			if !ok {
-				set = make(map[string]struct{})
-				confirmingInstances[confirmation] = set
+			key := pbsSnapshotKey{backupType: confirmation.BackupType, vmid: confirmation.VMID, unixTime: confirmation.Time}
+			viewsBySnapshot[key] = append(viewsBySnapshot[key], pbsStorageView{instance: instanceName, storage: confirmation.Storage})
+		}
+	}
+	sharedViews := make(map[pbsStorageView]struct{})
+	for _, views := range viewsBySnapshot {
+		for i := range views {
+			for j := i + 1; j < len(views); j++ {
+				if views[i].instance == views[j].instance {
+					continue
+				}
+				sharedViews[views[i]] = struct{}{}
+				sharedViews[views[j]] = struct{}{}
 			}
-			set[instanceName] = struct{}{}
+		}
+	}
+	// exclusiveConfirmer names the connection whose non-overlapping storage
+	// view listed a snapshot. A snapshot two connections both list makes both
+	// their views overlapping, so it has no exclusive confirmer at all.
+	exclusiveConfirmer := make(map[pbsSnapshotKey]string)
+	for key, views := range viewsBySnapshot {
+		exclusive := make(map[string]struct{}, len(views))
+		for _, view := range views {
+			if _, shared := sharedViews[view]; !shared {
+				exclusive[view.instance] = struct{}{}
+			}
+		}
+		if len(exclusive) == 1 {
+			for instanceName := range exclusive {
+				exclusiveConfirmer[key] = instanceName
+			}
 		}
 	}
 
@@ -4262,6 +4341,17 @@ func (s *State) SyncGuestBackupTimes() {
 	// learned mapping then resolves collision-VMID snapshots that carry no
 	// namespace or comment evidence of their own (#1639).
 	sourceLearner := proxmoxidentity.NewPBSSourceLearner()
+	for key, backups := range pbsBackupsBySubject {
+		guests := subjectGuests[key]
+		if len(guests) == 0 {
+			continue
+		}
+		for _, backup := range backups {
+			for _, guest := range guests {
+				sourceLearner.RegisterCandidate(backup.Instance, guest.instance)
+			}
+		}
+	}
 	for key, backups := range pbsBackupsBySubject {
 		guests := subjectGuests[key]
 		if len(guests) == 0 {
@@ -4282,6 +4372,12 @@ func (s *State) SyncGuestBackupTimes() {
 					for instance := range matched {
 						attributed = instance
 					}
+				}
+				if attributed == "" {
+					// An exclusive storage view is positive attribution too,
+					// and it makes the cluster behind it visible to the
+					// coverage check.
+					attributed = exclusiveConfirmer[pbsSnapshotKey{backupType: key.backupType, vmid: key.vmid, unixTime: backup.BackupTime.Unix()}]
 				}
 			}
 			if attributed != "" {
@@ -4312,24 +4408,33 @@ func (s *State) SyncGuestBackupTimes() {
 				instance,
 				node,
 			)
+			snapshotKey := pbsSnapshotKey{backupType: backupType, vmid: vmid, unixTime: backup.BackupTime.Unix()}
 			if score == 0 {
 				if !subjectIsAmbiguous[subjectKey] {
 					score = 1
-				} else if confirmers := confirmingInstances[PBSGuestConfirmation{BackupType: backupType, VMID: vmid, Time: backup.BackupTime.Unix()}]; len(confirmers) == 1 {
-					// Exactly one connection's own PBS storage listed this
-					// snapshot — it belongs to that cluster, full stop.
-					if _, ours := confirmers[instance]; ours {
-						score = 2
-					}
 				} else {
-					// No usable storage-view evidence (unconfirmed, or a
-					// shared datastore mount several clusters list); fall
-					// back to the learned submission-source mapping. A
-					// decisive attribution to another cluster keeps the
-					// snapshot away from this guest; an inconclusive one
-					// keeps the pre-#1639 drop.
-					if attributed, decisive := sourceLearner.Resolve(backup.Instance, backup.Datastore, backup.Owner); decisive && attributed == instance {
-						score = 1
+					// Two independent evidence paths, neither authoritative
+					// over the other. An exclusive storage view (one no other
+					// connection's listing overlaps) is authorship evidence;
+					// the learned submission-source mapping is inference from
+					// the batch's attributable snapshots. Where both speak
+					// they must agree, otherwise the snapshot stays dropped
+					// as it did before #1639.
+					confirmer, confirmed := exclusiveConfirmer[snapshotKey]
+					attributed, learned := sourceLearner.Resolve(backup.Instance, backup.Datastore, backup.Owner)
+					switch {
+					case confirmed && learned:
+						if confirmer == instance && attributed == instance {
+							score = 1
+						}
+					case confirmed:
+						if confirmer == instance {
+							score = 1
+						}
+					case learned:
+						if attributed == instance {
+							score = 1
+						}
 					}
 				}
 			}

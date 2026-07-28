@@ -38,7 +38,12 @@ may match a candidate guest's instance or node only by exact normalized
 equality. Suffix matching is reserved for real PBS namespaces inside the
 shared identity helpers; applying it to a PBS connection name
 cross-attributes clusters that share a VMID, so an unlinked backup whose
-label identifies no guest exactly stays on its generic rollup key.
+label identifies no guest exactly stays on its generic rollup key. The PBS
+submission-source learner that shares those identity helpers is backup
+attribution state, not alert identity: it is built per evaluation from
+positively attributed snapshots, never persists across evaluations, and is
+inconclusive by default, so it can only narrow which guest an already-linked
+backup belongs to and can never widen, merge, or move an alert's subject.
 Availability incident and alert identity belongs to the source-owned
 `network-endpoint` check. Correlation may project probe evidence onto a matched
 machine, but it must not copy the check incident onto that machine or create a

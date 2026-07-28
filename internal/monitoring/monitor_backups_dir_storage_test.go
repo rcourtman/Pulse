@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -66,6 +67,85 @@ func TestPollStorageBackups_KeepsDirStorageNamedLikePBS(t *testing.T) {
 	}
 	if backups[0].Storage != "pbs-backup" || backups[0].VMID != 106 {
 		t.Fatalf("expected vzdump from dir storage named pbs-backup, got %+v", backups[0])
+	}
+}
+
+// pbsPartialFailureClient serves two pbs-type storages and can be told to
+// fail one storage's content query, standing in for a partial poll failure.
+type pbsPartialFailureClient struct {
+	mockPVEClientExtra
+	snapshotTime time.Time
+	failStorage  string
+}
+
+func (c *pbsPartialFailureClient) GetStorage(ctx context.Context, node string) ([]pveapi.Storage, error) {
+	return []pveapi.Storage{
+		{Storage: "pbs-one", Content: "backup", Type: "pbs", Enabled: 1, Active: 1},
+		{Storage: "pbs-two", Content: "backup", Type: "pbs", Enabled: 1, Active: 1},
+	}, nil
+}
+
+func (c *pbsPartialFailureClient) GetStorageContent(ctx context.Context, node, storage string) ([]pveapi.StorageContent, error) {
+	if storage == c.failStorage {
+		return nil, fmt.Errorf("500 internal error")
+	}
+	vmid := 173
+	if storage == "pbs-two" {
+		vmid = 174
+	}
+	return []pveapi.StorageContent{{
+		Volid:   fmt.Sprintf("%s:backup/vm/%d/2026-07-27T01:00:00Z", storage, vmid),
+		VMID:    vmid,
+		Size:    2048,
+		CTime:   c.snapshotTime.Unix(),
+		Content: "backup",
+		Format:  "pbs-vm",
+	}}, nil
+}
+
+// TestPollStorageBackups_Issue1639PreservesConfirmationsOnPartialFailure
+// verifies that a storage whose content query fails keeps its previous PBS
+// guest confirmations instead of having them evicted by the partial set.
+// Losing them flips collision-VMID attribution from cycle to cycle.
+func TestPollStorageBackups_Issue1639PreservesConfirmationsOnPartialFailure(t *testing.T) {
+	snapshotTime := time.Date(2026, 7, 27, 1, 0, 0, 0, time.UTC)
+
+	m := &Monitor{
+		state: models.NewState(),
+		config: &config.Config{
+			PBSInstances: []config.PBSInstance{{Name: "pbs-1", Host: "https://pbs.example:8007"}},
+		},
+	}
+	nodes := []pveapi.Node{{Node: "node-a", Status: "online"}}
+	online := map[string]string{"node-a": "online"}
+
+	// Healthy cycle: both storages list one snapshot each.
+	m.pollStorageBackupsWithNodes(context.Background(), "cluster-a",
+		&pbsPartialFailureClient{snapshotTime: snapshotTime}, nodes, online)
+
+	healthy := m.state.PBSGuestConfirmationsForInstance("cluster-a")
+	if len(healthy) != 2 {
+		t.Fatalf("expected both storages to contribute confirmations, got %+v", healthy)
+	}
+
+	// Degraded cycle: pbs-one's content query fails. Its evidence must
+	// survive, and pbs-two's must be refreshed as usual.
+	m.pollStorageBackupsWithNodes(context.Background(), "cluster-a",
+		&pbsPartialFailureClient{snapshotTime: snapshotTime, failStorage: "pbs-one"}, nodes, online)
+
+	degraded := m.state.PBSGuestConfirmationsForInstance("cluster-a")
+	if len(degraded) != 2 {
+		t.Fatalf("partial failure evicted confirmation evidence, got %+v", degraded)
+	}
+	byStorage := map[string]models.PBSGuestConfirmation{}
+	for _, confirmation := range degraded {
+		byStorage[confirmation.Storage] = confirmation
+	}
+	if got, ok := byStorage["pbs-one"]; !ok || got.VMID != 173 {
+		t.Fatalf("pbs-one confirmation not preserved across the failed query, got %+v", degraded)
+	}
+	if got, ok := byStorage["pbs-two"]; !ok || got.VMID != 174 {
+		t.Fatalf("pbs-two confirmation missing after successful query, got %+v", degraded)
 	}
 }
 

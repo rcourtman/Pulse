@@ -969,7 +969,7 @@ func TestRetirePVEInstanceRuntimeClearsPBSGuestConfirmations(t *testing.T) {
 		{ID: "a-173", VMID: "173", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-1", Datastore: "backups"},
 	})
 	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []models.PBSGuestConfirmation{
-		{BackupType: "vm", VMID: 173, Time: backupTime.Unix()},
+		{Storage: "pbs-store", BackupType: "vm", VMID: 173, Time: backupTime.Unix()},
 	})
 
 	state.SyncGuestBackupTimes()

@@ -414,7 +414,11 @@ update, profile rollout, command reachability, or fleet-control authority.
     is monitoring-owned attribution state for Proxmox backup freshness: it is
     internal-only, never serialized into state payloads or snapshots, and does
     not describe agent enrollment, report admission, tombstones,
-    re-enrollment, or command authority.
+    re-enrollment, or command authority. The evidence is keyed by the PVE
+    storage it was listed from and is readable per connection so monitoring
+    can carry it forward across a failed storage query; that accessor is
+    likewise monitoring-internal and never becomes an agent- or API-facing
+    surface.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
