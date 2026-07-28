@@ -1093,6 +1093,58 @@ Companion drill:
   limited evidence can appear healthy; or mutation success can appear resolved
   before detector-owned recovery.
 
+## Gate: `pulse-intelligence-rg-01-rg-12`
+
+- Owner lanes: `L6`, `L20`
+- Minimum evidence tier: `real-external-e2e`
+- Why this is risky:
+  Pulse Intelligence crosses Assistant, Patrol, governed action, Relay, mobile,
+  approval, revocation, and independent-verification boundaries. Aggregate
+  counters or local unit tests cannot prove that a real approved action remains
+  bounded, correlated, revocable, and cleanly removed afterward.
+- Primary runtime surfaces:
+  `internal/api`
+  `internal/actionlifecycle`
+  `internal/unifiedresources`
+  `frontend-modern/src/features/patrol`
+  `scripts/intelligence_lab`
+  `scripts/release_control/pulse_intelligence_gate.py`
+  Pulse Mobile and the live Relay action transport
+- Automated proof:
+  `python3 scripts/release_control/pulse_intelligence_gate.py --validate-only`
+  validates the tracked RG-01 through RG-12 requirement matrix.
+  `python3 scripts/release_control/pulse_intelligence_gate.py --check --sha <exact-release-sha> --evidence <external-evidence.json>`
+  derives the verdict from external evidence bound to the exact candidate SHA.
+  The checker is read-only and must not execute mutation-gated proof commands.
+- Manual and external scenario:
+  1. Run the exact-revision unit and integration proof for RG-01 through RG-12.
+  2. Exercise the bounded Docker and Debian/Ubuntu Colima journeys.
+  3. Exercise Product Trust in a clean browser environment.
+  4. On a physical iPad against live Relay, pair a fresh device, register
+     notifications, reconnect through the encrypted transport, approve one
+     inert canonical action, deny another, and revoke the exact token.
+  5. Confirm the revoked token fails closed, the pending barrier remains
+     triple-zero, and temporary Relay, local action, audit, attempt, outbox,
+     receipt, token, and pairing state is removed.
+  6. Seal the evidence manifest, screenshots, result-bundle digests, cleanup
+     record, and exact core/mobile SHAs before evaluating the gate.
+- Pass when:
+  Every RG-01 through RG-12 requirement reports `PASS`, the aggregate evaluator
+  returns `GO` for the exact release SHA, approved and denied actions remain
+  inert and correlated, revocation is fail-closed, and cleanup leaves no
+  temporary mutation residue.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/pulse-intelligence-rg-01-rg-12-external-e2e-2026-07-12.md`
+  records GO at core
+  `a63b3eae2b5a62ee6803bfb4eee8fadbbba8e449` and Pulse Mobile
+  `a1ddb451618664025d22a986fbd3fd837e4ffe97`. That record does not by
+  itself certify a later release SHA.
+- Block release if:
+  The exact candidate lacks a sealed `GO`, any RG result is missing or failed,
+  approved actions can escape the inert capability set, revocation permits a
+  write or dispatch, cleanup leaves residue, or the evidence is bound to a
+  different core or mobile revision.
+
 ## Gate Ownership Rule
 
 Update these machine-visible gate states in `docs/release-control/v6/internal/status.json`
