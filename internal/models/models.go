@@ -48,6 +48,26 @@ type State struct {
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
 	PVETagStyles                 map[string]PVETagStyle     `json:"pveTagStyles,omitempty"`
+
+	// pbsGuestConfirmations records, per PVE connection, the (type, vmid,
+	// time) triples that connection's own pbs-type storage listings
+	// reported. When direct PBS polling is authoritative the raw storage
+	// contents are not kept as StorageBackups, but which cluster listed a
+	// snapshot is the only deterministic way to attribute a PBS snapshot
+	// whose VMID exists on several clusters (#1639). Internal evidence only:
+	// never serialized and never part of snapshots.
+	pbsGuestConfirmations map[string]map[PBSGuestConfirmation]struct{}
+}
+
+// PBSGuestConfirmation identifies one PBS snapshot as seen through a PVE
+// connection's own pbs-type storage content listing. BackupType uses PBS
+// nomenclature ("vm" or "ct") and Time is the snapshot's backup time in
+// unix seconds, which matches PBSBackup.BackupTime exactly because both
+// derive from the snapshot identifier.
+type PBSGuestConfirmation struct {
+	BackupType string
+	VMID       int
+	Time       int64
 }
 
 // PVETagStyle is the frontend-facing Proxmox tag style for one PVE instance.
@@ -4107,6 +4127,36 @@ func backupKey(instance string, vmid int) string {
 	return instance + "-" + strconv.Itoa(vmid)
 }
 
+// UpdatePBSGuestConfirmationsForInstance replaces the PVE-side PBS snapshot
+// evidence for one connection. Pass an empty slice when the connection's
+// storage poll saw no pbs-type storage content so stale evidence cannot
+// outlive the snapshots it described.
+func (s *State) UpdatePBSGuestConfirmationsForInstance(instanceName string, confirmations []PBSGuestConfirmation) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.pbsGuestConfirmations == nil {
+		s.pbsGuestConfirmations = make(map[string]map[PBSGuestConfirmation]struct{})
+	}
+	if len(confirmations) == 0 {
+		delete(s.pbsGuestConfirmations, instanceName)
+		return
+	}
+	set := make(map[PBSGuestConfirmation]struct{}, len(confirmations))
+	for _, confirmation := range confirmations {
+		confirmation.BackupType = strings.ToLower(strings.TrimSpace(confirmation.BackupType))
+		if (confirmation.BackupType != "vm" && confirmation.BackupType != "ct") || confirmation.VMID <= 0 || confirmation.Time <= 0 {
+			continue
+		}
+		set[confirmation] = struct{}{}
+	}
+	if len(set) == 0 {
+		delete(s.pbsGuestConfirmations, instanceName)
+		return
+	}
+	s.pbsGuestConfirmations[instanceName] = set
+}
+
 // SyncGuestBackupTimes updates LastBackup on VMs and Containers from storage backups and PBS backups.
 // Call this after updating storage backups or PBS backups to ensure guest backup indicators are accurate.
 // Matching is done by instance+VMID to prevent cross-instance VMID collisions.
@@ -4155,7 +4205,13 @@ func (s *State) SyncGuestBackupTimes() {
 	// Build a set of typed VMIDs that appear on more than one PVE location.
 	// When a typed VMID is ambiguous, we must not fall back to VMID-only matching
 	// because we can't tell which guest the backup belongs to.
+	type pbsSubjectGuest struct {
+		instance string
+		node     string
+		name     string
+	}
 	subjectLocations := make(map[pbsSubjectKey]map[string]struct{})
+	subjectGuests := make(map[pbsSubjectKey][]pbsSubjectGuest)
 	for i := range s.VMs {
 		key := pbsSubjectKey{backupType: "vm", vmid: s.VMs[i].VMID}
 		m, ok := subjectLocations[key]
@@ -4164,6 +4220,7 @@ func (s *State) SyncGuestBackupTimes() {
 			subjectLocations[key] = m
 		}
 		m[backupKey(s.VMs[i].Instance, s.VMs[i].VMID)+"@"+s.VMs[i].Node] = struct{}{}
+		subjectGuests[key] = append(subjectGuests[key], pbsSubjectGuest{instance: s.VMs[i].Instance, node: s.VMs[i].Node, name: s.VMs[i].Name})
 	}
 	for i := range s.Containers {
 		key := pbsSubjectKey{backupType: "ct", vmid: s.Containers[i].VMID}
@@ -4173,11 +4230,63 @@ func (s *State) SyncGuestBackupTimes() {
 			subjectLocations[key] = m
 		}
 		m[backupKey(s.Containers[i].Instance, s.Containers[i].VMID)+"@"+s.Containers[i].Node] = struct{}{}
+		subjectGuests[key] = append(subjectGuests[key], pbsSubjectGuest{instance: s.Containers[i].Instance, node: s.Containers[i].Node, name: s.Containers[i].Name})
 	}
 	subjectIsAmbiguous := make(map[pbsSubjectKey]bool)
 	for key, locations := range subjectLocations {
 		if len(locations) > 1 {
 			subjectIsAmbiguous[key] = true
+		}
+	}
+
+	// PVE-side confirmations deterministically attribute a PBS snapshot to
+	// the connection whose own pbs-type storage listed it. Index them by
+	// snapshot identity, keeping the set of confirming connections so a
+	// snapshot listed by several connections (shouldn't happen, but trust
+	// nothing) stays inconclusive.
+	confirmingInstances := make(map[PBSGuestConfirmation]map[string]struct{})
+	for instanceName, confirmations := range s.pbsGuestConfirmations {
+		for confirmation := range confirmations {
+			set, ok := confirmingInstances[confirmation]
+			if !ok {
+				set = make(map[string]struct{})
+				confirmingInstances[confirmation] = set
+			}
+			set[instanceName] = struct{}{}
+		}
+	}
+
+	// Learn which PVE connection each PBS submission source (owner token,
+	// datastore, PBS instance) belongs to from the backups that CAN be
+	// attributed — unique typed VMIDs, or placement/name matches. The
+	// learned mapping then resolves collision-VMID snapshots that carry no
+	// namespace or comment evidence of their own (#1639).
+	sourceLearner := proxmoxidentity.NewPBSSourceLearner()
+	for key, backups := range pbsBackupsBySubject {
+		guests := subjectGuests[key]
+		if len(guests) == 0 {
+			continue
+		}
+		for _, backup := range backups {
+			attributed := ""
+			if !subjectIsAmbiguous[key] {
+				attributed = guests[0].instance
+			} else {
+				matched := make(map[string]struct{})
+				for _, guest := range guests {
+					if proxmoxidentity.BackupGuestMatchScore(backup.Namespace, backup.Comment, backup.VMID, guest.name, guest.instance, guest.node) > 0 {
+						matched[guest.instance] = struct{}{}
+					}
+				}
+				if len(matched) == 1 {
+					for instance := range matched {
+						attributed = instance
+					}
+				}
+			}
+			if attributed != "" {
+				sourceLearner.Observe(backup.Instance, backup.Datastore, backup.Owner, attributed)
+			}
 		}
 	}
 
@@ -4203,8 +4312,26 @@ func (s *State) SyncGuestBackupTimes() {
 				instance,
 				node,
 			)
-			if score == 0 && !subjectIsAmbiguous[subjectKey] {
-				score = 1
+			if score == 0 {
+				if !subjectIsAmbiguous[subjectKey] {
+					score = 1
+				} else if confirmers := confirmingInstances[PBSGuestConfirmation{BackupType: backupType, VMID: vmid, Time: backup.BackupTime.Unix()}]; len(confirmers) == 1 {
+					// Exactly one connection's own PBS storage listed this
+					// snapshot — it belongs to that cluster, full stop.
+					if _, ours := confirmers[instance]; ours {
+						score = 2
+					}
+				} else {
+					// No usable storage-view evidence (unconfirmed, or a
+					// shared datastore mount several clusters list); fall
+					// back to the learned submission-source mapping. A
+					// decisive attribution to another cluster keeps the
+					// snapshot away from this guest; an inconclusive one
+					// keeps the pre-#1639 drop.
+					if attributed, decisive := sourceLearner.Resolve(backup.Instance, backup.Datastore, backup.Owner); decisive && attributed == instance {
+						score = 1
+					}
+				}
 			}
 			if score <= 0 {
 				continue

@@ -209,3 +209,31 @@ func TestNativePoolHealthEvidenceNormalizesWithoutChangingIdentity(t *testing.T)
 		t.Fatalf("normalized Ceph evidence = %+v", cluster)
 	}
 }
+
+// TestPBSGuestConfirmationEvidenceStaysOutOfSerializedState guards the
+// boundary the #1639 fix introduced: PVE-side PBS snapshot confirmations
+// are monitoring-internal attribution evidence on State. They must never
+// leak into serialized state or snapshots, where they would read as an
+// agent- or API-facing contract.
+func TestPBSGuestConfirmationEvidenceStaysOutOfSerializedState(t *testing.T) {
+	state := NewState()
+	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []PBSGuestConfirmation{
+		{BackupType: "vm", VMID: 173, Time: time.Now().Unix()},
+	})
+
+	payload, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal state: %v", err)
+	}
+	if strings.Contains(string(payload), "pbsGuestConfirmations") || strings.Contains(string(payload), "PBSGuestConfirmation") {
+		t.Fatal("PBS guest confirmation evidence must not serialize with state")
+	}
+
+	snapshotPayload, err := json.Marshal(state.GetSnapshot())
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if strings.Contains(string(snapshotPayload), "pbsGuestConfirmations") || strings.Contains(string(snapshotPayload), "PBSGuestConfirmation") {
+		t.Fatal("PBS guest confirmation evidence must not appear in snapshots")
+	}
+}

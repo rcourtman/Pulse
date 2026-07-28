@@ -82,6 +82,22 @@ full backup point batch per poll cycle. Complete authoritative enumerations
 coalesce only within the same provider, ID-prefix, and instance scope; distinct
 source scopes and non-reconciling event batches remain FIFO so bounding memory
 does not discard independent recovery facts.
+PBS snapshot-to-guest attribution for VMIDs that exist on more than one PVE
+location is evidence-driven, never guessed. When the direct PBS connection is
+authoritative and pbs-type storage contents are dropped from the PVE backup
+list, storage backup polling must still harvest each listed snapshot as a
+per-connection guest confirmation (type, VMID, backup time): which cluster
+listed a snapshot through its own storage is the only deterministic
+attribution for collision VMIDs with no namespace or comment evidence. Guest
+backup-time sync consumes those confirmations first, then a
+submission-source mapping (owner token, datastore, PBS instance — scoped to
+the PBS instance, strongest first) learned from the same poll's attributable
+snapshots; a source component that was never positively attributed stops
+resolution rather than deferring to weaker components. Snapshots that remain
+unattributable stay dropped for colliding guests, and the confirmation
+evidence is monitoring-internal state: cleared when a PVE instance is
+retired or its storage poll returns no pbs-type content, and never
+serialized into state payloads or snapshots.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.

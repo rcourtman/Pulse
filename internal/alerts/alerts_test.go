@@ -1645,9 +1645,12 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 
 func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 	// Test that when multiple guests have the same VMID from different instances,
-	// the namespace is used to match the backup to the correct guest.
-	// This addresses issue #1095 where users have multiple PVE instances with
-	// overlapping VMIDs and separate PBS instances backing them up.
+	// the subject ref's connection label is used to match the backup to the
+	// correct guest. This addresses issue #1095 where users have multiple PVE
+	// instances with overlapping VMIDs and separate PBS instances backing
+	// them up. The label must match a guest's instance or node exactly:
+	// suffix matching let a PBS instance name cross-attribute clusters that
+	// share a VMID (#1639), so "nat" no longer matches "pve-nat".
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
 
@@ -1690,13 +1693,14 @@ func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 		},
 	}
 
-	// PBS backup with namespace "nat" should match the "pve-nat" instance
+	// A subject ref labeled with the exact connection name matches the
+	// "pve-nat" instance.
 	rollups := []recovery.ProtectionRollup{
 		{
 			RollupID: "ext:pbs-nat-100",
 			SubjectRef: &recovery.ExternalRef{
 				Type:      "proxmox-vm",
-				Namespace: "nat", // namespace "nat" should match the pve-nat location
+				Namespace: "pve-nat", // exact connection label for the pve-nat location
 				Name:      "100",
 				ID:        "100",
 			},
@@ -1973,6 +1977,86 @@ func TestCheckBackupsVMIDCollisionNoNamespace(t *testing.T) {
 			keys = append(keys, effectiveAlertID(active, storageKey))
 		}
 		t.Fatalf("expected canonical rollup-backed alert, found keys: %v", keys)
+	}
+}
+
+// TestCheckBackupsIssue1639PBSInstanceLabelDoesNotCrossAttribute verifies
+// that a PBS connection name that merely suffix-matches one guest's
+// instance name does not attribute the backup to that guest. The subject
+// ref of an unlinked PBS rollup carries the PBS instance name in Namespace,
+// and loose matching let it cross-attribute clusters sharing a VMID.
+func TestCheckBackupsIssue1639PBSInstanceLabelDoesNotCrossAttribute(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  3,
+		CriticalDays: 5,
+	}
+	m.mu.Unlock()
+
+	now := time.Now()
+
+	guestsByKey := map[string]GuestLookup{
+		"pve-nat-node2-100": {
+			ResourceID: "qemu/100",
+			Name:       "webserver-nat",
+			Instance:   "pve-nat",
+			Node:       "node2",
+			Type:       "qemu",
+			VMID:       100,
+		},
+		"pve-main-node1-100": {
+			ResourceID: "qemu/100",
+			Name:       "webserver-main",
+			Instance:   "pve-main",
+			Node:       "node1",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {
+			guestsByKey["pve-nat-node2-100"],
+			guestsByKey["pve-main-node1-100"],
+		},
+	}
+
+	// "nat" is the PBS connection name, not a namespace. It suffix-matches
+	// "pve-nat" but identifies neither guest; the alert must stay on the
+	// generic rollup key instead of guessing.
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "ext:pbs-nat-100",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "nat",
+				Name:      "100",
+				ID:        "100",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
+		},
+	}
+
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, exists := testLookupActiveAlert(t, m, "backup-age-pve-nat-node2-100"); exists {
+		t.Fatal("PBS connection label cross-attributed the backup to pve-nat")
+	}
+	var keys []string
+	for storageKey, active := range m.activeAlerts {
+		keys = append(keys, effectiveAlertID(active, storageKey))
+	}
+	if len(keys) != 1 || !strings.Contains(keys[0], "ext-pbs-nat-100") {
+		t.Fatalf("expected a single generic rollup-keyed alert, found keys: %v", keys)
 	}
 }
 

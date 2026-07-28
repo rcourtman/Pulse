@@ -149,6 +149,7 @@ func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
 	var allBackups []models.StorageBackup
+	var pbsConfirmations []models.PBSGuestConfirmation
 	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
 	hadSuccessfulNode := false          // Track if at least one node responded successfully
@@ -306,6 +307,19 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				// connection was also configured (#1592).
 				isPBSStorage := storage.Type == "pbs"
 				if isPBSStorage && hasPBSDirectConnection {
+					// The direct PBS connection is authoritative for the
+					// backup list, but which cluster listed a snapshot is
+					// evidence only this storage view has: it attributes a
+					// snapshot whose VMID exists on several clusters to the
+					// cluster that made it (#1639). Keep that association
+					// even though the raw entry is dropped.
+					if confirmationType := pbsGuestConfirmationType(backupType); confirmationType != "" && content.VMID > 0 && content.CTime > 0 {
+						pbsConfirmations = append(pbsConfirmations, models.PBSGuestConfirmation{
+							BackupType: confirmationType,
+							VMID:       content.VMID,
+							Time:       content.CTime,
+						})
+					}
 					log.Debug().
 						Str("instance", instanceName).
 						Str("node", node.Node).
@@ -384,6 +398,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// Update state with storage backups for this instance
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
+	m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, pbsConfirmations)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
@@ -423,6 +438,20 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// Immediately broadcast the updated state so frontend sees new backups
 	m.broadcastStateUpdate()
+}
+
+// pbsGuestConfirmationType maps a PVE storage-content backup type to PBS
+// snapshot nomenclature. Host and unclassifiable entries return "" and are
+// not usable as guest attribution evidence.
+func pbsGuestConfirmationType(backupType string) string {
+	switch backupType {
+	case "qemu":
+		return "vm"
+	case "lxc":
+		return "ct"
+	default:
+		return ""
+	}
 }
 
 func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBackup, contentSuccess int) bool {
@@ -1330,6 +1359,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 	m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})
 	m.state.UpdateBackupTasksForInstance(instanceName, []models.BackupTask{})
 	m.state.UpdateStorageBackupsForInstance(instanceName, []models.StorageBackup{})
+	m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, nil)
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})
 
 	// Set connection health to false

@@ -950,3 +950,48 @@ func TestBuildProxmoxGuestInfoIndex_UsesCanonicalReadState(t *testing.T) {
 	assertInfo("pve1|nodeA|100", "vm-store-100", "pve1:nodeA:100", unifiedresources.ResourceTypeVM, "vm100")
 	assertInfo("pve1|nodeB|200", "ct-store-200", "pve1:nodeB:200", unifiedresources.ResourceTypeSystemContainer, "ct200")
 }
+
+// TestRetirePVEInstanceRuntimeClearsPBSGuestConfirmations verifies that
+// retiring a consolidated PVE instance also drops its PVE-side PBS
+// snapshot confirmations (#1639 evidence). Stale confirmations from a
+// retired duplicate would make every snapshot it once listed look
+// multi-confirmed and degrade collision attribution for the surviving
+// instance.
+func TestRetirePVEInstanceRuntimeClearsPBSGuestConfirmations(t *testing.T) {
+	backupTime := time.Date(2026, 7, 27, 1, 0, 0, 0, time.UTC)
+
+	state := models.NewState()
+	state.UpdateVMs([]models.VM{
+		{VMID: 173, Name: "web", Instance: "cluster-a", Node: "node-a", Status: "running"},
+		{VMID: 173, Name: "web", Instance: "cluster-b", Node: "node-b", Status: "running"},
+	})
+	state.UpdatePBSBackups("pbs-1", []models.PBSBackup{
+		{ID: "a-173", VMID: "173", BackupType: "vm", BackupTime: backupTime, Instance: "pbs-1", Datastore: "backups"},
+	})
+	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []models.PBSGuestConfirmation{
+		{BackupType: "vm", VMID: 173, Time: backupTime.Unix()},
+	})
+
+	state.SyncGuestBackupTimes()
+	for _, vm := range state.GetSnapshot().VMs {
+		if vm.Instance == "cluster-a" && !vm.LastBackup.Equal(backupTime) {
+			t.Fatalf("precondition: confirmed snapshot should attribute to cluster-a, got %v", vm.LastBackup)
+		}
+	}
+
+	m := &Monitor{state: state}
+	m.retirePVEInstanceRuntime("cluster-a")
+
+	// Re-add the guest without confirmations: the retired instance's
+	// evidence must be gone, so the collision VMID is unattributable again.
+	state.UpdateVMs([]models.VM{
+		{VMID: 173, Name: "web", Instance: "cluster-a", Node: "node-a", Status: "running"},
+		{VMID: 173, Name: "web", Instance: "cluster-b", Node: "node-b", Status: "running"},
+	})
+	state.SyncGuestBackupTimes()
+	for _, vm := range state.GetSnapshot().VMs {
+		if vm.VMID == 173 && !vm.LastBackup.IsZero() {
+			t.Fatalf("VM 173 on %s should be unattributable after retirement cleared confirmations, got %v", vm.Instance, vm.LastBackup)
+		}
+	}
+}

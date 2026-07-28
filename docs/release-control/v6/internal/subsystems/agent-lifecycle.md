@@ -410,6 +410,11 @@ update, profile rollout, command reachability, or fleet-control authority.
 24. `internal/config/host_continuity.go` shared with `monitoring`: the durable host identity, report-order watermark, and removal tombstone journal is jointly owned by agent lifecycle admission and monitoring report continuity.
 25. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
 26. `internal/models/models.go` shared with `monitoring`: removed host-agent identity aliases and tombstone state are both agent lifecycle authority and monitoring runtime report state.
+    The PVE-side PBS guest-backup confirmation evidence the same file carries
+    is monitoring-owned attribution state for Proxmox backup freshness: it is
+    internal-only, never serialized into state payloads or snapshots, and does
+    not describe agent enrollment, report admission, tombstones,
+    re-enrollment, or command authority.
 27. `internal/monitoring/monitor.go` shared with `monitoring`: monitor construction owns both monitoring runtime initialization and fail-closed agent lifecycle journal hydration before report admission.
 28. `internal/monitoring/monitor_agents.go` shared with `monitoring`: server-side Unified Agent report, removal, token binding, tombstone expiry, and re-enrollment semantics are jointly owned by agent lifecycle authority and monitoring ingest.
 29. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.

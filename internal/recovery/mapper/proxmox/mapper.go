@@ -53,7 +53,7 @@ func preferredPBSBackupSubjectName(comment, vmid string) string {
 	return proxmoxidentity.PreferredPBSBackupSubjectName(comment, vmid)
 }
 
-func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate) (GuestCandidate, bool) {
+func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate, learner *proxmoxidentity.PBSSourceLearner) (GuestCandidate, bool) {
 	if len(candidates) == 0 {
 		return GuestCandidate{}, false
 	}
@@ -88,6 +88,30 @@ func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidat
 			return filtered[0], true
 		}
 		if len(filtered) > 1 {
+			matched = filtered
+		}
+	}
+
+	// Last resort for collision VMIDs with no namespace or name evidence:
+	// the learned submission-source mapping (owner token / datastore / PBS
+	// instance, learned from this batch's attributable backups) can name the
+	// cluster the backup came from (#1639). A decisive attribution to a
+	// connection with no candidate here means the backup's own guest is
+	// gone; never link it to another cluster's guest.
+	if learner != nil {
+		if attributed, decisive := learner.Resolve(backup.Instance, backup.Datastore, backup.Owner); decisive {
+			filtered := make([]GuestCandidate, 0, len(matched))
+			for _, candidate := range matched {
+				if candidate.InstanceName == attributed {
+					filtered = append(filtered, candidate)
+				}
+			}
+			if len(filtered) == 1 {
+				return filtered[0], true
+			}
+			if len(filtered) == 0 {
+				return GuestCandidate{}, false
+			}
 			matched = filtered
 		}
 	}
@@ -380,6 +404,20 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 		return nil
 	}
 
+	// First pass: learn each PBS submission source's cluster from the
+	// backups that are attributable on their own evidence, so the second
+	// pass can resolve collision VMIDs with no evidence of their own (#1639).
+	learner := proxmoxidentity.NewPBSSourceLearner()
+	for _, b := range backups {
+		if strings.TrimSpace(b.ID) == "" {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(b.BackupType)) + ":" + strings.TrimSpace(b.VMID)
+		if c, ok := selectPBSGuestCandidate(b, candidatesByKey[key], nil); ok {
+			learner.Observe(b.Instance, b.Datastore, b.Owner, c.InstanceName)
+		}
+	}
+
 	out := make([]recovery.RecoveryPoint, 0, len(backups))
 	for _, b := range backups {
 		if strings.TrimSpace(b.ID) == "" {
@@ -395,7 +433,7 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 
 		// Link to a unified resource when the candidate set is already singular or can be
 		// disambiguated by PBS namespace / guest label without guessing across guest collisions.
-		if c, ok := selectPBSGuestCandidate(b, candidates); ok {
+		if c, ok := selectPBSGuestCandidate(b, candidates, learner); ok {
 			subjectRID = subjectResourceID(c.ResourceType, c.ResourceID, c.SourceID)
 			subjectRef = proxmoxSubjectRef(c.ResourceType, GuestInfo{Name: c.DisplayName, ResourceType: c.ResourceType, SourceID: c.SourceID}, c.InstanceName, c.NodeName, c.VMID, c.SourceID)
 		} else {

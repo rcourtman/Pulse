@@ -5436,6 +5436,7 @@
               "internal/dockeragent/swarm_coverage_test.go",
               "internal/models/deepcopy_test.go",
               "internal/models/host_transient_expiry_test.go",
+              "internal/models/issue1639_pbs_collision_test.go",
               "internal/models/metrics_types_test.go",
               "internal/models/state_host_test.go",
               "internal/monitoring/issue1595_collection_trust_test.go",
@@ -5572,6 +5573,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/monitor_alert_intent_test.go",
+              "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",

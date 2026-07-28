@@ -69,3 +69,66 @@ func TestBackupGuestMatchScoreRanksNodeMatchAboveClusterEntrypoint(t *testing.T)
 		t.Fatalf("node namespace score = %d, should outrank weak instance+comment match", got)
 	}
 }
+
+func TestLocationLabelsEqualRequiresExactNormalizedMatch(t *testing.T) {
+	if !LocationLabelsEqual("pve-nat", "PVE Nat") {
+		t.Fatal("normalized identical labels should match")
+	}
+	// NamespaceMatchesLocation would suffix-match these; a connection label
+	// must not (#1639).
+	if LocationLabelsEqual("nat", "pve-nat") {
+		t.Fatal("suffix relation between distinct labels must not match")
+	}
+	if LocationLabelsEqual("", "") {
+		t.Fatal("empty labels must not match")
+	}
+}
+
+func TestPBSSourceLearnerResolvesOwnerBeforeWeakerComponents(t *testing.T) {
+	l := NewPBSSourceLearner()
+	l.Observe("pbs-main", "backups", "cluster-a@pbs!token", "cluster-a")
+	l.Observe("pbs-main", "backups", "cluster-b@pbs!token", "cluster-b")
+
+	// Datastore and PBS instance are shared, but each owner token uniquely
+	// identifies its cluster.
+	if inst, ok := l.Resolve("pbs-main", "backups", "cluster-a@pbs!token"); !ok || inst != "cluster-a" {
+		t.Fatalf("owner resolution = %q,%v, want cluster-a,true", inst, ok)
+	}
+	if inst, ok := l.Resolve("pbs-main", "backups", "CLUSTER-B@pbs!token"); !ok || inst != "cluster-b" {
+		t.Fatalf("owner resolution should be case-insensitive, got %q,%v", inst, ok)
+	}
+}
+
+func TestPBSSourceLearnerSharedSourceIsNotDecisive(t *testing.T) {
+	l := NewPBSSourceLearner()
+	l.Observe("pbs-main", "backups", "shared@pbs!token", "cluster-a")
+	l.Observe("pbs-main", "backups", "shared@pbs!token", "cluster-b")
+
+	if inst, ok := l.Resolve("pbs-main", "backups", "shared@pbs!token"); ok {
+		t.Fatalf("shared source resolved to %q, want inconclusive", inst)
+	}
+}
+
+func TestPBSSourceLearnerUnfamiliarComponentStopsResolution(t *testing.T) {
+	l := NewPBSSourceLearner()
+	l.Observe("pbs-main", "backups", "cluster-a@pbs!token", "cluster-a")
+
+	// The datastore alone would resolve to cluster-a, but an owner token
+	// that was never observed means the backup may come from a cluster we
+	// have no evidence for — weaker components must not be consulted.
+	if inst, ok := l.Resolve("pbs-main", "backups", "mystery@pbs!token"); ok {
+		t.Fatalf("unfamiliar owner resolved to %q, want inconclusive", inst)
+	}
+	// Without an owner on the backup, the datastore evidence applies.
+	if inst, ok := l.Resolve("pbs-main", "backups", ""); !ok || inst != "cluster-a" {
+		t.Fatalf("datastore resolution = %q,%v, want cluster-a,true", inst, ok)
+	}
+}
+
+func TestPBSSourceLearnerNilReceiverIsInert(t *testing.T) {
+	var l *PBSSourceLearner
+	l.Observe("pbs-main", "backups", "owner", "cluster-a")
+	if _, ok := l.Resolve("pbs-main", "backups", "owner"); ok {
+		t.Fatal("nil learner must never be decisive")
+	}
+}

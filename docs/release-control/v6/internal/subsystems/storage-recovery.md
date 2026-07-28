@@ -49,6 +49,15 @@ archive, backup task, recovery-point, restore, PBS, routing, or credential key.
 Search includes both presentation and native diagnostics, duplicate display
 values are allowed, and clearing an override deterministically restores the
 current native node name.
+Recovery-point mapping of PBS snapshots whose VMID exists on more than one
+PVE connection may link a snapshot only on positive evidence: namespace
+placement, guest-name label, or the submission-source mapping (owner token,
+datastore, PBS instance — strongest first, scoped to the PBS instance)
+learned from the same batch's attributable snapshots. A source component
+never positively attributed stops resolution instead of deferring to weaker
+components, and a snapshot whose source decisively belongs to a connection
+with no matching guest stays unlinked; it must never be linked to another
+cluster's guest with the same VMID.
 
 
 Physical-disk to node association is evidence-directional. A disk reported by a

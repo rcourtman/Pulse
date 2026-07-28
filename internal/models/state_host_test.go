@@ -1159,7 +1159,9 @@ func TestSyncGuestBackupTimesClearsStaleBackupWhenCurrentEvidenceDisappears(t *t
 
 // TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace verifies that when the same VMID
 // exists on multiple PVE instances and a PBS backup namespace matches neither, both guests
-// get zero LastBackup instead of a false positive.
+// get zero LastBackup instead of a false positive. The backup's submission
+// source (owner/datastore) carries no learned attribution and no PVE-side
+// storage listing confirms it, so the #1639 evidence paths must not fire.
 func TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace(t *testing.T) {
 	state := NewState()
 
@@ -1182,6 +1184,8 @@ func TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace(t *testing.T) {
 			BackupType: "vm",
 			BackupTime: backupTime,
 			Instance:   "pbs-main",
+			Datastore:  "backups",
+			Owner:      "unlearned@pbs!token",
 		},
 	}
 	state.mu.Unlock()
@@ -1199,7 +1203,10 @@ func TestSyncGuestBackupTimesVMIDCollisionNonMatchingNamespace(t *testing.T) {
 
 // TestSyncGuestBackupTimesVMIDCollisionEmptyNamespace verifies that when the same VMID
 // exists on multiple PVE instances and a PBS backup has no namespace, both guests
-// get zero LastBackup.
+// get zero LastBackup. This is the genuinely unattributable core of #1639:
+// with a single snapshot, no learnable submission source, and no PVE-side
+// confirmation, guessing either guest would be a false positive. The
+// resolvable variants live in issue1639_pbs_collision_test.go.
 func TestSyncGuestBackupTimesVMIDCollisionEmptyNamespace(t *testing.T) {
 	state := NewState()
 

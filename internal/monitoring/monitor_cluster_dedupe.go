@@ -159,6 +159,7 @@ func (m *Monitor) retirePVEInstanceRuntime(instanceName string) {
 		m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})
 		m.state.UpdateBackupTasksForInstance(instanceName, []models.BackupTask{})
 		m.state.UpdateStorageBackupsForInstance(instanceName, []models.StorageBackup{})
+		m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, nil)
 		m.state.UpdateGuestSnapshotsForInstance(instanceName, []models.GuestSnapshot{})
 		m.state.UpdateReplicationJobsForInstance(instanceName, []models.ReplicationJob{})
 	}

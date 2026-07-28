@@ -510,3 +510,100 @@ func TestFromPBSBackupsWithEvidenceAddsProviderScopeAndCorrelation(t *testing.T)
 		t.Fatalf("evidence Validate() error = %v", err)
 	}
 }
+
+// Issue #1639: a root-namespace comment-less snapshot whose VMID exists on
+// two clusters must link to the cluster its submission source (owner token,
+// datastore, PBS instance) belongs to, learned from the batch's
+// attributable backups — and must stay unlinked when the source is shared.
+func TestFromPBSBackups_DisambiguatesCollisionVMIDBySubmissionSource(t *testing.T) {
+	candidatesByKey := map[string][]GuestCandidate{
+		"vm:173": {
+			{
+				ResourceID:    "vm-aaaaaaaaaaaaaaaa",
+				SourceID:      "cluster-a:pve-a1:173",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "web-a",
+				InstanceName:  "cluster-a",
+				NodeName:      "pve-a1",
+				VMID:          173,
+				BackupTypeKey: "vm",
+			},
+			{
+				ResourceID:    "vm-bbbbbbbbbbbbbbbb",
+				SourceID:      "cluster-b:pve-b1:173",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "web-b",
+				InstanceName:  "cluster-b",
+				NodeName:      "pve-b1",
+				VMID:          173,
+				BackupTypeKey: "vm",
+			},
+		},
+		"vm:100": {
+			{
+				ResourceID:    "vm-cccccccccccccccc",
+				SourceID:      "cluster-a:pve-a1:100",
+				ResourceType:  unifiedresources.ResourceTypeVM,
+				DisplayName:   "db-a",
+				InstanceName:  "cluster-a",
+				NodeName:      "pve-a1",
+				VMID:          100,
+				BackupTypeKey: "vm",
+			},
+		},
+	}
+
+	backups := []models.PBSBackup{
+		// Teaching snapshot: unique VMID attributes cluster-a's owner token.
+		{
+			ID:         "pbs-a-100",
+			VMID:       "100",
+			Instance:   "pbs-main",
+			Datastore:  "store-a",
+			Owner:      "cluster-a@pbs!token",
+			BackupType: "vm",
+			BackupTime: time.Date(2026, 7, 26, 1, 0, 0, 0, time.UTC),
+		},
+		// Collision snapshot: no namespace, no comment, cluster-a's source.
+		{
+			ID:         "pbs-a-173",
+			VMID:       "173",
+			Instance:   "pbs-main",
+			Datastore:  "store-a",
+			Owner:      "cluster-a@pbs!token",
+			BackupType: "vm",
+			BackupTime: time.Date(2026, 7, 27, 1, 0, 0, 0, time.UTC),
+		},
+		// Collision snapshot from a source never attributed to any cluster:
+		// must stay unlinked rather than guess.
+		{
+			ID:         "pbs-x-173",
+			VMID:       "173",
+			Instance:   "pbs-main",
+			Datastore:  "store-x",
+			Owner:      "mystery@pbs!token",
+			BackupType: "vm",
+			BackupTime: time.Date(2026, 7, 27, 2, 0, 0, 0, time.UTC),
+		},
+	}
+
+	result := FromPBSBackups(backups, candidatesByKey)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 points, got %d", len(result))
+	}
+
+	byID := map[string]int{}
+	for i, p := range result {
+		byID[p.ID] = i
+	}
+
+	linked := result[byID["pbs-backup:pbs-a-173"]]
+	if linked.SubjectResourceID != "vm-aaaaaaaaaaaaaaaa" {
+		t.Fatalf("collision snapshot SubjectResourceID = %q, want cluster-a guest", linked.SubjectResourceID)
+	}
+
+	unlinked := result[byID["pbs-backup:pbs-x-173"]]
+	if unlinked.SubjectResourceID != "" {
+		t.Fatalf("unattributable snapshot linked to %q, want unlinked", unlinked.SubjectResourceID)
+	}
+}

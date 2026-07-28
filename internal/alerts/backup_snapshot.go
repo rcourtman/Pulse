@@ -686,17 +686,23 @@ func (m *Manager) CheckBackupsWithInventory(
 					if len(guests) == 1 {
 						info = guests[0]
 					} else if len(guests) > 1 && strings.TrimSpace(ref.Namespace) != "" {
+						// ref.Namespace carries a connection label here (the
+						// PVE or PBS instance name from the mapper), not a
+						// PBS namespace, so it must match a guest's location
+						// exactly. Suffix matching a PBS instance name
+						// against node names cross-attributes clusters that
+						// share a VMID (#1639).
 						bestScore := 0
 						matchedMultiple := false
 						for _, g := range guests {
-							score := proxmoxidentity.BackupGuestMatchScore(
-								ref.Namespace,
-								ref.Name,
-								vmidStr,
-								g.Name,
-								g.Instance,
-								g.Node,
-							)
+							score := 0
+							if proxmoxidentity.LocationLabelsEqual(ref.Namespace, g.Instance) ||
+								proxmoxidentity.LocationLabelsEqual(ref.Namespace, g.Node) {
+								score += 10
+							}
+							if proxmoxidentity.BackupCommentMatchesGuestName(ref.Name, vmidStr, g.Name) {
+								score += 5
+							}
 							if score > bestScore {
 								bestScore = score
 								info = g

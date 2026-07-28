@@ -1,0 +1,238 @@
+package models
+
+import (
+	"testing"
+	"time"
+)
+
+// Issue #1639: two PVE clusters with the same VMID, root-namespace PBS
+// snapshots, and no comment left both guests with zero LastBackup because
+// the ambiguity guard disabled the VMID-only fallback and the scorer never
+// consulted the snapshots' provenance (owner token, datastore, PBS
+// instance) or the PVE-side storage listings.
+
+// TestIssue1639PBSCollisionResolvedBySubmissionSource verifies that when
+// each cluster's submission source is learnable from its other,
+// non-colliding guests, root-namespace comment-less snapshots for a
+// colliding VMID are attributed to the correct cluster.
+func TestIssue1639PBSCollisionResolvedBySubmissionSource(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTimeA := now.Add(-2 * time.Hour)
+	backupTimeB := now.Add(-3 * time.Hour)
+	uniqueTimeA := now.Add(-26 * time.Hour)
+	uniqueTimeB := now.Add(-27 * time.Hour)
+
+	state.UpdateVMs([]VM{
+		// VMID 173 exists on both clusters — the reported collision.
+		{VMID: 173, Name: "web-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 173, Name: "web-b", Instance: "cluster-b", Node: "pve-b1"},
+		// Each cluster also has a unique VMID whose snapshots teach the
+		// learner that cluster's owner token and datastore.
+		{VMID: 100, Name: "db-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 150, Name: "db-b", Instance: "cluster-b", Node: "pve-b1"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		// Teaching snapshots: unique VMIDs, root namespace, no comment.
+		{ID: "a-100", VMID: "100", BackupType: "vm", BackupTime: uniqueTimeA,
+			Instance: "pbs-main", Datastore: "store-a", Owner: "cluster-a@pbs!token"},
+		{ID: "b-150", VMID: "150", BackupType: "vm", BackupTime: uniqueTimeB,
+			Instance: "pbs-main", Datastore: "store-b", Owner: "cluster-b@pbs!token"},
+		// Colliding VMID with no namespace/comment evidence, distinct
+		// owner and datastore per cluster.
+		{ID: "a-173", VMID: "173", BackupType: "vm", BackupTime: backupTimeA,
+			Instance: "pbs-main", Datastore: "store-a", Owner: "cluster-a@pbs!token"},
+		{ID: "b-173", VMID: "173", BackupType: "vm", BackupTime: backupTimeB,
+			Instance: "pbs-main", Datastore: "store-b", Owner: "cluster-b@pbs!token"},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	got := map[string]time.Time{}
+	for _, vm := range snapshot.VMs {
+		if vm.VMID == 173 {
+			got[vm.Instance] = vm.LastBackup
+		}
+	}
+	if !got["cluster-a"].Equal(backupTimeA) {
+		t.Errorf("cluster-a VM 173 LastBackup = %v, want its own snapshot %v", got["cluster-a"], backupTimeA)
+	}
+	if !got["cluster-b"].Equal(backupTimeB) {
+		t.Errorf("cluster-b VM 173 LastBackup = %v, want its own snapshot %v", got["cluster-b"], backupTimeB)
+	}
+}
+
+// TestIssue1639PBSCollisionResolvedByDistinctPBSInstance verifies the
+// weakest source component: each cluster pushes to its own PBS instance,
+// same datastore name, no owner reported.
+func TestIssue1639PBSCollisionResolvedByDistinctPBSInstance(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTimeA := now.Add(-2 * time.Hour)
+	backupTimeB := now.Add(-3 * time.Hour)
+
+	state.UpdateVMs([]VM{
+		{VMID: 173, Name: "web-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 173, Name: "web-b", Instance: "cluster-b", Node: "pve-b1"},
+		{VMID: 100, Name: "db-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 150, Name: "db-b", Instance: "cluster-b", Node: "pve-b1"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{ID: "a-100", VMID: "100", BackupType: "vm", BackupTime: now.Add(-26 * time.Hour), Instance: "pbs-one", Datastore: "backups"},
+		{ID: "b-150", VMID: "150", BackupType: "vm", BackupTime: now.Add(-27 * time.Hour), Instance: "pbs-two", Datastore: "backups"},
+		{ID: "a-173", VMID: "173", BackupType: "vm", BackupTime: backupTimeA, Instance: "pbs-one", Datastore: "backups"},
+		{ID: "b-173", VMID: "173", BackupType: "vm", BackupTime: backupTimeB, Instance: "pbs-two", Datastore: "backups"},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		switch {
+		case vm.VMID == 173 && vm.Instance == "cluster-a":
+			if !vm.LastBackup.Equal(backupTimeA) {
+				t.Errorf("cluster-a VM 173 LastBackup = %v, want %v", vm.LastBackup, backupTimeA)
+			}
+		case vm.VMID == 173 && vm.Instance == "cluster-b":
+			if !vm.LastBackup.Equal(backupTimeB) {
+				t.Errorf("cluster-b VM 173 LastBackup = %v, want %v", vm.LastBackup, backupTimeB)
+			}
+		}
+	}
+}
+
+// TestIssue1639PBSCollisionSharedSourceStaysDropped verifies the guard is
+// not weakened: when both clusters push through the same owner, datastore,
+// and PBS instance and no PVE-side evidence exists, the snapshots stay
+// unattributed rather than being guessed onto a cluster.
+func TestIssue1639PBSCollisionSharedSourceStaysDropped(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	state.UpdateVMs([]VM{
+		{VMID: 173, Name: "web-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 173, Name: "web-b", Instance: "cluster-b", Node: "pve-b1"},
+		{VMID: 100, Name: "db-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 150, Name: "db-b", Instance: "cluster-b", Node: "pve-b1"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		// Both clusters share one submission source, so nothing about the
+		// colliding snapshots discriminates between them.
+		{ID: "a-100", VMID: "100", BackupType: "vm", BackupTime: now.Add(-26 * time.Hour), Instance: "pbs-main", Datastore: "backups", Owner: "shared@pbs!token"},
+		{ID: "b-150", VMID: "150", BackupType: "vm", BackupTime: now.Add(-27 * time.Hour), Instance: "pbs-main", Datastore: "backups", Owner: "shared@pbs!token"},
+		{ID: "x-173", VMID: "173", BackupType: "vm", BackupTime: now.Add(-2 * time.Hour), Instance: "pbs-main", Datastore: "backups", Owner: "shared@pbs!token"},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		if vm.VMID == 173 && !vm.LastBackup.IsZero() {
+			t.Errorf("VM 173 on %s should stay unattributed with a shared submission source, got %v", vm.Instance, vm.LastBackup)
+		}
+	}
+}
+
+// TestIssue1639PBSCollisionResolvedByPVEStorageConfirmation verifies the
+// deterministic path: even with identical submission sources (fully
+// mirrored clusters pushing to one datastore with one token), each PVE
+// connection's own pbs-type storage listing attributes its snapshots.
+func TestIssue1639PBSCollisionResolvedByPVEStorageConfirmation(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+	backupTimeA := now.Add(-2 * time.Hour).Truncate(time.Second)
+	backupTimeB := now.Add(-3 * time.Hour).Truncate(time.Second)
+
+	state.UpdateVMs([]VM{
+		{VMID: 173, Name: "web", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 173, Name: "web", Instance: "cluster-b", Node: "pve-b1"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		{ID: "a-173", VMID: "173", BackupType: "vm", BackupTime: backupTimeA, Instance: "pbs-main", Datastore: "backups", Owner: "shared@pbs!token"},
+		{ID: "b-173", VMID: "173", BackupType: "vm", BackupTime: backupTimeB, Instance: "pbs-main", Datastore: "backups", Owner: "shared@pbs!token"},
+	}
+	state.mu.Unlock()
+
+	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []PBSGuestConfirmation{
+		{BackupType: "vm", VMID: 173, Time: backupTimeA.Unix()},
+	})
+	state.UpdatePBSGuestConfirmationsForInstance("cluster-b", []PBSGuestConfirmation{
+		{BackupType: "vm", VMID: 173, Time: backupTimeB.Unix()},
+	})
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		switch vm.Instance {
+		case "cluster-a":
+			if !vm.LastBackup.Equal(backupTimeA) {
+				t.Errorf("cluster-a VM 173 LastBackup = %v, want confirmed snapshot %v", vm.LastBackup, backupTimeA)
+			}
+		case "cluster-b":
+			if !vm.LastBackup.Equal(backupTimeB) {
+				t.Errorf("cluster-b VM 173 LastBackup = %v, want confirmed snapshot %v", vm.LastBackup, backupTimeB)
+			}
+		}
+	}
+}
+
+// TestIssue1639PBSCollisionForeignSourceRejected verifies negative
+// attribution: a snapshot whose source decisively belongs to another
+// cluster must not reach this cluster's guest even though the guest has no
+// snapshot of its own.
+func TestIssue1639PBSCollisionForeignSourceRejected(t *testing.T) {
+	state := NewState()
+
+	now := time.Now()
+
+	state.UpdateVMs([]VM{
+		{VMID: 173, Name: "web-a", Instance: "cluster-a", Node: "pve-a1"},
+		{VMID: 173, Name: "web-b", Instance: "cluster-b", Node: "pve-b1"},
+		{VMID: 100, Name: "db-a", Instance: "cluster-a", Node: "pve-a1"},
+	})
+
+	state.mu.Lock()
+	state.PBSBackups = []PBSBackup{
+		// Only cluster-a's source is learnable, and the only 173 snapshot
+		// belongs to it. cluster-b must stay at zero.
+		{ID: "a-100", VMID: "100", BackupType: "vm", BackupTime: now.Add(-26 * time.Hour), Instance: "pbs-main", Datastore: "store-a", Owner: "cluster-a@pbs!token"},
+		{ID: "a-173", VMID: "173", BackupType: "vm", BackupTime: now.Add(-2 * time.Hour), Instance: "pbs-main", Datastore: "store-a", Owner: "cluster-a@pbs!token"},
+	}
+	state.mu.Unlock()
+
+	state.SyncGuestBackupTimes()
+	snapshot := state.GetSnapshot()
+
+	for _, vm := range snapshot.VMs {
+		if vm.VMID != 173 {
+			continue
+		}
+		switch vm.Instance {
+		case "cluster-a":
+			if vm.LastBackup.IsZero() {
+				t.Error("cluster-a VM 173 should get its own snapshot")
+			}
+		case "cluster-b":
+			if !vm.LastBackup.IsZero() {
+				t.Errorf("cluster-b VM 173 must not inherit cluster-a's snapshot, got %v", vm.LastBackup)
+			}
+		}
+	}
+}
