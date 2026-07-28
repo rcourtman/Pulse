@@ -28,6 +28,9 @@ type KnownHostsManager interface {
 	EnsureWithEntries(ctx context.Context, host string, port int, entries [][]byte) error
 	// Path returns the absolute path to the managed known_hosts file.
 	Path() string
+	// ResetFailures drops all recorded keyscan failure backoff so the next
+	// Ensure call retries immediately.
+	ResetFailures()
 }
 
 type knownHostsManager struct {
@@ -56,6 +59,35 @@ const (
 	keyscanFailureMaxBackoff     = 15 * time.Minute
 )
 
+// sshBackoffNow is the clock the SSH-related backoff maps in this package read.
+// Tests replace it to exercise expiry and compounding without sleeping.
+var sshBackoffNow = time.Now
+
+// sshBackoffDecayed reports whether a recorded failure is stale enough that the
+// next failure should restart from the floor instead of compounding. Backoff
+// that only ever doubles keeps a host pinned at the ceiling after a long quiet
+// period, so an entry whose retry deadline passed more than one backoff window
+// ago is treated as fresh (#1638).
+func sshBackoffDecayed(now, retryAt time.Time, backoff time.Duration) bool {
+	if backoff <= 0 {
+		return true
+	}
+	return now.After(retryAt.Add(backoff))
+}
+
+// nextSSHBackoff returns the backoff to record for a failure, given whatever
+// was recorded for the same target before.
+func nextSSHBackoff(now time.Time, previousRetryAt time.Time, previousBackoff, initial, ceiling time.Duration, escalate bool) time.Duration {
+	if !escalate || previousBackoff <= 0 || sshBackoffDecayed(now, previousRetryAt, previousBackoff) {
+		return initial
+	}
+	backoff := previousBackoff * 2
+	if backoff > ceiling {
+		backoff = ceiling
+	}
+	return backoff
+}
+
 var (
 	mkdirAllFn       = os.MkdirAll
 	statFn           = os.Stat
@@ -71,6 +103,11 @@ var (
 
 	// ErrNoHostKeys is returned when ssh-keyscan yields no usable entries.
 	ErrNoHostKeys = errors.New("knownhosts: no host keys discovered")
+	// ErrKeyscanSuppressed signals that no ssh-keyscan was executed because the
+	// previous failure's backoff window has not expired yet. Callers use it to
+	// tell "the host refused us" apart from "we did not ask", so they do not
+	// escalate their own backoff for work that never ran.
+	ErrKeyscanSuppressed = errors.New("knownhosts: ssh-keyscan suppressed by backoff")
 	// ErrHostKeyChanged signals that a host key already exists with a different fingerprint.
 	ErrHostKeyChanged = errors.New("knownhosts: host key changed")
 )
@@ -167,10 +204,10 @@ func (m *knownHostsManager) EnsureWithPort(ctx context.Context, host string, por
 		m.mu.Unlock()
 		return nil
 	}
-	if failure := m.failures[cacheKey]; failure != nil && time.Now().Before(failure.retryAt) {
+	if failure := m.failures[cacheKey]; failure != nil && sshBackoffNow().Before(failure.retryAt) {
 		err := failure.err
 		m.mu.Unlock()
-		return fmt.Errorf("knownhosts: ssh-keyscan for %s:%d suppressed until backoff expires: %w", host, port, err)
+		return fmt.Errorf("%w for %s:%d until it expires: %w", ErrKeyscanSuppressed, host, port, err)
 	}
 	m.mu.Unlock()
 
@@ -197,18 +234,32 @@ func (m *knownHostsManager) recordKeyscanFailure(cacheKey string, err error) {
 	if m.failures == nil {
 		m.failures = make(map[string]*keyscanFailure)
 	}
-	backoff := keyscanFailureInitialBackoff
+
+	// A keyscan that ran out of time says nothing about the host refusing us,
+	// so hold such a failure at the floor rather than compounding it.
+	escalate := !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled)
+
+	now := sshBackoffNow()
+	var previousRetryAt time.Time
+	var previousBackoff time.Duration
 	if existing := m.failures[cacheKey]; existing != nil {
-		backoff = existing.backoff * 2
-		if backoff > keyscanFailureMaxBackoff {
-			backoff = keyscanFailureMaxBackoff
-		}
+		previousRetryAt = existing.retryAt
+		previousBackoff = existing.backoff
 	}
+	backoff := nextSSHBackoff(now, previousRetryAt, previousBackoff, keyscanFailureInitialBackoff, keyscanFailureMaxBackoff, escalate)
+
 	m.failures[cacheKey] = &keyscanFailure{
-		retryAt: time.Now().Add(backoff),
+		retryAt: now.Add(backoff),
 		backoff: backoff,
 		err:     err,
 	}
+}
+
+// ResetFailures implements KnownHostsManager.ResetFailures.
+func (m *knownHostsManager) ResetFailures() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.failures = make(map[string]*keyscanFailure)
 }
 
 // EnsureWithEntries installs the provided host key entries for host:port.
@@ -455,6 +506,11 @@ func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Dur
 
 	output, err := keyscanCmdRunner(scanCtx, args...)
 	if err != nil {
+		// Surface our own timeout as a context error so the backoff can tell it
+		// apart from a host actively refusing the scan.
+		if ctxErr := scanCtx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("%w (output: %s)", ctxErr, strings.TrimSpace(string(output)))
+		}
 		return nil, fmt.Errorf("%w (output: %s)", err, strings.TrimSpace(string(output)))
 	}
 	return output, nil

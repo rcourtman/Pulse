@@ -67,6 +67,39 @@ func SetDNSCacheTTL(ttl time.Duration) {
 		Msg("DNS cache TTL configured")
 }
 
+// LookupHostCached resolves host through the same process-global cached
+// resolver that DialContextWithCache uses, returning parsed addresses.
+//
+// Callers that reason about which addresses a connection will actually reach
+// (endpoint policy checks, for example) must go through this rather than
+// net.LookupIP, so the decision and the dial share one DNS view. The resolver
+// caches both answers and lookup errors until the next refresh tick, so repeat
+// callers cost a map lookup rather than a query (#1638).
+func LookupHostCached(ctx context.Context, host string) ([]net.IP, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	addrs, err := GetDNSResolver().LookupHost(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+
+	ips := make([]net.IP, 0, len(addrs))
+	for _, addr := range addrs {
+		if ip := net.ParseIP(addr); ip != nil {
+			ips = append(ips, ip)
+		}
+	}
+	if len(ips) == 0 {
+		return nil, &net.DNSError{
+			Err:  "no IP addresses found",
+			Name: host,
+		}
+	}
+	return ips, nil
+}
+
 // DialContextWithCache is a DialContext function that uses the DNS cache.
 // On macOS, connections to RFC 1918 addresses are routed through a subprocess
 // (nc) to bypass VPN/NECP routing captures that affect the host process.

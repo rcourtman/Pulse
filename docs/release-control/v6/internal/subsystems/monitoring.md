@@ -2477,17 +2477,40 @@ proofs.
 The cluster-endpoint discovery-policy check (`clusterEndpointRuntimeURL` →
 `clusterEndpointAllowedByDiscoveryPolicy` in
 `internal/monitoring/monitor_cluster_helpers.go`) is a function of
-configuration, not poll state, and must not generate per-poll DNS load. The
-effective default policy — only the `NormalizeDiscoveryConfig`-injected
-link-local blocklist `169.254.0.0/16` — is evaluated against literal endpoint
-IPs only and never touches the resolver, because link-local addresses are not
-legitimately served through DNS. Custom allowlist/blocklist policies memoize
-their per-endpoint verdict for the shared 5-minute DNS-cache TTL, so hostname
-endpoints resolve at most once per TTL window across poll cycles instead of per
-node per cycle. SSH-based collectors in the same runtime follow the equivalent
-rule for process spawning: `knownhosts` caches keyscan failures with doubling
-backoff instead of re-executing `ssh-keyscan` every cycle, and the temperature
-collector backs off per host after failed SSH collection instead of re-running
-its two SSH probes every 10-second cycle.
+configuration, not poll state, and must not generate per-poll DNS load. It
+resolves hostname endpoints through the process-global cached resolver that
+`pkg/tlsutil` dials with (`tlsutil.LookupHostCached`), never through a bare
+`net.LookupIP`. That gives the policy and the connection one DNS view, and
+because the resolver caches lookup failures as well as answers, repeat poll
+cycles cost a cache hit rather than a query — roughly one query per endpoint
+host per DNS cache refresh, whose interval operators set through
+`DNS_CACHE_TIMEOUT`. There is deliberately no second, policy-level verdict
+cache: it would buy nothing on top of the resolver cache, would make the
+verdict trail the configuration, and would freeze a fail-open
+resolution-failed verdict in place for the length of its window. The effective
+default policy — the `NormalizeDiscoveryConfig`-injected link-local blocklist
+`169.254.0.0/16` — is therefore enforced against resolved addresses too, so a
+hostname endpoint pointed into the link-local range is rejected rather than
+allowed through unresolved. Literal-IP endpoints are still evaluated without
+any resolution.
+
+SSH-based collectors in the same runtime follow the equivalent rule for
+process spawning, and only escalate for work that actually ran. `knownhosts`
+caches keyscan failures with doubling backoff instead of re-executing
+`ssh-keyscan` every cycle, and reports a suppressed call as
+`ErrKeyscanSuppressed` so callers can tell it apart from a refusal. The
+temperature collector backs off per host after failed SSH collection instead of
+re-running its two SSH probes every 10-second cycle, but leaves its backoff
+untouched when the host key scan was suppressed (no ssh was executed) and holds
+it at the floor when the collection deadline expired rather than compounding on
+evidence about Pulse's own budget rather than the host. Both backoffs decay: a
+failure whose retry deadline passed more than one window ago restarts at the
+floor instead of resuming the ceiling. Neither backoff may be a trap the
+operator cannot leave: replacing the temperature SSH key on disk clears both
+maps (`TemperatureCollector.ResetSSHFailures`, triggered from the per-cycle key
+change check), so repairing the key is retried on the next cycle rather than
+after a window that has compounded to fifteen minutes.
 `internal/monitoring/issue1638_dns_cache_test.go` is the registered proof that
-repeat polls do not reach the raw resolver or re-exec the SSH probes.
+repeat polls stay on the DNS cache, that the link-local blocklist still rejects
+hostname endpoints resolving into it, and that the SSH backoffs suppress,
+decay, and reset as described.

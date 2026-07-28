@@ -1,16 +1,33 @@
 package monitoring
 
 import (
+	"context"
 	"net"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
-var lookupIPFunc = net.LookupIP
+// discoveryPolicyLookupTimeout bounds a policy resolution so a poll cycle can
+// never stall on an unresponsive resolver.
+const discoveryPolicyLookupTimeout = 5 * time.Second
+
+// lookupIPFunc resolves an endpoint hostname for the discovery-policy check.
+//
+// It goes through the process-global cached resolver that pkg/tlsutil dials
+// with, rather than a bare net.LookupIP, for two reasons: the policy verdict is
+// then made against the same addresses the connection will actually reach, and
+// repeat poll cycles cost a cache hit instead of a DNS query. The resolver
+// caches failures as well as answers, so an endpoint whose name does not
+// resolve costs one query per cache refresh too (#1638). Tests replace it.
+var lookupIPFunc = func(host string) ([]net.IP, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), discoveryPolicyLookupTimeout)
+	defer cancel()
+	return tlsutil.LookupHostCached(ctx, host)
+}
 
 func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
 	if instance == nil {
@@ -227,57 +244,6 @@ func discoveryPolicyIPsForEndpointHost(candidateURL string) []net.IP {
 	return filtered
 }
 
-// discoveryPolicyDecisionTTL bounds how long a cached discovery-policy verdict
-// (and the DNS answer behind it) is reused before re-evaluating. It matches the
-// tlsutil DNS cache refresh interval so policy decisions never trail the
-// resolver view used for actual connections by more than one refresh.
-const discoveryPolicyDecisionTTL = 5 * time.Minute
-
-// discoveryPolicyDecisionCacheLimit caps the decision cache. Keys derive from
-// configured endpoints and the discovery policy, so the map stays tiny in
-// practice; the cap only guards against pathological configs.
-const discoveryPolicyDecisionCacheLimit = 1024
-
-type discoveryPolicyDecision struct {
-	allowed   bool
-	expiresAt time.Time
-}
-
-var (
-	discoveryPolicyDecisionMu    sync.Mutex
-	discoveryPolicyDecisionCache = map[string]discoveryPolicyDecision{}
-	discoveryPolicyTimeNow       = time.Now
-)
-
-func resetDiscoveryPolicyDecisionCache() {
-	discoveryPolicyDecisionMu.Lock()
-	discoveryPolicyDecisionCache = map[string]discoveryPolicyDecision{}
-	discoveryPolicyDecisionMu.Unlock()
-}
-
-// discoveryPolicyIsDefaultOnly reports whether the effective policy consists
-// solely of the injected default link-local blocklist. NormalizeDiscoveryConfig
-// always adds 169.254.0.0/16, so every install has a non-empty policy and the
-// zero-policy fast path above never fires (#1638). Link-local addresses are
-// not routable across segments, so a hostname is never legitimately served by
-// one; only literal link-local IPs need blocking, which requires no DNS.
-func discoveryPolicyIsDefaultOnly(cfg config.DiscoveryConfig) bool {
-	if len(cfg.SubnetAllowlist) != 0 || len(cfg.IPBlocklist) != 0 {
-		return false
-	}
-	defaults := config.DefaultDiscoveryConfig().SubnetBlocklist
-	defaultSet := make(map[string]struct{}, len(defaults))
-	for _, cidr := range defaults {
-		defaultSet[strings.TrimSpace(cidr)] = struct{}{}
-	}
-	for _, cidr := range cfg.SubnetBlocklist {
-		if _, ok := defaultSet[strings.TrimSpace(cidr)]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
 // discoveryPolicyLiteralIPs returns the IPs knowable for an endpoint without
 // touching the resolver: a literal IP in the candidate URL, else the
 // endpoint's recorded effective IP.
@@ -293,20 +259,22 @@ func discoveryPolicyLiteralIPs(endpoint config.ClusterEndpoint, candidateURL str
 	return nil
 }
 
-func discoveryPolicyDecisionKey(endpoint config.ClusterEndpoint, candidateURL string, cfg config.DiscoveryConfig) string {
-	parts := []string{
-		candidateURL,
-		strings.TrimSpace(endpoint.EffectiveIP()),
-		strings.Join(cfg.SubnetAllowlist, ","),
-		strings.Join(cfg.SubnetBlocklist, ","),
-		strings.Join(cfg.IPBlocklist, ","),
+// clusterEndpointAllowedByDiscoveryPolicy evaluates the configured discovery
+// policy against every address the endpoint would be dialled at.
+//
+// There is deliberately no memoized verdict here. Resolution goes through the
+// shared cached resolver (see lookupIPFunc), which already collapses repeat
+// poll cycles to a cache hit, so a second decision cache would buy nothing
+// while making the policy trail the configuration and, worse, freezing a
+// fail-open "resolution failed, allow" verdict in place for minutes at a time.
+// Every policy — including the default link-local blocklist that
+// NormalizeDiscoveryConfig injects — is therefore enforced against resolved
+// addresses, not just literal ones (#1638).
+func clusterEndpointAllowedByDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
+	if len(discoveryCfg.SubnetAllowlist) == 0 && len(discoveryCfg.SubnetBlocklist) == 0 && len(discoveryCfg.IPBlocklist) == 0 {
+		return true
 	}
-	return strings.Join(parts, "|")
-}
 
-// evaluateClusterEndpointDiscoveryPolicy is the uncached policy check,
-// including DNS resolution of hostname endpoints.
-func evaluateClusterEndpointDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
 	allowlist := discoveryPolicyCIDRs(discoveryCfg.SubnetAllowlist)
 	blocklist := discoveryPolicyCIDRs(discoveryCfg.SubnetBlocklist)
 	blockedIPs := discoveryPolicyBlockedIPs(discoveryCfg.IPBlocklist)
@@ -326,51 +294,6 @@ func evaluateClusterEndpointDiscoveryPolicy(endpoint config.ClusterEndpoint, can
 	}
 
 	return true
-}
-
-func clusterEndpointAllowedByDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
-	if len(discoveryCfg.SubnetAllowlist) == 0 && len(discoveryCfg.SubnetBlocklist) == 0 && len(discoveryCfg.IPBlocklist) == 0 {
-		return true
-	}
-
-	// The policy is a function of configuration, not poll state, but since
-	// c5f5af7ab it is re-evaluated per node per poll cycle. With the default
-	// link-local-only blocklist no resolution is needed at all, and custom
-	// policies memoize their verdict so repeat polls stay off the resolver
-	// (#1638).
-	if discoveryPolicyIsDefaultOnly(discoveryCfg) {
-		blocklist := discoveryPolicyCIDRs(discoveryCfg.SubnetBlocklist)
-		for _, ip := range discoveryPolicyLiteralIPs(endpoint, candidateURL) {
-			if !discoveryPolicyAllowsIP(ip, nil, blocklist, nil) {
-				return false
-			}
-		}
-		return true
-	}
-
-	key := discoveryPolicyDecisionKey(endpoint, candidateURL, discoveryCfg)
-	now := discoveryPolicyTimeNow()
-
-	discoveryPolicyDecisionMu.Lock()
-	if cached, ok := discoveryPolicyDecisionCache[key]; ok && now.Before(cached.expiresAt) {
-		discoveryPolicyDecisionMu.Unlock()
-		return cached.allowed
-	}
-	discoveryPolicyDecisionMu.Unlock()
-
-	allowed := evaluateClusterEndpointDiscoveryPolicy(endpoint, candidateURL, discoveryCfg)
-
-	discoveryPolicyDecisionMu.Lock()
-	if len(discoveryPolicyDecisionCache) >= discoveryPolicyDecisionCacheLimit {
-		discoveryPolicyDecisionCache = map[string]discoveryPolicyDecision{}
-	}
-	discoveryPolicyDecisionCache[key] = discoveryPolicyDecision{
-		allowed:   allowed,
-		expiresAt: now.Add(discoveryPolicyDecisionTTL),
-	}
-	discoveryPolicyDecisionMu.Unlock()
-
-	return allowed
 }
 
 func clusterEndpointRuntimeURL(endpoint config.ClusterEndpoint, verifySSL bool, hasFingerprint bool, discoveryCfg config.DiscoveryConfig) string {

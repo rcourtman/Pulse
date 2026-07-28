@@ -90,6 +90,7 @@ type TemperatureCollector struct {
 	runner           CommandRunner
 	sshFailureMu     sync.Mutex
 	sshFailures      map[string]*temperatureSSHFailure
+	sshKeyIdentity   string
 }
 
 // temperatureSSHFailure remembers a host whose SSH collection failed so
@@ -106,28 +107,66 @@ const (
 	temperatureSSHFailureMaxBackoff     = 15 * time.Minute
 )
 
+// sshFailureOutcome describes what a failed collection attempt tells us about
+// the host, which decides how the per-host backoff moves.
+type sshFailureOutcome int
+
+const (
+	// sshFailureHard is a refusal, auth failure, or unusable output: the host
+	// answered (or actively did not) and the backoff should compound.
+	sshFailureHard sshFailureOutcome = iota
+	// sshFailureTransient is our own deadline expiring. That says nothing about
+	// the host, so hold the backoff at the floor instead of doubling it.
+	sshFailureTransient
+	// sshFailureNotAttempted means no ssh ran at all — the knownhosts manager
+	// suppressed the call inside its own backoff. Nothing was learned and
+	// nothing was spent, so the backoff must not move.
+	sshFailureNotAttempted
+)
+
+// classifySSHFailure maps a failed attempt onto its backoff treatment (#1638).
+func classifySSHFailure(err error) sshFailureOutcome {
+	switch {
+	case err == nil:
+		return sshFailureHard
+	case errors.Is(err, ErrKeyscanSuppressed):
+		return sshFailureNotAttempted
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return sshFailureTransient
+	default:
+		return sshFailureHard
+	}
+}
+
 func (tc *TemperatureCollector) inSSHFailureBackoff(host string) bool {
 	tc.sshFailureMu.Lock()
 	defer tc.sshFailureMu.Unlock()
 	failure := tc.sshFailures[host]
-	return failure != nil && time.Now().Before(failure.retryAt)
+	return failure != nil && sshBackoffNow().Before(failure.retryAt)
 }
 
-func (tc *TemperatureCollector) recordSSHFailure(host string) {
+func (tc *TemperatureCollector) recordSSHFailure(host string, outcome sshFailureOutcome) {
+	if outcome == sshFailureNotAttempted {
+		return
+	}
+
 	tc.sshFailureMu.Lock()
 	defer tc.sshFailureMu.Unlock()
 	if tc.sshFailures == nil {
 		tc.sshFailures = make(map[string]*temperatureSSHFailure)
 	}
-	backoff := temperatureSSHFailureInitialBackoff
+
+	now := sshBackoffNow()
+	var previousRetryAt time.Time
+	var previousBackoff time.Duration
 	if existing := tc.sshFailures[host]; existing != nil {
-		backoff = existing.backoff * 2
-		if backoff > temperatureSSHFailureMaxBackoff {
-			backoff = temperatureSSHFailureMaxBackoff
-		}
+		previousRetryAt = existing.retryAt
+		previousBackoff = existing.backoff
 	}
+	backoff := nextSSHBackoff(now, previousRetryAt, previousBackoff, temperatureSSHFailureInitialBackoff, temperatureSSHFailureMaxBackoff, outcome == sshFailureHard)
+
 	tc.sshFailures[host] = &temperatureSSHFailure{
-		retryAt: time.Now().Add(backoff),
+		retryAt: now.Add(backoff),
 		backoff: backoff,
 	}
 }
@@ -136,6 +175,59 @@ func (tc *TemperatureCollector) clearSSHFailure(host string) {
 	tc.sshFailureMu.Lock()
 	defer tc.sshFailureMu.Unlock()
 	delete(tc.sshFailures, host)
+}
+
+// ResetSSHFailures drops every recorded SSH backoff, including the knownhosts
+// manager's keyscan backoff, so an operator who has just repaired an SSH key or
+// host key sees the next poll cycle retry rather than waiting out a window that
+// has compounded to a quarter of an hour (#1638).
+func (tc *TemperatureCollector) ResetSSHFailures() {
+	if tc == nil {
+		return
+	}
+
+	tc.sshFailureMu.Lock()
+	tc.sshFailures = nil
+	hostKeys := tc.hostKeys
+	tc.sshFailureMu.Unlock()
+
+	if hostKeys != nil {
+		hostKeys.ResetFailures()
+	}
+}
+
+// resetSSHFailuresOnKeyChange clears the backoff maps when the SSH key on disk
+// has been replaced since the last cycle.
+//
+// Repairing that key is the usual fix for the failures that opened these
+// backoff windows in the first place, and nothing else notices it happening, so
+// without this the operator waits out a window that has already compounded
+// toward fifteen minutes before Pulse tries the repaired key (#1638).
+func (tc *TemperatureCollector) resetSSHFailuresOnKeyChange() {
+	identity := tc.currentSSHKeyIdentity()
+
+	tc.sshFailureMu.Lock()
+	changed := tc.sshKeyIdentity != "" && tc.sshKeyIdentity != identity
+	tc.sshKeyIdentity = identity
+	tc.sshFailureMu.Unlock()
+
+	if changed {
+		log.Info().
+			Str("sshKeyPath", tc.sshKeyPath).
+			Msg("Temperature SSH key changed on disk; clearing per-host SSH backoff")
+		tc.ResetSSHFailures()
+	}
+}
+
+// currentSSHKeyIdentity fingerprints the key file cheaply enough to run every
+// poll cycle. Content is deliberately not read: this is change detection, not
+// validation.
+func (tc *TemperatureCollector) currentSSHKeyIdentity() string {
+	info, err := os.Stat(strings.TrimSpace(tc.sshKeyPath))
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
 }
 
 // NewTemperatureCollectorWithPort creates a new temperature collector with custom SSH port
@@ -200,6 +292,8 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		return &models.Temperature{Available: false}, nil
 	}
 
+	tc.resetSSHFailuresOnKeyChange()
+
 	if tc.inSSHFailureBackoff(host) {
 		log.Debug().
 			Str("node", nodeName).
@@ -214,8 +308,17 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	// and still force sensors -j, so keep the parser backward-compatible.
 	output, err := tc.runSSHCommand(ctx, host, pulseSensorsSSHCommand)
 	if err != nil || strings.TrimSpace(output) == "" {
+		// A suppressed keyscan or an expired deadline would fail the RPi
+		// fallback identically, so stop here rather than paying for a second
+		// probe, and do not compound a backoff the host has not earned (#1638).
+		if outcome := classifySSHFailure(err); outcome != sshFailureHard {
+			tc.logSkippedSSHAttempt(outcome, nodeName, host, err)
+			tc.recordSSHFailure(host, outcome)
+			return &models.Temperature{Available: false}, nil
+		}
+
 		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
-			tc.recordSSHFailure(host)
+			tc.recordSSHFailure(host, sshFailureHard)
 			return &models.Temperature{Available: false}, nil
 		}
 
@@ -230,8 +333,14 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 			}
 		}
 
+		if outcome := classifySSHFailure(err); outcome != sshFailureHard {
+			tc.logSkippedSSHAttempt(outcome, nodeName, host, err)
+			tc.recordSSHFailure(host, outcome)
+			return &models.Temperature{Available: false}, nil
+		}
+
 		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
-			tc.recordSSHFailure(host)
+			tc.recordSSHFailure(host, sshFailureHard)
 			return &models.Temperature{Available: false}, nil
 		}
 
@@ -240,7 +349,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 			Str("host", host).
 			Err(err).
 			Msg("Failed to collect temperature data via SSH (tried both lm-sensors and RPi methods)")
-		tc.recordSSHFailure(host)
+		tc.recordSSHFailure(host, sshFailureHard)
 		return &models.Temperature{Available: false}, nil
 	}
 
@@ -263,6 +372,17 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	temp.LastUpdate = time.Now()
 
 	return temp, nil
+}
+
+// logSkippedSSHAttempt records why an attempt is being abandoned without
+// escalating the per-host backoff.
+func (tc *TemperatureCollector) logSkippedSSHAttempt(outcome sshFailureOutcome, nodeName, host string, err error) {
+	event := log.Debug().Str("node", nodeName).Str("host", host).Err(err)
+	if outcome == sshFailureNotAttempted {
+		event.Msg("Skipping SSH temperature collection; host key scan is in its own backoff window")
+		return
+	}
+	event.Msg("Abandoning SSH temperature collection after the collection deadline expired")
 }
 
 func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command string) (string, error) {
@@ -315,6 +435,12 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 	if err != nil {
 		if errors.Is(err, errTemperatureCommandOutputTooLarge) {
 			return "", fmt.Errorf("ssh command output exceeded %d bytes", maxTemperatureCommandOutputSize)
+		}
+		// Our own budget running out is not evidence about the host, and
+		// sanitizeSSHCommandError would flatten the signal into an exit status,
+		// so report the context error directly (#1638).
+		if ctxErr := runCtx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("ssh command aborted: %w", ctxErr)
 		}
 		return "", sanitizeSSHCommandError(err)
 	}

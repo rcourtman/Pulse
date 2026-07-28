@@ -293,8 +293,6 @@ func TestClusterEndpointEffectiveURL(t *testing.T) {
 }
 
 func TestBuildClusterEndpointsForInit_RespectsDiscoveryPolicy(t *testing.T) {
-	resetDiscoveryPolicyDecisionCache()
-	t.Cleanup(resetDiscoveryPolicyDecisionCache)
 	oldLookup := lookupIPFunc
 	lookupIPFunc = func(host string) ([]net.IP, error) {
 		switch host {
