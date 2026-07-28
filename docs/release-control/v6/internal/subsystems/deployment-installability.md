@@ -313,8 +313,19 @@ TLS floor in the dynamic config.
    window on the agent state directory, surfaces the reason recorded in a
    `proxmox-<type>-registration-blocked` marker as an installer error with
    remediation, reports success on a `proxmox-<type>-registered` marker, and
-   clears both marker families when resetting Proxmox state for a fresh
+   clears those marker families when resetting Proxmox state for a fresh
    registration.
+   That verdict is per Proxmox product, not per host. A machine running both
+   PVE and PBS registers each product separately and now holds one bootstrap
+   grant per canonical type (#1644), so the installer must read the agent's
+   `proxmox-detected-types` marker, wait for an outcome from every product it
+   names, and print a success or denial line for each. It must not let the
+   first marker it finds decide the whole install: a blocked second product
+   cannot suppress the first product's confirmed registration, and a confirmed
+   first product cannot mask the second's denial. Agents that predate the
+   detected-types marker keep the previous first-outcome-wins timing so a
+   single-product host does not wait out the full window, and the reset path
+   clears the detected-types marker alongside the rest.
    Existing-agent update commands copied from the settings UI must use the
    installer-owned `--update` mode rather than serializing a fresh enrollment
    token into platform notice links. In `--update` mode, `scripts/install.sh`

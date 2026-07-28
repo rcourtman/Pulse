@@ -1733,3 +1733,180 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		Header:     make(http.Header),
 	}, nil
 }
+
+// combinedProxmoxHostServer answers the RunAll traffic of a host running both
+// PVE and PBS. blockedTypes are the products whose bootstrap grant the server
+// refuses, so the same fixture drives both the clean combined install and the
+// partial-refusal case.
+func combinedProxmoxHostServer(t *testing.T, blockedTypes map[string]bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/auto-register" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+			http.Error(w, "unexpected path", http.StatusNotFound)
+			return
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("decode auto-register payload: %v", err)
+			http.Error(w, "bad payload", http.StatusBadRequest)
+			return
+		}
+		regType, _ := payload["type"].(string)
+		host, _ := payload["host"].(string)
+		w.Header().Set("Content-Type", "application/json")
+		if check, _ := payload["checkRegistration"].(bool); check {
+			_, _ = fmt.Fprintf(w, `{"registered":false,"sourceExists":false,"canRegister":%t}`, !blockedTypes[regType])
+			return
+		}
+		if blockedTypes[regType] {
+			http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
+			return
+		}
+		tokenUser := proxmoxUserPVE
+		if regType == "pbs" {
+			tokenUser = proxmoxUserPBS
+		}
+		_, _ = fmt.Fprintf(w,
+			`{"status":"success","message":"registered","action":"use_token","type":"%s","source":"agent","host":"%s","nodeId":"node-1","nodeName":"node-1","tokenId":"%s!%s","tokenValue":"v-%s"}`,
+			regType, host, tokenUser, "pulse-node-1", regType)
+	}))
+}
+
+// combinedProxmoxHostCollector mimics a machine with both Proxmox products
+// installed, recording every state-file write so the markers RunAll publishes
+// can be asserted without touching the real state dir.
+func combinedProxmoxHostCollector(writes map[string]string) *mockCollector {
+	mc := &mockCollector{}
+	mc.lookPathFn = func(file string) (string, error) { return "/usr/sbin/" + file, nil }
+	mc.statFn = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+	mc.mkdirAllFn = func(string, os.FileMode) error { return nil }
+	mc.chmodFn = func(string, os.FileMode) error { return nil }
+	mc.writeFileFn = func(filename string, data []byte, _ os.FileMode) error {
+		writes[filepath.Base(filename)] = string(data)
+		return nil
+	}
+	mc.dialTimeoutFn = func(string, string, time.Duration) (net.Conn, error) {
+		return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
+	}
+	mc.commandCombinedOutputFn = func(_ context.Context, name string, arg ...string) (string, error) {
+		if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
+			return "│ value │ v-pve │", nil
+		}
+		if name == "proxmox-backup-manager" && len(arg) > 1 && arg[1] == "generate-token" {
+			return `{"value":"v-pbs"}`, nil
+		}
+		return "", nil
+	}
+	return mc
+}
+
+// TestRunAllCombinedHostRegistersBothTypes covers the officially supported
+// PVE+PBS-on-one-machine deployment (#1644). The server now grants one
+// bootstrap create per canonical type, so both legs must register, and RunAll
+// must publish the detected-types marker the installer reads to decide how many
+// outcomes to wait for before reporting.
+func TestRunAllCombinedHostRegistersBothTypes(t *testing.T) {
+	server := combinedProxmoxHostServer(t, nil)
+	defer server.Close()
+
+	writes := make(map[string]string)
+	mc := combinedProxmoxHostCollector(writes)
+	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "install-token", "", "node-1", "", "/state", false)
+	p.retryBackoffs = []time.Duration{}
+
+	results, err := p.RunAll(context.Background())
+	if err != nil {
+		t.Fatalf("RunAll: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("results = %d, want one per detected product: %#v", len(results), results)
+	}
+	registered := map[string]bool{}
+	for _, result := range results {
+		if !result.Registered {
+			t.Fatalf("%s was not registered: %#v", result.ProxmoxType, result)
+		}
+		registered[result.ProxmoxType] = true
+	}
+	if !registered["pve"] || !registered["pbs"] {
+		t.Fatalf("registered types = %v, want both pve and pbs", registered)
+	}
+
+	if got := writes["proxmox-detected-types"]; got != "pve\npbs\n" {
+		t.Fatalf("detected-types marker = %q, want both products one per line", got)
+	}
+	for _, marker := range []string{"proxmox-pve-registered", "proxmox-pbs-registered"} {
+		if _, ok := writes[marker]; !ok {
+			t.Fatalf("RunAll did not write %s; writes = %v", marker, writes)
+		}
+	}
+}
+
+// TestRunAllReportsPartialProxmoxFailure pins that one product's genuine
+// refusal no longer erases the other's success: the working product is still
+// registered and returned, the refusal is still recorded in its own blocked
+// marker, and RunAll does not report the whole setup as failed.
+func TestRunAllReportsPartialProxmoxFailure(t *testing.T) {
+	server := combinedProxmoxHostServer(t, map[string]bool{"pbs": true})
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	writes := make(map[string]string)
+	mc := combinedProxmoxHostCollector(writes)
+	var logs strings.Builder
+	p := NewProxmoxSetup(zerolog.New(&logs), server.Client(), mc, server.URL, "install-token", "", "node-1", "", stateDir, false)
+	p.retryBackoffs = []time.Duration{}
+
+	results, err := p.RunAll(context.Background())
+	if err != nil {
+		t.Fatalf("RunAll returned an error for a partially successful combined host: %v", err)
+	}
+	if len(results) != 1 || results[0].ProxmoxType != "pve" || !results[0].Registered {
+		t.Fatalf("results = %#v, want the pve registration to survive the pbs refusal", results)
+	}
+	if _, ok := writes["proxmox-pve-registered"]; !ok {
+		t.Fatalf("pve registration marker missing; writes = %v", writes)
+	}
+
+	blocked, readErr := os.ReadFile(filepath.Join(stateDir, "proxmox-pbs-registration-blocked"))
+	if readErr != nil {
+		t.Fatalf("read pbs registration-blocked marker: %v", readErr)
+	}
+	if !strings.Contains(string(blocked), "Settings -> Infrastructure") {
+		t.Fatalf("pbs blocked marker lacks operator remediation: %s", blocked)
+	}
+	if _, err := os.Stat(filepath.Join(stateDir, "proxmox-pve-registration-blocked")); !os.IsNotExist(err) {
+		t.Fatalf("pve was marked blocked despite registering (stat err = %v)", err)
+	}
+	if !strings.Contains(logs.String(), "the remaining products were registered") {
+		t.Fatalf("partial failure summary missing from logs: %s", logs.String())
+	}
+}
+
+// TestRunAllFailsWhenEveryDetectedTypeFails keeps a fully denied combined host
+// loud: with nothing registered there is no partial success to protect, so the
+// caller must see an error rather than an empty, silent result set.
+func TestRunAllFailsWhenEveryDetectedTypeFails(t *testing.T) {
+	server := combinedProxmoxHostServer(t, map[string]bool{"pve": true, "pbs": true})
+	defer server.Close()
+
+	stateDir := t.TempDir()
+	writes := make(map[string]string)
+	mc := combinedProxmoxHostCollector(writes)
+	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "install-token", "", "node-1", "", stateDir, false)
+	p.retryBackoffs = []time.Duration{}
+
+	results, err := p.RunAll(context.Background())
+	if err == nil {
+		t.Fatal("RunAll returned nil error when every detected Proxmox product was refused")
+	}
+	for _, want := range []string{"pve", "pbs"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("RunAll error %v does not name the failed %s product", err, want)
+		}
+	}
+	if len(results) != 0 {
+		t.Fatalf("results = %#v, want none", results)
+	}
+}

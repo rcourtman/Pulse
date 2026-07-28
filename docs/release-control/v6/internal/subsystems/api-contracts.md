@@ -1626,8 +1626,16 @@ payload shape change when the portal presents compact client rows.
     (#1644), because the Settings → Infrastructure installer mints `host`
     tokens while the unified installer auto-detects PVE/PBS on the target.
     Non-canonical request types never hold the grant, and the grant keeps its
-    settings-authorized `issued_via` requirement, first-hostname binding,
-    serialized completion, and single consumption across types.
+    settings-authorized `issued_via` requirement, first-hostname binding, and
+    serialized completion. Consumption is recorded per canonical type: one PVE
+    create and one PBS create per token, each still one-shot, because a host
+    running both products is an officially supported deployment and the agent
+    registers each one separately from the same install token (#1644). The
+    hostname binding and the mint-age clock are not per type — the first type to
+    register pins `bound_hostname` for both. `proxmox_registration_consumed_types`
+    carries the per-type ledger; a record with only
+    `proxmox_registration_completed=true` predates it and reads as every
+    canonical type consumed, so upgrading cannot revive a spent token.
     That grant is also time-bounded on its own clock: install tokens are minted
     without an expiry, so the bootstrap capability expires 24 hours after mint
     (`install_issued_at`, falling back to the record's creation time, and fails
@@ -1637,7 +1645,9 @@ payload shape change when the portal presents compact client rows.
     Consumption ordering is part of the contract: the grant is consumed and
     persisted before the created source is written, and a failed source save
     rolls the consumption back, so a failing token store can never leave a
-    persisted source next to a live grant.
+    persisted source next to a live grant. The rollback restores only the type
+    being consumed, so a failed second-product save on a combined host cannot
+    revive the first product's already-spent grant.
     The exec binding contract follows from that grant: a `bound_hostname`
     written by auto-register (no `bound_agent_id`, no binding version) is a
     clean first use of the command channel, so a matching hostname binds the
@@ -8519,9 +8529,13 @@ credentials on a matching existing PVE/PBS source. Only an unused install token
 minted through the config or hosted agent-install command may create a new
 source, and only when its server-authored `install_type` matches. First use
 binds the token after request validation to the presenting hostname; successful
-serialized completion persists consumption and registration identity metadata.
-Malformed requests do not bind the grant. Reuse, cross-type or cross-host use,
-and ordinary agent tokens return `403` for a missing source.
+serialized completion persists consumption and registration identity metadata
+for the canonical type that was created. Malformed requests do not bind the
+grant. Reuse of an already-consumed type, cross-type use by a type-pinned
+token, cross-host use, and ordinary agent tokens return `403` for a missing
+source. A generic `host` install token gets one create per canonical type, so
+the PBS leg of a combined PVE+PBS host succeeds while a second create of either
+type does not.
 Authentication failure at the canonical endpoint remains a warning/error
 diagnostic rather than being suppressed as an expected setup-artifact denial.
 

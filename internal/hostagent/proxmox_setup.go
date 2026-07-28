@@ -329,6 +329,40 @@ func (p *ProxmoxSetup) registrationBlockedFilePath(ptype proxmoxProductType) str
 	return filepath.Join(p.stateDir, fmt.Sprintf("proxmox-%s-registration-blocked", ptype))
 }
 
+// detectedTypesFilePath names the marker RunAll writes listing the canonical
+// Proxmox products it is registering on this host, one per line.
+//
+// Without it the installer cannot tell a PVE-only host from a combined PVE+PBS
+// host, so it has to report the first outcome it sees and call the install
+// done. On a combined host — an officially supported deployment that now
+// consumes one bootstrap grant per type — that produced a partial verdict:
+// either a success banner before PBS had landed, or an error banner for PBS
+// that buried a perfectly good PVE registration (#1644).
+func (p *ProxmoxSetup) detectedTypesFilePath() string {
+	return filepath.Join(p.stateDir, "proxmox-detected-types")
+}
+
+// writeDetectedTypesMarker publishes the types RunAll is about to register so
+// the installer waits for an outcome from each of them, and only from them.
+func (p *ProxmoxSetup) writeDetectedTypesMarker(types []proxmoxProductType) {
+	if len(types) == 0 {
+		return
+	}
+	if err := p.collector.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
+		p.logger.Debug().Err(err).Str("dir", p.stateDir).Msg("Failed to create state dir for detected-types marker")
+		return
+	}
+	contents := strings.Join(proxmoxProductTypesToStrings(types), "\n") + "\n"
+	path := p.detectedTypesFilePath()
+	if err := p.collector.WriteFile(path, []byte(contents), proxmoxStateFilePerm); err != nil {
+		p.logger.Debug().Err(err).Msg("Failed to write detected-types marker")
+		return
+	}
+	if err := p.collector.Chmod(path, proxmoxStateFilePerm); err != nil {
+		p.logger.Debug().Err(err).Msg("Failed to enforce detected-types marker permissions")
+	}
+}
+
 func (p *ProxmoxSetup) writeRegistrationBlockedMarker(ptype proxmoxProductType, reason string) {
 	if err := os.MkdirAll(p.stateDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Debug().Err(err).Str("dir", p.stateDir).Msg("Failed to create state dir for registration-blocked marker")
@@ -442,8 +476,15 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 
 // RunAll detects and registers ALL Proxmox products on this system.
 // This supports hosts with both PVE and PBS installed (a common and officially
-// supported configuration). Each type gets its own registration and state tracking.
+// supported configuration). Each type gets its own registration and state tracking,
+// and the server grants one bootstrap create per canonical type, so a combined
+// host registers both from a single install token (#1644).
 // Returns results for all types that were processed (skipping already-registered ones).
+//
+// One type failing does not abandon the others: the remaining types are still
+// attempted and their results returned. An error comes back only when every
+// detected type failed, so a fully failed Proxmox setup is still loud while a
+// partial one leaves the successful registrations reportable.
 func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error) {
 	pulseURL, err := agenttarget.NormalizePulseURL(p.pulseURL, p.authoritative, p.allowPlaintextHTTP)
 	if err != nil {
@@ -461,6 +502,7 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 
 	// If a specific type is forced, only run that
 	if forcedType != "" {
+		p.writeDetectedTypesMarker([]proxmoxProductType{forcedType})
 		result, err := p.runForType(ctx, forcedType)
 		if err != nil {
 			return nil, fmt.Errorf("setup proxmox type %s: %w", p.proxmoxType, err)
@@ -478,17 +520,32 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 	}
 
 	p.logger.Info().Strs("types", proxmoxProductTypesToStrings(types)).Msg("Auto-detected Proxmox products")
+	p.writeDetectedTypesMarker(types)
 
 	// Register each type
+	var failures []error
+	var failedTypes []string
 	for _, ptype := range types {
 		result, err := p.runForType(ctx, ptype)
 		if err != nil {
 			p.logger.Error().Err(err).Str("type", string(ptype)).Msg("Failed to setup Proxmox type")
+			failures = append(failures, fmt.Errorf("setup proxmox type %s: %w", ptype, err))
+			failedTypes = append(failedTypes, string(ptype))
 			continue // Don't fail completely, try other types
 		}
 		if result != nil {
 			results = append(results, result)
 		}
+	}
+
+	if len(failures) == len(types) {
+		return results, errors.Join(failures...)
+	}
+	if len(failures) > 0 {
+		p.logger.Warn().
+			Strs("failed_types", failedTypes).
+			Strs("detected_types", proxmoxProductTypesToStrings(types)).
+			Msg("Some Proxmox products failed to set up; the remaining products were registered")
 	}
 
 	return results, nil

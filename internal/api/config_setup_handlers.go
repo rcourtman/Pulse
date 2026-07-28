@@ -30,8 +30,9 @@ import (
 
 // agentAutoRegContextKey marks a request authenticated via agent:report token.
 // Ordinary runtime tokens remain update-only. A Proxmox install token minted by
-// a settings:write endpoint may additionally carry one bounded, one-time grant
-// to create the declared PVE/PBS source.
+// a settings:write endpoint may additionally carry a bounded grant to create
+// the declared PVE/PBS source: one create per canonical type, each one-shot,
+// all of them sharing the token's single mint-age TTL and hostname binding.
 type agentAutoRegContextKey struct{}
 
 type agentAutoRegAuth struct {
@@ -56,11 +57,89 @@ const (
 	proxmoxInstallRegistrationHostKey      = "proxmox_registration_host"
 	proxmoxInstallRegistrationNodeKey      = "proxmox_registration_node"
 	proxmoxInstallRegistrationAtKey        = "proxmox_registration_at"
+	// proxmoxInstallRegistrationConsumedTypesKey lists the canonical Proxmox
+	// types whose one-shot source-creation grant this token has already spent.
+	// Its presence is also the marker that distinguishes a record written by a
+	// per-type-aware server from a pre-#1644-followup record, where the bare
+	// proxmox_registration_completed flag meant "every type is spent".
+	proxmoxInstallRegistrationConsumedTypesKey = "proxmox_registration_consumed_types"
 	// agentInstallTokenIssuedAtKey records when an install token was minted so
 	// the one-shot source-creation grant can expire independently of the
 	// token's own (unbounded) reporting lifetime.
 	agentInstallTokenIssuedAtKey = "install_issued_at"
 )
+
+// canonicalAutoRegisterTypes is the fixed set of source types an install token
+// may bootstrap. A combined PVE+PBS host — an officially supported deployment —
+// consumes one grant per type, so the set doubles as the "everything is spent"
+// expansion for legacy completion markers.
+var canonicalAutoRegisterTypes = []string{"pve", "pbs"}
+
+// proxmoxInstallRegistrationTypedKey suffixes a registration metadata key with
+// the canonical type it describes, so a combined host keeps the PVE and PBS
+// completion details side by side instead of overwriting one with the other.
+func proxmoxInstallRegistrationTypedKey(baseKey, nodeType string) string {
+	return baseKey + "_" + strings.TrimSpace(nodeType)
+}
+
+// proxmoxInstallRegistrationConsumedTypeSet reports which canonical types have
+// already spent their bootstrap grant on this token.
+//
+// tracked distinguishes the two record shapes. A record written by a per-type
+// server carries proxmox_registration_consumed_types and the returned set is
+// exactly what it lists. A record written before per-type consumption existed
+// carries only proxmox_registration_completed=true, which meant the token was
+// spent outright; those expand to every canonical type so an upgrade can never
+// hand an already-used token a second create. A consumed-types value that
+// parses to nothing usable falls back to the same conservative expansion.
+func proxmoxInstallRegistrationConsumedTypeSet(record *config.APITokenRecord) (map[string]struct{}, bool) {
+	if record == nil {
+		return nil, false
+	}
+	consumed := make(map[string]struct{}, len(canonicalAutoRegisterTypes))
+	for _, raw := range strings.Split(record.Metadata[proxmoxInstallRegistrationConsumedTypesKey], ",") {
+		nodeType := strings.TrimSpace(raw)
+		if isCanonicalAutoRegisterType(nodeType) {
+			consumed[nodeType] = struct{}{}
+		}
+	}
+	if len(consumed) > 0 {
+		return consumed, true
+	}
+	if strings.EqualFold(strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationCompletedKey]), "true") {
+		for _, nodeType := range canonicalAutoRegisterTypes {
+			consumed[nodeType] = struct{}{}
+		}
+	}
+	return consumed, false
+}
+
+// proxmoxInstallRegistrationConsumedForType reports whether requestedType has
+// already spent its one-shot grant on this token.
+func proxmoxInstallRegistrationConsumedForType(record *config.APITokenRecord, requestedType string) bool {
+	consumed, _ := proxmoxInstallRegistrationConsumedTypeSet(record)
+	_, spent := consumed[strings.TrimSpace(requestedType)]
+	return spent
+}
+
+// proxmoxInstallRegistrationConsumedTypesValue renders the consumed-type set
+// plus requestedType in a stable order, so the metadata value does not churn
+// with map iteration and stays readable in a token dump.
+func proxmoxInstallRegistrationConsumedTypesValue(record *config.APITokenRecord, requestedType string) string {
+	consumed, _ := proxmoxInstallRegistrationConsumedTypeSet(record)
+	if consumed == nil {
+		consumed = make(map[string]struct{}, len(canonicalAutoRegisterTypes))
+	}
+	consumed[strings.TrimSpace(requestedType)] = struct{}{}
+
+	ordered := make([]string, 0, len(canonicalAutoRegisterTypes))
+	for _, nodeType := range canonicalAutoRegisterTypes {
+		if _, ok := consumed[nodeType]; ok {
+			ordered = append(ordered, nodeType)
+		}
+	}
+	return strings.Join(ordered, ",")
+}
 
 // proxmoxInstallBootstrapGrantTTL bounds how long after mint the one-shot
 // Proxmox source-creation grant stays exercisable. Install tokens are minted
@@ -106,9 +185,12 @@ func proxmoxInstallGrantExpiredAt(record *config.APITokenRecord, now time.Time) 
 // installType may bootstrap a source of requestedType. Proxmox-typed tokens
 // stay pinned to their declared type. A generic host-agent install token may
 // bootstrap either canonical Proxmox type: the unified installer auto-detects
-// PVE/PBS on the target machine (#1644), and the token is still bounded by the
-// same settings:write mint requirement, one-shot completion marker, and
-// first-use hostname binding as a typed token.
+// PVE/PBS on the target machine (#1644), and a host with both installed is an
+// officially supported deployment, so it gets one create for each. The token is
+// still bounded by the same settings:write mint requirement, the same per-type
+// one-shot completion marker, and the same first-use hostname binding as a
+// typed token — the binding is shared across types, so whichever type registers
+// first pins the hostname for both.
 func installTokenTypeGrantsBootstrap(installType, requestedType string) bool {
 	if installType == requestedType && isCanonicalAutoRegisterType(requestedType) {
 		return true
@@ -124,7 +206,7 @@ func proxmoxInstallGrantEligible(record *config.APITokenRecord, req *AutoRegiste
 	if record == nil || req == nil || strings.TrimSpace(req.Source) != "agent" {
 		return false
 	}
-	if strings.EqualFold(strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationCompletedKey]), "true") {
+	if proxmoxInstallRegistrationConsumedForType(record, req.Type) {
 		return false
 	}
 	if !installTokenTypeGrantsBootstrap(strings.TrimSpace(record.Metadata["install_type"]), strings.TrimSpace(req.Type)) {
@@ -160,16 +242,35 @@ func canBootstrapProxmoxInstallRegistrationAt(record *config.APITokenRecord, req
 	return proxmoxInstallGrantEligible(record, req) && !proxmoxInstallGrantExpiredAt(record, now)
 }
 
+// completedProxmoxInstallRegistrationMatches reports that this exact
+// type-and-hostname registration is the one that already spent its grant, which
+// makes a repeat completion a no-op rather than a denial. It is deliberately
+// narrower than proxmoxInstallRegistrationConsumedForType: a spent grant for a
+// different hostname is still a refusal.
 func completedProxmoxInstallRegistrationMatches(record *config.APITokenRecord, req *AutoRegisterRequest) bool {
-	if record == nil || req == nil ||
-		!strings.EqualFold(strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationCompletedKey]), "true") {
+	if record == nil || req == nil {
 		return false
 	}
-	return strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationTypeKey]) == strings.TrimSpace(req.Type) &&
-		strings.EqualFold(
-			strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationHostnameKey]),
-			strings.TrimSpace(req.ServerName),
-		)
+	requestedType := strings.TrimSpace(req.Type)
+	requestedHostname := strings.TrimSpace(req.ServerName)
+
+	consumed, tracked := proxmoxInstallRegistrationConsumedTypeSet(record)
+	if _, spent := consumed[requestedType]; !spent {
+		return false
+	}
+	if !tracked {
+		// Legacy record: the single completion block describes the one
+		// registration this token performed, whatever type it was for.
+		return strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationTypeKey]) == requestedType &&
+			strings.EqualFold(
+				strings.TrimSpace(record.Metadata[proxmoxInstallRegistrationHostnameKey]),
+				requestedHostname,
+			)
+	}
+	completedHostname := strings.TrimSpace(
+		record.Metadata[proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostnameKey, requestedType)],
+	)
+	return completedHostname != "" && strings.EqualFold(completedHostname, requestedHostname)
 }
 
 // prepareProxmoxInstallBootstrap binds an unused install token to the first
@@ -245,10 +346,84 @@ func (h *ConfigHandlers) proxmoxInstallBootstrapAvailable(ctx context.Context, r
 // before the source is written, so an unrecoverable SaveNodesConfig must put
 // the grant back rather than leave a consumed grant with no source (or, worse,
 // leave the grant live next to a persisted source).
+//
+// The undo is scoped to the keys this one consumption wrote. On a combined
+// PVE+PBS host the two types spend their grants in sequence, so a failed PBS
+// save must restore the PBS grant without resurrecting the PVE grant that the
+// earlier leg already spent on a source that did persist.
 type proxmoxInstallBootstrapConsumption struct {
-	tokenID          string
-	previousMetadata map[string]string
+	tokenID     string
+	proxmoxType string
+	// previousValues holds the pre-consumption value of every metadata key this
+	// consumption wrote. Keys that did not exist beforehand are listed in
+	// previouslyAbsent and are deleted rather than restored.
+	previousValues   map[string]string
+	previouslyAbsent map[string]struct{}
 	consumed         bool
+}
+
+// recordProxmoxInstallBootstrapConsumption writes the completion metadata for
+// one canonical type and returns the undo record for it.
+func recordProxmoxInstallBootstrapConsumption(record *config.APITokenRecord, req *AutoRegisterRequest, host, node string) *proxmoxInstallBootstrapConsumption {
+	if record.Metadata == nil {
+		record.Metadata = make(map[string]string)
+	}
+	requestedType := strings.TrimSpace(req.Type)
+
+	consumption := &proxmoxInstallBootstrapConsumption{
+		tokenID:          record.ID,
+		proxmoxType:      requestedType,
+		previousValues:   make(map[string]string, 12),
+		previouslyAbsent: make(map[string]struct{}, 12),
+		consumed:         true,
+	}
+	set := func(key, value string) {
+		if previous, ok := record.Metadata[key]; ok {
+			consumption.previousValues[key] = previous
+		} else {
+			consumption.previouslyAbsent[key] = struct{}{}
+		}
+		record.Metadata[key] = value
+	}
+
+	completedAt := time.Now().UTC().Format(time.RFC3339)
+	// The consumed-type list is the authoritative per-type ledger. Compute it
+	// before any other write so it reads the pre-consumption state.
+	consumedTypes := proxmoxInstallRegistrationConsumedTypesValue(record, requestedType)
+	set(proxmoxInstallRegistrationConsumedTypesKey, consumedTypes)
+
+	// Per-type completion details, so a combined host keeps both registrations.
+	set(proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostnameKey, requestedType), strings.TrimSpace(req.ServerName))
+	set(proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, requestedType), strings.TrimSpace(host))
+	set(proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationNodeKey, requestedType), strings.TrimSpace(node))
+	set(proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationAtKey, requestedType), completedAt)
+
+	// The unsuffixed block stays as the most recent completion. It keeps
+	// existing operator tooling and any older Pulse binary reading this token
+	// store failing closed: to a pre-per-type server the bare completed flag
+	// still reads as "this token is spent".
+	set(proxmoxInstallRegistrationCompletedKey, "true")
+	set(proxmoxInstallRegistrationTypeKey, requestedType)
+	set(proxmoxInstallRegistrationHostnameKey, strings.TrimSpace(req.ServerName))
+	set(proxmoxInstallRegistrationHostKey, strings.TrimSpace(host))
+	set(proxmoxInstallRegistrationNodeKey, strings.TrimSpace(node))
+	set(proxmoxInstallRegistrationAtKey, completedAt)
+
+	return consumption
+}
+
+// restore undoes the metadata writes this consumption made, leaving every other
+// key — including a sibling type's completed grant — untouched.
+func (c *proxmoxInstallBootstrapConsumption) restore(metadata map[string]string) {
+	if metadata == nil {
+		return
+	}
+	for key, value := range c.previousValues {
+		metadata[key] = value
+	}
+	for key := range c.previouslyAbsent {
+		delete(metadata, key)
+	}
 }
 
 func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, req *AutoRegisterRequest, host, node string) (*proxmoxInstallBootstrapConsumption, error) {
@@ -276,30 +451,14 @@ func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, re
 		if !canBootstrapProxmoxInstallRegistration(record, req) {
 			return nil, fmt.Errorf("Proxmox install registration grant is no longer available")
 		}
-		if record.Metadata == nil {
-			record.Metadata = make(map[string]string)
-		}
-		previousMetadata := make(map[string]string, len(record.Metadata))
-		for key, value := range record.Metadata {
-			previousMetadata[key] = value
-		}
-		record.Metadata[proxmoxInstallRegistrationCompletedKey] = "true"
-		record.Metadata[proxmoxInstallRegistrationTypeKey] = strings.TrimSpace(req.Type)
-		record.Metadata[proxmoxInstallRegistrationHostnameKey] = strings.TrimSpace(req.ServerName)
-		record.Metadata[proxmoxInstallRegistrationHostKey] = strings.TrimSpace(host)
-		record.Metadata[proxmoxInstallRegistrationNodeKey] = strings.TrimSpace(node)
-		record.Metadata[proxmoxInstallRegistrationAtKey] = time.Now().UTC().Format(time.RFC3339)
+		consumption := recordProxmoxInstallBootstrapConsumption(record, req, host, node)
 		if persistence != nil {
 			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-				record.Metadata = previousMetadata
+				consumption.restore(record.Metadata)
 				return nil, fmt.Errorf("persist Proxmox install registration grant: %w", err)
 			}
 		}
-		return &proxmoxInstallBootstrapConsumption{
-			tokenID:          record.ID,
-			previousMetadata: previousMetadata,
-			consumed:         true,
-		}, nil
+		return consumption, nil
 	}
 	return nil, fmt.Errorf("Proxmox install token no longer exists")
 }
@@ -307,7 +466,9 @@ func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, re
 // rollbackProxmoxInstallBootstrap restores a grant consumed by
 // completeProxmoxInstallBootstrap. It is best effort by necessity — the token
 // store just failed us once — but it keeps the common case atomic: either the
-// source is persisted and the grant is spent, or neither happened.
+// source is persisted and the grant is spent, or neither happened. Only the
+// canonical type this consumption spent is restored; a sibling type already
+// registered from the same install token stays consumed.
 func (h *ConfigHandlers) rollbackProxmoxInstallBootstrap(ctx context.Context, consumption *proxmoxInstallBootstrapConsumption) {
 	if consumption == nil || !consumption.consumed {
 		return
@@ -326,22 +487,23 @@ func (h *ConfigHandlers) rollbackProxmoxInstallBootstrap(ctx context.Context, co
 		if record.ID != consumption.tokenID {
 			continue
 		}
-		restored := make(map[string]string, len(consumption.previousMetadata))
-		for key, value := range consumption.previousMetadata {
-			restored[key] = value
+		if record.Metadata == nil {
+			record.Metadata = make(map[string]string)
 		}
-		record.Metadata = restored
+		consumption.restore(record.Metadata)
 		if persistence != nil {
 			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
 				log.Error().
 					Err(err).
 					Str("token_id", consumption.tokenID).
+					Str("type", consumption.proxmoxType).
 					Msg("Failed to restore Proxmox install registration grant after a failed source save")
 				return
 			}
 		}
 		log.Warn().
 			Str("token_id", consumption.tokenID).
+			Str("type", consumption.proxmoxType).
 			Msg("Restored Proxmox install registration grant after a failed source save")
 		return
 	}

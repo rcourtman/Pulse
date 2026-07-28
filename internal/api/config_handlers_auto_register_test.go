@@ -1539,3 +1539,112 @@ func TestExtractHostIP(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleAutoRegisterInstallGrantIsPerCanonicalType pins the wire contract
+// for #1644 on a combined PVE+PBS host: the install token's source-creation
+// grant is spent per canonical type, so the PBS leg still answers
+// canRegister=true and completes after the PVE leg consumed its own grant,
+// while a repeat of either type is refused. Consumption used to be recorded per
+// token, which turned the second product of a supported deployment into a 403
+// and an installer error banner over a successful first registration.
+func TestHandleAutoRegisterInstallGrantIsPerCanonicalType(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	rawToken := "install-per-type-grant.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, map[string]string{
+		"install_type": agentInstallTypeHost,
+		"issued_via":   agentInstallIssuedViaConfig,
+	})
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{record},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	for _, leg := range []struct {
+		nodeType string
+		host     string
+		tokenID  string
+	}{
+		{nodeType: "pve", host: "https://per-type.local:8006", tokenID: "pulse-monitor@pve!pulse-per-type"},
+		{nodeType: "pbs", host: "https://per-type.local:8007", tokenID: "pulse-monitor@pbs!pulse-per-type"},
+	} {
+		checkRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+			Type:              leg.nodeType,
+			Host:              leg.host,
+			ServerName:        "per-type",
+			Source:            "agent",
+			CheckRegistration: true,
+		})
+		if checkRec.Code != http.StatusOK {
+			t.Fatalf("%s registration check status = %d, body=%s", leg.nodeType, checkRec.Code, checkRec.Body.String())
+		}
+		var check autoRegisterCheckResponse
+		if err := json.Unmarshal(checkRec.Body.Bytes(), &check); err != nil {
+			t.Fatalf("decode %s registration check: %v", leg.nodeType, err)
+		}
+		if !check.CanRegister {
+			t.Fatalf("%s leg reported canRegister=false; the per-type grant was not available", leg.nodeType)
+		}
+
+		registerRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+			Type:       leg.nodeType,
+			Host:       leg.host,
+			TokenID:    leg.tokenID,
+			TokenValue: "proxmox-secret-" + leg.nodeType,
+			ServerName: "per-type",
+			Source:     "agent",
+		})
+		if registerRec.Code != http.StatusOK {
+			t.Fatalf("%s registration status = %d, body=%s", leg.nodeType, registerRec.Code, registerRec.Body.String())
+		}
+	}
+
+	if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
+		t.Fatalf("combined host sources = %d PVE / %d PBS, want 1 each", len(cfg.PVEInstances), len(cfg.PBSInstances))
+	}
+
+	// Both grants are now spent. A third create of either type is refused, and
+	// the read-only check reports the refusal before the agent touches local
+	// Proxmox credentials.
+	for _, nodeType := range []string{"pve", "pbs"} {
+		port := "8006"
+		if nodeType == "pbs" {
+			port = "8007"
+		}
+		host := "https://per-type-replay.local:" + port
+
+		checkRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+			Type:              nodeType,
+			Host:              host,
+			ServerName:        "per-type",
+			Source:            "agent",
+			CheckRegistration: true,
+		})
+		if checkRec.Code != http.StatusOK {
+			t.Fatalf("%s replay check status = %d, body=%s", nodeType, checkRec.Code, checkRec.Body.String())
+		}
+		var check autoRegisterCheckResponse
+		if err := json.Unmarshal(checkRec.Body.Bytes(), &check); err != nil {
+			t.Fatalf("decode %s replay check: %v", nodeType, err)
+		}
+		if check.CanRegister {
+			t.Fatalf("%s replay check reported canRegister=true for a spent grant", nodeType)
+		}
+
+		replayRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+			Type:       nodeType,
+			Host:       host,
+			TokenID:    "pulse-monitor@" + nodeType + "!pulse-per-type-replay",
+			TokenValue: "proxmox-secret-replay",
+			ServerName: "per-type",
+			Source:     "agent",
+		})
+		if replayRec.Code != http.StatusForbidden {
+			t.Fatalf("%s replay status = %d, want 403; body=%s", nodeType, replayRec.Code, replayRec.Body.String())
+		}
+	}
+	if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
+		t.Fatalf("spent grants created extra sources: %d PVE / %d PBS", len(cfg.PVEInstances), len(cfg.PBSInstances))
+	}
+}

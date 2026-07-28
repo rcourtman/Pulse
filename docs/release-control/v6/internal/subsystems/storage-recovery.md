@@ -4727,11 +4727,15 @@ public-demo bootstrap signal instead of inferring demo posture from headers,
 The shared `internal/api/config_setup_handlers.go` Proxmox registration fix is
 adjacent lifecycle/API authority only. Runtime agents now use
 `/api/auto-register` directly, ordinary agent tokens remain update-only, and a
-server-minted Proxmox install token may consume one type- and host-bound initial
-source grant. This does not grant backup, snapshot, restore, retention,
-replication, datastore-management, or recovery-policy authority. The
-`settings:write` boundary on setup-artifact generation and all existing
-storage/recovery permission and evidence contracts remain unchanged.
+server-minted Proxmox install token may consume one host-bound initial source
+grant per canonical Proxmox type, so a combined PVE+PBS machine registers both
+products from one install token (#1644). Widening that grant from one create
+per token to one create per type does not widen it past source registration:
+it still grants backup, snapshot, restore, retention, replication,
+datastore-management, and recovery-policy authority not at all, and the second
+create is bound to the same hostname and the same 24-hour mint-age window as
+the first. The `settings:write` boundary on setup-artifact generation and all
+existing storage/recovery permission and evidence contracts remain unchanged.
 That same adjacent platform-connections boundary now also assumes direct
 TrueNAS and VMware connection writes fail closed while canonical
 monitored-system usage is unavailable. Storage and recovery may depend on the

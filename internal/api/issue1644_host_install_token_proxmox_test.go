@@ -18,7 +18,34 @@ import (
 // install tokens, while install.sh auto-detects Proxmox on the target machine
 // and presents type "pve"/"pbs" to /api/auto-register. The bootstrap grant
 // must accept a host-issued install token for a canonical Proxmox type, while
-// staying one-shot and hostname-bound.
+// staying one-shot per type and hostname-bound.
+//
+// A host with both PVE and PBS installed is an officially supported deployment
+// and the agent's RunAll registers each product in turn from the one install
+// token, so the grant is consumed per canonical type: one PVE create and one
+// PBS create, each still one-shot, both under the token's single mint-age TTL
+// and its single first-use hostname binding.
+
+// assertProxmoxGrantConsumedTypes fails unless the token's consumed-type ledger
+// is exactly want.
+func assertProxmoxGrantConsumedTypes(t *testing.T, record *config.APITokenRecord, want ...string) {
+	t.Helper()
+	consumed, tracked := proxmoxInstallRegistrationConsumedTypeSet(record)
+	if !tracked && len(want) > 0 {
+		t.Fatalf("token has no per-type consumption ledger (%s=%q); want %v",
+			proxmoxInstallRegistrationConsumedTypesKey,
+			record.Metadata[proxmoxInstallRegistrationConsumedTypesKey],
+			want)
+	}
+	if len(consumed) != len(want) {
+		t.Fatalf("consumed types = %v, want %v", consumed, want)
+	}
+	for _, nodeType := range want {
+		if _, ok := consumed[nodeType]; !ok {
+			t.Fatalf("consumed types = %v, want %v", consumed, want)
+		}
+	}
+}
 
 func mintHostInstallToken(t *testing.T, handler *ConfigHandlers) string {
 	t.Helper()
@@ -97,23 +124,342 @@ func TestIssue1644HostInstallTokenBootstrapsDetectedProxmoxSource(t *testing.T) 
 	if !strings.EqualFold(cfg.APITokens[0].Metadata[proxmoxInstallRegistrationCompletedKey], "true") {
 		t.Fatal("host-token pve registration did not consume the install grant")
 	}
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve")
 
-	// The grant stays one-shot: after the pve bootstrap completes, the same
-	// token cannot bootstrap another source of any type.
+	// The pve grant is spent: the same token cannot create a second pve source.
 	reuseRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
-		Type:       "pbs",
-		Host:       "https://pbs-host.local:8007",
-		TokenID:    "pulse-monitor@pbs!pulse-pbs-host",
+		Type:       "pve",
+		Host:       "https://pve-second.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-second",
 		TokenValue: "other-proxmox-secret",
 		ServerName: "pve-host",
 		Source:     "agent",
 	})
 	if reuseRec.Code != http.StatusForbidden {
-		t.Fatalf("consumed host-token grant reuse status = %d, want 403; body=%s", reuseRec.Code, reuseRec.Body.String())
+		t.Fatalf("consumed pve grant reuse status = %d, want 403; body=%s", reuseRec.Code, reuseRec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("PVE instances = %d, want 1 after the consumed pve grant was refused", len(cfg.PVEInstances))
+	}
+}
+
+// TestIssue1644CombinedProxmoxHostRegistersBothTypes covers the deployment the
+// docs call officially supported: PVE and PBS on one machine, discovered by the
+// agent's RunAll and registered in sequence from a single host install token.
+// Consumption used to be recorded per token, so the PBS leg was refused and the
+// installer printed an ERROR banner over a perfectly good PVE registration.
+func TestIssue1644CombinedProxmoxHostRegistersBothTypes(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		AuthUser: "admin",
+		AuthPass: "hashed-password",
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	rawToken := mintHostInstallToken(t, handler)
+
+	pveRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://combined.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-combined",
+		TokenValue: "pve-secret",
+		ServerName: "combined",
+		Source:     "agent",
+	})
+	if pveRec.Code != http.StatusOK {
+		t.Fatalf("combined-host pve registration status = %d, body=%s", pveRec.Code, pveRec.Body.String())
+	}
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve")
+
+	// The agent's second RunAll leg checks first, exactly as runForType does.
+	checkRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:              "pbs",
+		Host:              "https://combined.local:8007",
+		ServerName:        "combined",
+		Source:            "agent",
+		CheckRegistration: true,
+	})
+	if checkRec.Code != http.StatusOK {
+		t.Fatalf("combined-host pbs check status = %d, body=%s", checkRec.Code, checkRec.Body.String())
+	}
+	var check autoRegisterCheckResponse
+	if err := json.Unmarshal(checkRec.Body.Bytes(), &check); err != nil {
+		t.Fatalf("decode pbs registration check: %v", err)
+	}
+	if !check.CanRegister {
+		t.Fatal("pbs leg of a combined host reported canRegister=false after the pve leg consumed its grant")
+	}
+
+	pbsRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://combined.local:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-combined",
+		TokenValue: "pbs-secret",
+		ServerName: "combined",
+		Source:     "agent",
+	})
+	if pbsRec.Code != http.StatusOK {
+		t.Fatalf("combined-host pbs registration status = %d, body=%s", pbsRec.Code, pbsRec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
+		t.Fatalf("combined host sources = %d PVE / %d PBS, want 1 each", len(cfg.PVEInstances), len(cfg.PBSInstances))
+	}
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve", "pbs")
+
+	// Both per-type completion blocks survive; neither leg overwrote the other.
+	metadata := cfg.APITokens[0].Metadata
+	for nodeType, wantHost := range map[string]string{
+		"pve": "https://combined.local:8006",
+		"pbs": "https://combined.local:8007",
+	} {
+		key := proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, nodeType)
+		if got := metadata[key]; got != wantHost {
+			t.Fatalf("%s = %q, want %q", key, got, wantHost)
+		}
+	}
+
+	// Every grant is now spent: neither type can create a second source.
+	for _, spent := range []AutoRegisterRequest{
+		{
+			Type: "pve", Host: "https://combined-2.local:8006",
+			TokenID: "pulse-monitor@pve!pulse-combined-2", TokenValue: "pve-secret-2",
+			ServerName: "combined", Source: "agent",
+		},
+		{
+			Type: "pbs", Host: "https://combined-2.local:8007",
+			TokenID: "pulse-monitor@pbs!pulse-combined-2", TokenValue: "pbs-secret-2",
+			ServerName: "combined", Source: "agent",
+		},
+	} {
+		rec := runAgentAutoRegister(t, handler, rawToken, spent)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("second %s create status = %d, want 403; body=%s", spent.Type, rec.Code, rec.Body.String())
+		}
+	}
+	if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
+		t.Fatalf("spent grants created extra sources: %d PVE / %d PBS", len(cfg.PVEInstances), len(cfg.PBSInstances))
+	}
+}
+
+// TestIssue1644PerTypeGrantKeepsSingleHostnameBinding pins that per-type
+// consumption did not turn one hostname binding into two. The first type to
+// register pins the hostname for the whole token, so the second type cannot be
+// redirected at a different machine.
+func TestIssue1644PerTypeGrantKeepsSingleHostnameBinding(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		AuthUser: "admin",
+		AuthPass: "hashed-password",
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	rawToken := mintHostInstallToken(t, handler)
+
+	pveRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://bound-combined.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-bound-combined",
+		TokenValue: "pve-secret",
+		ServerName: "bound-combined",
+		Source:     "agent",
+	})
+	if pveRec.Code != http.StatusOK {
+		t.Fatalf("pve registration status = %d, body=%s", pveRec.Code, pveRec.Body.String())
+	}
+	if got := cfg.APITokens[0].Metadata["bound_hostname"]; got != "bound-combined" {
+		t.Fatalf("bound hostname = %q, want %q", got, "bound-combined")
+	}
+
+	otherHostRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://elsewhere.local:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-elsewhere",
+		TokenValue: "pbs-secret",
+		ServerName: "elsewhere",
+		Source:     "agent",
+	})
+	if otherHostRec.Code != http.StatusForbidden {
+		t.Fatalf("pbs grant on a different hostname status = %d, want 403; body=%s", otherHostRec.Code, otherHostRec.Body.String())
 	}
 	if len(cfg.PBSInstances) != 0 {
-		t.Fatalf("PBS instances = %d, want 0 after consumed grant", len(cfg.PBSInstances))
+		t.Fatalf("PBS instances = %d, want 0 after a cross-hostname refusal", len(cfg.PBSInstances))
 	}
+	if got := cfg.APITokens[0].Metadata["bound_hostname"]; got != "bound-combined" {
+		t.Fatalf("bound hostname after refusal = %q, want %q", got, "bound-combined")
+	}
+
+	// The pbs grant is live, just pinned to the bound host — proving the
+	// refusal above came from the binding and not from a spent grant.
+	boundRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://bound-combined.local:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-bound-combined",
+		TokenValue: "pbs-secret",
+		ServerName: "bound-combined",
+		Source:     "agent",
+	})
+	if boundRec.Code != http.StatusOK {
+		t.Fatalf("pbs registration on the bound host status = %d, body=%s", boundRec.Code, boundRec.Body.String())
+	}
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve", "pbs")
+}
+
+// TestIssue1644LegacyCompletionMarkerConsumesEveryType covers upgrade: a token
+// spent under the old per-token semantics carries only
+// proxmox_registration_completed=true. Reading that as "pve is spent, pbs is
+// free" would hand every already-used install token in the field a fresh
+// create, so the bare marker still means the whole token is spent.
+func TestIssue1644LegacyCompletionMarkerConsumesEveryType(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	rawToken := "issue-1644-legacy-consumed.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, map[string]string{
+		"install_type":                         agentInstallTypeHost,
+		"issued_via":                           agentInstallIssuedViaConfig,
+		"bound_hostname":                       "legacy-host",
+		proxmoxInstallRegistrationCompletedKey: "true",
+		proxmoxInstallRegistrationTypeKey:      "pve",
+		proxmoxInstallRegistrationHostnameKey:  "legacy-host",
+	})
+	if got := record.Metadata[proxmoxInstallRegistrationConsumedTypesKey]; got != "" {
+		t.Fatalf("legacy fixture carries a per-type ledger (%q); the upgrade assertion would be vacuous", got)
+	}
+
+	for _, nodeType := range []string{"pve", "pbs"} {
+		req := &AutoRegisterRequest{
+			Type:       nodeType,
+			Host:       "https://legacy-host.local:8006",
+			ServerName: "legacy-host",
+			Source:     "agent",
+		}
+		if canBootstrapProxmoxInstallRegistration(&record, req) {
+			t.Fatalf("legacy completed token still authorized a %s bootstrap", nodeType)
+		}
+	}
+
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{record},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://legacy-host.local:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-legacy-host",
+		TokenValue: "pbs-secret",
+		ServerName: "legacy-host",
+		Source:     "agent",
+	})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("legacy consumed token pbs registration status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PBSInstances) != 0 {
+		t.Fatalf("PBS instances = %d, want 0 for a legacy-consumed token", len(cfg.PBSInstances))
+	}
+}
+
+// TestIssue1644FailedSourceSaveRollsBackOnlyTheConsumedType pins that the
+// consume-before-persist rollback is scoped to the type being consumed. A PBS
+// save failure must put the PBS grant back without resurrecting the PVE grant
+// that already produced a persisted source.
+func TestIssue1644FailedSourceSaveRollsBackOnlyTheConsumedType(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	dataPath := t.TempDir()
+	cfg := &config.Config{
+		DataPath: dataPath,
+		AuthUser: "admin",
+		AuthPass: "hashed-password",
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	rawToken := mintHostInstallToken(t, handler)
+
+	pveRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://split-rollback.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-split-rollback",
+		TokenValue: "pve-secret",
+		ServerName: "split-rollback",
+		Source:     "agent",
+	})
+	if pveRec.Code != http.StatusOK {
+		t.Fatalf("pve registration status = %d, body=%s", pveRec.Code, pveRec.Body.String())
+	}
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve")
+
+	// Block only the nodes store so the pbs source cannot be persisted.
+	nodesFile := filepath.Join(dataPath, "nodes.enc")
+	if err := os.RemoveAll(nodesFile); err != nil {
+		t.Fatalf("clear nodes config: %v", err)
+	}
+	if err := os.MkdirAll(nodesFile, 0o755); err != nil {
+		t.Fatalf("block nodes config persistence: %v", err)
+	}
+
+	pbsRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://split-rollback.local:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-split-rollback",
+		TokenValue: "pbs-secret",
+		ServerName: "split-rollback",
+		Source:     "agent",
+	})
+	if pbsRec.Code != http.StatusInternalServerError {
+		t.Fatalf("blocked pbs source save status = %d, want 500; body=%s", pbsRec.Code, pbsRec.Body.String())
+	}
+
+	// The pbs grant came back; the pve grant stayed spent.
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve")
+	if got := cfg.APITokens[0].Metadata[proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pbs")]; got != "" {
+		t.Fatalf("rolled-back pbs consumption left completion detail %q behind", got)
+	}
+	if got := cfg.APITokens[0].Metadata[proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve")]; got != "https://split-rollback.local:8006" {
+		t.Fatalf("pbs rollback disturbed the pve completion detail: %q", got)
+	}
+	if got := cfg.APITokens[0].Metadata[proxmoxInstallRegistrationTypeKey]; got != "pve" {
+		t.Fatalf("pbs rollback left the latest-completion block on %q, want the restored pve block", got)
+	}
+
+	persisted, err := config.NewConfigPersistence(dataPath).LoadAPITokens()
+	if err != nil {
+		t.Fatalf("load persisted API tokens: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted API tokens = %d, want 1", len(persisted))
+	}
+	assertProxmoxGrantConsumedTypes(t, &persisted[0], "pve")
+
+	// A second pve create is still refused: the rollback restored one type.
+	replayRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://split-rollback-2.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-split-rollback-2",
+		TokenValue: "pve-secret-2",
+		ServerName: "split-rollback",
+		Source:     "agent",
+	})
+	if replayRec.Code != http.StatusForbidden {
+		t.Fatalf("pve replay after a pbs rollback status = %d, want 403; body=%s", replayRec.Code, replayRec.Body.String())
+	}
+
+	// With the nodes store working again the restored pbs grant completes once.
+	if err := os.Remove(nodesFile); err != nil {
+		t.Fatalf("unblock nodes config persistence: %v", err)
+	}
+	retryRec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://split-rollback.local:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-split-rollback",
+		TokenValue: "pbs-secret",
+		ServerName: "split-rollback",
+		Source:     "agent",
+	})
+	if retryRec.Code != http.StatusOK {
+		t.Fatalf("pbs retry after restored persistence status = %d, body=%s", retryRec.Code, retryRec.Body.String())
+	}
+	assertProxmoxGrantConsumedTypes(t, &cfg.APITokens[0], "pve", "pbs")
 }
 
 func TestIssue1644HostInstallTokenGrantStaysHostnameBound(t *testing.T) {

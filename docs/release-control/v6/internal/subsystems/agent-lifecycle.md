@@ -2175,12 +2175,20 @@ Agent` secondary handoff against the live setup wizard instead of relying
     startup and periodic registration checks must call `/api/auto-register`
     directly; `/api/setup-script-url` remains `settings:write`. Ordinary agent
     tokens stay update-only, while a server-minted install token may consume
-    one initial registration after durable first-host binding and serialized
-    completion: a PVE/PBS-typed token for its declared type, and a generic
-    `host` install token for one detected canonical Proxmox type (#1644). A
+    one initial registration per canonical Proxmox type after durable first-host
+    binding and serialized completion: a PVE/PBS-typed token for its declared
+    type, and a generic `host` install token for each detected canonical type
+    (#1644). A host running both PVE and PBS is an officially supported
+    deployment, so one install token bootstraps one PVE source and one PBS
+    source; a second create of a type already consumed still fails closed. A
     denied registration grant must fail loudly on the agent side through an
     error-level log, a returned setup error, and an installer-readable
-    `proxmox-<type>-registration-blocked` state marker.
+    `proxmox-<type>-registration-blocked` state marker. One product's refusal
+    must not erase another's success: `RunAll` still attempts and returns the
+    remaining products, publishes the detected products in a
+    `proxmox-detected-types` state marker, and errors only when every detected
+    product failed, so the installer reports an outcome per product instead of
+    one verdict for the whole host.
 
 22. A rejected legacy RBAC import must not destroy the store. The import is
     transactional and leaves the legacy files in place, so a failure leaves the
@@ -5341,9 +5349,9 @@ one source of the declared type. The server binds that grant to the first
 fully validated presenting hostname before local Proxmox credentials are
 mutated, serializes checks with completion, persists the completed type,
 hostname, selected host, node, and time, and then permanently returns the token
-to update-only behavior. A malformed request, wrong type, different hostname,
-reused grant, rejected/rotated token, or arbitrary agent token must fail closed
-with visible authorization diagnostics.
+to update-only behavior for that type. A malformed request, wrong type,
+different hostname, reused grant, rejected/rotated token, or arbitrary agent
+token must fail closed with visible authorization diagnostics.
 A positive registration preflight for an already-existing source consumes the
 fresh-install grant without rotating local credentials; a negative preflight
 keeps it available for the immediately following initial completion.
@@ -5351,14 +5359,35 @@ keeps it available for the immediately following initial completion.
 The bootstrap exception covers both install-token shapes the settings-write
 control plane actually mints. A PVE/PBS-typed agent-install token stays pinned
 to its declared type. A generic `host` install token minted by the Settings →
-Infrastructure installer additionally holds the same bounded grant for one
+Infrastructure installer additionally holds the same bounded grant for each
 canonical Proxmox type, because the unified installer auto-detects PVE/PBS on
 the target machine and the agent presents the detected type at registration
 (#1644). The host-token grant keeps every existing bound: settings-authorized
 mint via `issued_via`, first-presenting-hostname binding before local Proxmox
-credentials are mutated, serialized completion, and one-shot consumption — a
-host token that completes a PVE bootstrap cannot later bootstrap PBS, and
+credentials are mutated, serialized completion, and one-shot consumption — and
 non-Proxmox request types never hold a grant.
+
+Consumption is recorded per canonical type, not per token. A host with both PVE
+and PBS installed is an officially supported deployment, and the agent's
+`RunAll` registers each product in turn from the one install token; recording a
+single consumption for the whole token refused the second product and made the
+installer print a failure banner over a successful first registration (#1644).
+One install token therefore bootstraps one PVE source and one PBS source, each
+still one-shot: a second create of an already-consumed type fails closed with
+the same 403. The bounds that are not per type stay singular — the 24-hour
+mint-age clock and the first-use `bound_hostname` are shared, so whichever type
+registers first pins the hostname for both and the second type cannot be
+redirected at a different machine.
+
+The consumed types are recorded in `proxmox_registration_consumed_types`, and
+its presence is what distinguishes a per-type record from a token spent under
+the previous per-token semantics. A record carrying only
+`proxmox_registration_completed=true` predates the per-type ledger and means the
+whole token was spent, so on upgrade it must be read as every canonical type
+consumed; reading it as "one type spent, the other free" would hand a fresh
+create to every already-used install token in the field. The unsuffixed
+completion block continues to describe the most recent completion so an older
+Pulse binary reading the same token store also fails closed.
 
 The grant is time-bounded independently of the token that carries it. Install
 tokens are minted without an expiry because the agent reports with them for the
@@ -5375,7 +5404,9 @@ failed source save rolls the consumption back. The opposite order leaves a
 persistently failing token store able to write a source while the grant stays
 live, which is a repeatable create-a-source primitive under one install token.
 Either the source is persisted and the grant is spent, or neither happened and
-the install can be retried.
+the install can be retried. The rollback is scoped to the type being consumed:
+on a combined host a failed PBS save restores the PBS grant and must not
+resurrect the PVE grant that already produced a persisted source.
 
 A host install token that has already auto-registered its Proxmox source
 carries a `bound_hostname` written by the registration bootstrap, with no
@@ -5395,6 +5426,19 @@ marker is cleared once a later run finds the source registered or proceeds to
 register. The shell installer reads that marker after agent health
 verification and surfaces the denial with remediation in its own output, so
 the failure is visible at install time instead of buried in the agent journal.
+With per-type grants that path is reserved for genuine refusals: the second
+product of a combined host is no longer denied for having spent the token's
+only grant.
+
+The installer's verdict is per product, not per host. `RunAll` publishes the
+products it detected in a `proxmox-detected-types` state marker, and the
+installer waits for an outcome from each of those products before reporting,
+then prints a success or a denial line for each one. Without that list a
+combined host reported whichever marker appeared first, which produced either a
+premature success or an error banner that buried a completed registration.
+Agents that predate the marker keep the previous first-outcome-wins timing, so
+a PVE-only host never waits out the timeout for a PBS outcome that will not
+arrive.
 
 Token-optional installations retain the setup-token bootstrap path. Ordinary
 hosts never enter this Proxmox registration loop, while PVE, PBS, mixed-product

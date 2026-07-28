@@ -4645,7 +4645,7 @@ func TestInstallSHSurfacesBlockedProxmoxRegistration(t *testing.T) {
 		t.Fatal("complete_installation_flow does not report the Proxmox registration outcome")
 	}
 	clearFn := extractInstallShellFunction(t, "clear_proxmox_state_if_needed")
-	for _, marker := range []string{"proxmox-pve-registration-blocked", "proxmox-pbs-registration-blocked"} {
+	for _, marker := range []string{"proxmox-pve-registration-blocked", "proxmox-pbs-registration-blocked", "proxmox-detected-types"} {
 		if !strings.Contains(clearFn, marker) {
 			t.Fatalf("clear_proxmox_state_if_needed does not clear %s", marker)
 		}
@@ -4703,10 +4703,110 @@ func TestInstallSHSurfacesBlockedProxmoxRegistration(t *testing.T) {
 		if rc != 0 {
 			t.Fatalf("registered marker returned rc=%d:\n%s", rc, out)
 		}
-		if !strings.Contains(out, "Proxmox node registered with Pulse.") {
+		if !strings.Contains(out, "Proxmox pve node registered with Pulse.") {
 			t.Fatalf("registered marker did not report success:\n%s", out)
 		}
 	})
+
+	// A host with both PVE and PBS installed registers each product separately
+	// (#1644). The installer must report each outcome rather than letting the
+	// first marker it finds speak for the whole install.
+	t.Run("combined host reports both products", func(t *testing.T) {
+		stateDir := t.TempDir()
+		writeMarker(t, stateDir, "proxmox-detected-types", "pve\npbs\n")
+		writeMarker(t, stateDir, "proxmox-pve-registered", "ok\n")
+		writeMarker(t, stateDir, "proxmox-pbs-registered", "ok\n")
+
+		out, rc := runReport(t, stateDir)
+		if rc != 0 {
+			t.Fatalf("combined host returned rc=%d:\n%s", rc, out)
+		}
+		for _, want := range []string{"Proxmox pve node registered with Pulse.", "Proxmox pbs node registered with Pulse."} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("combined host output missing %q:\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "[ERROR]") {
+			t.Fatalf("fully registered combined host reported an error:\n%s", out)
+		}
+	})
+
+	// The regression behind #1644: PVE registered, PBS was refused, and the
+	// installer printed a bare ERROR banner that read as a failed install.
+	// Both outcomes must now show up, each attributed to its own product.
+	t.Run("combined host keeps a successful product visible next to a refusal", func(t *testing.T) {
+		stateDir := t.TempDir()
+		reason := "Pulse at https://pulse.local has no PBS source for https://pbs.local:8007 and this agent's token cannot create one."
+		writeMarker(t, stateDir, "proxmox-detected-types", "pve\npbs\n")
+		writeMarker(t, stateDir, "proxmox-pve-registered", "ok\n")
+		writeMarker(t, stateDir, "proxmox-pbs-registration-blocked", reason+"\n")
+
+		out, rc := runReport(t, stateDir)
+		if rc == 0 {
+			t.Fatalf("refused pbs registration reported overall success:\n%s", out)
+		}
+		if !strings.Contains(out, "Proxmox pve node registered with Pulse.") {
+			t.Fatalf("pve success was erased by the pbs refusal:\n%s", out)
+		}
+		if !strings.Contains(out, "Proxmox pbs registration failed:") || !strings.Contains(out, reason) {
+			t.Fatalf("pbs refusal not surfaced with its reason:\n%s", out)
+		}
+	})
+
+	// Only the detected products are awaited. A PVE-only host must not sit out
+	// the full timeout waiting for a PBS outcome that will never arrive.
+	t.Run("detected types bound what is awaited", func(t *testing.T) {
+		stateDir := t.TempDir()
+		writeMarker(t, stateDir, "proxmox-detected-types", "pve\n")
+		writeMarker(t, stateDir, "proxmox-pve-registered", "ok\n")
+
+		out, rc := runReport(t, stateDir)
+		if rc != 0 {
+			t.Fatalf("pve-only host returned rc=%d:\n%s", rc, out)
+		}
+		if strings.Contains(out, "pbs") {
+			t.Fatalf("pve-only host reported on pbs:\n%s", out)
+		}
+		if strings.Contains(out, "not confirmed") {
+			t.Fatalf("pve-only host warned about an unconfirmed registration:\n%s", out)
+		}
+	})
+
+	// Agents older than the detected-types marker keep the previous timing:
+	// the first outcome that appears ends the wait.
+	t.Run("missing detected types falls back to first outcome", func(t *testing.T) {
+		stateDir := t.TempDir()
+		writeMarker(t, stateDir, "proxmox-pbs-registered", "ok\n")
+
+		out, rc := runReport(t, stateDir)
+		if rc != 0 {
+			t.Fatalf("legacy agent marker returned rc=%d:\n%s", rc, out)
+		}
+		if !strings.Contains(out, "Proxmox pbs node registered with Pulse.") {
+			t.Fatalf("legacy agent marker did not report success:\n%s", out)
+		}
+		if strings.Contains(out, "not confirmed") {
+			t.Fatalf("legacy agent marker warned about an unconfirmed registration:\n%s", out)
+		}
+	})
+
+	t.Run("no outcome warns once", func(t *testing.T) {
+		stateDir := t.TempDir()
+		out, rc := runReport(t, stateDir)
+		if rc != 0 {
+			t.Fatalf("unconfirmed registration returned rc=%d:\n%s", rc, out)
+		}
+		if !strings.Contains(out, "not confirmed") || !strings.Contains(out, "Check the agent logs") {
+			t.Fatalf("unconfirmed registration did not warn:\n%s", out)
+		}
+	})
+}
+
+func writeMarker(t *testing.T, stateDir, name, contents string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(stateDir, name), []byte(contents), 0o600); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
 }
 
 // TestInstallSHWarnAgentTokenRejectedIsActionable pins the actionable recovery

@@ -1192,38 +1192,101 @@ EOF
 # registration result in installer output. The agent records a denied
 # registration grant in a proxmox-<type>-registration-blocked marker file so
 # the failure is not buried in its journal (#1644).
+#
+# A host with both PVE and PBS installed registers each product separately, so
+# the outcome is reported per product. The agent publishes the products it
+# detected in proxmox-detected-types; with that list the installer waits for an
+# outcome from every product before deciding, instead of letting whichever one
+# lands first speak for the whole install. Agents that predate the list keep the
+# old first-outcome-wins timing.
 report_proxmox_registration_outcome() {
     local state_dir="$1"
     local max_iterations=15
     local interval=2
     local iteration=0
-    local blocked_file=""
+    local detected_file=""
+    local awaited_types=""
+    local detected_types=""
+    local types_known="false"
+    local line=""
+    local pending=""
+    local saw_outcome="false"
+    local blocked_any="false"
+    local unconfirmed_any="false"
     local ptype=""
 
     if [[ "$ENABLE_PROXMOX" != "true" || -z "$state_dir" ]]; then
         return 0
     fi
 
+    detected_file="${state_dir}/proxmox-detected-types"
+    awaited_types="pve pbs"
+
     log_info "Waiting for Proxmox registration result..."
     while [ $iteration -lt $max_iterations ]; do
-        for ptype in pve pbs; do
-            blocked_file="${state_dir}/proxmox-${ptype}-registration-blocked"
-            if [ -f "$blocked_file" ]; then
-                log_error "Proxmox ${ptype} registration failed:"
-                while IFS= read -r line; do log_error "  $line"; done < "$blocked_file"
-                return 1
+        # Re-read each pass: the agent writes the list once it has probed the
+        # host, which can be after the first poll. Only known product names are
+        # accepted, so the marker can never inject a path or a glob into the
+        # state-file lookups below.
+        if [ -f "$detected_file" ]; then
+            detected_types=""
+            while IFS= read -r line || [[ -n "$line" ]]; do
+                case "${line%$'\r'}" in
+                    pve|pbs) detected_types="${detected_types}${line%$'\r'} " ;;
+                esac
+            done < "$detected_file"
+            if [[ -n "$detected_types" ]]; then
+                awaited_types="$detected_types"
+                types_known="true"
+            fi
+        fi
+
+        pending=""
+        saw_outcome="false"
+        for ptype in $awaited_types; do
+            if [ -f "${state_dir}/proxmox-${ptype}-registered" ] || [ -f "${state_dir}/proxmox-${ptype}-registration-blocked" ]; then
+                saw_outcome="true"
+            else
+                pending="${pending}${ptype} "
             fi
         done
-        if [ -f "${state_dir}/proxmox-pve-registered" ] || [ -f "${state_dir}/proxmox-pbs-registered" ]; then
-            log_info "Proxmox node registered with Pulse."
-            return 0
+
+        if [[ -z "$pending" ]]; then
+            break
         fi
+        if [[ "$types_known" != "true" && "$saw_outcome" == "true" ]]; then
+            break
+        fi
+
         sleep $interval
         iteration=$((iteration + 1))
     done
 
-    log_warn "Proxmox registration was not confirmed within ~$((max_iterations * interval))s. The agent keeps retrying in the background."
-    log_warn "Check the agent logs for Proxmox registration status if the node does not appear in Pulse."
+    for ptype in $awaited_types; do
+        if [ -f "${state_dir}/proxmox-${ptype}-registration-blocked" ]; then
+            blocked_any="true"
+            log_error "Proxmox ${ptype} registration failed:"
+            while IFS= read -r line; do log_error "  $line"; done < "${state_dir}/proxmox-${ptype}-registration-blocked"
+        elif [ -f "${state_dir}/proxmox-${ptype}-registered" ]; then
+            log_info "Proxmox ${ptype} node registered with Pulse."
+        elif [[ "$types_known" == "true" ]]; then
+            unconfirmed_any="true"
+            log_warn "Proxmox ${ptype} registration was not confirmed within ~$((max_iterations * interval))s. The agent keeps retrying in the background."
+        fi
+    done
+
+    if [[ "$types_known" != "true" && "$saw_outcome" != "true" ]]; then
+        unconfirmed_any="true"
+        log_warn "Proxmox registration was not confirmed within ~$((max_iterations * interval))s. The agent keeps retrying in the background."
+    fi
+
+    if [[ "$unconfirmed_any" == "true" ]]; then
+        log_warn "Check the agent logs for Proxmox registration status if the node does not appear in Pulse."
+    fi
+
+    if [[ "$blocked_any" == "true" ]]; then
+        return 1
+    fi
     return 0
 }
 
@@ -1862,6 +1925,7 @@ clear_proxmox_state_if_needed() {
     rm -f "${STATE_DIR}/proxmox-pbs-registered" 2>/dev/null || true
     rm -f "${STATE_DIR}/proxmox-pve-registration-blocked" 2>/dev/null || true
     rm -f "${STATE_DIR}/proxmox-pbs-registration-blocked" 2>/dev/null || true
+    rm -f "${STATE_DIR}/proxmox-detected-types" 2>/dev/null || true
 }
 
 write_connection_state_value() {
