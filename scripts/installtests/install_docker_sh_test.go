@@ -128,7 +128,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		want    string
 	}{
 		{version: "6.0.5-rc.4", want: "6.0.4"},
-		{version: "6.2.0-rc.1", want: "6.1.2"},
+		{version: "6.2.0-rc.2", want: "6.1.2"},
 	}
 
 	for _, test := range tests {
@@ -336,7 +336,8 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"introduces the Pulse Pro External Probes feature that runs assigned availability checks from a connected agent outside the monitored site, completes the multi-site Proxmox identity-isolation trilogy across connection consolidation, same-name node aggregation, and the first-poll unclassified-node window, adds host-agent identity-collapse detection for cloned machine-ids, restores service availability after a failed unattended update, follows same-host TrueNAS handshake redirects, and makes Pulse Intelligence outcome telemetry verified and complete",
+		"is a hardening and bugfix cut that supersedes `v6.2.0-rc.1` without dropping anything it carried: it restores unattended-update reliability including in-place repair of already-deployed update units, corrects PBS backup attribution across multiple Proxmox clusters, repairs Proxmox installer registration including per-canonical-type bootstrap grants on combined hosts, hardens the Patrol readiness streaming transport and gates readiness on a completed verdict, ends discovery-policy DNS and SSH retry churn, adds explicit per-metric threshold off toggles, derives SSO callback URLs from the request that reached Pulse, and documents Entra ID SSO integration",
+		"The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.1`.",
 		"The `v"+version+"` server cut is classified `no-mobile-impact`; no companion build upload is part of this cut. The existing mobile candidate programme remains separate, and the release packet must not describe a public store rollout.",
 		"Authenticode signing through SignPath is the canonical Windows signing backend for the `v6.2.0` line.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",

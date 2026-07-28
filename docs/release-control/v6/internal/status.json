@@ -9229,13 +9229,13 @@
   ],
   "work_claims": [
     {
-      "id": "release-operator-v620rc1-release-gate-single-build-release-promotion-path",
-      "agent_id": "release-operator-v620rc1",
-      "summary": "Prepare and publish v6.2.0-rc.1 through the governed exact-SHA promotion workflow",
+      "id": "release-operator-v620rc2-release-gate-single-build-release-promotion-path",
+      "agent_id": "release-operator-v620rc2",
+      "summary": "Prepare and publish v6.2.0-rc.2 through the governed exact-SHA promotion workflow",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-27T12:45:00Z",
-      "heartbeat_at": "2026-07-27T12:45:00Z",
-      "expires_at": "2026-07-27T20:45:00Z",
+      "claimed_at": "2026-07-28T14:59:51Z",
+      "heartbeat_at": "2026-07-28T14:59:51Z",
+      "expires_at": "2026-07-28T22:59:51Z",
       "work_item": {
         "kind": "release-gate",
         "id": "single-build-release-promotion-path"
