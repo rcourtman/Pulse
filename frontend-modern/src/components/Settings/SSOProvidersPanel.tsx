@@ -188,6 +188,27 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     </div>
                   </div>
 
+                  {/* OIDC callback info */}
+                  <Show when={provider.type === 'oidc' && provider.oidcCallbackUrl}>
+                    <div class="mt-3 pt-3 border-t border-border-subtle">
+                      <div class="flex flex-wrap gap-4 text-xs">
+                        <div class="flex items-center gap-1">
+                          <span class="text-slate-500">Callback / Redirect URL:</span>
+                          <CopyValueButton
+                            value={provider.oidcCallbackUrl}
+                            onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                            label="Copy callback / redirect URL"
+                            variant="accent"
+                            size="chip"
+                            class="max-w-[18rem] text-xs"
+                          >
+                            <span class="min-w-0 truncate">{provider.oidcCallbackUrl}</span>
+                          </CopyValueButton>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
+
                   {/* SAML metadata info */}
                   <Show when={provider.type === 'saml' && provider.enabled}>
                     <div class="mt-3 pt-3 border-t border-border-subtle">
@@ -274,6 +295,36 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {/* OIDC-specific fields */}
               <Show when={form.type === 'oidc'}>
                 <div class="space-y-4">
+                  <div class="bg-surface-alt border border-border rounded-md p-3">
+                    <p class="text-xs text-base-content">
+                      <strong>Setup:</strong> Register the Callback / Redirect URL below with your
+                      Identity Provider so it can redirect back to Pulse after sign-in.
+                    </p>
+                    <Show
+                      when={editingProvider()?.oidcCallbackUrl}
+                      fallback={
+                        <p class="mt-2 text-xs text-muted">
+                          The Callback / Redirect URL is generated when the provider is saved and
+                          shown here and on the provider card.
+                        </p>
+                      }
+                    >
+                      <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                        <span class="text-xs text-muted">Callback / Redirect URL:</span>
+                        <CopyValueButton
+                          value={editingProvider()?.oidcCallbackUrl}
+                          onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                          label="Copy callback / redirect URL"
+                          variant="accent"
+                          size="chip"
+                          class="max-w-full text-xs"
+                        >
+                          <span class="min-w-0 truncate">{editingProvider()?.oidcCallbackUrl}</span>
+                        </CopyValueButton>
+                      </div>
+                    </Show>
+                  </div>
+
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class={formField}>
                       <label class={labelClass()}>Issuer URL</label>

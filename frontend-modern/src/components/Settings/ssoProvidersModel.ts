@@ -9,6 +9,7 @@ export interface SSOProvider {
   oidcIssuerUrl?: string;
   oidcClientId?: string;
   oidcClientSecretSet?: boolean;
+  oidcCallbackUrl?: string;
   samlIdpEntityId?: string;
   samlSpEntityId?: string;
   samlMetadataUrl?: string;
