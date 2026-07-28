@@ -2444,3 +2444,23 @@ provider supplies that more specific evidence.
 `internal/monitoring/truenas_poller_test.go`, and
 `internal/monitoring/ceph_test.go` are the focused collection and identity
 proofs.
+
+### Cluster-endpoint discovery policy stays off the resolver on repeat polls
+
+The cluster-endpoint discovery-policy check (`clusterEndpointRuntimeURL` →
+`clusterEndpointAllowedByDiscoveryPolicy` in
+`internal/monitoring/monitor_cluster_helpers.go`) is a function of
+configuration, not poll state, and must not generate per-poll DNS load. The
+effective default policy — only the `NormalizeDiscoveryConfig`-injected
+link-local blocklist `169.254.0.0/16` — is evaluated against literal endpoint
+IPs only and never touches the resolver, because link-local addresses are not
+legitimately served through DNS. Custom allowlist/blocklist policies memoize
+their per-endpoint verdict for the shared 5-minute DNS-cache TTL, so hostname
+endpoints resolve at most once per TTL window across poll cycles instead of per
+node per cycle. SSH-based collectors in the same runtime follow the equivalent
+rule for process spawning: `knownhosts` caches keyscan failures with doubling
+backoff instead of re-executing `ssh-keyscan` every cycle, and the temperature
+collector backs off per host after failed SSH collection instead of re-running
+its two SSH probes every 10-second cycle.
+`internal/monitoring/issue1638_dns_cache_test.go` is the registered proof that
+repeat polls do not reach the raw resolver or re-exec the SSH probes.

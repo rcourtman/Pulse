@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -87,6 +88,54 @@ type TemperatureCollector struct {
 	hostKeys         KnownHostsManager
 	missingKeyWarned atomic.Bool
 	runner           CommandRunner
+	sshFailureMu     sync.Mutex
+	sshFailures      map[string]*temperatureSSHFailure
+}
+
+// temperatureSSHFailure remembers a host whose SSH collection failed so
+// subsequent 10s poll cycles don't re-exec ssh (twice, with the RPi fallback)
+// against a host that keeps failing identically (#1638). Backoff doubles per
+// consecutive failure; any successful collection clears it.
+type temperatureSSHFailure struct {
+	retryAt time.Time
+	backoff time.Duration
+}
+
+const (
+	temperatureSSHFailureInitialBackoff = 30 * time.Second
+	temperatureSSHFailureMaxBackoff     = 15 * time.Minute
+)
+
+func (tc *TemperatureCollector) inSSHFailureBackoff(host string) bool {
+	tc.sshFailureMu.Lock()
+	defer tc.sshFailureMu.Unlock()
+	failure := tc.sshFailures[host]
+	return failure != nil && time.Now().Before(failure.retryAt)
+}
+
+func (tc *TemperatureCollector) recordSSHFailure(host string) {
+	tc.sshFailureMu.Lock()
+	defer tc.sshFailureMu.Unlock()
+	if tc.sshFailures == nil {
+		tc.sshFailures = make(map[string]*temperatureSSHFailure)
+	}
+	backoff := temperatureSSHFailureInitialBackoff
+	if existing := tc.sshFailures[host]; existing != nil {
+		backoff = existing.backoff * 2
+		if backoff > temperatureSSHFailureMaxBackoff {
+			backoff = temperatureSSHFailureMaxBackoff
+		}
+	}
+	tc.sshFailures[host] = &temperatureSSHFailure{
+		retryAt: time.Now().Add(backoff),
+		backoff: backoff,
+	}
+}
+
+func (tc *TemperatureCollector) clearSSHFailure(host string) {
+	tc.sshFailureMu.Lock()
+	defer tc.sshFailureMu.Unlock()
+	delete(tc.sshFailures, host)
 }
 
 // NewTemperatureCollectorWithPort creates a new temperature collector with custom SSH port
@@ -151,6 +200,14 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 		return &models.Temperature{Available: false}, nil
 	}
 
+	if tc.inSSHFailureBackoff(host) {
+		log.Debug().
+			Str("node", nodeName).
+			Str("host", host).
+			Msg("Skipping SSH temperature collection while failure backoff is active")
+		return &models.Temperature{Available: false}, nil
+	}
+
 	// Direct SSH (legacy method for non-containerized deployments).
 	// New setup scripts restrict the key to /usr/local/sbin/pulse-sensors, which emits
 	// the canonical {sensors, smart} payload. Older keys ignore the requested command
@@ -158,6 +215,7 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 	output, err := tc.runSSHCommand(ctx, host, pulseSensorsSSHCommand)
 	if err != nil || strings.TrimSpace(output) == "" {
 		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
+			tc.recordSSHFailure(host)
 			return &models.Temperature{Available: false}, nil
 		}
 
@@ -167,11 +225,13 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 			// Parse RPi temperature format
 			temp, parseErr := tc.parseRPiTemperature(output)
 			if parseErr == nil {
+				tc.clearSSHFailure(host)
 				return temp, nil
 			}
 		}
 
 		if tc.disableLegacySSHOnAuthFailure(err, nodeName, host) {
+			tc.recordSSHFailure(host)
 			return &models.Temperature{Available: false}, nil
 		}
 
@@ -180,8 +240,11 @@ func (tc *TemperatureCollector) CollectTemperature(ctx context.Context, nodeHost
 			Str("host", host).
 			Err(err).
 			Msg("Failed to collect temperature data via SSH (tried both lm-sensors and RPi methods)")
+		tc.recordSSHFailure(host)
 		return &models.Temperature{Available: false}, nil
 	}
+
+	tc.clearSSHFailure(host)
 
 	// Parse sensors JSON output
 	temp, err := tc.parseSensorsJSON(output)

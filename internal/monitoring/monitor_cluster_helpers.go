@@ -4,6 +4,8 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -225,20 +227,93 @@ func discoveryPolicyIPsForEndpointHost(candidateURL string) []net.IP {
 	return filtered
 }
 
-func clusterEndpointAllowedByDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
-	if len(discoveryCfg.SubnetAllowlist) == 0 && len(discoveryCfg.SubnetBlocklist) == 0 && len(discoveryCfg.IPBlocklist) == 0 {
-		return true
-	}
+// discoveryPolicyDecisionTTL bounds how long a cached discovery-policy verdict
+// (and the DNS answer behind it) is reused before re-evaluating. It matches the
+// tlsutil DNS cache refresh interval so policy decisions never trail the
+// resolver view used for actual connections by more than one refresh.
+const discoveryPolicyDecisionTTL = 5 * time.Minute
 
+// discoveryPolicyDecisionCacheLimit caps the decision cache. Keys derive from
+// configured endpoints and the discovery policy, so the map stays tiny in
+// practice; the cap only guards against pathological configs.
+const discoveryPolicyDecisionCacheLimit = 1024
+
+type discoveryPolicyDecision struct {
+	allowed   bool
+	expiresAt time.Time
+}
+
+var (
+	discoveryPolicyDecisionMu    sync.Mutex
+	discoveryPolicyDecisionCache = map[string]discoveryPolicyDecision{}
+	discoveryPolicyTimeNow       = time.Now
+)
+
+func resetDiscoveryPolicyDecisionCache() {
+	discoveryPolicyDecisionMu.Lock()
+	discoveryPolicyDecisionCache = map[string]discoveryPolicyDecision{}
+	discoveryPolicyDecisionMu.Unlock()
+}
+
+// discoveryPolicyIsDefaultOnly reports whether the effective policy consists
+// solely of the injected default link-local blocklist. NormalizeDiscoveryConfig
+// always adds 169.254.0.0/16, so every install has a non-empty policy and the
+// zero-policy fast path above never fires (#1638). Link-local addresses are
+// not routable across segments, so a hostname is never legitimately served by
+// one; only literal link-local IPs need blocking, which requires no DNS.
+func discoveryPolicyIsDefaultOnly(cfg config.DiscoveryConfig) bool {
+	if len(cfg.SubnetAllowlist) != 0 || len(cfg.IPBlocklist) != 0 {
+		return false
+	}
+	defaults := config.DefaultDiscoveryConfig().SubnetBlocklist
+	defaultSet := make(map[string]struct{}, len(defaults))
+	for _, cidr := range defaults {
+		defaultSet[strings.TrimSpace(cidr)] = struct{}{}
+	}
+	for _, cidr := range cfg.SubnetBlocklist {
+		if _, ok := defaultSet[strings.TrimSpace(cidr)]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// discoveryPolicyLiteralIPs returns the IPs knowable for an endpoint without
+// touching the resolver: a literal IP in the candidate URL, else the
+// endpoint's recorded effective IP.
+func discoveryPolicyLiteralIPs(endpoint config.ClusterEndpoint, candidateURL string) []net.IP {
+	if host := normalizeEndpointHost(candidateURL); host != "" {
+		if ip := net.ParseIP(host); ip != nil {
+			return []net.IP{ip}
+		}
+	}
+	if ip := net.ParseIP(strings.TrimSpace(endpoint.EffectiveIP())); ip != nil {
+		return []net.IP{ip}
+	}
+	return nil
+}
+
+func discoveryPolicyDecisionKey(endpoint config.ClusterEndpoint, candidateURL string, cfg config.DiscoveryConfig) string {
+	parts := []string{
+		candidateURL,
+		strings.TrimSpace(endpoint.EffectiveIP()),
+		strings.Join(cfg.SubnetAllowlist, ","),
+		strings.Join(cfg.SubnetBlocklist, ","),
+		strings.Join(cfg.IPBlocklist, ","),
+	}
+	return strings.Join(parts, "|")
+}
+
+// evaluateClusterEndpointDiscoveryPolicy is the uncached policy check,
+// including DNS resolution of hostname endpoints.
+func evaluateClusterEndpointDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
 	allowlist := discoveryPolicyCIDRs(discoveryCfg.SubnetAllowlist)
 	blocklist := discoveryPolicyCIDRs(discoveryCfg.SubnetBlocklist)
 	blockedIPs := discoveryPolicyBlockedIPs(discoveryCfg.IPBlocklist)
 
 	resolvedIPs := discoveryPolicyIPsForEndpointHost(candidateURL)
 	if len(resolvedIPs) == 0 {
-		if ip := net.ParseIP(strings.TrimSpace(endpoint.EffectiveIP())); ip != nil {
-			resolvedIPs = []net.IP{ip}
-		}
+		resolvedIPs = discoveryPolicyLiteralIPs(endpoint, candidateURL)
 	}
 	if len(resolvedIPs) == 0 {
 		return true
@@ -251,6 +326,51 @@ func clusterEndpointAllowedByDiscoveryPolicy(endpoint config.ClusterEndpoint, ca
 	}
 
 	return true
+}
+
+func clusterEndpointAllowedByDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
+	if len(discoveryCfg.SubnetAllowlist) == 0 && len(discoveryCfg.SubnetBlocklist) == 0 && len(discoveryCfg.IPBlocklist) == 0 {
+		return true
+	}
+
+	// The policy is a function of configuration, not poll state, but since
+	// c5f5af7ab it is re-evaluated per node per poll cycle. With the default
+	// link-local-only blocklist no resolution is needed at all, and custom
+	// policies memoize their verdict so repeat polls stay off the resolver
+	// (#1638).
+	if discoveryPolicyIsDefaultOnly(discoveryCfg) {
+		blocklist := discoveryPolicyCIDRs(discoveryCfg.SubnetBlocklist)
+		for _, ip := range discoveryPolicyLiteralIPs(endpoint, candidateURL) {
+			if !discoveryPolicyAllowsIP(ip, nil, blocklist, nil) {
+				return false
+			}
+		}
+		return true
+	}
+
+	key := discoveryPolicyDecisionKey(endpoint, candidateURL, discoveryCfg)
+	now := discoveryPolicyTimeNow()
+
+	discoveryPolicyDecisionMu.Lock()
+	if cached, ok := discoveryPolicyDecisionCache[key]; ok && now.Before(cached.expiresAt) {
+		discoveryPolicyDecisionMu.Unlock()
+		return cached.allowed
+	}
+	discoveryPolicyDecisionMu.Unlock()
+
+	allowed := evaluateClusterEndpointDiscoveryPolicy(endpoint, candidateURL, discoveryCfg)
+
+	discoveryPolicyDecisionMu.Lock()
+	if len(discoveryPolicyDecisionCache) >= discoveryPolicyDecisionCacheLimit {
+		discoveryPolicyDecisionCache = map[string]discoveryPolicyDecision{}
+	}
+	discoveryPolicyDecisionCache[key] = discoveryPolicyDecision{
+		allowed:   allowed,
+		expiresAt: now.Add(discoveryPolicyDecisionTTL),
+	}
+	discoveryPolicyDecisionMu.Unlock()
+
+	return allowed
 }
 
 func clusterEndpointRuntimeURL(endpoint config.ClusterEndpoint, verifySSL bool, hasFingerprint bool, discoveryCfg config.DiscoveryConfig) string {

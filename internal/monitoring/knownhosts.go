@@ -33,15 +33,27 @@ type KnownHostsManager interface {
 type knownHostsManager struct {
 	path           string
 	cache          map[string]struct{}
+	failures       map[string]*keyscanFailure
 	mu             sync.Mutex
 	keyscanFn      keyscanFunc
 	keyscanTimeout time.Duration
 }
 
+// keyscanFailure remembers a failed ssh-keyscan so poll cycles don't re-exec
+// it every pass against a host that keeps refusing (#1638). Backoff doubles
+// per consecutive failure and any success clears the entry.
+type keyscanFailure struct {
+	retryAt time.Time
+	backoff time.Duration
+	err     error
+}
+
 type keyscanFunc func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error)
 
 const (
-	defaultKeyscanTimeout = 5 * time.Second
+	defaultKeyscanTimeout        = 5 * time.Second
+	keyscanFailureInitialBackoff = 30 * time.Second
+	keyscanFailureMaxBackoff     = 15 * time.Minute
 )
 
 var (
@@ -117,6 +129,7 @@ func NewKnownHostsManager(path string, opts ...KnownHostsOption) (KnownHostsMana
 	m := &knownHostsManager{
 		path:           path,
 		cache:          make(map[string]struct{}),
+		failures:       make(map[string]*keyscanFailure),
 		keyscanFn:      defaultKeyscan,
 		keyscanTimeout: defaultKeyscanTimeout,
 	}
@@ -150,22 +163,52 @@ func (m *knownHostsManager) EnsureWithPort(ctx context.Context, host string, por
 	cacheKey := fmt.Sprintf("%s:%d", host, port)
 	m.mu.Lock()
 	_, cached := m.cache[cacheKey]
-	m.mu.Unlock()
 	if cached {
+		m.mu.Unlock()
 		return nil
 	}
+	if failure := m.failures[cacheKey]; failure != nil && time.Now().Before(failure.retryAt) {
+		err := failure.err
+		m.mu.Unlock()
+		return fmt.Errorf("knownhosts: ssh-keyscan for %s:%d suppressed until backoff expires: %w", host, port, err)
+	}
+	m.mu.Unlock()
 
 	keyData, err := m.keyscanFn(ctx, host, port, m.keyscanTimeout)
 	if err != nil {
-		return fmt.Errorf("knownhosts: ssh-keyscan failed for %s:%d: %w", host, port, err)
+		wrapped := fmt.Errorf("knownhosts: ssh-keyscan failed for %s:%d: %w", host, port, err)
+		m.recordKeyscanFailure(cacheKey, wrapped)
+		return wrapped
 	}
 
 	entries := sanitizeKeyscanOutput(hostSpec, keyData)
 	if len(entries) == 0 {
-		return fmt.Errorf("%w for %s:%d", ErrNoHostKeys, host, port)
+		wrapped := fmt.Errorf("%w for %s:%d", ErrNoHostKeys, host, port)
+		m.recordKeyscanFailure(cacheKey, wrapped)
+		return wrapped
 	}
 
 	return m.EnsureWithEntries(ctx, host, port, entries)
+}
+
+func (m *knownHostsManager) recordKeyscanFailure(cacheKey string, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.failures == nil {
+		m.failures = make(map[string]*keyscanFailure)
+	}
+	backoff := keyscanFailureInitialBackoff
+	if existing := m.failures[cacheKey]; existing != nil {
+		backoff = existing.backoff * 2
+		if backoff > keyscanFailureMaxBackoff {
+			backoff = keyscanFailureMaxBackoff
+		}
+	}
+	m.failures[cacheKey] = &keyscanFailure{
+		retryAt: time.Now().Add(backoff),
+		backoff: backoff,
+		err:     err,
+	}
 }
 
 // EnsureWithEntries installs the provided host key entries for host:port.
@@ -226,6 +269,7 @@ func (m *knownHostsManager) EnsureWithEntries(ctx context.Context, host string, 
 	}
 
 	m.cache[cacheKey] = struct{}{}
+	delete(m.failures, cacheKey)
 	return nil
 }
 
