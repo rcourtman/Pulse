@@ -14,10 +14,10 @@ type updateAllCommandPayload struct {
 	ContainerIDs []string `json:"containerIds"`
 }
 
-func decodeUpdateAllPayload(payload map[string]any) (updateAllCommandPayload, error) {
+func (a *Agent) decodeUpdateAllPayload(payload map[string]any) (updateAllCommandPayload, error) {
 	var commandPayload updateAllCommandPayload
 
-	body, err := jsonMarshalFn(payload)
+	body, err := a.jsonMarshal(payload)
 	if err != nil {
 		return commandPayload, fmt.Errorf("marshal update_all command payload: %w", err)
 	}
@@ -54,7 +54,7 @@ func decodeUpdateAllPayload(payload map[string]any) (updateAllCommandPayload, er
 // handleUpdateAllCommand handles the update_all command from Pulse.
 // It updates each container sequentially to avoid overloading the runtime and registry.
 func (a *Agent) handleUpdateAllCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	commandPayload, err := decodeUpdateAllPayload(command.Payload)
+	commandPayload, err := a.decodeUpdateAllPayload(command.Payload)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("Update-all command missing or invalid containerIds in payload")
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, "Missing containerIds in payload"); err != nil {

@@ -11,7 +11,7 @@ import (
 
 func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	t.Run("nil map yields missing-containerIds error and zero-value struct", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(nil)
+		got, err := (&Agent{}).decodeUpdateAllPayload(nil)
 		if err == nil {
 			t.Fatal("expected error for nil payload")
 		}
@@ -24,7 +24,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	})
 
 	t.Run("empty map yields missing-containerIds error", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(map[string]any{})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{})
 		if err == nil {
 			t.Fatal("expected error for empty payload")
 		}
@@ -42,7 +42,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 		// defaulting and reports "missing containerIds" for both. The
 		// returned structs do differ (nil vs a non-nil empty slice), which
 		// simply reflects what encoding/json left on the field.
-		absent, errAbsent := decodeUpdateAllPayload(map[string]any{"other": "x"})
+		absent, errAbsent := (&Agent{}).decodeUpdateAllPayload(map[string]any{"other": "x"})
 		if errAbsent == nil {
 			t.Fatal("expected error when containerIds is absent")
 		}
@@ -53,7 +53,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 			t.Fatalf("absent field should leave ContainerIDs nil, got %+v", absent.ContainerIDs)
 		}
 
-		emptySlice, errEmpty := decodeUpdateAllPayload(map[string]any{"containerIds": []any{}})
+		emptySlice, errEmpty := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": []any{}})
 		if errEmpty == nil {
 			t.Fatal("expected error for empty containerIds slice")
 		}
@@ -72,7 +72,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 		// struct still carries the RAW decoded slice (the `= normalized`
 		// assignment only runs on success).
 		raw := []any{"", "  ", "\t"}
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": raw})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": raw})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -86,11 +86,11 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 
 	t.Run("marshal error is wrapped", func(t *testing.T) {
 		marshalErr := errors.New("boom")
-		swap(t, &jsonMarshalFn, func(any) ([]byte, error) {
+		agent := &Agent{jsonMarshalFn: func(any) ([]byte, error) {
 			return nil, marshalErr
-		})
+		}}
 
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": []any{"a"}})
+		got, err := agent.decodeUpdateAllPayload(map[string]any{"containerIds": []any{"a"}})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -106,7 +106,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	})
 
 	t.Run("wrong field type yields decode error", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": 123})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": 123})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -122,7 +122,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	})
 
 	t.Run("valid single id", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": []any{"a"}})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": []any{"a"}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -132,7 +132,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	})
 
 	t.Run("multiple ids preserve input order", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": []any{"b", "a"}})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": []any{"b", "a"}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -142,7 +142,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	})
 
 	t.Run("surrounding whitespace is trimmed", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": []any{"  a  "}})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": []any{"  a  "}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -152,7 +152,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	})
 
 	t.Run("exact duplicates are deduped", func(t *testing.T) {
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": []any{"a", "a"}})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": []any{"a", "a"}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -164,7 +164,7 @@ func TestBranchcov0723AmDecodeUpdateAllPayload(t *testing.T) {
 	t.Run("duplicates after trim are deduped", func(t *testing.T) {
 		// Verifies the source orders trim-before-dedupe: " a " collapses to
 		// "a" and is then deduped against the literal "a".
-		got, err := decodeUpdateAllPayload(map[string]any{"containerIds": []any{" a ", "a"}})
+		got, err := (&Agent{}).decodeUpdateAllPayload(map[string]any{"containerIds": []any{" a ", "a"}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

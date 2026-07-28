@@ -38,10 +38,10 @@ type updateContainerCommandPayload struct {
 	ContainerID string `json:"containerId"`
 }
 
-func decodeUpdateContainerPayload(payload map[string]any) (updateContainerCommandPayload, error) {
+func (a *Agent) decodeUpdateContainerPayload(payload map[string]any) (updateContainerCommandPayload, error) {
 	var commandPayload updateContainerCommandPayload
 
-	body, err := jsonMarshalFn(payload)
+	body, err := a.jsonMarshal(payload)
 	if err != nil {
 		return commandPayload, fmt.Errorf("marshal update command payload: %w", err)
 	}
@@ -189,7 +189,7 @@ func daemonGeneratedHostname(hostname, containerID string) bool {
 
 // handleUpdateContainerCommand handles the update_container command from Pulse.
 func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	commandPayload, err := decodeUpdateContainerPayload(command.Payload)
+	commandPayload, err := a.decodeUpdateContainerPayload(command.Payload)
 	if err != nil {
 		a.logger.Error().Err(err).Msg("Update command missing or invalid containerId in payload")
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, "Missing containerId in payload"); err != nil {

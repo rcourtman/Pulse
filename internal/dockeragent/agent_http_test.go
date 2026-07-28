@@ -364,11 +364,12 @@ func TestSendCommandAck(t *testing.T) {
 	})
 
 	t.Run("marshal error", func(t *testing.T) {
-		swap(t, &jsonMarshalFn, func(any) ([]byte, error) {
-			return nil, errors.New("marshal failed")
-		})
-
-		agent := &Agent{hostID: "host1"}
+		agent := &Agent{
+			hostID: "host1",
+			jsonMarshalFn: func(any) ([]byte, error) {
+				return nil, errors.New("marshal failed")
+			},
+		}
 		if err := agent.sendCommandAck(context.Background(), TargetConfig{URL: "http://example"}, "cmd", "status", "msg"); err == nil {
 			t.Fatal("expected error")
 		}

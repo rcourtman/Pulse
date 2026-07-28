@@ -3,7 +3,6 @@ package dockeragent
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
@@ -22,7 +21,6 @@ var (
 	randomDurationFn         = randomDuration
 	nowFn                    = time.Now
 	sleepFn                  = time.Sleep
-	jsonMarshalFn            = json.Marshal
 	normalizeTargetsFn       = normalizeTargets
 	buildRuntimeCandidatesFn = buildRuntimeCandidates
 	tryRuntimeCandidateFn    = tryRuntimeCandidate

@@ -135,6 +135,7 @@ type Agent struct {
 	manualCheckResults  map[string]manualUpdateCheckResult
 	manualCheckCollect  func(context.Context) (agentsdocker.Report, error) // test seam for bounded manual checks
 	newTimerFn          func(time.Duration) *time.Timer                    // test seam; per-Agent so async goroutines never read a shared global (nil = time.NewTimer)
+	jsonMarshalFn       func(any) ([]byte, error)                          // test seam; per-Agent so async goroutines never read a shared global (nil = json.Marshal)
 	backgroundMu        sync.Mutex                                         // protects updateCheckRunning, cleanupTaskRunning
 	updateCheckRunning  bool
 	cleanupTaskRunning  bool
@@ -817,6 +818,13 @@ func (a *Agent) newTimer(delay time.Duration) *time.Timer {
 		return a.newTimerFn(delay)
 	}
 	return time.NewTimer(delay)
+}
+
+func (a *Agent) jsonMarshal(v any) ([]byte, error) {
+	if a.jsonMarshalFn != nil {
+		return a.jsonMarshalFn(v)
+	}
+	return json.Marshal(v)
 }
 
 func (a *Agent) waitForAsyncDelay(delay time.Duration) bool {
@@ -1524,7 +1532,7 @@ func (a *Agent) sendCommandAckWithPayload(ctx context.Context, target TargetConf
 		Payload: payload,
 	}
 
-	body, err := jsonMarshalFn(ackPayload)
+	body, err := a.jsonMarshal(ackPayload)
 	if err != nil {
 		return fmt.Errorf("marshal command acknowledgement: %w", err)
 	}
