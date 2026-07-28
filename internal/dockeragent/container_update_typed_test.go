@@ -60,7 +60,6 @@ func TestTypedContainerUpdatePreflightRefusesRuntimeAndDigestDrift(t *testing.T)
 
 func TestTypedContainerUpdateDelegatesToProductionRecreatePath(t *testing.T) {
 	swap(t, &sleepFn, func(time.Duration) {})
-	swap(t, &newTimerFn, func(time.Duration) *time.Timer { return time.NewTimer(0) })
 
 	cleanupDone := make(chan struct{})
 	agent := &Agent{
@@ -93,7 +92,8 @@ func TestTypedContainerUpdateDelegatesToProductionRecreatePath(t *testing.T) {
 				return nil
 			},
 		},
-		logger: zerolog.Nop(),
+		logger:     zerolog.Nop(),
+		newTimerFn: immediateTimer,
 	}
 
 	var progress []string

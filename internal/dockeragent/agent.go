@@ -134,6 +134,7 @@ type Agent struct {
 	manualCheckActiveID string
 	manualCheckResults  map[string]manualUpdateCheckResult
 	manualCheckCollect  func(context.Context) (agentsdocker.Report, error) // test seam for bounded manual checks
+	newTimerFn          func(time.Duration) *time.Timer                    // test seam; per-Agent so async goroutines never read a shared global (nil = time.NewTimer)
 	backgroundMu        sync.Mutex                                         // protects updateCheckRunning, cleanupTaskRunning
 	updateCheckRunning  bool
 	cleanupTaskRunning  bool
@@ -734,7 +735,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	)
 
 	initialDelay := 5*time.Second + randomDurationFn(startupJitterWindow)
-	updateTimer := newTimerFn(initialDelay)
+	updateTimer := a.newTimer(initialDelay)
 	defer stopTimer(updateTimer)
 
 	// Periodic cleanup of orphaned backups (every 15 minutes)
@@ -811,13 +812,20 @@ func (a *Agent) runAsync(task func(context.Context)) {
 	}()
 }
 
+func (a *Agent) newTimer(delay time.Duration) *time.Timer {
+	if a.newTimerFn != nil {
+		return a.newTimerFn(delay)
+	}
+	return time.NewTimer(delay)
+}
+
 func (a *Agent) waitForAsyncDelay(delay time.Duration) bool {
 	if delay <= 0 {
 		return true
 	}
 
 	a.ensureAsyncLifecycle()
-	timer := newTimerFn(delay)
+	timer := a.newTimer(delay)
 	defer stopTimer(timer)
 
 	select {
@@ -1348,18 +1356,18 @@ func (a *Agent) sendManualUpdateCheckAckWithRetry(ctx context.Context, target Ta
 		if err == nil {
 			return nil
 		}
-		if attempt+1 == manualUpdateCheckAckAttempts || !waitForContextDelay(ctx, manualUpdateCheckAckRetryDelay*time.Duration(1<<attempt)) {
+		if attempt+1 == manualUpdateCheckAckAttempts || !a.waitForContextDelay(ctx, manualUpdateCheckAckRetryDelay*time.Duration(1<<attempt)) {
 			break
 		}
 	}
 	return err
 }
 
-func waitForContextDelay(ctx context.Context, delay time.Duration) bool {
+func (a *Agent) waitForContextDelay(ctx context.Context, delay time.Duration) bool {
 	if delay <= 0 {
 		return ctx.Err() == nil
 	}
-	timer := newTimerFn(delay)
+	timer := a.newTimer(delay)
 	defer stopTimer(timer)
 	select {
 	case <-ctx.Done():
@@ -1621,7 +1629,7 @@ func (a *Agent) Close() error {
 			close(done)
 		}()
 
-		waitTimer := newTimerFn(2 * time.Second)
+		waitTimer := a.newTimer(2 * time.Second)
 		select {
 		case <-done:
 			stopTimer(waitTimer)

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/image"
@@ -222,6 +223,10 @@ func statsReader(t *testing.T, stats containertypes.StatsResponse) dockerStatsRe
 	return dockerStatsResponseReader{
 		Body: io.NopCloser(bytes.NewReader(payload)),
 	}
+}
+
+func immediateTimer(time.Duration) *time.Timer {
+	return time.NewTimer(0)
 }
 
 func swap[T any](t *testing.T, target *T, value T) {

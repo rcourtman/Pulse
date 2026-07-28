@@ -19,7 +19,6 @@ var (
 	connectRuntimeFn         = connectRuntime
 	hostmetricsCollect       = hostmetrics.Collect
 	newTickerFn              = time.NewTicker
-	newTimerFn               = time.NewTimer
 	randomDurationFn         = randomDuration
 	nowFn                    = time.Now
 	sleepFn                  = time.Sleep

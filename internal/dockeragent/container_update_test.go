@@ -223,9 +223,6 @@ func TestUpdateContainer_Errors(t *testing.T) {
 func TestUpdateContainer_Success(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
-	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
-		return time.NewTimer(0)
-	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -271,7 +268,8 @@ func TestUpdateContainer_Success(t *testing.T) {
 				return err
 			},
 		},
-		logger: logger,
+		logger:     logger,
+		newTimerFn: immediateTimer,
 	}
 
 	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
@@ -297,9 +295,6 @@ func TestUpdateContainer_Success(t *testing.T) {
 func TestUpdateContainer_StoppedContainerPreservesStoppedState(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
-	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
-		return time.NewTimer(0)
-	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -348,7 +343,8 @@ func TestUpdateContainer_StoppedContainerPreservesStoppedState(t *testing.T) {
 				return nil
 			},
 		},
-		logger: logger,
+		logger:     logger,
+		newTimerFn: immediateTimer,
 	}
 
 	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
@@ -365,9 +361,6 @@ func TestUpdateContainer_StoppedContainerPreservesStoppedState(t *testing.T) {
 func TestUpdateContainer_CleanupError(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
-	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
-		return time.NewTimer(0)
-	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -405,7 +398,8 @@ func TestUpdateContainer_CleanupError(t *testing.T) {
 				return cleanupErr
 			},
 		},
-		logger: logger,
+		logger:     logger,
+		newTimerFn: immediateTimer,
 	}
 
 	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
@@ -621,9 +615,6 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 func TestUpdateContainer_SharedNamespaceCreateConfig(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
-	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
-		return time.NewTimer(0)
-	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -691,7 +682,8 @@ func TestUpdateContainer_SharedNamespaceCreateConfig(t *testing.T) {
 					return nil
 				},
 			},
-			logger: logger,
+			logger:     logger,
+			newTimerFn: immediateTimer,
 		}
 
 		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)

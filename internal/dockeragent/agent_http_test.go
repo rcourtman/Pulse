@@ -727,9 +727,6 @@ func TestHandleStopCommand(t *testing.T) {
 	t.Run("stop service goroutine executes", func(t *testing.T) {
 		marker := filepath.Join(t.TempDir(), "called")
 		writeSystemctl(t, "if [ \"$1\" = \"disable\" ]; then exit 0; fi\nif [ \"$1\" = \"stop\" ]; then : > "+marker+"; exit 2; fi\nexit 0")
-		swap(t, &newTimerFn, func(time.Duration) *time.Timer {
-			return time.NewTimer(0)
-		})
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -742,8 +739,9 @@ func TestHandleStopCommand(t *testing.T) {
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
+			newTimerFn: immediateTimer,
 		}
-		// Close agent BEFORE swap restores globals (t.Cleanup is LIFO)
+		// Close joins the stop-service goroutine before the fake systemctl is cleaned up
 		t.Cleanup(func() { _ = agent.Close() })
 
 		if err := agent.handleStopCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, agentsdocker.Command{ID: "cmd"}); !errors.Is(err, ErrStopRequested) {
