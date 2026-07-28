@@ -3633,6 +3633,16 @@ Failed evaluations carry per-scenario probe and validator evidence in
 reasons only — never fixture prompts or infrastructure content) so operators
 can diagnose a failure from the snapshot alone.
 
+The readiness response is a keepalive-padded JSON document. Because a full
+advisor run makes multiple sequential provider calls and can legitimately run
+for minutes on slow local hardware, the handler commits a 200 status with
+`Content-Type: application/json` up front and writes flushed newline
+keepalives while the evaluation runs, then appends the ordinary JSON payload.
+Leading newlines are insignificant JSON whitespace, so any standard JSON
+parser consumes the response unchanged; clients must not depend on the first
+response byte being `{`, and evaluation failures stay in-band in the payload
+rather than becoming non-200 statuses after the first keepalive (#1640).
+
 Every mobile-facing contract change must update the canonical manifest,
 regenerate both repositories, keep the mobile consumer minimum compatible, and
 pass `generate_mobile_compatibility.py --check` plus

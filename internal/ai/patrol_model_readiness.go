@@ -390,7 +390,8 @@ func (s *Service) RunPatrolModelReadiness(ctx context.Context, providerName, mod
 	}
 	result.Provider, result.Model = config.ParseModelString(modelString)
 	if err := ctx.Err(); err != nil {
-		result.Cause = PatrolFailureCauseProviderConnection
+		result.Cause = PatrolFailureCauseInterrupted
+		result.Status = PatrolModelReadinessNotAssessed
 		result.Summary = "The Patrol model readiness evaluation was cancelled."
 		result.Recommendation = "Run the advisor again when you are ready."
 		return finish()
@@ -424,6 +425,12 @@ func (s *Service) RunPatrolModelReadiness(ctx context.Context, providerName, mod
 	if err != nil {
 		failure := patrolRuntimeFailureFromError(err)
 		result.Cause = failure.Cause
+		if failure.Cause == PatrolFailureCauseInterrupted {
+			result.Status = PatrolModelReadinessNotAssessed
+			result.Summary = failure.Summary
+			result.Recommendation = failure.Recommendation
+			return finish()
+		}
 		result.Summary = "Patrol is already using the selected model."
 		result.Recommendation = "Wait for the active Patrol work to finish, then run the advisor again."
 		return finish()
@@ -473,6 +480,20 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	if err := provider.TestConnection(ctx); err != nil {
 		failure := patrolRuntimeFailureFromError(err)
 		result.Cause = failure.Cause
+		// A cancelled run carries no connectivity evidence: report it as not
+		// assessed instead of blaming the provider (#1640).
+		if failure.Cause == PatrolFailureCauseInterrupted {
+			result.Status = PatrolModelReadinessNotAssessed
+			result.Summary = failure.Summary
+			result.Recommendation = failure.Recommendation
+			result.Dimensions.Connectivity = PatrolModelReadinessDimension{
+				Status:     PatrolModelReadinessNotAssessed,
+				Summary:    "The evaluation was interrupted before connectivity could be assessed.",
+				DurationMs: time.Since(connectionStarted).Milliseconds(),
+			}
+			result.DurationMs = time.Since(started).Milliseconds()
+			return result
+		}
 		result.Status = PatrolModelReadinessFail
 		result.Summary = failure.Summary
 		result.Recommendation = failure.Recommendation
@@ -677,6 +698,19 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		probeFailure = &failure
 		toolSummary = failure.Summary
 	}
+	// A mid-run cancellation invalidates nothing the model already proved and
+	// proves nothing about what it never attempted: keep completed per-scenario
+	// evidence, report the unfinished dimensions as not assessed (#1640).
+	interrupted := probeFailure != nil && probeFailure.Cause == PatrolFailureCauseInterrupted
+	if interrupted {
+		if toolPassed == len(scenarios) {
+			toolStatus = PatrolModelReadinessPass
+			toolSummary = "All scenarios passed before the run was interrupted; multi-turn continuation was not assessed."
+		} else {
+			toolStatus = PatrolModelReadinessNotAssessed
+			toolSummary = fmt.Sprintf("Interrupted after %d/%d scenarios passed; the remaining scenarios were not assessed.", toolPassed, len(scenarios))
+		}
+	}
 	result.Dimensions.ToolProtocol = PatrolModelReadinessDimension{
 		Status:               toolStatus,
 		Summary:              toolSummary,
@@ -691,6 +725,9 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	if contextPassed == 2 {
 		contextStatus = PatrolModelReadinessPass
 		contextSummary = "Both Patrol-shaped fixtures selected the actionable resource without flagging healthy decoys."
+	} else if interrupted {
+		contextStatus = PatrolModelReadinessNotAssessed
+		contextSummary = fmt.Sprintf("Interrupted after %d/2 context fixtures passed; the remaining fixtures were not assessed.", contextPassed)
 	}
 	if result.Metadata != nil && result.Metadata.ContextWindow > 0 && result.Metadata.ContextWindow < patrolReadinessMinimumContext {
 		contextStatus = PatrolModelReadinessFail
@@ -712,7 +749,10 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	projectedApproval := warmP50 * time.Duration(cfg.GetPatrolInvestigationBudget())
 	latencyStatus := PatrolModelReadinessPass
 	latencySummary := fmt.Sprintf("Warm median %s; projected 8-turn Watch-only loop %s.", formatReadinessDuration(warmP50), formatReadinessDuration(projectedWatch))
-	if len(durations) == 0 || probeErr != nil {
+	if interrupted {
+		latencyStatus = PatrolModelReadinessNotAssessed
+		latencySummary = "Latency was not fully measured because the evaluation was interrupted."
+	} else if len(durations) == 0 || probeErr != nil {
 		latencyStatus = PatrolModelReadinessFail
 		latencySummary = "Latency could not be measured because the streaming probe did not complete."
 	} else if projectedWatch > patrolReadinessWatchEnvelope {
@@ -762,6 +802,11 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 		result.Cause = probeFailure.Cause
 		result.Summary = probeFailure.Summary
 		result.Recommendation = probeFailure.Recommendation
+	}
+	if interrupted {
+		result.Status = PatrolModelReadinessNotAssessed
+		result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "The evaluation was interrupted before Watch-only readiness could be assessed."}
+		result.Modes.Approval = PatrolModeSuitability{Status: PatrolModeNotAssessed, Summary: "The evaluation was interrupted before Ask-first readiness could be assessed."}
 	}
 	if contextStatus == PatrolModelReadinessFail && toolStatus == PatrolModelReadinessPass {
 		result.Cause = PatrolFailureCauseContextQualityFailed

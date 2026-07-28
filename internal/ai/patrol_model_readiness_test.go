@@ -279,8 +279,11 @@ func TestRunPatrolModelReadinessWithProvider_CancellationStopsStreamingProbe(t *
 	if time.Since(started) > time.Second {
 		t.Fatal("cancelled readiness evaluation did not stop promptly")
 	}
-	if result.Success || result.Dimensions.ToolProtocol.Status != PatrolModelReadinessFail {
-		t.Fatalf("cancelled evaluation should not pass, got %+v", result)
+	if result.Success || result.Dimensions.ToolProtocol.Status != PatrolModelReadinessNotAssessed {
+		t.Fatalf("cancelled evaluation should not pass and must stay unassessed, got %+v", result)
+	}
+	if result.Cause != PatrolFailureCauseInterrupted {
+		t.Fatalf("cancelled evaluation must be classified as interrupted, not %q", result.Cause)
 	}
 }
 

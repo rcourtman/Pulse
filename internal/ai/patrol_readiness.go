@@ -36,7 +36,12 @@ const (
 	PatrolFailureCauseProviderRateLimited        PatrolFailureCause = "provider_rate_limited"
 	PatrolFailureCauseProviderAuth               PatrolFailureCause = "provider_auth"
 	PatrolFailureCauseProviderConnection         PatrolFailureCause = "provider_connection"
-	PatrolFailureCauseCircuitOpen                PatrolFailureCause = "circuit_open"
+	// PatrolFailureCauseInterrupted marks a run that was cancelled mid-flight
+	// (operator cancel or a dropped client connection). It is deliberately not
+	// a provider fault: an interrupted run carries no evidence about the
+	// provider or model (#1640).
+	PatrolFailureCauseInterrupted PatrolFailureCause = "interrupted"
+	PatrolFailureCauseCircuitOpen PatrolFailureCause = "circuit_open"
 )
 
 type PatrolConfigReadiness struct {

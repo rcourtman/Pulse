@@ -113,7 +113,10 @@ async function createAPIErrorFromResponse(
   fallbackMessage?: string,
 ): Promise<APIErrorShape> {
   const text = await response.text();
-  let errorMessage = fallbackMessage || text;
+  // Never pre-seed the message with the raw body: a reverse proxy error page
+  // is a full HTML document, and whatever lands here becomes Error.message
+  // rendered directly in the UI (#1640).
+  let errorMessage = fallbackMessage || '';
 
   let errorCode: string | undefined;
   let errorDetail: string | undefined;
@@ -137,14 +140,20 @@ async function createAPIErrorFromResponse(
     errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
     errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
   } catch {
+    // Non-JSON body. Only surface it when it reads as a short plain-text
+    // message; anything with markup or excessive length (proxy/gateway HTML
+    // error pages) falls through to the generic status message.
     if (text.includes('<pre>') && text.includes('</pre>')) {
       const match = text.match(/<pre>(.*?)<\/pre>/s);
-      if (match) errorMessage = match[1];
+      const extracted = match ? match[1].trim() : '';
+      if (extracted && !extracted.includes('<') && extracted.length < 200) {
+        errorMessage = extracted;
+      }
+    } else if (!text.includes('<') && text.trim() && text.length < 200) {
+      errorMessage = text.trim();
     }
 
-    if (!text.includes('<') && text.length < 200) {
-      errorMessage = text;
-    } else if (!errorMessage && text.length > 200) {
+    if (!errorMessage) {
       errorMessage = `Request failed with status ${response.status}`;
     }
   }

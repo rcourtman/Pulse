@@ -1956,7 +1956,10 @@ Keep Patrol model-readiness context fixtures synthetic and isolated from
 storage/recovery state. The advisor may model backup failure and storage
 pressure to assess context selection, but it must not read live backup records,
 invoke recovery APIs, mutate storage, or treat a synthetic pass as evidence
-that Safe auto-fix or Autopilot remediation is verified.
+that Safe auto-fix or Autopilot remediation is verified. An interrupted
+readiness run keeps the same isolation: preserved partial scenario evidence is
+synthetic probe output only, and the keepalive response transport introduces no
+storage or recovery side channel.
 
 26. Storage row presentation resolves its topology label from
     `storage.vdevLayout` first and falls back to `storage.topology`, so a

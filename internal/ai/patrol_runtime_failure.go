@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -115,6 +117,20 @@ func patrolMalformedToolHistory(lower string) bool {
 		strings.Contains(lower, "responding to each")
 }
 
+// patrolRunCancelled reports whether the upstream error is a mid-run
+// cancellation rather than a provider failure. context.Canceled reaches this
+// classifier when the operator cancels the run or the HTTP client connection
+// drops (a reverse proxy cutting a long request cancels r.Context()). It is
+// checked before every provider-fault pattern because a cancelled run says
+// nothing about the provider or model (#1640). context.DeadlineExceeded is
+// deliberately excluded: a deadline is a real timeout on the provider path.
+func patrolRunCancelled(err error, lower string) bool {
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	return strings.Contains(lower, "context canceled")
+}
+
 func ClassifyPatrolRuntimeFailure(err error) PatrolRuntimeFailureDiagnostic {
 	failure := patrolRuntimeFailureFromError(err)
 	return PatrolRuntimeFailureDiagnostic{
@@ -137,6 +153,11 @@ func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic
 	}
 
 	switch failure.Cause {
+	case PatrolFailureCauseInterrupted:
+		diagnostic.Title = "Connection test interrupted"
+		diagnostic.Summary = "Connection test interrupted"
+		diagnostic.Description = "The connection test was cancelled before the provider finished responding."
+		diagnostic.Recommendation = "Run the test again when you are ready."
 	case PatrolFailureCauseMalformedToolHistory:
 		diagnostic.Title = "Provider conversation state issue"
 		diagnostic.Summary = "Provider conversation state issue"
@@ -211,6 +232,12 @@ func patrolRuntimeFailureFromError(err error) patrolRuntimeFailure {
 	}
 
 	switch {
+	case patrolRunCancelled(err, lower):
+		failure.Title = "Pulse Patrol: Analysis interrupted"
+		failure.Summary = "Analysis interrupted before completion"
+		failure.Cause = PatrolFailureCauseInterrupted
+		failure.Description = "The Patrol run was cancelled before the provider finished, either by an operator cancel or because the client connection closed mid-analysis. An interrupted run is not evidence about the provider or model."
+		failure.Recommendation = "Run the analysis again when you are ready. If you did not cancel it, check for reverse proxies or load balancers that close long-running requests."
 	case patrolMalformedToolHistory(lower):
 		failure.Title = "Pulse Patrol: Malformed tool-call conversation history"
 		failure.Summary = "Malformed tool-call conversation history"
@@ -329,6 +356,8 @@ func summarizePatrolRuntimeFailureDetail(raw string) string {
 	}
 	lower := strings.ToLower(raw)
 	switch {
+	case strings.Contains(lower, "context canceled"):
+		return "The run was cancelled before the provider finished. This is not evidence of a provider or model fault."
 	case patrolMalformedToolHistory(lower):
 		return "Pulse sent a malformed tool-call conversation. Each Patrol run should be stateless; restart Pulse if the failure persists."
 	case patrolToolChoiceValueRejected(lower):

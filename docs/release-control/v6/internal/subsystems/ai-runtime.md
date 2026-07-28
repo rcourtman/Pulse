@@ -3939,6 +3939,20 @@ relevant timeout budget changes. Monitor/Watch and Approval/Ask First may be
 verified independently, while Safe auto-fix and Autopilot remain explicitly
 unassessed until deterministic remediation evals exist.
 
+A cancelled run is not provider evidence. The runtime failure classifier
+(`internal/ai/patrol_runtime_failure.go`) must classify mid-run cancellation
+(`context.Canceled`, whether wrapped or surfaced as provider error text) as
+`interrupted`, never as a provider connection or analysis fault;
+`context.DeadlineExceeded` keeps its provider-path timeout classification. An
+interrupted readiness evaluation reports the overall status and every
+unfinished dimension and autonomy mode as not assessed while preserving the
+per-scenario evidence completed before the interruption, and it must not
+overwrite the last completed evaluation in the readiness cache. The readiness
+handler streams insignificant JSON-whitespace keepalives while the evaluation
+runs so intermediaries with short read timeouts do not sever slow local-model
+runs; severed or operator-cancelled runs surface as interrupted, not as model
+verdicts (#1640).
+
 ## Current State
 
 ### Agent surfaces expose execution-time readiness refusal

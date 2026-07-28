@@ -2822,6 +2822,11 @@ for hosted tenant requests. Cloud and MSP surfaces may show failures from
 `frontend-modern/src/utils/apiClient.ts`, but they must resolve canonical JSON
 `error` / `message` fields before showing UI feedback instead of leaking raw
 response payloads while tenant-scoped org headers are still in flight.
+When a response body is not canonical JSON at all — a hosted proxy, gateway,
+or load-balancer HTML error page — the shared client must not surface the raw
+body as the thrown error message. Only short plain-text bodies without markup
+may pass through; anything else collapses to a generic status-derived message
+so hosted intermediary HTML never reaches tenant-facing UI (#1640).
 That same boundary now also owns stable structured error metadata on the shared
 browser client. When backend routes return canonical JSON `code` plus
 string-valued `details`, `frontend-modern/src/utils/apiClient.ts` must preserve

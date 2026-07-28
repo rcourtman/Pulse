@@ -6201,10 +6201,48 @@ func patrolModelReadinessBudget(cfg *config.AIConfig) time.Duration {
 	return budget
 }
 
+// patrolModelReadinessKeepaliveInterval paces the whitespace keepalives
+// written while a readiness evaluation runs. A full advisor run makes four
+// sequential provider calls and can legitimately take minutes on slow local
+// hardware; without response bytes in flight, reverse proxies with ~30-second
+// read timeouts cut the connection mid-run (#1640). Ten seconds stays well
+// inside common proxy read-timeout defaults.
+const patrolModelReadinessKeepaliveInterval = 10 * time.Second
+
+// streamPatrolModelReadinessKeepalives runs evaluate in the background and
+// writes a newline to w on every keepalive tick until the evaluation
+// completes, flushing each one so intermediaries see bytes flowing. A leading
+// newline is insignificant JSON whitespace: every JSON parser skips it, so the
+// final payload appended after the padding still parses as ordinary JSON and
+// existing clients need no protocol change (#1640).
+func streamPatrolModelReadinessKeepalives(w http.ResponseWriter, interval time.Duration, evaluate func() ai.PatrolModelReadinessResult) ai.PatrolModelReadinessResult {
+	flusher, _ := w.(http.Flusher)
+	resultCh := make(chan ai.PatrolModelReadinessResult, 1)
+	go func() { resultCh <- evaluate() }()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case result := <-resultCh:
+			return result
+		case <-ticker.C:
+			// A failed write means the client is gone; the request context
+			// cancellation already unwinds the evaluation, so keep draining.
+			_, _ = w.Write([]byte("\n"))
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}
+}
+
 // HandlePatrolModelReadiness runs the explicit, multi-scenario Patrol model
 // advisor. Unlike the startup preflight, this uses Patrol's streaming
 // transport, exact typed arguments, two context fixtures, and a multi-turn tool
 // result. The request context makes the evaluation cancellable from the UI.
+// The response streams whitespace keepalives while the evaluation runs so
+// reverse proxies with short read timeouts do not sever the request (#1640).
 func (h *AISettingsHandler) HandlePatrolModelReadiness(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -6239,7 +6277,16 @@ func (h *AISettingsHandler) HandlePatrolModelReadiness(w http.ResponseWriter, r 
 
 	ctx, cancel := context.WithTimeout(r.Context(), patrolModelReadinessBudget(aiService.GetConfig()))
 	defer cancel()
-	result := aiService.RunPatrolModelReadiness(ctx, body.Provider, body.Model)
+
+	// Headers must be committed before the first keepalive byte. The status is
+	// always 200: evaluation failures travel in the result payload.
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	// Ask nginx-style proxies not to buffer the keepalives back out of existence.
+	w.Header().Set("X-Accel-Buffering", "no")
+	result := streamPatrolModelReadinessKeepalives(w, patrolModelReadinessKeepaliveInterval, func() ai.PatrolModelReadinessResult {
+		return aiService.RunPatrolModelReadiness(ctx, body.Provider, body.Model)
+	})
 	response := patrolModelReadinessSnapshot(&result, time.Now())
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write Patrol model readiness response")
