@@ -202,6 +202,34 @@ export function getAlertResourceEnabledDefault(metric: string): number {
   return 80;
 }
 
+export const ALERT_RESOURCE_METRIC_OFF_VALUE = -1;
+
+/**
+ * The alert engine disables a metric whenever its trigger is `<= 0`
+ * (`internal/alerts/canonical_metric.go`), so every editor surface has to read
+ * `0` as Off too: older builds advertised `0` as the disable value and those
+ * overrides are still on disk. New writes always use the canonical `-1`.
+ */
+export function isAlertResourceMetricOff(value: number | undefined | null): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value <= 0;
+}
+
+/**
+ * Value an override editor must stage when a metric is switched back on.
+ * Clearing the override (`undefined`) only re-inherits the default, so it
+ * re-enables nothing when the inherited default is itself off; in that case the
+ * editor has to stage an explicit enabled threshold instead.
+ */
+export function resolveAlertResourceMetricEnableValue(
+  inheritedDefault: number | undefined,
+  metric: string,
+): number | undefined {
+  if (inheritedDefault === undefined || isAlertResourceMetricOff(inheritedDefault)) {
+    return getAlertResourceEnabledDefault(metric);
+  }
+  return undefined;
+}
+
 export function getAlertResourceMetricDelayOverride(
   metricDelaySeconds: Record<string, number> | undefined,
   metric: string,

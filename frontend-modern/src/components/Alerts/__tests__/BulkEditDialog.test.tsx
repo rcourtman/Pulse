@@ -246,7 +246,11 @@ describe('BulkEditDialog', () => {
     expect(props.onSave).toHaveBeenCalledWith({ restartCount: -1 });
   });
 
-  it('off toggle returns the metric to Unchanged when clicked again', () => {
+  it('re-enabling a metric stages an explicit threshold the save path can apply', () => {
+    // An undefined entry means "unchanged" to the bulk save path, so staging
+    // undefined here would leave every selected resource disabled while the
+    // badge claimed On. Re-enabling therefore stages the metric's enabled
+    // default.
     const props = defaultProps();
     props.columns = ['Restart Count'];
     render(() => <BulkEditDialog {...props} />);
@@ -254,10 +258,43 @@ describe('BulkEditDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'On' }));
     fireEvent.click(screen.getByRole('button', { name: 'Off' }));
 
+    expect(screen.getByRole('button', { name: 'On' })).toBeInTheDocument();
+    expect(screen.queryByText('Unchanged')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Apply to 3 items/));
+    expect(props.onSave).toHaveBeenCalledWith({ restartCount: 3 });
+  });
+
+  it('Clear still returns a re-enabled metric to Unchanged', () => {
+    const props = defaultProps();
+    props.columns = ['Restart Count'];
+    render(() => <BulkEditDialog {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'On' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Off' }));
+    fireEvent.click(screen.getByText('Clear'));
+
     expect(screen.getByText('Unchanged')).toBeInTheDocument();
     fireEvent.click(screen.getByText(/Apply to 3 items/));
     const saved = props.onSave.mock.calls[0][0] as Record<string, number | undefined>;
     expect(saved.restartCount).toBeUndefined();
+  });
+
+  it('reads a staged 0 as Off, matching the alert engine', () => {
+    // The engine disables any metric whose trigger is <= 0, and older builds
+    // told operators to type 0, so 0 must not read as On here.
+    const props = defaultProps();
+    props.columns = ['Restart Count'];
+    render(() => <BulkEditDialog {...props} />);
+
+    fireEvent.input(screen.getByRole('spinbutton'), { target: { value: '0' } });
+
+    expect(screen.getByRole('button', { name: 'Off' })).toBeInTheDocument();
+
+    // Toggling that stale 0 back on stages the canonical enabled default.
+    fireEvent.click(screen.getByRole('button', { name: 'Off' }));
+    fireEvent.click(screen.getByText(/Apply to 3 items/));
+    expect(props.onSave).toHaveBeenCalledWith({ restartCount: 3 });
   });
 
   it('typing a value after turning a metric off replaces the staged -1', () => {

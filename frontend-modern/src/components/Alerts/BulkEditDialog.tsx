@@ -7,6 +7,11 @@ import {
   getAlertResourceTableMetricPlaceholder,
 } from '@/utils/alertResourceTablePresentation';
 import {
+  ALERT_RESOURCE_METRIC_OFF_VALUE,
+  getAlertResourceEnabledDefault,
+  isAlertResourceMetricOff,
+} from './alertResourceTableModel';
+import {
   ALERT_BULK_EDIT_CANCEL_LABEL,
   ALERT_BULK_EDIT_CLEAR_LABEL,
   ALERT_BULK_EDIT_DIALOG_TITLE,
@@ -107,7 +112,7 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                 if (metric === 'backup' || metric === 'snapshot') return null;
                 const bounds = getMetricBounds(metric);
                 const val = () => thresholds()[metric];
-                const isOff = () => val() === -1;
+                const isOff = () => isAlertResourceMetricOff(val());
 
                 return (
                   <div class="space-y-2 pb-4 border-b border-border-subtle last:border-0">
@@ -126,7 +131,12 @@ export function BulkEditDialog(props: BulkEditDialogProps) {
                           onToggle={() =>
                             setThresholds((prev) => ({
                               ...prev,
-                              [metric]: isOff() ? undefined : -1,
+                              // Re-enabling has to stage a real threshold: an
+                              // undefined entry reads as "unchanged" on save, so
+                              // the selected resources would stay disabled.
+                              [metric]: isOff()
+                                ? getAlertResourceEnabledDefault(metric)
+                                : ALERT_RESOURCE_METRIC_OFF_VALUE,
                             }))
                           }
                           {...getAlertResourceTableMetricOffToggleProps()}

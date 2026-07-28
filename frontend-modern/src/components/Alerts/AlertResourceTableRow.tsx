@@ -23,6 +23,7 @@ import {
   getAlertResourceTableRevertToDefaultsLabel,
 } from '@/utils/alertResourceTablePresentation';
 import {
+  ALERT_RESOURCE_METRIC_OFF_VALUE,
   ALERT_RESOURCE_TABLE_SLIDER_METRICS,
   alertResourceSupportsMetric,
   getAlertResourceColumnKind,
@@ -30,8 +31,10 @@ import {
   getAlertResourceMetricBounds,
   getAlertResourceMetricDisplayValue,
   getAlertResourceMetricStep,
+  isAlertResourceMetricOff,
   isAlertResourceMetricOverridden,
   normalizeAlertResourceMetricKey,
+  resolveAlertResourceMetricEnableValue,
   type AlertResourceThresholdMap,
 } from './alertResourceTableModel';
 import type { Alert } from '@/types/api';
@@ -314,8 +317,10 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         {(column) => {
           const metric = normalizeAlertResourceMetricKey(column);
           const bounds = getAlertResourceMetricBounds(metric);
-          const isDisabled = () => getThresholds()?.[metric] === -1;
+          const isDisabled = () => isAlertResourceMetricOff(getThresholds()?.[metric]);
+          const inheritedDefault = () => props.resource.defaults?.[metric];
           const isSpecialToggle = metric === 'backup' || metric === 'snapshot';
+          let metricEditor: HTMLDivElement | undefined;
 
           if (isSpecialToggle) {
             const config = metric === 'backup' ? props.resource.backup : props.resource.snapshot;
@@ -439,7 +444,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         );
                       })()}
                     </Show>
-                    <div class="flex items-center justify-center gap-1.5">
+                    <div class="flex items-center justify-center gap-1.5" ref={metricEditor}>
                       <input
                         type="number"
                         min={bounds.min}
@@ -471,10 +476,17 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                             updateEditingThreshold(metric, val);
                           }
                         }}
-                        onBlur={() => {
-                          if (props.editingId() === props.resource.id) {
-                            saveEditing();
+                        onBlur={(event) => {
+                          if (props.editingId() !== props.resource.id) {
+                            return;
                           }
+                          // Tabbing to the Off toggle must not save and close the
+                          // editor before the toggle can be operated.
+                          const nextFocus = event.relatedTarget;
+                          if (nextFocus instanceof Node && metricEditor?.contains(nextFocus)) {
+                            return;
+                          }
+                          saveEditing();
                         }}
                         class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${
                           isDisabled()
@@ -488,7 +500,12 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                         <StatusBadge
                           isEnabled={!isDisabled()}
                           onToggle={() =>
-                            updateEditingThreshold(metric, isDisabled() ? undefined : -1)
+                            updateEditingThreshold(
+                              metric,
+                              isDisabled()
+                                ? resolveAlertResourceMetricEnableValue(inheritedDefault(), metric)
+                                : ALERT_RESOURCE_METRIC_OFF_VALUE,
+                            )
                           }
                           {...getAlertResourceTableMetricOffToggleProps()}
                         />

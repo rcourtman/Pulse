@@ -39,12 +39,14 @@ import {
   getAlertResourceTableNoResultsState,
 } from '@/utils/alertResourceTablePresentation';
 import {
+  ALERT_RESOURCE_METRIC_OFF_VALUE,
   getAlertResourceColumnKind,
   getAlertResourceColumnHeaderTooltip,
   getAlertResourceEnabledDefault,
   getAlertResourceMetricBounds,
   getAlertResourceMetricDelayOverride,
   getAlertResourceMetricStep,
+  isAlertResourceMetricOff,
   normalizeAlertResourceMetricKey,
 } from './alertResourceTableModel';
 import type { OfflineState, ResourceTableProps } from './ResourceTable';
@@ -223,7 +225,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                   const metric = normalizeAlertResourceMetricKey(column);
                   const bounds = getAlertResourceMetricBounds(metric);
                   const value = () => props.table.globalDefaults?.[metric] ?? 0;
-                  const isOff = () => value() === -1;
+                  // An unset default and a stored 0 are both disabled to the
+                  // alert engine, so neither may render as On.
+                  const isOff = () => isAlertResourceMetricOff(value());
 
                   return (
                     <TableCell
@@ -241,9 +245,16 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                             disabled={isOff()}
                             onInput={(e) => {
                               const nextValue = parseFloat(e.currentTarget.value);
+                              // An empty box is mid-edit, not a disable request:
+                              // coercing it to 0 used to disable the metric in the
+                              // engine while the row still claimed On. Use the Off
+                              // toggle to disable.
+                              if (Number.isNaN(nextValue)) {
+                                return;
+                              }
                               props.table.setGlobalDefaults?.((prev) => ({
                                 ...prev,
-                                [metric]: Number.isNaN(nextValue) ? 0 : nextValue,
+                                [metric]: nextValue,
                               }));
                               props.table.setHasUnsavedChanges?.(true);
                             }}
@@ -276,7 +287,9 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                           onToggle={() => {
                             props.table.setGlobalDefaults?.((prev) => ({
                               ...prev,
-                              [metric]: isOff() ? getAlertResourceEnabledDefault(metric) : -1,
+                              [metric]: isOff()
+                                ? getAlertResourceEnabledDefault(metric)
+                                : ALERT_RESOURCE_METRIC_OFF_VALUE,
                             }));
                             props.table.setHasUnsavedChanges?.(true);
                           }}

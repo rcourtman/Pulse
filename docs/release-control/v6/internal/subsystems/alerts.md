@@ -79,6 +79,29 @@ the one whose identity alerting honours. Standalone Pulse-agent machines belong
 to Machines, so the Virtualization Hosts section is fed by provider-owned
 virtualization nodes rather than by every resource of type `agent`.
 
+A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
+engine truth (`internal/alerts/canonical_metric.go`,
+`internal/alerts/config_runtime.go`), not a display convention: `-1` is the
+value Pulse writes, and `0` disables the metric just as completely because
+earlier builds advertised `0` as the disable value and those overrides are still
+on disk. Every threshold editor reads that same `<= 0` rule through
+`frontend-modern/src/components/Alerts/alertResourceTableModel.ts` rather than
+testing for `-1` inline: read cells, the row override editor, the global
+defaults row, and the bulk edit dialog, on both the desktop and the mobile
+surface. A surface that recognises only `-1` reports On for a metric the engine
+is not alerting on at all, and an unset global default carries the same
+obligation, because absent is disabled rather than enabled.
+
+Turning a metric back on must write a value the save path will actually
+persist. Clearing an override only re-inherits the default, so it re-enables
+nothing when the inherited default is itself off, and an undefined entry in a
+bulk edit reads as unchanged rather than as on; in both cases the editor stages
+the metric's enabled default instead, and only clears the override when the
+inherited default is already enabled. Editors must also not manufacture an off
+state out of an empty input: a cleared box is mid-edit, and coercing it to `0`
+disabled the metric in the engine while the row still showed On. Disabling is
+the toggle's job, and the toggle writes the canonical `-1`.
+
 ## Canonical Files
 
 1. `internal/alerts/specs/types.go`

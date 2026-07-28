@@ -12,7 +12,9 @@ import {
   alertResourceSupportsMetric,
   buildAlertResourceEditPayload,
   getAlertResourceMetricDisplayValue,
+  isAlertResourceMetricOff,
   normalizeAlertResourceMetricKey,
+  resolveAlertResourceMetricEnableValue,
 } from '@/components/Alerts/alertResourceTableModel';
 
 // --- Mocks (must be before component import) ---
@@ -346,6 +348,16 @@ describe('ResourceTable', () => {
       expect(alertResourceTableModelSource).toContain(
         'export function alertResourceSupportsMetric',
       );
+      // The off sentinel is engine truth, not per-surface trivia: every editor
+      // reads it through the shared model instead of comparing against -1 inline.
+      expect(alertResourceTableModelSource).toContain('export function isAlertResourceMetricOff');
+      expect(alertResourceTableModelSource).toContain(
+        'export function resolveAlertResourceMetricEnableValue',
+      );
+      const strictOffComparison = ['===', ' -1'].join('');
+      expect(alertResourceTableDesktopSource).not.toContain(strictOffComparison);
+      expect(alertResourceTableMobileSource).not.toContain(strictOffComparison);
+      expect(alertResourceTableRowSource).not.toContain(strictOffComparison);
     });
 
     it('resolves metric values and edit payloads through the shared model', () => {
@@ -389,6 +401,23 @@ describe('ResourceTable', () => {
         defaults: { cpu: 80 },
         note: 'Investigating bursty load',
       });
+    });
+
+    it('reads the engine off sentinel and resolves re-enable values in the shared model', () => {
+      // internal/alerts/canonical_metric.go disables any metric whose trigger is
+      // <= 0, so a legacy 0 override is off even though the UI now writes -1.
+      expect(isAlertResourceMetricOff(-1)).toBe(true);
+      expect(isAlertResourceMetricOff(0)).toBe(true);
+      expect(isAlertResourceMetricOff(-5)).toBe(true);
+      expect(isAlertResourceMetricOff(80)).toBe(false);
+      expect(isAlertResourceMetricOff(undefined)).toBe(false);
+
+      // Re-enabling can only clear the override when the inherited default is
+      // itself enabled; otherwise the resource stays disabled.
+      expect(resolveAlertResourceMetricEnableValue(80, 'cpu')).toBeUndefined();
+      expect(resolveAlertResourceMetricEnableValue(-1, 'cpu')).toBe(80);
+      expect(resolveAlertResourceMetricEnableValue(0, 'cpu')).toBe(80);
+      expect(resolveAlertResourceMetricEnableValue(undefined, 'restartCount')).toBe(3);
     });
   });
 
@@ -754,6 +783,212 @@ describe('ResourceTable', () => {
       const resetBtn = screen.getByLabelText('Reset to factory defaults');
       fireEvent.click(resetBtn);
       expect(onResetDefaults).toHaveBeenCalled();
+    });
+  });
+
+  describe('metric off toggles', () => {
+    // The alert engine disables a metric whenever its trigger is <= 0, so every
+    // editor here has to agree on that reading and has to write a value the
+    // engine will actually honour.
+    function editorProps(overrides: Record<string, any> = {}) {
+      return makeProps({
+        columns: ['CPU %'],
+        editingId: () => 'vm-1',
+        ...overrides,
+      });
+    }
+
+    it('reads a stored 0 override as Off in the row editor', () => {
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 0 }, defaults: { cpu: 80 } })],
+        editingThresholds: () => ({ cpu: 0 }),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+    });
+
+    it('stages an explicit threshold when the inherited default is itself off', () => {
+      // Clearing the override would only re-inherit the disabled default, so
+      // the save path would drop the change and the metric would stay off.
+      const setEditingThresholds = vi.fn();
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: {}, defaults: { cpu: -1 } })],
+        editingThresholds: () => ({ cpu: -1 }),
+        setEditingThresholds,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+
+      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: 80 });
+    });
+
+    it('clears the override when the inherited default is already enabled', () => {
+      const setEditingThresholds = vi.fn();
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: -1 }, defaults: { cpu: 80 } })],
+        editingThresholds: () => ({ cpu: -1 }),
+        setEditingThresholds,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+
+      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: undefined });
+    });
+
+    it('turns a metric off with the canonical -1 sentinel', () => {
+      const setEditingThresholds = vi.fn();
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+        editingThresholds: () => ({ cpu: 80 }),
+        setEditingThresholds,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+
+      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: -1 });
+    });
+
+    it('keeps the editor open when focus moves from the input to the off toggle', () => {
+      // Tabbing to the toggle must not save and close the row before the toggle
+      // can be operated.
+      const onSaveEdit = vi.fn();
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+        editingThresholds: () => ({ cpu: 80 }),
+        onSaveEdit,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      const input = screen.getByRole('spinbutton');
+      fireEvent.blur(input, { relatedTarget: screen.getByTestId('status-badge') });
+
+      expect(onSaveEdit).not.toHaveBeenCalled();
+    });
+
+    it('still saves when focus leaves the metric editor entirely', () => {
+      const onSaveEdit = vi.fn();
+      const props = editorProps({
+        resources: [makeResource({ id: 'vm-1', thresholds: { cpu: 80 }, defaults: { cpu: 80 } })],
+        editingThresholds: () => ({ cpu: 80 }),
+        onSaveEdit,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.blur(screen.getByRole('spinbutton'), { relatedTarget: null });
+
+      expect(onSaveEdit).toHaveBeenCalledWith('vm-1');
+    });
+
+    it('shows an unset global default as Off and re-enables it explicitly', () => {
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['CPU %'],
+        globalDefaults: {},
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({})).toEqual({ cpu: 80 });
+    });
+
+    it('shows a stored 0 global default as Off', () => {
+      const props = makeProps({
+        resources: [],
+        columns: ['CPU %'],
+        globalDefaults: { cpu: 0 },
+        setGlobalDefaults: vi.fn(),
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+    });
+
+    it('does not write a disabling 0 when the global default input is cleared', () => {
+      const setGlobalDefaults = vi.fn();
+      const setHasUnsavedChanges = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['CPU %'],
+        globalDefaults: { cpu: 80 },
+        setGlobalDefaults,
+        setHasUnsavedChanges,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.input(screen.getByDisplayValue('80'), { target: { value: '' } });
+
+      expect(setGlobalDefaults).not.toHaveBeenCalled();
+      expect(setHasUnsavedChanges).not.toHaveBeenCalled();
+    });
+
+    it('turns a global default off with the canonical -1 sentinel', () => {
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['CPU %'],
+        globalDefaults: { cpu: 80 },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ cpu: 80 })).toEqual({ cpu: -1 });
+    });
+
+    it('applies the same off reading to the mobile global defaults card', () => {
+      mockIsMobile.mockReturnValue(true);
+      const setGlobalDefaults = vi.fn();
+      const props = makeProps({
+        resources: [],
+        columns: ['CPU %'],
+        globalDefaults: { cpu: 0 },
+        setGlobalDefaults,
+        setHasUnsavedChanges: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('Off');
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+      const updater = setGlobalDefaults.mock.calls[0][0] as (
+        prev: Record<string, number | undefined>,
+      ) => Record<string, number | undefined>;
+      expect(updater({ cpu: 0 })).toEqual({ cpu: 80 });
+    });
+
+    it('stages an explicit threshold from the mobile row editor', () => {
+      mockIsMobile.mockReturnValue(true);
+      const setEditingThresholds = vi.fn();
+      const props = makeProps({
+        columns: ['CPU %'],
+        resources: [makeResource({ id: 'vm-1', thresholds: {}, defaults: { cpu: -1 } })],
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ cpu: -1 }),
+        setEditingThresholds,
+        globalDefaults: undefined,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByTestId('status-badge'));
+
+      expect(setEditingThresholds).toHaveBeenCalledWith({ cpu: 80 });
     });
   });
 
