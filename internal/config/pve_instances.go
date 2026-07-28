@@ -125,6 +125,18 @@ func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
 	return false
 }
 
+// PVEClusterInstancesShareIdentity reports whether two configured cluster
+// views have enough evidence to be consolidated. Cluster names are not unique
+// across organizations, so a matching name alone is never sufficient.
+func PVEClusterInstancesShareIdentity(a, b PVEInstance) bool {
+	return a.IsCluster &&
+		b.IsCluster &&
+		strings.TrimSpace(a.ClusterName) != "" &&
+		strings.EqualFold(strings.TrimSpace(a.ClusterName), strings.TrimSpace(b.ClusterName)) &&
+		!pveClusterInstancesHaveFingerprintConflict(a, b) &&
+		pveClusterInstancesHaveStrongOverlap(a, b)
+}
+
 func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, bool) {
 	removed := make(map[int]struct{})
 	mergedAny := false
@@ -146,10 +158,7 @@ func mergeDuplicateClusterInstances(instances []PVEInstance) ([]PVEInstance, boo
 				continue
 			}
 			duplicate := instances[dupIdx]
-			if !duplicate.IsCluster ||
-				!strings.EqualFold(strings.TrimSpace(primary.ClusterName), strings.TrimSpace(duplicate.ClusterName)) ||
-				pveClusterInstancesHaveFingerprintConflict(*primary, duplicate) ||
-				!pveClusterInstancesHaveStrongOverlap(*primary, duplicate) {
+			if !PVEClusterInstancesShareIdentity(*primary, duplicate) {
 				continue
 			}
 

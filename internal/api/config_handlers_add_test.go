@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestHandleAddNode(t *testing.T) {
@@ -489,5 +490,66 @@ func TestHandleAddNodeConsolidatesStandaloneOverlapIntoClusterInMemory(t *testin
 	}
 	if !cluster.VerifySSL {
 		t.Fatalf("expected VerifySSL to be promoted onto the surviving cluster")
+	}
+}
+
+func TestHandleAddNodeKeepsDistinctSameNameClustersWithContradictingFingerprints(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "enacon",
+				Host:        "https://192.168.1.253:8006",
+				ClusterName: "production",
+				IsCluster:   true,
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{
+						NodeName:    "pve01",
+						Host:        "https://192.168.1.246:8006",
+						IP:          "192.168.1.246",
+						Fingerprint: "AA:AA",
+					},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	originalDetect := detectPVECluster
+	t.Cleanup(func() { detectPVECluster = originalDetect })
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return true, "production", []config.ClusterEndpoint{
+			{
+				NodeName:    "pve01",
+				Host:        "https://192.168.1.246:8006",
+				IP:          "192.168.1.246",
+				Fingerprint: "BB:BB",
+			},
+		}
+	}
+
+	body, err := json.Marshal(map[string]any{
+		"name":       "rewo",
+		"type":       "pve",
+		"host":       "192.168.1.254",
+		"tokenName":  "pulse@pve!token",
+		"tokenValue": "secret",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAddNode(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201: %s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 2 {
+		t.Fatalf("PVE instances = %#v, want both organizations to remain configured", cfg.PVEInstances)
+	}
+	if cfg.PVEInstances[0].Name != "enacon" || cfg.PVEInstances[1].Name != "rewo" {
+		t.Fatalf("PVE instance names = %q, %q, want enacon and rewo", cfg.PVEInstances[0].Name, cfg.PVEInstances[1].Name)
 	}
 }

@@ -405,15 +405,23 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			isCluster, clusterName, clusterEndpoints = detectPVECluster(clientConfig, req.Name, nil)
 		}
 
-		// CLUSTER DEDUPLICATION: If this node is part of a cluster, check if we already
-		// have that cluster configured. If so, this is a duplicate - we should merge
-		// the node as an endpoint to the existing cluster instead of creating a new instance.
-		// This prevents duplicate VMs/containers when users install agents on multiple cluster nodes.
+		// CLUSTER DEDUPLICATION: If this node is part of a cluster, merge it
+		// only when endpoint and TLS evidence identify an existing cluster.
+		// Cluster names and private addresses can repeat across organizations.
 		if isCluster && clusterName != "" {
+			candidateCluster := config.PVEInstance{
+				Name:             req.Name,
+				Host:             host,
+				Fingerprint:      req.Fingerprint,
+				IsCluster:        true,
+				ClusterName:      clusterName,
+				ClusterEndpoints: clusterEndpoints,
+			}
 			for i := range h.getConfig(r.Context()).PVEInstances {
 				existingInstance := &h.getConfig(r.Context()).PVEInstances[i]
-				if existingInstance.IsCluster && existingInstance.ClusterName == clusterName {
-					// Found existing cluster with same name - merge endpoints!
+				if config.PVEClusterInstancesShareIdentity(*existingInstance, candidateCluster) {
+					// Strong identity evidence confirms this is another view
+					// of the existing cluster, so merge its endpoints.
 					log.Info().
 						Str("cluster", clusterName).
 						Str("existingInstance", existingInstance.Name).

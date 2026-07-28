@@ -237,6 +237,29 @@ func TestConsolidatePVEInstancesKeepsSameNameClustersWithCollidingPrivateIPs(t *
 	}
 }
 
+func TestPVEClusterInstancesShareIdentityRejectsSameNameWithContradictingFingerprints(t *testing.T) {
+	siteA := PVEInstance{
+		Name:        "enacon",
+		ClusterName: "production",
+		IsCluster:   true,
+		ClusterEndpoints: []ClusterEndpoint{
+			{NodeName: "pve01", Host: "https://192.168.1.246:8006", IP: "192.168.1.246", Fingerprint: "AA:AA"},
+		},
+	}
+	siteB := PVEInstance{
+		Name:        "rewo",
+		ClusterName: "production",
+		IsCluster:   true,
+		ClusterEndpoints: []ClusterEndpoint{
+			{NodeName: "pve01", Host: "https://192.168.1.246:8006", IP: "192.168.1.246", Fingerprint: "BB:BB"},
+		},
+	}
+
+	if PVEClusterInstancesShareIdentity(siteA, siteB) {
+		t.Fatal("same-name clusters with contradicting TLS fingerprints must not share identity")
+	}
+}
+
 func TestConsolidatePVEInstancesKeepsStandaloneWithContradictingFingerprint(t *testing.T) {
 	// A standalone whose address collides with a cluster endpoint at another
 	// site must not fold into that cluster when its TLS fingerprint disagrees.

@@ -1136,29 +1136,30 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.2` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.0-rc.3` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.2` release
+fallback, and Helm chart release metadata to the same `6.2.0-rc.3` release
 version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. Stable
 install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The second
-`v6.2.0` candidate is a hardening and bugfix cut that supersedes `v6.2.0-rc.1`
-without dropping anything it carried: it restores unattended-update reliability
-including in-place repair of already-deployed update units, corrects PBS backup
-attribution across multiple Proxmox clusters, repairs Proxmox installer
-registration including per-canonical-type bootstrap grants on combined hosts,
-hardens the Patrol readiness streaming transport and gates readiness on a
-completed verdict, ends discovery-policy DNS and SSH retry churn, adds explicit
-per-metric threshold off toggles, derives SSO callback URLs from the request
-that reached Pulse, and documents Entra ID SSO integration. The exact `main` SHA
-must pass the integrated release checks and immutable-candidate build before the
-single-build workflow crosses its public mutation boundary.
-The `v6.2.0-rc.2` server cut is classified `no-mobile-impact`; no companion
+continues to govern the stable line until this candidate is promoted. The third
+`v6.2.0` candidate is a focused support correction that supersedes
+`v6.2.0-rc.2`: adding a Proxmox connection now applies the same endpoint and
+TLS identity doctrine as later configuration consolidation, so clusters in
+different organizations are not merged merely because their internal names,
+node names, and private addresses overlap. The exact `main` SHA must pass the
+integrated release checks and immutable-candidate build before the single-build
+workflow crosses its public mutation boundary.
+The `v6.2.0-rc.3` server cut is classified `no-mobile-impact`; no companion
 build upload is part of this cut. The existing mobile candidate programme
 remains separate, and the release packet must not describe a public store
 rollout.
+The preceding `v6.2.0-rc.2` candidate used the same support-prerelease path
+with `rollback_version=v6.1.2` and pinned the same four install surfaces to
+`6.2.0-rc.2`. It is superseded by this cut and no longer governs the install
+pins; its packet stays in `docs/releases/` as the historical candidate record
+for the `v6.2.0` line.
 The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path
 with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 `6.2.0-rc.1`. It is superseded by this cut and no longer governs the install
@@ -1313,14 +1314,14 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.2` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.2`
+For the active support prerelease `v6.2.0-rc.3` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.3`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release. Each new candidate on the
 `v6.2.0` line moves these two pins together with the repo-root `VERSION` and
 the Helm chart metadata in the same commit; a candidate that leaves any of the
-four on the superseded `6.2.0-rc.1` value is a release-packet blocker.
+four on a superseded `6.2.0-rc.*` value is a release-packet blocker.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
 as the current validation-risk commit. That head includes the earlier
 Docker-default correction plus the follow-on capacity-forecast and Patrol
