@@ -255,7 +255,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 			Msg("Remote config signature required but missing")
 		return nil, nil, fmt.Errorf("config signature required but missing")
 	} else if len(configResp.Config.Settings) > 0 || configResp.Config.CommandsEnabled != nil {
-		logger.Warn().
+		logger.Debug().
 			Str("action", "missing_signature_skip_verification").
 			Str("agent_id", agentID).
 			Str("response_agent_id", responseAgentID).

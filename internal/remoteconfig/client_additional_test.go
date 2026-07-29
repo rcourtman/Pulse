@@ -616,6 +616,9 @@ func TestClientFetchLogsStructuredContextWhenSignatureMissing(t *testing.T) {
 	if entry["component"] != "remote_config_client" {
 		t.Fatalf("expected component remote_config_client, got %#v", entry["component"])
 	}
+	if entry["level"] != "debug" {
+		t.Fatalf("expected permitted unsigned config to log at debug, got %#v", entry["level"])
+	}
 	if entry["action"] != "missing_signature_skip_verification" {
 		t.Fatalf("expected action missing_signature_skip_verification, got %#v", entry["action"])
 	}
