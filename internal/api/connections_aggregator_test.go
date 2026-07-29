@@ -239,6 +239,40 @@ func TestBuildConnections_AvailabilityTargetStateFromProbeStatus(t *testing.T) {
 	}
 }
 
+func TestDeriveAvailabilityConnectionStateUsesCanonicalRemoteProbeFreshness(t *testing.T) {
+	receivedAt := time.Date(2026, 7, 29, 10, 0, 0, 0, time.UTC)
+	agentCheckedAt := receivedAt.Add(-24 * time.Hour)
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:               "remote-sensor",
+		Name:             "Remote sensor",
+		Address:          "sensor.example",
+		Protocol:         config.AvailabilityProbeICMP,
+		Enabled:          true,
+		PollIntervalSecs: 60,
+		ProbeAgentID:     "probe-agent",
+	})
+	status := monitoring.AvailabilityProbeStatus{
+		TargetID:              target.ID,
+		Available:             true,
+		LastChecked:           agentCheckedAt,
+		LastSuccess:           agentCheckedAt,
+		ProbeAgentID:          "probe-agent",
+		ProbeReportReceivedAt: receivedAt,
+	}
+
+	state, reason, lastSeen, lastError := deriveAvailabilityConnectionState(
+		target,
+		status,
+		receivedAt.Add(4*time.Minute),
+	)
+	if state != ConnectionStateActive || reason != "" || lastError != nil {
+		t.Fatalf("connection = state %q reason %q error %+v, want active", state, reason, lastError)
+	}
+	if lastSeen == nil || !lastSeen.Equal(receivedAt) {
+		t.Fatalf("last seen = %v, want server receipt %v", lastSeen, receivedAt)
+	}
+}
+
 func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{

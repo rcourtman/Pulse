@@ -84,7 +84,11 @@ indeterminate reachability evidence. Even when its target is a NAS, PBS,
 datastore, or other storage resource, the resulting warning and canonical
 probe alert are not backup failure, protection drift, snapshot damage,
 recovery-point loss, or restore-readiness evidence. Storage/recovery consumers
-must wait for their domain-owned observations.
+must wait for their domain-owned observations. The shared Connections row and
+availability evidence use server receipt time for remote-probe freshness while
+retaining agent check time as observation metadata; storage/recovery must not
+reinterpret either timestamp as backup recency, datastore health, or recovery
+freshness.
 
 ## Canonical Files
 

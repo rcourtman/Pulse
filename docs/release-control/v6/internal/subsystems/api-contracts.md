@@ -1212,6 +1212,11 @@ payload shape change when the portal presents compact client rows.
     `availability` must route management handoffs, pause, remove, and test
     actions to those availability-target endpoints and must not reuse node,
     SSH, platform API, or Pulse Agent setup payloads.
+    For probe-assigned rows, the Connections ledger consumes monitoring's
+    canonical server-receipt freshness reference and its already-derived stale
+    verdict. It must not independently age the agent-authored `LastSuccess`
+    timestamp, because agent clock skew could make Connections disagree with
+    the `network-endpoint` resource and canonical probe alert lifecycle.
     Mock mode must expose authored availability targets through those same
     list, saved-test, and connections-ledger payloads so demo endpoints exercise
     the canonical API contract rather than a frontend-only fixture.
@@ -7846,6 +7851,11 @@ as a `network-endpoint`. Browser callers may test unsaved or saved targets, but
 the persisted target list remains owned by `/api/availability-targets` and
 must be managed from `/settings/monitoring/availability`, not reconstructed
 from resource snapshots or monitored-system counts.
+Remote probe rows preserve the agent-authored check time as observation
+metadata, but API freshness and `lastSeenAt` projections use the server-authored
+receipt time supplied by monitoring. API consumers must not substitute the
+agent clock for disconnect detection or apply a second, shorter generic
+Connections staleness window.
 Mock availability fixtures must still behave like saved targets: `/api/connections`
 reports them as availability rows, `/api/availability-targets` lists them with
 probe status, and saved-test calls return the synthetic probe result instead of

@@ -106,12 +106,14 @@ in-memory queue; if the agent cannot deliver for several check intervals the
 check shows as indeterminate in Pulse until reports resume. After the
 five-minute minimum grace window, Pulse raises one
 `availability_probe_unavailable` warning per disconnected probe, regardless of
-how many checks it owns. That warning uses the normal email, webhook, Apprise,
-and recovery-notification pipeline. When Pulse Mobile is paired through Relay,
-Pulse also sends a privacy-safe `external_probe_offline` push linked to the
-canonical mobile attention item without exposing target names or addresses.
-The alert identity belongs to the probe agent, so adding or removing an
-assigned check does not resolve and reopen it.
+how many checks it owns. Pulse measures that reporting window from server receipt
+time rather than the agent's clock, so clock skew cannot create or conceal the
+disconnect. That warning uses the normal email, webhook, Apprise, and
+recovery-notification pipeline. When Pulse Mobile is paired through Relay, Pulse
+also sends a privacy-safe `external_probe_offline` push linked to the canonical
+mobile attention item without exposing target names or addresses. The alert
+identity belongs to the probe agent, so adding or removing an assigned check
+does not resolve and reopen it.
 
 When the host heartbeat itself is offline, Pulse keeps the existing
 host-offline alert as the single canonical incident and suppresses the

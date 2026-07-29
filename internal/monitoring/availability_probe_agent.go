@@ -83,12 +83,25 @@ func (m *Monitor) effectiveProbeAgentID(target config.AvailabilityTarget) string
 // ApplyProbeAvailabilityResults ingests availability results reported by a host
 // agent. Results are accepted only for targets currently assigned to that agent.
 func (m *Monitor) ApplyProbeAvailabilityResults(hostID string, results []ProbeAvailabilityResult) {
+	m.applyProbeAvailabilityResultsAt(hostID, results, time.Now().UTC())
+}
+
+// applyProbeAvailabilityResultsAt keeps server receipt time explicit for the
+// host-report path and deterministic tests. Agent-authored CheckedAt describes
+// the observation; receivedAt is the authoritative signal that the probe is
+// still reporting.
+func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []ProbeAvailabilityResult, receivedAt time.Time) {
 	if m == nil {
 		return
 	}
 	hostID = strings.TrimSpace(hostID)
 	if hostID == "" || len(results) == 0 {
 		return
+	}
+	if receivedAt.IsZero() {
+		receivedAt = time.Now().UTC()
+	} else {
+		receivedAt = receivedAt.UTC()
 	}
 
 	applied := 0
@@ -115,14 +128,14 @@ func (m *Monitor) ApplyProbeAvailabilityResults(hostID string, results []ProbeAv
 
 		checkedAt := result.CheckedAt
 		if checkedAt.IsZero() {
-			checkedAt = time.Now()
+			checkedAt = receivedAt
 		}
 		latency := time.Duration(result.LatencyMillis) * time.Millisecond
 		if latency < 0 {
 			latency = 0
 		}
 		outcome, probeErr := probeResultOutcome(result)
-		m.applyAvailabilityObservation(target, checkedAt.UTC(), latency, outcome, probeErr, hostID)
+		m.applyAvailabilityObservation(target, checkedAt.UTC(), latency, outcome, probeErr, hostID, receivedAt)
 		applied++
 	}
 
@@ -176,7 +189,7 @@ func (m *Monitor) deriveAvailabilityProbeStaleness(
 		status = availabilityStatusFromTarget(target)
 	}
 	status.ProbeAgentID = agentID
-	reference := status.LastChecked
+	reference := status.FreshnessTime()
 	if reference.IsZero() {
 		reference = m.availabilityProbeAssignmentReference(target.ID, agentID, now)
 	}
@@ -224,11 +237,15 @@ func availabilityProbeReportIsStale(target config.AvailabilityTarget, lastChecke
 	if lastChecked.IsZero() {
 		return true
 	}
+	return now.Sub(lastChecked) > availabilityProbeStaleWindow(target)
+}
+
+func availabilityProbeStaleWindow(target config.AvailabilityTarget) time.Duration {
 	window := time.Duration(target.EffectivePollIntervalSecs()) * 3 * time.Second
 	if window < availabilityProbeStaleFloor {
-		window = availabilityProbeStaleFloor
+		return availabilityProbeStaleFloor
 	}
-	return now.Sub(lastChecked) > window
+	return window
 }
 
 // availabilityProbeTargetsForAgent returns the probe payload for the targets the

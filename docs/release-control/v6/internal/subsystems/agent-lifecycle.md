@@ -60,6 +60,12 @@ and reassignment start a fresh reporting grace window; a result from the
 previous agent must not satisfy the new lease. Once the host heartbeat itself
 is unhealthy, the canonical host-offline lifecycle owns the outage so the
 availability-probe lifecycle cannot create a duplicate whole-agent incident.
+The adjacent `/api/connections` availability row uses monitoring's
+server-receipt freshness reference for that lease while preserving the
+agent-authored check time as observation metadata. That receipt timestamp is
+probe-result liveness only: lifecycle consumers must not reinterpret it as a
+host heartbeat, enrollment renewal, command-channel readiness, or fleet-update
+observation.
 
 ## Canonical Files
 

@@ -1366,6 +1366,9 @@ func deriveAvailabilityConnectionState(target config.AvailabilityTarget, status 
 	var lastSeen *time.Time
 	if !status.LastSuccess.IsZero() {
 		t := status.LastSuccess
+		if freshness := status.FreshnessTime(); strings.TrimSpace(status.ProbeAgentID) != "" && !freshness.IsZero() {
+			t = freshness
+		}
 		lastSeen = &t
 	}
 
@@ -1392,7 +1395,11 @@ func deriveAvailabilityConnectionState(target config.AvailabilityTarget, status 
 		}
 		return ConnectionStateUnreachable, reason, lastSeen, lastError
 	}
-	if lastSeen != nil {
+	// Probe-assigned statuses have already passed through monitoring's
+	// canonical receipt-time staleness derivation. Do not apply this generic
+	// LastSuccess clock a second time or the Connections projection can
+	// disagree with the resource and alert lifecycle.
+	if lastSeen != nil && strings.TrimSpace(status.ProbeAgentID) == "" {
 		staleThreshold := time.Duration(target.EffectivePollIntervalSecs()*2) * time.Second
 		if staleThreshold < connectionStaleThreshold {
 			staleThreshold = connectionStaleThreshold

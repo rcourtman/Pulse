@@ -337,9 +337,9 @@ func TestAvailabilityProbeStalenessDerivesIndeterminateAtReadTime(t *testing.T) 
 	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
 
 	checkedAt := time.Now().UTC()
-	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{
 		{TargetID: "remote", Outcome: AvailabilityProbeReachable, LatencyMillis: 9, CheckedAt: checkedAt},
-	})
+	}, checkedAt)
 
 	// Effective poll interval is 60s, so the floor of five minutes governs.
 	fresh := monitor.availabilityStatusSnapshotForTargets([]config.AvailabilityTarget{target}, checkedAt.Add(5*time.Minute))
@@ -382,13 +382,69 @@ func TestAvailabilityProbeStalenessDerivesIndeterminateAtReadTime(t *testing.T) 
 	}
 }
 
+func TestAvailabilityProbeStalenessUsesServerReceiptTimeAcrossAgentClockSkew(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(probeAgentTarget("remote", "agent-1"))
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+
+	receivedAt := time.Now().UTC()
+	for _, test := range []struct {
+		name      string
+		checkedAt time.Time
+	}{
+		{name: "slow agent clock", checkedAt: receivedAt.Add(-24 * time.Hour)},
+		{name: "fast agent clock", checkedAt: receivedAt.Add(24 * time.Hour)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{
+				{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: test.checkedAt},
+			}, receivedAt)
+
+			fresh := monitor.availabilityStatusSnapshotForTargets(
+				[]config.AvailabilityTarget{target},
+				receivedAt.Add(availabilityProbeStaleFloor),
+			)["remote"]
+			if !fresh.Available || availabilityProbeStatusIsStale(fresh) {
+				t.Fatalf("boundary status = %+v, server receipt must keep the report fresh", fresh)
+			}
+			if !fresh.LastChecked.Equal(test.checkedAt) {
+				t.Fatalf("last checked = %v, want agent observation time %v preserved", fresh.LastChecked, test.checkedAt)
+			}
+			resource, _ := availabilityResourceFromTarget(target, fresh, "", receivedAt)
+			if !resource.LastSeen.Equal(receivedAt) {
+				t.Fatalf("resource last seen = %v, want server receipt %v", resource.LastSeen, receivedAt)
+			}
+			evidence := resource.Availability.Evidence
+			if evidence == nil || !evidence.IngestedAt.Equal(receivedAt) {
+				t.Fatalf("evidence = %+v, want server receipt as ingest time", evidence)
+			}
+			wantValidUntil := receivedAt.Add(availabilityProbeStaleWindow(target))
+			if evidence.ValidUntil == nil || !evidence.ValidUntil.Equal(wantValidUntil) {
+				t.Fatalf("evidence valid until = %v, want %v", evidence.ValidUntil, wantValidUntil)
+			}
+			if evidence.ObservedAt.After(evidence.IngestedAt) {
+				t.Fatalf("evidence chronology = observed %v after ingested %v", evidence.ObservedAt, evidence.IngestedAt)
+			}
+
+			stale := monitor.availabilityStatusSnapshotForTargets(
+				[]config.AvailabilityTarget{target},
+				receivedAt.Add(availabilityProbeStaleFloor+time.Second),
+			)["remote"]
+			if !availabilityProbeStatusIsStale(stale) {
+				t.Fatalf("post-window status = %+v, want stale by server receipt time", stale)
+			}
+		})
+	}
+}
+
 func TestAvailabilitySupplementalRecordsPresentStaleProbeAsIndeterminate(t *testing.T) {
 	monitor := newProbeAgentTestMonitor(t, probeAgentTarget("remote", "agent-1"))
 	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
 
-	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
-		{TargetID: "remote", Outcome: AvailabilityProbeReachable, LatencyMillis: 9, CheckedAt: time.Now().UTC().Add(-time.Hour)},
-	})
+	old := time.Now().UTC().Add(-time.Hour)
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote", Outcome: AvailabilityProbeReachable, LatencyMillis: 9, CheckedAt: old},
+	}, old)
 
 	records := availabilityPollProvider{}.SupplementalRecords(monitor, "org-a")
 	if len(records) != 1 {
@@ -487,13 +543,13 @@ func TestAvailabilityProbeStaleIncidentDeduplicatesPerAgent(t *testing.T) {
 	t.Cleanup(alertManager.Stop)
 	monitor.alertManager = alertManager
 	old := time.Now().UTC().Add(-time.Hour)
-	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{
 		{TargetID: "remote-a", Outcome: AvailabilityProbeReachable, CheckedAt: old},
 		{TargetID: "remote-b", Outcome: AvailabilityProbeReachable, CheckedAt: old},
-	})
-	monitor.ApplyProbeAvailabilityResults("agent-2", []ProbeAvailabilityResult{
+	}, old)
+	monitor.applyProbeAvailabilityResultsAt("agent-2", []ProbeAvailabilityResult{
 		{TargetID: "remote-c", Outcome: AvailabilityProbeReachable, CheckedAt: old},
-	})
+	}, old)
 
 	_ = (availabilityPollProvider{}).SupplementalRecords(monitor, "")
 	alertsByAgent := make(map[string]int)
@@ -515,9 +571,10 @@ func TestAvailabilityProbeFreshReportResolvesStaleIncident(t *testing.T) {
 	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
 	t.Cleanup(alertManager.Stop)
 	monitor.alertManager = alertManager
-	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
-		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: time.Now().UTC().Add(-time.Hour)},
-	})
+	old := time.Now().UTC().Add(-time.Hour)
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: old},
+	}, old)
 	_ = (availabilityPollProvider{}).SupplementalRecords(monitor, "")
 	if got := alertManager.GetActiveAlerts(); len(got) != 1 || got[0].Type != alerts.ExternalProbeUnavailableAlertType {
 		t.Fatalf("stale alerts = %+v, want one before recovery", got)
@@ -547,9 +604,10 @@ func TestAvailabilityProbeHostOfflineOwnsConnectivityLifecycle(t *testing.T) {
 		LastSeen:        time.Now().UTC().Add(-time.Hour),
 		IntervalSeconds: 30,
 	})
-	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
-		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: time.Now().UTC().Add(-time.Hour)},
-	})
+	old := time.Now().UTC().Add(-time.Hour)
+	monitor.applyProbeAvailabilityResultsAt("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: old},
+	}, old)
 
 	_ = (availabilityPollProvider{}).SupplementalRecords(monitor, "")
 	for _, alert := range alertManager.GetActiveAlerts() {

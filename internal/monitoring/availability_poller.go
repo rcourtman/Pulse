@@ -33,6 +33,21 @@ type AvailabilityProbeStatus struct {
 	LastError           string    `json:"lastError,omitempty"`
 	FailureThreshold    int       `json:"failureThreshold,omitempty"`
 	ProbeAgentID        string    `json:"probeAgentId,omitempty"`
+	// ProbeReportReceivedAt is server-authored freshness evidence for a remote
+	// observation. Keep it off the wire: LastChecked remains the agent's
+	// observation time, while disconnect detection must not trust agent clock
+	// skew in either direction.
+	ProbeReportReceivedAt time.Time `json:"-"`
+}
+
+// FreshnessTime returns the authoritative liveness reference for this status.
+// Remote observations use server receipt time; local observations use their
+// server-authored check time.
+func (s AvailabilityProbeStatus) FreshnessTime() time.Time {
+	if strings.TrimSpace(s.ProbeAgentID) != "" && !s.ProbeReportReceivedAt.IsZero() {
+		return s.ProbeReportReceivedAt
+	}
+	return s.LastChecked
 }
 
 // AvailabilityProbeOutcome and its values are aliases for the shared probe
@@ -308,7 +323,7 @@ func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.Avai
 	outcome, err := ProbeAvailabilityTargetResult(ctx, target)
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.applyAvailabilityObservation(target, checkedAt, latency, outcome, err, "")
+	m.applyAvailabilityObservation(target, checkedAt, latency, outcome, err, "", time.Time{})
 	m.updateResourceStore(m.GetState())
 }
 
@@ -322,8 +337,9 @@ func (m *Monitor) applyAvailabilityObservation(
 	outcome AvailabilityProbeOutcome,
 	probeErr error,
 	probeAgentID string,
+	probeReportReceivedAt time.Time,
 ) {
-	m.setAvailabilityStatus(target, checkedAt, latency, outcome, probeErr, probeAgentID)
+	m.setAvailabilityStatus(target, checkedAt, latency, outcome, probeErr, probeAgentID, probeReportReceivedAt)
 
 	if probeErr == nil {
 		if m.stalenessTracker != nil {
@@ -339,7 +355,15 @@ func (m *Monitor) applyAvailabilityObservation(
 	m.recordTaskResult(InstanceTypeAvailability, target.ID, nil)
 }
 
-func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checkedAt time.Time, latency time.Duration, outcome AvailabilityProbeOutcome, probeErr error, probeAgentID string) {
+func (m *Monitor) setAvailabilityStatus(
+	target config.AvailabilityTarget,
+	checkedAt time.Time,
+	latency time.Duration,
+	outcome AvailabilityProbeOutcome,
+	probeErr error,
+	probeAgentID string,
+	probeReportReceivedAt time.Time,
+) {
 	if m == nil {
 		return
 	}
@@ -347,6 +371,9 @@ func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checke
 	status.Outcome = string(outcome)
 	status.LastChecked = checkedAt
 	status.ProbeAgentID = strings.TrimSpace(probeAgentID)
+	if status.ProbeAgentID != "" {
+		status.ProbeReportReceivedAt = probeReportReceivedAt.UTC()
+	}
 	latencyMs := latency.Milliseconds()
 	if probeErr == nil && latencyMs == 0 {
 		latencyMs = 1
@@ -414,7 +441,7 @@ func availabilityStatusFromTarget(target config.AvailabilityTarget) Availability
 }
 
 func availabilityResourceFromTarget(target config.AvailabilityTarget, status AvailabilityProbeStatus, _ string, now time.Time) (unifiedresources.Resource, unifiedresources.ResourceIdentity) {
-	lastSeen := status.LastChecked
+	lastSeen := status.FreshnessTime()
 	if lastSeen.IsZero() {
 		lastSeen = now
 	}
@@ -442,7 +469,19 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		PollIntervalSeconds: target.EffectivePollIntervalSecs(),
 		TimeoutMillis:       target.EffectiveTimeoutMillis(),
 	}
-	data.Evidence = availabilityEvidenceEnvelope(target, status, lastSeen, now)
+	observedAt := status.LastChecked
+	if observedAt.IsZero() {
+		observedAt = lastSeen
+	}
+	if observedAt.After(lastSeen) {
+		// A fast remote clock cannot author evidence in the server's future.
+		observedAt = lastSeen
+	}
+	ingestedAt := now
+	if strings.TrimSpace(status.ProbeAgentID) != "" && !status.ProbeReportReceivedAt.IsZero() {
+		ingestedAt = status.ProbeReportReceivedAt
+	}
+	data.Evidence = availabilityEvidenceEnvelope(target, status, observedAt, ingestedAt)
 	resource := unifiedresources.Resource{
 		Type:         unifiedresources.ResourceTypeNetworkEndpoint,
 		Technology:   string(target.Protocol),
@@ -498,9 +537,13 @@ func availabilityEvidenceEnvelope(
 		return nil
 	}
 
-	validUntil := observedAt.Add(
-		time.Duration(target.EffectivePollIntervalSecs()*2) * time.Second,
-	)
+	freshnessAt := observedAt
+	validityWindow := time.Duration(target.EffectivePollIntervalSecs()*2) * time.Second
+	if strings.TrimSpace(status.ProbeAgentID) != "" && !status.ProbeReportReceivedAt.IsZero() {
+		freshnessAt = status.ProbeReportReceivedAt
+		validityWindow = availabilityProbeStaleWindow(target)
+	}
+	validUntil := freshnessAt.Add(validityWindow)
 	completeness := operationaltrust.EvidenceComplete
 	confidence := operationaltrust.EvidenceConfirmed
 	var reason *operationaltrust.EvidenceReason

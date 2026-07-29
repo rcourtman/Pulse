@@ -324,13 +324,16 @@ yields no entry and must say so in the log rather than passing silently, and it
 must never prevent the remaining configured hosts from being suppressed.
 
 External availability-probe freshness is evaluated against the effective
-target cadence with a five-minute minimum grace. Missing, stale, or
-wrong-agent results are indeterminate monitoring evidence: their
-`network-endpoint` resources degrade to warning without manufacturing a target
-reachability incident. Monitoring aggregates stale targets by current agent,
-updates the single canonical probe alert lifecycle, and treats a fresh result
-from that same assignment as recovery. Assignment trackers are removed with
-their targets and reset when agent identity changes.
+target cadence with a five-minute minimum grace. The server-authored receipt
+time is authoritative for reporting freshness; the agent-authored check time
+remains observation metadata and must not create or suppress a disconnect when
+clocks differ. Missing, stale, or wrong-agent results are indeterminate
+monitoring evidence: their `network-endpoint` resources degrade to warning
+without manufacturing a target reachability incident. Monitoring aggregates
+stale targets by current agent, updates the single canonical probe alert
+lifecycle, and treats a fresh result from that same assignment as recovery.
+Assignment trackers are removed with their targets and reset when agent identity
+changes.
 
 ## Canonical Files
 
@@ -999,9 +1002,12 @@ to resolve. Every completed probe also authors an operational-trust
 `EvidenceEnvelope` with provider `availability`, collector
 `availability-poller`, the saved target as its provider reference, the exact
 observation/ingest times, and a validity window of twice the effective polling
-interval. Before the first completed probe, evidence is explicitly partial and
-unknown with reason `availability_not_observed`; monitoring must never encode
-that state as a confirmed failure or a healthy observation. The registry owns
+interval for local checks. Remote-probe evidence instead uses its canonical
+server-receipt freshness window (three effective intervals with the five-minute
+minimum), so resource evidence, Connections state, and the probe alert lifecycle
+cannot disagree. Before the first completed probe, evidence is explicitly
+partial and unknown with reason `availability_not_observed`; monitoring must
+never encode that state as a confirmed failure or a healthy observation. The registry owns
 binding the source envelope to the check resource and cloning a separately
 bound envelope for any matched-resource facet projection after correlation.
 Availability target kind is monitoring-owned runtime metadata, not a frontend
@@ -1029,10 +1035,12 @@ local and the normal poll provider resumes the target on its next planning
 cycle, without a restart. Reported results are accepted only from the agent that
 currently owns the target, and results for any other target or from any other
 agent are dropped. Failure accounting, thresholds, and incident projection stay
-server-side. When an assigned agent stops reporting, monitoring derives
-indeterminate with a stale-report explanation at read time through the shared
-probe-status snapshot rather than mutating stored state, so every availability
-consumer sees the same staleness verdict.
+server-side. The agent-authored observation time remains visible as the target's
+last check, but staleness uses server receipt time so slow or fast agent clocks
+cannot manufacture or conceal a disconnect. When an assigned agent stops
+reporting, monitoring derives indeterminate with a stale-report explanation at
+read time through the shared probe-status snapshot rather than mutating stored
+state, so every availability consumer sees the same staleness verdict.
 Mock-mode Discovery context follows the same fixture-graph rule. Demo service
 details such as detected version, config/data/log paths, Docker bind mounts,
 ports, and suggested web URLs may be authored in mock fixtures, but consumers
