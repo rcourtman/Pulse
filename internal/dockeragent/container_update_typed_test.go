@@ -8,6 +8,7 @@ import (
 	"time"
 
 	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/network"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/rs/zerolog"
@@ -75,6 +76,11 @@ func TestTypedContainerUpdateDelegatesToProductionRecreatePath(t *testing.T) {
 			imagePullFn: func(context.Context, string, dockerImagePullOptions) (io.ReadCloser, error) {
 				return io.NopCloser(strings.NewReader("{}")), nil
 			},
+			imageInspectWithRawFn: func(context.Context, string) (image.InspectResponse, []byte, error) {
+				return image.InspectResponse{
+					RepoDigests: []string{"docker.io/library/nginx@sha256:registry-old"},
+				}, nil, nil
+			},
 			containerStopFn: func(context.Context, string, dockerContainerStopOptions) error {
 				return nil
 			},
@@ -101,7 +107,7 @@ func TestTypedContainerUpdateDelegatesToProductionRecreatePath(t *testing.T) {
 		context.Background(),
 		"docker",
 		"container-id",
-		"sha256:old0000000000",
+		"sha256:registry-old",
 		func(step string) { progress = append(progress, step) },
 	)
 	if err != nil {

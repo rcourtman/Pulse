@@ -29,8 +29,22 @@ func (a *Agent) TypedContainerUpdate(ctx context.Context, runtime, containerID, 
 	if err != nil {
 		return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("container preflight inspect unavailable: %v", annotateDockerConnectionError(err))
 	}
-	if expectedImageDigest != "" && !strings.EqualFold(strings.TrimSpace(inspect.Image), expectedImageDigest) {
-		return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("container image digest no longer matches the planned update")
+	if expectedImageDigest != "" {
+		expectedImageDigest = strings.TrimSpace(expectedImageDigest)
+		localImageID := strings.TrimSpace(inspect.Image)
+		matchesLocalID := strings.EqualFold(localImageID, expectedImageDigest)
+		matchesRepoDigest := false
+		if !matchesLocalID {
+			imageName := ""
+			if inspect.Config != nil {
+				imageName = inspect.Config.Image
+			}
+			repoDigest, _, _, _ := a.getImageRepoDigest(ctx, localImageID, imageName)
+			matchesRepoDigest = strings.EqualFold(strings.TrimSpace(repoDigest), expectedImageDigest)
+		}
+		if !matchesLocalID && !matchesRepoDigest {
+			return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("container image digest no longer matches the planned update")
+		}
 	}
 
 	result := a.updateContainerWithProgress(ctx, containerID, progress)

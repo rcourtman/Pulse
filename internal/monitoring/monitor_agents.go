@@ -2229,6 +2229,122 @@ func normalizedSecurityStrings(values []string) []string {
 	return normalized
 }
 
+// staleHostIdentityForReenrollment recognizes explicit reinstall intent before
+// a new token is bound. Reusing the stale record's ID keeps serial-less
+// physical-disk identities stable across reinstall while the token creation
+// boundary prevents a foreign token from taking over a live host.
+func staleHostIdentityForReenrollment(report agentshost.Report, tokenRecord *config.APITokenRecord, hosts []models.Host) string {
+	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
+		return ""
+	}
+	machineID := strings.TrimSpace(report.Host.MachineID)
+	hostname := strings.TrimSpace(report.Host.Hostname)
+	tokenID := strings.TrimSpace(tokenRecord.ID)
+	if machineID == "" || hostname == "" || tokenID == "" {
+		return ""
+	}
+
+	var bestID string
+	var bestLastSeen time.Time
+	for _, candidate := range hosts {
+		if strings.TrimSpace(candidate.MachineID) != machineID ||
+			!unifiedresources.HostnamesEquivalent(candidate.Hostname, hostname) ||
+			strings.TrimSpace(candidate.TokenID) == tokenID ||
+			!candidate.LastSeen.Before(tokenRecord.CreatedAt) {
+			continue
+		}
+		candidateID := strings.TrimSpace(candidate.ID)
+		if candidateID == "" {
+			continue
+		}
+		if bestID == "" || candidate.LastSeen.After(bestLastSeen) {
+			bestID = candidateID
+			bestLastSeen = candidate.LastSeen
+		}
+	}
+	return bestID
+}
+
+// supersedeStaleHostAgentDuplicates removes older generations left behind by
+// installs completed before this cleanup existed. This is an internal
+// supersession, not a user removal: it deliberately creates no tombstone and
+// does not revoke either token.
+func (m *Monitor) supersedeStaleHostAgentDuplicates(current models.Host, tokenRecord *config.APITokenRecord, hosts []models.Host) {
+	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
+		return
+	}
+	machineID := strings.TrimSpace(current.MachineID)
+	hostname := strings.TrimSpace(current.Hostname)
+	if machineID == "" || hostname == "" {
+		return
+	}
+
+	for _, stale := range hosts {
+		staleID := strings.TrimSpace(stale.ID)
+		if staleID == "" ||
+			strings.TrimSpace(stale.MachineID) != machineID ||
+			!unifiedresources.HostnamesEquivalent(stale.Hostname, hostname) ||
+			!stale.LastSeen.Before(tokenRecord.CreatedAt) {
+			continue
+		}
+
+		if staleID == strings.TrimSpace(current.ID) {
+			// The fresh install reused the physical host's stable ID. Remove
+			// bindings for its pre-install token so the stopped old agent
+			// cannot later overwrite the replacement through that same ID.
+			currentTokenID := strings.TrimSpace(current.TokenID)
+			m.mu.Lock()
+			for key, boundID := range m.hostTokenBindings {
+				if strings.TrimSpace(boundID) != staleID {
+					continue
+				}
+				if key == currentTokenID || strings.HasPrefix(key, currentTokenID+":") {
+					continue
+				}
+				delete(m.hostTokenBindings, key)
+			}
+			m.mu.Unlock()
+			continue
+		}
+
+		removed, ok := m.state.RemoveHost(staleID)
+		if !ok {
+			continue
+		}
+		m.state.RemoveConnectionHealth(hostConnectionPrefix + staleID)
+		m.state.UnlinkNodesFromHostAgent(staleID)
+
+		m.mu.Lock()
+		for key, boundID := range m.hostTokenBindings {
+			if strings.TrimSpace(boundID) == staleID {
+				delete(m.hostTokenBindings, key)
+			}
+		}
+		m.clearHostAgentIdentityTrackingLocked(staleID)
+		m.mu.Unlock()
+
+		m.hostReportOrderMu.Lock()
+		delete(m.hostReportOrders, staleID)
+		m.hostReportOrderMu.Unlock()
+
+		if m.hostContinuityStore != nil {
+			if err := m.hostContinuityStore.Delete(staleID); err != nil {
+				log.Warn().Err(err).Str("staleHostID", staleID).Msg("Failed to remove superseded host continuity entry")
+			}
+		}
+		if m.alertManager != nil {
+			m.alertManager.HandleHostRemoved(removed)
+			m.SyncAlertState()
+		}
+
+		log.Info().
+			Str("host", removed.Hostname).
+			Str("staleHostID", staleID).
+			Str("replacementHostID", current.ID).
+			Msg("Superseded stale host agent record after re-enrollment")
+	}
+}
+
 // ApplyHostReport ingests a host agent report into the shared state.
 func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.APITokenRecord) (models.Host, error) {
 	m.hostAgentLifecycleMu.RLock()
@@ -2290,6 +2406,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if readState != nil {
 		existingHosts = readState.Hosts()
 	}
+	existingHostModels := m.state.GetHosts()
 
 	identifier := baseIdentifier
 	if tokenRecord != nil && strings.TrimSpace(tokenRecord.ID) != "" {
@@ -2312,9 +2429,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			identifier = boundID
 		} else {
 			bindingID := baseIdentifier
+			reusedStaleID := staleHostIdentityForReenrollment(report, tokenRecord, existingHostModels)
+			if reusedStaleID != "" {
+				bindingID = reusedStaleID
+			}
 			for _, candidate := range existingHosts {
 				if candidate == nil || candidate.AgentID() != bindingID {
 					continue
+				}
+				if reusedStaleID == bindingID {
+					break
 				}
 				if hostAgentHostnamesMatch(candidate.Hostname(), hostname) && strings.TrimSpace(candidate.TokenID()) == tokenID {
 					break
@@ -2414,6 +2538,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if readState != nil {
 		existingHosts = readState.Hosts()
 	}
+	existingHostModels = m.state.GetHosts()
 
 	reportOrder, accepted := m.reserveHostReportOrder(identifier, report, receivedAt)
 	if !accepted {
@@ -2772,6 +2897,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	m.state.UpsertHost(host)
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
+	m.supersedeStaleHostAgentDuplicates(host, tokenRecord, existingHostModels)
 
 	// Update the linked PVE node to point back to this host agent
 	if host.LinkedNodeID != "" {

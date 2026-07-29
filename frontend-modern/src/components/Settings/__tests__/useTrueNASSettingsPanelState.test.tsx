@@ -84,6 +84,7 @@ describe('useTrueNASSettingsPanelState', () => {
         pollIntervalSeconds: 90,
         useHttps: true,
         insecureSkipVerify: false,
+        fingerprint: 'SHA256:stored-fingerprint',
         enabled: true,
       },
     ] as never);
@@ -122,6 +123,7 @@ describe('useTrueNASSettingsPanelState', () => {
     result.openEditDialog(result.connections()[0]);
     expect(result.dialogOpen()).toBe(true);
     expect(result.form().pollIntervalSeconds).toBe('90');
+    result.updateForm({ fingerprint: '' });
     await result.previewCurrentForm();
     await result.saveCurrentForm();
 
@@ -142,6 +144,7 @@ describe('useTrueNASSettingsPanelState', () => {
         pollIntervalSeconds: 90,
         username: 'pulse-readonly',
         password: '',
+        fingerprint: '',
       }),
     );
     expect(result.dialogOpen()).toBe(false);

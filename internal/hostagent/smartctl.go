@@ -1,6 +1,7 @@
 package hostagent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -221,7 +222,7 @@ var (
 	smartTextTempAttributeRE = regexp.MustCompile(`^\s*(190|194)\s+\S+.*-\s+(\d{1,3})\b`)
 	smartTextCurrentTempRE   = regexp.MustCompile(`(?i)^current(?: drive)? temperature:\s*(\d{1,3})\b`)
 	smartTextTemperatureRE   = regexp.MustCompile(`(?i)^temperature:\s*(\d{1,3})\b`)
-	linuxDirectSATDeviceRE   = regexp.MustCompile(`^(sd|hd)[a-z]+$`)
+	linuxDirectSATDeviceRE   = regexp.MustCompile(`^((sd|hd)[a-z]+|sata[0-9]+)$`)
 	pciControllerAddressRE   = regexp.MustCompile(`(?i)^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$`)
 )
 
@@ -252,7 +253,9 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 // Unraid membership, transport, and spin state as authoritative hints. Native
 // array state is never derived from SMART success or failure.
 func CollectSMARTLocalWithUnraid(ctx context.Context, diskExclude []string, unraid *agentshost.UnraidStorage) ([]DiskSMART, error) {
-	targets, err := listSMARTTargets(ctx, diskExclude)
+	enumerationCtx, cancelEnumeration := context.WithTimeout(ctx, 10*time.Second)
+	targets, err := listSMARTTargets(enumerationCtx, diskExclude)
+	cancelEnumeration()
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to list block devices for SMART collection")
 		return nil, fmt.Errorf("list block devices for SMART collection: %w", err)
@@ -529,7 +532,7 @@ func unionSMARTTargets(scanTargets []smartctlTarget, devices []string) []smartct
 }
 
 func listSMARTTargetsLinuxFromScan(ctx context.Context, diskExclude []string) ([]smartctlTarget, error) {
-	smartctlPath, err := execLookPath("smartctl")
+	smartctlPath, err := resolveSmartctlPath()
 	if err != nil {
 		return nil, fmt.Errorf("look up smartctl binary: %w", err)
 	}
@@ -1369,7 +1372,7 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	smartctlPath, err := execLookPath("smartctl")
+	smartctlPath, err := resolveSmartctlPath()
 	if err != nil {
 		return nil, fmt.Errorf("look up smartctl binary: %w", err)
 	}
@@ -1380,7 +1383,7 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 	var lastErr error
 
 	for i, args := range attempts {
-		output, err := smartRunCommandOutput(cmdCtx, smartctlPath, args...)
+		output, err := runSmartctlCompatible(cmdCtx, smartctlPath, args)
 		if err != nil {
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) {
@@ -1475,6 +1478,59 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 		return nil, lastErr
 	}
 	return nil, errSMARTDataUnavailable
+}
+
+func resolveSmartctlPath() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv("PULSE_SMARTCTL_PATH")); configured != "" {
+		if !filepath.IsAbs(configured) {
+			return "", fmt.Errorf("PULSE_SMARTCTL_PATH must be an absolute path")
+		}
+		return configured, nil
+	}
+	return execLookPath("smartctl")
+}
+
+// runSmartctlCompatible keeps JSON output on supported smartmontools releases,
+// but retries in text mode for older vendor builds (notably DSM's 6.5 build)
+// that reject --json=o before examining the device.
+func runSmartctlCompatible(ctx context.Context, smartctlPath string, args []string) ([]byte, error) {
+	output, err := smartRunCommandOutput(ctx, smartctlPath, args...)
+	if err == nil || !smartctlRejectsJSONOption(output, err) {
+		return output, err
+	}
+
+	legacyArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg != "--json=o" {
+			legacyArgs = append(legacyArgs, arg)
+		}
+	}
+	return smartRunCommandOutput(ctx, smartctlPath, legacyArgs...)
+}
+
+func smartctlRejectsJSONOption(output []byte, err error) bool {
+	message := strings.ToLower(strings.TrimSpace(string(output) + " " + errorString(err)))
+	if !strings.Contains(message, "json") {
+		return false
+	}
+	for _, marker := range []string{
+		"unrecognized option",
+		"unknown option",
+		"invalid option",
+		"unrecognized command line option",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func smartctlArgsUseStandbyExitStatus(args []string) bool {
@@ -1977,7 +2033,8 @@ func parseSMARTTextFallback(text string) smartTextFallback {
 			}
 		case strings.HasPrefix(lower, "serial number:"):
 			fallback.Serial = strings.TrimSpace(line[len("Serial Number:"):])
-		case strings.Contains(lower, "device is in standby mode"):
+		case strings.Contains(lower, "device is in standby mode"),
+			strings.Contains(lower, "standby (os)"):
 			fallback.Standby = true
 		case strings.HasPrefix(lower, "smart overall-health self-assessment test result:"):
 			fallback.Health = parseSMARTHealthText(line)
@@ -2200,7 +2257,9 @@ func runCommandOutputLimited(ctx context.Context, maxBytes int, name string, arg
 	}
 
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stderr = io.Discard
+	var stderr limitedCommandBuffer
+	stderr.limit = 32 * 1024
+	cmd.Stderr = &stderr
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -2249,8 +2308,27 @@ func runCommandOutputLimited(ctx context.Context, maxBytes int, name string, arg
 		return nil, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxBytes)
 	}
 	if waitErr != nil {
+		if message := strings.TrimSpace(stderr.String()); message != "" {
+			return output, fmt.Errorf("%w: %s", waitErr, message)
+		}
 		return output, waitErr
 	}
 
 	return output, nil
+}
+
+type limitedCommandBuffer struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *limitedCommandBuffer) Write(p []byte) (int, error) {
+	originalLength := len(p)
+	if remaining := b.limit - b.Len(); remaining > 0 {
+		if len(p) > remaining {
+			p = p[:remaining]
+		}
+		_, _ = b.Buffer.Write(p)
+	}
+	return originalLength, nil
 }

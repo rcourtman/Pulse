@@ -154,7 +154,10 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
     pollIntervalSeconds,
     useHttps: form.useHttps,
     insecureSkipVerify: form.insecureSkipVerify,
-    ...(fingerprint ? { fingerprint } : {}),
+    // Empty is meaningful when editing: it explicitly clears a previously
+    // pinned certificate fingerprint. Omitting the field makes the backend's
+    // merge preserve the stored value (#1631).
+    fingerprint,
     enabled: form.enabled,
     monitorDatasets: form.monitorDatasets,
     monitorPools: form.monitorPools,

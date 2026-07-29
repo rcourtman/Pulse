@@ -216,7 +216,17 @@ func (c *Client) ensureTransportLocked(ctx context.Context) (TransportMode, erro
 		return TransportJSONRPC, lockedErr
 	}
 
-	if !isUnsupportedWebSocketEndpoint(err) {
+	unsupportedEndpoint := isUnsupportedWebSocketEndpoint(err)
+	// TrueNAS CORE 13 commonly redirects the HTTPS /api/current handshake to
+	// /ui/ instead of returning 404. A redirect from an already-TLS endpoint
+	// cannot be an HTTP-to-HTTPS upgrade, so treat it as another form of
+	// "JSON-RPC not implemented" and let the version probe decide whether the
+	// appliance is eligible for the legacy REST transport.
+	if !unsupportedEndpoint && c.config.UseHTTPS {
+		var handshake *RPCHandshakeError
+		unsupportedEndpoint = errors.As(err, &handshake) && isRedirectStatus(handshake.StatusCode)
+	}
+	if !unsupportedEndpoint {
 		c.recordTransportError(err)
 		return TransportUnknown, err
 	}
