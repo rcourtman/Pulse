@@ -20,6 +20,7 @@ import (
 const maxActionPlanRequestBytes = 1 << 20
 const maxActionDecisionRequestBytes = 64 << 10
 const maxActionExecutionRequestBytes = 64 << 10
+const maxActionForceFailRequestBytes = 64 << 10
 const maxPendingActionAudits = 100
 
 // ActionExecutor is the API-facing name for the canonical action lifecycle
@@ -61,6 +62,12 @@ type actionDecisionResponse struct {
 type actionExecutionRequest struct {
 	Reason   string `json:"reason,omitempty"`
 	PlanHash string `json:"planHash,omitempty"`
+}
+
+// actionForceFailRequest carries the operator's justification for the
+// override. It is optional and is recorded verbatim in the terminal result.
+type actionForceFailRequest struct {
+	Reason string `json:"reason,omitempty"`
 }
 
 type actionExecutionResponse struct {
@@ -543,6 +550,80 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		Audit:    completed,
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_encode_failed", "Failed to encode action execution")
+	}
+}
+
+// HandleForceFailAction is the operator escape hatch for an action wedged in
+// executing because its agent never returned durable completion evidence.
+// Reconciliation self-heals the known stranded shapes on its own; this exists
+// for the residue an operator has verified by hand. It only terminalizes the
+// audit row — it never sends, resends, or cancels anything on the transport —
+// and it refuses actions that are already final.
+func (h *ResourceHandlers) HandleForceFailAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if mock.IsMockEnabled() {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeMockModeEnabled, "Cannot force-fail actions in mock mode")
+		return
+	}
+
+	actionID := strings.TrimSpace(r.PathValue("id"))
+	if actionID == "" {
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeMissingID, "Missing action ID")
+		return
+	}
+	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
+		return
+	}
+
+	var override actionForceFailRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionForceFailRequestBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&override); err != nil {
+		if !errors.Is(err, io.EOF) {
+			writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionExecution, "Invalid action force-fail request", map[string]string{
+				"body": "request body must be a valid action force-fail JSON object",
+			})
+			return
+		}
+	} else if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionExecution, "Invalid action force-fail request", map[string]string{
+			"body": "request body must contain one JSON object",
+		})
+		return
+	}
+	override.Reason = strings.TrimSpace(override.Reason)
+
+	orgID := GetOrgID(r.Context())
+	actor, err := actionActorForRequest(h.cfg, r, orgID)
+	if err != nil {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
+		return
+	}
+	failed, err := h.ActionLifecycle().ForceFail(orgID, actionID, actor.SubjectID, override.Reason)
+	if err != nil {
+		writeActionLifecycleReadError(w, err, func() {
+			var persist *actionlifecycle.PersistError
+			if errors.As(err, &persist) {
+				writeJSONError(w, http.StatusInternalServerError, "action_force_fail_persist_failed", sanitizeErrorForClient(err, "Failed to persist action force-fail"))
+				return
+			}
+			writeActionExecutionApplyError(w, err)
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(actionExecutionResponse{
+		ActionID: failed.ID,
+		State:    failed.State,
+		Result:   failed.Result,
+		Audit:    failed,
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "action_force_fail_encode_failed", "Failed to encode action force-fail")
 	}
 }
 

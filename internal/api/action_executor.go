@@ -4,11 +4,97 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+// strandedActionDispatchWindow bounds how long a committed dispatch may sit
+// without any durable completion evidence before Pulse stops waiting and
+// terminalizes the audit row. It is deliberately the same threshold the
+// pulse-intelligence telemetry uses to call an executing action stuck, so an
+// action can never be reported stuck while reconciliation is still waiting on
+// it. Every typed operation timeout is far shorter than this window, so an
+// in-flight mutation is never cut short by it.
+const strandedActionDispatchWindow = pulseIntelligenceStuckExecutingThreshold
+
+// strandedActionDispatchClassifiable reports whether a non-terminal receipt
+// query carries enough protocol meaning to be reasoned about at all. An
+// unrecognized status is not evidence of anything, so the attempt stays
+// receipt_pending rather than being validated or terminalized.
+func strandedActionDispatchClassifiable(status operationreceipt.QueryStatus) bool {
+	return status == operationreceipt.QueryNotFound || status == operationreceipt.QueryFoundInterrupted
+}
+
+// strandedActionDispatch converts an authenticated, correlated non-terminal
+// receipt query into terminal audit truth when the agent can no longer produce
+// completion evidence for the committed attempt. It returns found=false while
+// evidence may still arrive, so the deliberate receipt_pending semantics stay:
+// a transport error never reaches here, and a fresh missing receipt keeps
+// waiting. Callers must have validated the query against the attempt identity
+// and must not call it for a terminal receipt, which carries real result truth.
+func strandedActionDispatch(query operationreceipt.QueryResult, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt, now time.Time) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool) {
+	reasonCode, summary, stranded := strandedActionDispatchReason(query, attempt, now)
+	if !stranded {
+		return nil, unified.ActionDispatchReceipt{}, false
+	}
+	result := actionlifecycle.StrandedDispatchResult(reasonCode, summary, record.Plan.RollbackAvailable)
+	receipt := unified.ActionDispatchReceipt{
+		AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: now.UTC(),
+	}
+	return result, receipt, true
+}
+
+// strandedActionDispatchReason classifies a non-terminal receipt query. An
+// interrupted or tombstoned receipt is unrecoverable the moment it is read:
+// the agent-side store only marks a receipt interrupted when the agent
+// restarted after admitting the operation, and no interrupted or tombstoned
+// receipt can ever become terminal again. A receipt that is merely still
+// accepted or started, or one the agent has no record of at all, may still be
+// completed, so those only strand once the bounded window has elapsed.
+func strandedActionDispatchReason(query operationreceipt.QueryResult, attempt unified.ActionDispatchAttempt, now time.Time) (string, string, bool) {
+	switch query.Status {
+	case operationreceipt.QueryNotFound:
+		if !strandedActionDispatchWindowElapsed(attempt, now) {
+			return "", "", false
+		}
+		return "dispatch_evidence_missing", "The Pulse agent has no record of this operation and no completion evidence arrived within the reconciliation window, so Pulse cannot confirm whether it took effect. Check the resource directly before retrying.", true
+	case operationreceipt.QueryFoundInterrupted:
+		if query.Record == nil {
+			return "", "", false
+		}
+		switch query.Record.State {
+		case operationreceipt.StateInterrupted:
+			return "dispatch_evidence_interrupted", "The Pulse agent restarted while this operation was running and kept no durable completion evidence, so Pulse cannot confirm whether it took effect. Check the resource directly before retrying.", true
+		case operationreceipt.StateTombstone:
+			return "dispatch_evidence_discarded", "The Pulse agent discarded this operation's durable completion evidence before Pulse could read it, so Pulse cannot confirm whether it took effect. Check the resource directly before retrying.", true
+		default:
+			if !strandedActionDispatchWindowElapsed(attempt, now) {
+				return "", "", false
+			}
+			return "dispatch_evidence_incomplete", "The Pulse agent still reports this operation as unfinished long after it was dispatched, so Pulse cannot confirm whether it took effect. Check the resource directly before retrying.", true
+		}
+	default:
+		return "", "", false
+	}
+}
+
+// strandedActionDispatchWindowElapsed measures from the last durable transport
+// transition on the attempt. An attempt with no usable timestamp never strands
+// on its own; the operator override remains the escape hatch for it.
+func strandedActionDispatchWindowElapsed(attempt unified.ActionDispatchAttempt, now time.Time) bool {
+	since := attempt.UpdatedAt
+	if since.Before(attempt.CreatedAt) {
+		since = attempt.CreatedAt
+	}
+	if since.IsZero() || now.IsZero() {
+		return false
+	}
+	return !now.UTC().Before(since.UTC().Add(strandedActionDispatchWindow))
+}
 
 type actionAgentCommander interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)

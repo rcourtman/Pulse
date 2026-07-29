@@ -159,6 +159,14 @@ func (r *Router) registerMonitoringResourceRoutes(
 		agentcapabilities.ExecuteActionCapabilityName,
 		requireActionCapability(r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleExecuteAction),
 	))))
+	// Operator override for an action wedged in executing without agent
+	// completion evidence. It is deliberately not an agent capability and not
+	// a relay-mobile route: it is a local admin repair, gated harder than
+	// execute (admin plus settings:write on top of the execute capability)
+	// because it writes terminal audit truth Pulse could not observe.
+	r.mux.HandleFunc("POST /api/actions/{id}/force-fail", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite,
+		requireActionCapability(r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleForceFailAction),
+	)))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {

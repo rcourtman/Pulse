@@ -134,10 +134,17 @@ func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Co
 	if err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
-	if query.Status != operationreceipt.QueryFoundTerminal {
-		return nil, unified.ActionDispatchReceipt{}, false, nil
-	}
 	receivedAt := e.currentTime()
+	if query.Status != operationreceipt.QueryFoundTerminal {
+		if !strandedActionDispatchClassifiable(query.Status) {
+			return nil, unified.ActionDispatchReceipt{}, false, nil
+		}
+		if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
+			return nil, unified.ActionDispatchReceipt{}, false, err
+		}
+		execution, receipt, stranded := strandedActionDispatch(query, record, attempt, receivedAt)
+		return execution, receipt, stranded, nil
+	}
 	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}

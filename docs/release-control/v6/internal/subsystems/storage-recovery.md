@@ -2134,6 +2134,15 @@ Storage and recovery consumers may observe action detail, pending/settled
 projections, and correlated receipt state, but may not infer restore,
 verification, rollback, or compensation truth from those transport-only fields
 or create a local retry path when the core attempt is `receipt_pending`.
+The shared lifecycle, not this subsystem, also owns the exits from
+`receipt_pending`. A correlated interrupted or tombstoned receipt settles the
+action immediately, and a missing or still-unfinished receipt settles it only
+after the shared bounded reconciliation window, always as durable inconclusive
+truth with no evidence. Storage and recovery consumers must read that outcome
+as "effect unknown, verify the resource" and must never treat it as a confirmed
+failure, a restore/rollback signal, or a licence to redispatch. The operator
+force-fail override on the shared action route carries exactly the same
+inconclusive meaning and the same prohibition.
 The adjacent command transport now namespaces live sessions and pending
 response channels by organization plus agent identity, while durable receipt
 identity remains the immutable attempt/action/operation/digest/agent tuple.

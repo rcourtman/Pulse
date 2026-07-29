@@ -8086,10 +8086,26 @@ Legacy executing rows without an attempt remain readable but inert.
 Task 07 Phase B1 owns server transport continuity. Phase B2 now adds the
 generic agent-side durable operation-receipt owner, exact server/agent binding,
 query-only reconciliation, payload-to-tombstone retention, and explicit agent
-receipt-protocol capability gate consumed by the APT adapters. A query
-`not_found`, interrupted record, or replay-denial tombstone leaves the action
-`executing` with its dispatch `receipt_pending`; it never authorizes executor
-or transport resend. Query-only executor routing is derived from the immutable
+receipt-protocol capability gate consumed by the APT adapters. No non-terminal
+query answer ever authorizes executor or transport resend. It does, however,
+bound how long the action may wait: an authenticated, identity-correlated query
+that returns an interrupted record or a replay-denial tombstone terminalizes
+the action immediately, because the agent-side store marks a receipt
+interrupted only after the agent restarted post-admission and neither an
+interrupted nor a tombstoned receipt can ever become terminal again. A
+`not_found` answer, or a receipt still merely accepted or started, leaves the
+action `executing`/`receipt_pending` while completion evidence may still
+arrive, and terminalizes only once the dispatch attempt is older than the
+bounded reconciliation window — the same one-hour threshold the
+pulse-intelligence telemetry uses to call an executing action stuck, so an
+action can never be reported stuck while reconciliation still waits on it.
+Every terminalization of that kind is durable inconclusive truth with no
+evidence and a stable reason code (`dispatch_evidence_interrupted`,
+`dispatch_evidence_discarded`, `dispatch_evidence_missing`,
+`dispatch_evidence_incomplete`); it is never success, and its operator-facing
+summary states that Pulse cannot confirm the effect and the resource must be
+checked directly. A transport error answering the query is still not evidence
+and preserves `receipt_pending` unchanged. Query-only executor routing is derived from the immutable
 operation kind and action identity committed on the dispatch attempt. Each
 durable executor registers the operation kinds it owns; recovery must not
 rediscover that route through current resource inventory. A successful mutation
@@ -8111,6 +8127,21 @@ reuse the same bounded, serialized pass; none introduces a new resend
 authority, and a disconnected agent simply leaves the action
 `executing`/`receipt_pending` until a later periodic or registration pass can
 query it.
+
+`POST /api/actions/{id}/force-fail` is the operator escape hatch for whatever
+that automatic path cannot settle: an agent that was reinstalled and will never
+answer, or a legacy executing row with no dispatch attempt at all. It is a
+local repair route, not an agent capability and not a relay-mobile route, and
+it is gated harder than execute — admin plus `settings:write` on top of the
+same action-execute capability check the execute route applies. It only writes
+terminal audit truth: it never sends, resends, cancels, or queries the
+transport. It accepts only an `executing` action and refuses every terminal
+state with the existing already-final conflict token, so a stale client cannot
+overwrite a settled outcome, and it refuses planned, pending, or approved rows
+because plan expiry still owns those. The recorded result is the same durable
+inconclusive shape as automatic terminalization under reason code
+`operator_force_failed`, attributed to the authenticated operator, with the
+operator's justification preserved verbatim in the terminal audit event.
 
 Typed Docker / Podman container start, stop, and restart operations extend that
 same durable boundary rather than creating a provider-local action protocol.

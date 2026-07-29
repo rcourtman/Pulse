@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -41,6 +42,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
@@ -20490,6 +20492,8 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"action_execution_persist_failed":                      true,
 		"action_execution_encode_failed":                       true,
 		"action_execution_failed":                              true,
+		"action_force_fail_persist_failed":                     true,
+		"action_force_fail_encode_failed":                      true,
 		"action_queue_unavailable":                             true,
 		"action_queue_query_failed":                            true,
 		"action_queue_encode_failed":                           true,
@@ -22116,4 +22120,192 @@ func TestContract_SSOProviderResponseBaseURLNeverGuessesLocalhost(t *testing.T) 
 				samlResp.SAMLMetadataURL, samlResp.SAMLACSURL, samlResp.SAMLSPEntityID)
 		}
 	})
+}
+
+// Issue1649 regression coverage. Docker update (and every other typed) action
+// used to sit in "executing" forever whenever the agent could not produce a
+// terminal receipt: the agent-side receipt store marks an in-flight receipt
+// interrupted on every restart, and no executor ever turned that, a missing
+// receipt, or a compacted one into terminal audit truth. Expiry deliberately
+// skips executing rows, so nothing else could clear them either. These pin the
+// three shapes that now terminalize, and the ones that must keep waiting.
+func issue1649HostUpdateReceiptQuery(status operationreceipt.QueryStatus, state operationreceipt.State, attempt unifiedresources.ActionDispatchAttempt, at time.Time) operationreceipt.QueryResult {
+	query := operationreceipt.QueryResult{Version: operationreceipt.ProtocolVersion, Status: status}
+	if status == operationreceipt.QueryNotFound {
+		return query
+	}
+	record := &operationreceipt.Record{
+		Identity: operationreceipt.Identity{
+			AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind,
+			OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID,
+		},
+		State:      state,
+		AcceptedAt: at.Add(-2 * time.Second),
+	}
+	if state != operationreceipt.StateAccepted {
+		record.StartedAt = at.Add(-time.Second)
+	}
+	if state == operationreceipt.StateTombstone {
+		record.TerminalAt = at
+	}
+	query.Record = record
+	return query
+}
+
+func TestIssue1649InterruptedReceiptTerminalizesStrandedActionImmediately(t *testing.T) {
+	dispatchedAt := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", dispatchedAt)
+	// The agent restarted one minute after dispatch: well inside the bounded
+	// wait, but the receipt can never become terminal again, so waiting is
+	// pointless and the row must terminalize now.
+	receivedAt := dispatchedAt.Add(time.Minute)
+	agents := &fakeHostUpdateAgent{queryResult: issue1649HostUpdateReceiptQuery(operationreceipt.QueryFoundInterrupted, operationreceipt.StateInterrupted, attempt, dispatchedAt)}
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return receivedAt }}
+
+	result, receipt, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found || result == nil || result.ActionResultV2 == nil {
+		t.Fatalf("reconcile result=%#v found=%v err=%v", result, found, err)
+	}
+	if result.Success {
+		t.Fatalf("stranded dispatch reported success: %#v", result)
+	}
+	truth := result.ActionResultV2
+	if truth.Execution.Status != unifiedresources.ActionExecutionInconclusive || truth.Execution.ReasonCode != "dispatch_evidence_interrupted" {
+		t.Fatalf("execution truth=%#v", truth.Execution)
+	}
+	if truth.Verification.Status != unifiedresources.ActionVerificationInconclusive || truth.Verification.EvidenceClass != unifiedresources.ActionEvidenceNone {
+		t.Fatalf("verification truth=%#v", truth.Verification)
+	}
+	if !strings.Contains(result.ErrorMessage, "restarted") || !strings.Contains(result.ErrorMessage, "Check the resource directly") {
+		t.Fatalf("operator-facing message=%q", result.ErrorMessage)
+	}
+	if receipt.AttemptID != attempt.ID || receipt.ActionID != attempt.ActionID || !receipt.ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("receipt=%#v", receipt)
+	}
+	if len(agents.requests) != 0 {
+		t.Fatalf("terminalizing a stranded dispatch resent the mutation: %#v", agents.requests)
+	}
+
+	// The completion is real terminal audit truth, so the wedged row leaves
+	// executing instead of being reconciled forever.
+	completed, event, err := unifiedresources.CompleteActionExecution(hostUpdateActionRecord(attempt.ActionID), result, "system:restart-recovery", receivedAt)
+	if err != nil || completed.State != unifiedresources.ActionStateFailed || event.State != unifiedresources.ActionStateFailed {
+		t.Fatalf("completed=%#v event=%#v err=%v", completed, event, err)
+	}
+}
+
+func TestIssue1649DiscardedReceiptTerminalizesStrandedActionImmediately(t *testing.T) {
+	dispatchedAt := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", dispatchedAt)
+	receivedAt := dispatchedAt.Add(time.Minute)
+	agents := &fakeHostUpdateAgent{queryResult: issue1649HostUpdateReceiptQuery(operationreceipt.QueryFoundInterrupted, operationreceipt.StateTombstone, attempt, dispatchedAt)}
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return receivedAt }}
+
+	result, _, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found || result == nil || result.ActionResultV2 == nil {
+		t.Fatalf("reconcile result=%#v found=%v err=%v", result, found, err)
+	}
+	if result.Success || result.ActionResultV2.Execution.ReasonCode != "dispatch_evidence_discarded" {
+		t.Fatalf("execution truth=%#v", result.ActionResultV2.Execution)
+	}
+}
+
+func TestIssue1649MissingReceiptWaitsInsideTheBoundedWindow(t *testing.T) {
+	dispatchedAt := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", dispatchedAt)
+	agents := &fakeHostUpdateAgent{queryResult: issue1649HostUpdateReceiptQuery(operationreceipt.QueryNotFound, "", attempt, dispatchedAt)}
+	// A receipt that has not been written yet is not evidence of anything, so
+	// a fresh not-found keeps the attempt receipt_pending.
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return dispatchedAt.Add(strandedActionDispatchWindow - time.Minute) }}
+
+	result, _, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || found || result != nil {
+		t.Fatalf("fresh not-found terminalized early: result=%#v found=%v err=%v", result, found, err)
+	}
+}
+
+func TestIssue1649MissingReceiptTerminalizesAfterTheBoundedWindow(t *testing.T) {
+	dispatchedAt := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", dispatchedAt)
+	agents := &fakeHostUpdateAgent{queryResult: issue1649HostUpdateReceiptQuery(operationreceipt.QueryNotFound, "", attempt, dispatchedAt)}
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return dispatchedAt.Add(strandedActionDispatchWindow) }}
+
+	result, receipt, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found || result == nil || result.ActionResultV2 == nil {
+		t.Fatalf("aged not-found result=%#v found=%v err=%v", result, found, err)
+	}
+	if result.Success || result.ActionResultV2.Execution.ReasonCode != "dispatch_evidence_missing" {
+		t.Fatalf("execution truth=%#v", result.ActionResultV2.Execution)
+	}
+	if receipt.AttemptID != attempt.ID || len(agents.requests) != 0 {
+		t.Fatalf("receipt=%#v resent=%#v", receipt, agents.requests)
+	}
+}
+
+func TestIssue1649UnfinishedReceiptWaitsThenTerminalizes(t *testing.T) {
+	dispatchedAt := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", dispatchedAt)
+	query := issue1649HostUpdateReceiptQuery(operationreceipt.QueryFoundInterrupted, operationreceipt.StateStarted, attempt, dispatchedAt)
+	agents := &fakeHostUpdateAgent{queryResult: query}
+
+	// A started receipt on a live agent means the operation may still be
+	// running (an image pull can be slow), so it must not be cut short.
+	inFlight := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return dispatchedAt.Add(time.Minute) }}
+	if result, _, found, err := inFlight.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt); err != nil || found || result != nil {
+		t.Fatalf("in-flight operation terminalized: result=%#v found=%v err=%v", result, found, err)
+	}
+
+	aged := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return dispatchedAt.Add(strandedActionDispatchWindow) }}
+	result, _, found, err := aged.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found || result == nil || result.ActionResultV2 == nil {
+		t.Fatalf("aged unfinished result=%#v found=%v err=%v", result, found, err)
+	}
+	if result.Success || result.ActionResultV2.Execution.ReasonCode != "dispatch_evidence_incomplete" {
+		t.Fatalf("execution truth=%#v", result.ActionResultV2.Execution)
+	}
+}
+
+func TestIssue1649TransportErrorNeverTerminalizesTheAction(t *testing.T) {
+	dispatchedAt := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", dispatchedAt)
+	transportErr := errors.New("agent command channel is not connected")
+	agents := &fakeHostUpdateAgent{queryErr: transportErr}
+	// Long past the bounded window: an unanswered query is still not evidence,
+	// so receipt_pending semantics survive and nothing is terminalized.
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return dispatchedAt.Add(48 * time.Hour) }}
+
+	result, _, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if !errors.Is(err, transportErr) || found || result != nil {
+		t.Fatalf("transport error result=%#v found=%v err=%v", result, found, err)
+	}
+}
+
+func TestIssue1649StrandedDockerUpdateReconcilesWithoutRedispatch(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerUpdateActionResource("app-container:api", "docker", now)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unifiedresources.Resource{resource}})
+	agents := &fakeDockerActionAgentCommander{}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	record := dockerContainerActionRecord("act_container", resource.ID, "update")
+	attempt, err := unifiedresources.NewActionDispatchAttempt(record.ID, now.Add(-30*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err = executor.BindActionDispatch(context.Background(), record, attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents.queryResult = issue1649HostUpdateReceiptQuery(operationreceipt.QueryFoundInterrupted, operationreceipt.StateInterrupted, attempt, now.Add(-30*time.Minute))
+
+	result, receipt, found, err := executor.ReconcileActionDispatch(context.Background(), record, attempt)
+	if err != nil || !found || result == nil || result.ActionResultV2 == nil {
+		t.Fatalf("docker reconcile result=%#v found=%v err=%v", result, found, err)
+	}
+	if result.Success || result.ActionResultV2.Execution.ReasonCode != "dispatch_evidence_interrupted" {
+		t.Fatalf("execution truth=%#v", result.ActionResultV2.Execution)
+	}
+	if receipt.ActionID != record.ID || len(agents.typedUpdateCalls) != 0 || len(agents.typedCalls) != 0 || len(agents.calls) != 0 {
+		t.Fatalf("receipt=%#v update=%d lifecycle=%d raw=%d", receipt, len(agents.typedUpdateCalls), len(agents.typedCalls), len(agents.calls))
+	}
 }

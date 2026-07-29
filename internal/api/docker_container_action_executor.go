@@ -265,10 +265,17 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 	if err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
-	if query.Status != operationreceipt.QueryFoundTerminal {
-		return nil, unified.ActionDispatchReceipt{}, false, nil
-	}
 	receivedAt := time.Now().UTC()
+	if query.Status != operationreceipt.QueryFoundTerminal {
+		if !strandedActionDispatchClassifiable(query.Status) {
+			return nil, unified.ActionDispatchReceipt{}, false, nil
+		}
+		if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
+			return nil, unified.ActionDispatchReceipt{}, false, err
+		}
+		result, receipt, stranded := strandedActionDispatch(query, record, attempt, receivedAt)
+		return result, receipt, stranded, nil
+	}
 	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}

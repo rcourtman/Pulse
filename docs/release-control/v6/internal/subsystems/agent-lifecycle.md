@@ -5175,7 +5175,19 @@ The server derives operation version and request digest after canonical request
 fields are fixed, persists that binding on the action dispatch attempt, and
 queries the authenticated agent by the exact binding after callback loss or
 restart. `not_found`, interrupted, tombstoned, malformed, late, duplicate,
-wrong-agent, and mismatched responses never authorize resend or terminal truth.
+wrong-agent, and mismatched responses never authorize resend, and none of them
+can ever produce success or agent-attested verification. They are not, however,
+an open-ended wait. Because a reopen converts accepted or started work to
+`interrupted_unknown` and nothing can move an interrupted or tombstoned receipt
+back to terminal, an identity-correlated interrupted or tombstoned answer is
+proof that this agent will never complete the operation, and the API-owned
+lifecycle settles the action as inconclusive on the spot. A `not_found` answer,
+or a receipt still merely accepted or started, keeps the attempt receipt-pending
+until the API-owned bounded reconciliation window elapses and is only then
+settled the same inconclusive way. The agent still authors no execution,
+verification, evidence, or compensation truth in any of these paths: it reports
+receipt state, and the server alone decides that the absence of evidence is now
+durable.
 Terminal payload kind/version and strict adapter codecs are revalidated on
 write, read, query, and reopen. APT update and cleanup are adapters over this
 generic owner, persist only bounded sanitized typed results, and still share

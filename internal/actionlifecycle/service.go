@@ -1262,6 +1262,79 @@ func (s *Service) RecordDispatchReceipt(orgID string, receipt unified.ActionDisp
 	return attempt, nil
 }
 
+// StrandedDispatchResult is the durable inconclusive truth for a committed
+// dispatch whose agent can no longer produce completion evidence: the receipt
+// was interrupted by an agent restart, was compacted away, or never existed
+// and never arrived inside the bounded wait. The mutation may or may not have
+// taken effect, so execution and verification are both inconclusive with no
+// evidence; the audit row becomes failed rather than staying executing
+// forever. Reconcilers use it to terminalize; it is never success truth.
+func StrandedDispatchResult(reasonCode, summary string, rollbackAvailable bool) *unified.ExecutionResult {
+	return unified.ExecutorContractViolationResult(reasonCode, summary, rollbackAvailable)
+}
+
+// ForceFailReasonCode is the canonical execution reason code recorded when an
+// operator terminalizes a wedged action through the explicit override.
+const ForceFailReasonCode = "operator_force_failed"
+
+// ErrActionForceFailNotExecuting reports that the requested override target is
+// not a dispatched, non-terminal action. Terminal rows unwrap to
+// unified.ErrActionExecutionFinal instead so callers reuse the existing
+// already-final transport mapping.
+var ErrActionForceFailNotExecuting = fmt.Errorf("%w: only a dispatched action can be force-failed", unified.ErrActionNotExecuting)
+
+// ForceFail is the operator escape hatch for an action wedged in executing:
+// the agent never returned completion evidence and reconciliation cannot
+// manufacture it. It records terminal inconclusive truth (the mutation may
+// have taken effect) attributed to the operator, so the row leaves the
+// executing state with a full audit trail instead of being edited out of band.
+// It refuses terminal actions and never touches the transport.
+func (s *Service) ForceFail(orgID, actionID, actor, reason string) (unified.ActionAuditRecord, error) {
+	actionID = strings.TrimSpace(actionID)
+	store, err := s.store(orgID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	record, found, err := store.GetActionAudit(actionID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, &QueryError{Op: "action audit", Err: err}
+	}
+	if !found {
+		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
+	}
+	switch record.State {
+	case unified.ActionStateExecuting:
+	case unified.ActionStateCompleted, unified.ActionStateFailed, unified.ActionStateRejected, unified.ActionStateExpired:
+		return record, unified.ErrActionExecutionFinal
+	default:
+		return record, ErrActionForceFailNotExecuting
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		actor = "api:authenticated"
+	}
+	summary := "Operator force-failed this action after it was left executing without agent completion evidence. Pulse cannot confirm whether the operation took effect; verify the resource directly before retrying."
+	if reason = strings.TrimSpace(reason); reason != "" {
+		summary += " Operator reason: " + reason
+	}
+	result := StrandedDispatchResult(ForceFailReasonCode, summary, record.Plan.RollbackAvailable)
+	failed, doneEvent, err := unified.CompleteActionExecution(record, result, actor, s.now())
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := store.RecordActionExecutionResult(failed, doneEvent); err != nil {
+		if errors.Is(err, unified.ErrActionNotExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
+			if current, ok, queryErr := store.GetActionAudit(actionID); queryErr == nil && ok {
+				return current, unified.ErrActionExecutionFinal
+			}
+		}
+		return unified.ActionAuditRecord{}, &PersistError{Op: "action force fail", Err: err}
+	}
+	s.publishTransition(orgID, failed)
+	s.publishCompleted(failed)
+	return failed, nil
+}
+
 // RecoverExecutingActions drives restart recovery without blind re-execution.
 // Queued or pre-send expired claims may dispatch once; post-start attempts are
 // reconciled by durable attempt identity only.

@@ -1555,3 +1555,103 @@ func TestActionPolicyProvenanceParticipatesInFreshnessWithoutAuthorizingDispatch
 		t.Fatalf("descriptive provenance authorized dispatch: %v", err)
 	}
 }
+
+// Issue1649: an executing action whose agent never returns completion evidence
+// used to have no exit at all. Expiry skips executing rows and only a terminal
+// agent receipt could complete one, so a Docker update interrupted by an agent
+// restart stayed "executing" forever with no operator route out. Reconciliation
+// now self-heals the known stranded shapes; ForceFail is the manual override
+// for anything left, and it must refuse to rewrite settled truth.
+func TestIssue1649ForceFailTerminalizesWedgedExecutingActionWithAudit(t *testing.T) {
+	store := unified.NewMemoryStore()
+	executor := &reconcilingExecutor{executeErr: context.DeadlineExceeded, found: false}
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	var completed []unified.ActionAuditRecord
+	var transitions []unified.ActionAuditRecord
+	service.OnActionCompleted = func(record unified.ActionAuditRecord) { completed = append(completed, record) }
+	service.OnActionTransition = func(_ string, record unified.ActionAuditRecord) { transitions = append(transitions, record) }
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "wedge it"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Execute error=%v", err)
+	}
+	if current, _, err := service.Get("default", plan.ActionID); err != nil || current.State != unified.ActionStateExecuting {
+		t.Fatalf("precondition current=%#v err=%v", current, err)
+	}
+
+	failed, err := service.ForceFail("default", plan.ActionID, "operator", "verified by hand, container is running the new image")
+	if err != nil || failed.State != unified.ActionStateFailed || failed.Result == nil || failed.Result.ActionResultV2 == nil {
+		t.Fatalf("ForceFail failed=%#v err=%v", failed, err)
+	}
+	truth := failed.Result.ActionResultV2
+	if truth.Execution.Status != unified.ActionExecutionInconclusive || truth.Execution.ReasonCode != ForceFailReasonCode {
+		t.Fatalf("execution truth=%#v", truth.Execution)
+	}
+	if truth.Verification.Status != unified.ActionVerificationInconclusive || truth.Verification.EvidenceClass != unified.ActionEvidenceNone {
+		t.Fatalf("verification truth=%#v", truth.Verification)
+	}
+	if !strings.Contains(failed.Result.ErrorMessage, "verified by hand") {
+		t.Fatalf("operator reason missing from audit result: %q", failed.Result.ErrorMessage)
+	}
+	if executor.executeCalls != 1 {
+		t.Fatalf("ForceFail touched the transport: execute=%d", executor.executeCalls)
+	}
+	persisted, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found || persisted.State != unified.ActionStateFailed {
+		t.Fatalf("persisted=%#v found=%v err=%v", persisted, found, err)
+	}
+	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 100)
+	if err != nil || len(events) == 0 {
+		t.Fatalf("events=%#v err=%v", events, err)
+	}
+	terminal := events[0]
+	if terminal.State != unified.ActionStateFailed || terminal.Actor != "operator" || !strings.Contains(terminal.Message, "Operator force-failed") {
+		t.Fatalf("terminal audit event=%#v", terminal)
+	}
+	if len(completed) != 1 || completed[0].State != unified.ActionStateFailed {
+		t.Fatalf("completed=%#v", completed)
+	}
+	if len(transitions) == 0 || transitions[len(transitions)-1].State != unified.ActionStateFailed {
+		t.Fatalf("transitions=%#v", transitions)
+	}
+	// The row is settled, so the recovery loop stops reconciling it and the
+	// override cannot be replayed over the persisted outcome.
+	recovered, err := service.RecoverExecutingActions(context.Background(), "default", "system:restart-recovery", 100)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("recovered=%#v err=%v", recovered, err)
+	}
+	if _, err := service.ForceFail("default", plan.ActionID, "operator", "again"); !errors.Is(err, unified.ErrActionExecutionFinal) {
+		t.Fatalf("replayed ForceFail error=%v", err)
+	}
+}
+
+func TestIssue1649ForceFailRefusesTerminalAndUndispatchedActions(t *testing.T) {
+	store := unified.NewMemoryStore()
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), &stubExecutor{result: &unified.ExecutionResult{Success: true, Output: "restarted"}})
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Planned but never dispatched: expiry still owns this row, so the
+	// override must not manufacture an unknown-effect failure for it.
+	if _, err := service.ForceFail("default", plan.ActionID, "operator", ""); !errors.Is(err, unified.ErrActionNotExecuting) {
+		t.Fatalf("undispatched ForceFail error=%v", err)
+	}
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "run it")
+	if err != nil || current.State != unified.ActionStateCompleted {
+		t.Fatalf("current=%#v err=%v", current, err)
+	}
+	if _, err := service.ForceFail("default", plan.ActionID, "operator", ""); !errors.Is(err, unified.ErrActionExecutionFinal) {
+		t.Fatalf("completed ForceFail error=%v", err)
+	}
+	settled, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found || settled.State != unified.ActionStateCompleted || !settled.Result.Success {
+		t.Fatalf("refused override rewrote settled truth: %#v found=%v err=%v", settled, found, err)
+	}
+	var notFound *ActionNotFoundError
+	if _, err := service.ForceFail("default", "act_missing", "operator", ""); !errors.As(err, &notFound) {
+		t.Fatalf("missing action ForceFail error=%v", err)
+	}
+}

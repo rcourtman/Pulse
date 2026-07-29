@@ -1287,3 +1287,103 @@ func TestHandlePlanActionRejectsMissingCapability(t *testing.T) {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 }
+
+// Issue1649: the transport surface for the operator override. A dispatch that
+// never came back leaves the audit row executing with nothing able to settle
+// it, so POST /api/actions/{id}/force-fail terminalizes it — and refuses once
+// the row is already final so a stale tab cannot overwrite real truth.
+func TestIssue1649HandleForceFailActionSettlesWedgedExecutingAction(t *testing.T) {
+	now := time.Date(2026, 7, 29, 9, 0, 0, 0, time.UTC)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID: "vm:42", Type: unified.ResourceTypeVM, Name: "web-42", Status: unified.StatusWarning,
+				LastSeen: now, UpdatedAt: now, Sources: []unified.DataSource{unified.SourceProxmox},
+				Capabilities: []unified.ResourceCapability{
+					{
+						Name: "restart", Type: unified.CapabilityTypeCommon, Description: "Restart the VM",
+						MinimumApprovalLevel: unified.ApprovalNone, InternalHandler: "proxmox.vm.restart",
+					},
+				},
+			},
+		},
+	})
+	// The executor answers with a transport failure, which deliberately keeps
+	// the dispatch receipt-pending and the audit row executing.
+	h.SetActionExecutor(&stubActionExecutor{err: errors.New("agent connection dropped mid-dispatch")})
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"issue1649-force-fail",
+		"resourceId":"vm:42",
+		"capabilityName":"restart",
+		"reason":"Recover after confirmed outage"
+	}`))
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatal(err)
+	}
+
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{"reason":"run it"}`))
+	executeReq.SetPathValue("id", plan.ActionID)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
+	if executeRec.Code != http.StatusInternalServerError {
+		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wedged, ok, err := store.GetActionAudit(plan.ActionID); err != nil || !ok || wedged.State != unified.ActionStateExecuting {
+		t.Fatalf("precondition wedged=%#v ok=%v err=%v", wedged, ok, err)
+	}
+
+	forceRec := httptest.NewRecorder()
+	forceReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/force-fail", bytes.NewBufferString(`{"reason":"agent host was rebuilt"}`))
+	forceReq.SetPathValue("id", plan.ActionID)
+	h.HandleForceFailAction(forceRec, actionHandlerTestRequest(forceReq, ""))
+	if forceRec.Code != http.StatusOK {
+		t.Fatalf("force-fail status = %d, body=%s", forceRec.Code, forceRec.Body.String())
+	}
+	var settled actionExecutionResponse
+	if err := json.Unmarshal(forceRec.Body.Bytes(), &settled); err != nil {
+		t.Fatal(err)
+	}
+	if settled.ActionID != plan.ActionID || settled.State != unified.ActionStateFailed {
+		t.Fatalf("force-fail response = %#v", settled)
+	}
+	if settled.Result == nil || settled.Result.Success || settled.Result.ActionResultV2 == nil ||
+		settled.Result.ActionResultV2.Execution.ReasonCode != actionlifecycle.ForceFailReasonCode {
+		t.Fatalf("force-fail result = %#v", settled.Result)
+	}
+	if !strings.Contains(settled.Result.ErrorMessage, "agent host was rebuilt") {
+		t.Fatalf("operator reason missing: %q", settled.Result.ErrorMessage)
+	}
+	persisted, ok, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !ok || persisted.State != unified.ActionStateFailed {
+		t.Fatalf("persisted=%#v ok=%v err=%v", persisted, ok, err)
+	}
+
+	replayRec := httptest.NewRecorder()
+	replayReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/force-fail", bytes.NewBufferString(`{}`))
+	replayReq.SetPathValue("id", plan.ActionID)
+	h.HandleForceFailAction(replayRec, actionHandlerTestRequest(replayReq, ""))
+	if replayRec.Code != http.StatusConflict || !strings.Contains(replayRec.Body.String(), "action_execution_final") {
+		t.Fatalf("replayed force-fail status = %d, body=%s", replayRec.Code, replayRec.Body.String())
+	}
+
+	missingRec := httptest.NewRecorder()
+	missingReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_missing/force-fail", bytes.NewBufferString(`{}`))
+	missingReq.SetPathValue("id", "act_missing")
+	h.HandleForceFailAction(missingRec, actionHandlerTestRequest(missingReq, ""))
+	if missingRec.Code != http.StatusNotFound {
+		t.Fatalf("missing force-fail status = %d, body=%s", missingRec.Code, missingRec.Body.String())
+	}
+}
