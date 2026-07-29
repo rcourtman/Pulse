@@ -128,7 +128,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		want    string
 	}{
 		{version: "6.0.5-rc.4", want: "6.0.4"},
-		{version: "6.2.0-rc.3", want: "6.1.2"},
+		{version: "6.2.0-rc.4", want: "6.1.2"},
 	}
 
 	for _, test := range tests {
@@ -336,7 +336,8 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"is a focused support correction that supersedes `v6.2.0-rc.2`: adding a Proxmox connection now applies the same endpoint and TLS identity doctrine as later configuration consolidation",
+		"is a hardening cut that supersedes `v6.2.0-rc.3`: it repairs stranded-action recovery, kiosk-session containment, alert and notification accounting, node-restricted Proxmox storage projection, installer container-runtime selection, and host-agent CPU sampling",
+		"The preceding `v6.2.0-rc.3` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.3`.",
 		"The preceding `v6.2.0-rc.2` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.2`.",
 		"The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.1`.",
 		"The `v"+version+"` server cut is classified `no-mobile-impact`; no companion build upload is part of this cut. The existing mobile candidate programme remains separate, and the release packet must not describe a public store rollout.",

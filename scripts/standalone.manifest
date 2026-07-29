@@ -12,6 +12,7 @@ scripts/dev-check.sh | Local development runtime/process sanity checker and clea
 scripts/dev-deploy-agent.sh | Developer utility to rebuild and push agent binaries to test hosts.
 scripts/dev-launchd-setup.sh | macOS helper to install/uninstall the local launchd hot-dev agent.
 scripts/dev-launchd-wrapper.sh | launchd trampoline invoked by scripts/dev-launchd-setup.sh-generated plist.
+scripts/dev-prepush.sh | Local pre-push validation for canonical governance, mutation registry, touched Go packages, builds, and frontend types.
 scripts/dev/start-oidc-mock.sh | Local Dex OIDC helper for development and auth-flow testing.
 scripts/docker-build.sh | Developer convenience wrapper enforcing BuildKit for manual docker builds.
 scripts/hot-dev-bg.sh | Managed background launcher for hot-dev with pid/log lifecycle controls.
