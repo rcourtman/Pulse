@@ -21,6 +21,7 @@ var infrastructureRouteCatalog = map[string]routeClassification{
 	"GET /api/actions/{id}":                {},
 	"POST /api/actions/{id}/decision":      {MutationID: "action.api.decision"},
 	"POST /api/actions/{id}/execute":       {MutationID: "action.api.execute"},
+	"POST /api/actions/{id}/force-fail":    {MutationID: "action.api.force-fail"},
 	"/api/agents/docker/report":            {},
 	"/api/agents/docker/commands/":         {},
 	"/api/agents/docker/runtimes/":         {MutationID: "docker.api.runtime-stop"},

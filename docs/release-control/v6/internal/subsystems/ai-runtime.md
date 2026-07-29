@@ -6579,7 +6579,14 @@ are omitted from offered schemas and denied if fabricated.
 
 The registry audits enumerate actual registered tool discriminator values and
 bind mechanically discovered API, job, and transport candidates to one registry
-disposition. Transport lifecycle entries must name non-transport lifecycle
+disposition. The action lifecycle API surface registers four lifecycle
+entries — `action.api.plan`, `action.api.decision`, `action.api.execute`, and
+`action.api.force-fail` — all executed by `internal/actionlifecycle.Service`
+with committed-lifecycle delivery. `action.api.force-fail` is the operator
+override that terminalizes a dispatched action stranded without agent
+completion evidence; it shares the `execute_action` capability and admin
+approval floor with execute, writes terminal inconclusive audit truth through
+the same completion path, and never carries transport authority of its own. Transport lifecycle entries must name non-transport lifecycle
 authority and committed authority before delivery. Task 07 owns durable
 delivery/reconnect and Task 10 owns terminal truth/compensation; incomplete
 Kubernetes/native-provider, delivery, and rollback paths remain
