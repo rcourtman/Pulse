@@ -79,6 +79,13 @@ server applies. `-1` is unreported and renders as a muted placeholder, a `0`
 from an endurance-reporting device is a spent disk and renders critical, and a
 `0` from a rotational or untyped disk is absence rather than a fault.
 
+An external availability probe that stops reporting contributes only
+indeterminate reachability evidence. Even when its target is a NAS, PBS,
+datastore, or other storage resource, the resulting warning and canonical
+probe alert are not backup failure, protection drift, snapshot damage,
+recovery-point loss, or restore-readiness evidence. Storage/recovery consumers
+must wait for their domain-owned observations.
+
 ## Canonical Files
 
 1. `internal/recovery/index.go`

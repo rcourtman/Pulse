@@ -48,6 +48,18 @@ func (m *Monitor) SetAlertResolvedAICallback(callback func(*alerts.Alert)) {
 	log.Info().Msg("alert-resolved AI callback registered")
 }
 
+// SetAlertPushCallback wires best-effort mobile push delivery for canonical
+// alerts. The callback is intentionally transport-agnostic; the API layer owns
+// Relay and decides which alert classes are safe and useful to send.
+func (m *Monitor) SetAlertPushCallback(callback func(*alerts.Alert)) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.alertPushCallback = callback
+	m.mu.Unlock()
+}
+
 // SetConnectionsSnapshotLister registers the closure that produces platform
 // connection snapshots once per monitor poll cycle. The api layer owns the
 // closure because it owns the config + persistence inputs the aggregator
@@ -92,6 +104,22 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 		Msg("Alert raised, sending to notification manager")
 	if m.notificationMgr != nil {
 		go m.notificationMgr.SendAlert(alert)
+	}
+	m.mu.RLock()
+	pushCallback := m.alertPushCallback
+	m.mu.RUnlock()
+	if pushCallback != nil {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					log.Error().
+						Interface("panic", recovered).
+						Str("alertID", alert.ID).
+						Msg("panic in alert push callback")
+				}
+			}()
+			pushCallback(alert)
+		}()
 	}
 
 	if m.incidentStore != nil {

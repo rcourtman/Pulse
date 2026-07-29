@@ -95,17 +95,39 @@ Pulse can be assigned to run from a specific agent instead of the Pulse
 server (Settings -> Monitoring -> Availability checks -> "Run from"). This is
 how you monitor a site from the outside: deploy the agent on a machine
 elsewhere — a cloud VM, a Docker host at another location — and assign checks
-to it. Alerting still happens on the Pulse server through your normal alert
-routes.
+to it. Target failures are evaluated on the Pulse server through your normal
+alert routes.
 
 There is nothing to configure on the agent itself. Assignments arrive through
 the agent's signed remote configuration, the agent runs each check on its
 configured interval, and results are delivered with its regular reports.
 Results survive temporary connectivity loss to the Pulse server in a bounded
 in-memory queue; if the agent cannot deliver for several check intervals the
-check shows as indeterminate in Pulse until reports resume. The module
-appears as `availability` in the agent's module status when at least one
-check is assigned.
+check shows as indeterminate in Pulse until reports resume. After the
+five-minute minimum grace window, Pulse raises one
+`availability_probe_unavailable` warning per disconnected probe, regardless of
+how many checks it owns. That warning uses the normal email, webhook, Apprise,
+and recovery-notification pipeline. When Pulse Mobile is paired through Relay,
+Pulse also sends a privacy-safe `external_probe_offline` push linked to the
+canonical mobile attention item without exposing target names or addresses.
+The alert identity belongs to the probe agent, so adding or removing an
+assigned check does not resolve and reopen it.
+
+When the host heartbeat itself is offline, Pulse keeps the existing
+host-offline alert as the single canonical incident and suppresses the
+probe-results warning. Assigned probe hosts still receive the external-probe
+mobile push, but operators do not get two normal alerts for the same agent
+failure.
+
+This has a complementary dark-site path: if the entire Pulse instance or its
+site goes offline, Pulse Relay independently sends its existing instance
+offline push after five minutes. Together, probe-loss alerts while Pulse is
+online and Relay's instance-loss alert while Pulse is dark ensure the
+outside-monitoring path cannot disappear silently. Relay does not evaluate
+individual target results while the Pulse server is offline.
+
+The module appears as `availability` in the agent's module status when at
+least one check is assigned.
 
 Note for ICMP (ping) checks: the probe uses the system `ping` binary. In
 containers or hardened service units without `CAP_NET_RAW`, ICMP checks fail;

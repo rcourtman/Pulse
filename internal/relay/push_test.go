@@ -101,6 +101,25 @@ func TestNewPatrolFindingNotification(t *testing.T) {
 	})
 }
 
+func TestNewExternalProbeUnavailableNotification(t *testing.T) {
+	n := NewExternalProbeUnavailableNotification(" alert-123 ")
+	if n.Type != PushTypeExternalProbeOffline || n.Priority != PushPriorityHigh {
+		t.Fatalf("notification posture = %#v", n)
+	}
+	if n.Title != "External Probe Offline" {
+		t.Fatalf("notification presentation = %#v", n)
+	}
+	if n.ActionType != PushActionViewAlert || n.ActionID != "alert-123" {
+		t.Fatalf("notification must route the canonical alert into mobile attention: %#v", n)
+	}
+	if n.Category != "availability" || n.Severity != "warning" {
+		t.Fatalf("notification routing = %#v", n)
+	}
+	if strings.Contains(n.Body, "agent-") || strings.Contains(n.Body, ".local") {
+		t.Fatalf("notification leaked infrastructure context: %#v", n)
+	}
+}
+
 func TestNewApprovalRequestNotification(t *testing.T) {
 	t.Run("with risk level", func(t *testing.T) {
 		n := NewApprovalRequestNotification("approval-789", "Fix disk space", "high")

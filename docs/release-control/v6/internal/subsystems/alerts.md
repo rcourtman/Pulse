@@ -107,6 +107,14 @@ state out of an empty input: a cleared box is mid-edit, and coercing it to `0`
 disabled the metric in the engine while the row still showed On. Disabling is
 the toggle's job, and the toggle writes the canonical `-1`.
 
+External availability-probe reporting loss owns one canonical
+`external-probe-unavailable` alert per assigned agent, not one alert per target.
+The lifecycle waits for the assignment grace floor before firing, keeps target
+IDs as bounded supporting metadata, yields to the existing host-offline
+lifecycle when the agent heartbeat is unhealthy, and resolves only when a
+fresh result from the currently assigned agent arrives. Notification delivery,
+acknowledgement, history, and recovery reuse the normal alert pipeline.
+
 ## Canonical Files
 
 1. `internal/alerts/specs/types.go`

@@ -30,6 +30,14 @@ retained identity ledger and aliases. Those labels never become authentication
 principals, API-token ownership, credential lookup, TLS identity, routing
 authority, audit actor identity, or organization scope.
 
+External-probe mobile notifications are a metadata-minimization boundary.
+Only the generated event type, generic operator copy, canonical alert ID,
+severity/category, and `view_alert` action may leave the instance through
+Relay. Agent names, hostnames, target names, URLs, IP addresses, failure text,
+and target lists must remain local. Detection remains behind the existing
+Pulse Pro availability entitlement; the push adapter cannot turn Relay access
+into availability-probe entitlement.
+
 ## Canonical Files
 
 1. `SECURITY.md`

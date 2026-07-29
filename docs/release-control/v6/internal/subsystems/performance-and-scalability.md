@@ -24,6 +24,12 @@ admission coordinator; the broker must not add policy-history scans, resource
 registry walks after admission, or network probes before the executor. Failed
 admission records a stable refusal without invoking executor or network code.
 
+External-probe alert synchronization is linear in configured availability
+targets and assigned agents during the existing availability snapshot pass.
+It must aggregate to one alert and at most one mobile notification per agent
+outage, retain only bounded target identifiers needed for diagnosis, and never
+start a goroutine, timer, or notification lifecycle per target.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`

@@ -961,6 +961,33 @@ func (r *Router) setupRoutes() {
 			}
 			return monitorLicSvc.HasFeature(feature)
 		})
+		// A probe that stops reporting is a first-class availability incident.
+		// Normal notification routes are handled by the monitor; Relay adds a
+		// privacy-safe mobile push while the Pulse instance is still online.
+		// If the whole instance is offline, Relay's independent disconnect
+		// timer supplies the complementary dark-site notification.
+		r.monitor.SetAlertPushCallback(func(alert *alerts.Alert) {
+			notification, ok := externalProbePushNotification(
+				alert,
+				r.monitor.HasExternalProbeAssignments,
+			)
+			if !ok {
+				return
+			}
+			r.relayMu.RLock()
+			client := r.relayClient
+			r.relayMu.RUnlock()
+			if client == nil {
+				return
+			}
+			if err := client.SendPushNotification(notification); err != nil {
+				log.Warn().
+					Err(err).
+					Str("alertID", notification.ActionID).
+					Str("type", notification.Type).
+					Msg("External probe push notification send failed")
+			}
+		})
 	}
 
 	// Initialize recovery token store and capture the exact worker this router owns.

@@ -157,6 +157,8 @@ func (availabilityPollProvider) SupplementalRecords(m *Monitor, orgID string) []
 	targets := m.availabilityTargets()
 	now := time.Now().UTC()
 	statuses := m.availabilityStatusSnapshotForTargets(targets, now)
+	m.syncAvailabilityProbeAlerts(targets, statuses, now)
+
 	records := make([]unifiedresources.IngestRecord, 0, len(targets))
 	for _, target := range targets {
 		status := statuses[target.ID]
@@ -237,7 +239,10 @@ func (m *Monitor) availabilityStatusSnapshotForTargets(targets []config.Availabi
 	for _, target := range targets {
 		status, ok := out[target.ID]
 		if !ok {
-			continue
+			if m.effectiveProbeAgentID(target) == "" {
+				continue
+			}
+			status = availabilityStatusFromTarget(target)
 		}
 		out[target.ID] = m.deriveAvailabilityProbeStaleness(target, status, now)
 	}
@@ -250,9 +255,14 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 	}
 	targets := m.availabilityTargets()
 	activeIDs := make(map[string]struct{}, len(targets))
+	activeProbeIDs := make(map[string]struct{}, len(targets))
 	now := time.Now()
 	for _, target := range targets {
 		activeIDs[target.ID] = struct{}{}
+		if agentID := m.effectiveProbeAgentID(target); agentID != "" {
+			activeProbeIDs[target.ID] = struct{}{}
+			m.availabilityProbeAssignmentReference(target.ID, agentID, now)
+		}
 		if m.taskQueue == nil {
 			continue
 		}
@@ -276,6 +286,11 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 		if _, ok := activeIDs[id]; !ok {
 			delete(m.availabilityStatuses, id)
 			removedIDs = append(removedIDs, id)
+		}
+	}
+	for id := range m.availabilityProbeTrackers {
+		if _, ok := activeProbeIDs[id]; !ok {
+			delete(m.availabilityProbeTrackers, id)
 		}
 	}
 	m.mu.Unlock()
@@ -532,6 +547,9 @@ func availabilityResourceStatus(target config.AvailabilityTarget, status Availab
 	if !target.Enabled {
 		return unifiedresources.StatusUnknown
 	}
+	if availabilityProbeStatusIsStale(status) {
+		return unifiedresources.StatusWarning
+	}
 	if status.LastChecked.IsZero() {
 		return unifiedresources.StatusUnknown
 	}
@@ -545,7 +563,13 @@ func availabilityResourceStatus(target config.AvailabilityTarget, status Availab
 }
 
 func availabilityIncident(target config.AvailabilityTarget, status AvailabilityProbeStatus, startedAt time.Time) *unifiedresources.ResourceIncident {
-	if !target.Enabled || status.Available || status.LastChecked.IsZero() {
+	if !target.Enabled || status.Available {
+		return nil
+	}
+	if availabilityProbeStatusIsStale(status) {
+		return nil
+	}
+	if status.LastChecked.IsZero() {
 		return nil
 	}
 	if status.ConsecutiveFailures < target.EffectiveFailureThreshold() {
@@ -555,12 +579,16 @@ func availabilityIncident(target config.AvailabilityTarget, status AvailabilityP
 	if status.LastError != "" {
 		summary = summary + ": " + status.LastError
 	}
+	source := string(unifiedresources.SourceAvailability)
+	if strings.TrimSpace(status.ProbeAgentID) != "" {
+		source = "external-probe"
+	}
 	return &unifiedresources.ResourceIncident{
 		Provider:  string(unifiedresources.SourceAvailability),
 		NativeID:  target.ID,
 		Code:      "availability_unreachable",
 		Severity:  storagehealth.RiskCritical,
-		Source:    string(unifiedresources.SourceAvailability),
+		Source:    source,
 		Summary:   summary,
 		StartedAt: startedAt,
 	}

@@ -41,10 +41,30 @@ func TestMonitor_HandleAlertFired_Extra(t *testing.T) {
 		Level: alerts.AlertLevelWarning,
 	}
 
+	var pushed atomic.Bool
+	m2.SetAlertPushCallback(func(got *alerts.Alert) {
+		if got == alert {
+			pushed.Store(true)
+		}
+	})
 	m2.handleAlertFired(alert)
+	if !pushed.Load() {
+		t.Fatal("alert push callback was not invoked")
+	}
 	// We are just verifying it doesn't crash and calls methods.
 	// Hub doesn't expose way to check broadcasts easily without client.
 	// NotificationMgr might spin up goroutine.
+}
+
+func TestMonitor_HandleAlertFired_RecoversFromPushCallbackPanic(t *testing.T) {
+	m := &Monitor{}
+	m.SetAlertPushCallback(func(*alerts.Alert) {
+		panic("push transport failure")
+	})
+
+	// A transport adapter must not be able to abort the canonical alert
+	// lifecycle or its remaining persistence callbacks.
+	m.handleAlertFired(&alerts.Alert{ID: "alert-push-panic"})
 }
 
 func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {

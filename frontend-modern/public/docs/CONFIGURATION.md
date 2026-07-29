@@ -509,7 +509,16 @@ its signed agent configuration, runs it on the configured interval, and
 reports results back with its reports; results are only accepted from the
 currently assigned agent. An assigned check is not also run locally. If no
 report arrives for several intervals the check shows as indeterminate
-("no recent report from probe agent"), and if the entitlement lapses the
+("no recent report from probe agent"). After at least five minutes without a
+report, Pulse raises one warning per disconnected probe through the normal
+notification routes, even when that probe owns several checks. The incident is
+keyed to the probe agent rather than an arbitrary check, so changing assignments
+does not reopen it. If the agent heartbeat is also offline, the existing
+host-offline alert owns the incident instead of producing a duplicate probe
+warning. A paired Pulse Mobile client receives a privacy-safe
+`external_probe_offline` Relay push linked to that canonical alert. If the whole
+Pulse instance becomes unreachable, Relay's independent five-minute
+instance-offline push covers the dark-site case. If the entitlement lapses, the
 check automatically resumes running from the Pulse server. Checks without an
 assignment are unaffected and remain available in every edition.
 

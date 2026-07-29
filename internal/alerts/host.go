@@ -12,6 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const HostOfflineAlertType = "host-offline"
+
 func hostResourceID(hostID string) string {
 	trimmed := strings.TrimSpace(hostID)
 	if trimmed == "" {
@@ -763,7 +765,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		Tracking:     m.offlineConfirmations,
 		TrackingKey:  resourceKey,
 		AlertID:      alertID,
-		AlertType:    "host-offline",
+		AlertType:    HostOfflineAlertType,
 		ResourceID:   resourceKey,
 		ResourceName: resourceName,
 		Node:         nodeName,

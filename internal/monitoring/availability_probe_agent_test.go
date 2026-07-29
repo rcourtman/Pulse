@@ -7,6 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
@@ -222,8 +223,16 @@ func TestApplyProbeAvailabilityResultsRejectsForeignAgents(t *testing.T) {
 		{TargetID: "local", Outcome: AvailabilityProbeReachable, LatencyMillis: 5, CheckedAt: checkedAt},
 		{TargetID: "missing", Outcome: AvailabilityProbeReachable, LatencyMillis: 5, CheckedAt: checkedAt},
 	})
-	if statuses := monitor.AvailabilityStatusSnapshot(); len(statuses) != 0 {
-		t.Fatalf("statuses = %+v, want no state from an agent that owns nothing", statuses)
+	statuses := monitor.AvailabilityStatusSnapshot()
+	remote, ok := statuses["remote"]
+	if !ok {
+		t.Fatal("assigned remote target missing from first-report grace state")
+	}
+	if !remote.LastChecked.IsZero() || remote.Outcome != "" || remote.Available {
+		t.Fatalf("remote status = %+v, want no observation from an agent that owns nothing", remote)
+	}
+	if _, ok := statuses["local"]; ok {
+		t.Fatalf("local status = %+v, want no state from an agent that owns nothing", statuses["local"])
 	}
 
 	// The owning agent may not claim a locally executed target either.
@@ -398,10 +407,175 @@ func TestAvailabilitySupplementalRecordsPresentStaleProbeAsIndeterminate(t *test
 	if data.ProbeAgentID != "agent-1" {
 		t.Fatalf("availability probe agent = %q, want agent-1 so the UI can attribute the source", data.ProbeAgentID)
 	}
+	if len(records[0].Resource.Incidents) != 0 {
+		t.Fatalf("stale target incidents = %+v, probe lifecycle must not be tied to an arbitrary target", records[0].Resource.Incidents)
+	}
+	if records[0].Resource.Status != unifiedresources.StatusWarning {
+		t.Fatalf("stale resource status = %q, want warning", records[0].Resource.Status)
+	}
 
 	statuses := availabilityPollProvider{}.ConnectionStatuses(monitor)
 	if statuses["availability-remote"] {
 		t.Fatalf("connection statuses = %+v, want a stale probe to read as not connected", statuses)
+	}
+}
+
+func TestAvailabilityProbeFirstReportGraceThenStale(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(probeAgentTarget("remote", "agent-1"))
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+
+	assignedAt := time.Now().UTC()
+	fresh := monitor.availabilityStatusSnapshotForTargets(
+		[]config.AvailabilityTarget{target},
+		assignedAt,
+	)
+	if availabilityProbeStatusIsStale(fresh["remote"]) {
+		t.Fatalf("new assignment status = %+v, must receive the first-report grace window", fresh["remote"])
+	}
+
+	stale := monitor.availabilityStatusSnapshotForTargets(
+		[]config.AvailabilityTarget{target},
+		assignedAt.Add(availabilityProbeStaleFloor+time.Second),
+	)
+	if !availabilityProbeStatusIsStale(stale["remote"]) {
+		t.Fatalf("post-grace assignment status = %+v, want stale without a first report", stale["remote"])
+	}
+	if stale["remote"].ProbeAgentID != "agent-1" {
+		t.Fatalf("post-grace probe agent = %q, want agent-1", stale["remote"].ProbeAgentID)
+	}
+}
+
+func TestAvailabilityProbeReassignmentReceivesFreshGrace(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(probeAgentTarget("remote", "agent-2"))
+	monitor := newProbeAgentTestMonitor(t, target)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	old := time.Now().UTC().Add(-time.Hour)
+	monitor.availabilityStatuses["remote"] = AvailabilityProbeStatus{
+		TargetID:     "remote",
+		ProbeAgentID: "agent-1",
+		LastChecked:  old,
+		Outcome:      string(AvailabilityProbeReachable),
+		Available:    true,
+	}
+
+	reassignedAt := time.Now().UTC()
+	statuses := monitor.availabilityStatusSnapshotForTargets(
+		[]config.AvailabilityTarget{target},
+		reassignedAt,
+	)
+	status := statuses["remote"]
+	if availabilityProbeStatusIsStale(status) {
+		t.Fatalf("reassigned status = %+v, must receive a fresh first-report grace window", status)
+	}
+	if status.ProbeAgentID != "agent-2" {
+		t.Fatalf("reassigned probe agent = %q, want agent-2", status.ProbeAgentID)
+	}
+	if !status.LastChecked.IsZero() || status.Outcome != "" || status.Available {
+		t.Fatalf("reassigned status = %+v, must not present the old probe's observation as current", status)
+	}
+}
+
+func TestAvailabilityProbeStaleIncidentDeduplicatesPerAgent(t *testing.T) {
+	monitor := newProbeAgentTestMonitor(t,
+		probeAgentTarget("remote-a", "agent-1"),
+		probeAgentTarget("remote-b", "agent-1"),
+		probeAgentTarget("remote-c", "agent-2"),
+	)
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(alertManager.Stop)
+	monitor.alertManager = alertManager
+	old := time.Now().UTC().Add(-time.Hour)
+	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote-a", Outcome: AvailabilityProbeReachable, CheckedAt: old},
+		{TargetID: "remote-b", Outcome: AvailabilityProbeReachable, CheckedAt: old},
+	})
+	monitor.ApplyProbeAvailabilityResults("agent-2", []ProbeAvailabilityResult{
+		{TargetID: "remote-c", Outcome: AvailabilityProbeReachable, CheckedAt: old},
+	})
+
+	_ = (availabilityPollProvider{}).SupplementalRecords(monitor, "")
+	alertsByAgent := make(map[string]int)
+	for _, alert := range alertManager.GetActiveAlerts() {
+		if alert.Type != alerts.ExternalProbeUnavailableAlertType {
+			continue
+		}
+		agentID, _ := alert.Metadata["hostId"].(string)
+		alertsByAgent[agentID]++
+	}
+	if alertsByAgent["agent-1"] != 1 || alertsByAgent["agent-2"] != 1 {
+		t.Fatalf("stale alerts by agent = %+v, want exactly one per disconnected probe", alertsByAgent)
+	}
+}
+
+func TestAvailabilityProbeFreshReportResolvesStaleIncident(t *testing.T) {
+	monitor := newProbeAgentTestMonitor(t, probeAgentTarget("remote", "agent-1"))
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(alertManager.Stop)
+	monitor.alertManager = alertManager
+	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: time.Now().UTC().Add(-time.Hour)},
+	})
+	_ = (availabilityPollProvider{}).SupplementalRecords(monitor, "")
+	if got := alertManager.GetActiveAlerts(); len(got) != 1 || got[0].Type != alerts.ExternalProbeUnavailableAlertType {
+		t.Fatalf("stale alerts = %+v, want one before recovery", got)
+	}
+
+	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: time.Now().UTC()},
+	})
+	recovered := (availabilityPollProvider{}).SupplementalRecords(monitor, "")[0].Resource
+	if got := alertManager.GetActiveAlerts(); len(got) != 0 {
+		t.Fatalf("active alerts after recovery = %+v, want none", got)
+	}
+	if recovered.Status != "online" {
+		t.Fatalf("recovered resource = %+v, want online", recovered)
+	}
+}
+
+func TestAvailabilityProbeHostOfflineOwnsConnectivityLifecycle(t *testing.T) {
+	monitor := newProbeAgentTestMonitor(t, probeAgentTarget("remote", "agent-1"))
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(alertManager.Stop)
+	monitor.alertManager = alertManager
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-1",
+		Hostname:        "probe.local",
+		LastSeen:        time.Now().UTC().Add(-time.Hour),
+		IntervalSeconds: 30,
+	})
+	monitor.ApplyProbeAvailabilityResults("agent-1", []ProbeAvailabilityResult{
+		{TargetID: "remote", Outcome: AvailabilityProbeReachable, CheckedAt: time.Now().UTC().Add(-time.Hour)},
+	})
+
+	_ = (availabilityPollProvider{}).SupplementalRecords(monitor, "")
+	for _, alert := range alertManager.GetActiveAlerts() {
+		if alert.Type == alerts.ExternalProbeUnavailableAlertType {
+			t.Fatalf("probe-specific alert duplicated host-offline lifecycle: %+v", alert)
+		}
+	}
+}
+
+func TestHasExternalProbeAssignmentsRequiresEnabledLicensedTarget(t *testing.T) {
+	enabled := probeAgentTarget("enabled", "agent-1")
+	disabled := probeAgentTarget("disabled", "agent-2")
+	disabled.Enabled = false
+	monitor := newProbeAgentTestMonitor(t, enabled, disabled)
+
+	monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+	if !monitor.HasExternalProbeAssignments("agent-1") {
+		t.Fatal("licensed agent with an enabled assignment was not recognized")
+	}
+	if monitor.HasExternalProbeAssignments("agent-2") {
+		t.Fatal("disabled assignment was treated as an active external probe")
+	}
+
+	monitor.SetLicenseChecker(licenseWithExternalProbe(false))
+	if monitor.HasExternalProbeAssignments("agent-1") {
+		t.Fatal("lapsed entitlement retained external probe notification routing")
 	}
 }
 
@@ -454,8 +628,12 @@ func TestApplyHostReportIngestsAssignedAvailabilityResults(t *testing.T) {
 	if !status.LastChecked.Equal(checkedAt) {
 		t.Fatalf("last checked = %v, want %v", status.LastChecked, checkedAt)
 	}
-	if _, ok := statuses["foreign"]; ok {
-		t.Fatal("a report claimed a target assigned to another agent")
+	foreign, ok := statuses["foreign"]
+	if !ok {
+		t.Fatal("foreign assigned target missing from first-report grace state")
+	}
+	if !foreign.LastChecked.IsZero() || foreign.Outcome != "" || foreign.Available {
+		t.Fatalf("foreign status = %+v, a report claimed a target assigned to another agent", foreign)
 	}
 }
 

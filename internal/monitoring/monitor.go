@@ -1059,6 +1059,7 @@ type Monitor struct {
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
 	availabilityStatuses       map[string]AvailabilityProbeStatus
+	availabilityProbeTrackers  map[string]availabilityProbeAssignmentTracker
 	pollProviders              map[InstanceType]PollProvider
 	pollMetrics                *PollMetrics
 	scheduler                  *AdaptiveScheduler
@@ -1086,6 +1087,7 @@ type Monitor struct {
 	alertManager               *alerts.Manager
 	alertResolvedAICallback    func(*alerts.Alert)
 	alertTriggeredAICallback   func(*alerts.Alert)
+	alertPushCallback          func(*alerts.Alert)
 	connectionsSnapshotLister  func() []alerts.ConnectionSnapshot // returns platform connection snapshots for the connection-degraded check
 	incidentStore              *memory.IncidentStore
 	notificationMgr            *notifications.NotificationManager
@@ -1619,6 +1621,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		pbsClients:                 make(map[string]*pbs.Client),
 		pmgClients:                 make(map[string]*pmg.Client),
 		availabilityStatuses:       make(map[string]AvailabilityProbeStatus),
+		availabilityProbeTrackers:  make(map[string]availabilityProbeAssignmentTracker),
 		pollProviders:              make(map[InstanceType]PollProvider),
 		pollMetrics:                getPollMetrics(),
 		scheduler:                  scheduler,

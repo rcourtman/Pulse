@@ -49,10 +49,28 @@ func (b *safeBuffer) String() string {
 }
 
 func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
-	t.Parallel()
-
 	pulseRoot, pulseProRelayDir := managedRelayWorkspaceRoots(t)
 	relayBinary := buildManagedRelayBinary(t, pulseProRelayDir)
+	const revocationFeedToken = "managed-runtime-revocation-feed-token"
+	revocationFeed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/revocations" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+revocationFeedToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"next_seq": 0,
+			"has_more": false,
+			"events":   []any{},
+		})
+	}))
+	defer revocationFeed.Close()
+	t.Setenv("PULSE_RELAY_LICENSE_SERVER_URL", revocationFeed.URL)
+	t.Setenv("PULSE_RELAY_REVOCATION_FEED_TOKEN", revocationFeedToken)
 
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {

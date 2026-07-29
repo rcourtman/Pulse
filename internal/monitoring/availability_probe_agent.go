@@ -30,6 +30,14 @@ type ProbeAvailabilityResult struct {
 	Error         string
 }
 
+// availabilityProbeAssignmentTracker provides a grace reference for a newly
+// assigned target before its first report. AgentID is retained so reassigning
+// the same target to a different probe starts a fresh grace window.
+type availabilityProbeAssignmentTracker struct {
+	AgentID string
+	Since   time.Time
+}
+
 // probeAvailabilityResultsFromReport converts the wire results carried by a
 // host agent report. Outcome vocabulary is normalized here so the ingestion
 // path never has to trust an agent's spelling; probeResultOutcome then decides
@@ -159,10 +167,20 @@ func (m *Monitor) deriveAvailabilityProbeStaleness(
 	status AvailabilityProbeStatus,
 	now time.Time,
 ) AvailabilityProbeStatus {
-	if m.effectiveProbeAgentID(target) == "" {
+	agentID := m.effectiveProbeAgentID(target)
+	if agentID == "" {
 		return status
 	}
-	if !availabilityProbeReportIsStale(target, status.LastChecked, now) {
+	reportingAgentID := strings.TrimSpace(status.ProbeAgentID)
+	if reportingAgentID != agentID {
+		status = availabilityStatusFromTarget(target)
+	}
+	status.ProbeAgentID = agentID
+	reference := status.LastChecked
+	if reference.IsZero() {
+		reference = m.availabilityProbeAssignmentReference(target.ID, agentID, now)
+	}
+	if !availabilityProbeReportIsStale(target, reference, now) {
 		return status
 	}
 	status.Outcome = string(AvailabilityProbeIndeterminate)
@@ -170,6 +188,36 @@ func (m *Monitor) deriveAvailabilityProbeStaleness(
 	status.LastError = availabilityProbeStaleError
 	status.LatencyMillis = 0
 	return status
+}
+
+func (m *Monitor) availabilityProbeAssignmentReference(targetID, agentID string, now time.Time) time.Time {
+	if m == nil {
+		return now
+	}
+	targetID = strings.TrimSpace(targetID)
+	agentID = strings.TrimSpace(agentID)
+	if targetID == "" || agentID == "" {
+		return now
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.availabilityProbeTrackers == nil {
+		m.availabilityProbeTrackers = make(map[string]availabilityProbeAssignmentTracker)
+	}
+	if tracker, ok := m.availabilityProbeTrackers[targetID]; ok && tracker.AgentID == agentID && !tracker.Since.IsZero() {
+		return tracker.Since
+	}
+	m.availabilityProbeTrackers[targetID] = availabilityProbeAssignmentTracker{
+		AgentID: agentID,
+		Since:   now,
+	}
+	return now
+}
+
+func availabilityProbeStatusIsStale(status AvailabilityProbeStatus) bool {
+	return status.Outcome == string(AvailabilityProbeIndeterminate) &&
+		strings.EqualFold(strings.TrimSpace(status.LastError), availabilityProbeStaleError)
 }
 
 func availabilityProbeReportIsStale(target config.AvailabilityTarget, lastChecked time.Time, now time.Time) bool {

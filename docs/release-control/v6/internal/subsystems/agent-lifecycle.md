@@ -54,6 +54,13 @@ rather than a zero value that reads as a real measurement: an absent
 physical-disk view projects `Wearout` as `unifiedresources.WearoutUnreported`,
 never `0`, which would announce a spent disk the agent never reported.
 
+An enabled availability target assigned to a host agent creates an
+agent-lifecycle lease for that exact target/agent pairing. First assignment
+and reassignment start a fresh reporting grace window; a result from the
+previous agent must not satisfy the new lease. Once the host heartbeat itself
+is unhealthy, the canonical host-offline lifecycle owns the outage so the
+availability-probe lifecycle cannot create a duplicate whole-agent incident.
+
 ## Canonical Files
 
 1. `internal/api/agent_install_command_shared.go`

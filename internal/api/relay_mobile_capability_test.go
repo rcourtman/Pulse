@@ -16,14 +16,23 @@ func TestRelayMobileRuntimeProjectionMatchesManifestDigest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read mobile compatibility manifest: %v", err)
 	}
-	generated, err := os.ReadFile("relay_mobile_capability_generated.go")
+	apiGenerated, err := os.ReadFile("relay_mobile_capability_generated.go")
 	if err != nil {
 		t.Fatalf("read generated mobile route projection: %v", err)
 	}
+	relayGenerated, err := os.ReadFile("../relay/mobile_compatibility_generated.go")
+	if err != nil {
+		t.Fatalf("read generated mobile push projection: %v", err)
+	}
 
 	digest := fmt.Sprintf("%x", sha256.Sum256(manifest))
-	if !strings.Contains(string(generated), "Source SHA256: "+digest) {
-		t.Fatalf("generated mobile route projection does not match manifest digest %s", digest)
+	for name, generated := range map[string][]byte{
+		"mobile route": apiGenerated,
+		"mobile push":  relayGenerated,
+	} {
+		if !strings.Contains(string(generated), "Source SHA256: "+digest) {
+			t.Fatalf("generated %s projection does not match manifest digest %s", name, digest)
+		}
 	}
 }
 

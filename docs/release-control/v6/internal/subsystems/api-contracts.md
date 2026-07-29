@@ -38,6 +38,14 @@ and must not suppress the endpoint from type filters, totals, REST reloads, or
 websocket snapshots. Plural machine projections use `availabilityChecks`; the
 singular `availability` field remains only a compatibility projection.
 
+The API-owned Relay adapter may translate a canonical external-probe outage
+into the governed Pulse Mobile push contract only after alert identity is
+established. The push carries the stable alert ID and the generated
+`external_probe_offline` type with the existing `view_alert` action; it carries
+no infrastructure name, target, address, error text, or arbitrary alert
+metadata. A host-offline alert is eligible only when that host currently owns
+an enabled external-probe assignment.
+
 ## Canonical Files
 
 1. `internal/api/contract_test.go`

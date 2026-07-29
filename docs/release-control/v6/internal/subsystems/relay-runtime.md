@@ -22,6 +22,14 @@ boundaries, the server-owned mobile relay capability boundary, and the
 canonical reconnect, encryption, protocol, proxy, and relay-trust behavior
 for Pulse instance bridging.
 
+The generated mobile push vocabulary includes
+`external_probe_offline` for a Pulse instance that is still connected while
+one of its assigned external probes stops reporting. Desktop Relay sends only
+generic copy, the canonical alert ID, and the existing `view_alert` action;
+resource names, addresses, targets, and probe errors remain inside Pulse.
+Relay's independent whole-instance disconnect notification remains the sole
+dark-site signal and must not be conflated with this per-agent alert.
+
 ## Canonical Files
 
 1. `internal/relay/client.go`

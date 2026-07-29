@@ -323,6 +323,15 @@ the scanner reaches whichever address it reaches. A host that cannot be resolved
 yields no entry and must say so in the log rather than passing silently, and it
 must never prevent the remaining configured hosts from being suppressed.
 
+External availability-probe freshness is evaluated against the effective
+target cadence with a five-minute minimum grace. Missing, stale, or
+wrong-agent results are indeterminate monitoring evidence: their
+`network-endpoint` resources degrade to warning without manufacturing a target
+reachability incident. Monitoring aggregates stale targets by current agent,
+updates the single canonical probe alert lifecycle, and treats a fresh result
+from that same assignment as recovery. Assignment trackers are removed with
+their targets and reset when agent identity changes.
+
 ## Canonical Files
 
 1. `internal/monitoring/monitor.go`

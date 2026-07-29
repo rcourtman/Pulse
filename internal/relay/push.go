@@ -86,6 +86,22 @@ func NewPatrolFindingNotification(findingID, severity, category, title string) P
 	}
 }
 
+// NewExternalProbeUnavailableNotification creates the privacy-safe mobile push
+// used when a remote availability probe stops reporting. Resource names,
+// addresses, and target details intentionally stay inside Pulse.
+func NewExternalProbeUnavailableNotification(alertID string) PushNotificationPayload {
+	return PushNotificationPayload{
+		Type:       PushTypeExternalProbeOffline,
+		Priority:   PushPriorityHigh,
+		Title:      "External Probe Offline",
+		Body:       "An external Pulse probe stopped reporting. Open Pulse for details.",
+		ActionType: PushActionViewAlert,
+		ActionID:   strings.TrimSpace(alertID),
+		Category:   "availability",
+		Severity:   "warning",
+	}
+}
+
 // NewApprovalRequestNotification creates a push notification for a fix needing approval.
 func NewApprovalRequestNotification(approvalID, findingTitle, riskLevel string) PushNotificationPayload {
 	body := "A proposed fix requires your approval"
