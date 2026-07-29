@@ -26,11 +26,18 @@ func TestDerivePollTimeout(t *testing.T) {
 			want: 90 * time.Second,
 		},
 		{
-			name: "enforces minimum",
+			name: "short request timeout does not shrink whole poll cycle",
 			cfg: &config.Config{
 				ConnectionTimeout: 5 * time.Second,
 			},
-			want: minTaskTimeout,
+			want: defaultTaskTimeout,
+		},
+		{
+			name: "reported seven node cluster keeps default cycle budget",
+			cfg: &config.Config{
+				ConnectionTimeout: 10 * time.Second,
+			},
+			want: defaultTaskTimeout,
 		},
 		{
 			name: "enforces maximum",

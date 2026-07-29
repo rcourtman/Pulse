@@ -2139,7 +2139,14 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 func derivePollTimeout(cfg *config.Config) time.Duration {
 	timeout := defaultTaskTimeout
 	if cfg != nil && cfg.ConnectionTimeout > 0 {
-		timeout = cfg.ConnectionTimeout * 2
+		// ConnectionTimeout is the budget for one provider request, while a
+		// poll cycle may enumerate hundreds of guests across many cluster
+		// nodes. A short per-request timeout must not shrink the whole-cycle
+		// budget below the default; that cancelled otherwise healthy large
+		// PVE generations at exactly 30 seconds (#1437).
+		if requestScaledTimeout := cfg.ConnectionTimeout * 2; requestScaledTimeout > timeout {
+			timeout = requestScaledTimeout
+		}
 	}
 	if timeout < minTaskTimeout {
 		timeout = minTaskTimeout
