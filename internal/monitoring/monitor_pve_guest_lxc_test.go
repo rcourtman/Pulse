@@ -25,11 +25,12 @@ func TestMergeContainerRuntimeCounters_PrefersNewerStatusCounters(t *testing.T) 
 	t.Parallel()
 
 	current := IOMetrics{
-		DiskRead:   0,
-		DiskWrite:  8,
-		NetworkIn:  12,
-		NetworkOut: 0,
-		Timestamp:  time.Unix(0, 0),
+		DiskRead:     0,
+		DiskWrite:    8,
+		NetworkIn:    12,
+		NetworkOut:   0,
+		Timestamp:    time.Unix(0, 0),
+		SourceUptime: 100,
 	}
 
 	merged := mergeContainerRuntimeCounters(current, &proxmox.Container{
@@ -37,6 +38,7 @@ func TestMergeContainerRuntimeCounters_PrefersNewerStatusCounters(t *testing.T) 
 		DiskWrite: 4,
 		NetIn:     10,
 		NetOut:    256,
+		Uptime:    1,
 	})
 
 	if merged.DiskRead != 128 {
@@ -71,6 +73,7 @@ func TestMergeContainerRuntimeCounters_OverridesOnlyPresentStatusFields(t *testi
 			NetworkIn:  true,
 			NetworkOut: true,
 		},
+		SourceUptime: 100,
 	}
 	status := &proxmox.Container{
 		DiskRead:  0,
@@ -80,6 +83,7 @@ func TestMergeContainerRuntimeCounters_OverridesOnlyPresentStatusFields(t *testi
 			DiskRead: true,
 		},
 		ObservedAt: time.Unix(20, 0),
+		Uptime:     1,
 	}
 
 	merged := mergeContainerRuntimeCounters(current, status)
@@ -99,6 +103,65 @@ func TestMergeContainerRuntimeCounters_OverridesOnlyPresentStatusFields(t *testi
 		!merged.ObservedAt.NetworkIn.Equal(listingObservedAt) ||
 		!merged.ObservedAt.NetworkOut.Equal(listingObservedAt) {
 		t.Fatalf("missing status fields lost listing receipt times: %+v", merged.ObservedAt)
+	}
+}
+
+func TestIssue1613LXCStatusLagDoesNotEraseNewerListingDiskWrite(t *testing.T) {
+	t.Parallel()
+
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	client := &stubPVEClientLXCStatus{
+		containerStatus: &proxmox.Container{
+			Status:    "running",
+			DiskWrite: 0,
+			Uptime:    600,
+			IOCounters: proxmox.IOCounterPresence{
+				Explicit:  true,
+				DiskWrite: true,
+			},
+			ObservedAt: time.Unix(1_700_000_001, 0),
+		},
+	}
+	resource := proxmox.ClusterResource{
+		Type:       "lxc",
+		Node:       "pve-a",
+		Name:       "write-test",
+		Status:     "running",
+		VMID:       203,
+		Uptime:     600,
+		MaxMem:     4096,
+		Mem:        2048,
+		ObservedAt: time.Unix(1_700_000_000, 0),
+		IOCounters: proxmox.IOCounterPresence{
+			Explicit:  true,
+			DiskWrite: true,
+		},
+	}
+
+	if _, _, _, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(), "cluster-a", resource, client, map[int]bool{},
+	); !ok {
+		t.Fatal("expected first LXC sample")
+	}
+
+	resource.DiskWrite = 90 * 1024 * 1024
+	resource.ObservedAt = resource.ObservedAt.Add(120 * time.Second)
+	client.containerStatus.ObservedAt = resource.ObservedAt.Add(time.Second)
+
+	container, _, _, _, ok := monitor.buildContainerFromClusterResource(
+		context.Background(), "cluster-a", resource, client, map[int]bool{},
+	)
+	if !ok {
+		t.Fatal("expected second LXC sample")
+	}
+	if container.DiskWrite <= 0 {
+		t.Fatalf("LXC disk write rate = %d, lagging status/current erased the listing counter", container.DiskWrite)
+	}
+	// The first authoritative zero came from status/current one second after
+	// the listing, while the changed counter came from the next listing.
+	const want = 90 * 1024 * 1024 / 119
+	if container.DiskWrite != want {
+		t.Fatalf("LXC disk write rate = %d B/s, want %d B/s", container.DiskWrite, want)
 	}
 }
 

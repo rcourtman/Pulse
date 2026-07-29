@@ -1095,11 +1095,10 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect Ceph cluster data (best effort - only on Ceph nodes)
 	cephData := a.collectCephStatus(collectCtx, runtimeConfig.disableCeph)
 
-	// Collect S.M.A.R.T. disk data after topology owners and on its own
-	// deadline. Unsupported diagnostics must not starve RAID/Unraid/Ceph state.
-	smartCtx, cancelSMART := context.WithTimeout(ctx, 10*time.Second)
-	smartData := a.collectSMARTData(smartCtx, runtimeConfig.diskExclude, unraidData)
-	cancelSMART()
+	// Collect S.M.A.R.T. disk data after topology owners. Enumeration and each
+	// device probe have their own deadlines; a single shared 10-second budget
+	// caused later disks on larger arrays to be cancelled before their probe.
+	smartData := a.collectSMARTData(ctx, runtimeConfig.diskExclude, unraidData)
 	if len(smartData) > 0 {
 		annotateSMARTWithDiskIO(smartData, snapshot.DiskIO)
 		sensorData.SMART = smartData

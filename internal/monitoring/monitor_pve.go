@@ -65,12 +65,21 @@ func mergeContainerRuntimeCounters(current IOMetrics, status *proxmox.Container)
 
 	currentPresence := current.Presence.Effective()
 	statusPresence := status.IOCounters.Effective()
-	if statusPresence.DiskRead {
+	// /cluster/resources and /status/current are sampled by different PVE
+	// workers. In practice status/current can lag at zero while the cluster
+	// listing already contains a newer LXC disk counter (#1613). Do not let a
+	// lower disk value erase that evidence unless uptime proves the guest
+	// restarted and began a new counter epoch. Equal values still take the
+	// later receipt time so an idle interval is emitted as a valid zero.
+	restarted := current.SourceUptime > 0 && status.Uptime > 0 && status.Uptime < current.SourceUptime
+	if statusPresence.DiskRead &&
+		(!currentPresence.DiskRead || status.DiskRead >= uint64(max(0, current.DiskRead)) || restarted) {
 		current.DiskRead = int64(status.DiskRead)
 		currentPresence.DiskRead = true
 		current.ObservedAt.DiskRead = status.ObservedAt
 	}
-	if statusPresence.DiskWrite {
+	if statusPresence.DiskWrite &&
+		(!currentPresence.DiskWrite || status.DiskWrite >= uint64(max(0, current.DiskWrite)) || restarted) {
 		current.DiskWrite = int64(status.DiskWrite)
 		currentPresence.DiskWrite = true
 		current.ObservedAt.DiskWrite = status.ObservedAt
