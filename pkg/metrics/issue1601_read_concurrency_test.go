@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -53,5 +54,70 @@ func TestQueriesDoNotQueueBehindWriteTransaction(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Query blocked behind the open write transaction")
+	}
+}
+
+// Startup maintenance used to execute on the same worker that drained
+// writeCh. A large retention/VACUUM pass could therefore fill the bounded
+// write queue and drop live samples. Keep maintenance blocked here and prove
+// that ingestion and its Flush barrier remain operational.
+func TestStartupMaintenanceDoesNotBlockIngestionWorker(t *testing.T) {
+	maintenanceEntered := make(chan struct{})
+	releaseMaintenance := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() { close(releaseMaintenance) })
+	}
+	t.Cleanup(release)
+
+	previousHook := startupMaintenanceHook
+	startupMaintenanceHook = func() {
+		close(maintenanceEntered)
+		<-releaseMaintenance
+	}
+	t.Cleanup(func() { startupMaintenanceHook = previousHook })
+
+	config := DefaultConfig(t.TempDir())
+	config.WriteBufferSize = 1
+	config.FlushInterval = time.Hour
+
+	store, err := NewStore(config)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	select {
+	case <-maintenanceEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("startup maintenance did not begin")
+	}
+
+	timestamp := time.Now().UTC().Truncate(time.Second)
+	store.Write("node", "n1", "cpu", 42, timestamp)
+
+	flushed := make(chan struct{})
+	go func() {
+		store.Flush()
+		close(flushed)
+	}()
+
+	select {
+	case <-flushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("metric ingestion blocked behind startup maintenance")
+	}
+
+	release()
+	if err := store.WaitForMaintenance(10 * time.Second); err != nil {
+		t.Fatalf("WaitForMaintenance: %v", err)
+	}
+
+	points, err := store.Query("node", "n1", "cpu", timestamp.Add(-time.Second), timestamp.Add(time.Second), 0)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(points) != 1 || points[0].Value != 42 {
+		t.Fatalf("persisted points = %+v, want one value 42", points)
 	}
 }

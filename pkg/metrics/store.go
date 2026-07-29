@@ -202,6 +202,7 @@ type Store struct {
 	maintenanceCh              chan maintenanceRequest
 	stopCh                     chan struct{}
 	doneCh                     chan struct{}
+	maintenanceDoneCh          chan struct{}
 	stopOnce                   sync.Once
 	stopping                   atomic.Bool
 	identityMigrationPending   atomic.Bool
@@ -291,13 +292,14 @@ func NewStore(config StoreConfig) (*Store, error) {
 	db := pdb.Wrap(rawDB, "metrics")
 
 	store := &Store{
-		db:            db,
-		config:        config,
-		buffer:        make([]bufferedMetric, 0, config.WriteBufferSize),
-		writeCh:       make(chan writeRequest, 100), // Buffer for write batches
-		maintenanceCh: make(chan maintenanceRequest, 1),
-		stopCh:        make(chan struct{}),
-		doneCh:        make(chan struct{}),
+		db:                db,
+		config:            config,
+		buffer:            make([]bufferedMetric, 0, config.WriteBufferSize),
+		writeCh:           make(chan writeRequest, 100), // Buffer for write batches
+		maintenanceCh:     make(chan maintenanceRequest, 1),
+		stopCh:            make(chan struct{}),
+		doneCh:            make(chan struct{}),
+		maintenanceDoneCh: make(chan struct{}),
 	}
 
 	// Initialize schema
@@ -312,8 +314,12 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to secure metrics db files: %w", err)
 	}
 
-	// Start background workers
+	// Keep metric ingestion independent from rollup, retention, and one-time
+	// startup maintenance. SQLite remains the write-serialization boundary,
+	// but long maintenance scheduling no longer prevents the write queue from
+	// being drained (#1601).
 	go store.backgroundWorker()
+	go store.maintenanceWorker()
 	store.enqueueMaintenance(store.runStartupMaintenance)
 
 	log.Info().
@@ -1673,17 +1679,14 @@ func (s *Store) tierFallbacks(duration time.Duration) []Tier {
 	}
 }
 
-// backgroundWorker runs periodic tasks
+// backgroundWorker owns buffered metric ingestion. Maintenance work runs on a
+// separate scheduler so a long startup migration, rollup, or retention pass
+// cannot leave write requests unconsumed until the bounded channel overflows.
 func (s *Store) backgroundWorker() {
 	defer close(s.doneCh)
 
 	flushTicker := time.NewTicker(s.config.FlushInterval)
-	rollupTicker := time.NewTicker(s.config.RollupInterval)
-	retentionTicker := time.NewTicker(1 * time.Hour)
-
 	defer flushTicker.Stop()
-	defer rollupTicker.Stop()
-	defer retentionTicker.Stop()
 
 	for {
 		select {
@@ -1705,6 +1708,29 @@ func (s *Store) backgroundWorker() {
 			}
 			s.processWriteRequests(s.coalesceQueuedRequests(req))
 
+		case <-flushTicker.C:
+			s.flushBufferedAsync()
+		}
+	}
+}
+
+// maintenanceWorker owns startup maintenance and periodic rollup/retention
+// scheduling. Its database writes may still wait behind live metric writes,
+// but its CPU or read work cannot stop the ingestion worker from draining the
+// write channel.
+func (s *Store) maintenanceWorker() {
+	defer close(s.maintenanceDoneCh)
+
+	rollupTicker := time.NewTicker(s.config.RollupInterval)
+	retentionTicker := time.NewTicker(1 * time.Hour)
+	defer rollupTicker.Stop()
+	defer retentionTicker.Stop()
+
+	for {
+		select {
+		case <-s.stopCh:
+			return
+
 		case maintenance := <-s.maintenanceCh:
 			if maintenance.run != nil {
 				maintenance.run()
@@ -1712,9 +1738,6 @@ func (s *Store) backgroundWorker() {
 			if maintenance.done != nil {
 				close(maintenance.done)
 			}
-
-		case <-flushTicker.C:
-			s.flushBufferedAsync()
 
 		case <-rollupTicker.C:
 			s.runRollup()
@@ -2112,11 +2135,22 @@ func (s *Store) Close() error {
 		close(s.stopCh)
 	})
 
-	// Wait for background worker to finish
+	// Wait for both the ingestion and maintenance workers to finish before
+	// closing the shared database pool.
+	shutdownTimer := time.NewTimer(5 * time.Second)
+	defer shutdownTimer.Stop()
+
 	select {
 	case <-s.doneCh:
-	case <-time.After(5 * time.Second):
-		log.Warn().Msg("Metrics store shutdown timed out")
+	case <-shutdownTimer.C:
+		log.Warn().Msg("Metrics store ingestion shutdown timed out")
+		return s.db.Close()
+	}
+
+	select {
+	case <-s.maintenanceDoneCh:
+	case <-shutdownTimer.C:
+		log.Warn().Msg("Metrics store maintenance shutdown timed out")
 	}
 
 	return s.db.Close()
