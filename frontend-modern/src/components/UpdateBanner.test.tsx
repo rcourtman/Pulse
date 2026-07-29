@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const { mock } = vi.hoisted(() => ({
   mock: {
     runtimeBuild: 'community' as string,
+    deploymentType: 'systemd' as string,
     dockerUpdate: undefined as
       | {
           version: string;
@@ -44,7 +45,7 @@ vi.mock('@/stores/updates', () => ({
       isMajorUpgrade: false,
       dockerUpdate: mock.dockerUpdate,
     }),
-    versionInfo: () => ({ version: '6.0.0', deploymentType: 'systemd' }),
+    versionInfo: () => ({ version: '6.0.0', deploymentType: mock.deploymentType }),
     isUpdateVisible: () => true,
     dismissUpdate: vi.fn(),
     applyUpdate: vi.fn(() => Promise.resolve(true)),
@@ -68,6 +69,7 @@ const PORTAL_URL = 'https://pulserelay.pro/download.html';
 afterEach(() => {
   cleanup();
   mock.runtimeBuild = 'community';
+  mock.deploymentType = 'systemd';
   mock.dockerUpdate = undefined;
   mock.plan = {
     canAutoUpdate: true,
@@ -179,5 +181,22 @@ describe('UpdateBanner Pro edition update paths', () => {
     // Apply appears once the (async) update plan resolves with canAutoUpdate.
     expect(await screen.findByRole('button', { name: 'Apply Update' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Private Release Access/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('UpdateBanner Proxmox LXC update safety', () => {
+  it('routes an auto-updatable LXC to in-product apply instead of the legacy update helper', async () => {
+    mock.deploymentType = 'proxmoxve';
+
+    render(() => <UpdateBanner />);
+
+    expect(await screen.findByRole('button', { name: 'Apply Update' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/use Apply Update here; do not use a legacy community 'update' helper/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/type 'update' in console/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Show more'));
+    expect(screen.getByText(/Safe upgrade:/)).toBeInTheDocument();
   });
 });

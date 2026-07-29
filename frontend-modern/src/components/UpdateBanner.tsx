@@ -116,7 +116,9 @@ export function UpdateBanner() {
 
     switch (deploymentType) {
       case 'proxmoxve':
-        return "ProxmoxVE users: type 'update' in console";
+        return updatePlan()?.canAutoUpdate
+          ? "ProxmoxVE LXC: use Apply Update here; do not use a legacy community 'update' helper"
+          : 'ProxmoxVE LXC: use the signed Pulse installer, not a legacy community update helper';
       case 'docker':
         return 'Docker: pull image and recreate container';
       case 'source':
@@ -372,7 +374,7 @@ export function UpdateBanner() {
 
                 {!isProEdition() && getUpdateInstructions() && (
                   <p>
-                    <span class="font-medium">Quick upgrade:</span> {getUpdateInstructions()}
+                    <span class="font-medium">Safe upgrade:</span> {getUpdateInstructions()}
                   </p>
                 )}
                 <Show when={updateStore.updateInfo()?.warning}>

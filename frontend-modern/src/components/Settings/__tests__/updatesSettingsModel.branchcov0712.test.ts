@@ -221,7 +221,31 @@ describe('buildUpdateInstallGuide', () => {
 
   // -- proxmoxve arm ---------------------------------------------------------
 
-  it('returns the proxmox LXC guide for the proxmoxve deployment arm', () => {
+  it('routes an auto-updatable proxmox LXC away from the legacy community helper', () => {
+    const guide = buildUpdateInstallGuide(
+      makeVersionInfo({ deploymentType: 'proxmoxve' }),
+      makeUpdateInfo({ latestVersion: 'v6.0.5' }),
+      makeUpdatePlan({ canAutoUpdate: true }),
+      'v6.0.5',
+      'curl',
+      false,
+    );
+    expect(guide).toStrictEqual({
+      headerTitle: 'Update Available',
+      headerSummary: 'Version v6.0.5 is ready to install',
+      introText:
+        'Use "Install Update" above. It stages and verifies the release before stopping Pulse and preserves rollback.',
+      steps: [
+        {
+          id: 'proxmox-safe-update',
+          title: 'Install from this page',
+          note: 'Do not run a legacy community-scripts `update` helper. Under memory or disk pressure it can stop Pulse before its download succeeds.',
+        },
+      ],
+    });
+  });
+
+  it('routes a manual-only proxmox LXC to the signed Pulse installer', () => {
     const guide = buildUpdateInstallGuide(
       makeVersionInfo({ deploymentType: 'proxmoxve' }),
       makeUpdateInfo({ latestVersion: 'v6.0.5' }),
@@ -230,20 +254,16 @@ describe('buildUpdateInstallGuide', () => {
       'curl',
       false,
     );
-    expect(guide).toStrictEqual({
-      headerTitle: 'Update Available',
-      headerSummary: 'Version v6.0.5 is ready to install',
-      introText: 'Follow these steps to update manually:',
-      steps: [
-        { id: 'open-console', title: 'Open your Pulse LXC console' },
-        { id: 'run-update', title: 'Run the update command:', command: 'update' },
-        {
-          id: 'run-update-note',
-          title: '',
-          note: 'The script will automatically download and install the latest version.',
-        },
-      ],
-    });
+    expect(guide?.introText).toBe(
+      'Use the supported signed Pulse installer for this manual update.',
+    );
+    expect(guide?.steps).toStrictEqual([
+      {
+        id: 'proxmox-signed-installer',
+        title: 'Follow the signed installer instructions',
+        note: 'Open https://github.com/rcourtman/Pulse/blob/main/docs/INSTALL.md and use the pinned SSH-signature verification flow. Do not run a legacy community-scripts `update` helper.',
+      },
+    ]);
   });
 
   // -- docker arm: pro steps (dockerUpdate present) --------------------------

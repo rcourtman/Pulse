@@ -107,19 +107,28 @@ export function buildUpdateInstallGuide(
     : 'Follow these steps to update manually:';
 
   if (versionInfo.deploymentType === 'proxmoxve') {
+    const canAutoUpdate = updatePlan?.canAutoUpdate === true;
     return {
       headerTitle: 'Update Available',
       headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,
-      introText,
-      steps: [
-        { id: 'open-console', title: 'Open your Pulse LXC console' },
-        { id: 'run-update', title: 'Run the update command:', command: 'update' },
-        {
-          id: 'run-update-note',
-          title: '',
-          note: 'The script will automatically download and install the latest version.',
-        },
-      ],
+      introText: canAutoUpdate
+        ? 'Use "Install Update" above. It stages and verifies the release before stopping Pulse and preserves rollback.'
+        : 'Use the supported signed Pulse installer for this manual update.',
+      steps: canAutoUpdate
+        ? [
+            {
+              id: 'proxmox-safe-update',
+              title: 'Install from this page',
+              note: 'Do not run a legacy community-scripts `update` helper. Under memory or disk pressure it can stop Pulse before its download succeeds.',
+            },
+          ]
+        : [
+            {
+              id: 'proxmox-signed-installer',
+              title: 'Follow the signed installer instructions',
+              note: 'Open https://github.com/rcourtman/Pulse/blob/main/docs/INSTALL.md and use the pinned SSH-signature verification flow. Do not run a legacy community-scripts `update` helper.',
+            },
+          ],
     };
   }
 
