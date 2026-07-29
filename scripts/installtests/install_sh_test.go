@@ -11,9 +11,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitoring(t *testing.T) {
@@ -1460,7 +1463,7 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 		`write_qnap_wrapper_script() {`,
 		`append_qnap_autorun_block() {`,
 		`select_platform_state_dir "${QNAP_VOL}/.pulse-agent"`,
-		`write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY" "$QNAP_LOG_DIR"`,
+		`write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY" "$QNAP_LOG_DIR" "$STATE_DIR"`,
 		`append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f ${AGENT_LOG_FILE}"`,
 	}
@@ -1658,6 +1661,168 @@ func TestInstallSHWatchdogPathsUseRotatingAgentLog(t *testing.T) {
 	}
 	if strings.Contains(script, `${EXEC_ARGS} >> /var/log/${AGENT_NAME}.log`) {
 		t.Fatalf("a watchdog loop still shell-appends agent output to the unrotated /var/log/${AGENT_NAME}.log")
+	}
+}
+
+// TestInstallSHQNAPWatchdogIsSingleton pins the process-ownership half of issue
+// #1617. QNAP can launch the persistent wrapper both from autorun.sh and from an
+// install/upgrade, so the wrapper must elect one supervisor before killing or
+// starting an agent and must clean up only state that it owns.
+func TestInstallSHQNAPWatchdogIsSingleton(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`WATCHDOG_PIDFILE="${state_dir}/${AGENT_NAME}.watchdog.pid"`,
+		`AGENT_PIDFILE="${state_dir}/${AGENT_NAME}.pid"`,
+		`LOCK_DIR="${state_dir}/${AGENT_NAME}.watchdog.lock"`,
+		`while ! mkdir "\$LOCK_DIR" 2>/dev/null; do`,
+		`if pid_is_live "\$_owner"; then`,
+		`if ! acquire_watchdog_lock; then`,
+		`[ "\$(cat "\$WATCHDOG_PIDFILE" 2>/dev/null)" = "\$\$" ]`,
+		`trap cleanup_watchdog EXIT`,
+		`trap shutdown_watchdog INT TERM HUP`,
+		`CURRENT_AGENT_PID=\$!`,
+		`echo "\$CURRENT_AGENT_PID" > "\$AGENT_PIDFILE"`,
+		`wait "\$CURRENT_AGENT_PID"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing QNAP watchdog singleton contract: %s", needle)
+		}
+	}
+
+	lockPos := strings.Index(script, `if ! acquire_watchdog_lock; then`)
+	killPos := strings.Index(script, `pkill -x "pulse-agent" 2>/dev/null || true`)
+	if lockPos < 0 || killPos < 0 || lockPos > killPos {
+		t.Fatalf("QNAP wrapper must acquire singleton ownership before killing an existing agent")
+	}
+}
+
+func TestRenderedQNAPWatchdogRejectsASecondSupervisor(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	start := strings.Index(script, "write_qnap_wrapper_script() {")
+	if start < 0 {
+		t.Fatal("install.sh missing QNAP wrapper renderer")
+	}
+	endOffset := strings.Index(script[start:], "\nappend_qnap_autorun_block() {")
+	if endOffset < 0 {
+		t.Fatal("could not isolate QNAP wrapper renderer")
+	}
+	renderer := script[start : start+endOffset]
+
+	tempDir := t.TempDir()
+	stateDir := filepath.Join(tempDir, "state")
+	logDir := filepath.Join(stateDir, "logs")
+	wrapperPath := filepath.Join(stateDir, "start-pulse-agent.sh")
+	storedPath := filepath.Join(stateDir, "stored-agent")
+	runtimePath := filepath.Join(tempDir, "runtime", "pulse-agent")
+	startsPath := filepath.Join(tempDir, "agent-starts")
+	mockBinDir := filepath.Join(tempDir, "bin")
+
+	for _, dir := range []string{stateDir, mockBinDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create test directory: %v", err)
+		}
+	}
+	agentScript := "#!/bin/sh\n" +
+		"echo \"$$\" >> " + strconv.Quote(startsPath) + "\n" +
+		"trap 'exit 0' INT TERM HUP\n" +
+		"while :; do sleep 1; done\n"
+	if err := os.WriteFile(storedPath, []byte(agentScript), 0o755); err != nil {
+		t.Fatalf("write fake agent: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(mockBinDir, "pkill"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake pkill: %v", err)
+	}
+
+	harness := renderer + `
+AGENT_NAME=pulse-agent
+SHELL_EXPORT_LINES=""
+EXEC_ARGS=""
+write_qnap_wrapper_script "$1" "$2" "$3" "$4" "$5"
+`
+	render := exec.Command("bash", "-c", harness, "_", wrapperPath, runtimePath, storedPath, logDir, stateDir)
+	if output, err := render.CombinedOutput(); err != nil {
+		t.Fatalf("render QNAP wrapper: %v\n%s", err, output)
+	}
+
+	env := []string{"PATH=" + mockBinDir + ":/usr/bin:/bin"}
+	first := exec.Command("sh", wrapperPath)
+	first.Env = env
+	if err := first.Start(); err != nil {
+		t.Fatalf("start first watchdog: %v", err)
+	}
+	t.Cleanup(func() {
+		if first.Process != nil {
+			_ = first.Process.Signal(syscall.SIGTERM)
+			_, _ = first.Process.Wait()
+		}
+	})
+
+	watchdogPIDFile := filepath.Join(stateDir, "pulse-agent.watchdog.pid")
+	agentPIDFile := filepath.Join(stateDir, "pulse-agent.pid")
+	waitForFile := func(path string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(path); err == nil {
+				return
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		t.Fatalf("timed out waiting for %s", path)
+	}
+	waitForFile(watchdogPIDFile)
+	waitForFile(agentPIDFile)
+	waitForFile(startsPath)
+
+	second := exec.Command("sh", wrapperPath)
+	second.Env = env
+	if output, err := second.CombinedOutput(); err != nil {
+		t.Fatalf("second watchdog should exit cleanly: %v\n%s", err, output)
+	}
+
+	starts, err := os.ReadFile(startsPath)
+	if err != nil {
+		t.Fatalf("read fake-agent starts: %v", err)
+	}
+	if got := len(strings.Fields(string(starts))); got != 1 {
+		t.Fatalf("expected one supervised agent after two watchdog launches, got %d", got)
+	}
+
+	agentPIDBytes, err := os.ReadFile(agentPIDFile)
+	if err != nil {
+		t.Fatalf("read agent pid: %v", err)
+	}
+	agentPID, err := strconv.Atoi(strings.TrimSpace(string(agentPIDBytes)))
+	if err != nil {
+		t.Fatalf("parse agent pid: %v", err)
+	}
+
+	if err := first.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("stop first watchdog: %v", err)
+	}
+	if err := first.Wait(); err != nil {
+		t.Fatalf("wait for first watchdog shutdown: %v", err)
+	}
+	first.Process = nil
+
+	if err := syscall.Kill(agentPID, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("watchdog shutdown left agent pid %d alive (kill check: %v)", agentPID, err)
+	}
+	for _, path := range []string{watchdogPIDFile, agentPIDFile, filepath.Join(stateDir, "pulse-agent.watchdog.lock")} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("watchdog shutdown left singleton state %s (stat: %v)", path, err)
+		}
 	}
 }
 
