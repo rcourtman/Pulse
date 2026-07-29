@@ -154,6 +154,8 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
   deadLetter: number;
   completedRetentionDays: number;
   deadLetterRetentionDays: number;
+  failureClasses7d?: Record<string, number>;
+  failureClassesAvailable?: boolean;
 }) {
   if (input.status === 'unavailable') {
     return 'Pulse could not verify the notification queue. Review the destination settings below and send a test before relying on delivery.';
@@ -171,7 +173,25 @@ export function getAlertDestinationsDeliveryHealthDescription(input: {
     );
   }
   const summary = outcomes.join(' and ') || 'A retained terminal delivery failure';
-  return `${summary}. These notifications were not delivered. Check each enabled destination and send a test; recoverable retry attempts do not trigger this warning.`;
+  const guidanceByClass: Record<string, string> = {
+    authentication: 'Check destination credentials, tokens, and account permissions.',
+    rate_limited: 'Check provider rate limits and reduce delivery volume before retrying.',
+    connectivity: 'Check DNS, firewall, proxy, and destination reachability.',
+    tls: 'Check certificate trust, hostname matching, and TLS settings.',
+    configuration: 'Review the enabled destination configuration and required fields.',
+    rejected: 'Check the destination endpoint and payload requirements.',
+    unknown: 'Review the local notification audit details for the terminal error.',
+  };
+  let diagnostic = 'Check each enabled destination and send a test.';
+  if (input.failureClassesAvailable && input.failureClasses7d) {
+    const dominant = Object.entries(input.failureClasses7d)
+      .filter(([, count]) => count > 0)
+      .sort((left, right) => right[1] - left[1])[0];
+    if (dominant) {
+      diagnostic = `Most recent terminal failures were classified as ${dominant[0].replace('_', ' ')} (${dominant[1]}). ${guidanceByClass[dominant[0]] ?? guidanceByClass.unknown}`;
+    }
+  }
+  return `${summary}. These notifications were not delivered. ${diagnostic} Recoverable retry attempts do not trigger this warning.`;
 }
 
 export function getAlertDestinationsDeliveryRefreshLabel() {

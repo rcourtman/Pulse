@@ -117,6 +117,17 @@ describe('useAlertDestinationsTabState', () => {
         countsAreRetentionBounded: true,
         retryAttemptsAffectHealth: false,
         terminalFailuresAffectHealth: true,
+        failureClasses7d: {
+          authentication: 0,
+          rate_limited: 0,
+          connectivity: 0,
+          tls: 0,
+          configuration: 0,
+          rejected: 0,
+          unknown: 0,
+        },
+        failureClassesAvailable: true,
+        failureClassWindowDays: 7,
       },
     });
     vi.mocked(NotificationsAPI.testNotification).mockResolvedValue({ success: true } as never);

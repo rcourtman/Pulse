@@ -809,10 +809,13 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 		IsDocker: true,
 		GetSnapshot: func() Snapshot {
 			return Snapshot{
-				PVENodes:     3,
-				VMs:          10,
-				ActiveAlerts: 2,
-				AIEnabled:    true,
+				PVENodes:                             3,
+				VMs:                                  10,
+				ActiveAlerts:                         2,
+				AIEnabled:                            true,
+				NotificationFailures7d:               3,
+				NotificationFailuresAuthentication7d: 2,
+				NotificationFailuresConnectivity7d:   1,
 			}
 		},
 	})
@@ -846,6 +849,11 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 	}
 	if preview.PVENodes != 3 || preview.VMs != 10 || preview.ActiveAlerts != 2 {
 		t.Fatalf("preview snapshot = %#v", preview)
+	}
+	if preview.NotificationFailures7d != 3 ||
+		preview.NotificationFailuresAuthentication7d != 2 ||
+		preview.NotificationFailuresConnectivity7d != 1 {
+		t.Fatalf("preview notification failure classes = %#v", preview)
 	}
 	if preview.InstallID == "" {
 		t.Fatal("expected preview install ID")

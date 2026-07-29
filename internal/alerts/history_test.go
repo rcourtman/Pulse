@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 // newTestHistoryManager creates a HistoryManager using a temp directory
@@ -156,6 +158,83 @@ func TestAddAlert(t *testing.T) {
 
 	if hm.history[0].Alert.ID != "test-alert-1" {
 		t.Errorf("alert ID = %s, want test-alert-1", hm.history[0].Alert.ID)
+	}
+}
+
+func TestAddAlertCoalescesRepeatedOpenOccurrence(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	startedAt := time.Now().Add(-time.Hour)
+	first := Alert{
+		ID:             "resource::cpu",
+		CanonicalState: "resource::cpu",
+		StartTime:      startedAt,
+		LastSeen:       startedAt.Add(time.Minute),
+		OperationalRecord: &operationaltrust.OperationalRecord{
+			State: operationaltrust.OperationalOpen,
+		},
+	}
+	recreated := *first.Clone()
+	recreated.StartTime = startedAt.Add(30 * time.Minute)
+	recreated.LastSeen = startedAt.Add(31 * time.Minute)
+
+	callbacks := 0
+	hm.OnAlert(func(Alert) { callbacks++ })
+	hm.AddAlert(first)
+	hm.AddAlert(recreated)
+
+	if len(hm.history) != 1 {
+		t.Fatalf("history length = %d, want one open occurrence", len(hm.history))
+	}
+	if !hm.history[0].Alert.StartTime.Equal(startedAt) {
+		t.Fatalf("coalesced start = %v, want %v", hm.history[0].Alert.StartTime, startedAt)
+	}
+	if !hm.history[0].Alert.LastSeen.Equal(recreated.LastSeen) {
+		t.Fatalf("coalesced last seen = %v, want %v", hm.history[0].Alert.LastSeen, recreated.LastSeen)
+	}
+	if callbacks != 1 {
+		t.Fatalf("callbacks = %d, want one new-incident callback", callbacks)
+	}
+}
+
+func TestAddAlertAppendsAfterResolvedOccurrence(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	startedAt := time.Now().Add(-time.Hour)
+	resolved := Alert{
+		ID:             "resource::cpu",
+		CanonicalState: "resource::cpu",
+		StartTime:      startedAt,
+		OperationalRecord: &operationaltrust.OperationalRecord{
+			State: operationaltrust.OperationalResolved,
+		},
+	}
+	refired := *resolved.Clone()
+	refired.StartTime = startedAt.Add(30 * time.Minute)
+	refired.OperationalRecord.State = operationaltrust.OperationalOpen
+
+	hm.AddAlert(resolved)
+	hm.AddAlert(refired)
+
+	if len(hm.history) != 2 {
+		t.Fatalf("history length = %d, want distinct resolved and re-fired occurrences", len(hm.history))
+	}
+}
+
+func TestAddAlertTransitionExplicitlyPreservesSeverityHistory(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	alert := Alert{
+		ID:             "resource::cpu",
+		CanonicalState: "resource::cpu",
+		StartTime:      time.Now().Add(-time.Hour),
+		OperationalRecord: &operationaltrust.OperationalRecord{
+			State: operationaltrust.OperationalOpen,
+		},
+	}
+
+	hm.AddAlert(alert)
+	hm.AddAlertTransition(alert)
+
+	if len(hm.history) != 2 {
+		t.Fatalf("history length = %d, want explicit transition snapshot", len(hm.history))
 	}
 }
 

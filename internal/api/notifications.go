@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -43,6 +44,7 @@ type NotificationManager interface {
 	GetWebhookHistory() []notifications.WebhookDelivery
 	TestEnhancedWebhook(notifications.EnhancedWebhookConfig) (int, string, error)
 	GetQueueStats() (map[string]int, error)
+	GetTelemetryStats(time.Time) (notifications.TelemetryStats, error)
 }
 
 // NotificationConfigPersistence defines the interface for saving notification configuration.
@@ -793,6 +795,17 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 	monitor := h.getMonitor(r.Context())
 	manager := monitor.GetNotificationManager()
 
+	failureClasses := notifications.NotificationFailureClassCounts{}.AsMap()
+	failureClassesAvailable := false
+	if deliveryStats, statsErr := manager.GetTelemetryStats(
+		time.Now().Add(-completedQueueRetentionDays * 24 * time.Hour),
+	); statsErr != nil {
+		log.Warn().Err(statsErr).Msg("Failed to get notification failure classes for health check")
+	} else {
+		failureClasses = deliveryStats.FailureClasses.AsMap()
+		failureClassesAvailable = true
+	}
+
 	queueStats := make(map[string]interface{})
 	stats, err := manager.GetQueueStats()
 	if err != nil {
@@ -807,6 +820,9 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 			"counts_are_retention_bounded":    true,
 			"retry_attempts_affect_health":    false,
 			"terminal_failures_affect_health": true,
+			"failure_classes_7d":              failureClasses,
+			"failure_classes_available":       failureClassesAvailable,
+			"failure_class_window_days":       completedQueueRetentionDays,
 		}
 	} else {
 		healthy, attentionRequired, reasonCodes := classifyNotificationQueueHealth(stats)
@@ -829,6 +845,9 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 			"counts_are_retention_bounded":    true,
 			"retry_attempts_affect_health":    false,
 			"terminal_failures_affect_health": true,
+			"failure_classes_7d":              failureClasses,
+			"failure_classes_available":       failureClassesAvailable,
+			"failure_class_window_days":       completedQueueRetentionDays,
 		}
 	}
 

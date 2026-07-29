@@ -40,6 +40,8 @@ export function AlertDeliveryHealthCard(props: AlertDeliveryHealthCardProps) {
                 deadLetter: deadLetter(),
                 completedRetentionDays: completedRetentionDays(),
                 deadLetterRetentionDays: deadLetterRetentionDays(),
+                failureClasses7d: props.health?.failureClasses7d,
+                failureClassesAvailable: props.health?.failureClassesAvailable ?? false,
               })}
             </p>
           </div>

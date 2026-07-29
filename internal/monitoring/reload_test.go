@@ -188,6 +188,34 @@ func TestAccumulateAlertOutcomeCountsUsesOnlyContentFreeLifecycleTotals(t *testi
 	assert.Equal(t, 1, counts.AlertsResolved30d)
 }
 
+func TestAccumulateAlertOutcomeCountsDeduplicatesOccurrenceSnapshots(t *testing.T) {
+	now := time.Now().UTC()
+	startedAt := now.Add(-2 * time.Hour)
+	acknowledgedAt := now.Add(-time.Hour)
+	open := alerts.Alert{
+		ID:             "resource::cpu",
+		CanonicalState: "resource::cpu",
+		StartTime:      startedAt,
+	}
+	acknowledged := *open.Clone()
+	acknowledged.AckTime = &acknowledgedAt
+	resolved := *acknowledged.Clone()
+	resolved.OperationalRecord = &operationaltrust.OperationalRecord{
+		State: operationaltrust.OperationalResolved,
+	}
+
+	counts := InstallSnapshotCounts{}
+	accumulateAlertOutcomeCounts(
+		&counts,
+		[]alerts.Alert{open, acknowledged, resolved},
+		now.Add(-30*24*time.Hour),
+	)
+
+	assert.Equal(t, 1, counts.AlertsFired30d)
+	assert.Equal(t, 1, counts.AlertsAcknowledged30d)
+	assert.Equal(t, 1, counts.AlertsResolved30d)
+}
+
 func testTelemetryMonitor(
 	nodes []models.Node,
 	vms []models.VM,

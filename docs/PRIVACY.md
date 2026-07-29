@@ -90,12 +90,19 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notifications enabled | `true`/`false` | See whether alert notification delivery is configured |
 | AI actions enabled | `true`/`false` | See whether AI control tools are enabled without sending action history or command content |
 | Active alerts | `4` | Understand how noisy or quiet installations are in aggregate |
-| Alerts fired 30d | `18` | Count locally retained alert-history entries in the current 30-day window without sending alert text, resource IDs, or timestamps |
+| Alerts fired 30d | `18` | Count unique locally retained alert occurrences in the current 30-day window without sending alert text, resource IDs, or timestamps |
 | Alerts acknowledged 30d | `7` | Count acknowledgements in the current 30-day window without sending actors, reasons, alert IDs, or timestamps |
 | Alerts resolved 30d | `12` | Count resolved alert records in the current 30-day window without sending resolution details, alert IDs, or resource IDs |
 | Notification attempts 7d | `14` | Count delivery attempts, including retry attempts, in the locally retained seven-day queue window without sending recipients, endpoints, titles, or message content |
 | Notification deliveries 7d | `11` | Count successfully delivered queue records in the local seven-day window without sending channel, recipient, endpoint, or content |
 | Notification failures 7d (terminal in schema v3) | `3` | Count terminal failed or dead-lettered delivery outcomes in the local seven-day window without sending retry-attempt failures, error text, endpoint, recipient, or message content |
+| Notification failures authentication 7d (schema v5) | `1` | Count terminal failures classified locally as credential or permission failures without sending raw errors, provider names, endpoints, recipients, or message content |
+| Notification failures rate limited 7d (schema v5) | `0` | Count terminal failures classified locally as provider rate limiting without sending provider identity or response content |
+| Notification failures connectivity 7d (schema v5) | `2` | Count terminal failures classified locally as DNS, timeout, or connection failures without sending addresses, hosts, or raw errors |
+| Notification failures TLS 7d (schema v5) | `0` | Count terminal failures classified locally as certificate or TLS failures without sending certificates, hostnames, or raw errors |
+| Notification failures configuration 7d (schema v5) | `0` | Count terminal failures classified locally as missing or invalid destination configuration without sending configuration values |
+| Notification failures rejected 7d (schema v5) | `0` | Count terminal failures classified locally as destination request or payload rejection without sending response or payload content |
+| Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
@@ -185,6 +192,12 @@ Telemetry schema v4 adds complete approved-action outcome accounting, fixed
 pre-dispatch refusal categories, and an independently verified
 action-to-finding resolution count. These remain aggregate counters and do not
 send action, finding, resource, evidence, actor, or command identity or content.
+
+Telemetry schema v5 adds seven fixed notification terminal-failure counters so
+fleet health can distinguish authentication, rate limiting, connectivity, TLS,
+configuration, destination rejection, and unknown failures. Classification is
+performed locally; raw error text and destination/provider identity are never
+included in the payload.
 
 #### Server-side handling and retention
 

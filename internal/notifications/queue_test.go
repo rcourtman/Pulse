@@ -524,9 +524,10 @@ func TestNewNotificationQueue_MigratesAuditAlertIdentifiersColumn(t *testing.T) 
 		t.Fatalf("tableColumns(notification_queue) failed: %v", err)
 	}
 	if !queueColumns[notificationOperationalLinksColumn] ||
-		!columns[notificationOperationalLinksColumn] {
+		!columns[notificationOperationalLinksColumn] ||
+		!columns[notificationFailureClassColumn] {
 		t.Fatalf(
-			"expected migrated operational link columns, queue=%#v audit=%#v",
+			"expected migrated operational link and failure class columns, queue=%#v audit=%#v",
 			queueColumns,
 			columns,
 		)
@@ -1445,8 +1446,83 @@ func TestGetTelemetryStatsReturnsOnlyWindowedOutcomeCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTelemetryStats: %v", err)
 	}
-	if stats != (TelemetryStats{Attempts: 3, Deliveries: 1, Failures: 1}) {
+	if stats != (TelemetryStats{
+		Attempts:   3,
+		Deliveries: 1,
+		Failures:   1,
+		FailureClasses: NotificationFailureClassCounts{
+			Unknown: 1,
+		},
+	}) {
 		t.Fatalf("telemetry stats = %#v", stats)
+	}
+}
+
+func TestClassifyNotificationFailureUsesBoundedPrivacySafeBuckets(t *testing.T) {
+	tests := []struct {
+		errorMessage string
+		want         NotificationFailureClass
+	}{
+		{"webhook returned status 401: Unauthorized", NotificationFailureAuthentication},
+		{"SMTP auth failed: 535 invalid credentials", NotificationFailureAuthentication},
+		{"webhook returned HTTP 429: Too Many Requests", NotificationFailureRateLimited},
+		{"x509: certificate signed by unknown authority", NotificationFailureTLS},
+		{"dial tcp 10.0.0.1:443: i/o timeout", NotificationFailureConnectivity},
+		{"apprise server URL is not configured", NotificationFailureConfiguration},
+		{"webhook returned status 413: Payload Too Large", NotificationFailureRejected},
+		{"provider-specific secret detail", NotificationFailureUnknown},
+	}
+
+	for _, test := range tests {
+		if got := ClassifyNotificationFailure(test.errorMessage); got != test.want {
+			t.Errorf("ClassifyNotificationFailure(%q) = %q, want %q", test.errorMessage, got, test.want)
+		}
+	}
+}
+
+func TestGetTelemetryStatsClassifiesTerminalFailuresOnly(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	now := time.Now().UTC()
+	entries := []*QueuedNotification{
+		{ID: "auth-dlq", Type: "webhook", Status: QueueStatusDLQ, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
+		{ID: "rate-retry", Type: "webhook", Status: QueueStatusPending, Attempts: 1, Config: []byte(`{}`), CreatedAt: now},
+		{ID: "tls-failed", Type: "email", Status: QueueStatusFailed, Attempts: 3, Config: []byte(`{}`), CreatedAt: now},
+	}
+	for _, entry := range entries {
+		status := entry.Status
+		entry.Status = QueueStatusPending
+		if err := nq.Enqueue(entry); err != nil {
+			t.Fatalf("enqueue %s: %v", entry.ID, err)
+		}
+		entry.Status = status
+	}
+	if err := nq.RecordAudit(entries[0], false, "HTTP 401 Unauthorized"); err != nil {
+		t.Fatalf("record auth audit: %v", err)
+	}
+	if err := nq.RecordAudit(entries[1], false, "HTTP 429 Too Many Requests"); err != nil {
+		t.Fatalf("record retry audit: %v", err)
+	}
+	if err := nq.RecordAudit(entries[2], false, "x509 certificate failure"); err != nil {
+		t.Fatalf("record TLS audit: %v", err)
+	}
+
+	stats, err := nq.GetTelemetryStats(now.Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("GetTelemetryStats: %v", err)
+	}
+	if stats.Attempts != 3 || stats.Failures != 2 {
+		t.Fatalf("telemetry totals = %#v, want 3 attempts and 2 terminal failures", stats)
+	}
+	if stats.FailureClasses.Authentication != 1 || stats.FailureClasses.TLS != 1 {
+		t.Fatalf("failure classes = %#v, want authentication=1 tls=1", stats.FailureClasses)
+	}
+	if stats.FailureClasses.RateLimited != 0 {
+		t.Fatalf("retry failure leaked into terminal class counts: %#v", stats.FailureClasses)
 	}
 }
 

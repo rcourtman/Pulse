@@ -106,6 +106,17 @@ describe('NotificationsAPI', () => {
         counts_are_retention_bounded: true,
         retry_attempts_affect_health: false,
         terminal_failures_affect_health: true,
+        failure_classes_7d: {
+          authentication: 3,
+          rate_limited: 0,
+          connectivity: 1,
+          tls: 0,
+          configuration: 0,
+          rejected: 0,
+          unknown: 0,
+        },
+        failure_classes_available: true,
+        failure_class_window_days: 7,
       },
     } as any);
 
@@ -129,6 +140,17 @@ describe('NotificationsAPI', () => {
         countsAreRetentionBounded: true,
         retryAttemptsAffectHealth: false,
         terminalFailuresAffectHealth: true,
+        failureClasses7d: {
+          authentication: 3,
+          rate_limited: 0,
+          connectivity: 1,
+          tls: 0,
+          configuration: 0,
+          rejected: 0,
+          unknown: 0,
+        },
+        failureClassesAvailable: true,
+        failureClassWindowDays: 7,
       },
     });
   });

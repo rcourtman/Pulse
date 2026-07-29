@@ -542,6 +542,13 @@ func Run(ctx context.Context, version string) error {
 			snap.NotificationAttempts7d = counts.NotificationAttempts7d
 			snap.NotificationDeliveries7d = counts.NotificationDeliveries7d
 			snap.NotificationFailures7d = counts.NotificationFailures7d
+			snap.NotificationFailuresAuthentication7d = counts.NotificationFailuresAuthentication7d
+			snap.NotificationFailuresRateLimited7d = counts.NotificationFailuresRateLimited7d
+			snap.NotificationFailuresConnectivity7d = counts.NotificationFailuresConnectivity7d
+			snap.NotificationFailuresTLS7d = counts.NotificationFailuresTLS7d
+			snap.NotificationFailuresConfiguration7d = counts.NotificationFailuresConfiguration7d
+			snap.NotificationFailuresRejected7d = counts.NotificationFailuresRejected7d
+			snap.NotificationFailuresUnknown7d = counts.NotificationFailuresUnknown7d
 			snap.DiscoveryEnabled = currentCfg.DiscoveryEnabled
 
 			// Feature flags from persisted config (using pre-created persistence).

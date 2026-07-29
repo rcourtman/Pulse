@@ -89,6 +89,16 @@ export interface NotificationTestRequest {
 }
 
 export type NotificationQueueHealthStatus = 'healthy' | 'degraded' | 'unavailable';
+export type NotificationFailureClass =
+  | 'authentication'
+  | 'rate_limited'
+  | 'connectivity'
+  | 'tls'
+  | 'configuration'
+  | 'rejected'
+  | 'unknown';
+
+export type NotificationFailureClassCounts = Record<NotificationFailureClass, number>;
 
 export interface NotificationQueueHealth {
   pending: number;
@@ -105,6 +115,9 @@ export interface NotificationQueueHealth {
   countsAreRetentionBounded: boolean;
   retryAttemptsAffectHealth: boolean;
   terminalFailuresAffectHealth: boolean;
+  failureClasses7d: NotificationFailureClassCounts;
+  failureClassesAvailable: boolean;
+  failureClassWindowDays: number;
 }
 
 export interface NotificationHealth {
@@ -127,6 +140,27 @@ function nonNegativeCount(value: unknown): number | undefined {
     : undefined;
 }
 
+const notificationFailureClasses: NotificationFailureClass[] = [
+  'authentication',
+  'rate_limited',
+  'connectivity',
+  'tls',
+  'configuration',
+  'rejected',
+  'unknown',
+];
+
+function normalizeFailureClassCounts(value: unknown): NotificationFailureClassCounts | undefined {
+  const record = apiRecord(value);
+  const counts = {} as NotificationFailureClassCounts;
+  for (const failureClass of notificationFailureClasses) {
+    const count = nonNegativeCount(record[failureClass]);
+    if (count === undefined) return undefined;
+    counts[failureClass] = count;
+  }
+  return counts;
+}
+
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
 
@@ -145,6 +179,9 @@ export class NotificationsAPI {
     const attentionRequired = nonNegativeCount(queue.attention_required);
     const completedRetentionDays = nonNegativeCount(queue.completed_retention_days);
     const deadLetterRetentionDays = nonNegativeCount(queue.dead_letter_retention_days);
+    const failureClasses7d = normalizeFailureClassCounts(queue.failure_classes_7d);
+    const failureClassWindowDays = nonNegativeCount(queue.failure_class_window_days);
+    const failureClassesAvailable = strictBoolean(queue.failure_classes_available);
     const reasonCodesAreValid =
       Array.isArray(queue.reason_codes) &&
       queue.reason_codes.every((reasonCode) => typeof reasonCode === 'string');
@@ -161,6 +198,9 @@ export class NotificationsAPI {
       completedRetentionDays > 0 &&
       deadLetterRetentionDays !== undefined &&
       deadLetterRetentionDays > 0 &&
+      failureClasses7d !== undefined &&
+      failureClassWindowDays !== undefined &&
+      failureClassWindowDays > 0 &&
       reasonCodesAreValid &&
       semanticsAreValid;
     const rawStatus = normalizeQueueHealthStatus(queue.status);
@@ -199,6 +239,19 @@ export class NotificationsAPI {
         countsAreRetentionBounded: strictBoolean(queue.counts_are_retention_bounded),
         retryAttemptsAffectHealth: strictBoolean(queue.retry_attempts_affect_health),
         terminalFailuresAffectHealth: strictBoolean(queue.terminal_failures_affect_health, true),
+        failureClasses7d:
+          failureClasses7d ??
+          ({
+            authentication: 0,
+            rate_limited: 0,
+            connectivity: 0,
+            tls: 0,
+            configuration: 0,
+            rejected: 0,
+            unknown: 0,
+          } satisfies NotificationFailureClassCounts),
+        failureClassesAvailable,
+        failureClassWindowDays: failureClassWindowDays ?? 7,
       },
     };
   }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestGetNotificationHealthReportsRetainedTerminalFailures(t *testing.T) {
@@ -23,6 +24,13 @@ func TestGetNotificationHealthReportsRetainedTerminalFailures(t *testing.T) {
 		"sent":    9,
 		"failed":  2,
 		"dlq":     3,
+	}, nil).Once()
+	mockManager.On("GetTelemetryStats", mock.Anything).Return(notifications.TelemetryStats{
+		Failures: 5,
+		FailureClasses: notifications.NotificationFailureClassCounts{
+			Authentication: 3,
+			Connectivity:   2,
+		},
 	}, nil).Once()
 	mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
@@ -40,15 +48,18 @@ func TestGetNotificationHealthReportsRetainedTerminalFailures(t *testing.T) {
 	var response struct {
 		OverallHealthy bool `json:"overall_healthy"`
 		Queue          struct {
-			Healthy                      bool     `json:"healthy"`
-			Status                       string   `json:"status"`
-			AttentionRequired            int      `json:"attention_required"`
-			ReasonCodes                  []string `json:"reason_codes"`
-			CompletedRetentionDays       int      `json:"completed_retention_days"`
-			DeadLetterRetentionDays      int      `json:"dead_letter_retention_days"`
-			CountsAreRetentionBounded    bool     `json:"counts_are_retention_bounded"`
-			RetryAttemptsAffectHealth    bool     `json:"retry_attempts_affect_health"`
-			TerminalFailuresAffectHealth bool     `json:"terminal_failures_affect_health"`
+			Healthy                      bool           `json:"healthy"`
+			Status                       string         `json:"status"`
+			AttentionRequired            int            `json:"attention_required"`
+			ReasonCodes                  []string       `json:"reason_codes"`
+			CompletedRetentionDays       int            `json:"completed_retention_days"`
+			DeadLetterRetentionDays      int            `json:"dead_letter_retention_days"`
+			CountsAreRetentionBounded    bool           `json:"counts_are_retention_bounded"`
+			RetryAttemptsAffectHealth    bool           `json:"retry_attempts_affect_health"`
+			TerminalFailuresAffectHealth bool           `json:"terminal_failures_affect_health"`
+			FailureClasses7d             map[string]int `json:"failure_classes_7d"`
+			FailureClassesAvailable      bool           `json:"failure_classes_available"`
+			FailureClassWindowDays       int            `json:"failure_class_window_days"`
 		} `json:"queue"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
@@ -72,6 +83,12 @@ func TestGetNotificationHealthReportsRetainedTerminalFailures(t *testing.T) {
 		!response.Queue.TerminalFailuresAffectHealth {
 		t.Fatalf("queue semantics = %#v", response.Queue)
 	}
+	if !response.Queue.FailureClassesAvailable ||
+		response.Queue.FailureClassWindowDays != 7 ||
+		response.Queue.FailureClasses7d["authentication"] != 3 ||
+		response.Queue.FailureClasses7d["connectivity"] != 2 {
+		t.Fatalf("failure classes = %#v", response.Queue)
+	}
 }
 
 func TestGetNotificationHealthFailsClosedWhenQueueStatsAreUnavailable(t *testing.T) {
@@ -81,6 +98,10 @@ func TestGetNotificationHealthFailsClosedWhenQueueStatsAreUnavailable(t *testing
 	mockMonitor.On("GetNotificationManager").Return(mockManager)
 	mockMonitor.On("GetConfigPersistence").Return(mockPersistence)
 	mockManager.On("GetQueueStats").Return(nil, errors.New("database path /secret unavailable")).Once()
+	mockManager.On("GetTelemetryStats", mock.Anything).Return(
+		notifications.TelemetryStats{},
+		errors.New("database unavailable"),
+	).Once()
 	mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
 	mockPersistence.On("IsEncryptionEnabled").Return(false).Once()

@@ -18,36 +18,43 @@ import (
 // InstallSnapshotCounts holds install-wide resource and alert counts aggregated
 // across tenant monitors.
 type InstallSnapshotCounts struct {
-	PVENodes                 int
-	PBSInstances             int
-	PMGInstances             int
-	VMs                      int
-	Containers               int
-	AgentHosts               int
-	DockerHosts              int
-	DockerContainers         int
-	KubernetesClusters       int
-	KubernetesNodes          int
-	KubernetesPods           int
-	KubernetesDeployments    int
-	StoragePools             int
-	PhysicalDisks            int
-	CephClusters             int
-	NetworkShares            int
-	TrueNASSystems           int
-	TrueNASVMs               int
-	TrueNASApps              int
-	VMwareHosts              int
-	VMwareVMs                int
-	VMwareDatastores         int
-	AvailabilityTargets      int
-	ActiveAlerts             int
-	AlertsFired30d           int
-	AlertsAcknowledged30d    int
-	AlertsResolved30d        int
-	NotificationAttempts7d   int
-	NotificationDeliveries7d int
-	NotificationFailures7d   int
+	PVENodes                             int
+	PBSInstances                         int
+	PMGInstances                         int
+	VMs                                  int
+	Containers                           int
+	AgentHosts                           int
+	DockerHosts                          int
+	DockerContainers                     int
+	KubernetesClusters                   int
+	KubernetesNodes                      int
+	KubernetesPods                       int
+	KubernetesDeployments                int
+	StoragePools                         int
+	PhysicalDisks                        int
+	CephClusters                         int
+	NetworkShares                        int
+	TrueNASSystems                       int
+	TrueNASVMs                           int
+	TrueNASApps                          int
+	VMwareHosts                          int
+	VMwareVMs                            int
+	VMwareDatastores                     int
+	AvailabilityTargets                  int
+	ActiveAlerts                         int
+	AlertsFired30d                       int
+	AlertsAcknowledged30d                int
+	AlertsResolved30d                    int
+	NotificationAttempts7d               int
+	NotificationDeliveries7d             int
+	NotificationFailures7d               int
+	NotificationFailuresAuthentication7d int
+	NotificationFailuresRateLimited7d    int
+	NotificationFailuresConnectivity7d   int
+	NotificationFailuresTLS7d            int
+	NotificationFailuresConfiguration7d  int
+	NotificationFailuresRejected7d       int
+	NotificationFailuresUnknown7d        int
 }
 
 // ReloadableMonitor wraps a Monitor with reload capability
@@ -289,6 +296,13 @@ func accumulateInstallOutcomeCounts(counts *InstallSnapshotCounts, monitor *Moni
 		counts.NotificationAttempts7d += stats.Attempts
 		counts.NotificationDeliveries7d += stats.Deliveries
 		counts.NotificationFailures7d += stats.Failures
+		counts.NotificationFailuresAuthentication7d += stats.FailureClasses.Authentication
+		counts.NotificationFailuresRateLimited7d += stats.FailureClasses.RateLimited
+		counts.NotificationFailuresConnectivity7d += stats.FailureClasses.Connectivity
+		counts.NotificationFailuresTLS7d += stats.FailureClasses.TLS
+		counts.NotificationFailuresConfiguration7d += stats.FailureClasses.Configuration
+		counts.NotificationFailuresRejected7d += stats.FailureClasses.Rejected
+		counts.NotificationFailuresUnknown7d += stats.FailureClasses.Unknown
 	}
 }
 
@@ -296,12 +310,39 @@ func accumulateAlertOutcomeCounts(counts *InstallSnapshotCounts, history []alert
 	if counts == nil {
 		return
 	}
-	for _, alert := range history {
-		counts.AlertsFired30d++
+	type outcome struct {
+		acknowledged bool
+		resolved     bool
+	}
+	outcomes := make(map[string]outcome, len(history))
+	for index, alert := range history {
+		identity := strings.TrimSpace(alert.CanonicalState)
+		if identity == "" {
+			identity = strings.TrimSpace(alert.ID)
+		}
+		occurrence := alert.StartTime
+		if occurrence.IsZero() && alert.OperationalRecord != nil {
+			occurrence = alert.OperationalRecord.FirstObservedAt
+		}
+		key := fmt.Sprintf("%s:%d", identity, occurrence.UnixNano())
+		if identity == "" {
+			key = fmt.Sprintf("anonymous:%d", index)
+		}
+		current := outcomes[key]
 		if alert.AckTime != nil && !alert.AckTime.Before(cutoff) {
-			counts.AlertsAcknowledged30d++
+			current.acknowledged = true
 		}
 		if alert.OperationalRecord != nil && alert.OperationalRecord.State == operationaltrust.OperationalResolved {
+			current.resolved = true
+		}
+		outcomes[key] = current
+	}
+	for _, current := range outcomes {
+		counts.AlertsFired30d++
+		if current.acknowledged {
+			counts.AlertsAcknowledged30d++
+		}
+		if current.resolved {
 			counts.AlertsResolved30d++
 		}
 	}

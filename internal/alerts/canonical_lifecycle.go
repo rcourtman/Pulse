@@ -445,7 +445,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			return result, true
 		}
 
-		reactivatedStart, reactivatedAt, reactivated := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
+		reactivatedStart, reactivatedAt, reactivated, hadResolvedOccurrence := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
 		if reactivated {
 			if !reactivatedStart.IsZero() {
 				alert.StartTime = reactivatedStart
@@ -465,7 +465,11 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 
 		if params.AddToHistory {
-			m.historyManager.AddAlert(*alert)
+			if hadResolvedOccurrence {
+				m.historyManager.AddAlertTransition(*alert)
+			} else {
+				m.historyManager.AddAlert(*alert)
+			}
 		}
 
 		if params.RateLimit && !m.checkRateLimit(trackingKey) {
@@ -606,7 +610,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 
 		if existing == nil {
-			reactivatedStart, reactivatedAt, reactivated := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
+			reactivatedStart, reactivatedAt, reactivated, hadResolvedOccurrence := m.consumeRecentlyResolvedForRefireWithPrimaryLock(storageKey, time.Now())
 			if reactivated {
 				if !reactivatedStart.IsZero() {
 					alert.StartTime = reactivatedStart
@@ -626,7 +630,11 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			}
 
 			if params.AddToHistory {
-				m.historyManager.AddAlert(*alert)
+				if hadResolvedOccurrence {
+					m.historyManager.AddAlertTransition(*alert)
+				} else {
+					m.historyManager.AddAlert(*alert)
+				}
 			}
 			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				log.Debug().
@@ -642,7 +650,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 
 		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionSeverityChanged && params.NotifyOnSeverityChange {
 			if params.AddToHistoryOnSeverityChange {
-				m.historyManager.AddAlert(*alert)
+				m.historyManager.AddAlertTransition(*alert)
 			}
 			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				log.Debug().

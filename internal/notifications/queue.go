@@ -27,6 +27,7 @@ const (
 	notificationAuditAlertIdentifiersColumn       = "alert_identifiers"
 	legacyNotificationAuditAlertIdentifiersColumn = "alert_ids"
 	notificationOperationalLinksColumn            = "operational_links"
+	notificationFailureClassColumn                = "failure_class"
 	notificationQueueDirName                      = "notifications"
 	notificationQueueFileName                     = "notification_queue.db"
 )
@@ -42,6 +43,97 @@ const (
 	QueueStatusDLQ       NotificationQueueStatus = "dlq"
 	QueueStatusCancelled NotificationQueueStatus = "cancelled"
 )
+
+// NotificationFailureClass is a closed, content-free delivery failure bucket.
+// Only these coarse values may leave the installation in telemetry.
+type NotificationFailureClass string
+
+const (
+	NotificationFailureAuthentication NotificationFailureClass = "authentication"
+	NotificationFailureRateLimited    NotificationFailureClass = "rate_limited"
+	NotificationFailureConnectivity   NotificationFailureClass = "connectivity"
+	NotificationFailureTLS            NotificationFailureClass = "tls"
+	NotificationFailureConfiguration  NotificationFailureClass = "configuration"
+	NotificationFailureRejected       NotificationFailureClass = "rejected"
+	NotificationFailureUnknown        NotificationFailureClass = "unknown"
+)
+
+// NotificationFailureClassCounts contains only bounded aggregate counters.
+type NotificationFailureClassCounts struct {
+	Authentication int
+	RateLimited    int
+	Connectivity   int
+	TLS            int
+	Configuration  int
+	Rejected       int
+	Unknown        int
+}
+
+func (counts NotificationFailureClassCounts) AsMap() map[string]int {
+	return map[string]int{
+		string(NotificationFailureAuthentication): counts.Authentication,
+		string(NotificationFailureRateLimited):    counts.RateLimited,
+		string(NotificationFailureConnectivity):   counts.Connectivity,
+		string(NotificationFailureTLS):            counts.TLS,
+		string(NotificationFailureConfiguration):  counts.Configuration,
+		string(NotificationFailureRejected):       counts.Rejected,
+		string(NotificationFailureUnknown):        counts.Unknown,
+	}
+}
+
+// ClassifyNotificationFailure maps local error text to a fixed diagnostic
+// bucket. It never returns any portion of the error string.
+func ClassifyNotificationFailure(errorMessage string) NotificationFailureClass {
+	message := strings.ToLower(strings.TrimSpace(errorMessage))
+	containsAny := func(values ...string) bool {
+		for _, value := range values {
+			if strings.Contains(message, value) {
+				return true
+			}
+		}
+		return false
+	}
+
+	switch {
+	case containsAny(
+		"unauthorized", "forbidden", "authentication", "auth failed",
+		"auth negotiation",
+		"invalid token", "invalid api key", "invalid credentials",
+		"status 401", "http 401", "status 403", "http 403", "smtp 535", " 535 ",
+	):
+		return NotificationFailureAuthentication
+	case containsAny("rate limit", "too many requests", "status 429", "http 429"):
+		return NotificationFailureRateLimited
+	case containsAny(
+		"x509", "certificate", "tls", "ssl", "starttls",
+	):
+		return NotificationFailureTLS
+	case containsAny(
+		"timeout", "timed out", "deadline exceeded", "connection refused",
+		"connection reset", "network unreachable", "no such host", "dial tcp",
+		"broken pipe", "unexpected eof",
+	):
+		return NotificationFailureConnectivity
+	case containsAny(
+		"not configured", "missing ", "invalid address", "invalid url",
+		"invalid webhook", "invalid configuration",
+		"must start with http", "validation failed", "executable file not found",
+		"no supported", "requires payload template",
+	):
+		return NotificationFailureConfiguration
+	case containsAny(
+		"bad request", "not found", "method not allowed", "gone",
+		"payload too large", "unsupported media type", "unprocessable",
+		"status 400", "http 400", "status 404", "http 404",
+		"status 405", "http 405", "status 410", "http 410",
+		"status 413", "http 413", "status 415", "http 415",
+		"status 422", "http 422", "status 4", "http 4", "status 5", "http 5",
+	):
+		return NotificationFailureRejected
+	default:
+		return NotificationFailureUnknown
+	}
+}
 
 // QueuedNotification represents a notification in the persistent queue
 type QueuedNotification struct {
@@ -319,6 +411,7 @@ func (nq *NotificationQueue) initSchema() error {
 			attempts INTEGER,
 		success BOOLEAN,
 		error_message TEXT,
+		failure_class TEXT NOT NULL DEFAULT '',
 		payload_size INTEGER,
 		timestamp INTEGER NOT NULL,
 		FOREIGN KEY (notification_id) REFERENCES notification_queue(id)
@@ -353,9 +446,15 @@ func (nq *NotificationQueue) initSchema() error {
 	); err != nil {
 		return err
 	}
-	return nq.ensureJSONColumn(
+	if err := nq.ensureJSONColumn(
 		"notification_audit",
 		notificationOperationalLinksColumn,
+	); err != nil {
+		return err
+	}
+	return nq.ensureTextColumn(
+		"notification_audit",
+		notificationFailureClassColumn,
 	)
 }
 
@@ -481,6 +580,22 @@ func (nq *NotificationQueue) ensureJSONColumn(table, column string) error {
 	}
 	if _, err := nq.db.Exec(
 		`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` TEXT NOT NULL DEFAULT '[]'`,
+	); err != nil {
+		return fmt.Errorf("add %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+func (nq *NotificationQueue) ensureTextColumn(table, column string) error {
+	columns, err := nq.tableColumns(table)
+	if err != nil {
+		return err
+	}
+	if columns[column] {
+		return nil
+	}
+	if _, err := nq.db.Exec(
+		`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` TEXT NOT NULL DEFAULT ''`,
 	); err != nil {
 		return fmt.Errorf("add %s.%s: %w", table, column, err)
 	}
@@ -1169,10 +1284,14 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 
 	query := `
 		INSERT INTO notification_audit
-		(notification_id, type, method, status, alert_identifiers, alert_count, operational_links, attempts, success, error_message, payload_size, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(notification_id, type, method, status, alert_identifiers, alert_count, operational_links, attempts, success, error_message, failure_class, payload_size, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
+	failureClass := ""
+	if !success {
+		failureClass = string(ClassifyNotificationFailure(errorMsg))
+	}
 	_, err = nq.db.Exec(query,
 		notif.ID,
 		notif.Type,
@@ -1184,6 +1303,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		notif.Attempts,
 		success,
 		errorMsg,
+		failureClass,
 		notif.PayloadBytes,
 		time.Now().Unix(),
 	)
@@ -1249,7 +1369,8 @@ type TelemetryStats struct {
 	// Failures counts terminal delivery failures only. Recoverable failed
 	// attempts that returned to pending for retry are included in Attempts but
 	// not in Failures.
-	Failures int
+	Failures       int
+	FailureClasses NotificationFailureClassCounts
 }
 
 // GetTelemetryStats returns aggregate delivery activity from locally retained
@@ -1276,10 +1397,33 @@ func (nq *NotificationQueue) GetTelemetryStats(since time.Time) (TelemetryStats,
 			COALESCE(SUM(CASE
 				WHEN success = 0 AND status IN ('failed', 'dlq') THEN 1
 				ELSE 0
+			END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'authentication' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'rate_limited' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'connectivity' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'tls' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'configuration' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN success = 0 AND status IN ('failed', 'dlq') AND failure_class = 'rejected' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE
+				WHEN success = 0
+					AND status IN ('failed', 'dlq')
+					AND COALESCE(failure_class, '') NOT IN ('authentication', 'rate_limited', 'connectivity', 'tls', 'configuration', 'rejected')
+				THEN 1 ELSE 0
 			END), 0)
 		FROM notification_audit
 		WHERE timestamp >= ?
-	`, since.UTC().Unix()).Scan(&stats.Attempts, &stats.Deliveries, &stats.Failures)
+	`, since.UTC().Unix()).Scan(
+		&stats.Attempts,
+		&stats.Deliveries,
+		&stats.Failures,
+		&stats.FailureClasses.Authentication,
+		&stats.FailureClasses.RateLimited,
+		&stats.FailureClasses.Connectivity,
+		&stats.FailureClasses.TLS,
+		&stats.FailureClasses.Configuration,
+		&stats.FailureClasses.Rejected,
+		&stats.FailureClasses.Unknown,
+	)
 	if err != nil {
 		return TelemetryStats{}, fmt.Errorf("read notification telemetry aggregates: %w", err)
 	}

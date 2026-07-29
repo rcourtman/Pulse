@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -135,13 +136,42 @@ func (hm *HistoryManager) OnAlert(cb AlertCallback) {
 	hm.callbacks = append(hm.callbacks, cb)
 }
 
-// AddAlert adds an alert to history
+// AddAlert records a newly observed alert occurrence. Repeated attempts to add
+// the same still-open occurrence are folded into its existing history row.
+// This makes the history write path enforce the same incident semantics as the
+// runtime alert lifecycle instead of relying on the daily cleanup pass.
 func (hm *HistoryManager) AddAlert(alert Alert) {
+	hm.addAlert(alert, false)
+}
+
+// AddAlertTransition records an explicit transition snapshot even when the
+// alert occurrence is still open. Callers should use this only when the extra
+// row is intentional, such as a configured severity-change history event.
+func (hm *HistoryManager) AddAlertTransition(alert Alert) {
+	hm.addAlert(alert, true)
+}
+
+func (hm *HistoryManager) addAlert(alert Alert, forceAppend bool) {
 	hm.mu.Lock()
 
 	entry := HistoryEntry{
 		Alert:     *alert.Clone(),
 		Timestamp: time.Now(),
+	}
+
+	if !forceAppend {
+		for i := len(hm.history) - 1; i >= 0; i-- {
+			if historyIdentityKey(&hm.history[i].Alert) != historyIdentityKey(&entry.Alert) {
+				continue
+			}
+			if sameHistoryIncident(hm.history[i], entry) {
+				hm.history[i].Alert = mergeHistoryAlertSnapshots(hm.history[i].Alert, entry.Alert)
+				hm.mu.Unlock()
+				log.Debug().Str("alertID", alert.ID).Msg("updated existing alert history occurrence")
+				return
+			}
+			break
+		}
 	}
 
 	hm.history = append(hm.history, entry)
@@ -154,6 +184,56 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	for _, cb := range callbacks {
 		cb(alert)
 	}
+}
+
+func sameHistoryIncident(existing, incoming HistoryEntry) bool {
+	existingKey := historyIdentityKey(&existing.Alert)
+	if existingKey == "" || existingKey != historyIdentityKey(&incoming.Alert) {
+		return false
+	}
+
+	if !existing.Alert.StartTime.IsZero() &&
+		!incoming.Alert.StartTime.IsZero() &&
+		existing.Alert.StartTime.Equal(incoming.Alert.StartTime) {
+		return true
+	}
+
+	existingResolved := existing.Alert.OperationalRecord != nil &&
+		existing.Alert.OperationalRecord.State == operationaltrust.OperationalResolved
+	incomingResolved := incoming.Alert.OperationalRecord != nil &&
+		incoming.Alert.OperationalRecord.State == operationaltrust.OperationalResolved
+	if existingResolved || incomingResolved {
+		return false
+	}
+	if existing.Alert.OperationalRecord != nil &&
+		incoming.Alert.OperationalRecord != nil &&
+		!existingResolved && !incomingResolved {
+		return true
+	}
+
+	lastObservation := existing.Timestamp
+	if existing.Alert.LastSeen.After(lastObservation) {
+		lastObservation = existing.Alert.LastSeen
+	}
+	gap := incoming.Timestamp.Sub(lastObservation)
+	return gap >= 0 && gap <= historyDedupWindow
+}
+
+func mergeHistoryAlertSnapshots(existing, incoming Alert) Alert {
+	merged := *incoming.Clone()
+	if !existing.StartTime.IsZero() &&
+		(merged.StartTime.IsZero() || existing.StartTime.Before(merged.StartTime)) {
+		merged.StartTime = existing.StartTime
+	}
+	if existing.LastSeen.After(merged.LastSeen) {
+		merged.LastSeen = existing.LastSeen
+	}
+	if existing.Acknowledged && !merged.Acknowledged {
+		merged.Acknowledged = true
+		merged.AckTime = existing.AckTime
+		merged.AckUser = existing.AckUser
+	}
+	return merged
 }
 
 // UpdateAlertLastSeen updates the LastSeen timestamp on the most recent
@@ -630,9 +710,7 @@ func (hm *HistoryManager) deduplicateHistory() {
 		if lastTime, ok := lastTimeByKey[key]; ok {
 			if entry.Timestamp.Sub(lastTime) <= historyDedupWindow {
 				idx := lastIdxByKey[key]
-				if entry.Alert.LastSeen.After(deduped[idx].Alert.LastSeen) {
-					deduped[idx].Alert.LastSeen = entry.Alert.LastSeen
-				}
+				deduped[idx].Alert = mergeHistoryAlertSnapshots(deduped[idx].Alert, entry.Alert)
 				lastTimeByKey[key] = entry.Timestamp
 				removed++
 				continue

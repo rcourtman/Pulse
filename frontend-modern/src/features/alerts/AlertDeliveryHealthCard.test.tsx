@@ -20,6 +20,17 @@ const degradedHealth: NotificationQueueHealth = {
   countsAreRetentionBounded: true,
   retryAttemptsAffectHealth: false,
   terminalFailuresAffectHealth: true,
+  failureClasses7d: {
+    authentication: 2,
+    rate_limited: 0,
+    connectivity: 1,
+    tls: 0,
+    configuration: 0,
+    rejected: 0,
+    unknown: 0,
+  },
+  failureClassesAvailable: true,
+  failureClassWindowDays: 7,
 };
 
 describe('AlertDeliveryHealthCard', () => {
@@ -42,7 +53,13 @@ describe('AlertDeliveryHealthCard', () => {
       '2 dead-lettered deliveries retained for 30 days',
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'recoverable retry attempts do not trigger this warning',
+      'Recoverable retry attempts do not trigger this warning',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'classified as authentication (2)',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Check destination credentials, tokens, and account permissions',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh delivery status' }));

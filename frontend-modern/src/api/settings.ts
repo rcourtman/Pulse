@@ -51,6 +51,8 @@ export interface TelemetryPingPreview {
   vmware_vms: number;
   vmware_datastores: number;
   availability_targets: number;
+  availability_probe_targets: number;
+  availability_probe_agents: number;
   ai_enabled: boolean;
   patrol_enabled: boolean;
   discovery_enabled: boolean;
@@ -72,6 +74,13 @@ export interface TelemetryPingPreview {
   notification_attempts_7d: number;
   notification_deliveries_7d: number;
   notification_failures_7d: number;
+  notification_failures_authentication_7d: number;
+  notification_failures_rate_limited_7d: number;
+  notification_failures_connectivity_7d: number;
+  notification_failures_tls_7d: number;
+  notification_failures_configuration_7d: number;
+  notification_failures_rejected_7d: number;
+  notification_failures_unknown_7d: number;
   pulse_intelligence_loop_configured: boolean;
   pulse_intelligence_loop_active_30d: boolean;
   pulse_intelligence_complete_operations_loop_30d: boolean;

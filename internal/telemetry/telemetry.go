@@ -136,7 +136,8 @@ const (
 	// Schema v3 makes notification_failures_7d a terminal-delivery count;
 	// schema v4 adds complete approved-action outcome accounting, fixed
 	// pre-dispatch refusal categories, and verified finding-resolution linkage.
-	TelemetrySchemaVersion = 4
+	// Schema v5 adds bounded, content-free notification failure classes.
+	TelemetrySchemaVersion = 5
 )
 
 type installIDRecord struct {
@@ -237,7 +238,14 @@ type Ping struct {
 	NotificationDeliveries7d int `json:"notification_deliveries_7d"`
 	// NotificationFailures7d counts only terminal failed/dead-letter outcomes.
 	// Retry-attempt failures remain represented in NotificationAttempts7d.
-	NotificationFailures7d int `json:"notification_failures_7d"`
+	NotificationFailures7d               int `json:"notification_failures_7d"`
+	NotificationFailuresAuthentication7d int `json:"notification_failures_authentication_7d"`
+	NotificationFailuresRateLimited7d    int `json:"notification_failures_rate_limited_7d"`
+	NotificationFailuresConnectivity7d   int `json:"notification_failures_connectivity_7d"`
+	NotificationFailuresTLS7d            int `json:"notification_failures_tls_7d"`
+	NotificationFailuresConfiguration7d  int `json:"notification_failures_configuration_7d"`
+	NotificationFailuresRejected7d       int `json:"notification_failures_rejected_7d"`
+	NotificationFailuresUnknown7d        int `json:"notification_failures_unknown_7d"`
 
 	// Pulse Intelligence usage (30-day counts/booleans — no prompts, commands, outputs, resource IDs, or token values)
 	PulseIntelligenceLoopConfigured                                bool `json:"pulse_intelligence_loop_configured"`
@@ -366,6 +374,13 @@ type Snapshot struct {
 	NotificationAttempts7d                                         int
 	NotificationDeliveries7d                                       int
 	NotificationFailures7d                                         int
+	NotificationFailuresAuthentication7d                           int
+	NotificationFailuresRateLimited7d                              int
+	NotificationFailuresConnectivity7d                             int
+	NotificationFailuresTLS7d                                      int
+	NotificationFailuresConfiguration7d                            int
+	NotificationFailuresRejected7d                                 int
+	NotificationFailuresUnknown7d                                  int
 	PulseIntelligenceLoopConfigured                                bool
 	PulseIntelligenceLoopActive30d                                 bool
 	PulseIntelligenceCompleteOperationsLoop30d                     bool
@@ -930,6 +945,13 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.NotificationAttempts7d = s.NotificationAttempts7d
 	ping.NotificationDeliveries7d = s.NotificationDeliveries7d // gitleaks:allow -- schema field name, not a credential
 	ping.NotificationFailures7d = s.NotificationFailures7d
+	ping.NotificationFailuresAuthentication7d = s.NotificationFailuresAuthentication7d
+	ping.NotificationFailuresRateLimited7d = s.NotificationFailuresRateLimited7d
+	ping.NotificationFailuresConnectivity7d = s.NotificationFailuresConnectivity7d
+	ping.NotificationFailuresTLS7d = s.NotificationFailuresTLS7d
+	ping.NotificationFailuresConfiguration7d = s.NotificationFailuresConfiguration7d
+	ping.NotificationFailuresRejected7d = s.NotificationFailuresRejected7d
+	ping.NotificationFailuresUnknown7d = s.NotificationFailuresUnknown7d
 	ping.PulseIntelligenceLoopConfigured = s.PulseIntelligenceLoopConfigured
 	ping.PulseIntelligenceLoopActive30d = s.PulseIntelligenceLoopActive30d
 	ping.PulseIntelligenceCompleteOperationsLoop30d = s.PulseIntelligenceCompleteOperationsLoop30d

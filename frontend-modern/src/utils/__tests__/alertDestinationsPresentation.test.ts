@@ -133,9 +133,19 @@ describe('alertDestinationsPresentation', () => {
         deadLetter: 2,
         completedRetentionDays: 7,
         deadLetterRetentionDays: 30,
+        failureClasses7d: {
+          authentication: 3,
+          rate_limited: 0,
+          connectivity: 0,
+          tls: 0,
+          configuration: 0,
+          rejected: 0,
+          unknown: 0,
+        },
+        failureClassesAvailable: true,
       }),
     ).toBe(
-      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Check each enabled destination and send a test; recoverable retry attempts do not trigger this warning.',
+      '1 failed delivery retained for 7 days and 2 dead-lettered deliveries retained for 30 days. These notifications were not delivered. Most recent terminal failures were classified as authentication (3). Check destination credentials, tokens, and account permissions. Recoverable retry attempts do not trigger this warning.',
     );
     expect(
       getAlertDestinationsDeliveryHealthDescription({

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/stretchr/testify/assert"
@@ -252,6 +253,11 @@ func (m *MockNotificationManager) GetQueueStats() (map[string]int, error) {
 	return args.Get(0).(map[string]int), args.Error(1)
 }
 
+func (m *MockNotificationManager) GetTelemetryStats(since time.Time) (notifications.TelemetryStats, error) {
+	args := m.Called(since)
+	return args.Get(0).(notifications.TelemetryStats), args.Error(1)
+}
+
 type MockNotificationConfigPersistence struct {
 	mock.Mock
 }
@@ -413,6 +419,10 @@ func TestNotificationHandlers(t *testing.T) {
 			"dlq":     0,
 		}
 		mockManager.On("GetQueueStats").Return(stats, nil).Once()
+		mockManager.On("GetTelemetryStats", mock.Anything).Return(
+			notifications.TelemetryStats{},
+			nil,
+		).Once()
 		mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
 		mockPersistence.On("IsEncryptionEnabled").Return(true).Once()
@@ -567,6 +577,10 @@ func TestNotificationHandlers(t *testing.T) {
 			{"GET", "/api/notifications/email-providers", func() {}},
 			{"GET", "/api/notifications/health", func() {
 				mockManager.On("GetQueueStats").Return(map[string]int{}, nil).Once()
+				mockManager.On("GetTelemetryStats", mock.Anything).Return(
+					notifications.TelemetryStats{},
+					nil,
+				).Once()
 				mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
 				mockPersistence.On("IsEncryptionEnabled").Return(true).Once()

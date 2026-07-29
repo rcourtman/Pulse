@@ -92,6 +92,13 @@ USER_BASE_COUNT_FIELDS = (
     ("alerts_resolved_30d", "Alerts resolved (30d)"),
     ("notification_attempts_7d", "Notification attempts, including retries (7d)"),
     ("notification_deliveries_7d", "Notification deliveries (7d)"),
+    ("notification_failures_authentication_7d", "Notification authentication failures (7d, schema v5+)"),
+    ("notification_failures_rate_limited_7d", "Notification rate-limit failures (7d, schema v5+)"),
+    ("notification_failures_connectivity_7d", "Notification connectivity failures (7d, schema v5+)"),
+    ("notification_failures_tls_7d", "Notification TLS failures (7d, schema v5+)"),
+    ("notification_failures_configuration_7d", "Notification configuration failures (7d, schema v5+)"),
+    ("notification_failures_rejected_7d", "Notification destination rejections (7d, schema v5+)"),
+    ("notification_failures_unknown_7d", "Notification unknown failures (7d, schema v5+)"),
 )
 NOTIFICATION_FAILURE_COUNT_SIGNALS = (
     (
