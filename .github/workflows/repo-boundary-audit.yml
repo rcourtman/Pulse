@@ -38,7 +38,7 @@ jobs:
       - name: Enforce Paid Surface Allowlist Integrity
         run: ./scripts/audit-private-boundary.sh --enforce-paid-surface-allowlist
 
-      - name: Enforce No Paid-Domain Leaks Outside Allowlist
+      - name: Enforce Paid-Domain Leakage Ratchet
         run: ./scripts/audit-private-boundary.sh --enforce
 
       - name: Upload Audit Report

@@ -1,0 +1,9 @@
+# Known production paid-domain implementation files that predate enforcement.
+# Keep these visible as migration debt; do not add new files without review.
+internal/api/demo_mode_commercial.go
+internal/api/hosted_entitlement_refresh.go
+internal/api/monitored_system_ledger.go
+internal/api/reporting_availability.go
+internal/api/reporting_catalog_handlers.go
+internal/api/reporting_inventory_handlers.go
+internal/api/sso_outbound.go

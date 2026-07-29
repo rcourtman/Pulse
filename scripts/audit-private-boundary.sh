@@ -3,6 +3,7 @@ set -euo pipefail
 
 MODE="${1:-report}"
 PAID_SURFACE_ALLOWLIST_FILE="scripts/repo-boundary-paid-surface.allowlist"
+PRIVATE_IMPL_BASELINE_FILE="scripts/repo-boundary-private-implementation.baseline"
 
 if [[ "${MODE}" != "report" && "${MODE}" != "--enforce" && "${MODE}" != "--enforce-api-imports" && "${MODE}" != "--enforce-api-root-imports" && "${MODE}" != "--enforce-nonapi-imports" && "${MODE}" != "--enforce-api-pkg-licensing-imports" && "${MODE}" != "--enforce-paid-surface-allowlist" ]]; then
   echo "Usage: $0 [report|--enforce|--enforce-api-imports|--enforce-api-root-imports|--enforce-nonapi-imports|--enforce-api-pkg-licensing-imports|--enforce-paid-surface-allowlist]" >&2
@@ -28,7 +29,7 @@ TEST_MATCHES="$(printf "%s\n" "${ALL_MATCHES}" | rg '_test\.go$' || true)"
 PAID_SURFACE_ALLOWLIST="$(cat "${PAID_SURFACE_ALLOWLIST_FILE}" 2>/dev/null | sed 's/#.*$//' | sed '/^$/d' | sort -u || true)"
 PAID_SURFACE_ALLOWLIST_REGEX='^$'
 if [[ -n "${PAID_SURFACE_ALLOWLIST}" ]]; then
-	PAID_SURFACE_ALLOWLIST_REGEX="$(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | sed 's/[.[\*^$()+?{|]/\\&/g' | sed 's#/#\\/#g' | paste -sd'|' -)"
+	PAID_SURFACE_ALLOWLIST_REGEX="^($(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | sed 's/[.[\*^$()+?{|]/\\&/g' | sed 's#/#\\/#g' | paste -sd'|' -))$"
 fi
 
 PROD_PAID_SURFACE_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | rg "${PAID_SURFACE_ALLOWLIST_REGEX}" || true)"
@@ -37,6 +38,21 @@ PROD_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_MATCHES}" | rg -v "${PAID_SUR
 PAID_SURFACE_MISSING_FILES="$(printf "%s\n" "${PAID_SURFACE_ALLOWLIST}" | while IFS= read -r file; do
 	[[ -z "${file}" ]] && continue
 	if [[ ! -f "${file}" ]]; then
+		printf "%s\n" "${file}"
+	fi
+done)"
+
+PRIVATE_IMPL_BASELINE="$(sed 's/#.*$//' "${PRIVATE_IMPL_BASELINE_FILE}" 2>/dev/null | sed '/^$/d' | sort -u || true)"
+PRIVATE_IMPL_BASELINE_REGEX='^$'
+if [[ -n "${PRIVATE_IMPL_BASELINE}" ]]; then
+	PRIVATE_IMPL_BASELINE_REGEX="^($(printf "%s\n" "${PRIVATE_IMPL_BASELINE}" | sed 's/[.[\*^$()+?{|]/\\&/g' | sed 's#/#\\/#g' | paste -sd'|' -))$"
+fi
+
+PROD_BASELINED_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | rg "${PRIVATE_IMPL_BASELINE_REGEX}" || true)"
+PROD_NEW_PRIVATE_IMPL_MATCHES="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | rg -v "${PRIVATE_IMPL_BASELINE_REGEX}" || true)"
+PRIVATE_IMPL_STALE_BASELINE_ENTRIES="$(printf "%s\n" "${PRIVATE_IMPL_BASELINE}" | while IFS= read -r file; do
+	[[ -z "${file}" ]] && continue
+	if ! printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | rg -Fxq -- "${file}"; then
 		printf "%s\n" "${file}"
 	fi
 done)"
@@ -63,6 +79,8 @@ NON_API_INTERNAL_LICENSE_IMPORTS="$(printf "%s\n" "${NON_API_INTERNAL_LICENSE_RO
 
 prod_count=0
 prod_private_impl_count=0
+prod_baselined_private_impl_count=0
+prod_new_private_impl_count=0
 prod_paid_surface_count=0
 test_count=0
 if [[ -n "${PROD_MATCHES}" ]]; then
@@ -70,6 +88,12 @@ if [[ -n "${PROD_MATCHES}" ]]; then
 fi
 if [[ -n "${PROD_PRIVATE_IMPL_MATCHES}" ]]; then
   prod_private_impl_count="$(printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
+fi
+if [[ -n "${PROD_BASELINED_PRIVATE_IMPL_MATCHES}" ]]; then
+  prod_baselined_private_impl_count="$(printf "%s\n" "${PROD_BASELINED_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
+fi
+if [[ -n "${PROD_NEW_PRIVATE_IMPL_MATCHES}" ]]; then
+  prod_new_private_impl_count="$(printf "%s\n" "${PROD_NEW_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
 fi
 if [[ -n "${PROD_PAID_SURFACE_MATCHES}" ]]; then
   prod_paid_surface_count="$(printf "%s\n" "${PROD_PAID_SURFACE_MATCHES}" | sed '/^$/d' | wc -l | tr -d ' ')"
@@ -81,6 +105,11 @@ fi
 paid_surface_missing_file_count=0
 if [[ -n "${PAID_SURFACE_MISSING_FILES}" ]]; then
   paid_surface_missing_file_count="$(printf "%s\n" "${PAID_SURFACE_MISSING_FILES}" | sed '/^$/d' | wc -l | tr -d ' ')"
+fi
+
+private_impl_stale_baseline_count=0
+if [[ -n "${PRIVATE_IMPL_STALE_BASELINE_ENTRIES}" ]]; then
+  private_impl_stale_baseline_count="$(printf "%s\n" "${PRIVATE_IMPL_STALE_BASELINE_ENTRIES}" | sed '/^$/d' | wc -l | tr -d ' ')"
 fi
 
 api_import_count=0
@@ -111,6 +140,8 @@ fi
 echo "Private boundary audit"
 echo "  Production files in paid domains: ${prod_count}"
 echo "  Production files in paid domains (private implementation leakage): ${prod_private_impl_count}"
+echo "  Production files in paid domains (baselined private implementation leakage): ${prod_baselined_private_impl_count}"
+echo "  Production files in paid domains (new private implementation leakage): ${prod_new_private_impl_count}"
 echo "  Production files in paid domains (allowlisted paid surface adapters): ${prod_paid_surface_count}"
 echo "  Test files in paid domains: ${test_count}"
 echo "  API files importing internal/license: ${api_import_count}"
@@ -125,10 +156,22 @@ if [[ "${prod_count}" -gt 0 ]]; then
 	printf "%s\n" "${PROD_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
 fi
 
-if [[ "${prod_private_impl_count}" -gt 0 ]]; then
+if [[ "${prod_baselined_private_impl_count}" -gt 0 ]]; then
 	echo
-	echo "Production files in paid domains outside paid-surface allowlist:"
-	printf "%s\n" "${PROD_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+	echo "Baselined production paid-domain implementation files:"
+	printf "%s\n" "${PROD_BASELINED_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+fi
+
+if [[ "${prod_new_private_impl_count}" -gt 0 ]]; then
+	echo
+	echo "New production files in paid domains outside paid-surface allowlist:"
+	printf "%s\n" "${PROD_NEW_PRIVATE_IMPL_MATCHES}" | sed '/^$/d' | sed 's/^/  - /'
+fi
+
+if [[ "${private_impl_stale_baseline_count}" -gt 0 ]]; then
+	echo
+	echo "Private-implementation baseline entries that no longer match:"
+	printf "%s\n" "${PRIVATE_IMPL_STALE_BASELINE_ENTRIES}" | sed '/^$/d' | sed 's/^/  - /'
 fi
 
 if [[ "${prod_paid_surface_count}" -gt 0 ]]; then
@@ -179,9 +222,15 @@ if [[ "${api_pkg_licensing_import_outside_allowlist_count}" -gt 0 ]]; then
 	printf "%s\n" "${API_PKG_LICENSING_IMPORT_FILES_OUTSIDE_ALLOWLIST}" | sed '/^$/d' | sed 's/^/  - /'
 fi
 
-if [[ "${MODE}" == "--enforce" && "${prod_private_impl_count}" -gt 0 ]]; then
+if [[ "${MODE}" == "--enforce" && "${prod_new_private_impl_count}" -gt 0 ]]; then
 	echo
-	echo "Boundary enforcement failed: production paid-domain implementation files still live in public repo."
+	echo "Boundary enforcement failed: new production paid-domain implementation files are not baselined."
+	exit 1
+fi
+
+if [[ "${MODE}" == "--enforce" && "${private_impl_stale_baseline_count}" -gt 0 ]]; then
+	echo
+	echo "Boundary enforcement failed: shrink the private-implementation baseline after removing or reclassifying files."
 	exit 1
 fi
 
