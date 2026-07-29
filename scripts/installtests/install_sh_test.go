@@ -1816,8 +1816,8 @@ write_qnap_wrapper_script "$1" "$2" "$3" "$4" "$5"
 	}
 	first.Process = nil
 
-	if err := syscall.Kill(agentPID, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Fatalf("watchdog shutdown left agent pid %d alive (kill check: %v)", agentPID, err)
+	if err := exec.Command("kill", "-0", strconv.Itoa(agentPID)).Run(); err == nil {
+		t.Fatalf("watchdog shutdown left agent pid %d alive", agentPID)
 	}
 	for _, path := range []string{watchdogPIDFile, agentPIDFile, filepath.Join(stateDir, "pulse-agent.watchdog.lock")} {
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
