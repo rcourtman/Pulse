@@ -1229,7 +1229,14 @@ aggregate-only min/max columns stay unset. Rollups must not be hard-coded to a
 5-minute disk-write cadence: the default cadence should favor set-based
 transactions, remain bounded by raw retention so data is aggregated before
 pruning, and stay overrideable for operators who deliberately trade freshness
-for lower write frequency. Rollup transactions must also keep a bounded
+for lower write frequency. Startup cleanup, rollup, and retention must run on a
+lifecycle-owned maintenance worker separate from the worker draining the
+bounded live-ingestion queue. SQLite remains the serialization boundary for
+their transactions, but maintenance CPU or read work must not stop buffered
+writes or `Flush` barriers from progressing; shutdown must join both workers
+before closing their shared database. `pkg/metrics/store_additional_test.go`
+must prove ingestion remains live while startup maintenance is blocked. Rollup
+transactions must also keep a bounded
 time-window working set and resume from checkpoints across invocations instead
 of aggregating every pending series and bucket in one global SQLite GROUP BY
 that can spike RSS on agent-heavy installs. The runtime must also allow an explicit

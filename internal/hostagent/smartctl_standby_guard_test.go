@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -193,7 +194,8 @@ func TestIssue1653DSMDeviceGetsSATRetry(t *testing.T) {
 }
 
 func TestIssue1653SmartctlPathOverride(t *testing.T) {
-	t.Setenv("PULSE_SMARTCTL_PATH", "/opt/syno/bin/smartctl")
+	configuredPath := filepath.Join(t.TempDir(), "smartctl")
+	t.Setenv("PULSE_SMARTCTL_PATH", configuredPath)
 	originalLookPath := execLookPath
 	t.Cleanup(func() { execLookPath = originalLookPath })
 	execLookPath = func(string) (string, error) {
@@ -204,7 +206,7 @@ func TestIssue1653SmartctlPathOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveSmartctlPath() error = %v", err)
 	}
-	if path != "/opt/syno/bin/smartctl" {
+	if path != configuredPath {
 		t.Fatalf("resolveSmartctlPath() = %q", path)
 	}
 }
