@@ -47,10 +47,33 @@ jobs:
           fetch-depth: 1
           path: repos/pulse-enterprise
 
+      - name: Resolve pulse-mobile evidence ref
+        id: pulse-mobile-ref
+        shell: bash
+        env:
+          CANDIDATE_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: |
+          set -euo pipefail
+          resolved_ref="main"
+          if [ -n "${CANDIDATE_REF}" ]; then
+            matching_ref="$(gh api \
+              "repos/rcourtman/pulse-mobile/git/matching-refs/heads/${CANDIDATE_REF}" \
+              --jq '.[].ref' 2>/dev/null \
+              | grep --fixed-strings --line-regexp -- "refs/heads/${CANDIDATE_REF}" \
+              || true)"
+            if [ -n "${matching_ref}" ]; then
+              resolved_ref="${CANDIDATE_REF}"
+            fi
+          fi
+          echo "ref=${resolved_ref}" >> "${GITHUB_OUTPUT}"
+          echo "Using pulse-mobile ref: ${resolved_ref}"
+
       - name: Checkout pulse-mobile evidence repo
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: rcourtman/pulse-mobile
+          ref: ${{ steps.pulse-mobile-ref.outputs.ref }}
           token: ${{ secrets.WORKFLOW_PAT }}
           persist-credentials: false
           fetch-depth: 1
