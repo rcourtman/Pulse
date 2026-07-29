@@ -1160,6 +1160,23 @@ func TestCloneProfile(t *testing.T) {
 		}
 	})
 
+	t.Run("IP blocklist is deep copied", func(t *testing.T) {
+		input := &envdetect.EnvironmentProfile{
+			Type:        envdetect.Native,
+			IPBlocklist: []net.IP{net.ParseIP("192.168.1.10")},
+		}
+		result := cloneProfile(input)
+
+		if len(result.IPBlocklist) != 1 || result.IPBlocklist[0].String() != "192.168.1.10" {
+			t.Fatalf("IPBlocklist = %v, want [192.168.1.10]", result.IPBlocklist)
+		}
+
+		result.IPBlocklist[0] = net.ParseIP("10.0.0.10")
+		if input.IPBlocklist[0].String() != "192.168.1.10" {
+			t.Errorf("original IPBlocklist was modified: got %v", input.IPBlocklist[0])
+		}
+	})
+
 	t.Run("phases are deep copied", func(t *testing.T) {
 		_, subnet, _ := net.ParseCIDR("172.17.0.0/16")
 		input := &envdetect.EnvironmentProfile{
@@ -1215,4 +1232,22 @@ func TestCloneProfile(t *testing.T) {
 			t.Errorf("original Confidence was modified: got %v", input.Confidence)
 		}
 	})
+}
+
+func TestResolveProfileManualSubnetPreservesIPBlocklist(t *testing.T) {
+	t.Parallel()
+
+	scanner := NewScannerWithProfile(&envdetect.EnvironmentProfile{
+		Type:        envdetect.Native,
+		Policy:      envdetect.DefaultScanPolicy(),
+		IPBlocklist: []net.IP{net.ParseIP("10.0.1.10")},
+	})
+
+	profile, err := scanner.resolveProfile("10.0.1.0/24")
+	if err != nil {
+		t.Fatalf("resolveProfile returned error: %v", err)
+	}
+	if len(profile.IPBlocklist) != 1 || profile.IPBlocklist[0].String() != "10.0.1.10" {
+		t.Fatalf("manual profile IPBlocklist = %v, want [10.0.1.10]", profile.IPBlocklist)
+	}
 }

@@ -674,10 +674,11 @@ func (s *Scanner) resolveProfile(subnet string) (*envdetect.EnvironmentProfile, 
 	}
 
 	manualProfile := &envdetect.EnvironmentProfile{
-		Type:       envdetect.Unknown,
-		Confidence: 1.0,
-		Policy:     s.policy,
-		Warnings:   []string{"Manual subnet override applied"},
+		Type:        envdetect.Unknown,
+		Confidence:  1.0,
+		Policy:      s.policy,
+		IPBlocklist: append([]net.IP(nil), s.profile.IPBlocklist...),
+		Warnings:    []string{"Manual subnet override applied"},
 		Metadata: map[string]string{
 			"manual_subnets": strings.Join(renderedSubnets, ","),
 		},
@@ -826,6 +827,9 @@ func cloneProfile(profile *envdetect.EnvironmentProfile) *envdetect.EnvironmentP
 	}
 	if profile.ExtraTargets != nil {
 		cloned.ExtraTargets = append([]net.IP(nil), profile.ExtraTargets...)
+	}
+	if profile.IPBlocklist != nil {
+		cloned.IPBlocklist = append([]net.IP(nil), profile.IPBlocklist...)
 	}
 	if profile.Phases != nil {
 		cloned.Phases = make([]envdetect.SubnetPhase, len(profile.Phases))
