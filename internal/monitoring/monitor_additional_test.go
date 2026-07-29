@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 type fakeDockerChecker struct{}
@@ -402,5 +403,196 @@ func TestRecordGuestMetricsSkipsGracePeriodGuestsButKeepsObservedOnes(t *testing
 		if got := history.GetGuestMetrics(id, "cpu", time.Hour); len(got) != 0 {
 			t.Fatalf("%s: grace-period guest recorded %d fabricated sample(s): %+v", id, len(got), got)
 		}
+	}
+}
+
+// Issue1645: PVE's per-node endpoint GET /nodes/{node}/storage returns every
+// storage in the datacenter config, including ones the node is not allowed to
+// use. Those come back enabled:0/active:0 and used to be ingested as "disabled"
+// rows, which the UI rendered as an offline storage on every node.
+func TestIssue1645StorageRestrictedToOtherNodesIsNotListed(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "inst1",
+					IsCluster:   true,
+					ClusterName: "cluster-a",
+				},
+			},
+		},
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{
+			// Restricted to node1 only.
+			{Storage: "node1-only", Type: "dir", Content: "images", Nodes: "node1", Enabled: 1, Active: 1, Total: 100, Used: 10, Available: 90},
+			// No node restriction at all.
+			{Storage: "everywhere", Type: "dir", Content: "images", Enabled: 1, Active: 1, Total: 200, Used: 20, Available: 180},
+			// No node restriction, but disabled across the whole datacenter.
+			{Storage: "off-everywhere", Type: "dir", Content: "images", Enabled: 0, Active: 0, Total: 300, Used: 30, Available: 270},
+		},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {
+				{Storage: "node1-only", Type: "dir", Content: "images", Enabled: 1, Active: 1, Total: 100, Used: 10, Available: 90},
+				{Storage: "everywhere", Type: "dir", Content: "images", Enabled: 1, Active: 1, Total: 200, Used: 20, Available: 180},
+				{Storage: "off-everywhere", Type: "dir", Content: "images", Enabled: 0, Active: 0, Total: 300, Used: 30, Available: 270},
+			},
+			"node2": {
+				// PVE still lists the restricted storage here, flagged unusable.
+				{Storage: "node1-only", Type: "dir", Content: "images", Enabled: 0, Active: 0, Total: 100, Used: 10, Available: 90},
+				{Storage: "everywhere", Type: "dir", Content: "images", Enabled: 1, Active: 1, Total: 200, Used: 25, Available: 175},
+				{Storage: "off-everywhere", Type: "dir", Content: "images", Enabled: 0, Active: 0, Total: 300, Used: 30, Available: 270},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{
+		{Node: "node1", Status: "online"},
+		{Node: "node2", Status: "online"},
+	}
+
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	byName := map[string][]models.Storage{}
+	for _, storage := range monitor.state.GetSnapshot().Storage {
+		byName[storage.Name] = append(byName[storage.Name], storage)
+	}
+
+	// (a) The restricted storage must only exist on the node it is assigned to.
+	restricted := byName["node1-only"]
+	if len(restricted) != 1 {
+		t.Fatalf("expected node-restricted storage on exactly one node, got %+v", restricted)
+	}
+	if restricted[0].Node != "node1" {
+		t.Fatalf("expected node-restricted storage on node1, got %+v", restricted[0])
+	}
+
+	// (b) An unrestricted storage still shows up on every node.
+	unrestricted := byName["everywhere"]
+	if len(unrestricted) != 2 {
+		t.Fatalf("expected unrestricted storage on both nodes, got %+v", unrestricted)
+	}
+	seenNodes := map[string]bool{}
+	for _, storage := range unrestricted {
+		seenNodes[storage.Node] = true
+	}
+	if !seenNodes["node1"] || !seenNodes["node2"] {
+		t.Fatalf("expected unrestricted storage on node1 and node2, got %+v", unrestricted)
+	}
+
+	// (c) A globally disabled storage with no restriction is still reported, as disabled.
+	disabled := byName["off-everywhere"]
+	if len(disabled) != 2 {
+		t.Fatalf("expected globally disabled storage to remain visible on both nodes, got %+v", disabled)
+	}
+	for _, storage := range disabled {
+		if storage.Status != "disabled" || storage.Enabled {
+			t.Fatalf("expected globally disabled storage to report disabled, got %+v", storage)
+		}
+	}
+}
+
+// Issue1645: the shared-storage aggregation derives its node list from the
+// per-node rows, so honouring the datacenter restriction must also stop
+// non-member nodes from being credited with the storage.
+func TestIssue1645SharedStorageNodeListExcludesRestrictedNodes(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "inst1",
+					IsCluster:   true,
+					ClusterName: "cluster-a",
+				},
+			},
+		},
+	}
+
+	sharedRow := proxmox.Storage{
+		Storage:   "shared-nfs",
+		Type:      "nfs",
+		Content:   "images,backup",
+		Shared:    1,
+		Enabled:   1,
+		Active:    1,
+		Total:     1000,
+		Used:      400,
+		Available: 600,
+	}
+	unusableRow := sharedRow
+	unusableRow.Enabled = 0
+	unusableRow.Active = 0
+
+	clusterRow := sharedRow
+	clusterRow.Nodes = "node1,node2"
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{clusterRow},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {sharedRow},
+			"node2": {sharedRow},
+			// node3 is not in the restriction but PVE lists the storage anyway.
+			"node3": {unusableRow},
+		},
+	}
+
+	nodes := []proxmox.Node{
+		{Node: "node1", Status: "online"},
+		{Node: "node2", Status: "online"},
+		{Node: "node3", Status: "online"},
+	}
+
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	var shared *models.Storage
+	for _, storage := range monitor.state.GetSnapshot().Storage {
+		if storage.Name == "shared-nfs" {
+			storageCopy := storage
+			shared = &storageCopy
+			break
+		}
+	}
+	if shared == nil {
+		t.Fatalf("expected shared storage in state, got %+v", monitor.state.GetSnapshot().Storage)
+	}
+	if shared.NodeCount != 2 {
+		t.Fatalf("expected shared storage node count of 2, got %+v", *shared)
+	}
+	for _, nodeName := range shared.Nodes {
+		if nodeName == "node3" {
+			t.Fatalf("node3 is excluded by the storage node restriction but was listed: %+v", *shared)
+		}
+	}
+	for _, nodeID := range shared.NodeIDs {
+		if nodeID == "cluster-a-node3" {
+			t.Fatalf("node3 is excluded by the storage node restriction but was listed: %+v", *shared)
+		}
+	}
+}
+
+func TestIssue1645ClusterStorageRestrictedToOtherNodes(t *testing.T) {
+	cases := []struct {
+		name        string
+		restriction string
+		node        string
+		want        bool
+	}{
+		{name: "no restriction", restriction: "", node: "node1", want: false},
+		{name: "member", restriction: "node1,node2", node: "node2", want: false},
+		{name: "non member", restriction: "node1,node2", node: "node3", want: true},
+		{name: "case insensitive member", restriction: "Node1", node: "node1", want: false},
+		{name: "spaced restriction", restriction: " node1 ; node2 ", node: "node2", want: false},
+		{name: "empty node name", restriction: "node1", node: "", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := clusterStorageRestrictedToOtherNodes(tc.restriction, tc.node); got != tc.want {
+				t.Fatalf("clusterStorageRestrictedToOtherNodes(%q, %q) = %v, want %v", tc.restriction, tc.node, got, tc.want)
+			}
+		})
 	}
 }

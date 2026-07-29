@@ -2517,3 +2517,38 @@ that has compounded to fifteen minutes.
 repeat polls stay on the DNS cache, that the link-local blocklist still rejects
 hostname endpoints resolving into it, and that the SSH backoffs suppress,
 decay, and reset as described.
+
+### Datacenter storage node restriction bounds the per-node storage surface
+
+Proxmox's per-node storage endpoint (`GET /nodes/{node}/storage`) is not a view
+of what that node can use. It returns every storage in the datacenter
+configuration, and reports the ones the node is excluded from with
+`enabled:0`/`active:0` rather than omitting them. The canonical storage poller
+must therefore treat the datacenter `nodes` restriction, not the per-node
+enabled/active flags, as the authority on which node a storage belongs to.
+
+In `internal/monitoring/monitor_polling_storage.go`, `pollStorageWithNodes`
+already reads the datacenter configuration once through `GetAllStorage` before
+fanning out per node. When a storage name is present in that configuration and
+its `nodes` field parses to a non-empty set (`parseClusterStorageNodes`) that
+does not contain the node currently being polled, the per-node row is dropped
+and never becomes a `models.Storage`. Node-name matching is case-insensitive
+and whitespace-tolerant, matching how node identity is compared elsewhere in
+the poller.
+
+The restriction is the only permitted reason to drop a row here. A storage with
+no `nodes` restriction stays visible on every node it is reported from,
+including when it is disabled everywhere — a datacenter-wide disabled storage
+must still surface as a `disabled` entry rather than disappearing, because
+disappearing would hide a real misconfiguration. Because the shared-storage
+aggregation derives `Nodes`, `NodeIDs`, and `NodeCount` from the surviving
+per-node rows, honouring the restriction at ingest is also what keeps a
+restricted shared storage from claiming cluster members that cannot mount it.
+The cluster-only synthesis path further down already derives its node list from
+the same restriction, so both paths now agree.
+
+`internal/monitoring/monitor_additional_test.go` is the registered proof
+(`Issue1645*`) that a restricted storage is dropped on excluded nodes, that an
+unrestricted storage still appears on every node, that a globally disabled
+unrestricted storage still surfaces as disabled, and that the shared-storage
+node list excludes non-member nodes.

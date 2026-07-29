@@ -336,6 +336,26 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					continue
 				}
 
+				// Get cluster config for this storage
+				clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
+
+				// PVE's per-node endpoint returns every storage in the datacenter
+				// config, including ones this node is not allowed to use (those come
+				// back enabled:0/active:0). Honour the datacenter "nodes" restriction
+				// so a storage limited to other nodes does not show up here as an
+				// offline entry (#1645). A storage with no restriction is still
+				// ingested even when disabled, so globally disabled storages keep
+				// showing up as disabled.
+				if hasClusterConfig && clusterStorageRestrictedToOtherNodes(clusterConfig.Nodes, n.Node) {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("node", n.Node).
+						Str("storage", storage.Storage).
+						Str("restrictedTo", clusterConfig.Nodes).
+						Msg("Skipping storage not assigned to this node by the datacenter node restriction")
+					continue
+				}
+
 				// Create storage ID
 				var storageID string
 				if instanceName == n.Node {
@@ -343,9 +363,6 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 				} else {
 					storageID = fmt.Sprintf("%s-%s-%s", instanceName, n.Node, storage.Storage)
 				}
-
-				// Get cluster config for this storage
-				clusterConfig, hasClusterConfig := clusterStorageMap[storage.Storage]
 
 				// Determine if shared - check multiple sources:
 				// 1. Per-node API returns shared flag directly
@@ -821,4 +838,25 @@ func parseClusterStorageNodes(raw string) []string {
 		return nil
 	}
 	return result
+}
+
+// clusterStorageRestrictedToOtherNodes reports whether a datacenter storage
+// definition carries a node restriction that excludes nodeName. An empty
+// restriction means the storage is available on every node, so it returns
+// false in that case.
+func clusterStorageRestrictedToOtherNodes(restriction string, nodeName string) bool {
+	allowed := parseClusterStorageNodes(restriction)
+	if len(allowed) == 0 {
+		return false
+	}
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName == "" {
+		return false
+	}
+	for _, candidate := range allowed {
+		if strings.EqualFold(strings.TrimSpace(candidate), nodeName) {
+			return false
+		}
+	}
+	return true
 }
