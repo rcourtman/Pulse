@@ -5108,7 +5108,12 @@ check when both paths share a filesystem, honors an operator-selected
 Unraid watchdogs must route agent output through the agent's rotating
 `--log-file` writer instead of an unbounded shell append; their own watchdog
 messages must also be size-bounded so either logging path cannot exhaust a
-RAM-backed appliance root.
+RAM-backed appliance root. The QNAP wrapper is also a singleton lifecycle
+owner: concurrent starts from flash-backed `autorun.sh` and an install or
+upgrade must elect exactly one watchdog before terminating or launching an
+agent. The elected watchdog records both supervisor and child PIDs, removes
+only lock state it owns, and terminates its child on shutdown so a second
+watchdog or orphan agent cannot accumulate appliance CPU.
 
 Unified Agent lifecycle truth is agent-authored. The host report contract now
 carries the non-secret applied managed-config fingerprint, self-updater state

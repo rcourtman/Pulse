@@ -2750,7 +2750,13 @@ an operator-supplied `TMPDIR`. `--preflight-only` must exercise the same
 storage check and report an actionable alternate-temporary-directory hint.
 Generated QNAP and Unraid watchdogs must use the agent's rotating `--log-file`
 path rather than an unbounded stdout append, while keeping watchdog-owned
-messages independently size-bounded.
+messages independently size-bounded. Because QNAP may launch the same
+persistent wrapper from both flash-backed `autorun.sh` and an installer or
+upgrader, that wrapper must acquire one portable atomic singleton lock before
+killing or starting an agent, track its owned child, recover stale lock state,
+and remove only its own PID and lock artifacts on shutdown. Installer
+verification must exercise concurrent wrapper launches and prove that they
+produce one watchdog/agent pair with no orphan after termination.
 
 The in-app updater's apply pipeline now owns a downgrade guard on the normal
 apply path. A syntactically valid release asset URL can name a release older
