@@ -32,6 +32,13 @@ Unsupported SMART commands, permission failures, and timeouts must never alter
 native array membership or turn a present disk into a missing disk. Direct
 SATA, SAS, USB-bridge, NVMe, and controller-member inventory must all survive
 one compressed unified-agent report without a collector-side suffix cap.
+Appliance-vendored smartctl builds are part of that compatibility boundary.
+`PULSE_SMARTCTL_PATH` may select the installed binary explicitly; rejection of
+the JSON output option must retry the same probe in parseable text mode; DSM
+`/dev/sataN` devices must receive a SAT retry; and `STANDBY (OS)` remains
+standby evidence. Enumeration and each device probe have independent bounded
+deadlines so one slow disk cannot consume the complete SMART pass, while
+command errors retain bounded stderr for compatibility diagnosis.
 `internal/monitoring/monitor.go` also serializes shared unified-resource
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
@@ -200,6 +207,11 @@ must report compensation truth and attempt rollback rather than declaring a
 partially connected replacement successful. The typed host-agent command path
 owns durable terminal receipts for that mutation: reconnect or server recovery
 may replay a persisted result, but may not execute the Docker mutation twice.
+The typed update preflight must accept the planned image only when the daemon's
+resolved image proves either the expected local content ID or the expected
+registry `RepoDigest`. A tag that resolves to neither digest fails before the
+rename boundary; comparing only a registry digest to a daemon-local image ID is
+not sufficient proof and must not reject an otherwise matching pull.
 
 Automatic Patrol action admission wired through `internal/api/` is API/action-
 lifecycle authority, not agent enrollment or command authority. Agent command
@@ -1452,6 +1464,11 @@ the intentionally sparse public response.
    or no-data results, and partial or plain-text smartctl output must still
    preserve model, serial, health, and temperature data through the same
    host-agent runtime boundary instead of leaving monitoring to guess.
+   Vendor smartctl compatibility is proved in
+   `internal/hostagent/smartctl_standby_guard_test.go`: a JSON-option rejection
+   retries in text mode, DSM `/dev/sataN` gains a SAT attempt, an explicit
+   binary path bypasses PATH lookup, `STANDBY (OS)` is recognized, and stderr
+   survives command failure wrapping.
    macOS thermal telemetry belongs in the same host-agent sensor contract, but
    it must report Darwin `pmset` thermal and performance pressure as
    `sensors.thermalState` instead of inventing Celsius readings from unavailable
@@ -3497,7 +3514,11 @@ from the saved-connection APIs instead of falling back to provider-local
 inference or agent-first setup guidance. Saved-connection retests must use the
 server-owned test routes, must allow masked-secret continuity on edit, and
 must refresh the shared connection-summary state after a save or retest
-completes. `frontend-modern/src/utils/clusterEndpointPresentation.ts` and
+completes. A TrueNAS edit always sends the fingerprint field: a non-empty value
+updates the TLS pin and an explicit empty string clears a previously persisted
+pin. Omitting the field when the operator clears it would silently retain stale
+trust state and is outside the saved-connection lifecycle contract.
+`frontend-modern/src/utils/clusterEndpointPresentation.ts` and
 `frontend-modern/src/utils/proxmoxSettingsPresentation.ts` remain part of that
 same governed lifecycle surface, so endpoint reachability state,
 discovery-prefill defaults, and variant copy do not drift into card-local
@@ -5380,6 +5401,17 @@ that credential to recreate or remote-configure the removed host. Revoked,
 expired, missing-scope, and pre-removal credentials remain denied. The
 operator-only `allow-reenroll` action is the explicit override that may clear
 both the tombstone and detached-token lineage.
+
+A fresh installation can also arrive while an older same-machine host record
+is merely stale rather than tombstoned. When the presenting token's `CreatedAt`
+is newer than that record's last observation and machine ID plus normalized
+hostname identify the same physical host, report admission treats the event as
+explicit re-enrollment: it preserves the established canonical host ID,
+rebinds the new token, removes older duplicate generations and their token
+bindings, and therefore preserves physical-disk resource continuity. A
+pre-existing generation observed at or after the new token was created is live
+and must not be superseded. The focused proof lives in
+`internal/monitoring/monitor_host_agents_test.go`.
 
 Report ingestion holds a shared lifecycle lock for the full state transition;
 deletion, manual allowance, and tombstone expiry hold the exclusive side.

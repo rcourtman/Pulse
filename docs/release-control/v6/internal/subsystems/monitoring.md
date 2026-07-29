@@ -232,6 +232,13 @@ wrap rebases that counter and produces a valid zero for the reset interval. A
 source-uptime rollback rebases the complete counter epoch and leaves the first
 post-restart rate unknown, including when a busy guest already surpassed its
 pre-restart counter value before the next poll.
+LXC rows may merge `cluster/resources` with the independently sampled
+`/nodes/{node}/lxc/{vmid}/status/current` response. When both describe the same
+uptime epoch, a lower status/current disk counter is lagging evidence and must
+not overwrite a higher cumulative counter already observed from the cluster
+row. Only an uptime rollback proves a restart and permits the lower value to
+start a new epoch. This merge rule applies before rate calculation so endpoint
+ordering cannot fabricate a reset, zero interval, or negative disk rate.
 First-sample and missing-field unknowns remain internal validity state; the
 legacy API/websocket guest number fields stay numeric, while history, unified
 metrics, and alerts omit the unknown observation instead of manufacturing
@@ -644,6 +651,13 @@ changes.
     CORE/FreeNAS. Unknown or current versions fail closed. The decision and
     persistent socket belong to one configured client, so reconnects or
     legacy negotiation for one appliance cannot alter another appliance.
+    On a connection already configured as HTTPS, an `/api/current` handshake
+    that redirects to the same appliance's HTTPS web UI is unsupported-endpoint
+    evidence, not successful JSON-RPC negotiation. It may open only the bounded
+    REST version probe described above: recognized CORE/legacy releases select
+    REST, while current SCALE and unknown releases still fail closed. This
+    exception does not treat authentication, TLS, protocol, or method failures
+    as downgrade signals.
     A plaintext `ws://` handshake answered with a redirect is not an
     unsupported endpoint and must never wake the REST bridge. When the
     redirect target is an https URL on the same host — TrueNAS's HTTP to
@@ -2461,6 +2475,15 @@ allowance is the only path that clears that lineage. Focused proofs are
 `internal/monitoring/monitor_host_agents_test.go`, and
 `internal/api/host_agent_removal_lifecycle_integration_test.go`; the concurrency
 proof must also pass under the Go race detector.
+
+Fresh-install reconciliation also applies before a tombstone exists. A token
+created after a stale same-machine, same-normalized-hostname observation is
+explicit re-enrollment evidence: monitoring preserves the established host ID,
+removes older duplicate generations and token bindings, and keeps physical-disk
+resource identities attached to that host. A generation observed at or after
+the new token's creation remains live and is never removed by this rule.
+`internal/monitoring/monitor_host_agents_test.go` proves stable-ID reuse,
+duplicate cleanup, and the live-generation guard.
 
 ### Native pool-health collection and appliance isolation
 
