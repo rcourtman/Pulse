@@ -87,4 +87,54 @@ describe('SecurityWarning', () => {
       '/docs/SECURITY.md',
     );
   });
+
+  it('Issue1650 renders nothing for a status payload truncated below privileged', async () => {
+    const pendingStatus = deferred<any>();
+    apiFetchJSONMock.mockReturnValue(pendingStatus.promise);
+
+    const { SecurityWarning } = await import('../SecurityWarning');
+    render(() => <SecurityWarning />);
+
+    // What a kiosk token (monitoring:read only) actually receives: identity
+    // fields, and none of the posture fields the score is computed from.
+    pendingStatus.resolve({
+      detailLevel: 'authenticated',
+      hasAuthentication: true,
+      requiresAuth: true,
+      tokenScopes: ['monitoring:read'],
+    });
+
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Security score:/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Enable Security/i })).not.toBeInTheDocument();
+  });
+
+  it('Issue1650 still warns a privileged payload that genuinely lacks export protection', async () => {
+    const pendingStatus = deferred<any>();
+    apiFetchJSONMock.mockReturnValue(pendingStatus.promise);
+
+    const { SecurityWarning } = await import('../SecurityWarning');
+    render(() => <SecurityWarning />);
+
+    pendingStatus.resolve({
+      detailLevel: 'privileged',
+      apiTokenConfigured: false,
+      credentialsEncrypted: true,
+      exportProtected: false,
+      hasAuditLogging: false,
+      hasAuthentication: true,
+      hasHTTPS: true,
+      publicAccess: false,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Security score:/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('link', { name: /Enable Security/i })).toBeInTheDocument();
+  });
 });

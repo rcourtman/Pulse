@@ -24,7 +24,7 @@ import {
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
-import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
+import { MONITORING_READ_SCOPE, SETTINGS_READ_SCOPE } from '@/constants/apiScopes';
 import type { Organization } from '@/api/orgs';
 import type { VersionInfo } from '@/api/updates';
 import type { Alert, State } from '@/types/api';
@@ -111,6 +111,20 @@ function resolvePrimaryNavigationRoute(tab: PrimaryTab, routeMemory: PrimaryRout
 
 export function resetPrimaryNavigationRouteMemory() {
   primaryRouteMemory = {};
+}
+
+/**
+ * Whether this session is allowed to reach settings surfaces.
+ *
+ * Session/cookie auth carries no token scopes, so an absent or empty scope list
+ * means "unrestricted". A scoped API token needs the wildcard or settings:read.
+ * Kiosk tokens are minted with monitoring:read only, so they fail this check and
+ * must never be handed a settings tab, a settings route, or a banner that links
+ * into settings (#1650).
+ */
+export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean {
+  if (!scopes || scopes.length === 0) return true;
+  return scopes.includes('*') || scopes.includes(SETTINGS_READ_SCOPE);
 }
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -294,6 +308,11 @@ export function AppLayout(props: AppLayoutProps) {
     setKioskMode(!kioskMode());
   };
 
+  // Scope-limited sessions (kiosk API tokens) have no way back into the full
+  // shell, so kiosk is not theirs to leave. Sessions that can reach settings
+  // chose kiosk themselves and keep the escape hatch.
+  const hasSettingsAccess = createMemo(() => sessionHasSettingsAccess(props.tokenScopes()));
+
   const platformNavigationVisibility = createMemo(
     () =>
       props.platformVisibility?.() ??
@@ -335,16 +354,27 @@ export function AppLayout(props: AppLayoutProps) {
     if (!kioskMode()) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        toggleKioskMode();
+      if (event.key !== 'Escape') return;
+      if (!hasSettingsAccess()) {
+        // A kiosk-token session cannot exit kiosk: setKioskMode(false) is sticky
+        // for the rest of the session and would strand the display on chrome it
+        // has no authority to use. Give it the same temporary header peek the
+        // hover and touch affordances give instead.
+        showHeader();
+        scheduleHideHeader(3000);
+        return;
       }
+      toggleKioskMode();
     };
     window.addEventListener('keydown', onKeyDown);
     onCleanup(() => window.removeEventListener('keydown', onKeyDown));
   });
 
   createEffect(() => {
-    if (!kioskMode()) return;
+    // Kiosk hides the navigation, but the redirect is not a kiosk decoration:
+    // a session whose token cannot read settings must stay off these routes
+    // whether or not kiosk is currently on (#1650).
+    if (!kioskMode() && hasSettingsAccess()) return;
     const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
     const blockedPrefixes = ['/settings', '/patrol'];
     const isBlocked = blockedPrefixes.some(
@@ -504,10 +534,6 @@ export function AppLayout(props: AppLayoutProps) {
     );
     const activeAlertCount = breakdown.warning + breakdown.critical;
 
-    const scopes = props.tokenScopes();
-    const hasSettingsAccess =
-      !scopes || scopes.length === 0 || scopes.includes('*') || scopes.includes('settings:read');
-
     const tabs: UtilityTab[] = [
       {
         id: 'alerts',
@@ -543,7 +569,7 @@ export function AppLayout(props: AppLayoutProps) {
       },
     ];
 
-    if (hasSettingsAccess) {
+    if (hasSettingsAccess()) {
       tabs.push({
         id: 'settings',
         label: 'Settings',

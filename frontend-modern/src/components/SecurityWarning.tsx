@@ -11,11 +11,13 @@ import {
   getSecurityScoreTextClass,
   getSecurityWarningPresentation,
   shouldShowGlobalSecurityWarning,
+  type SecurityStatusDetailLevel,
 } from '@/utils/securityScorePresentation';
 
 import type { SecurityStatus } from '@/types/config';
 
 interface SecurityState {
+  detailLevel?: SecurityStatusDetailLevel;
   hasAuthentication: boolean;
   hasHTTPS: boolean;
   hasAPIToken: boolean;
@@ -62,6 +64,9 @@ export const SecurityWarning: Component = () => {
       if (data.hasAuthentication) score++;
 
       setStatus({
+        // Carried through so the banner can tell a real posture from a payload
+        // the server truncated for this caller's authority (#1650).
+        detailLevel: data.detailLevel,
         hasAuthentication: data.hasAuthentication || false,
         hasHTTPS: runningOverHttps,
         hasAPIToken: data.apiTokenConfigured || false,
@@ -100,6 +105,7 @@ export const SecurityWarning: Component = () => {
     if (!currentStatus) return false;
 
     return shouldShowGlobalSecurityWarning({
+      detailLevel: currentStatus.detailLevel,
       hasAuthentication: currentStatus.hasAuthentication,
       exportProtected: currentStatus.exportProtected,
       hasHTTPS: currentStatus.hasHTTPS,

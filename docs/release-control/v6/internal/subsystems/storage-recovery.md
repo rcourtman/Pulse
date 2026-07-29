@@ -4772,3 +4772,14 @@ detected public URL is unchanged. Tenant workspace preservation, recovery flows
 that copy `system.json` forward, and backup or restore attribution are
 unaffected, and the extension-point expectations on `internal/api/` and
 `internal/api/router.go` are otherwise unchanged.
+
+The shared `frontend-modern/src/App.tsx` shell boundary this subsystem consumes
+gained one authority gate on its global banner block. The banners rendered
+above the authenticated shell (security, demo, commercial migration, update,
+what's-new, GitHub star, and the global update progress watcher) now render
+only for a session that can reach settings, using the single
+`sessionHasSettingsAccess` predicate exported from
+`frontend-modern/src/AppLayout.tsx`. Public-route ownership, the post-login
+handoff, demo organization suppression, and platform-page route carriage in
+`frontend-modern/src/App.tsx` are unchanged; nothing about backup, restore, or
+recovery routing keys off banner visibility.

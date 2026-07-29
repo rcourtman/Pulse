@@ -6816,3 +6816,14 @@ from the active tenant monitor. Provider replacement refreshes both the default
 service and already-created tenant services after monitor reload, so no AI
 service retains an orphaned cache or writes a tenant's URL through another
 organization's guest, Docker, or host metadata store.
+
+The same shell chrome boundary now also has to respect browser session
+authority. When the authenticated shell in `frontend-modern/src/App.tsx` and
+`frontend-modern/src/AppLayout.tsx` is driven by a scope-limited API token
+(a kiosk token carrying `monitoring:read` only), the Patrol utility tab route
+`/patrol` stays inside the shell's blocked-route redirect whether or not kiosk
+mode is currently on, and the Escape key must not be usable to leave kiosk into
+that chrome. Assistant and Patrol shell state stays owned by
+`frontend-modern/src/stores/aiChat.ts` and the canonical Patrol path as before;
+this containment is a shell-level authority rule and must not be forked into a
+second AI-side scope check.

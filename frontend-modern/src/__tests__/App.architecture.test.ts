@@ -102,7 +102,9 @@ describe('App platform navigation admission', () => {
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
-    expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
+    expect(appSource).toContain(
+      "import { AppLayout, sessionHasSettingsAccess } from '@/AppLayout';",
+    );
     expect(appSource).toContain("import { aiChatStore } from './stores/aiChat';");
     expect(appSource).toContain(
       "import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';",
@@ -291,6 +293,31 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('TrialBanner');
     expect(appSource).not.toContain('MonitoredSystemLimitWarningBanner');
     expect(appSource).not.toContain('monitoredSystemLimitWarningBanner');
+  });
+
+  it('Issue1650 keeps kiosk-scoped sessions off settings chrome in the shell', () => {
+    // ESC used to call toggleKioskMode() unconditionally, and setKioskMode(false)
+    // is sticky for the rest of the session, so a kiosk display could be walked
+    // out of kiosk and into settings-linked chrome it has no authority to use.
+    expect(appLayoutSource).toContain('export function sessionHasSettingsAccess(');
+    expect(appLayoutSource).toContain(
+      'const hasSettingsAccess = createMemo(() => sessionHasSettingsAccess(props.tokenScopes()));',
+    );
+    expect(appLayoutSource).toContain("if (event.key !== 'Escape') return;");
+    expect(appLayoutSource).toContain('if (!hasSettingsAccess()) {');
+    expect(appLayoutSource).toContain('scheduleHideHeader(3000);');
+    expect(appLayoutSource).not.toContain(
+      "if (event.key === 'Escape') {\n        toggleKioskMode();",
+    );
+    // The blocked-route guard is an authority rule, not kiosk decoration.
+    expect(appLayoutSource).toContain('if (!kioskMode() && hasSettingsAccess()) return;');
+    expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/patrol'];");
+    // Banners in the shell deep-link into settings, so they follow the same rule.
+    expect(appSource).toContain('<Show when={!kioskMode() && hasSettingsAccess()}>');
+    expect(appSource).toContain(
+      'const hasSettingsAccess = createMemo(() =>\n      sessionHasSettingsAccess(runtime.securityStatus()?.tokenScopes),\n    );',
+    );
+    expect(appSource).not.toContain("scopes.includes('settings:read')");
   });
 
   it('keeps the update progress watcher aligned with the backend updater stages', () => {

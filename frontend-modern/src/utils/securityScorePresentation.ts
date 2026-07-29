@@ -26,7 +26,18 @@ export interface SecurityWarningPresentation {
   messageClass: string;
 }
 
+/**
+ * How much of the security posture `/api/security/status` was willing to tell
+ * this caller. The endpoint truncates by authority: `public` carries login
+ * discovery and authentication state only, `authenticated` adds session
+ * identity but still no posture fields, and only `privileged` (settings:read)
+ * carries exportProtected, apiTokenConfigured, hasHTTPS, publicAccess and the
+ * rest.
+ */
+export type SecurityStatusDetailLevel = 'public' | 'authenticated' | 'privileged';
+
 export interface SecurityRuntimeWarningVisibilityOptions {
+  detailLevel?: SecurityStatusDetailLevel;
   hasAuthentication: boolean;
   exportProtected: boolean;
   hasHTTPS?: boolean;
@@ -192,11 +203,35 @@ export function getSecurityWarningPresentation(options: {
   };
 }
 
+/**
+ * The global banner may only be raised from fields the payload actually
+ * carries. A truncated response omits the posture fields entirely, and reading
+ * an absent field as `false` is how a kiosk token (monitoring:read only) was
+ * shown a bogus "security score 1/5" banner linking into settings it cannot
+ * open (#1650).
+ *
+ * - `authenticated`: no posture fields at all, so nothing can be asserted.
+ * - `public`: only `hasAuthentication` is authoritative, which is exactly the
+ *   case that matters — an instance with no authentication configured must
+ *   still be warned about.
+ * - `privileged` (or a caller supplying the full posture directly): full
+ *   assessment.
+ */
 export function shouldShowGlobalSecurityWarning(
   options: SecurityRuntimeWarningVisibilityOptions,
 ): boolean {
+  const detailLevel = options.detailLevel ?? 'privileged';
+
+  if (detailLevel === 'authenticated') {
+    return false;
+  }
+
   if (!options.hasAuthentication) {
     return true;
+  }
+
+  if (detailLevel === 'public') {
+    return false;
   }
 
   if (!options.exportProtected) {

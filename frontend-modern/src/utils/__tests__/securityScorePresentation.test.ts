@@ -297,3 +297,71 @@ describe('securityScorePresentation', () => {
     ).toBe('Private network access');
   });
 });
+
+describe('Issue1650 truncated security status must not raise the global warning', () => {
+  // /api/security/status truncates its payload by authority. A kiosk API token
+  // (monitoring:read only) gets detailLevel 'authenticated' with no posture
+  // fields at all, which used to read as "exports unprotected" and produced a
+  // false 1/5 security banner linking into settings the token cannot open.
+  const truncatedKioskPayload = {
+    detailLevel: 'authenticated' as const,
+    hasAuthentication: true,
+    exportProtected: false,
+    hasHTTPS: false,
+    publicAccess: false,
+  };
+
+  it('stays silent for an authenticated-but-unprivileged payload', () => {
+    expect(shouldShowGlobalSecurityWarning(truncatedKioskPayload)).toBe(false);
+  });
+
+  it('stays silent for an authenticated payload that looks publicly exposed', () => {
+    expect(
+      shouldShowGlobalSecurityWarning({
+        ...truncatedKioskPayload,
+        publicAccess: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('still warns an unauthenticated instance from its public payload', () => {
+    expect(
+      shouldShowGlobalSecurityWarning({
+        detailLevel: 'public',
+        hasAuthentication: false,
+        exportProtected: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not invent posture debt from a public payload that has authentication', () => {
+    expect(
+      shouldShowGlobalSecurityWarning({
+        detailLevel: 'public',
+        hasAuthentication: true,
+        exportProtected: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the full assessment for a privileged payload', () => {
+    expect(
+      shouldShowGlobalSecurityWarning({
+        detailLevel: 'privileged',
+        hasAuthentication: true,
+        exportProtected: false,
+        hasHTTPS: true,
+        publicAccess: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowGlobalSecurityWarning({
+        detailLevel: 'privileged',
+        hasAuthentication: true,
+        exportProtected: true,
+        hasHTTPS: true,
+        publicAccess: false,
+      }),
+    ).toBe(false);
+  });
+});

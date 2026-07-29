@@ -56,7 +56,7 @@ import {
   buildVmwarePath,
 } from './routing/resourceLinks';
 import { APP_SHELL_ROUTE_PRELOAD_PATHS, preloadRouteModule } from '@/routing/routePreload';
-import { AppLayout } from '@/AppLayout';
+import { AppLayout, sessionHasSettingsAccess } from '@/AppLayout';
 import RuntimeHomePage from '@/pages/RuntimeHome';
 import { useAppRuntimeState } from '@/useAppRuntimeState';
 import {
@@ -293,12 +293,9 @@ function App() {
     );
     const platformNavigationResolved = () => platformNavigationAdmission().resolved;
     const platformNavigationVisibility = () => platformNavigationAdmission().visibility;
-    const hasSettingsAccess = createMemo(() => {
-      const scopes = runtime.securityStatus()?.tokenScopes;
-      return (
-        !scopes || scopes.length === 0 || scopes.includes('*') || scopes.includes('settings:read')
-      );
-    });
+    const hasSettingsAccess = createMemo(() =>
+      sessionHasSettingsAccess(runtime.securityStatus()?.tokenScopes),
+    );
     let appShellRoutePreloadCleanup: (() => void) | undefined;
     let appShellRoutesPreloadScheduled = false;
     let workspaceRedirectPending = false;
@@ -491,7 +488,12 @@ function App() {
                 >
                   <WebSocketContext.Provider value={runtime.enhancedStore()!}>
                     <DarkModeContext.Provider value={runtime.darkMode}>
-                      <Show when={!kioskMode()}>
+                      {/* Global banners deep-link into settings (security
+                          hardening, telemetry preferences, license management),
+                          so they are for sessions that can actually reach those
+                          surfaces. Kiosk hides them; a scope-limited token has
+                          no business seeing them even outside kiosk (#1650). */}
+                      <Show when={!kioskMode() && hasSettingsAccess()}>
                         <SecurityWarning />
                         <DemoBanner />
                         <CommercialMigrationBanner />

@@ -573,6 +573,15 @@ tokens, and path-normalization variants.
     `internal/api/rbac_handlers_test.go`, and the rejection cases in
     `pkg/auth/sqlite_manager_test.go`.
 
+14. Security posture presentation must never be computed from a payload the
+    caller was not authorized to read. `/api/security/status` truncates its
+    response by authority and declares which tier it returned through
+    `detailLevel`. `frontend-modern/src/utils/securityScorePresentation.ts`
+    treats an `authenticated` payload as carrying no posture at all and a
+    `public` payload as authoritative for `hasAuthentication` only; only a
+    `privileged` payload supports the full assessment. Absent posture fields
+    must not be read as disabled controls.
+
 ## Current State
 
 ### System settings mutation surface no longer accepts dead schedule inputs
@@ -1731,3 +1740,31 @@ or scheme of its choosing — it can only reach the same `Host` header handling
 the request already depends on. The derived value is returned in an
 admin-authenticated settings response and is never persisted, never used as a
 redirect target, and never used to make an authorization decision.
+
+### The global security banner no longer scores a truncated status payload
+
+`/api/security/status` in `internal/api/router_routes_auth_security.go` returns
+three payload tiers and names the tier it served in `detailLevel`. Only the
+`privileged` tier (settings:read) carries `exportProtected`,
+`apiTokenConfigured`, `hasHTTPS`, and `publicAccess`. The browser banner used
+to compute its score from whatever arrived, so a kiosk API token holding
+`monitoring:read` alone received an `authenticated` payload with those fields
+absent, read them as disabled controls, and rendered a false "security score
+1/5" banner whose "Enable Security" link pointed at a settings page the token
+cannot open (#1650).
+
+`shouldShowGlobalSecurityWarning` in
+`frontend-modern/src/utils/securityScorePresentation.ts` now takes the served
+`detailLevel` and refuses to assert anything the payload does not support. An
+`authenticated` payload raises no warning. A `public` payload is authoritative
+for `hasAuthentication` only, so an instance with no authentication configured
+is still warned about — the case the banner exists for — while a public payload
+that does have authentication contributes no invented posture debt. A
+`privileged` payload keeps the full assessment unchanged, and a caller passing
+the posture directly without a `detailLevel` is still treated as privileged.
+`frontend-modern/src/components/SecurityWarning.tsx` carries the field through
+from the response. This is presentation authority only; every settings endpoint
+already enforces scopes server-side and no backend behaviour changed.
+Regression coverage: the `Issue1650` cases in
+`frontend-modern/src/utils/__tests__/securityScorePresentation.test.ts` and
+`frontend-modern/src/components/__tests__/SecurityWarning.test.tsx`.

@@ -1368,6 +1368,15 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     deployed environment. The returned portal identifier is a separate
     approved configuration/deployment input, and a passing GET-only production
     re-audit remains the postcondition.
+29. Keep the authenticated shell's kiosk containment keyed to session
+    authority. Token scope settings access is decided once by
+    `sessionHasSettingsAccess` in `frontend-modern/src/AppLayout.tsx` and
+    consumed by the utility tab list, the blocked-route redirect, the Escape
+    key handler, and the `frontend-modern/src/App.tsx` global banner block.
+    Escape exits kiosk only for a session that can reach settings; a
+    scope-limited session gets the temporary header reveal instead. The
+    blocked-route redirect and the banner block must stay active for a
+    scope-limited session even when kiosk is off.
 
 ## Current State
 
@@ -3206,3 +3215,21 @@ nullable until the formatting edge, but it must normalize the message through
 the shared monitored-system presentation helper instead of branching on
 demo/billing state inside settings panels or inventing a second mock-only
 license explanation path.
+That same authenticated shell split also owns kiosk containment for
+scope-limited browser sessions. A kiosk API token carries `monitoring:read`
+only, so the shell must treat "this session cannot read settings" as an
+authority fact rather than a kiosk decoration.
+`frontend-modern/src/AppLayout.tsx` exports the single
+`sessionHasSettingsAccess` predicate over token scopes, and both the utility
+tab list and `frontend-modern/src/App.tsx` must consume that one predicate
+instead of re-deriving scope membership inline. Escape may toggle kiosk only
+for a session that can reach settings; for a scope-limited session Escape must
+resolve to the existing temporary header reveal, because `setKioskMode(false)`
+is sticky for the remainder of the browser session and would otherwise strand a
+wall display on chrome it has no authority to use. The blocked-route redirect
+away from `/settings`, `/patrol`, and alert-configuration tabs must hold
+whenever the session lacks settings access, not only while kiosk is on, and the
+global banner block in `frontend-modern/src/App.tsx` (security, demo,
+commercial migration, update, what's-new, GitHub star) must be gated on the
+same predicate because those banners deep-link into settings destinations a
+scope-limited session cannot open.

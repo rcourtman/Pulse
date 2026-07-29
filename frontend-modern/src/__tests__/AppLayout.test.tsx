@@ -3,7 +3,12 @@ import { Route, Router, useNavigate } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { AppLayout, resetPrimaryNavigationRouteMemory } from '@/AppLayout';
+import {
+  AppLayout,
+  resetPrimaryNavigationRouteMemory,
+  sessionHasSettingsAccess,
+} from '@/AppLayout';
+import { isKioskMode, setKioskMode } from '@/utils/url';
 import type { PlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 import { aiChatStore } from '@/stores/aiChat';
 
@@ -26,6 +31,87 @@ vi.mock('@/routing/routePreload', () => ({
   preloadRouteModule: vi.fn(() => Promise.resolve()),
 }));
 
+const makeResource = (overrides: Partial<Resource>): Resource =>
+  ({
+    id: overrides.id ?? 'resource-1',
+    name: overrides.name ?? overrides.id ?? 'resource-1',
+    displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'resource-1',
+    type: overrides.type ?? 'agent',
+    platformId: overrides.platformId ?? 'platform-1',
+    platformType: overrides.platformType ?? 'agent',
+    sourceType: overrides.sourceType ?? 'api',
+    status: overrides.status ?? 'online',
+    lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
+    ...overrides,
+  }) as Resource;
+
+const renderLayout = (
+  resources: Resource[] = [],
+  initialPath = '/settings/infrastructure',
+  platformVisibility?: PlatformNavigationVisibility,
+  tokenScopes: string[] = ['settings:read'],
+) => {
+  window.history.replaceState({}, '', initialPath);
+  const RouteStateProbe = () => {
+    const navigate = useNavigate();
+    return (
+      <button
+        type="button"
+        onClick={() => navigate('/proxmox/overview?status=running', { replace: true })}
+      >
+        Set Proxmox running filter
+      </button>
+    );
+  };
+  const LayoutRoute = () => (
+    <AppLayout
+      connectionStatus={() => ({
+        kind: 'connected',
+        label: 'Connected',
+        detail: 'Backend and live data stream are connected.',
+        tone: 'healthy',
+      })}
+      lastUpdateText={() => ''}
+      versionInfo={() =>
+        ({
+          version: '6.0.0-rc.2',
+          channel: 'rc',
+          isDevelopment: false,
+          isDocker: false,
+        }) as never
+      }
+      hasAuth={() => true}
+      needsAuth={() => false}
+      proxyAuthInfo={() => null}
+      handleLogout={() => {}}
+      state={() =>
+        ({
+          activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
+          resources,
+        }) as unknown as State
+      }
+      platformVisibility={platformVisibility ? () => platformVisibility : undefined}
+      tokenScopes={() => tokenScopes}
+      organizations={() => []}
+      activeOrgID={() => 'default'}
+      orgsLoading={() => false}
+      showOrgSwitcher={() => false}
+      onSwitchOrg={() => {}}
+    >
+      <div>Infrastructure body</div>
+      <RouteStateProbe />
+    </AppLayout>
+  );
+  return render(() => (
+    <Router>
+      <Route path="/settings/infrastructure" component={LayoutRoute} />
+      <Route path="/proxmox/overview" component={LayoutRoute} />
+      <Route path="/docker/overview" component={LayoutRoute} />
+      <Route path="/alerts" component={LayoutRoute} />
+    </Router>
+  ));
+};
+
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/settings/infrastructure');
@@ -40,85 +126,6 @@ describe('AppLayout navigation icons', () => {
     aiChatStore.setEnabled(false);
     cleanup();
   });
-
-  const makeResource = (overrides: Partial<Resource>): Resource =>
-    ({
-      id: overrides.id ?? 'resource-1',
-      name: overrides.name ?? overrides.id ?? 'resource-1',
-      displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'resource-1',
-      type: overrides.type ?? 'agent',
-      platformId: overrides.platformId ?? 'platform-1',
-      platformType: overrides.platformType ?? 'agent',
-      sourceType: overrides.sourceType ?? 'api',
-      status: overrides.status ?? 'online',
-      lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
-      ...overrides,
-    }) as Resource;
-
-  const renderLayout = (
-    resources: Resource[] = [],
-    initialPath = '/settings/infrastructure',
-    platformVisibility?: PlatformNavigationVisibility,
-  ) => {
-    window.history.replaceState({}, '', initialPath);
-    const RouteStateProbe = () => {
-      const navigate = useNavigate();
-      return (
-        <button
-          type="button"
-          onClick={() => navigate('/proxmox/overview?status=running', { replace: true })}
-        >
-          Set Proxmox running filter
-        </button>
-      );
-    };
-    const LayoutRoute = () => (
-      <AppLayout
-        connectionStatus={() => ({
-          kind: 'connected',
-          label: 'Connected',
-          detail: 'Backend and live data stream are connected.',
-          tone: 'healthy',
-        })}
-        lastUpdateText={() => ''}
-        versionInfo={() =>
-          ({
-            version: '6.0.0-rc.2',
-            channel: 'rc',
-            isDevelopment: false,
-            isDocker: false,
-          }) as never
-        }
-        hasAuth={() => true}
-        needsAuth={() => false}
-        proxyAuthInfo={() => null}
-        handleLogout={() => {}}
-        state={() =>
-          ({
-            activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
-            resources,
-          }) as unknown as State
-        }
-        platformVisibility={platformVisibility ? () => platformVisibility : undefined}
-        tokenScopes={() => ['settings:read']}
-        organizations={() => []}
-        activeOrgID={() => 'default'}
-        orgsLoading={() => false}
-        showOrgSwitcher={() => false}
-        onSwitchOrg={() => {}}
-      >
-        <div>Infrastructure body</div>
-        <RouteStateProbe />
-      </AppLayout>
-    );
-    return render(() => (
-      <Router>
-        <Route path="/settings/infrastructure" component={LayoutRoute} />
-        <Route path="/proxmox/overview" component={LayoutRoute} />
-        <Route path="/docker/overview" component={LayoutRoute} />
-      </Router>
-    ));
-  };
 
   const getInfrastructureTab = (name: string) => {
     const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
@@ -368,5 +375,104 @@ describe('AppLayout navigation icons', () => {
         }),
       );
     });
+  });
+});
+
+describe('AppLayout Issue1650 kiosk scope containment', () => {
+  const KIOSK_TOKEN_SCOPES = ['monitoring:read'];
+  const DOCKER_ONLY_VISIBILITY: PlatformNavigationVisibility = {
+    proxmox: false,
+    docker: true,
+    kubernetes: false,
+    truenas: false,
+    vmware: false,
+    standalone: false,
+  };
+
+  const header = (container: HTMLElement) => container.querySelector('.header') as HTMLElement;
+  const headerIsRevealed = (container: HTMLElement) =>
+    header(container).style.transform === 'translateY(0)';
+
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/settings/infrastructure');
+    resetPrimaryNavigationRouteMemory();
+    patrolAttentionMockState.activeCount = 0;
+    aiChatStore.close();
+    aiChatStore.setEnabled(false);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    setKioskMode(false);
+    window.sessionStorage.clear();
+  });
+
+  it('treats a monitoring-only token as having no settings access', () => {
+    expect(sessionHasSettingsAccess(KIOSK_TOKEN_SCOPES)).toBe(false);
+    expect(sessionHasSettingsAccess(['monitoring:read', 'settings:read'])).toBe(true);
+    expect(sessionHasSettingsAccess(['*'])).toBe(true);
+    expect(sessionHasSettingsAccess([])).toBe(true);
+    expect(sessionHasSettingsAccess(undefined)).toBe(true);
+  });
+
+  it('keeps kiosk on and peeks the header when a kiosk token presses Escape', () => {
+    vi.useFakeTimers();
+    setKioskMode(true);
+    const { container } = renderLayout(
+      [],
+      '/docker/overview',
+      DOCKER_ONLY_VISIBILITY,
+      KIOSK_TOKEN_SCOPES,
+    );
+
+    // Kiosk shows the header briefly on entry, then hides it.
+    vi.advanceTimersByTime(2000);
+    expect(headerIsRevealed(container)).toBe(false);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(isKioskMode()).toBe(true);
+    expect(screen.queryByRole('tablist', { name: 'Primary navigation' })).toBeNull();
+    expect(headerIsRevealed(container)).toBe(true);
+
+    // The peek is temporary, exactly like the hover and touch affordances.
+    vi.advanceTimersByTime(3500);
+    expect(headerIsRevealed(container)).toBe(false);
+    expect(isKioskMode()).toBe(true);
+  });
+
+  it('still exits kiosk on Escape for a session that can reach settings', () => {
+    setKioskMode(true);
+    renderLayout([], '/docker/overview', DOCKER_ONLY_VISIBILITY, ['settings:read']);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(isKioskMode()).toBe(false);
+    expect(screen.getByRole('tablist', { name: 'Primary navigation' })).toBeTruthy();
+  });
+
+  it('redirects a scope-limited session away from settings even when kiosk is off', async () => {
+    setKioskMode(false);
+    renderLayout([], '/settings/infrastructure', DOCKER_ONLY_VISIBILITY, KIOSK_TOKEN_SCOPES);
+
+    expect(isKioskMode()).toBe(false);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/docker/overview');
+    });
+    const systemGroup = screen
+      .getByRole('tablist', { name: 'Primary navigation' })
+      .querySelector('[aria-label="System"]');
+    expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Settings' })).toBeNull();
+  });
+
+  it('leaves settings reachable with kiosk off for a session that has settings access', async () => {
+    setKioskMode(false);
+    renderLayout([], '/settings/infrastructure', DOCKER_ONLY_VISIBILITY, ['settings:read']);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tablist', { name: 'Primary navigation' })).toBeTruthy();
+    });
+    expect(window.location.pathname).toBe('/settings/infrastructure');
   });
 });
