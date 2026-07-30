@@ -471,6 +471,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 	// Clear LinkedAgentID from any nodes that were linked to this host agent
 	unlinkedCount := m.state.UnlinkNodesFromHostAgent(hostID)
+	m.clearAgentLXCFilesystems(hostID)
 	if unlinkedCount > 0 {
 		log.Info().
 			Str("hostID", hostID).
@@ -2319,6 +2320,7 @@ func (m *Monitor) supersedeStaleHostAgentDuplicates(current models.Host, tokenRe
 		}
 		m.state.RemoveConnectionHealth(hostConnectionPrefix + staleID)
 		m.state.UnlinkNodesFromHostAgent(staleID)
+		m.clearAgentLXCFilesystems(staleID)
 
 		m.mu.Lock()
 		for key, boundID := range m.hostTokenBindings {
@@ -2931,6 +2933,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Update the linked PVE node to point back to this host agent
 	if host.LinkedNodeID != "" {
 		m.linkNodeToHostAgent(host.LinkedNodeID, host.ID)
+		m.applyAgentLXCFilesystems(
+			host.LinkedNodeID,
+			host.ID,
+			report.ProxmoxLXC,
+			receivedAt,
+			report.Agent.IntervalSeconds,
+		)
 	}
 
 	// If host reports Ceph data, also update the global CephClusters state

@@ -6,11 +6,11 @@ For API-backed platforms, start with the platform connection first and add the a
 
 For Proxmox, install the agent only where you need telemetry that the Proxmox
 API cannot provide, such as host SMART and temperature data, local
-ZFS/Ceph/mdadm detail, arbitrary mount reads, or inside-guest runtime
-visibility. Docker containers inside LXCs can be reported by a Proxmox host
-agent when the server has explicitly enabled the privacy-bounded LXC inventory
-mode; Docker/Podman inside VMs still needs a guest-local agent or another
-explicit guest reporting path.
+ZFS/Ceph/mdadm detail, arbitrary host mount reads, or the full mounted
+filesystem breakdown for running LXCs. Docker containers inside LXCs can be
+reported by a Proxmox host agent when the server has explicitly enabled the
+privacy-bounded LXC inventory mode; Docker/Podman inside VMs still needs a
+guest-local agent or another explicit guest reporting path.
 Basic Proxmox inventory and utilization can use a read-only or narrowly scoped
 Proxmox API token instead. Settings uses that API inventory path as the
 default for new PVE/PBS setup. See [Agent Security](AGENT_SECURITY.md) for
@@ -403,7 +403,13 @@ Unified Agent in the guest when you want full Docker host, container, service,
 and task inventory on the Docker page.
 
 Pulse does not use a Proxmox node agent to look inside LXCs by default. The
-optional Proxmox-side LXC Docker hint is off unless the Pulse server is started
+node agent does automatically collect filesystem capacity for running LXCs
+when the local `pct` tool is available. It uses bounded `pct list` and
+`pct df <vmid>` calls and reports only mount keys, volume labels, mount paths,
+and capacity/usage values; it does not run commands inside a guest or read
+guest files. Stopped LXCs retain the normal API-derived disk view.
+
+The optional Proxmox-side LXC Docker hint is off unless the Pulse server is started
 with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true`. That hint uses
 `pct exec` only to check whether `/var/run/docker.sock` exists in a running LXC;
 it does not enumerate containers, images, environment variables, files, or

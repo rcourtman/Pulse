@@ -1123,6 +1123,10 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// normal host report.
 	xcpngData := a.collectXCPNGInventory(ctx)
 
+	// Proxmox VE exposes per-mount LXC usage only through the node-local pct
+	// CLI. Query running containers on an independent bounded deadline.
+	proxmoxLXCData := a.collectProxmoxLXCFilesystems(ctx)
+
 	// Collect S.M.A.R.T. disk data after topology owners. Enumeration and each
 	// device probe have their own deadlines; a single shared 10-second budget
 	// caused later disks on larger arrays to be cancelled before their probe.
@@ -1165,6 +1169,14 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Enabled:   true,
 			State:     "running",
 			UpdatedAt: xcpngData.CollectedAt,
+		})
+	}
+	if proxmoxLXCData != nil {
+		moduleStatus = append(moduleStatus, agentshost.ModuleStatus{
+			Name:      "proxmox-lxc-filesystems",
+			Enabled:   true,
+			State:     "running",
+			UpdatedAt: proxmoxLXCData.CollectedAt,
 		})
 	}
 
@@ -1214,6 +1226,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Ceph:           cephData,
 		Libvirt:        libvirtData,
 		XCPNG:          xcpngData,
+		ProxmoxLXC:     proxmoxLXCData,
 		ClusterSensors: clusterSensors,
 		// Results stay queued until the primary destination accepts this
 		// report, so a delivery failure retries them instead of losing them.

@@ -262,6 +262,12 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					&modelContainer,
 					statusSnapshot,
 				)
+				m.enrichContainerWithAgentLXCFilesystems(
+					instanceName,
+					n.Node,
+					&modelContainer,
+					sampleTime,
+				)
 
 				// Zero out metrics for non-running containers
 				if container.Status != "running" {

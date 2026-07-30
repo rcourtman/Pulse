@@ -40,6 +40,15 @@ source-native `{instance}:{node}:{vmid}` IDs; a successful empty member
 enumeration is authoritative and removes genuinely deleted guests. Collection
 failure remains visible through source freshness/error state and must not be
 converted into an authoritative empty inventory.
+Running LXC filesystem detail may be supplemented by a node-local Unified
+Agent report when the reporting host is securely linked to exactly one current
+PVE node. Monitoring admits only bounded, normalized VMID/name/disk rows,
+keys them by PVE instance, node, and VMID, and requires the subsequent API poll
+to match the exact container name and running state. Server receipt time owns
+the cadence-derived cache lease. Missing, expired, renamed, stopped, or
+migrated observations fall back to the Proxmox API disk view; a fresh accepted
+rootfs reading also replaces the row's primary disk summary before alerts and
+history are evaluated.
 Host-agent report liveness is server-observed, not agent-clock-observed:
 `ApplyHostReport` must stamp `Host.LastSeen`, agent-sourced Ceph cluster
 freshness, and host-agent cluster sensor freshness from Pulse receipt time, so
@@ -394,6 +403,7 @@ changes.
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
 34. `internal/monitoring/monitor_polling_containers.go`
+34a. `internal/monitoring/monitor_agent_lxc_filesystems.go`
 35. `internal/mock/fixture_graph.go`
 35a. `internal/mock/action_fixtures.go`
 35b. `internal/mock/availability_fixtures.go`

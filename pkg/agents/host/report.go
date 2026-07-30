@@ -55,6 +55,7 @@ type Report struct {
 	Ceph           *CephCluster         `json:"ceph,omitempty"`
 	Libvirt        *LibvirtInventory    `json:"libvirt,omitempty"`
 	XCPNG          *XCPNGInventory      `json:"xcpng,omitempty"`
+	ProxmoxLXC     *ProxmoxLXCInventory `json:"proxmoxLxc,omitempty"`
 	ClusterSensors []ClusterNodeSensors `json:"clusterSensors,omitempty"`
 	// AvailabilityResults carries availability checks the agent executed on
 	// behalf of the server for targets assigned to it. The server owns failure
@@ -110,6 +111,23 @@ type XCPNGVM struct {
 	MemoryActual     int64  `json:"memoryActualBytes,omitempty"`
 	MemoryStaticMax  int64  `json:"memoryStaticMaxBytes,omitempty"`
 	ResidentHostUUID string `json:"residentHostUuid,omitempty"`
+}
+
+// ProxmoxLXCInventory is the bounded, node-local filesystem inventory
+// collected through the pct CLI on a Proxmox VE host. Only containers the
+// preceding pct list reported running are queried.
+type ProxmoxLXCInventory struct {
+	Containers  []ProxmoxLXCContainer `json:"containers"`
+	CollectedAt time.Time             `json:"collectedAt"`
+}
+
+// ProxmoxLXCContainer contains direct pct df readings for one local running
+// container. VMID and name are both carried so the server can fail closed
+// when correlating the node-local observation with API inventory.
+type ProxmoxLXCContainer struct {
+	VMID  int    `json:"vmid"`
+	Name  string `json:"name"`
+	Disks []Disk `json:"disks"`
 }
 
 // AvailabilityProbeResult is one completed availability check reported by a

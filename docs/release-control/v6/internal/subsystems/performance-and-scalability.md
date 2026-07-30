@@ -342,6 +342,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    the same startup-only router rule: env opt-in may configure monitoring-owned
    checker/collector callbacks, but normal protected request setup must not run
    `pct`, scan LXC guests, or collect Docker inventory.
+   Automatic LXC filesystem capacity collection remains outside that request
+   path in the node-local Unified Agent. It uses one shared deadline, fixed
+   output ceilings, and bounded running-guest/disk counts; monitoring merges
+   only a fresh in-memory node/VMID/name match during the existing PVE poll.
    Source freshness threshold wiring in `internal/api/router.go` follows the
    same bounded startup/config rule. Router construction may pass already-held
    monitor config into the unified-resource adapter, but it must not add

@@ -720,3 +720,46 @@ func TestReportXCPNGInventoryJSONRoundTrip(t *testing.T) {
 		t.Fatalf("XCP-ng inventory = %+v", decoded.XCPNG)
 	}
 }
+
+func TestReportProxmoxLXCInventoryJSONRoundTrip(t *testing.T) {
+	collectedAt := time.Date(2026, 7, 30, 20, 30, 0, 0, time.UTC)
+	report := Report{ProxmoxLXC: &ProxmoxLXCInventory{
+		CollectedAt: collectedAt,
+		Containers: []ProxmoxLXCContainer{{
+			VMID: 200,
+			Name: "app",
+			Disks: []Disk{{
+				Device:     "local:subvol-200-disk-0",
+				Mountpoint: "/",
+				Type:       "rootfs",
+				TotalBytes: 20 << 30,
+				UsedBytes:  5 << 30,
+				FreeBytes:  15 << 30,
+				Usage:      25,
+			}},
+		}},
+	}}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	var decoded Report
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if decoded.ProxmoxLXC == nil ||
+		!decoded.ProxmoxLXC.CollectedAt.Equal(collectedAt) ||
+		len(decoded.ProxmoxLXC.Containers) != 1 ||
+		decoded.ProxmoxLXC.Containers[0].VMID != 200 ||
+		decoded.ProxmoxLXC.Containers[0].Disks[0].Mountpoint != "/" {
+		t.Fatalf("Proxmox LXC inventory = %+v", decoded.ProxmoxLXC)
+	}
+
+	bare, err := json.Marshal(Report{})
+	if err != nil {
+		t.Fatalf("marshal bare report: %v", err)
+	}
+	if contains(string(bare), "proxmoxLxc") {
+		t.Fatalf("nil Proxmox LXC inventory should be omitted: %s", bare)
+	}
+}

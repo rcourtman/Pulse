@@ -3,9 +3,11 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -686,6 +688,81 @@ func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
 		report.Sensors.SMART[0].Type != "nvme" ||
 		report.Sensors.SMART[0].Temperature != 39 {
 		t.Fatalf("Windows storage temperatures = %+v, want native PhysicalDisk0 reading", report.Sensors.SMART)
+	}
+}
+
+func TestBuildReportIncludesProxmoxLXCFilesystems(t *testing.T) {
+	const pctPath = "/usr/sbin/pct"
+	now := time.Date(2026, 7, 30, 20, 30, 0, 0, time.UTC)
+	mc := &mockCollector{
+		goos:  "linux",
+		nowFn: func() time.Time { return now },
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname: "pve-a",
+				HostID:   "pve-a-id",
+				Platform: "debian",
+			}, nil
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file == "pct" {
+				return pctPath, nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputLimitedFn: func(
+			_ context.Context,
+			_ int,
+			name string,
+			args ...string,
+		) (string, error) {
+			if name != pctPath {
+				return "", os.ErrNotExist
+			}
+			switch strings.Join(args, " ") {
+			case "list":
+				return fmt.Sprintf(
+					"%-10s %-10s %-12s %-20s\n%-10d %-10s %-12s %-20s\n",
+					"VMID", "Status", "Lock", "Name",
+					200, "running", "", "app",
+				), nil
+			case "df 200":
+				return "MP Volume Size Used Avail Use% Path\nrootfs local:subvol-200-disk-0 20.0G 5.0G 15.0G 25.0 /\n", nil
+			default:
+				return "", fmt.Errorf("unexpected pct args: %v", args)
+			}
+		},
+	}
+	agent, err := New(Config{
+		AgentID:   "pve-a-agent",
+		APIToken:  "token",
+		LogLevel:  -1,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("buildReport failed: %v", err)
+	}
+	if report.ProxmoxLXC == nil || len(report.ProxmoxLXC.Containers) != 1 {
+		t.Fatalf("Proxmox LXC inventory = %+v", report.ProxmoxLXC)
+	}
+	if report.ProxmoxLXC.Containers[0].VMID != 200 ||
+		len(report.ProxmoxLXC.Containers[0].Disks) != 1 ||
+		report.ProxmoxLXC.Containers[0].Disks[0].Mountpoint != "/" {
+		t.Fatalf("Proxmox LXC container = %+v", report.ProxmoxLXC.Containers[0])
+	}
+	foundModule := false
+	for _, module := range report.Agent.Modules {
+		if module.Name == "proxmox-lxc-filesystems" && module.State == "running" {
+			foundModule = true
+		}
+	}
+	if !foundModule {
+		t.Fatalf("agent modules = %+v, want Proxmox LXC filesystem module", report.Agent.Modules)
 	}
 }
 

@@ -69,6 +69,7 @@ answers your monitoring question:
 |---|---|---|
 | PVE/PBS/PMG inventory, node status, VM/container status, storage usage, and normal Proxmox API metrics | Add the Proxmox connection with a read-only or narrowly scoped API token | No |
 | VM guest disk and memory details through QEMU Guest Agent | Use Proxmox API permissions such as `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` where supported | No host agent for the Proxmox node |
+| All mounted LXC filesystem capacities and usage | Install the Unified Agent on the owning PVE node; it automatically uses bounded `pct list` and `pct df` reads for running LXCs | Yes, on the PVE node |
 | Docker/Podman containers inside a VM or LXC through guest-local reporting | Install the agent inside that VM/LXC with Docker/Podman monitoring enabled, or use another explicit guest access/reporting path | Usually requires root or Docker socket-equivalent access |
 | Docker containers inside an LXC from a Proxmox host agent | Start Pulse with `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`; optionally limit guests with `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102` | Requires a root/equivalent Pulse agent on the Proxmox node and explicit server opt-in |
 | Host SMART, temperatures, local ZFS/Ceph/mdadm detail, arbitrary mount reads, and full host telemetry | Install the agent on that host | Yes, for the supported full-telemetry profile |
@@ -77,7 +78,15 @@ answers your monitoring question:
 Inside-guest runtime visibility is explicit. Installing the agent inside a VM or
 LXC authorizes that guest-local agent to report Docker/Podman monitoring data
 according to its local module flags. A Proxmox node agent does not look inside
-LXCs by default. It can collect Docker container inventory from LXC guests
+LXCs by default. Its automatic LXC filesystem collector is a node-local
+capacity query only: it runs `pct list`, then `pct df <vmid>` for guests already
+reported running, and reports mount keys, volume labels, mount paths, and
+capacity/usage numbers. It does not run a command inside the guest or read
+guest files, processes, environment, or container-runtime metadata. It skips
+guests reported stopped and bounds command time, output, guest count, and disk
+count.
+
+The node agent can collect Docker container inventory from LXC guests
 through `pct exec`, but only when the server is started with
 `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
 Inventory collection is disabled by default, can be VMID-allowlisted, and is

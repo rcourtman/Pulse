@@ -1173,6 +1173,11 @@ type Monitor struct {
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry
+	// Proxmox LXC filesystem cache: bounded pct df readings reported by an
+	// agent securely linked to the node that owns each running container.
+	proxmoxLXCFilesystemsMu    sync.RWMutex
+	proxmoxLXCFilesystemsCache map[string]agentLXCFilesystemCacheEntry
+
 	// Cluster sensor cache: temperature data collected by an agent on one Proxmox
 	// cluster node via SSH to its siblings. Keyed by lowercase node name.
 	clusterSensorsMu    sync.RWMutex
@@ -1677,6 +1682,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		hostReportApplyLocks:       make(map[string]*hostReportApplyLock),
 		hostReportOrders:           make(map[string]hostReportOrder),
 		clusterSensorsCache:        make(map[string]clusterSensorsCacheEntry),
+		proxmoxLXCFilesystemsCache: make(map[string]agentLXCFilesystemCacheEntry),
 		dockerCommands:             make(map[string]*dockerHostCommand),
 		dockerCommandIndex:         make(map[string]string),
 		guestMetadataCache:         make(map[string]guestMetadataCacheEntry),

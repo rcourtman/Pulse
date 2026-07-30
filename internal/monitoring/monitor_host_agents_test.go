@@ -867,6 +867,7 @@ func TestUnifiedAgentHostAndDockerReportsShareOneCanonicalMachine(t *testing.T) 
 			}
 		})
 	}
+
 }
 
 func TestDockerOnlyAgentRemainsWorkloadOnly(t *testing.T) {
@@ -4719,5 +4720,187 @@ func TestNormalizeAgentXCPNGInventoryBoundsAndPreservesFailures(t *testing.T) {
 	preserved.VMs[0].Name = "mutated"
 	if previous.XCPNG.VMs[0].Name != "Database" {
 		t.Fatal("preserved inventory aliases previous host state")
+	}
+}
+
+func TestAgentLXCFilesystemsRequireLinkedNodeAndExactRunningGuest(t *testing.T) {
+	now := time.Date(2026, 7, 30, 21, 0, 0, 0, time.UTC)
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{
+		ID:            "pve-a:node-a",
+		Name:          "node-a",
+		Instance:      "pve-a",
+		LinkedAgentID: "agent-a",
+	}})
+	monitor := &Monitor{state: state}
+	monitor.applyAgentLXCFilesystems(
+		"pve-a:node-a",
+		"agent-a",
+		&agentshost.ProxmoxLXCInventory{Containers: []agentshost.ProxmoxLXCContainer{{
+			VMID: 100,
+			Name: "web",
+			Disks: []agentshost.Disk{
+				{
+					Device:     "local-lvm:vm-100-disk-0",
+					Mountpoint: "/",
+					Type:       "rootfs",
+					TotalBytes: 8 << 30,
+					UsedBytes:  2 << 30,
+					FreeBytes:  6 << 30,
+					Usage:      99,
+				},
+				{
+					Device:     "tank:subvol-100-disk-0",
+					Mountpoint: "/srv/data",
+					Type:       "mp0",
+					TotalBytes: 1 << 40,
+					UsedBytes:  512 << 30,
+					FreeBytes:  512 << 30,
+				},
+				{
+					Device:     "invalid",
+					Mountpoint: "/srv/../etc",
+					Type:       "mp1",
+					TotalBytes: 1,
+				},
+			},
+		}}},
+		now,
+		30,
+	)
+
+	container := models.Container{
+		VMID:   100,
+		Name:   "web",
+		Status: "running",
+		Disk:   models.Disk{Total: 8 << 30, Used: 1 << 30, Mountpoint: "/"},
+	}
+	monitor.enrichContainerWithAgentLXCFilesystems("pve-a", "node-a", &container, now.Add(time.Minute))
+	if len(container.Disks) != 2 {
+		t.Fatalf("agent LXC disks = %+v", container.Disks)
+	}
+	if container.Disk.Used != 2<<30 || container.Disk.Usage != 25 {
+		t.Fatalf("agent root disk = %+v", container.Disk)
+	}
+	if container.Disks[1].Mountpoint != "/srv/data" || container.Disks[1].Type != "mp0" {
+		t.Fatalf("agent mount disk = %+v", container.Disks[1])
+	}
+
+	for _, test := range []struct {
+		name      string
+		instance  string
+		node      string
+		guestName string
+		status    string
+	}{
+		{name: "wrong instance", instance: "pve-b", node: "node-a", guestName: "web", status: "running"},
+		{name: "wrong node", instance: "pve-a", node: "node-b", guestName: "web", status: "running"},
+		{name: "renamed guest", instance: "pve-a", node: "node-a", guestName: "web-new", status: "running"},
+		{name: "stopped guest", instance: "pve-a", node: "node-a", guestName: "web", status: "stopped"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := models.Container{
+				VMID:   100,
+				Name:   test.guestName,
+				Status: test.status,
+				Disk:   models.Disk{Used: 1},
+			}
+			monitor.enrichContainerWithAgentLXCFilesystems(
+				test.instance,
+				test.node,
+				&candidate,
+				now.Add(time.Minute),
+			)
+			if len(candidate.Disks) != 0 || candidate.Disk.Used != 1 {
+				t.Fatalf("unmatched guest was enriched: %+v", candidate)
+			}
+		})
+	}
+
+	monitor.clearAgentLXCFilesystems("agent-a")
+	unlinked := models.Container{
+		VMID:   100,
+		Name:   "web",
+		Status: "running",
+		Disk:   models.Disk{Used: 1},
+	}
+	monitor.enrichContainerWithAgentLXCFilesystems(
+		"pve-a",
+		"node-a",
+		&unlinked,
+		now.Add(time.Minute),
+	)
+	if len(unlinked.Disks) != 0 || unlinked.Disk.Used != 1 {
+		t.Fatalf("removed agent cache was applied: %+v", unlinked)
+	}
+}
+
+func TestAgentLXCFilesystemsExpireAndRejectAmbiguousNodeLink(t *testing.T) {
+	now := time.Date(2026, 7, 30, 21, 0, 0, 0, time.UTC)
+	inventory := &agentshost.ProxmoxLXCInventory{Containers: []agentshost.ProxmoxLXCContainer{{
+		VMID: 100,
+		Name: "web",
+		Disks: []agentshost.Disk{{
+			Device:     "local-lvm:vm-100-disk-0",
+			Mountpoint: "/",
+			Type:       "rootfs",
+			TotalBytes: 8 << 30,
+			UsedBytes:  2 << 30,
+			FreeBytes:  6 << 30,
+		}},
+	}}}
+
+	ambiguousState := models.NewState()
+	ambiguousState.UpdateNodes([]models.Node{
+		{ID: "duplicate", Name: "node-a", Instance: "pve-a"},
+		{ID: "duplicate", Name: "node-b", Instance: "pve-b"},
+	})
+	ambiguousMonitor := &Monitor{state: ambiguousState}
+	ambiguousMonitor.applyAgentLXCFilesystems("duplicate", "agent-a", inventory, now, 30)
+	if len(ambiguousMonitor.proxmoxLXCFilesystemsCache) != 0 {
+		t.Fatalf("ambiguous node link was admitted: %+v", ambiguousMonitor.proxmoxLXCFilesystemsCache)
+	}
+
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{
+		ID:            "node-id",
+		Name:          "node-a",
+		Instance:      "pve-a",
+		LinkedAgentID: "agent-a",
+	}})
+	monitor := &Monitor{state: state}
+	monitor.applyAgentLXCFilesystems("node-id", "agent-a", inventory, now, 30)
+	container := models.Container{
+		VMID:   100,
+		Name:   "web",
+		Status: "running",
+		Disk:   models.Disk{Used: 1},
+	}
+	monitor.enrichContainerWithAgentLXCFilesystems(
+		"pve-a",
+		"node-a",
+		&container,
+		now.Add(agentLXCFilesystemMinTTL),
+	)
+	if len(container.Disks) != 0 || container.Disk.Used != 1 {
+		t.Fatalf("expired cache enriched guest: %+v", container)
+	}
+	if len(monitor.proxmoxLXCFilesystemsCache) != 0 {
+		t.Fatalf("expired cache entry was not removed: %+v", monitor.proxmoxLXCFilesystemsCache)
+	}
+
+	monitor.proxmoxLXCFilesystemsCache["expired-elsewhere"] = agentLXCFilesystemCacheEntry{
+		name:      "old",
+		expiresAt: now,
+	}
+	monitor.applyAgentLXCFilesystems(
+		"node-id",
+		"agent-a",
+		&agentshost.ProxmoxLXCInventory{},
+		now.Add(time.Second),
+		30,
+	)
+	if len(monitor.proxmoxLXCFilesystemsCache) != 0 {
+		t.Fatalf("accepted empty inventory did not prune expired entries: %+v", monitor.proxmoxLXCFilesystemsCache)
 	}
 }

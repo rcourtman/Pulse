@@ -39,6 +39,14 @@ the JSON output option must retry the same probe in parseable text mode; DSM
 standby evidence. Enumeration and each device probe have independent bounded
 deadlines so one slow disk cannot consume the complete SMART pass, while
 command errors retain bounded stderr for compatibility diagnosis.
+On a PVE node, the Unified Agent may also report the mounted filesystem
+capacity of running LXCs through the fixed local `pct list` and
+`pct df <vmid>` command set. This collector is automatic when `pct` is
+available, uses one shared deadline plus per-command byte ceilings, caps guest
+and disk counts, never accepts an unvalidated VMID as an argument, and does not
+invoke `pct df` for guests the preceding list reported stopped. The report
+carries VMID and exact container name so monitoring can reject stale migration
+or rename correlations.
 `internal/monitoring/monitor.go` also serializes shared unified-resource
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
@@ -98,6 +106,7 @@ observation.
    5e. `internal/agentexec/verifier_postconditions.go`
    5f. `pkg/agents/docker/report_limits.go`
    5g. `internal/hostagent/xcpng.go`
+   5h. `internal/hostagent/proxmox_lxc_filesystems.go`
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
