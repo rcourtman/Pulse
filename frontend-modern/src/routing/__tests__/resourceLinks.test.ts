@@ -8,6 +8,7 @@ import {
   EXTERNAL_AGENT_SETUP_ANCHOR,
   EXTERNAL_AGENT_SETUP_PATH,
   KUBERNETES_PATH,
+  KUBERNETES_QUERY_PARAMS,
   PMG_THRESHOLDS_PATH,
   PATROL_AUTONOMY_OPERATIONS_LOOP_PATH,
   PATROL_CONTROL_ANCHOR,
@@ -187,6 +188,7 @@ describe('resource link routing contract', () => {
     expect(buildKubernetesPath('services')).toBe('/kubernetes/services');
     expect(buildKubernetesPath('configuration')).toBe('/kubernetes/configuration');
     expect(buildKubernetesPath('pods')).toBe('/kubernetes/pods');
+    expect(KUBERNETES_QUERY_PARAMS.cluster).toBe('cluster');
 
     expect(TRUENAS_PATH).toBe('/truenas');
     expect(buildTrueNASPath()).toBe('/truenas/overview');

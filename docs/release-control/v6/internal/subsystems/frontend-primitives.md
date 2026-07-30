@@ -1359,6 +1359,21 @@ Agent`), with the plain-language source phrase available through accessible
    Jobs, and CronJobs, including targets, active/current counts,
    ready/succeeded counts, availability, exceptions, service names, schedules,
    and last run metadata.
+   Kubernetes Overview keeps the cluster inventory above the native workload
+   inventory so multi-cluster operators can orient and scope in one surface,
+   matching the Docker Overview host-to-container flow. Selecting a cluster
+   name writes the canonical `cluster` query parameter and scopes every
+   Deployment, Pod, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob, and
+   autoscaling section beneath it; selecting the active cluster again clears
+   that scope. The same URL-backed Cluster facet is available on Workloads,
+   Services, and Configuration and composes with the existing namespace,
+   search, and status parameters so saved views, bookmarks, and shared links
+   retain the complete scope. Changing cluster scope clears namespace scope to
+   prevent a namespace from the previous cluster from silently hiding all
+   rows. Cluster names remain separate from their external web-interface
+   control and detail disclosure: the name scopes inventory, the adjacent
+   external-link icon opens the persisted cluster URL, and the row continues
+   to own drawer expansion.
 7. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, surface-kind guesses, readiness-state guesses, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generated governance/readiness split is authoritative: supported platform arrays drive current support claims, while admitted platform arrays may keep route/navigation and add-flow vocabulary available without turning `first-lab-ready` entries such as VMware into supported-source copy. Kubernetes manifest projections must enumerate the native API-backed page sections the shared tab shell can expose, including controllers, networking, storage, config, policy, autoscaling, and events, so platform pages do not invent local support claims outside the governed JSON. The generated `surface_kind` is the machine-readable boundary between owning platform entries and runtime lenses: `docker` is a `runtime-lens`, not a `platform`, even when the container-runtime route stays available as a primary shell destination. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed runtime family, not the primary customer-facing label. Identity colour is semantic, not page-local decoration: shared source/platform badges, host identity badges, and container runtime badges must use the shared presentation helpers so Docker remains on the Docker/Podman blue runtime tone, Podman uses its distinct runtime tone, Proxmox PVE remains orange, and those meanings do not drift across table rows, filters, drawers, or platform pages. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
    The generated host-profile projection also carries runtime platform fallback
    metadata for shared explanation and parity with backend normalization, but

@@ -314,11 +314,16 @@ guest.
 Platform Overview tabs are rollup boundaries, not duplicate inventory dumps.
 Docker / Podman Overview owns runtime host rows and primary container workload
 rows; image, storage, network, and Swarm object rows belong in their workflow
-tabs. Kubernetes Overview owns cluster/control-plane rollup rows only; node,
-workload, service, storage, configuration, policy, and event object rows belong
-in their workflow tabs. If a future Overview repeats a detailed table, the
-owning workflow must be retired or the Overview content must be reduced to
-aggregate signal.
+tabs. Kubernetes Overview owns cluster/control-plane rollup rows followed by
+the primary native workload stack: Deployments, Pods, workload controllers,
+and autoscaling rows. That deliberate cluster-to-workload composition mirrors
+the Docker host-to-container Overview and shares the exact same URL-backed
+cluster, namespace, search, and status state as the Workloads workflow; it must
+not fork a second projection or filter model. Node, service, storage,
+configuration, policy, and event object rows remain in their workflow tabs.
+Any other future Overview that repeats a detailed table must retire the owning
+workflow, reduce the Overview content to aggregate signal, or establish an
+equally explicit shared-state contract.
 Cross-platform handoffs into the Docker / Podman Overview must preserve runtime
 scope when the source surface knows it. A Proxmox LXC drawer that links to the
 Docker runtime lens must carry the unambiguous Docker host facet as route state,

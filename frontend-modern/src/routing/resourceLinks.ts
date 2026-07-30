@@ -66,6 +66,7 @@ export const DOCKER_QUERY_PARAMS = {
 } as const;
 
 export const KUBERNETES_QUERY_PARAMS = {
+  cluster: 'cluster',
   namespace: 'namespace',
   query: 'q',
   status: 'status',

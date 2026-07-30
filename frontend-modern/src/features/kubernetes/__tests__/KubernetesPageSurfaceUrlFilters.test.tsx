@@ -92,6 +92,72 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     expect(screen.queryByText('checkout-api')).not.toBeInTheDocument();
   });
 
+  it('applies the URL cluster filter across workload sections', () => {
+    setResources([
+      makeResource({
+        id: 'west-api',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-west', clusterName: 'West', namespace: 'prod' },
+      }),
+      makeResource({
+        id: 'east-api',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-east', clusterName: 'East', namespace: 'prod' },
+      }),
+      makeResource({
+        id: 'west-pod',
+        type: 'pod',
+        kubernetes: { clusterId: 'cluster-west', clusterName: 'West', namespace: 'prod' },
+      }),
+      makeResource({
+        id: 'east-pod',
+        type: 'pod',
+        kubernetes: { clusterId: 'cluster-east', clusterName: 'East', namespace: 'prod' },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/workloads?cluster=cluster-west');
+
+    expect(screen.getByText('west-api')).toBeInTheDocument();
+    expect(screen.getByText('west-pod')).toBeInTheDocument();
+    expect(screen.queryByText('east-api')).not.toBeInTheDocument();
+    expect(screen.queryByText('east-pod')).not.toBeInTheDocument();
+  });
+
+  it('scopes the Overview workload inventory when a cluster name is selected', async () => {
+    setResources([
+      makeResource({
+        id: 'cluster-west',
+        type: 'k8s-cluster',
+        name: 'West',
+        kubernetes: { clusterId: 'cluster-west', clusterName: 'West' },
+      }),
+      makeResource({
+        id: 'cluster-east',
+        type: 'k8s-cluster',
+        name: 'East',
+        kubernetes: { clusterId: 'cluster-east', clusterName: 'East' },
+      }),
+      makeResource({
+        id: 'west-api',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-west', clusterName: 'West', namespace: 'prod' },
+      }),
+      makeResource({
+        id: 'east-api',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-east', clusterName: 'East', namespace: 'prod' },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/overview');
+    fireEvent.click(screen.getByRole('button', { name: 'Show workloads for West' }));
+
+    await waitFor(() => expect(window.location.search).toBe('?cluster=cluster-west'));
+    expect(screen.getByText('west-api')).toBeInTheDocument();
+    expect(screen.queryByText('east-api')).not.toBeInTheDocument();
+  });
+
   it('applies the URL search filter on the services tab', () => {
     setResources([
       makeResource({ id: 'checkout-svc', type: 'k8s-service' }),
@@ -116,7 +182,7 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     expect(screen.queryByText('cache-settings')).not.toBeInTheDocument();
   });
 
-  it('clears search, status, and namespace in one navigation on reset', async () => {
+  it('clears search, status, cluster, and namespace in one navigation on reset', async () => {
     setResources([
       makeResource({
         id: 'checkout-api',
@@ -131,13 +197,15 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
       }),
     ]);
 
-    renderSurfaceAt('/kubernetes/workloads?q=-cache&status=offline&namespace=prod');
+    renderSurfaceAt(
+      '/kubernetes/workloads?q=-cache&status=offline&cluster=cluster-1&namespace=prod',
+    );
 
     fireEvent.click(screen.getByLabelText('Clear all'));
 
     // A multi-write reset would leave earlier-cleared params resurrected by
     // later writes (each merges against the pre-navigation URL); the settled
-    // URL must lose all three params.
+    // URL must lose all four params.
     await waitFor(() => expect(window.location.search).toBe(''));
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
     expect(screen.getByText('cache-worker')).toBeInTheDocument();

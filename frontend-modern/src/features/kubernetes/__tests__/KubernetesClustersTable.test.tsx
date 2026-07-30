@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -147,5 +147,28 @@ describe('KubernetesClustersTable', () => {
     ));
 
     expect(screen.getByText('Pending uninstall')).toBeInTheDocument();
+  });
+
+  it('lets the overview scope workload inventory from the cluster name', () => {
+    const cluster = makeClusterResource();
+    const onSelectCluster = vi.fn();
+
+    render(() => (
+      <KubernetesClustersTable
+        clusters={[cluster]}
+        scope={[cluster]}
+        emptyIcon={<span />}
+        emptyTitle="No clusters"
+        emptyDescription="No clusters"
+        showToolbar={false}
+        selectedClusterId="prod-west"
+        onSelectCluster={onSelectCluster}
+      />
+    ));
+
+    const selector = screen.getByRole('button', { name: 'Show workloads for prod-west' });
+    expect(selector).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(selector);
+    expect(onSelectCluster).toHaveBeenCalledWith(cluster);
   });
 });

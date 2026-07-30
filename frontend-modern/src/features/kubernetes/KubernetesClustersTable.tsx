@@ -73,6 +73,8 @@ export const KubernetesClustersTable: Component<{
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  selectedClusterId?: string;
+  onSelectCluster?: (cluster: Resource) => void;
 }> = (props) => {
   const alertsActivation = useAlertsActivation();
   const tableState = createPlatformTableFilterState({
@@ -246,6 +248,10 @@ export const KubernetesClustersTable: Component<{
                       asTrimmedString(cluster.kubernetes?.clusterName) ||
                       asTrimmedString(cluster.name) ||
                       cluster.id;
+                    const clusterScopeId = () =>
+                      asTrimmedString(cluster.kubernetes?.clusterId) ||
+                      asTrimmedString(cluster.kubernetes?.clusterName) ||
+                      '';
                     const context = () => formatPlatformTableTextValue(cluster.kubernetes?.context);
                     const version = () => formatPlatformTableTextValue(cluster.kubernetes?.version);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(cluster);
@@ -305,7 +311,31 @@ export const KubernetesClustersTable: Component<{
                                 url={cluster.customUrl}
                                 class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
-                              />
+                              >
+                                <Show when={props.onSelectCluster} fallback={name()}>
+                                  <button
+                                    type="button"
+                                    class={`truncate rounded-sm text-left font-semibold underline-offset-2 hover:text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:text-blue-400 ${
+                                      props.selectedClusterId === clusterScopeId()
+                                        ? 'text-blue-600 dark:text-blue-400'
+                                        : 'text-base-content'
+                                    }`}
+                                    aria-label={`Show workloads for ${name()}`}
+                                    aria-pressed={
+                                      props.selectedClusterId === clusterScopeId()
+                                        ? 'true'
+                                        : 'false'
+                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      props.onSelectCluster?.(cluster);
+                                    }}
+                                    onKeyDown={(event) => event.stopPropagation()}
+                                  >
+                                    {name()}
+                                  </button>
+                                </Show>
+                              </ResourceNameWithWebInterfaceLink>
                               <Show when={cluster.kubernetes?.pendingUninstall === true}>
                                 <span class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                                   Pending uninstall

@@ -244,34 +244,57 @@ function countKubernetesVisible(
   return visible;
 }
 
-type KubernetesNamespaceScope = {
+type KubernetesInventoryScope = {
   scopedSections: Accessor<Resource[][]>;
   scopeFilters: Accessor<FilterDef[]>;
-  hasActiveNamespace: Accessor<boolean>;
+  hasActiveScope: Accessor<boolean>;
 };
 
-// Namespace scope for a shared-toolbar Kubernetes tab. Namespace is the primary
-// scoping axis and the shared toolbar drives several stacked tables at once, so
-// the facet pre-filters every section's resources rather than living on any one
-// table. URL-backed so it is shareable and captured by saved views; the facet
-// only appears when more than one namespace is present.
-function createKubernetesNamespaceScope(
+// Cluster and namespace scope for a shared-toolbar Kubernetes tab. The shared
+// toolbar drives several stacked tables at once, so both facets pre-filter every
+// section rather than living on any one table. URL-backed scope is shareable,
+// captured by saved views, and lets the Overview cluster table drive the
+// workload inventory beneath it.
+function createKubernetesInventoryScope(
   sections: Accessor<Resource[][]>,
-): KubernetesNamespaceScope {
+): KubernetesInventoryScope {
   const [searchParams, setSearchParams] = useSearchParams();
+  const clusterFilter = () => {
+    const value = searchParams[KUBERNETES_QUERY_PARAMS.cluster];
+    return typeof value === 'string' ? value : '';
+  };
   const namespaceFilter = () => {
     const value = searchParams[KUBERNETES_QUERY_PARAMS.namespace];
     return typeof value === 'string' ? value : '';
   };
+  const clusterOf = (resource: Resource) =>
+    (resource.kubernetes?.clusterId ?? resource.kubernetes?.clusterName ?? '').trim();
   const namespaceOf = (resource: Resource) => (resource.kubernetes?.namespace ?? '').trim();
+  const matchesCluster = (resource: Resource) => {
+    const cluster = clusterFilter();
+    return !cluster || clusterOf(resource) === cluster;
+  };
   const matchesNamespace = (resource: Resource) => {
     const namespace = namespaceFilter();
     return !namespace || namespaceOf(resource) === namespace;
   };
+  const clusterOptions = createMemo(() => {
+    const clusters = new Map<string, string>();
+    for (const section of sections()) {
+      for (const resource of section) {
+        const value = clusterOf(resource);
+        if (!value) continue;
+        const label = (resource.kubernetes?.clusterName ?? value).trim() || value;
+        if (!clusters.has(value)) clusters.set(value, label);
+      }
+    }
+    return [...clusters.entries()].sort((left, right) => left[1].localeCompare(right[1]));
+  });
   const namespaceOptions = createMemo(() => {
     const seen = new Set<string>();
     for (const section of sections()) {
       for (const resource of section) {
+        if (!matchesCluster(resource)) continue;
         const namespace = namespaceOf(resource);
         if (namespace) seen.add(namespace);
       }
@@ -279,12 +302,32 @@ function createKubernetesNamespaceScope(
     return [...seen].sort((a, b) => a.localeCompare(b));
   });
   const scopedSections = createMemo<Resource[][]>(() =>
-    sections().map((rows) => rows.filter(matchesNamespace)),
+    sections().map((rows) =>
+      rows.filter((resource) => matchesCluster(resource) && matchesNamespace(resource)),
+    ),
   );
   const scopeFilters = createMemo<FilterDef[]>(() => {
-    if (namespaceOptions().length <= 1) return [];
-    return [
-      {
+    const filters: FilterDef[] = [];
+    if (clusterOptions().length > 1) {
+      filters.push({
+        id: 'cluster',
+        label: 'Cluster',
+        group: 'scope',
+        options: () => [
+          { value: '', label: 'All clusters' },
+          ...clusterOptions().map(([value, label]) => ({ value, label })),
+        ],
+        value: clusterFilter,
+        setValue: (value: string) =>
+          setSearchParams({
+            [KUBERNETES_QUERY_PARAMS.cluster]: value || null,
+            [KUBERNETES_QUERY_PARAMS.namespace]: null,
+          }),
+        defaultValue: '',
+      });
+    }
+    if (namespaceOptions().length > 1) {
+      filters.push({
         id: 'namespace',
         label: 'Namespace',
         group: 'scope',
@@ -296,13 +339,14 @@ function createKubernetesNamespaceScope(
         setValue: (value: string) =>
           setSearchParams({ [KUBERNETES_QUERY_PARAMS.namespace]: value || null }),
         defaultValue: '',
-      },
-    ];
+      });
+    }
+    return filters;
   });
   return {
     scopedSections,
     scopeFilters,
-    hasActiveNamespace: () => namespaceFilter() !== '',
+    hasActiveScope: () => clusterFilter() !== '' || namespaceFilter() !== '',
   };
 }
 
@@ -319,9 +363,9 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
   ]);
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
 
-  // Namespace scope applies across every workload section at once (see the
-  // shared helper). Section order here defines the scoped accessors below.
-  const scope = createKubernetesNamespaceScope(sections);
+  // Cluster and namespace scope apply across every workload section at once
+  // (see the shared helper). Section order defines the scoped accessors below.
+  const scope = createKubernetesInventoryScope(sections);
   const scopedDeployments = () => scope.scopedSections()[0];
   const scopedPods = () => scope.scopedSections()[1];
   const scopedControllers = () => scope.scopedSections()[2];
@@ -330,8 +374,12 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
   const visibleRows = createMemo(() =>
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () => toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
+  const resetFilters = () =>
+    toolbar.resetFilters({
+      [KUBERNETES_QUERY_PARAMS.cluster]: null,
+      [KUBERNETES_QUERY_PARAMS.namespace]: null,
+    });
 
   return (
     <Show
@@ -419,14 +467,18 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
     props.model.serviceNetworking,
   ]);
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
-  const scope = createKubernetesNamespaceScope(sections);
+  const scope = createKubernetesInventoryScope(sections);
   const scopedServices = () => scope.scopedSections()[0];
   const scopedNetworking = () => scope.scopedSections()[1];
   const visibleRows = createMemo(() =>
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () => toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
+  const resetFilters = () =>
+    toolbar.resetFilters({
+      [KUBERNETES_QUERY_PARAMS.cluster]: null,
+      [KUBERNETES_QUERY_PARAMS.namespace]: null,
+    });
 
   return (
     <Show
@@ -489,14 +541,18 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
   const toolbar = createKubernetesSharedToolbar();
   const sections = createMemo<Resource[][]>(() => [props.model.config, props.model.policy]);
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
-  const scope = createKubernetesNamespaceScope(sections);
+  const scope = createKubernetesInventoryScope(sections);
   const scopedConfig = () => scope.scopedSections()[0];
   const scopedPolicy = () => scope.scopedSections()[1];
   const visibleRows = createMemo(() =>
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () => toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
+  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
+  const resetFilters = () =>
+    toolbar.resetFilters({
+      [KUBERNETES_QUERY_PARAMS.cluster]: null,
+      [KUBERNETES_QUERY_PARAMS.namespace]: null,
+    });
 
   return (
     <Show
@@ -553,6 +609,7 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
 }
 
 function KubernetesOverview(props: KubernetesOverviewProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const posture = createMemo(() => buildKubernetesOverviewPosture(props.model()));
   const needsAttention = () => posture().attentionResources > 0 || posture().attentionSignals > 0;
   const workloadAttention = () => posture().podAttention + posture().deploymentAttention;
@@ -608,6 +665,24 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         emptyTitle="No clusters reported"
         emptyDescription="Kubernetes clusters appear here once at least one agent reports cluster context."
         showToolbar={false}
+        selectedClusterId={
+          typeof searchParams[KUBERNETES_QUERY_PARAMS.cluster] === 'string'
+            ? searchParams[KUBERNETES_QUERY_PARAMS.cluster]
+            : ''
+        }
+        onSelectCluster={(cluster) => {
+          const clusterId =
+            cluster.kubernetes?.clusterId?.trim() || cluster.kubernetes?.clusterName?.trim() || '';
+          setSearchParams({
+            [KUBERNETES_QUERY_PARAMS.cluster]:
+              searchParams[KUBERNETES_QUERY_PARAMS.cluster] === clusterId ? null : clusterId,
+            [KUBERNETES_QUERY_PARAMS.namespace]: null,
+          });
+        }}
+      />
+      <KubernetesWorkloads
+        model={props.model()}
+        controllers={getKubernetesControllerResources(props.model())}
       />
       <Show when={props.model().incidents.length > 0}>
         <div id="kubernetes-health-signals">
