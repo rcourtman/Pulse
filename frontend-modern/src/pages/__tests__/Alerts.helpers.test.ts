@@ -1065,6 +1065,8 @@ describe('normalizeEmailConfigFromAPI', () => {
       maxRetries: 3,
       retryDelay: 5,
       rateLimit: 0,
+      tagFilter: [],
+      tagFilterMode: 'all',
     });
   });
 
@@ -1100,6 +1102,8 @@ describe('normalizeEmailConfigFromAPI', () => {
       maxRetries: 3,
       retryDelay: 5,
       rateLimit: 60,
+      tagFilter: [],
+      tagFilterMode: 'all',
     });
   });
 });
