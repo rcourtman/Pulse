@@ -44,6 +44,14 @@ func TestBearerAPITokenScopesDenyReadWriteAndExecRoutes(t *testing.T) {
 			wantScopeHint: config.ScopeSettingsWrite,
 		},
 		{
+			name:          "scope update route missing settings write",
+			method:        http.MethodPatch,
+			path:          "/api/security/tokens/token-1",
+			body:          `{"scopes":["monitoring:read"]}`,
+			token:         "bearer-write-token-123.12345678",
+			wantScopeHint: config.ScopeSettingsWrite,
+		},
+		{
 			name:          "exec route missing ai execute",
 			method:        http.MethodPost,
 			path:          "/api/ai/execute",

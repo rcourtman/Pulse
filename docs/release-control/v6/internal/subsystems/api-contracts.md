@@ -7583,7 +7583,7 @@ top-level preset array that can reintroduce settings-chunk initialization-order
 failures in production bundles.
 That same boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so token load/create/
-revoke errors keep one governed customer-facing message source instead of
+update/revoke errors keep one governed customer-facing message source instead of
 reappearing as hook-local strings.
 That same token surface, together with `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and
@@ -7611,9 +7611,18 @@ shared setup helpers must not point API responses or runtime guidance at
 GitHub `main` for security instructions that the running build already serves
 locally; those references belong on the shipped `/docs/SECURITY.md` path.
 That same governed token contract must fail closed on mutation. Limited-scope
-API tokens may only create, rotate, or delete tokens whose effective scopes
-are a subset of the caller's own scopes; token-management routes must not let a
-settings-capable but narrower token revoke or replace a broader credential.
+API tokens may only create, update, rotate, or delete tokens whose effective
+scopes are a subset of the caller's own scopes; token-management routes must
+not let a settings-capable but narrower token revoke, narrow, or replace a
+broader credential. `PATCH /api/security/tokens/<id>` requires an explicit
+non-empty canonical `scopes` array and checks both the target's existing scope
+set and the requested scope set against token-authenticated caller authority.
+A successful patch preserves token identity, secret hash, expiry, metadata,
+and organization bindings, takes effect on the next request, and returns the
+updated metadata record without exposing or rotating the raw secret. The
+mutation must emit a `token_updated` audit event containing the old and new
+scope sets, and a persistence failure must restore the complete in-memory
+record before returning failure.
 Those owner-bound credentials now also define the effective authenticated
 principal on governed API routes: when token metadata carries `ownerUserId`,
 RBAC and audit-facing auth resolution must use that bound user identity rather

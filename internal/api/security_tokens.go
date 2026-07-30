@@ -293,6 +293,10 @@ type createTokenRequest struct {
 	ExpiresIn *string   `json:"expiresIn,omitempty"` // e.g. "24h", "720h", "8760h"
 }
 
+type updateTokenRequest struct {
+	Scopes *[]string `json:"scopes"`
+}
+
 func (r *Router) auditTokenEvent(req *http.Request, event string, success bool, details string) {
 	user := internalauth.GetUser(req.Context())
 	if user == "" && r != nil && r.config != nil {
@@ -366,6 +370,119 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 	json.NewEncoder(w).Encode(map[string]any{
 		"token":  rawToken,
 		"record": toAPITokenDTO(*record),
+	})
+}
+
+// handleUpdateAPIToken changes an API token's scopes without rotating its secret.
+func (r *Router) handleUpdateAPIToken(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPatch {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tokenID := strings.TrimSpace(strings.TrimPrefix(req.URL.Path, "/api/security/tokens/"))
+	if tokenID == "" || strings.Contains(tokenID, "/") {
+		r.auditTokenEvent(req, "token_updated", false, "Missing or invalid API token ID in update request")
+		http.Error(w, "Token ID required", http.StatusBadRequest)
+		return
+	}
+
+	var payload updateTokenRequest
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Failed to decode scope update for token id=%s", tokenID))
+		log.Warn().Err(err).Str("token_id", tokenID).Msg("Failed to decode API token update request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if payload.Scopes == nil {
+		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Missing scopes field for token id=%s", tokenID))
+		http.Error(w, "Scopes field required", http.StatusBadRequest)
+		return
+	}
+
+	scopes, err := normalizeRequestedScopes(payload.Scopes)
+	if err != nil {
+		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Invalid scope update for token id=%s", tokenID))
+		log.Warn().Err(err).Str("token_id", tokenID).Msg("Invalid scopes provided for API token update")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
+	tokenIndex := -1
+	for idx := range r.config.APITokens {
+		if r.config.APITokens[idx].ID == tokenID {
+			tokenIndex = idx
+			break
+		}
+	}
+	if tokenIndex == -1 {
+		r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("API token id=%s not found for update", tokenID))
+		http.Error(w, "Token not found", http.StatusNotFound)
+		return
+	}
+
+	storedRecord := r.config.APITokens[tokenIndex]
+	oldRecord := storedRecord.Clone()
+
+	// A token-authenticated caller must be able to control both sides of the
+	// transition. Checking the existing scopes prevents a limited caller from
+	// narrowing or otherwise mutating a more privileged credential; checking
+	// the requested scopes prevents widening a token beyond the caller's own
+	// authority, including when editing itself.
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil {
+		for _, scope := range oldRecord.Scopes {
+			if !callerToken.HasScope(scope) {
+				r.auditTokenEvent(req, "token_updated", false,
+					fmt.Sprintf("Scope update denied: caller missing existing scope %q on target token id=%s", scope, tokenID))
+				http.Error(w, fmt.Sprintf("Cannot update token with scope %q: your token does not have this scope", scope), http.StatusForbidden)
+				return
+			}
+		}
+		for _, scope := range scopes {
+			if !callerToken.HasScope(scope) {
+				r.auditTokenEvent(req, "token_updated", false,
+					fmt.Sprintf("Scope update denied: caller cannot grant scope %q on target token id=%s", scope, tokenID))
+				http.Error(w, fmt.Sprintf("Cannot grant scope %q: your token does not have this scope", scope), http.StatusForbidden)
+				return
+			}
+		}
+	}
+
+	r.config.APITokens[tokenIndex].Scopes = append([]string(nil), scopes...)
+	if r.persistence != nil {
+		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+			r.config.APITokens[tokenIndex] = storedRecord
+			r.auditTokenEvent(req, "token_updated", false, fmt.Sprintf("Failed to persist scope update for token id=%s", tokenID))
+			log.Error().Err(err).Str("token_id", tokenID).Msg("Failed to persist API token scope update")
+			http.Error(w, "Failed to save token", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	updatedRecord := r.config.APITokens[tokenIndex]
+	r.auditTokenEvent(req, "token_updated", true,
+		fmt.Sprintf(
+			"Updated API token id=%s old_scopes=%s new_scopes=%s",
+			tokenID,
+			strings.Join(oldRecord.Scopes, ","),
+			strings.Join(updatedRecord.Scopes, ","),
+		))
+
+	log.Info().
+		Str("audit_event", "token_updated").
+		Str("token_id", tokenID).
+		Str("token_name", updatedRecord.Name).
+		Strs("old_scopes", oldRecord.Scopes).
+		Strs("new_scopes", updatedRecord.Scopes).
+		Str("client_ip", req.RemoteAddr).
+		Msg("API token scopes updated")
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"record": toAPITokenDTO(updatedRecord),
 	})
 }
 

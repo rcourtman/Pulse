@@ -636,6 +636,17 @@ In Docker installs, the response includes a restart notice.
 { "name": "ansible-script", "scopes": ["monitoring:read"] }
 ```
 
+### Edit API Token Scopes
+`PATCH /api/security/tokens/<id>`
+```json
+{ "scopes": ["monitoring:read", "settings:read"] }
+```
+
+The `scopes` field is required and must contain at least one known scope.
+Wildcard access (`"*"`) cannot be combined with other scopes. The update takes
+effect on the token's next request without changing its ID, secret, expiry, or
+organization bindings.
+
 ### Revoke Token
 `DELETE /api/security/tokens/<id>`
 

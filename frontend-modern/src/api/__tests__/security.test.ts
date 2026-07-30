@@ -209,6 +209,31 @@ describe('SecurityAPI', () => {
     });
   });
 
+  describe('updateTokenScopes', () => {
+    it('patches an encoded token id and returns the updated record', async () => {
+      const updated: APITokenRecord = {
+        id: 'token/1',
+        name: 'Automation',
+        prefix: 'pulse',
+        suffix: '1234',
+        createdAt: '2026-07-30T10:00:00Z',
+        scopes: ['monitoring:read', 'settings:read'],
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ record: updated });
+
+      const result = await SecurityAPI.updateTokenScopes('token/1', [
+        'monitoring:read',
+        'settings:read',
+      ]);
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/tokens/token%2F1', {
+        method: 'PATCH',
+        body: JSON.stringify({ scopes: ['monitoring:read', 'settings:read'] }),
+      });
+      expect(result).toEqual(updated);
+    });
+  });
+
   describe('deleteToken', () => {
     it('deletes a token', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);

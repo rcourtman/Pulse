@@ -64,6 +64,21 @@ export function getAPITokenRevokeErrorMessage(): string {
   return 'Unable to revoke the API token.';
 }
 
+export function getAPITokenUpdateErrorMessage(error?: unknown): string {
+  if (error && typeof error === 'object') {
+    const typedError = error as APITokenErrorShape;
+    const message = typedError.message?.trim();
+    if (
+      typedError.status === 403 &&
+      message &&
+      (message.startsWith('Cannot grant scope') || message.startsWith('Cannot update token'))
+    ) {
+      return message;
+    }
+  }
+  return 'Unable to update API token scopes.';
+}
+
 export function getAPITokenDockerPodmanUsageCountLabel(count: number): string {
   return count === 1
     ? API_TOKEN_DOCKER_PODMAN_RUNTIME_LABEL

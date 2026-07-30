@@ -273,10 +273,15 @@ instead of reporting drift against a token that cannot execute.
 Install tokens for the generic host agent flow are minted server-side through
 the agent install command endpoint. The server decides the token's scopes from
 the operator's command-execution choice at mint time, because scopes are never
-upgraded on an existing token, and stamps the install-type and issuance
-metadata that make the token eligible for one first-use command-channel
-binding. Frontend surfaces may choose whether commands are requested but must
-not compose install-token scope lists themselves.
+upgraded implicitly by an install or repair flow, and stamps the install-type
+and issuance metadata that make the token eligible for one first-use
+command-channel binding. The operator-owned
+`PATCH /api/security/tokens/<id>` scope editor is a separate API/security
+mutation: it may deliberately change an installed agent token's live
+authority, but agent lifecycle code must not call it to auto-upgrade, repair,
+or reconcile command permissions. Frontend install surfaces may choose whether
+commands are requested for a newly minted credential but must not compose
+install-token scope lists themselves.
 
 PVE node setup shared boundaries that render or copy `PulseMonitor`
 permissions must treat `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` as

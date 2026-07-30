@@ -292,6 +292,10 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
+		if req.Method == http.MethodPatch {
+			r.handleUpdateAPIToken(w, req)
+			return
+		}
 		if strings.HasSuffix(req.URL.Path, "/rotate") && req.Method == http.MethodPost {
 			r.handleRotateAPIToken(w, req)
 			return

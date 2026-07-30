@@ -3332,7 +3332,10 @@ pressed button shell and `aria-pressed` wiring, while
 `frontend-modern/src/components/shared/selectablePillModel.ts` owns the active
 and inactive pill class catalog. API token scope surfaces may own the security
 scope labels and click handlers, but must not recreate rounded-full selector
-pill class strings locally.
+pill class strings locally. A token's in-place scope editor may use semantic
+native checkboxes because it is a multi-select form checklist rather than a
+pressed pill selector; it must not imitate or fork the selectable-pill class
+catalog.
 Filter-toolbar segmented controls must delegate to this primitive rather than
 calling `segmentedButtonClass` directly, and icon+text labels must render as
 one inline-flex button label so compact bars keep the v5 single-line control

@@ -119,6 +119,11 @@ with missing, unknown, or unrelated scopes fail closed.
    Full access is a deliberate wildcard choice, not the default empty
    selection. The token creation form must require an explicit scoped preset,
    custom scope, or Full access selection before a credential can be minted.
+   Existing token rows may open an explicit checkbox checklist for in-place
+   scope editing. That editor must initialize from the token's effective live
+   scopes, preserve wildcard exclusivity, reject empty or unchanged
+   submissions, state that the token value does not rotate, and keep the
+   dialog open when the backend rejects the transition.
    Stable in-page anchors for sibling API Access onboarding panels are allowed
    only as navigation into the token creation section; those sibling panels do
    not own token scope derivation or preset contents.
@@ -1297,6 +1302,14 @@ That same trust boundary also governs API token scope identity: legacy
 migration boundaries, where they must be rewritten immediately into canonical
 `agent:*` scopes. Live token records and runtime scope checks may not keep the
 legacy scope names as an active second contract.
+In-place token scope mutation belongs to that same boundary.
+`PATCH /api/security/tokens/<id>` must require `settings:write`, normalize and
+validate the complete replacement scope set, and prevent token-authenticated
+callers from controlling a target whose existing authority exceeds their own
+or granting authority they do not hold. Successful edits preserve the token
+secret and all identity/binding metadata, apply to the next request, and
+record both sides of the transition in a `token_updated` audit event without
+including a raw secret or hash.
 Update-readiness checks may inspect loaded API token metadata to determine
 whether agent reporting scope exists or has expired, but they must not expose
 raw token values, token hashes, or owner metadata in the update plan payload.

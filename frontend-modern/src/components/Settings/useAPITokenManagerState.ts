@@ -26,6 +26,7 @@ import {
   getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
   getAPITokenRevokeErrorMessage,
+  getAPITokenUpdateErrorMessage,
 } from '@/utils/apiTokenPresentation';
 import { logger } from '@/utils/logger';
 import { getPulseBaseUrl } from '@/utils/url';
@@ -73,6 +74,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [tokensLoaded, setTokensLoaded] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
   const [isGenerating, setIsGenerating] = createSignal(false);
+  const [updatingTokenId, setUpdatingTokenId] = createSignal<string | null>(null);
   const [newTokenValue, setNewTokenValue] = createSignal<string | null>(null);
   const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
   const [nameInput, setNameInput] = createSignal('');
@@ -391,6 +393,28 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     }
   };
 
+  const handleUpdateScopes = async (record: APITokenRecord, scopes: string[]) => {
+    if (!canManage() || scopes.length === 0 || updatingTokenId() !== null) return false;
+
+    setUpdatingTokenId(record.id);
+    try {
+      const updated = await SecurityAPI.updateTokenScopes(record.id, [...scopes].sort());
+      setTokens((previous) => previous.map((token) => (token.id === updated.id ? updated : token)));
+      if (newTokenRecord()?.id === updated.id) {
+        setNewTokenRecord(updated);
+      }
+      notificationStore.success(`Scopes updated for ${getAPITokenDialogName(updated)}.`);
+      props.onTokensChanged?.();
+      return true;
+    } catch (err) {
+      logger.error('Failed to update API token scopes', err);
+      notificationStore.error(getAPITokenUpdateErrorMessage(err));
+      return false;
+    } finally {
+      setUpdatingTokenId(null);
+    }
+  };
+
   const isRevealActiveForCurrentToken = () => {
     const active = tokenRevealState();
     return newTokenValue() !== null && Boolean(active && active.token === newTokenValue());
@@ -447,10 +471,12 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     formatRelativeTime,
     handleDelete,
     handleGenerate,
+    handleUpdateScopes,
     hasWildcardTokens,
     hasScopeSelection,
     isFullAccessSelected,
     isGenerating,
+    updatingTokenId,
     isRevealActiveForCurrentToken,
     loading,
     nameInput,

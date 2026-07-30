@@ -49,6 +49,17 @@ export class SecurityAPI {
     });
   }
 
+  static async updateTokenScopes(id: string, scopes: string[]): Promise<APITokenRecord> {
+    const response = await apiFetchJSON<{ record: APITokenRecord }>(
+      `/api/security/tokens/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ scopes }),
+      },
+    );
+    return response.record;
+  }
+
   static async deleteToken(id: string): Promise<void> {
     await apiFetchJSON(`/api/security/tokens/${encodeURIComponent(id)}`, {
       method: 'DELETE',

@@ -26,6 +26,8 @@ interface APITokenManagerProps {
 
 export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokenToRevoke, setTokenToRevoke] = createSignal<APITokenRecord | null>(null);
+  const [tokenToEdit, setTokenToEdit] = createSignal<APITokenRecord | null>(null);
+  const [editScopes, setEditScopes] = createSignal<string[]>([]);
   const {
     API_SCOPE_LABELS,
     API_TOKEN_SCOPES_DOC_URL,
@@ -43,6 +45,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     formatRelativeTime,
     handleDelete,
     handleGenerate,
+    handleUpdateScopes,
     hasWildcardTokens,
     hasScopeSelection,
     isFullAccessSelected,
@@ -64,9 +67,55 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     tokenHint,
     toggleScope,
     totalTokens,
+    updatingTokenId,
     wildcardCount,
     presetMatchesSelection,
   } = useAPITokenManagerState(props);
+
+  const effectiveScopes = (token: APITokenRecord) =>
+    token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
+
+  const openScopeEditor = (token: APITokenRecord) => {
+    setEditScopes([...effectiveScopes(token)]);
+    setTokenToEdit(token);
+  };
+
+  const closeScopeEditor = () => {
+    if (updatingTokenId() !== null) return;
+    setTokenToEdit(null);
+    setEditScopes([]);
+  };
+
+  const toggleEditScope = (scope: string) => {
+    setEditScopes((previous) => {
+      if (scope === '*') {
+        return previous.includes('*') ? [] : ['*'];
+      }
+      const scoped = previous.filter((value) => value !== '*');
+      if (scoped.includes(scope)) {
+        return scoped.filter((value) => value !== scope);
+      }
+      return [...scoped, scope];
+    });
+  };
+
+  const scopeSelectionKey = (scopes: string[]) => Array.from(new Set(scopes)).sort().join('\u0000');
+
+  const editScopesChanged = () => {
+    const token = tokenToEdit();
+    return token
+      ? scopeSelectionKey(editScopes()) !== scopeSelectionKey(effectiveScopes(token))
+      : false;
+  };
+
+  const saveEditedScopes = async () => {
+    const token = tokenToEdit();
+    if (!token || editScopes().length === 0 || !editScopesChanged()) return;
+    if (await handleUpdateScopes(token, editScopes())) {
+      setTokenToEdit(null);
+      setEditScopes([]);
+    }
+  };
 
   return (
     <div class="space-y-5">
@@ -389,16 +438,27 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               },
               {
                 key: 'action',
-                label: 'Action',
+                label: 'Actions',
                 align: 'right',
                 render: (token) => (
-                  <button
-                    onClick={() => setTokenToRevoke(token)}
-                    disabled={!canManage()}
-                    class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
-                  >
-                    Revoke
-                  </button>
+                  <div class="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openScopeEditor(token)}
+                      disabled={!canManage()}
+                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200"
+                    >
+                      Edit scopes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTokenToRevoke(token)}
+                      disabled={!canManage()}
+                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                    >
+                      Revoke
+                    </button>
+                  </div>
                 ),
               },
             ]}
@@ -558,6 +618,106 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           Scope reference
         </ExternalTextLink>
       </Card>
+
+      <Show when={tokenToEdit()}>
+        <Dialog
+          isOpen={true}
+          onClose={closeScopeEditor}
+          panelClass="max-w-2xl"
+          ariaLabel="Edit API token scopes"
+        >
+          <div class="w-full space-y-5 p-6">
+            <div>
+              <h3 class="text-lg font-semibold text-base-content">Edit token scopes</h3>
+              <p class="mt-1 text-sm text-muted">
+                Changes to{' '}
+                <span class="font-medium text-base-content">
+                  {tokenToEdit()!.name || tokenToEdit()!.id}
+                </span>{' '}
+                take effect on its next request. The token value and expiry do not change.
+              </p>
+            </div>
+
+            <label class="flex cursor-pointer items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-900">
+              <input
+                type="checkbox"
+                checked={editScopes().includes('*')}
+                onChange={() => toggleEditScope('*')}
+                disabled={updatingTokenId() !== null}
+                class="mt-0.5 h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500"
+              />
+              <span>
+                <span class="block font-semibold text-amber-900 dark:text-amber-100">
+                  Full access
+                </span>
+                <span class="text-amber-800 dark:text-amber-200">
+                  Legacy wildcard access to every API capability.
+                </span>
+              </span>
+            </label>
+
+            <div class="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
+              <For each={scopeGroups()}>
+                {([group, options]) => (
+                  <fieldset class="space-y-2">
+                    <legend class="text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
+                      {group}
+                    </legend>
+                    <div class="grid gap-2 sm:grid-cols-2">
+                      <For each={options}>
+                        {(option) => (
+                          <label class="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 text-sm transition hover:bg-surface-hover">
+                            <input
+                              type="checkbox"
+                              checked={editScopes().includes(option.value)}
+                              onChange={() => toggleEditScope(option.value)}
+                              disabled={updatingTokenId() !== null}
+                              class="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
+                            />
+                            <span>
+                              <span class="block font-medium text-base-content">
+                                {option.label}
+                              </span>
+                              <span class="text-xs text-muted">{option.description}</span>
+                            </span>
+                          </label>
+                        )}
+                      </For>
+                    </div>
+                  </fieldset>
+                )}
+              </For>
+            </div>
+
+            <Show when={editScopes().length === 0}>
+              <p class="text-sm text-red-600 dark:text-red-300">
+                Select at least one scope before saving.
+              </p>
+            </Show>
+
+            <div class="flex justify-end gap-3 border-t border-border pt-4">
+              <button
+                type="button"
+                onClick={closeScopeEditor}
+                disabled={updatingTokenId() !== null}
+                class="rounded-md border border-border px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveEditedScopes()}
+                disabled={
+                  editScopes().length === 0 || !editScopesChanged() || updatingTokenId() !== null
+                }
+                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {updatingTokenId() !== null ? 'Saving…' : 'Save scopes'}
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      </Show>
 
       {/* Revoke confirmation modal — token deletion is irreversible
           and breaks any agents/integrations relying on the token,

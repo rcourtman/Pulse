@@ -17,6 +17,7 @@ import {
   getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
   getAPITokenRevokeErrorMessage,
+  getAPITokenUpdateErrorMessage,
 } from '@/utils/apiTokenPresentation';
 
 describe('apiTokenPresentation', () => {
@@ -24,6 +25,7 @@ describe('apiTokenPresentation', () => {
     expect(getAPITokensLoadErrorMessage()).toBe('Unable to load API tokens.');
     expect(getAPITokenGenerateErrorMessage()).toBe('Unable to generate the API token.');
     expect(getAPITokenRevokeErrorMessage()).toBe('Unable to revoke the API token.');
+    expect(getAPITokenUpdateErrorMessage()).toBe('Unable to update API token scopes.');
   });
 
   it('returns canonical API token settings location copy', () => {
@@ -80,6 +82,20 @@ describe('apiTokenPresentation', () => {
     expect(getAPITokenGenerateErrorMessage(error)).toBe(
       'Cannot grant scope "monitoring:read": your token does not have this scope',
     );
+  });
+
+  it('surfaces token scope denial copy for update failures', () => {
+    const grantError = Object.assign(
+      new Error('Cannot grant scope "monitoring:write": your token does not have this scope'),
+      { status: 403 },
+    );
+    const targetError = Object.assign(
+      new Error('Cannot update token with scope "*": your token does not have this scope'),
+      { status: 403 },
+    );
+
+    expect(getAPITokenUpdateErrorMessage(grantError)).toBe(grantError.message);
+    expect(getAPITokenUpdateErrorMessage(targetError)).toBe(targetError.message);
   });
 
   it('surfaces required scope when middleware returns missing_scope', () => {

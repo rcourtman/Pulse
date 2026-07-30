@@ -23,6 +23,7 @@ import { APITokenManager } from '../APITokenManager';
 
 const listTokensMock = vi.fn();
 const createTokenMock = vi.fn();
+const updateTokenScopesMock = vi.fn();
 const deleteTokenMock = vi.fn();
 const fetchAgentCapabilitiesManifestMock = vi.fn();
 const notificationSuccessMock = vi.fn();
@@ -39,6 +40,7 @@ vi.mock('@/api/security', () => ({
   SecurityAPI: {
     listTokens: (...args: unknown[]) => listTokensMock(...args),
     createToken: (...args: unknown[]) => createTokenMock(...args),
+    updateTokenScopes: (...args: unknown[]) => updateTokenScopesMock(...args),
     deleteToken: (...args: unknown[]) => deleteTokenMock(...args),
   },
 }));
@@ -148,6 +150,7 @@ describe('APITokenManager', () => {
   beforeEach(() => {
     listTokensMock.mockReset();
     createTokenMock.mockReset();
+    updateTokenScopesMock.mockReset();
     deleteTokenMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
@@ -195,6 +198,9 @@ describe('APITokenManager', () => {
       }),
     });
     deleteTokenMock.mockResolvedValue(undefined);
+    updateTokenScopesMock.mockImplementation(
+      async (id: string, scopes: string[]): Promise<APITokenRecord> => makeToken({ id, scopes }),
+    );
   });
 
   afterEach(() => {
@@ -526,6 +532,112 @@ describe('APITokenManager', () => {
       expect(screen.queryByText('Runtime token')).not.toBeInTheDocument();
       expect(screen.getByText('Unused token')).toBeInTheDocument();
     });
+  });
+
+  it('edits a token scope set in place without rotating or revoking it', async () => {
+    const onTokensChanged = vi.fn();
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'token-edit',
+        name: 'Editable token',
+        scopes: [DOCKER_REPORT_SCOPE],
+      }),
+    ]);
+    updateTokenScopesMock.mockResolvedValue(
+      makeToken({
+        id: 'token-edit',
+        name: 'Editable token',
+        scopes: [MONITORING_READ_SCOPE],
+      }),
+    );
+
+    render(() => <APITokenManager onTokensChanged={onTokensChanged} canManage />);
+
+    const tokenName = await screen.findByText('Editable token');
+    const row = tokenName.closest('tr');
+    expect(row).toBeTruthy();
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', { name: 'Edit scopes' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    expect(within(dialog).getByText(/take effect on its next request/i)).toBeInTheDocument();
+    const dockerReport = within(dialog).getByRole('checkbox', {
+      name: /Docker \/ Podman reporting/i,
+    });
+    const monitoringRead = within(dialog).getByRole('checkbox', {
+      name: /Monitoring & alerts \(read\)/i,
+    });
+    expect(dockerReport).toBeChecked();
+    expect(monitoringRead).not.toBeChecked();
+
+    fireEvent.click(dockerReport);
+    fireEvent.click(monitoringRead);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save scopes' }));
+
+    await waitFor(() => {
+      expect(updateTokenScopesMock).toHaveBeenCalledWith('token-edit', [MONITORING_READ_SCOPE]);
+    });
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    expect(createTokenMock).not.toHaveBeenCalled();
+    expect(onTokensChanged).toHaveBeenCalledTimes(1);
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Scopes updated for Editable token.');
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Edit API token scopes' }),
+      ).not.toBeInTheDocument();
+    });
+    const updatedRow = screen.getByText('Editable token').closest('tr');
+    expect(
+      within(updatedRow as HTMLTableRowElement).getByText('Monitoring & alerts (read)'),
+    ).toBeInTheDocument();
+    expect(
+      within(updatedRow as HTMLTableRowElement).queryByText('Docker / Podman reporting'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('requires at least one changed scope and keeps failed edits open', async () => {
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'token-edit-failure',
+        name: 'Protected token',
+        scopes: [DOCKER_REPORT_SCOPE],
+      }),
+    ]);
+    updateTokenScopesMock.mockRejectedValueOnce(new Error('Cannot grant scope "monitoring:read"'));
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    const tokenName = await screen.findByText('Protected token');
+    const row = tokenName.closest('tr');
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', { name: 'Edit scopes' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    const save = within(dialog).getByRole('button', { name: 'Save scopes' });
+    expect(save).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Docker \/ Podman reporting/i }));
+    expect(
+      within(dialog).getByText('Select at least one scope before saving.'),
+    ).toBeInTheDocument();
+    expect(save).toBeDisabled();
+
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: /Monitoring & alerts \(read\)/i }),
+    );
+    expect(save).not.toBeDisabled();
+    fireEvent.click(save);
+
+    await waitFor(() => {
+      expect(updateTokenScopesMock).toHaveBeenCalledWith('token-edit-failure', [
+        MONITORING_READ_SCOPE,
+      ]);
+    });
+    expect(notificationErrorMock).toHaveBeenCalledWith('Unable to update API token scopes.');
+    expect(screen.getByRole('dialog', { name: 'Edit API token scopes' })).toBeInTheDocument();
   });
 
   it('keeps governed infrastructure token usage labels on local operator identity', async () => {

@@ -4183,6 +4183,12 @@ token-store write that fails after the nodes write would otherwise leave a
 persisted source next to a still-live one-shot grant, so a persistently failing
 token store becomes a repeatable source-creation primitive. Either both stores
 advanced or neither did.
+The API-token store also owns atomic in-place scope replacement.
+`PATCH /api/security/tokens/<id>` may change only the canonical scope slice; it
+must preserve the stored hash, ID, timestamps, expiry, metadata, and
+organization bindings. If `SaveAPITokens` fails, the complete prior in-memory
+record must be restored so runtime authorization cannot diverge from the
+durable token store.
 That same shared dependency also assumes generated setup scripts preserve
 setup-token auth guidance, so adjacent setup flows do not regress back to
 stale API-token instructions after the backend has already standardized on the
