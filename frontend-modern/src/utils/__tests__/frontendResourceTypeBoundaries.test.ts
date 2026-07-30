@@ -3095,7 +3095,7 @@ describe('frontend resource type boundaries', () => {
       'Choose how Pulse should execute Apprise notifications.',
     );
     expect(alertsPageSource).not.toContain(
-      'Enter one Apprise URL per line. Commas are also supported.',
+      'Enter one Apprise URL per line. Commas are also supported. For Telegram forum topics, append :topic to the chat ID.',
     );
     expect(alertsPageSource).not.toContain(
       'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.',

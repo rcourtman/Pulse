@@ -151,7 +151,7 @@ describe('alertDestinationsPresentation.branchcov0718', () => {
     it('exposes the apprise targets label and per-mode help copy', () => {
       expect(ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL).toBe('Delivery targets');
       expect(ALERT_DESTINATIONS_APPRISE_TARGETS_HELP_CLI).toBe(
-        'Enter one Apprise URL per line. Commas are also supported.',
+        'Enter one Apprise URL per line. Commas are also supported. For Telegram forum topics, append :topic to the chat ID.',
       );
       expect(ALERT_DESTINATIONS_APPRISE_TARGETS_HELP_HTTP).toBe(
         'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.',
