@@ -725,3 +725,33 @@ smallfixnumber="3"
 		t.Fatalf("Host.OSVersion = %q, want %q", report.Host.OSVersion, "7.2.2-72806 Update 3")
 	}
 }
+
+type legacyCommandOutputCollector struct {
+	SystemCollector
+	output string
+	err    error
+}
+
+func (c *legacyCommandOutputCollector) CommandCombinedOutput(
+	context.Context,
+	string,
+	...string,
+) (string, error) {
+	return c.output, c.err
+}
+
+func TestCollectCommandOutputLimitedKeepsLegacyCollectorsCompatible(t *testing.T) {
+	collector := &legacyCommandOutputCollector{output: "123456"}
+	output, err := collectCommandOutputLimited(
+		context.Background(),
+		collector,
+		4,
+		"example-command",
+	)
+	if err == nil {
+		t.Fatal("expected oversized legacy collector output to fail")
+	}
+	if output != "1234" {
+		t.Fatalf("bounded output = %q, want %q", output, "1234")
+	}
+}

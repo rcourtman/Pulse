@@ -39,6 +39,32 @@ var libvirtStatsArgs = []string{
 	"--block",
 }
 
+type limitedCommandOutputCollector interface {
+	CommandCombinedOutputLimited(
+		ctx context.Context,
+		maxBytes int,
+		name string,
+		arg ...string,
+	) (string, error)
+}
+
+func collectCommandOutputLimited(
+	ctx context.Context,
+	collector SystemCollector,
+	maxBytes int,
+	name string,
+	arg ...string,
+) (string, error) {
+	if limited, ok := collector.(limitedCommandOutputCollector); ok {
+		return limited.CommandCombinedOutputLimited(ctx, maxBytes, name, arg...)
+	}
+	output, err := collector.CommandCombinedOutput(ctx, name, arg...)
+	if len(output) > maxBytes {
+		return output[:maxBytes], fmt.Errorf("command output exceeds %d bytes", maxBytes)
+	}
+	return output, err
+}
+
 // collectLibvirtInventory auto-detects a local read-only libvirt connection.
 // It is deliberately best-effort: hosts without virsh, socket access, or a
 // compatible driver continue reporting normal host telemetry.
@@ -58,8 +84,9 @@ func (a *Agent) collectLibvirtInventory(ctx context.Context) *agentshost.Libvirt
 	queryCtx, cancel := context.WithTimeout(ctx, libvirtQueryTimeout)
 	defer cancel()
 
-	listOutput, err := a.collector.CommandCombinedOutputLimited(
+	listOutput, err := collectCommandOutputLimited(
 		queryCtx,
+		a.collector,
 		libvirtMaxListOutputBytes,
 		path,
 		"--readonly",
@@ -88,8 +115,9 @@ func (a *Agent) collectLibvirtInventory(ctx context.Context) *agentshost.Libvirt
 	args := make([]string, 0, len(libvirtStatsArgs)+len(names))
 	args = append(args, libvirtStatsArgs...)
 	args = append(args, names...)
-	statsOutput, err := a.collector.CommandCombinedOutputLimited(
+	statsOutput, err := collectCommandOutputLimited(
 		queryCtx,
+		a.collector,
 		libvirtMaxStatsOutputBytes,
 		path,
 		args...,

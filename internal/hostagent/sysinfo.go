@@ -41,7 +41,6 @@ type SystemCollector interface {
 	Chmod(name string, mode os.FileMode) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	CommandCombinedOutput(ctx context.Context, name string, arg ...string) (string, error)
-	CommandCombinedOutputLimited(ctx context.Context, maxBytes int, name string, arg ...string) (string, error)
 	LookPath(file string) (string, error)
 }
 

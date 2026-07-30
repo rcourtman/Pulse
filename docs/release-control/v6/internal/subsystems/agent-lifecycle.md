@@ -1516,7 +1516,11 @@ the intentionally sparse public response.
    interface/block field selection, and no server-authored URI, domain, or
    command input. Missing clients, inaccessible sockets, unsupported drivers,
    partial statistics, or parse failures omit the inventory without failing
-   host telemetry. Authenticated ingest derives CPU and I/O rates only after
+   host telemetry. Bounded command output is an optional collector capability
+   rather than a new `SystemCollector` interface requirement, preserving
+   compatibility with existing injected collectors; the production collector
+   enforces the cap during execution and fallback collectors are rejected
+   after the same size limit. Authenticated ingest derives CPU and I/O rates only after
    two accepted samples and projects the domains as provider-neutral
    `technology=libvirt` VM resources parented to the reporting host. It
    preserves the last successful collection timestamp across a failed query so
