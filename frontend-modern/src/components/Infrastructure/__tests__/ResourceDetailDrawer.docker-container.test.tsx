@@ -226,6 +226,12 @@ describe('ResourceDetailDrawer for Docker containers', () => {
             containerId: 'abc123def456',
             containerState: 'running',
             image: 'ghcr.io/example/edge-web:2026.05',
+            updateStatus: {
+              updateAvailable: true,
+              currentDigest: 'sha256:current-digest',
+              latestDigest: 'sha256:target-digest',
+              lastChecked: '2026-05-24T13:00:00Z',
+            },
             restartCount: 7,
             createdAt: '2026-04-13T01:14:01Z',
             startedAt: '2026-04-13T01:15:01Z',
@@ -253,6 +259,13 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     const section = screen.getByTestId('resource-docker-container-section');
     expect(within(section).getByText('Image')).toBeInTheDocument();
     expect(within(section).getByText('ghcr.io/example/edge-web:2026.05')).toBeInTheDocument();
+    expect(within(section).getByText('Image update')).toBeInTheDocument();
+    expect(within(section).getByText('Available')).toHaveClass('text-sky-700');
+    expect(within(section).getByText('Current digest')).toBeInTheDocument();
+    expect(within(section).getByText('sha256:current-digest')).toBeInTheDocument();
+    expect(within(section).getByText('Target digest')).toBeInTheDocument();
+    expect(within(section).getByText('sha256:target-digest')).toBeInTheDocument();
+    expect(within(section).queryByText('Release information')).not.toBeInTheDocument();
     expect(within(section).getByText('Restarts')).toBeInTheDocument();
     expect(within(section).getByText('7')).toHaveClass('text-red-600');
     expect(within(section).getByText('Created')).toBeInTheDocument();
@@ -279,6 +292,36 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     expect(within(section).getByText('2.00 MB')).toBeInTheDocument();
     expect(within(section).getByText('Labels')).toBeInTheDocument();
     expect(within(section).getByText(/traefik\.enable/)).toBeInTheDocument();
+  });
+
+  it('links update targets to a reliable public registry tags page', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'app-container-web',
+          name: 'edge-web',
+          docker: {
+            containerId: 'abc123def456',
+            containerState: 'running',
+            image: 'docker.io/library/nginx:latest',
+            updateStatus: {
+              updateAvailable: true,
+              currentDigest: 'sha256:current',
+              latestDigest: 'sha256:target',
+              lastChecked: '2026-05-24T13:00:00Z',
+            },
+          },
+        })}
+      />
+    ));
+
+    const section = screen.getByTestId('resource-docker-container-section');
+    expect(within(section).getByText('Release information')).toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: 'View image tags' })).toHaveAttribute(
+      'href',
+      'https://hub.docker.com/_/nginx/tags',
+    );
   });
 
   it('does not render the container section for non-container resources', () => {

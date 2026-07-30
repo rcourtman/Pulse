@@ -6,6 +6,7 @@ import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { formatInteger } from './resourceDetailMappers';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
+import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 
 interface ResourceSummaryPresentationProps {
   resource: Resource;
@@ -25,6 +26,7 @@ const dockerContainerMeta = (resource: Resource): NonNullable<Resource['docker']
     !docker.containerId &&
     !docker.containerState &&
     !docker.image &&
+    !docker.updateStatus &&
     !docker.startedAt &&
     !docker.finishedAt &&
     !docker.blockIo &&
@@ -77,6 +79,15 @@ const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['d
   const blockReadBytes = () => dockerByteTotal(props.docker.blockIo?.readBytes);
   const blockWriteBytes = () => dockerByteTotal(props.docker.blockIo?.writeBytes);
   const restartCount = () => props.docker.restartCount;
+  const updateStatus = () => props.docker.updateStatus;
+  const imageRegistryLink = () =>
+    updateStatus()?.updateAvailable ? getDockerImageRegistryLink(props.docker.image) : null;
+  const updateState = () => {
+    const update = updateStatus();
+    if (!update) return '';
+    if (trimmedDockerValue(update.error)) return 'Check failed';
+    return update.updateAvailable ? 'Available' : 'Current';
+  };
 
   return (
     <tbody
@@ -98,6 +109,66 @@ const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['d
             <span class="block truncate">{props.docker.image}</span>
           </td>
         </tr>
+      </Show>
+      <Show when={updateState()}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Image update</td>
+          <td
+            class={`px-2 py-1 text-right font-medium ${
+              updateStatus()?.updateAvailable
+                ? 'text-sky-700 dark:text-sky-300'
+                : updateStatus()?.error
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-base-content'
+            }`}
+            title={updateStatus()?.error}
+          >
+            {updateState()}
+          </td>
+        </tr>
+      </Show>
+      <Show when={trimmedDockerValue(updateStatus()?.currentDigest)}>
+        {(digest) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Current digest</td>
+            <td
+              class="break-all px-2 py-1 text-right font-mono text-[10px] font-medium text-base-content"
+              title={digest()}
+            >
+              {digest()}
+            </td>
+          </tr>
+        )}
+      </Show>
+      <Show when={trimmedDockerValue(updateStatus()?.latestDigest)}>
+        {(digest) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Target digest</td>
+            <td
+              class="break-all px-2 py-1 text-right font-mono text-[10px] font-medium text-base-content"
+              title={digest()}
+            >
+              {digest()}
+            </td>
+          </tr>
+        )}
+      </Show>
+      <Show when={imageRegistryLink()}>
+        {(link) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Release information</td>
+            <td class="px-2 py-1 text-right font-medium">
+              <a
+                href={link().href}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-sky-700 hover:underline dark:text-sky-300"
+              >
+                {link().label}
+              </a>
+            </td>
+          </tr>
+        )}
       </Show>
       <Show when={typeof restartCount() === 'number'}>
         <tr>
