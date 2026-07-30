@@ -6,7 +6,11 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
 import { copyToClipboard } from '@/utils/clipboard';
-import { updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
+import {
+  loadRuntimeBranding,
+  updateDockerUpdateActionsSetting,
+} from '@/stores/systemSettings';
+import type { ReportBrandSettings } from '@/types/config';
 import {
   BACKUP_INTERVAL_OPTIONS,
   getCheckForUpdatesErrorMessage,
@@ -58,6 +62,10 @@ export function useSystemSettingsState({
   const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
+  const [reportBrandDisplayName, setReportBrandDisplayName] = createSignal('');
+  const [reportBrandLogoBase64, setReportBrandLogoBase64] = createSignal('');
+  const [reportBrandLogoFormat, setReportBrandLogoFormat] =
+    createSignal<NonNullable<ReportBrandSettings['logoFormat']>>('');
   const [savingTelemetry, setSavingTelemetry] = createSignal(false);
   const [telemetryPreview, setTelemetryPreview] = createSignal<TelemetryPreviewResponse | null>(
     null,
@@ -141,6 +149,9 @@ export function useSystemSettingsState({
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
       setTelemetryEnabled(systemSettings.telemetryEnabled ?? true);
+      setReportBrandDisplayName(systemSettings.reportBranding?.displayName ?? '');
+      setReportBrandLogoBase64(systemSettings.reportBranding?.logoBase64 ?? '');
+      setReportBrandLogoFormat(systemSettings.reportBranding?.logoFormat ?? '');
 
       if (typeof systemSettings.backupPollingEnabled === 'boolean') {
         setBackupPollingEnabled(systemSettings.backupPollingEnabled);
@@ -221,7 +232,13 @@ export function useSystemSettingsState({
           allowedEmbedOrigins: allowedEmbedOrigins(),
           webhookAllowedPrivateCIDRs: webhookAllowedPrivateCIDRs(),
           publicURL: publicURL(),
+          reportBranding: {
+            displayName: reportBrandDisplayName().trim(),
+            logoBase64: reportBrandLogoBase64(),
+            logoFormat: reportBrandLogoFormat(),
+          },
         });
+        await loadRuntimeBranding();
       }
 
       const isNetworkTab = initiatingTab === 'system-network';
@@ -502,6 +519,12 @@ export function useSystemSettingsState({
     savingDockerUpdateActions,
     handleDisableDockerUpdateActionsChange,
     telemetryEnabled,
+    reportBrandDisplayName,
+    setReportBrandDisplayName,
+    reportBrandLogoBase64,
+    setReportBrandLogoBase64,
+    reportBrandLogoFormat,
+    setReportBrandLogoFormat,
     telemetryEnabledLocked,
     savingTelemetry,
     handleTelemetryEnabledChange,

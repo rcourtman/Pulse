@@ -6,9 +6,12 @@ import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 import { EN_MESSAGES } from '@/i18n/messages';
 import {
   areSystemSettingsLoaded,
+  clearRuntimeBranding,
   markSystemSettingsLoadedWithDefaults,
+  runtimeBranding,
   shouldHideDockerUpdateActions,
   shouldReduceProUpsellNoise,
+  updateRuntimeBrandingFromResponse,
   updateSystemSettingsFromResponse,
 } from '@/stores/systemSettings';
 
@@ -20,6 +23,7 @@ const repoRoot = path.resolve(frontendRoot, '..');
 describe('systemSettings store', () => {
   beforeEach(() => {
     markSystemSettingsLoadedWithDefaults();
+    clearRuntimeBranding();
   });
 
   it('applies route and docker feature flags from API response', () => {
@@ -53,6 +57,33 @@ describe('systemSettings store', () => {
     expect(areSystemSettingsLoaded()).toBe(true);
     expect(shouldHideDockerUpdateActions()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(false);
+  });
+
+  it('normalizes the entitlement-filtered runtime branding payload', () => {
+    updateRuntimeBrandingFromResponse({
+      enabled: true,
+      displayName: '  Acme Operations  ',
+      logoDataUrl: 'data:image/png;base64,YWJj',
+    });
+
+    expect(runtimeBranding()).toEqual({
+      enabled: true,
+      displayName: 'Acme Operations',
+      logoDataUrl: 'data:image/png;base64,YWJj',
+    });
+
+    clearRuntimeBranding();
+    expect(runtimeBranding()).toEqual({ enabled: false, displayName: '', logoDataUrl: '' });
+  });
+
+  it('drops branding values from a disabled runtime response', () => {
+    updateRuntimeBrandingFromResponse({
+      enabled: false,
+      displayName: 'Must not render',
+      logoDataUrl: 'data:image/png;base64,YWJj',
+    });
+
+    expect(runtimeBranding()).toEqual({ enabled: false, displayName: '', logoDataUrl: '' });
   });
 
   it('keeps the telemetry disclosure on the shipped local privacy doc', () => {

@@ -236,7 +236,13 @@ environment (`PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`,
 model each client runtime has its own settings, so the override is
 per-client; in shared-process mode the settings override applies
 instance-wide, so all organizations share one brand (usually yours). Branding
-requires the `white_label` entitlement on the licence.
+requires the `white_label` entitlement on the licence. Entitled administrators
+can edit the settings-based display name and bounded inline PNG, JPEG, or GIF
+under **Settings → System → General → Appearance**. That override is used by
+both generated reports and the authenticated application header; the browser
+title follows the configured display name. Without the entitlement, the
+runtime returns and renders the built-in Pulse identity even if branding
+settings remain stored.
 
 Scheduled reports are tenant-local. In provider-hosted MSP, each client
 runtime stores its own schedules in `report_schedules.json`, writes generated

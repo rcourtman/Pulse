@@ -24,6 +24,12 @@ export interface AuthConfig {
  */
 export type UpdateChannel = 'stable' | 'rc';
 
+export interface ReportBrandSettings {
+  displayName?: string;
+  logoBase64?: string;
+  logoFormat?: 'png' | 'jpg' | 'jpeg' | 'gif' | '';
+}
+
 export interface SystemConfig {
   pvePollingInterval?: number; // PVE polling interval in seconds
   pbsPollingInterval?: number; // PBS polling interval in seconds
@@ -49,6 +55,7 @@ export interface SystemConfig {
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
   reduceProUpsellNoise?: boolean; // Legacy compatibility preference for proactive commercial prompts
   telemetryEnabled?: boolean; // Outbound usage telemetry, enabled by default unless disabled
+  reportBranding?: ReportBrandSettings; // Entitlement-gated application and report branding
 }
 
 /**

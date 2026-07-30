@@ -13,6 +13,11 @@ function renderGeneralSettingsPanel(overrides: Partial<GeneralSettingsPanelProps
   const [, setHasUnsavedChanges] = createSignal(false);
   const [telemetryEnabled] = createSignal(true);
   const [disableDockerUpdateActions] = createSignal(false);
+  const [reportBrandDisplayName, setReportBrandDisplayName] = createSignal('');
+  const [reportBrandLogoBase64, setReportBrandLogoBase64] = createSignal('');
+  const [reportBrandLogoFormat, setReportBrandLogoFormat] = createSignal<
+    '' | 'png' | 'jpg' | 'jpeg' | 'gif'
+  >('');
 
   const props: GeneralSettingsPanelProps = {
     darkMode: () => false,
@@ -26,6 +31,12 @@ function renderGeneralSettingsPanel(overrides: Partial<GeneralSettingsPanelProps
     setPVEPollingCustomSeconds,
     pvePollingEnvLocked: () => false,
     setHasUnsavedChanges,
+    reportBrandDisplayName,
+    setReportBrandDisplayName,
+    reportBrandLogoBase64,
+    setReportBrandLogoBase64,
+    reportBrandLogoFormat,
+    setReportBrandLogoFormat,
     telemetryEnabled,
     telemetryEnabledLocked: () => false,
     savingTelemetry: () => false,

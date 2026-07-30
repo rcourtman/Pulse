@@ -238,6 +238,7 @@ describe('useAppRuntimeState', () => {
     }));
 
     vi.doMock('@/stores/systemSettings', () => ({
+      loadRuntimeBranding: vi.fn().mockResolvedValue(undefined),
       markSystemSettingsLoadedWithDefaults: vi.fn(),
       updateSystemSettingsFromResponse: vi.fn(),
     }));

@@ -7,6 +7,8 @@ import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import type { TelemetryPreviewResponse } from '@/api/settings';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
+import { BrandingSettingsCard } from './BrandingSettingsCard';
+import type { ReportBrandSettings } from '@/types/config';
 import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
 import Languages from 'lucide-solid/icons/languages';
@@ -70,6 +72,12 @@ export interface GeneralSettingsPanelProps {
   setPVEPollingCustomSeconds: Setter<number>;
   pvePollingEnvLocked: () => boolean;
   setHasUnsavedChanges: Setter<boolean>;
+  reportBrandDisplayName: Accessor<string>;
+  setReportBrandDisplayName: Setter<string>;
+  reportBrandLogoBase64: Accessor<string>;
+  setReportBrandLogoBase64: Setter<string>;
+  reportBrandLogoFormat: Accessor<NonNullable<ReportBrandSettings['logoFormat']>>;
+  setReportBrandLogoFormat: Setter<NonNullable<ReportBrandSettings['logoFormat']>>;
 
   telemetryEnabled: Accessor<boolean>;
   telemetryEnabledLocked: () => boolean;
@@ -210,6 +218,18 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             checked={layoutStore.isFullWidth()}
             class="shrink-0"
             onChange={() => layoutStore.toggle()}
+          />
+        </div>
+
+        <div class="p-4 sm:p-6">
+          <BrandingSettingsCard
+            displayName={props.reportBrandDisplayName}
+            setDisplayName={props.setReportBrandDisplayName}
+            logoBase64={props.reportBrandLogoBase64}
+            setLogoBase64={props.setReportBrandLogoBase64}
+            logoFormat={props.reportBrandLogoFormat}
+            setLogoFormat={props.setReportBrandLogoFormat}
+            setHasUnsavedChanges={props.setHasUnsavedChanges}
           />
         </div>
       </SettingsPanel>

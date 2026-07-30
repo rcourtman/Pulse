@@ -3050,6 +3050,7 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 
 	paths := []string{
 		"/api/config",
+		"/api/runtime/branding",
 		"/api/storage/host-1",
 		"/api/storage-charts",
 		"/api/charts",

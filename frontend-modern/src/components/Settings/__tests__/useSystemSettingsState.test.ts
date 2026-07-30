@@ -242,6 +242,7 @@ describe('useSystemSettingsState', () => {
 
     vi.doMock('@/stores/systemSettings', () => ({
       updateDockerUpdateActionsSetting: vi.fn(),
+      loadRuntimeBranding: vi.fn().mockResolvedValue(undefined),
     }));
 
     ({ useSystemSettingsState } = await import('../useSystemSettingsState'));

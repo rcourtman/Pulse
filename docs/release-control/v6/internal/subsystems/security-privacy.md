@@ -1789,3 +1789,22 @@ already enforces scopes server-side and no backend behaviour changed.
 Regression coverage: the `Issue1650` cases in
 `frontend-modern/src/utils/__tests__/securityScorePresentation.test.ts` and
 `frontend-modern/src/components/__tests__/SecurityWarning.test.tsx`.
+
+### Runtime branding reveals presentation material only after entitlement
+
+The authenticated application header cannot depend on the admin-only full
+system-settings response, so `/api/runtime/branding` is deliberately readable
+with `monitoring:read`. That wider read authority is safe only because the
+payload is a strict allowlist of three presentation fields and the server
+fails closed: without the active `white_label` entitlement it returns
+`enabled: false` with empty name and logo values. It never exposes
+`logoPath`, other settings, environment values, licence records, or storage
+locations.
+
+Brand mutations remain behind `settings:write` and the existing report-brand
+validation rejects unsupported keys, newlines, oversized base64, malformed
+base64, and formats outside PNG/JPEG/GIF. Browser rendering consumes only the
+server-filtered runtime payload; hiding controls or checking a client-side
+capability is not treated as the authorization boundary.
+`internal/api/runtime_branding_test.go` proves the no-entitlement non-leakage
+and image normalization.

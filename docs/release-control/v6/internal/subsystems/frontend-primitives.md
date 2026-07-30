@@ -5502,3 +5502,22 @@ as the card. `settingsArchitecture.test.ts` pins the guidance owner, the absent
 localhost literal, and the corrected post-save copy; the rendered fallbacks and
 copy affordances are covered by
 `frontend-modern/src/components/Settings/__tests__/SSOProvidersPanel.test.tsx`.
+
+### Entitled application branding stays app-shell-owned
+
+`frontend-modern/src/stores/systemSettings.ts` owns the narrow reactive
+runtime-brand payload loaded during authenticated bootstrap. The shared
+`frontend-modern/src/AppLayout.tsx` shell is the only owner of applying that
+payload to the centered header lockup and route-aware browser title. A custom
+bounded banner logo replaces the built-in mark; a non-empty display name
+replaces the Pulse wordmark, while a logo with an empty display name may stand
+alone. Kiosk mode keeps its existing hidden-header behavior.
+
+The Appearance surface edits the already-canonical `reportBranding` object
+through `BrandingSettingsCard`; it accepts PNG, JPEG, or GIF files no larger
+than the persisted inline-logo boundary, previews the exact saved material,
+marks the shared settings form dirty, and provides an explicit remove action.
+It must not create a page-local branding cache or render configured values
+when `white_label` is unavailable. Focused proofs live in
+`BrandingSettingsCard.test.tsx`, `AppLayout.test.tsx`, and
+`stores/__tests__/systemSettings.test.ts`.

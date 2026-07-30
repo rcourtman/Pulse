@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   updateStoreIsDismissedMock: vi.fn(),
   updateStoreClearDismissedMock: vi.fn(),
   updateDockerUpdateActionsSettingMock: vi.fn(),
+  loadRuntimeBrandingMock: vi.fn(),
 }));
 
 vi.mock('@/api/settings', () => ({
@@ -86,6 +87,7 @@ vi.mock('@/stores/updates', () => ({
 
 vi.mock('@/stores/systemSettings', () => ({
   updateDockerUpdateActionsSetting: mocks.updateDockerUpdateActionsSettingMock,
+  loadRuntimeBranding: mocks.loadRuntimeBrandingMock,
 }));
 
 type HookState = ReturnType<typeof useSystemSettingsState>;
@@ -99,6 +101,7 @@ describe('useSystemSettingsState branch coverage', () => {
   beforeEach(() => {
     mocks.getSystemSettingsMock.mockResolvedValue({});
     mocks.updateSystemSettingsMock.mockResolvedValue(undefined);
+    mocks.loadRuntimeBrandingMock.mockResolvedValue(undefined);
     mocks.getUpdatePlanMock.mockResolvedValue({
       canAutoUpdate: false,
       requiresRoot: false,

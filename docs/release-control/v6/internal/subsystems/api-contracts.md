@@ -8711,3 +8711,22 @@ to configure a public URL. `TestContract_SSOProviderResponseBaseURLNeverGuessesL
 in `internal/api/contract_test.go` pins the precedence, the request fallback,
 the trusted-proxy gate on forwarded headers, and the empty-rather-than-wrong
 behavior.
+
+### Runtime branding is a narrow presentation contract
+
+`GET /api/runtime/branding` is the authenticated `monitoring:read` boundary
+for application-shell branding. It returns only `enabled`, `displayName`, and
+the validated inline `logoDataUrl`; it never returns the system settings
+document, filesystem logo paths, provider credentials, or licence material.
+The handler returns the canonical disabled/empty shape unless the request's
+active licence service grants `white_label`, even when `reportBranding`
+remains persisted.
+
+The settings write contract remains `reportBranding` on
+`POST /api/system/settings/update`, protected by `settings:write` and the
+existing bounded display-name, base64, and PNG/JPEG/GIF validation. The
+runtime read normalizes valid image bytes to a canonical data URL and omits an
+invalid or unknown image without discarding a valid display name.
+`internal/api/runtime_branding_test.go` and
+`internal/api/route_inventory_test.go` pin the entitlement, shape, image, and
+route contracts.

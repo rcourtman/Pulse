@@ -6,7 +6,7 @@
  */
 
 import { createSignal } from 'solid-js';
-import { SettingsAPI } from '@/api/settings';
+import { SettingsAPI, type RuntimeBrandingResponse } from '@/api/settings';
 import { logger } from '@/utils/logger';
 import type { SystemConfig } from '@/types/config';
 
@@ -14,6 +14,11 @@ import type { SystemConfig } from '@/types/config';
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
 // Server-side compatibility setting for proactive commercial prompts
 const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
+const [runtimeBranding, setRuntimeBranding] = createSignal<RuntimeBrandingResponse>({
+  enabled: false,
+  displayName: '',
+  logoDataUrl: '',
+});
 
 // Track if settings have been loaded
 const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
@@ -48,6 +53,29 @@ export async function loadSystemSettings(): Promise<void> {
     setReduceProUpsellNoise(false);
     setSystemSettingsLoaded(true);
   }
+}
+
+export async function loadRuntimeBranding(): Promise<void> {
+  try {
+    updateRuntimeBrandingFromResponse(await SettingsAPI.getRuntimeBranding());
+  } catch (err) {
+    logger.warn('Failed to load runtime branding, using Pulse defaults', err);
+    clearRuntimeBranding();
+  }
+}
+
+export function updateRuntimeBrandingFromResponse(branding: RuntimeBrandingResponse): void {
+  const enabled = branding.enabled === true;
+  setRuntimeBranding({
+    enabled,
+    displayName:
+      enabled && typeof branding.displayName === 'string' ? branding.displayName.trim() : '',
+    logoDataUrl: enabled && typeof branding.logoDataUrl === 'string' ? branding.logoDataUrl : '',
+  });
+}
+
+export function clearRuntimeBranding(): void {
+  setRuntimeBranding({ enabled: false, displayName: '', logoDataUrl: '' });
 }
 
 /**
@@ -90,3 +118,5 @@ export function updateDockerUpdateActionsSetting(disabled: boolean): void {
 export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {
   setReduceProUpsellNoise(enabled);
 }
+
+export { runtimeBranding };

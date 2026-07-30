@@ -55,6 +55,7 @@ import {
 } from '@/stores/sessionPresentationPolicy';
 import { layoutStore } from '@/utils/layout';
 import {
+  loadRuntimeBranding,
   markSystemSettingsLoadedWithDefaults,
   updateSystemSettingsFromResponse,
 } from '@/stores/systemSettings';
@@ -370,7 +371,7 @@ export const useAppRuntimeState = () => {
     await loadOrganizations();
     setWsStore(acquireWsStore());
     setBackendHealthy(true);
-    await loadSystemSettingsAndLayout();
+    await Promise.all([loadSystemSettingsAndLayout(), loadRuntimeBranding()]);
     // Shared commercial posture stays off ordinary self-hosted app shells.
     if (!presentationPolicyHidesUpgradePrompts()) {
       void loadCommercialPosture();

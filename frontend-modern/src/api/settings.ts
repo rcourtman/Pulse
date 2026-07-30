@@ -156,6 +156,12 @@ export interface TelemetryPreviewResponse {
   payload: TelemetryPingPreview;
 }
 
+export interface RuntimeBrandingResponse {
+  enabled: boolean;
+  displayName: string;
+  logoDataUrl: string;
+}
+
 export class SettingsAPI {
   private static baseUrl = '/api';
 
@@ -170,6 +176,10 @@ export class SettingsAPI {
   // Get system settings - returns SystemConfig
   static async getSystemSettings(): Promise<SystemSettingsResponse> {
     return apiFetchJSON(`${this.baseUrl}/system/settings`) as Promise<SystemSettingsResponse>;
+  }
+
+  static async getRuntimeBranding(): Promise<RuntimeBrandingResponse> {
+    return apiFetchJSON(`${this.baseUrl}/runtime/branding`) as Promise<RuntimeBrandingResponse>;
   }
 
   static async getTelemetryPreview(): Promise<TelemetryPreviewResponse> {

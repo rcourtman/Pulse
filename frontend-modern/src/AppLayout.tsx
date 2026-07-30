@@ -54,6 +54,7 @@ import { getActionApprovalBadgePresentation } from '@/features/actions/actionPre
 import { actionInboxStore } from '@/stores/actionInbox';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import { isPro } from '@/stores/licenseCommercial';
+import { runtimeBranding } from '@/stores/systemSettings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { getAssistantPageContext } from '@/utils/assistantPageContext';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
@@ -235,6 +236,13 @@ export function AppLayout(props: AppLayoutProps) {
   const location = useLocation();
   const kioskMode = useKioskMode();
   const brandMotionActive = createMemo(() => props.connectionStatus().tone === 'healthy');
+  const customBrandLogo = createMemo(() =>
+    runtimeBranding().enabled ? runtimeBranding().logoDataUrl : '',
+  );
+  const customBrandName = createMemo(() =>
+    runtimeBranding().enabled ? runtimeBranding().displayName.trim() : '',
+  );
+  const browserBrandName = createMemo(() => customBrandName() || 'Pulse');
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
   const [skipLinkFocused, setSkipLinkFocused] = createSignal(false);
@@ -290,7 +298,7 @@ export function AppLayout(props: AppLayoutProps) {
   createEffect(() => {
     const active = getActiveTabForPath(location.pathname);
     if (!active) {
-      document.title = 'Pulse';
+      document.title = browserBrandName();
       return;
     }
     // The standalone (Machines) section has sub-tabs with their own labels.
@@ -298,10 +306,10 @@ export function AppLayout(props: AppLayoutProps) {
     // the actual page (e.g. "Availability checks" not "Machines").
     if (active === 'standalone') {
       const subTab = resolveStandaloneSubTabTitle(location.pathname);
-      document.title = `${subTab} · Pulse`;
+      document.title = `${subTab} · ${browserBrandName()}`;
       return;
     }
-    document.title = `${tabTitleByActive[active]} · Pulse`;
+    document.title = `${tabTitleByActive[active]} · ${browserBrandName()}`;
   });
 
   const toggleKioskMode = () => {
@@ -754,37 +762,55 @@ export function AppLayout(props: AppLayoutProps) {
         <Show when={!kioskMode()}>
           <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
             <div
-              class={`pulse-brand-lockup flex items-center gap-2 ${brandMotionActive() ? 'animate-pulse-brand' : ''}`}
+              class={`pulse-brand-lockup flex items-center gap-2 ${!customBrandLogo() && brandMotionActive() ? 'animate-pulse-brand' : ''}`}
               data-testid="pulse-brand-lockup"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 256 256"
-                xmlns="http://www.w3.org/2000/svg"
-                class="pulse-brand-logo"
+              <Show
+                when={customBrandLogo()}
+                fallback={
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 256 256"
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="pulse-brand-logo"
+                  >
+                    <title>Pulse Logo</title>
+                    <circle
+                      class="pulse-bg fill-blue-600 dark:fill-blue-500"
+                      cx="128"
+                      cy="128"
+                      r="122"
+                    />
+                    <circle
+                      class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
+                      cx="128"
+                      cy="128"
+                      r="84"
+                    />
+                    <circle
+                      class="pulse-center fill-white dark:fill-[#dbeafe]"
+                      cx="128"
+                      cy="128"
+                      r="26"
+                    />
+                  </svg>
+                }
               >
-                <title>Pulse Logo</title>
-                <circle
-                  class="pulse-bg fill-blue-600 dark:fill-blue-500"
-                  cx="128"
-                  cy="128"
-                  r="122"
-                />
-                <circle
-                  class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
-                  cx="128"
-                  cy="128"
-                  r="84"
-                />
-                <circle
-                  class="pulse-center fill-white dark:fill-[#dbeafe]"
-                  cx="128"
-                  cy="128"
-                  r="26"
-                />
-              </svg>
-              <span class="pulse-brand-wordmark text-lg font-medium text-base-content">Pulse</span>
+                {(logoDataUrl) => (
+                  <img
+                    src={logoDataUrl()}
+                    alt={customBrandName() ? `${customBrandName()} logo` : 'Custom logo'}
+                    class="max-h-8 max-w-[12rem] object-contain"
+                    data-testid="custom-brand-logo"
+                  />
+                )}
+              </Show>
+              <Show when={customBrandName() || !customBrandLogo()}>
+                <span class="pulse-brand-wordmark text-lg font-medium text-base-content">
+                  {customBrandName() || 'Pulse'}
+                </span>
+              </Show>
               <Show when={props.versionInfo()?.channel === 'rc'}>
                 <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
                   Preview

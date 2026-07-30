@@ -186,6 +186,22 @@ describe('SettingsAPI', () => {
     });
   });
 
+  describe('getRuntimeBranding', () => {
+    it('fetches the narrow runtime branding payload', async () => {
+      const branding = {
+        enabled: true,
+        displayName: 'Acme Operations',
+        logoDataUrl: 'data:image/png;base64,YWJj',
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(branding);
+
+      const result = await SettingsAPI.getRuntimeBranding();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/runtime/branding');
+      expect(result).toEqual(branding);
+    });
+  });
+
   describe('getTelemetryPreview', () => {
     it('fetches the telemetry preview payload', async () => {
       const mockPreview = {

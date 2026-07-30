@@ -4818,3 +4818,12 @@ only for a session that can reach settings, using the single
 handoff, demo organization suppression, and platform-page route carriage in
 `frontend-modern/src/App.tsx` are unchanged; nothing about backup, restore, or
 recovery routing keys off banner visibility.
+
+The persisted `reportBranding` object remains adjacent tenant/runtime
+configuration rather than storage inventory or recovery state. The
+application-header extension reuses that same object and does not create a
+second logo artifact, database table, or backup surface. Existing system
+configuration export/restore therefore carries the display name and bounded
+inline logo exactly as it already carries report branding. Runtime reads
+through `/api/runtime/branding` are read-only and entitlement-filtered; they do
+not mutate, relocate, or synthesize persisted branding state.

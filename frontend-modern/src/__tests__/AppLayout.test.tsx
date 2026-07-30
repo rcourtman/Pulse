@@ -11,6 +11,10 @@ import {
 import { isKioskMode, setKioskMode } from '@/utils/url';
 import type { PlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 import { aiChatStore } from '@/stores/aiChat';
+import {
+  clearRuntimeBranding,
+  updateRuntimeBrandingFromResponse,
+} from '@/stores/systemSettings';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
 window.scrollTo = vi.fn();
@@ -117,6 +121,7 @@ describe('AppLayout navigation icons', () => {
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
     patrolAttentionMockState.activeCount = 0;
+    clearRuntimeBranding();
     aiChatStore.close();
     aiChatStore.setEnabled(true);
   });
@@ -124,6 +129,7 @@ describe('AppLayout navigation icons', () => {
   afterEach(() => {
     aiChatStore.close();
     aiChatStore.setEnabled(false);
+    clearRuntimeBranding();
     cleanup();
   });
 
@@ -332,6 +338,24 @@ describe('AppLayout navigation icons', () => {
     expect(wordmark).toHaveTextContent('Pulse');
     expect(wordmark).not.toHaveClass('animate-pulse-brand');
     expect(container.querySelector('.animate-pulse-logo')).toBeNull();
+  });
+
+  it('renders entitled custom branding and uses its name in the browser title', () => {
+    updateRuntimeBrandingFromResponse({
+      enabled: true,
+      displayName: 'Acme Operations',
+      logoDataUrl: 'data:image/png;base64,YWJj',
+    });
+
+    renderLayout();
+
+    expect(screen.getByTestId('custom-brand-logo')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,YWJj',
+    );
+    expect(screen.getByText('Acme Operations')).toBeInTheDocument();
+    expect(screen.getByTestId('pulse-brand-lockup')).not.toHaveClass('animate-pulse-brand');
+    expect(document.title).toBe('Settings · Acme Operations');
   });
 
   it('keeps the assistant launcher clear of the mobile navigation breakpoint', () => {
