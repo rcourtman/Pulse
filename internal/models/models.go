@@ -297,6 +297,7 @@ type Host struct {
 	Memory                  Memory                  `json:"memory"`
 	LoadAverage             []float64               `json:"loadAverage,omitempty"`
 	Disks                   []Disk                  `json:"disks,omitempty"`
+	ZFSPools                []HostZFSPool           `json:"zfsPools,omitempty"`
 	DiskIO                  []DiskIO                `json:"diskIO,omitempty"`
 	NetworkInterfaces       []HostNetworkInterface  `json:"networkInterfaces,omitempty"`
 	Sensors                 HostSensorSummary       `json:"sensors,omitempty"`
@@ -406,6 +407,12 @@ func (h Host) NormalizeCollections() Host {
 	}
 	if h.Disks == nil {
 		h.Disks = []Disk{}
+	}
+	if h.ZFSPools == nil {
+		h.ZFSPools = []HostZFSPool{}
+	}
+	for i := range h.ZFSPools {
+		h.ZFSPools[i] = h.ZFSPools[i].NormalizeCollections()
 	}
 	if h.DiskIO == nil {
 		h.DiskIO = []DiskIO{}
@@ -2385,20 +2392,44 @@ func (s Storage) NormalizeCollections() Storage {
 
 // ZFSPool represents a ZFS pool with health and error information
 type ZFSPool struct {
-	Name           string      `json:"name"`
-	State          string      `json:"state"`  // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
-	Status         string      `json:"status"` // Healthy, Degraded, Faulted, etc.
-	Scan           string      `json:"scan"`   // Current scan status (scrub, resilver, none)
-	ScanDetails    *ZFSScan    `json:"scanDetails,omitempty"`
-	ReadErrors     int64       `json:"readErrors"`
-	WriteErrors    int64       `json:"writeErrors"`
-	ChecksumErrors int64       `json:"checksumErrors"`
-	Devices        []ZFSDevice `json:"devices"`
+	Name           string       `json:"name"`
+	State          string       `json:"state"`  // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
+	Status         string       `json:"status"` // Healthy, Degraded, Faulted, etc.
+	Scan           string       `json:"scan"`   // Current scan status (scrub, resilver, none)
+	ScanDetails    *ZFSScan     `json:"scanDetails,omitempty"`
+	ReadErrors     int64        `json:"readErrors"`
+	WriteErrors    int64        `json:"writeErrors"`
+	ChecksumErrors int64        `json:"checksumErrors"`
+	Devices        []ZFSDevice  `json:"devices"`
+	Datasets       []ZFSDataset `json:"datasets,omitempty"`
 }
 
 func (p ZFSPool) NormalizeCollections() ZFSPool {
 	if p.Devices == nil {
 		p.Devices = []ZFSDevice{}
+	}
+	return p
+}
+
+// ZFSDataset is the read-only dataset capacity projection reported by a linked
+// host agent and attached to the provider-owned pool.
+type ZFSDataset struct {
+	Name            string `json:"name"`
+	Type            string `json:"type,omitempty"`
+	Mountpoint      string `json:"mountpoint,omitempty"`
+	UsedBytes       int64  `json:"usedBytes,omitempty"`
+	AvailableBytes  int64  `json:"availableBytes,omitempty"`
+	ReferencedBytes int64  `json:"referencedBytes,omitempty"`
+}
+
+type HostZFSPool struct {
+	Name     string       `json:"name"`
+	Datasets []ZFSDataset `json:"datasets"`
+}
+
+func (p HostZFSPool) NormalizeCollections() HostZFSPool {
+	if p.Datasets == nil {
+		p.Datasets = []ZFSDataset{}
 	}
 	return p
 }

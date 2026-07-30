@@ -170,6 +170,32 @@ func TestMemoryMetric_Fields(t *testing.T) {
 	}
 }
 
+func TestDiskZFSDatasetsJSONRoundTrip(t *testing.T) {
+	input := Disk{
+		Device: "tank",
+		Type:   "zfs",
+		ZFSDatasets: []ZFSDataset{{
+			Name:            "tank/apps",
+			Type:            "filesystem",
+			Mountpoint:      "/tank/apps",
+			UsedBytes:       100,
+			AvailableBytes:  200,
+			ReferencedBytes: 50,
+		}},
+	}
+	data, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output Disk
+	if err := json.Unmarshal(data, &output); err != nil {
+		t.Fatal(err)
+	}
+	if len(output.ZFSDatasets) != 1 || output.ZFSDatasets[0].Name != "tank/apps" {
+		t.Fatalf("zfs datasets = %#v", output.ZFSDatasets)
+	}
+}
+
 func TestDisk_Fields(t *testing.T) {
 	disk := Disk{
 		Device:     "/dev/sda1",

@@ -57,6 +57,14 @@ export type StoragePoolDetailZfsSummary = {
   scan: string;
   errorSummary: string | null;
   devices: StoragePoolDetailZfsDevice[];
+  datasets: Array<{
+    name: string;
+    type: string;
+    mountpoint: string;
+    usedLabel: string;
+    availableLabel: string;
+    referencedLabel: string;
+  }>;
 };
 
 export const STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS: readonly {
@@ -251,6 +259,14 @@ export function buildStoragePoolDetailZfsSummary(
         device.checksumErrors || 0,
       ),
       message: (device.message || '').trim(),
+    })),
+    datasets: (pool.datasets || []).map((dataset) => ({
+      name: dataset.name,
+      type: dataset.type || 'filesystem',
+      mountpoint: dataset.mountpoint || '',
+      usedLabel: formatBytes(dataset.usedBytes || 0),
+      availableLabel: formatBytes(dataset.availableBytes || 0),
+      referencedLabel: formatBytes(dataset.referencedBytes || 0),
     })),
   };
 }

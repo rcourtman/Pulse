@@ -23,6 +23,18 @@ func TestCloneResourcePtr_Nil(t *testing.T) {
 	}
 }
 
+func TestCloneZFSPoolIsolatesDatasets(t *testing.T) {
+	input := &models.ZFSPool{
+		Name:     "tank",
+		Datasets: []models.ZFSDataset{{Name: "tank/apps", UsedBytes: 100}},
+	}
+	cloned := cloneZFSPool(input)
+	cloned.Datasets[0].Name = "mutated"
+	if input.Datasets[0].Name != "tank/apps" {
+		t.Fatal("unified resource zfs pool clone aliased datasets")
+	}
+}
+
 func TestCloneResource_MutateOriginalSlice(t *testing.T) {
 	original := &Resource{
 		ID:      "r-1",

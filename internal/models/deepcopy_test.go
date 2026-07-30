@@ -24,6 +24,25 @@ func TestCloneBoolPtr_Value(t *testing.T) {
 	}
 }
 
+func TestCloneHostAndZFSPoolIsolateZFSDatasets(t *testing.T) {
+	host := Host{ZFSPools: []HostZFSPool{{
+		Name:     "tank",
+		Datasets: []ZFSDataset{{Name: "tank/apps", UsedBytes: 100}},
+	}}}
+	hostClone := cloneHost(host)
+	hostClone.ZFSPools[0].Datasets[0].Name = "mutated"
+	if host.ZFSPools[0].Datasets[0].Name != "tank/apps" {
+		t.Fatal("host clone aliased zfs datasets")
+	}
+
+	pool := &ZFSPool{Name: "tank", Datasets: []ZFSDataset{{Name: "tank/apps"}}}
+	poolClone := cloneZFSPool(pool)
+	poolClone.Datasets[0].Name = "mutated"
+	if pool.Datasets[0].Name != "tank/apps" {
+		t.Fatal("pool clone aliased zfs datasets")
+	}
+}
+
 func TestCloneDockerContainer_PreservesIndependentOOMEvidence(t *testing.T) {
 	oomKilled := false
 	src := DockerContainer{ID: "container-1", OOMKilled: &oomKilled}

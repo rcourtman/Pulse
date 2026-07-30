@@ -325,6 +325,7 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 	}
 
 	zfsDisks := summarizeZFSPools(ctx, zfsDatasets)
+	enrichZFSPoolDisksWithDatasets(ctx, zfsDisks, zfsDatasets)
 	log.Debug().Int("zfsDatasets", len(zfsDatasets)).Int("zfsDisks", len(zfsDisks)).Int("regularDisks", len(disks)).Msg("disk: collection summary")
 	disks = append(disks, zfsDisks...)
 

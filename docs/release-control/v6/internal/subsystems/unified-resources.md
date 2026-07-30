@@ -2014,6 +2014,14 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+ZFS dataset inventory remains nested evidence rather than a new unified
+resource kind. The canonical host snapshot owns a deep-copied list of reported
+pool datasets, and Proxmox storage polling copies that list into the matching
+pool detail without changing resource identity, counts, parentage, or source
+selection. Deep-copy boundaries must clone both pool and dataset slices so
+state snapshots and unified-resource consumers cannot alias mutable ingest
+buffers.
+
 ### Alert-intent identity and availability evidence projection
 
 The monitor adapter may expose two optional read capabilities to the alert

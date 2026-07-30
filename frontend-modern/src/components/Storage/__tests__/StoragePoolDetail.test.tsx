@@ -198,4 +198,48 @@ describe('StoragePoolDetail', () => {
     expect(screen.getByText('spun down')).toBeInTheDocument();
     expect(screen.getByText('16 errors')).toBeInTheDocument();
   });
+
+  it('renders linked host-agent ZFS datasets inside the expanded pool detail', () => {
+    render(() => (
+      <table>
+        <tbody>
+          <StoragePoolDetail
+            record={makeRecord({
+              details: {
+                type: 'zfspool',
+                zfsPool: {
+                  name: 'tank',
+                  state: 'ONLINE',
+                  status: 'Healthy',
+                  scan: 'none',
+                  readErrors: 0,
+                  writeErrors: 0,
+                  checksumErrors: 0,
+                  devices: [],
+                  datasets: [
+                    {
+                      name: 'tank/apps',
+                      type: 'filesystem',
+                      mountpoint: '/tank/apps',
+                      usedBytes: 1_073_741_824,
+                      availableBytes: 2_147_483_648,
+                      referencedBytes: 536_870_912,
+                    },
+                  ],
+                },
+              },
+            })}
+            physicalDisks={[]}
+            summarySeriesId="tank"
+          />
+        </tbody>
+      </table>
+    ));
+
+    expect(screen.getByText('Datasets (1)')).toBeInTheDocument();
+    expect(screen.getByText('tank/apps')).toBeInTheDocument();
+    expect(screen.getByText('1.00 GB')).toBeInTheDocument();
+    expect(screen.getByText('2.00 GB')).toBeInTheDocument();
+    expect(screen.getByText('/tank/apps')).toBeInTheDocument();
+  });
 });

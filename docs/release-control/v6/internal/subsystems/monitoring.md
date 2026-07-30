@@ -2605,3 +2605,14 @@ the same restriction, so both paths now agree.
 unrestricted storage still appears on every node, that a globally disabled
 unrestricted storage still surfaces as disabled, and that the shared-storage
 node list excludes non-member nodes.
+
+### Linked host evidence enriches provider-owned ZFS pools
+
+The host collector supplements mounted filesystem facts with a bounded,
+read-only `zfs list` query for filesystems and zvols under already-discovered
+pools. Authenticated report ingest validates that optional evidence and stores
+it on the canonical host model. During Proxmox storage polling, a node's linked
+host dataset evidence is copied onto the matching provider-owned ZFS pool;
+provider health, scan, device, and error fields remain authoritative. When the
+provider cannot return pool detail, monitoring may synthesize only a minimal
+`UNKNOWN` pool so valid dataset evidence is still inspectable.

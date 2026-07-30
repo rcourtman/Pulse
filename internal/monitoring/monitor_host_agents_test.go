@@ -21,6 +21,61 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
+func TestHostZFSPoolsFromAgentDisksPreservesDatasetFacts(t *testing.T) {
+	got := hostZFSPoolsFromAgentDisks([]agentshost.Disk{
+		{Device: "/", Type: "ext4"},
+		{
+			Device: "tank",
+			Type:   "zfs",
+			ZFSDatasets: []agentshost.ZFSDataset{
+				{
+					Name:            " tank/apps ",
+					Type:            " filesystem ",
+					Mountpoint:      " /tank/apps ",
+					UsedBytes:       100,
+					AvailableBytes:  200,
+					ReferencedBytes: 50,
+				},
+			},
+		},
+	})
+
+	if len(got) != 1 || got[0].Name != "tank" || len(got[0].Datasets) != 1 {
+		t.Fatalf("host zfs pools = %#v", got)
+	}
+	if got[0].Datasets[0].Name != "tank/apps" ||
+		got[0].Datasets[0].Mountpoint != "/tank/apps" {
+		t.Fatalf("dataset was not normalized: %#v", got[0].Datasets[0])
+	}
+}
+
+func TestHostZFSPoolsFromAgentDisksRejectsInvalidAndBoundsRows(t *testing.T) {
+	datasets := []agentshost.ZFSDataset{
+		{Name: "tank/negative", Type: "filesystem", UsedBytes: -1},
+		{Name: "other/wrong-pool", Type: "filesystem"},
+		{Name: strings.Repeat("x", maxHostZFSDatasetNameBytes+1), Type: "filesystem"},
+		{Name: "tank/long-mount", Type: "filesystem", Mountpoint: strings.Repeat("x", maxHostZFSMountpointBytes+1)},
+	}
+	for i := 0; i < maxHostZFSDatasetsPerPool+2; i++ {
+		datasets = append(datasets, agentshost.ZFSDataset{
+			Name: fmt.Sprintf("tank/data-%03d", i),
+			Type: "filesystem",
+		})
+	}
+
+	got := hostZFSPoolsFromAgentDisks([]agentshost.Disk{{
+		Device:      "tank",
+		Type:        "zfs",
+		ZFSDatasets: datasets,
+	}})
+	if len(got) != 1 || len(got[0].Datasets) != maxHostZFSDatasetsPerPool {
+		t.Fatalf("bounded host zfs pools = %#v", got)
+	}
+	if got[0].Datasets[0].Name != "tank/data-000" {
+		t.Fatalf("invalid rows were not rejected: %#v", got[0].Datasets[0])
+	}
+}
+
 func TestMonitoringBroadcastCarriesEveryAvailabilityProjection(t *testing.T) {
 	input := monitorResourceToConvertInput(unifiedresources.Resource{
 		ID:     "agent-core2026",

@@ -144,6 +144,41 @@ func matchZFSPoolForStorage(storage models.Storage, zfsPoolMap map[string]*model
 	return nil
 }
 
+func mergeLinkedHostZFSDatasets(
+	pools map[string]*models.ZFSPool,
+	host *models.Host,
+) {
+	if host == nil {
+		return
+	}
+	for _, reported := range host.ZFSPools {
+		name := strings.TrimSpace(reported.Name)
+		if name == "" || len(reported.Datasets) == 0 {
+			continue
+		}
+		pool := pools[name]
+		if pool == nil {
+			for candidateName, candidate := range pools {
+				if strings.EqualFold(strings.TrimSpace(candidateName), name) {
+					pool = candidate
+					break
+				}
+			}
+		}
+		if pool == nil {
+			pool = &models.ZFSPool{
+				Name:    name,
+				State:   "UNKNOWN",
+				Status:  "Dataset inventory available",
+				Scan:    "none",
+				Devices: []models.ZFSDevice{},
+			}
+			pools[name] = pool
+		}
+		pool.Datasets = append([]models.ZFSDataset(nil), reported.Datasets...)
+	}
+}
+
 // pollVMsWithNodes polls VMs from all nodes in parallel using goroutines
 // When the instance is part of a cluster, the cluster name is used for guest IDs to prevent duplicates
 // when multiple cluster nodes are configured as separate PVE instances.
@@ -321,6 +356,10 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 						Msg("Could not get ZFS pool status (may require additional permissions)")
 				}
 			}
+			mergeLinkedHostZFSDatasets(
+				zfsPoolMap,
+				m.linkedHostForNode(instanceName, n.Node, n.Node),
+			)
 
 			// Process each storage
 			for _, storage := range nodeStorage {

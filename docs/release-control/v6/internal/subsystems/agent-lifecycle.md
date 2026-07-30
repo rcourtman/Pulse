@@ -5624,3 +5624,14 @@ tenant-local `reportBranding` settings record, but it must not enumerate
 agents, resolve install tokens, mutate agent state, or reuse agent lifecycle
 authority. Agent setup and reporting remain independent of whether an
 operator has configured a custom application name or logo.
+
+### ZFS dataset inventory is read-only host evidence
+
+The Unified Agent host report may attach a bounded `zfsDatasets` collection to
+each detected ZFS pool disk. The collector executes only the fixed read-only
+`zfs list` projection for pools it already discovered, admits only filesystem
+and volume rows beneath those pools, and bounds command output, row counts, and
+text fields. Dataset collection does not broaden registration, token,
+configuration, update, or command authority. Servers validate and copy the
+optional evidence during normal authenticated host-report ingest; agents that
+do not send it remain wire-compatible.

@@ -17,7 +17,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const maxZpoolCommandOutputSize = 1 << 20 // 1 MiB
+const (
+	maxZpoolCommandOutputSize = 1 << 20 // 1 MiB
+	maxZFSCommandOutputSize   = 4 << 20 // 4 MiB
+	maxZFSDatasetsPerPool     = 128
+	maxZFSDatasetNameBytes    = 512
+	maxZFSMountpointBytes     = 1024
+)
 
 var errZpoolCommandOutputTooLarge = errors.New("zpool command output exceeded limit")
 
@@ -39,9 +45,13 @@ type zfsDatasetUsage struct {
 }
 
 var queryZpoolStats = fetchZpoolStats
+var queryZFSDatasets = fetchZFSDatasets
 var zpoolLookPath = exec.LookPath
 var zpoolStat = os.Stat
 var zpoolCommandRunner = runZpoolCommand
+var zfsLookPath = exec.LookPath
+var zfsStat = os.Stat
+var zfsCommandRunner = runZFSCommand
 
 type limitedBuffer struct {
 	buf      bytes.Buffer
@@ -205,6 +215,66 @@ func fallbackZFSDisks(bestDatasets map[string]zfsDatasetUsage, mountpoints map[s
 	return disks
 }
 
+func enrichZFSPoolDisksWithDatasets(
+	ctx context.Context,
+	disks []agentshost.Disk,
+	mounted []zfsDatasetUsage,
+) {
+	if len(disks) == 0 {
+		return
+	}
+	pools := make([]string, 0, len(disks))
+	for _, disk := range disks {
+		if pool, ok := normalizeZFSPoolName(disk.Device); ok {
+			pools = append(pools, pool)
+		}
+	}
+
+	datasets, err := queryZFSDatasets(ctx, pools)
+	if err != nil {
+		log.Debug().Err(err).Msg("zfs: dataset inventory unavailable, using mounted datasets")
+		datasets = mountedZFSDatasets(mounted)
+	}
+	for index := range disks {
+		disks[index].ZFSDatasets = append(
+			[]agentshost.ZFSDataset(nil),
+			datasets[disks[index].Device]...,
+		)
+	}
+}
+
+func mountedZFSDatasets(mounted []zfsDatasetUsage) map[string][]agentshost.ZFSDataset {
+	result := make(map[string][]agentshost.ZFSDataset)
+	seen := make(map[string]struct{})
+	for _, dataset := range mounted {
+		pool, ok := normalizeZFSPoolName(dataset.Pool)
+		name := strings.TrimSpace(dataset.Dataset)
+		mountpoint := strings.TrimSpace(dataset.Mountpoint)
+		if !ok || name == pool || !strings.HasPrefix(name, pool+"/") ||
+			len(name) > maxZFSDatasetNameBytes || len(mountpoint) > maxZFSMountpointBytes ||
+			len(result[pool]) >= maxZFSDatasetsPerPool {
+			continue
+		}
+		if _, duplicate := seen[name]; duplicate {
+			continue
+		}
+		seen[name] = struct{}{}
+		result[pool] = append(result[pool], agentshost.ZFSDataset{
+			Name:           name,
+			Type:           "filesystem",
+			Mountpoint:     mountpoint,
+			UsedBytes:      int64(dataset.Used),
+			AvailableBytes: int64(dataset.Free),
+		})
+	}
+	for pool := range result {
+		sort.Slice(result[pool], func(i, j int) bool {
+			return result[pool][i].Name < result[pool][j].Name
+		})
+	}
+	return result
+}
+
 // commonZpoolPaths lists common locations for the zpool binary.
 // TrueNAS SCALE, FreeBSD, and various Linux distributions may install
 // zpool in different locations that might not be in the agent's PATH.
@@ -216,6 +286,15 @@ var commonZpoolPaths = []string{
 	"/usr/local/bin/zpool",  // Custom installations
 	"/opt/zfs/bin/zpool",    // Some enterprise Linux
 	"/usr/bin/zpool",        // Some distributions
+}
+
+var commonZFSPaths = []string{
+	"/usr/sbin/zfs",
+	"/sbin/zfs",
+	"/usr/local/sbin/zfs",
+	"/usr/local/bin/zfs",
+	"/opt/zfs/bin/zfs",
+	"/usr/bin/zfs",
 }
 
 // findZpool returns the path to the zpool binary by preferring known absolute
@@ -247,6 +326,126 @@ func findZpool() (string, error) {
 
 	log.Debug().Str("path", path).Msg("zfs: found zpool via PATH")
 	return path, nil
+}
+
+func findZFS() (string, error) {
+	for _, path := range commonZFSPaths {
+		if _, err := zfsStat(path); err == nil {
+			return path, nil
+		}
+	}
+	path, err := zfsLookPath("zfs")
+	if err != nil {
+		return "", fmt.Errorf("zfs binary not found in PATH or common locations")
+	}
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("zfs path is not absolute: %q", path)
+	}
+	if _, err := zfsStat(path); err != nil {
+		return "", fmt.Errorf("zfs path unavailable: %w", err)
+	}
+	return path, nil
+}
+
+func fetchZFSDatasets(
+	ctx context.Context,
+	pools []string,
+) (map[string][]agentshost.ZFSDataset, error) {
+	pools = filterValidZFSPoolNames(pools)
+	if len(pools) == 0 {
+		return nil, nil
+	}
+	path, err := findZFS()
+	if err != nil {
+		return nil, err
+	}
+	args := []string{
+		"list", "-Hp", "-t", "filesystem,volume",
+		"-o", "name,type,used,available,referenced,mountpoint",
+	}
+	args = append(args, pools...)
+	output, stderr, err := zfsCommandRunner(ctx, path, args...)
+	if err != nil {
+		if errors.Is(err, errZpoolCommandOutputTooLarge) {
+			return nil, fmt.Errorf("zfs list output exceeded %d bytes", maxZFSCommandOutputSize)
+		}
+		return nil, fmt.Errorf("zfs list failed (stderr %d bytes): %w", len(stderr), err)
+	}
+	return parseZFSList(output, pools)
+}
+
+func runZFSCommand(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	stdout := limitedBuffer{maxBytes: maxZFSCommandOutputSize}
+	stderr := limitedBuffer{maxBytes: maxZFSCommandOutputSize}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return stdout.Bytes(), stderr.Bytes(), errZpoolCommandOutputTooLarge
+	}
+	return stdout.Bytes(), stderr.Bytes(), err
+}
+
+func parseZFSList(
+	output []byte,
+	allowedPools []string,
+) (map[string][]agentshost.ZFSDataset, error) {
+	allowed := make(map[string]struct{}, len(allowedPools))
+	for _, pool := range filterValidZFSPoolNames(allowedPools) {
+		allowed[pool] = struct{}{}
+	}
+	result := make(map[string][]agentshost.ZFSDataset)
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	scanner.Buffer(make([]byte, 64*1024), maxZFSCommandOutputSize)
+	for scanner.Scan() {
+		fields := strings.Split(scanner.Text(), "\t")
+		if len(fields) != 6 {
+			continue
+		}
+		name := strings.TrimSpace(fields[0])
+		pool := zfsPoolFromDevice(name)
+		if _, ok := allowed[pool]; !ok || name == pool || !strings.HasPrefix(name, pool+"/") ||
+			len(name) > maxZFSDatasetNameBytes || len(result[pool]) >= maxZFSDatasetsPerPool {
+			continue
+		}
+		datasetType := strings.ToLower(strings.TrimSpace(fields[1]))
+		if datasetType != "filesystem" && datasetType != "volume" {
+			continue
+		}
+		used, usedErr := strconv.ParseInt(fields[2], 10, 64)
+		available, availableErr := strconv.ParseInt(fields[3], 10, 64)
+		referenced, referencedErr := strconv.ParseInt(fields[4], 10, 64)
+		if usedErr != nil || availableErr != nil || referencedErr != nil ||
+			used < 0 || available < 0 || referenced < 0 {
+			continue
+		}
+		mountpoint := strings.TrimSpace(fields[5])
+		if mountpoint == "-" || mountpoint == "none" || mountpoint == "legacy" {
+			mountpoint = ""
+		}
+		if len(mountpoint) > maxZFSMountpointBytes {
+			continue
+		}
+		result[pool] = append(result[pool], agentshost.ZFSDataset{
+			Name:            name,
+			Type:            datasetType,
+			Mountpoint:      mountpoint,
+			UsedBytes:       used,
+			AvailableBytes:  available,
+			ReferencedBytes: referenced,
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan zfs list output: %w", err)
+	}
+	for pool := range result {
+		sort.Slice(result[pool], func(i, j int) bool {
+			return result[pool][i].Name < result[pool][j].Name
+		})
+	}
+	return result, nil
 }
 
 func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats, error) {

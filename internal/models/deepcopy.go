@@ -377,6 +377,11 @@ func cloneHost(src Host) Host {
 	dest := src
 	dest.LoadAverage = append([]float64(nil), src.LoadAverage...)
 	dest.Disks = append([]Disk(nil), src.Disks...)
+	dest.ZFSPools = make([]HostZFSPool, len(src.ZFSPools))
+	for i := range src.ZFSPools {
+		dest.ZFSPools[i] = src.ZFSPools[i]
+		dest.ZFSPools[i].Datasets = append([]ZFSDataset(nil), src.ZFSPools[i].Datasets...)
+	}
 	dest.DiskIO = append([]DiskIO(nil), src.DiskIO...)
 	dest.NetworkInterfaces = cloneHostNetworkInterfaces(src.NetworkInterfaces)
 	dest.Sensors = cloneHostSensorSummary(src.Sensors)
@@ -1084,6 +1089,7 @@ func cloneZFSPool(src *ZFSPool) *ZFSPool {
 	}
 	dest := *src
 	dest.Devices = append([]ZFSDevice(nil), src.Devices...)
+	dest.Datasets = append([]ZFSDataset(nil), src.Datasets...)
 	normalized := dest.NormalizeCollections()
 	return &normalized
 }

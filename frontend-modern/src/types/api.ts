@@ -839,6 +839,16 @@ export interface ZFSPool {
   writeErrors: number;
   checksumErrors: number;
   devices: ZFSDevice[];
+  datasets?: ZFSDataset[];
+}
+
+export interface ZFSDataset {
+  name: string;
+  type?: 'filesystem' | 'volume' | string;
+  mountpoint?: string;
+  usedBytes?: number;
+  availableBytes?: number;
+  referencedBytes?: number;
 }
 
 export interface ZFSScan {

@@ -37,6 +37,16 @@ const buildRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => (
       readErrors: 1,
       writeErrors: 2,
       checksumErrors: 3,
+      datasets: [
+        {
+          name: 'tank/apps',
+          type: 'filesystem',
+          mountpoint: '/tank/apps',
+          usedBytes: 1024,
+          availableBytes: 2048,
+          referencedBytes: 512,
+        },
+      ],
       devices: [
         { name: 'sda', type: 'disk', state: 'ONLINE' },
         {
@@ -132,6 +142,16 @@ describe('storagePoolDetailPresentation', () => {
           state: 'FAULTED',
           errorSummary: '3R/0W/1C errors',
           message: 'too many errors',
+        },
+      ],
+      datasets: [
+        {
+          name: 'tank/apps',
+          type: 'filesystem',
+          mountpoint: '/tank/apps',
+          usedLabel: '1.00 KB',
+          availableLabel: '2.00 KB',
+          referencedLabel: '512 B',
         },
       ],
     });

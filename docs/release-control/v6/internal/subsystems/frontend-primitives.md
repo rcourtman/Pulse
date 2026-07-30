@@ -5521,3 +5521,12 @@ It must not create a page-local branding cache or render configured values
 when `white_label` is unavailable. Focused proofs live in
 `BrandingSettingsCard.test.tsx`, `AppLayout.test.tsx`, and
 `stores/__tests__/systemSettings.test.ts`.
+
+### ZFS datasets extend the existing storage detail primitive
+
+`StoragePoolDetail` remains the owner of the expandable ZFS pool presentation.
+When a pool carries optional `datasets`, its already-expanded detail region
+renders the canonical dataset name and formatted used, available, referenced,
+and mountpoint values. Empty dataset collections add no new panel, route, or
+navigation state. The presentation mapper owns byte formatting and missing
+mountpoint fallback so components do not reinterpret provider data.

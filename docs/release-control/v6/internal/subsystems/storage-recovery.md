@@ -4827,3 +4827,10 @@ configuration export/restore therefore carries the display name and bounded
 inline logo exactly as it already carries report branding. Runtime reads
 through `/api/runtime/branding` are read-only and entitlement-filtered; they do
 not mutate, relocate, or synthesize persisted branding state.
+
+ZFS dataset inventory is likewise read-only runtime evidence, not recovery or
+storage-configuration state. The agent does not mount, create, snapshot,
+destroy, or alter datasets, and the server does not persist a second provider
+inventory. Optional dataset rows travel with the current host snapshot and
+only enrich the matching Proxmox pool presentation; backup and restore
+authority, storage mutation paths, and recovery semantics are unchanged.

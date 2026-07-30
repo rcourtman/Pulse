@@ -2,8 +2,12 @@ package hostmetrics
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
+
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 func TestSummarizeZFSPoolsUsesZpoolStats(t *testing.T) {
@@ -542,6 +546,78 @@ func TestParseZpoolList(t *testing.T) {
 				t.Errorf("parseZpoolList() got %d pools, want %d", len(got), len(tt.wantPools))
 			}
 		})
+	}
+}
+
+func TestParseZFSListPreservesDatasetHierarchyAndUsage(t *testing.T) {
+	output := []byte(
+		"rpool\tfilesystem\t100\t900\t75\t/rpool\n" +
+			"rpool/ROOT\tfilesystem\t200\t800\t150\tlegacy\n" +
+			"rpool/data/vm-100-disk-0\tvolume\t300\t700\t300\t-\n" +
+			"other/apps\tfilesystem\t400\t600\t350\t/other/apps\n",
+	)
+
+	got, err := parseZFSList(output, []string{"rpool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got["rpool"]) != 2 {
+		t.Fatalf("datasets = %#v, want two descendants", got["rpool"])
+	}
+	if got["rpool"][0] != (agentshost.ZFSDataset{
+		Name:            "rpool/ROOT",
+		Type:            "filesystem",
+		UsedBytes:       200,
+		AvailableBytes:  800,
+		ReferencedBytes: 150,
+	}) {
+		t.Fatalf("filesystem dataset = %#v", got["rpool"][0])
+	}
+	if got["rpool"][1].Type != "volume" || got["rpool"][1].Mountpoint != "" {
+		t.Fatalf("volume dataset = %#v", got["rpool"][1])
+	}
+}
+
+func TestParseZFSListBoundsDatasetInventory(t *testing.T) {
+	var output strings.Builder
+	for i := 0; i < maxZFSDatasetsPerPool+2; i++ {
+		_, _ = fmt.Fprintf(
+			&output,
+			"tank/data-%03d\tfilesystem\t1\t2\t1\t/tank/data-%03d\n",
+			i,
+			i,
+		)
+	}
+	_, _ = fmt.Fprintf(
+		&output,
+		"tank/%s\tfilesystem\t1\t2\t1\t/tank/too-long\n",
+		strings.Repeat("x", maxZFSDatasetNameBytes),
+	)
+
+	got, err := parseZFSList([]byte(output.String()), []string{"tank"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got["tank"]) != maxZFSDatasetsPerPool {
+		t.Fatalf("dataset count = %d, want %d", len(got["tank"]), maxZFSDatasetsPerPool)
+	}
+}
+
+func TestEnrichZFSPoolDisksWithDatasetsFallsBackToMountedInventory(t *testing.T) {
+	originalQuery := queryZFSDatasets
+	t.Cleanup(func() { queryZFSDatasets = originalQuery })
+	queryZFSDatasets = func(context.Context, []string) (map[string][]agentshost.ZFSDataset, error) {
+		return nil, context.DeadlineExceeded
+	}
+
+	disks := []agentshost.Disk{{Device: "tank", Type: "zfs"}}
+	enrichZFSPoolDisksWithDatasets(context.Background(), disks, []zfsDatasetUsage{
+		{Pool: "tank", Dataset: "tank", Mountpoint: "/tank"},
+		{Pool: "tank", Dataset: "tank/apps", Mountpoint: "/tank/apps", Used: 25, Free: 75},
+	})
+
+	if len(disks[0].ZFSDatasets) != 1 || disks[0].ZFSDatasets[0].Name != "tank/apps" {
+		t.Fatalf("fallback datasets = %#v", disks[0].ZFSDatasets)
 	}
 }
 

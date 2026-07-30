@@ -182,6 +182,56 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                       </For>
                     </div>
                   </Show>
+                  <Show when={zfsSummary()!.datasets.length > 0}>
+                    <div class={`${STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS} space-y-2 pt-2`}>
+                      <div class="text-xs font-medium text-base-content">
+                        Datasets ({zfsSummary()!.datasets.length})
+                      </div>
+                      <div class="overflow-x-auto rounded border border-border">
+                        <table class="w-full min-w-[34rem] text-left text-xs">
+                          <thead class="bg-surface-alt text-muted">
+                            <tr>
+                              <th class="px-2 py-1.5 font-medium">Dataset</th>
+                              <th class="px-2 py-1.5 font-medium">Used</th>
+                              <th class="px-2 py-1.5 font-medium">Available</th>
+                              <th class="px-2 py-1.5 font-medium">Referenced</th>
+                              <th class="px-2 py-1.5 font-medium">Mountpoint</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <For each={zfsSummary()!.datasets}>
+                              {(dataset) => (
+                                <tr class="border-t border-border">
+                                  <td
+                                    class="max-w-64 truncate px-2 py-1.5 font-mono"
+                                    title={dataset.name}
+                                  >
+                                    {dataset.name}
+                                  </td>
+                                  <td class="whitespace-nowrap px-2 py-1.5 font-mono">
+                                    {dataset.usedLabel}
+                                  </td>
+                                  <td class="whitespace-nowrap px-2 py-1.5 font-mono">
+                                    {dataset.availableLabel}
+                                  </td>
+                                  <td class="whitespace-nowrap px-2 py-1.5 font-mono">
+                                    {dataset.referencedLabel}
+                                  </td>
+                                  <td
+                                    class="max-w-48 truncate px-2 py-1.5 text-muted"
+                                    title={dataset.mountpoint}
+                                  >
+                                    {dataset.mountpoint ||
+                                      (dataset.type === 'volume' ? 'zvol' : '—')}
+                                  </td>
+                                </tr>
+                              )}
+                            </For>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </Show>
                 </div>
               </div>
             </Show>

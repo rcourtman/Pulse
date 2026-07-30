@@ -191,6 +191,7 @@ func cloneZFSPool(in *models.ZFSPool) *models.ZFSPool {
 	}
 	out := *in
 	out.Devices = append([]models.ZFSDevice(nil), in.Devices...)
+	out.Datasets = append([]models.ZFSDataset(nil), in.Datasets...)
 	if in.ScanDetails != nil {
 		scan := *in.ScanDetails
 		scan.StartedAt = cloneTimePtr(in.ScanDetails.StartedAt)

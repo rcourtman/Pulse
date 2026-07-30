@@ -28,6 +28,12 @@ const hostContinuityRetention = 72 * time.Hour
 
 const maxRetiredHostReportStreams = 8
 
+const (
+	maxHostZFSDatasetsPerPool  = 128
+	maxHostZFSDatasetNameBytes = 512
+	maxHostZFSMountpointBytes  = 1024
+)
+
 func normalizeAgentMemory(total, used, free, cache int64, usage float64, swapTotal, swapUsed int64) models.Memory {
 	if total <= 0 {
 		return models.Memory{}
@@ -2571,6 +2577,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	)
 
 	disks := make([]models.Disk, 0, len(report.Disks))
+	hostZFSPools := hostZFSPoolsFromAgentDisks(report.Disks)
 	for _, disk := range report.Disks {
 		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
 		// the UI with tmpfs, devtmpfs, /dev, /run, /sys, docker overlay mounts, snap mounts,
@@ -2748,6 +2755,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		LoadAverage:       append([]float64(nil), report.Host.LoadAverage...),
 		Memory:            memory,
 		Disks:             disks,
+		ZFSPools:          hostZFSPools,
 		DiskIO:            diskIO,
 		NetworkInterfaces: network,
 		Sensors: models.HostSensorSummary{
@@ -2791,6 +2799,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 	if len(host.Disks) == 0 {
 		host.Disks = nil
+	}
+	if len(host.ZFSPools) == 0 {
+		host.ZFSPools = nil
 	}
 	if len(host.DiskIO) == 0 {
 		host.DiskIO = nil
@@ -3000,6 +3011,52 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	m.refreshUnifiedResourceStoreAfterAgentReport()
 
 	return host, nil
+}
+
+func hostZFSPoolsFromAgentDisks(disks []agentshost.Disk) []models.HostZFSPool {
+	pools := make([]models.HostZFSPool, 0)
+	for _, disk := range disks {
+		name := strings.TrimSpace(disk.Device)
+		if name == "" ||
+			!strings.EqualFold(strings.TrimSpace(disk.Type), "zfs") ||
+			len(disk.ZFSDatasets) == 0 {
+			continue
+		}
+		datasets := make([]models.ZFSDataset, 0, len(disk.ZFSDatasets))
+		for _, dataset := range disk.ZFSDatasets {
+			if len(datasets) >= maxHostZFSDatasetsPerPool {
+				break
+			}
+			datasetName := strings.TrimSpace(dataset.Name)
+			datasetType := strings.ToLower(strings.TrimSpace(dataset.Type))
+			if datasetType == "" {
+				datasetType = "filesystem"
+			}
+			mountpoint := strings.TrimSpace(dataset.Mountpoint)
+			if datasetName == "" ||
+				!strings.HasPrefix(datasetName, name+"/") ||
+				(datasetType != "filesystem" && datasetType != "volume") ||
+				len(datasetName) > maxHostZFSDatasetNameBytes ||
+				len(mountpoint) > maxHostZFSMountpointBytes ||
+				dataset.UsedBytes < 0 ||
+				dataset.AvailableBytes < 0 ||
+				dataset.ReferencedBytes < 0 {
+				continue
+			}
+			datasets = append(datasets, models.ZFSDataset{
+				Name:            datasetName,
+				Type:            datasetType,
+				Mountpoint:      mountpoint,
+				UsedBytes:       dataset.UsedBytes,
+				AvailableBytes:  dataset.AvailableBytes,
+				ReferencedBytes: dataset.ReferencedBytes,
+			})
+		}
+		if len(datasets) > 0 {
+			pools = append(pools, models.HostZFSPool{Name: name, Datasets: datasets})
+		}
+	}
+	return pools
 }
 
 func convertHostPackageUpdateStatus(status *agentshost.PackageUpdateStatus, observedAt time.Time) *models.HostPackageUpdateStatus {

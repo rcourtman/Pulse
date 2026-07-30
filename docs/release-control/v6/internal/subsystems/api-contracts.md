@@ -8730,3 +8730,13 @@ invalid or unknown image without discarding a valid display name.
 `internal/api/runtime_branding_test.go` and
 `internal/api/route_inventory_test.go` pin the entitlement, shape, image, and
 route contracts.
+
+### ZFS dataset evidence is an optional nested host-report contract
+
+The existing authenticated host-report payload may include `zfsDatasets` on a
+disk row. Each entry exposes only `name`, optional `type` and `mountpoint`, and
+non-negative `usedBytes`, `availableBytes`, and `referencedBytes`. The field is
+optional and additive: older agents omit it, older stored hosts may have no
+dataset collection, and provider ZFS pool responses omit `datasets` when no
+linked host evidence exists. Ingest trims text, rejects invalid counters, and
+bounds rows and field lengths before the data reaches runtime models.
