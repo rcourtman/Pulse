@@ -62,7 +62,7 @@ import {
 const PROXMOX_RESOURCE_QUERY =
   'type=agent,vm,system-container,oci-container,storage,physical_disk,ceph,pbs,pmg';
 
-const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
+const PROXMOX_PLATFORM_FILTER = 'proxmox-all';
 const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
 const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const;
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));

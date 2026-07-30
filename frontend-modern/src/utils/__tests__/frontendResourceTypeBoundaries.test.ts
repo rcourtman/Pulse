@@ -1605,7 +1605,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(storageDetailKeyValueRowSource).toContain('STORAGE_DETAIL_KEY_VALUE_ROW_CLASS');
     expect(storageDetailMetricCardSource).toContain('STORAGE_DETAIL_CARD_CLASS');
-    expect(storagePoolDetailSource).toContain('STORAGE_DETAIL_ROW_CLASS');
+    expect(storagePoolDetailSource).toContain('<tr class={STORAGE_DETAIL_ROW_CLASS}>');
     expect(storagePoolDetailSource).not.toContain('border-t border-border');
     expect(storagePoolDetailSource).not.toContain('col-span-2');
     expect(storagePoolDetailSource).not.toContain('text-base-content truncate flex-1');

@@ -6,6 +6,7 @@ import {
   normalizeStorageSourceKey,
   orderStorageSourceKeys,
   resolveStorageSourceKey,
+  storageSourceMatchesFilter,
   type StorageSourceOption,
 } from '@/utils/storageSources';
 
@@ -29,6 +30,14 @@ const makeStorage = (overrides: Partial<Pick<Storage, 'platform' | 'type'>>): St
   }) as Storage;
 
 describe('storageSources', () => {
+  it('matches the hidden Proxmox workspace scope across PVE, PBS, and PMG', () => {
+    expect(storageSourceMatchesFilter('proxmox-pve', 'proxmox-all')).toBe(true);
+    expect(storageSourceMatchesFilter('proxmox-pbs', 'proxmox-all')).toBe(true);
+    expect(storageSourceMatchesFilter('proxmox-pmg', 'proxmox-all')).toBe(true);
+    expect(storageSourceMatchesFilter('truenas', 'proxmox-all')).toBe(false);
+    expect(storageSourceMatchesFilter('proxmox-pbs', 'proxmox-pve')).toBe(false);
+  });
+
   describe('normalizeStorageSourceKey', () => {
     it.each([
       ['k8s', 'kubernetes'],

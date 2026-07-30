@@ -201,7 +201,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                           <tbody>
                             <For each={zfsSummary()!.datasets}>
                               {(dataset) => (
-                                <tr class="border-t border-border">
+                                <tr class={STORAGE_DETAIL_ROW_CLASS}>
                                   <td
                                     class="max-w-64 truncate px-2 py-1.5 font-mono"
                                     title={dataset.name}

@@ -74,6 +74,17 @@ export const normalizeStorageSourceKey = (value: string | null | undefined): str
   }
 };
 
+export const storageSourceMatchesFilter = (
+  source: string | null | undefined,
+  filter: string | null | undefined,
+): boolean => {
+  const sourceKey = normalizeStorageSourceKey(source);
+  const filterKey = normalizeStorageSourceKey(filter);
+  if (!filterKey || filterKey === 'all') return true;
+  if (filterKey === 'proxmox-all') return sourceKey.startsWith('proxmox-');
+  return sourceKey === filterKey;
+};
+
 export const resolveStorageSourceKey = (storage: Storage): string => {
   // Prefer the explicit canonical platform tag when the storage adapter
   // already declared it (TrueNAS, VMware, Hyper-V, etc. set

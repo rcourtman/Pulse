@@ -1,5 +1,9 @@
 import type { NormalizedHealth, StorageHealthFilter, StorageRecord } from './models';
-import { normalizeStorageSourceKey, orderStorageSourceKeys } from '@/utils/storageSources';
+import {
+  normalizeStorageSourceKey,
+  orderStorageSourceKeys,
+  storageSourceMatchesFilter,
+} from '@/utils/storageSources';
 import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
 import type { StorageCapacityDeltaPresentation } from './storageCapacityDeltaPresentation';
 import { resolveStorageRecordMetricResourceId } from './storageMetricsIdentity';
@@ -146,9 +150,7 @@ export const filterStorageRecords = (
   const selectedSource = normalizeStorageSourceKey(options.sourceFilter);
   return records
     .filter((record) =>
-      selectedSource === 'all'
-        ? true
-        : normalizeStorageSourceKey(record.source.platform) === selectedSource,
+      storageSourceMatchesFilter(normalizeStorageSourceKey(record.source.platform), selectedSource),
     )
     .filter((record) => matchesStorageHealthFilter(record.health, options.healthFilter))
     .filter((record) => matchesStorageRecordNode(record, options.selectedNode))

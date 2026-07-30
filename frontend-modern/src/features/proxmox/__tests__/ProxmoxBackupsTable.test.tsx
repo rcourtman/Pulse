@@ -377,6 +377,14 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
   });
 
+  it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {
+    expect(proxmoxPageSurfaceSource).toContain("const PROXMOX_PLATFORM_FILTER = 'proxmox-all';");
+    expect(proxmoxPageSurfaceSource).toContain('forcedSourceFilter={PROXMOX_PLATFORM_FILTER}');
+    expect(proxmoxPageSurfaceSource).not.toContain(
+      "const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';",
+    );
+  });
+
   it('keeps Patrol coverage out of Proxmox evidence surfaces', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('getMonitorContextPatrolProtectionPosture');
     expect(proxmoxPageSurfaceSource).not.toContain('getPatrolRunHistory(1)');

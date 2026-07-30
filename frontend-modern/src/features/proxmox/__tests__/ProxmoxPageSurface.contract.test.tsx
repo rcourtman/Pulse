@@ -6,6 +6,7 @@ import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
+const mockStorageProps = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -61,7 +62,10 @@ vi.mock('@solidjs/router', async () => {
 });
 
 vi.mock('@/components/Storage/Storage', () => ({
-  default: () => <div data-testid="storage-surface" />,
+  default: (props: { forcedSourceFilter?: string }) => {
+    mockStorageProps(props);
+    return <div data-testid="storage-surface" />;
+  },
 }));
 
 vi.mock('@/components/Workloads/WorkloadsFilter', () => ({
@@ -130,6 +134,25 @@ describe('ProxmoxPageSurface contract', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it('scopes the storage tab to both PVE and PBS resources', () => {
+    mockPathname.mockReturnValue('/proxmox/storage');
+    setResources([
+      makeResource({
+        id: 'pbs-datastore-1',
+        type: 'storage',
+        platformType: 'proxmox-pbs',
+        sources: ['pbs'],
+      }),
+    ]);
+
+    render(() => <ProxmoxPageSurface />);
+
+    expect(screen.getByTestId('storage-surface')).toBeInTheDocument();
+    expect(mockStorageProps).toHaveBeenCalledWith(
+      expect.objectContaining({ forcedSourceFilter: 'proxmox-all' }),
+    );
   });
 
   it('surfaces stale agent-backed Proxmox nodes', () => {

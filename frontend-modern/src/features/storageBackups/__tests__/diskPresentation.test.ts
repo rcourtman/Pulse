@@ -434,6 +434,27 @@ describe('diskPresentation', () => {
       }).map((disk) => disk.id),
     ).toEqual(['disk-warning']);
     expect(
+      filterAndSortPhysicalDisks(
+        [
+          warningDisk,
+          {
+            ...healthyDisk,
+            id: 'pbs-disk',
+            platformType: 'proxmox-pbs',
+            sources: ['agent', 'pbs'],
+          },
+        ],
+        {
+          selectedNode: null,
+          searchTerm: '',
+          sourceFilter: 'proxmox-all',
+          healthFilter: 'all',
+          getDiskData: (disk) => (disk.id === warningDisk.id ? warningData : healthyData),
+          matchesNode: () => true,
+        },
+      ).map((disk) => disk.id),
+    ).toEqual(['disk-warning', 'pbs-disk']);
+    expect(
       filterAndSortPhysicalDisks([warningDisk, healthyDisk], {
         selectedNode: null,
         searchTerm: '',
@@ -461,10 +482,12 @@ describe('wearout evidence boundary', () => {
 
   it('flags a spent SSD but leaves a rotational zero alone', () => {
     expect(
-      getPhysicalDiskHealthStatus(makeDiskData({ health: 'PASSED', wearout: 0, type: 'ssd' })).label,
+      getPhysicalDiskHealthStatus(makeDiskData({ health: 'PASSED', wearout: 0, type: 'ssd' }))
+        .label,
     ).toBe('Needs Attention');
     expect(
-      getPhysicalDiskHealthStatus(makeDiskData({ health: 'PASSED', wearout: 0, type: 'hdd' })).label,
+      getPhysicalDiskHealthStatus(makeDiskData({ health: 'PASSED', wearout: 0, type: 'hdd' }))
+        .label,
     ).toBe('Healthy');
   });
 

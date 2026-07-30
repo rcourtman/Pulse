@@ -4834,3 +4834,24 @@ destroy, or alter datasets, and the server does not persist a second provider
 inventory. Optional dataset rows travel with the current host snapshot and
 only enrich the matching Proxmox pool presentation; backup and restore
 authority, storage mutation paths, and recovery semantics are unchanged.
+
+The shared Proxmox Storage route uses the internal `proxmox-all` source scope
+to include normalized Proxmox-family storage rows and physical disks across
+PVE and PBS instead of silently narrowing the workspace to PVE. This umbrella
+scope is route-owned and hidden; ordinary source-picker selections remain
+exact, so selecting PVE does not admit PBS and selecting PBS does not admit
+PVE. Agent-reported SMART disks correlated to a unique PBS host may carry PBS
+platform membership for this filter, but their health and device facts remain
+agent telemetry rather than PBS API inventory.
+
+`frontend-modern/src/features/storageBackups/__tests__/storageModelCore.test.ts`,
+`frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`,
+and `frontend-modern/src/components/Storage/__tests__/storagePageState.test.ts`
+pin the record, disk, and node-scope behavior. The Proxmox surface wiring is
+also guarded by
+`frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx`.
+
+The ZFS pool-detail summary has one stable shape: `datasets` is always an
+array, including when the backend reports no dataset inventory. Consumers and
+branch proofs must retain the empty array instead of treating dataset support
+as an optional return-field contract.

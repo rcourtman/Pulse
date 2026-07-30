@@ -120,6 +120,27 @@ describe('storageModelCore', () => {
     });
   });
 
+  it('keeps both PVE pools and PBS datastores in the Proxmox workspace scope', () => {
+    const pbs = makeRecord({
+      id: 'pbs-datastore',
+      source: {
+        platform: 'proxmox-pbs',
+        family: 'virtualization',
+        origin: 'resource',
+        adapterId: 'resource-storage',
+      },
+    });
+
+    expect(
+      filterStorageRecords([makeRecord(), pbs], {
+        search: '',
+        sourceFilter: 'proxmox-all',
+        healthFilter: 'all',
+        selectedNode: null,
+      }).map((record) => record.id),
+    ).toEqual(['storage-1', 'pbs-datastore']);
+  });
+
   it('sorts storage records by the visible pool-table columns', () => {
     const alpha = makeRecord({
       id: 'storage-alpha',

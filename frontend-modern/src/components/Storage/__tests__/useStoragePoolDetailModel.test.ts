@@ -84,6 +84,7 @@ describe('useStoragePoolDetailModel', () => {
       scan: 'scrub in progress',
       errorSummary: null,
       devices: [{ name: 'sda', type: '', state: '', errorSummary: '', message: '' }],
+      datasets: [],
     });
     expect(result.linkedDisks()).toEqual([
       {

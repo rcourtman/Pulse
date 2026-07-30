@@ -10,6 +10,7 @@ import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import { storageSourceMatchesFilter } from '@/utils/storageSources';
 import { matchesPhysicalDiskNode } from './diskResourceUtils';
 import type { StorageGroupKey, StorageSortKey } from './useStorageModel';
 import type { StorageRouteStateFields } from './useStorageRouteState';
@@ -375,8 +376,8 @@ export const storageResourceMatchesSourceFilter = (
     ? platformData.sources.filter((source): source is string => typeof source === 'string')
     : [];
   const candidates = [resource.platformType, resource.sourceType, ...sources];
-  return candidates.some(
-    (candidate) => normalizeSourcePlatformQueryValue(candidate || '') === selectedSource,
+  return candidates.some((candidate) =>
+    storageSourceMatchesFilter(normalizeSourcePlatformQueryValue(candidate || ''), selectedSource),
   );
 };
 

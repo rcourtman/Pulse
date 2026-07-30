@@ -196,7 +196,14 @@ describe('storagePageState', () => {
 
     expect(storageResourceMatchesSourceFilter(node, 'all')).toBe(true);
     expect(storageResourceMatchesSourceFilter(node, 'proxmox-pve')).toBe(true);
+    expect(storageResourceMatchesSourceFilter(node, 'proxmox-all')).toBe(true);
     expect(storageResourceMatchesSourceFilter(node, 'truenas')).toBe(false);
+
+    const pbsNode = makeNode({
+      platformType: 'proxmox-pbs',
+      platformData: { sources: ['pbs', 'agent'] },
+    });
+    expect(storageResourceMatchesSourceFilter(pbsNode, 'proxmox-all')).toBe(true);
   });
 
   it('keeps expanded storage groups canonical across data refreshes', () => {

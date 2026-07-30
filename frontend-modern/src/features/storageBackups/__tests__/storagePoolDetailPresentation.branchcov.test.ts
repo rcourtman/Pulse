@@ -258,6 +258,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
       scan: '',
       errorSummary: null,
       devices: [],
+      datasets: [],
     });
   });
 
@@ -279,6 +280,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
       scan: '',
       errorSummary: null,
       devices: [],
+      datasets: [],
     });
   });
 
@@ -300,6 +302,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
       scan: 'scrub ok',
       errorSummary: null,
       devices: [{ name: 'sdc', type: '', state: '', errorSummary: '', message: '' }],
+      datasets: [],
     });
   });
 
@@ -321,6 +324,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
       scan: '',
       errorSummary: 'Errors: R:1 W:0 C:0',
       devices: [],
+      datasets: [],
     });
   });
 });

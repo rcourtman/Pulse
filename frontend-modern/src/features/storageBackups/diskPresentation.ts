@@ -11,7 +11,7 @@ import {
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getPhysicalDiskNodeIdentity } from '@/components/Storage/diskResourceUtils';
 import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSettingsPresentation';
-import { normalizeStorageSourceKey } from '@/utils/storageSources';
+import { normalizeStorageSourceKey, storageSourceMatchesFilter } from '@/utils/storageSources';
 import type { NormalizedHealth, StorageHealthFilter } from './models';
 import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
 
@@ -452,7 +452,7 @@ export function matchesPhysicalDiskFilterState(
   },
 ): boolean {
   const selectedSource = normalizeStorageSourceKey(options.sourceFilter || 'all');
-  if (selectedSource !== 'all' && getPhysicalDiskSourceKey(resource) !== selectedSource) {
+  if (!storageSourceMatchesFilter(getPhysicalDiskSourceKey(resource), selectedSource)) {
     return false;
   }
 

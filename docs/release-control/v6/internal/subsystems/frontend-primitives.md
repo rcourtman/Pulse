@@ -5548,3 +5548,22 @@ default history groups unchanged. Rendered table proof belongs in
 `frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
 drawer grouping and fallback proof belongs in
 `frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.
+
+### Proxmox Storage reuses the shared product-family source scope
+
+`frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx` mounts the
+canonical shared Storage surface for its Storage tab and supplies the hidden
+`proxmox-all` filter. Shared storage source matching owns that internal
+umbrella and admits normalized PVE, PBS, and other Proxmox-family source keys;
+visible source-picker filters remain exact. The page must not create a
+PBS-only disk table or duplicate storage state in the Proxmox feature.
+
+The rendered route contract in
+`frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx`
+and the shared-surface source guard in
+`frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx`
+pin this composition boundary.
+
+ZFS dataset table rows inside `StoragePoolDetail` inherit their separator from
+the shared `STORAGE_DETAIL_ROW_CLASS` presentation constant. The component
+must not reintroduce a raw border-token class for dataset rows.

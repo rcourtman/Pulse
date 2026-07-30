@@ -4210,6 +4210,22 @@ provider-local alert state.
 `internal/unifiedresources/ceph_pool_health_contract_test.go`, and
 `internal/api/resources_pool_health_contract_test.go` pin the normalized and
 wire-level contract.
+
+### PBS host physical-disk correlation preserves agent telemetry authority
+
+`internal/unifiedresources/pbs_host_disks.go` may add `pbs` source membership
+to an agent host and its agent-reported SMART disk resources only when one
+host is uniquely corroborated by the PBS instance name, endpoint hostname, or
+endpoint IP against the host report and interface addresses. Multiple matches
+are ambiguous and must fail closed without assigning PBS ownership.
+
+PBS does not supply the SMART inventory. Disk identity, health, temperature,
+and other typed physical-disk facts therefore remain agent-owned, while the
+PBS source mapping and PBS-parent relationship make the existing disk
+discoverable in Proxmox Backup Server storage context. Canonical parent and
+fact precedence continue to follow the existing source-priority rules.
+`internal/unifiedresources/pbs_pmg_registry_test.go` pins the unique-match and
+ambiguous-match boundaries.
 That same shared-consumer boundary now also owns VMware phase-1 detail
 presentation. `frontend-modern/src/components/Infrastructure/`
 `resourceDetailDrawerVmwareModel.ts`,

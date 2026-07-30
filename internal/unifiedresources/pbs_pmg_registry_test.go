@@ -191,3 +191,129 @@ func TestIngestSnapshotIncludesPBSAndPMGInstances(t *testing.T) {
 		t.Fatalf("expected PMG mail count points, got %+v", pmgResource.PMG.MailCount)
 	}
 }
+
+func TestIngestSnapshotAssociatesPBSHostAgentPhysicalDisks(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "agent-pbs-1",
+				Hostname:  "pbs-one.local",
+				MachineID: "machine-pbs-1",
+				Status:    "online",
+				LastSeen:  now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/sda",
+							Model:       "Backup Drive",
+							Serial:      "PBS-DISK-1",
+							Health:      "PASSED",
+							Temperature: 36,
+						},
+					},
+				},
+			},
+		},
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:       "pbs-1",
+				Name:     "pbs-one",
+				Host:     "https://pbs-one.example:8007",
+				Status:   "online",
+				LastSeen: now,
+			},
+		},
+	})
+
+	var hostResource *Resource
+	var diskResource *Resource
+	for _, resource := range registry.List() {
+		switch resource.Type {
+		case ResourceTypeAgent:
+			if resource.Agent != nil && resource.Agent.AgentID == "agent-pbs-1" {
+				copy := resource
+				hostResource = &copy
+			}
+		case ResourceTypePhysicalDisk:
+			if resource.PhysicalDisk != nil && resource.PhysicalDisk.Serial == "PBS-DISK-1" {
+				copy := resource
+				diskResource = &copy
+			}
+		}
+	}
+	if hostResource == nil || diskResource == nil {
+		t.Fatalf("expected correlated PBS host and disk, host=%+v disk=%+v", hostResource, diskResource)
+	}
+	if !containsDataSource(hostResource.Sources, SourcePBS) {
+		t.Fatalf("PBS host sources = %v, want PBS membership", hostResource.Sources)
+	}
+	if !containsDataSource(diskResource.Sources, SourceAgent) ||
+		!containsDataSource(diskResource.Sources, SourcePBS) {
+		t.Fatalf("PBS disk sources = %v, want agent and PBS", diskResource.Sources)
+	}
+	if diskResource.ParentID == nil || *diskResource.ParentID != hostResource.ID {
+		t.Fatalf(
+			"PBS disk parent = %v, want agent host %q to retain canonical parent authority",
+			diskResource.ParentID,
+			hostResource.ID,
+		)
+	}
+	RefreshCanonicalMetadata(diskResource)
+	if !containsPlatformScope(diskResource.PlatformScopes, "proxmox-pbs") {
+		t.Fatalf("PBS disk platform scopes = %v, want proxmox-pbs", diskResource.PlatformScopes)
+	}
+}
+
+func TestIngestSnapshotSkipsAmbiguousPBSHostAgentAssociation(t *testing.T) {
+	now := time.Now().UTC()
+	hosts := []models.Host{
+		{
+			ID:       "agent-pbs-a",
+			Hostname: "pbs-one.local",
+			Status:   "online",
+			LastSeen: now,
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{{Device: "/dev/sda", Serial: "PBS-A"}},
+			},
+		},
+		{
+			ID:       "agent-pbs-b",
+			Hostname: "pbs-one.example",
+			Status:   "online",
+			LastSeen: now,
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{{Device: "/dev/sdb", Serial: "PBS-B"}},
+			},
+		},
+	}
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: hosts,
+		PBSInstances: []models.PBSInstance{
+			{
+				ID:       "pbs-1",
+				Name:     "pbs-one",
+				Host:     "https://pbs-one.example:8007",
+				Status:   "online",
+				LastSeen: now,
+			},
+		},
+	})
+
+	for _, resource := range registry.ListByType(ResourceTypePhysicalDisk) {
+		if containsDataSource(resource.Sources, SourcePBS) {
+			t.Fatalf("ambiguous PBS host disk gained PBS source membership: %+v", resource)
+		}
+	}
+}
+
+func containsPlatformScope(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
