@@ -550,6 +550,13 @@ The alert webhook editor now mirrors that canonical Pushover field rule through
 `frontend-modern/src/utils/alertWebhookPresentation.ts`, so the UI shares the
 same alias, preset, and custom-field input mapping instead of carrying its own
 local webhook-field normalization fork.
+The destination editor also exposes resource-tag routing for email and each
+alert webhook. Alert producers must carry canonical resource tags into alert
+metadata: Proxmox VM/container tags remain literal, Docker container/service
+labels become `key:value` tags (or `key` for empty values), host-agent tags
+remain literal, and unified resources forward their canonical `Tags`. The
+alerts surface owns this producer metadata and routing UX; destination
+matching, persistence, and receipt-aware delivery remain notifications-owned.
 The alert manager callback layer now also has to stay fan-out-safe. Monitor
 delivery, the unified alert bridge, and Patrol-adjacent AI listeners must
 compose through additive fired/resolved subscriptions instead of overwriting a
@@ -882,6 +889,10 @@ initial raised notification. Resolved notifications must not fan out when the
 alert was never notified or was already acknowledged, and monitoring-driven
 escalation delivery must consult the same quiet-hours suppression path while
 still letting canonical escalation state reach websocket consumers.
+Resource-tag filtering must not re-evaluate mutable tags for a resolved event.
+The notification owner uses the firing delivery receipt to select recovery
+destinations, so a tag change between firing and recovery cannot suppress a
+clear from a destination that received the original alert.
 That schedule surface now also follows the same shell/runtime split as the
 other feature tabs: `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx`
 stays the render shell, while

@@ -6241,6 +6241,13 @@ input aliases at ingress instead of leaving them as a live runtime contract:
 Pushover `app_token` / `user_token` may be accepted only at config/API/UI input
 boundaries, and API responses plus live notification runtime state must carry
 only canonical `token` / `user` fields.
+Email and webhook notification payloads also carry optional `tagFilter` and
+`tagFilterMode` (`all` or `any`). Omitted routing fields on update preserve
+saved values for mixed-version clients; an explicit empty `tagFilter` clears
+routing. Webhook list/create/update responses must return the normalized
+routing state without exposing masked headers, custom fields, or signing
+secrets, and the frontend client must retain the old payload shape when older
+servers omit these optional fields.
 `GET /api/notifications/health` must fail closed around the persistent queue.
 Its queue object reports `healthy`, `degraded`, or `unavailable`; includes
 retained status counts, `attention_required`, fixed `reason_codes`, and the

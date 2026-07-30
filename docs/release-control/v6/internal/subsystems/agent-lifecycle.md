@@ -4114,6 +4114,11 @@ accept compatibility keys like Pushover `app_token` / `user_token`, but it
 must return and forward only canonical `token` / `user` fields so agent-
 adjacent shared `internal/api/` surfaces do not inherit a second live alias
 contract.
+That notification boundary also carries resource-tag routing configuration.
+`internal/api/notifications.go` may preserve and normalize `tagFilter` plus
+`tagFilterMode` for email and webhook destinations, but those fields remain
+notifications/alerts-owned delivery policy. They do not change agent
+enrollment, command targeting, lifecycle authority, or host identity.
 That same shared `internal/api/` dependency now also assumes recovery-token
 persistence follows the same rule: raw recovery secrets may be minted for
 immediate operator use, but `recovery_tokens.go` must persist only token hashes

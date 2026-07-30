@@ -2211,6 +2211,10 @@ Notification webhook management changes on shared `internal/api/` handlers are
 likewise adjacent only: the webhook `signingSecret` payload field and its
 masking semantics are notifications/API-contract owned and create no storage,
 recovery-point, or backup-surface semantics.
+Resource-tag routing fields on email and webhook configuration are likewise
+notifications/alerts-owned. They may select delivery destinations from
+canonical alert metadata, but they do not alter storage health, protection
+posture, backup verification, recovery-point validity, or restore readiness.
 Persistent notification queue-health changes on that same shared boundary
 remain notifications/API-contract owned. Retained failed/dead-letter counts,
 their seven-day/30-day retention metadata, and fail-closed unavailable state

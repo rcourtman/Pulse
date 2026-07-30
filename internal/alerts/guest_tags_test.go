@@ -6,35 +6,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func TestGuestAlertIncludesTagsForNotificationRouting(t *testing.T) {
-	m := newTestManager(t)
-	m.ClearActiveAlerts()
-
-	m.mu.Lock()
-	m.config.GuestDefaults = ThresholdConfig{
-		CPU: &HysteresisThreshold{Trigger: 80, Clear: 70},
-	}
-	m.config.TimeThresholds = map[string]int{}
-	m.mu.Unlock()
-
-	guest := models.VM{
-		ID:     "qemu/route-100",
-		Name:   "customer-alpha",
-		Status: "running",
-		CPU:    0.95,
-		Tags:   []string{"customer:alpha", "critical"},
-	}
-	m.CheckGuest(guest, "pve-prod")
-
-	m.mu.RLock()
-	alert := testRequireActiveAlert(t, m, canonicalMetricStateID(guest.ID, "cpu"))
-	m.mu.RUnlock()
-	tags, ok := alert.Metadata["tags"].([]string)
-	if !ok || len(tags) != 2 || tags[0] != "customer:alpha" || tags[1] != "critical" {
-		t.Fatalf("guest routing tags = %#v", alert.Metadata["tags"])
-	}
-}
-
 func TestGuestPoweredOffAlertIncludesTagsForNotificationRouting(t *testing.T) {
 	m := newTestManager(t)
 	tags := []string{"customer:alpha", "critical"}

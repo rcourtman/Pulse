@@ -4763,6 +4763,11 @@ controls in `ThresholdsTableDockerTab.tsx` remain gated to real
 `docker-host` resources instead of leaking onto platform-managed runtimes.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
 owns webhook runtime, and
+the email and webhook destination forms compose the shared `TagInput` for
+resource-tag routing. Their feature state owns `tagFilter` plus the `all`/`any`
+mode, an empty filter presents global delivery, and webhook list cards render
+the saved tags without creating a second tag-input primitive or destination-
+local normalization contract.
 `frontend-modern/src/components/Alerts/ResourceTable.tsx` now follows the same
 shell rule: the shell only picks desktop vs mobile render ownership and bulk-edit
 composition, while
