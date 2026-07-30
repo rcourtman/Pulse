@@ -3051,6 +3051,40 @@ func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {
 	}
 }
 
+func TestMonitorStartupAppliesPersistedInitialNotificationTarget(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	t.Cleanup(func() { mustSetMockEnabled(t, previous) })
+
+	dataDir := t.TempDir()
+	persistence := config.NewConfigPersistence(dataDir)
+	alertManager := alerts.NewManagerWithDataDir(dataDir)
+	alertConfig := alertManager.GetConfig()
+	alertConfig.Enabled = true
+	alertConfig.ActivationState = alerts.ActivationActive
+	alertConfig.Schedule.InitialNotify = "email"
+	alertManager.UpdateConfig(alertConfig)
+	if err := persistence.SaveAlertConfig(alertManager.GetConfig()); err != nil {
+		alertManager.Stop()
+		t.Fatalf("save alert config: %v", err)
+	}
+	alertManager.Stop()
+
+	monitor, err := New(&config.Config{
+		ConfigPath:   dataDir,
+		DataPath:     dataDir,
+		EnvOverrides: make(map[string]bool),
+	})
+	if err != nil {
+		t.Fatalf("create monitor: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+
+	if actual := monitor.GetNotificationManager().GetInitialNotifyTarget(); actual != "email" {
+		t.Fatalf("startup initial notification target = %q, want email", actual)
+	}
+}
+
 func waitForStoredDiskMetric(t *testing.T, store *metrics.Store, resourceID, metric string) []metrics.MetricPoint {
 	t.Helper()
 

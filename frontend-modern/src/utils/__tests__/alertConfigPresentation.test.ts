@@ -8,8 +8,13 @@ import {
   ALERT_CONFIG_COOLDOWN_PERIOD_LABEL,
   ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX,
   ALERT_CONFIG_COOLDOWN_TITLE,
+  ALERT_CONFIG_DELIVERY_DESCRIPTION,
+  ALERT_CONFIG_DELIVERY_HELP,
+  ALERT_CONFIG_DELIVERY_TARGET_LABEL,
+  ALERT_CONFIG_DELIVERY_TITLE,
   ALERT_CONFIG_ESCALATION_DESCRIPTION,
   ALERT_CONFIG_ESCALATION_NOTIFY_ALL,
+  ALERT_CONFIG_ESCALATION_NOTIFY_APPRISE,
   ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL,
   ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS,
   ALERT_CONFIG_ESCALATION_TITLE,
@@ -60,6 +65,7 @@ import {
   getAlertConfigSaveChangesLabel,
   getAlertConfigSaveSuccess,
   getAlertConfigSummaryCooldown,
+  getAlertConfigSummaryDelivery,
   getAlertConfigSummaryEscalation,
   getAlertConfigSummaryGrouping,
   getAlertConfigSummaryAllDisabled,
@@ -76,7 +82,7 @@ describe('alertConfigPresentation', () => {
     expect(ALERT_CONFIG_SAVE_CHANGES).toBe('Save Changes');
     expect(ALERT_CONFIG_RESET_DEFAULTS).toBe('Reset to defaults');
     expect(ALERT_CONFIG_RESET_DEFAULTS_TITLE).toBe(
-      'Restore quiet hours, cooldown, grouping, and escalation settings to their defaults',
+      'Restore quiet hours, cooldown, grouping, delivery, and escalation settings to their defaults',
     );
     expect(ALERT_CONFIG_SCHEDULING_TITLE).toBe('Alert scheduling');
     expect(ALERT_CONFIG_SCHEDULING_DESCRIPTION).toBe('Configure when and how alerts are delivered');
@@ -131,11 +137,20 @@ describe('alertConfigPresentation', () => {
     expect(ALERT_CONFIG_ESCALATION_DESCRIPTION).toBe(
       'Notify additional contacts for persistent issues.',
     );
+    expect(ALERT_CONFIG_DELIVERY_TITLE).toBe('Initial delivery');
+    expect(ALERT_CONFIG_DELIVERY_DESCRIPTION).toBe(
+      'Choose where firing and recovery notifications are sent.',
+    );
+    expect(ALERT_CONFIG_DELIVERY_TARGET_LABEL).toBe('Send initial alerts to');
+    expect(ALERT_CONFIG_DELIVERY_HELP).toBe(
+      'Escalation levels can use a different destination for persistent alerts.',
+    );
     expect(ALERT_CONFIG_RECOVERY_HELP).toBe(
       'Sends on the same channels as live alerts to confirm when a condition clears.',
     );
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL).toBe('Email');
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS).toBe('Webhooks');
+    expect(ALERT_CONFIG_ESCALATION_NOTIFY_APPRISE).toBe('Apprise');
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_ALL).toBe('All channels');
     expect(ALERT_CONFIG_SUMMARY_TITLE).toBe('Configuration summary');
     expect(ALERT_CONFIG_SUMMARY_DESCRIPTION).toBe('Preview of the active schedule settings.');
@@ -154,7 +169,7 @@ describe('alertConfigPresentation', () => {
     expect(getAlertConfigSaveChangesLabel()).toBe('Save Changes');
     expect(getAlertConfigResetDefaultsLabel()).toBe('Reset to defaults');
     expect(getAlertConfigResetDefaultsTitle()).toBe(
-      'Restore quiet hours, cooldown, grouping, and escalation settings to their defaults',
+      'Restore quiet hours, cooldown, grouping, delivery, and escalation settings to their defaults',
     );
     expect(getAlertConfigDiscardedSuccess()).toBe('Changes discarded');
     expect(getAlertConfigReloadFailure()).toBe('Failed to reload configuration');
@@ -185,7 +200,11 @@ describe('alertConfigPresentation', () => {
     expect(getAlertConfigEscalationHelp()).toBe('Define escalation levels for unresolved alerts:');
     expect(getAlertConfigEscalationNotifyLabel('email')).toBe('Email');
     expect(getAlertConfigEscalationNotifyLabel('webhook')).toBe('Webhooks');
+    expect(getAlertConfigEscalationNotifyLabel('apprise')).toBe('Apprise');
     expect(getAlertConfigEscalationNotifyLabel('all')).toBe('All channels');
+    expect(getAlertConfigSummaryDelivery('apprise')).toBe(
+      '• Initial and recovery notifications use Apprise',
+    );
     expect(getAlertConfigSummaryRecoveryEnabled()).toBe(ALERT_CONFIG_SUMMARY_RECOVERY);
     expect(getAlertConfigSummaryEscalation(2)).toBe('• 2 escalation levels configured');
     expect(getAlertConfigSummaryAllDisabled()).toBe(

@@ -19,6 +19,11 @@
 
 Own polling, typed collection, runtime state assembly, and canonical monitoring
 truth for live infrastructure data.
+Monitor construction also applies the persisted alert schedule's normalized
+initial-delivery target to the tenant notification manager. This is runtime
+wiring only: monitoring does not choose destinations or own notification
+policy, and live API saves must apply the same setting without requiring a
+monitor restart.
 Monitoring also owns the distinction between Proxmox VM power state and QEMU
 guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy

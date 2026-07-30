@@ -17,6 +17,13 @@
 
 Own alert identity, alert specs, evaluation, persistence semantics, and
 operator-facing alert routing behavior for live runtime alerts.
+Alert schedule delivery routing is one persisted, normalized contract.
+`schedule.initialNotify` accepts `all`, `email`, `webhook`, or `apprise`;
+missing, legacy, and unknown values preserve the backward-compatible `all`
+target. The selected initial target owns firing, grouped, and recovery delivery,
+while every escalation level retains its own independently normalized target.
+Saving the alert configuration must update the live notification manager as
+well as persistence so delivery does not differ before and after restart.
 Docker and Podman container CPU thresholds evaluate host-capacity-normalized
 CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
 carry the raw per-core value and reporting host CPU count for evidence, but the

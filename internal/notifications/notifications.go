@@ -236,6 +236,7 @@ type NotificationManager struct {
 	appriseConfig      AppriseConfig
 	enabled            bool
 	cooldown           time.Duration
+	initialTarget      notificationDeliveryTarget
 	notifyOnResolve    bool
 	lastNotified       map[string]notificationRecord
 	deliveryReceipts   map[string]struct{}
@@ -711,6 +712,7 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 	nm := &NotificationManager{
 		enabled:          true,
 		cooldown:         5 * time.Minute,
+		initialTarget:    notificationDeliveryTargetAll,
 		notifyOnResolve:  true,
 		lastNotified:     make(map[string]notificationRecord),
 		deliveryReceipts: make(map[string]struct{}),
@@ -883,6 +885,28 @@ func (n *NotificationManager) SetNotifyOnResolve(enabled bool) {
 	}
 }
 
+// SetInitialNotifyTarget selects destinations for firing and grouped
+// notifications. Matching recovery delivery follows firing delivery receipts,
+// while escalation levels retain their own per-level routing.
+func (n *NotificationManager) SetInitialNotifyTarget(target string) {
+	normalized := normalizeNotificationDeliveryTarget(target)
+	n.mu.Lock()
+	was := n.initialTarget
+	n.initialTarget = normalized
+	n.mu.Unlock()
+
+	if was != normalized {
+		log.Info().Str("target", string(normalized)).Msg("updated initial alert notification target")
+	}
+}
+
+// GetInitialNotifyTarget returns the normalized initial delivery target.
+func (n *NotificationManager) GetInitialNotifyTarget() string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return string(n.initialTarget)
+}
+
 // GetNotifyOnResolve returns whether resolved alerts trigger notifications.
 func (n *NotificationManager) GetNotifyOnResolve() bool {
 	n.mu.RLock()
@@ -1019,7 +1043,10 @@ func (n *NotificationManager) IsEnabled() bool {
 
 // SendAlert sends notifications for a newly fired or explicitly re-notified alert.
 func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
-	n.sendAlert(alert, alertSendOptions{target: notificationDeliveryTargetAll})
+	n.mu.RLock()
+	target := n.initialTarget
+	n.mu.RUnlock()
+	n.sendAlert(alert, alertSendOptions{target: target})
 }
 
 // SendEscalatedAlert sends a scheduled escalation notification. Escalation
@@ -1436,10 +1463,19 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	emailConfig := copyEmailConfig(n.emailConfig)
 	webhooks := copyWebhookConfigs(n.webhooks)
 	appriseConfig := copyAppriseConfig(n.appriseConfig)
+	initialTarget := n.initialTarget
 	queue := n.queue
 	n.mu.Unlock()
 
-	jobs := buildNotificationDeliveryJobs(emailConfig, webhooks, appriseConfig, alertsToSend, eventAlert, time.Time{})
+	jobs := buildNotificationDeliveryJobsForTarget(
+		emailConfig,
+		webhooks,
+		appriseConfig,
+		alertsToSend,
+		eventAlert,
+		time.Time{},
+		initialTarget,
+	)
 	if len(jobs) == 0 {
 		// Preserve cooldown semantics when notifications are globally enabled
 		// but no destination is configured. Delivery receipts remain empty, so

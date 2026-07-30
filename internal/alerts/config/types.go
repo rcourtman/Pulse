@@ -78,7 +78,7 @@ type QuietHoursSuppression struct {
 // EscalationLevel represents an escalation rule
 type EscalationLevel struct {
 	After  int    `json:"after"`  // minutes after initial alert
-	Notify string `json:"notify"` // "email", "webhook", or "all"
+	Notify string `json:"notify"` // "email", "webhook", "apprise", or "all"
 }
 
 // EscalationConfig represents alert escalation configuration
@@ -100,9 +100,25 @@ type ScheduleConfig struct {
 	QuietHours      QuietHours       `json:"quietHours"`
 	Cooldown        int              `json:"cooldown"`        // minutes
 	MaxAlertsHour   int              `json:"maxAlertsHour"`   // max alerts per hour per resource
+	InitialNotify   string           `json:"initialNotify"`   // "email", "webhook", "apprise", or "all"
 	NotifyOnResolve bool             `json:"notifyOnResolve"` // Send notification when alert clears
 	Escalation      EscalationConfig `json:"escalation"`
 	Grouping        GroupingConfig   `json:"grouping"`
+}
+
+// NormalizeNotificationDeliveryTarget keeps schedule delivery routing backward
+// compatible while rejecting unknown values from persisted or API config.
+func NormalizeNotificationDeliveryTarget(target string) string {
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case "email":
+		return "email"
+	case "webhook", "webhooks":
+		return "webhook"
+	case "apprise":
+		return "apprise"
+	default:
+		return "all"
+	}
 }
 
 // FilterCondition represents a single filter condition

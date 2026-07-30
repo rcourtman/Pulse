@@ -95,6 +95,7 @@ type alertSchedulePresence struct {
 type alertScheduleFieldPresence struct {
 	Cooldown        *int                           `json:"cooldown"`
 	MaxAlertsHour   *int                           `json:"maxAlertsHour"`
+	InitialNotify   *string                        `json:"initialNotify"`
 	NotifyOnResolve *bool                          `json:"notifyOnResolve"`
 	Grouping        *alertScheduleGroupingPresence `json:"grouping"`
 }
@@ -979,6 +980,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 				Schedule: alerts.ScheduleConfig{
 					Cooldown:        5,
 					MaxAlertsHour:   10,
+					InitialNotify:   "all",
 					NotifyOnResolve: true,
 					Grouping: alerts.GroupingConfig{
 						Enabled: true,
@@ -1038,6 +1040,7 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	defaultSchedule := alerts.ScheduleConfig{
 		Cooldown:        5,
 		MaxAlertsHour:   10,
+		InitialNotify:   "all",
 		NotifyOnResolve: true,
 		Grouping: alerts.GroupingConfig{
 			Enabled: true,
@@ -1055,6 +1058,9 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		}
 		if sched == nil || sched.MaxAlertsHour == nil {
 			config.Schedule.MaxAlertsHour = defaultSchedule.MaxAlertsHour
+		}
+		if sched == nil || sched.InitialNotify == nil {
+			config.Schedule.InitialNotify = defaultSchedule.InitialNotify
 		}
 		if sched == nil || sched.NotifyOnResolve == nil {
 			config.Schedule.NotifyOnResolve = defaultSchedule.NotifyOnResolve

@@ -40,6 +40,7 @@ import type {
   EscalationConfig,
   EscalationNotifyTarget,
   GroupingConfig,
+  NotificationDeliveryTarget,
   QuietHoursConfig,
 } from './types';
 import { GROUPING_WINDOW_DEFAULT_SECONDS, clampCooldownMinutes } from './types';
@@ -67,6 +68,7 @@ export interface AlertsConfigurationSnapshot {
   scheduleCooldown: CooldownConfig;
   scheduleGrouping: GroupingConfig;
   scheduleEscalation: EscalationConfig;
+  initialNotify: NotificationDeliveryTarget;
   notifyOnResolve: boolean;
   guestDefaults: Record<string, number | undefined>;
   guestDisableConnectivity: boolean;
@@ -218,12 +220,29 @@ const normalizeWarningCriticalPair = (
 const normalizeStringList = (values: string[] | undefined): string[] =>
   (values ?? []).map((value) => value.trim()).filter((value) => value.length > 0);
 
+const normalizeNotificationDeliveryTarget = (
+  value: string | undefined,
+): NotificationDeliveryTarget => {
+  switch (value?.trim().toLowerCase()) {
+    case 'email':
+      return 'email';
+    case 'webhook':
+    case 'webhooks':
+      return 'webhook';
+    case 'apprise':
+      return 'apprise';
+    default:
+      return 'all';
+  }
+};
+
 export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationSnapshot {
   return {
     scheduleQuietHours: createDefaultQuietHours(),
     scheduleCooldown: createDefaultCooldown(),
     scheduleGrouping: createDefaultGrouping(),
     scheduleEscalation: createDefaultEscalation(),
+    initialNotify: 'all',
     notifyOnResolve: createDefaultResolveNotifications(),
     guestDefaults: { ...FACTORY_GUEST_DEFAULTS },
     guestDisableConnectivity: false,
@@ -578,6 +597,8 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
   snapshot.disableAllDockerHostsOffline = config.disableAllDockerHostsOffline ?? false;
 
   if (config.schedule) {
+    snapshot.initialNotify = normalizeNotificationDeliveryTarget(config.schedule.initialNotify);
+
     if (config.schedule.quietHours) {
       const quietHours = config.schedule.quietHours;
       const days = Array.isArray(quietHours.days)
@@ -642,7 +663,7 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
         enabled: Boolean(config.schedule.escalation.enabled),
         levels: (config.schedule.escalation.levels || []).map((level) => ({
           after: typeof level.after === 'number' ? level.after : 15,
-          notify: (level.notify as EscalationNotifyTarget) || 'all',
+          notify: normalizeNotificationDeliveryTarget(level.notify) as EscalationNotifyTarget,
         })),
       };
     }
@@ -827,6 +848,7 @@ export function buildAlertsConfigurationPayload({
           days: cloneDays(snapshot.scheduleQuietHours.days),
         },
         cooldown: normalizedCooldownMinutes,
+        initialNotify: snapshot.initialNotify,
         notifyOnResolve: snapshot.notifyOnResolve,
         maxAlertsHour: normalizedMaxAlertsHour,
         escalation: {

@@ -8,11 +8,18 @@ import {
 import { AlertCooldownSection } from '../AlertCooldownSection';
 import { AlertEscalationSection } from '../AlertEscalationSection';
 import { AlertGroupingSection } from '../AlertGroupingSection';
+import { AlertDeliveryRoutingSection } from '../AlertDeliveryRoutingSection';
 import { AlertQuietHoursSection } from '../AlertQuietHoursSection';
 import { AlertRecoverySection } from '../AlertRecoverySection';
 import { AlertScheduleSummarySection } from '../AlertScheduleSummarySection';
 import { useAlertScheduleState } from '../useAlertScheduleState';
-import type { CooldownConfig, EscalationConfig, GroupingConfig, QuietHoursConfig } from '../types';
+import type {
+  CooldownConfig,
+  EscalationConfig,
+  GroupingConfig,
+  NotificationDeliveryTarget,
+  QuietHoursConfig,
+} from '../types';
 
 export interface ScheduleTabProps {
   setHasUnsavedChanges: (value: boolean) => void;
@@ -22,6 +29,8 @@ export interface ScheduleTabProps {
   setCooldown: (value: CooldownConfig) => void;
   grouping: () => GroupingConfig;
   setGrouping: (value: GroupingConfig) => void;
+  initialNotify: () => NotificationDeliveryTarget;
+  setInitialNotify: (value: NotificationDeliveryTarget) => void;
   notifyOnResolve: () => boolean;
   setNotifyOnResolve: (value: boolean) => void;
   escalation: () => EscalationConfig;
@@ -95,6 +104,11 @@ export function ScheduleTab(props: ScheduleTabProps) {
           setGroupingByGuest={scheduleState.setGroupingByGuest}
         />
 
+        <AlertDeliveryRoutingSection
+          initialNotify={props.initialNotify()}
+          setInitialNotifyTarget={scheduleState.setInitialNotifyTarget}
+        />
+
         <AlertRecoverySection
           notifyOnResolve={props.notifyOnResolve()}
           setNotifyOnResolveEnabled={scheduleState.setNotifyOnResolveEnabled}
@@ -113,6 +127,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
           quietHours={props.quietHours()}
           cooldown={props.cooldown()}
           grouping={props.grouping()}
+          initialNotify={props.initialNotify()}
           notifyOnResolve={props.notifyOnResolve()}
           escalation={props.escalation()}
           quietHourSuppressOptions={quietHourSuppressOptions}

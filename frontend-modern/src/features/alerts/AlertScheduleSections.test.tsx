@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AlertCooldownSection } from './AlertCooldownSection';
+import { AlertDeliveryRoutingSection } from './AlertDeliveryRoutingSection';
 import { AlertEscalationSection } from './AlertEscalationSection';
 import { AlertGroupingSection } from './AlertGroupingSection';
 import { AlertQuietHoursSection } from './AlertQuietHoursSection';
@@ -138,7 +139,22 @@ describe('Alert schedule sections', () => {
     );
     expect(screen.getByRole('spinbutton', { name: 'After' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Notify' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Apprise' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove escalation level' })).toBeInTheDocument();
+  });
+
+  it('associates the initial delivery selector and exposes every destination type', () => {
+    render(() => (
+      <AlertDeliveryRoutingSection initialNotify="webhook" setInitialNotifyTarget={vi.fn()} />
+    ));
+
+    expect(screen.getByRole('combobox', { name: 'Send initial alerts to' })).toHaveValue('webhook');
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'All channels',
+      'Email',
+      'Webhooks',
+      'Apprise',
+    ]);
   });
 
   it('associates the visible recovery heading with its status toggle', () => {

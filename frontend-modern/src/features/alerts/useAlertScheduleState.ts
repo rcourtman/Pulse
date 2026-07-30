@@ -14,6 +14,7 @@ import type {
   EscalationLevel,
   EscalationNotifyTarget,
   GroupingConfig,
+  NotificationDeliveryTarget,
   QuietHoursConfig,
 } from './types';
 import { fallbackCooldownMinutes } from './types';
@@ -26,6 +27,8 @@ export interface UseAlertScheduleStateProps {
   setCooldown: (value: CooldownConfig) => void;
   grouping: () => GroupingConfig;
   setGrouping: (value: GroupingConfig) => void;
+  initialNotify: () => NotificationDeliveryTarget;
+  setInitialNotify: (value: NotificationDeliveryTarget) => void;
   notifyOnResolve: () => boolean;
   setNotifyOnResolve: (value: boolean) => void;
   escalation: () => EscalationConfig;
@@ -126,6 +129,7 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     props.setQuietHours(createDefaultQuietHours());
     props.setCooldown(createDefaultCooldown());
     props.setGrouping(createDefaultGrouping());
+    props.setInitialNotify('all');
     props.setNotifyOnResolve(createDefaultResolveNotifications());
     props.setEscalation(createDefaultEscalation());
     markUnsaved();
@@ -283,6 +287,11 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     markUnsaved();
   };
 
+  const setInitialNotifyTarget = (target: NotificationDeliveryTarget) => {
+    props.setInitialNotify(target);
+    markUnsaved();
+  };
+
   const setEscalationEnabled = (enabled: boolean) => {
     props.setEscalation({
       ...props.escalation(),
@@ -360,6 +369,7 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
     setGroupingWindow,
     setGroupingByNode,
     setGroupingByGuest,
+    setInitialNotifyTarget,
     setNotifyOnResolveEnabled,
     setEscalationEnabled,
     setEscalationAfter,

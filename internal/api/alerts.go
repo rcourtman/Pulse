@@ -216,6 +216,7 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 		updatedConfig.Schedule.Grouping.ByNode,
 		updatedConfig.Schedule.Grouping.ByGuest,
 	)
+	notificationMgr.SetInitialNotifyTarget(updatedConfig.Schedule.InitialNotify)
 	notificationMgr.SetNotifyOnResolve(updatedConfig.Schedule.NotifyOnResolve)
 
 	// Save to persistent storage. Failure here used to be swallowed (logged

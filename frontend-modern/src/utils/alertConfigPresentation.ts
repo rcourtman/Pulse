@@ -4,7 +4,7 @@ export const ALERT_CONFIG_UNSAVED_CHANGES = 'You have unsaved changes';
 export const ALERT_CONFIG_SAVE_CHANGES = 'Save Changes';
 export const ALERT_CONFIG_RESET_DEFAULTS = 'Reset to defaults';
 export const ALERT_CONFIG_RESET_DEFAULTS_TITLE =
-  'Restore quiet hours, cooldown, grouping, and escalation settings to their defaults';
+  'Restore quiet hours, cooldown, grouping, delivery, and escalation settings to their defaults';
 export const ALERT_CONFIG_LEAVE_CONFIRMATION =
   'You have unsaved changes that will be lost. Discard changes and leave?';
 
@@ -55,6 +55,12 @@ export const ALERT_CONFIG_RECOVERY_DESCRIPTION =
 export const ALERT_CONFIG_ESCALATION_TITLE = 'Alert escalation';
 export const ALERT_CONFIG_ESCALATION_DESCRIPTION =
   'Notify additional contacts for persistent issues.';
+export const ALERT_CONFIG_DELIVERY_TITLE = 'Initial delivery';
+export const ALERT_CONFIG_DELIVERY_DESCRIPTION =
+  'Choose where firing and recovery notifications are sent.';
+export const ALERT_CONFIG_DELIVERY_TARGET_LABEL = 'Send initial alerts to';
+export const ALERT_CONFIG_DELIVERY_HELP =
+  'Escalation levels can use a different destination for persistent alerts.';
 export const ALERT_CONFIG_SUMMARY_QUIET_HOURS_PREFIX = '• Quiet hours active from';
 export const ALERT_CONFIG_SUMMARY_SUPPRESSING_PREFIX = '• Suppressing';
 export const ALERT_CONFIG_SUMMARY_SUPPRESSING_SUFFIX = 'during quiet hours';
@@ -69,6 +75,7 @@ export const ALERT_CONFIG_ESCALATION_NOTIFY_LABEL = 'Notify';
 export const ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX = 'min';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL = 'Email';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS = 'Webhooks';
+export const ALERT_CONFIG_ESCALATION_NOTIFY_APPRISE = 'Apprise';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_ALL = getAllFilterOptionLabel('channels');
 export const ALERT_CONFIG_ESCALATION_REMOVE_TITLE = 'Remove escalation level';
 export const ALERT_CONFIG_ESCALATION_ADD_LABEL = 'Add Escalation Level';
@@ -151,15 +158,21 @@ export function getAlertConfigEscalationHelp() {
   return ALERT_CONFIG_ESCALATION_HELP;
 }
 
-export function getAlertConfigEscalationNotifyLabel(type: 'email' | 'webhook' | 'all') {
+export function getAlertConfigEscalationNotifyLabel(type: 'email' | 'webhook' | 'apprise' | 'all') {
   switch (type) {
     case 'email':
       return ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL;
     case 'webhook':
       return ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS;
+    case 'apprise':
+      return ALERT_CONFIG_ESCALATION_NOTIFY_APPRISE;
     default:
       return ALERT_CONFIG_ESCALATION_NOTIFY_ALL;
   }
+}
+
+export function getAlertConfigSummaryDelivery(target: 'email' | 'webhook' | 'apprise' | 'all') {
+  return `• Initial and recovery notifications use ${getAlertConfigEscalationNotifyLabel(target)}`;
 }
 
 export function getAlertConfigSummaryAllDisabled() {

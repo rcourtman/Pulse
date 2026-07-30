@@ -6,6 +6,7 @@ import {
   ALERT_CONFIG_SUMMARY_TITLE,
   getAlertConfigSummaryAllDisabled,
   getAlertConfigSummaryCooldown,
+  getAlertConfigSummaryDelivery,
   getAlertConfigSummaryEscalation,
   getAlertConfigSummaryGrouping,
   getAlertConfigSummaryQuietHours,
@@ -13,7 +14,13 @@ import {
   getAlertConfigSummarySuppressing,
 } from '@/utils/alertConfigPresentation';
 
-import type { CooldownConfig, EscalationConfig, GroupingConfig, QuietHoursConfig } from './types';
+import type {
+  CooldownConfig,
+  EscalationConfig,
+  GroupingConfig,
+  NotificationDeliveryTarget,
+  QuietHoursConfig,
+} from './types';
 
 interface QuietSuppressOption {
   key: keyof QuietHoursConfig['suppress'];
@@ -25,6 +32,7 @@ interface AlertScheduleSummarySectionProps {
   quietHours: QuietHoursConfig;
   cooldown: CooldownConfig;
   grouping: GroupingConfig;
+  initialNotify: NotificationDeliveryTarget;
   notifyOnResolve: boolean;
   escalation: EscalationConfig;
   quietHourSuppressOptions: QuietSuppressOption[];
@@ -77,6 +85,7 @@ export function AlertScheduleSummarySection(props: AlertScheduleSummarySectionPr
           )}
         </p>
       </Show>
+      <p>{getAlertConfigSummaryDelivery(props.initialNotify)}</p>
       <Show when={props.notifyOnResolve}>
         <p>{getAlertConfigSummaryRecoveryEnabled()}</p>
       </Show>

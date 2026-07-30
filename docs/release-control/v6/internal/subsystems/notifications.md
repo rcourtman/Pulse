@@ -17,6 +17,12 @@
 
 Own notification delivery transport, provider configuration, queueing, and
 notification-management API surfaces.
+The alert schedule selects firing, grouped, and matching recovery delivery
+through one normalized target (`all`, `email`, `webhook`, or `apprise`).
+Escalation delivery remains independently targetable per level, allowing an
+Apprise/ntfy first notification to escalate through email, or the reverse.
+Unknown and absent persisted targets preserve historical all-destination
+behavior, and destination tag filters still apply after target selection.
 
 ## Canonical Files
 

@@ -43,6 +43,11 @@ command errors retain bounded stderr for compatibility diagnosis.
 websocket payloads. Carrying plural availability facets through that serializer
 is an adjacent monitoring/API projection and does not change agent enrollment,
 report admission, removal, update, profile, or command authority.
+That shared monitor constructor may also copy the persisted alert schedule's
+initial notification target into the notification manager. This adjacent
+alerts/notifications wiring grants no agent enrollment, reporting, removal,
+profile, update, probe-assignment, or command authority and must not mutate
+host-agent state.
 The JSON-excluded Proxmox VM/LXC I/O-rate validity fields carried by
 `internal/models/models.go` are likewise monitoring-owned sidecar evidence.
 They distinguish a valid idle interval from an unknown rate for history,

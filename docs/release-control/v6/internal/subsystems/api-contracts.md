@@ -23,6 +23,12 @@
 Own canonical runtime payload shapes between backend and frontend, including
 the trust boundary that keeps customer-safe support diagnostics and normal
 product API routes free of maintainer commercial analytics.
+`GET /api/alerts/config` and `PUT /api/alerts/config` carry
+`schedule.initialNotify` as the canonical initial notification-routing field.
+The accepted values are `all`, `email`, `webhook`, and `apprise`; the backend
+normalizes aliases and invalid values before responding, persisting, and
+updating the live notification runtime. Escalation levels use the same value
+vocabulary but remain independent of the initial target.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server

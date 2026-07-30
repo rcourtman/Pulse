@@ -34,7 +34,8 @@ func TestAlertsEndpoints(t *testing.T) {
 	t.Run("UpdateAlertConfig", func(t *testing.T) {
 		newConfig := alerts.AlertConfig{
 			Schedule: alerts.ScheduleConfig{
-				Cooldown: 300,
+				Cooldown:      300,
+				InitialNotify: "apprise",
 			},
 		}
 		body, _ := json.Marshal(newConfig)
@@ -69,6 +70,12 @@ func TestAlertsEndpoints(t *testing.T) {
 
 		if updatedConfig.Schedule.Cooldown != 300 {
 			t.Errorf("expected cooldown 300, got %d", updatedConfig.Schedule.Cooldown)
+		}
+		if updatedConfig.Schedule.InitialNotify != "apprise" {
+			t.Errorf("expected initial notify apprise, got %q", updatedConfig.Schedule.InitialNotify)
+		}
+		if got := srv.monitor.GetNotificationManager().GetInitialNotifyTarget(); got != "apprise" {
+			t.Errorf("expected live initial target apprise, got %q", got)
 		}
 	})
 

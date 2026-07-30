@@ -22,6 +22,11 @@
 
 Own reusable frontend primitives and canonical page-shell patterns so feature
 work extends shared components instead of creating new local variants.
+The alert schedule's initial-delivery selector composes `SettingsPanel` and
+`FormSelect`, uses the shared alert-configuration presentation vocabulary, and
+exposes the same email, webhook, Apprise, and all-destination labels used by
+escalation. It must not introduce a page-local select shell or a second
+destination-label map.
 
 Platform-owned workload controls extend the shared `WorkloadsFilter` view
 options rather than creating page-local toolbar shells. The Proxmox overview

@@ -25,6 +25,7 @@ describe('alertsConfigurationModel', () => {
     expect(snapshot.timeThresholds['vmware-host']).toBe(5);
     expect(snapshot.vmwareDefaults.usage).toBe(85);
     expect(snapshot.scheduleCooldown.enabled).toBe(true);
+    expect(snapshot.initialNotify).toBe('all');
     expect(snapshot.backupDefaults.ignoreVMIDs).toEqual([]);
   });
 
@@ -69,6 +70,11 @@ describe('alertsConfigurationModel', () => {
         },
         cooldown: 45,
         maxAlertsHour: 7,
+        initialNotify: 'apprise',
+        escalation: {
+          enabled: true,
+          levels: [{ after: 30, notify: 'APPRISE' }],
+        },
       },
     } as AlertConfig;
 
@@ -96,6 +102,8 @@ describe('alertsConfigurationModel', () => {
       saturday: false,
     });
     expect(snapshot.scheduleCooldown.maxAlerts).toBe(7);
+    expect(snapshot.initialNotify).toBe('apprise');
+    expect(snapshot.scheduleEscalation.levels).toEqual([{ after: 30, notify: 'apprise' }]);
   });
 
   it('builds the canonical save payload from the runtime snapshot', () => {
@@ -117,6 +125,7 @@ describe('alertsConfigurationModel', () => {
       byNode: true,
       byGuest: false,
     };
+    snapshot.initialNotify = 'email';
     snapshot.backupDefaults = {
       enabled: true,
       warningDays: 30,
@@ -147,6 +156,7 @@ describe('alertsConfigurationModel', () => {
     expect(result.alertConfig?.guestTagWhitelist).toEqual(['prod']);
     expect(result.alertConfig?.metricTimeThresholds).toEqual({ guest: { cpu: 17 } });
     expect(result.alertConfig?.schedule?.cooldown).toBe(47);
+    expect(result.alertConfig?.schedule?.initialNotify).toBe('email');
     expect(result.alertConfig?.schedule?.maxAlertsHour).toBe(10);
     expect(result.alertConfig?.schedule?.grouping).toEqual({
       enabled: true,

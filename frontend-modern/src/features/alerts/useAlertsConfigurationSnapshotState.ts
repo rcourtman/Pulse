@@ -21,7 +21,13 @@ import {
   FACTORY_VMWARE_DEFAULTS,
   type AlertsConfigurationSnapshot,
 } from './alertsConfigurationModel';
-import type { CooldownConfig, EscalationConfig, GroupingConfig, QuietHoursConfig } from './types';
+import type {
+  CooldownConfig,
+  EscalationConfig,
+  GroupingConfig,
+  NotificationDeliveryTarget,
+  QuietHoursConfig,
+} from './types';
 
 interface UseAlertsConfigurationSnapshotStateProps {
   setHasUnsavedChanges: (value: boolean) => void;
@@ -42,6 +48,9 @@ export function useAlertsConfigurationSnapshotState(
   );
   const [scheduleEscalation, setScheduleEscalation] = createSignal<EscalationConfig>(
     defaultSnapshot.scheduleEscalation,
+  );
+  const [initialNotify, setInitialNotify] = createSignal<NotificationDeliveryTarget>(
+    defaultSnapshot.initialNotify,
   );
   const [notifyOnResolve, setNotifyOnResolve] = createSignal<boolean>(
     defaultSnapshot.notifyOnResolve,
@@ -165,6 +174,7 @@ export function useAlertsConfigurationSnapshotState(
       enabled: snapshot.scheduleEscalation.enabled,
       levels: snapshot.scheduleEscalation.levels.map((level) => ({ ...level })),
     });
+    setInitialNotify(snapshot.initialNotify);
     setNotifyOnResolve(snapshot.notifyOnResolve);
     setGuestDefaults({ ...snapshot.guestDefaults });
     setGuestDisableConnectivity(snapshot.guestDisableConnectivity);
@@ -226,6 +236,7 @@ export function useAlertsConfigurationSnapshotState(
       enabled: scheduleEscalation().enabled,
       levels: scheduleEscalation().levels.map((level) => ({ ...level })),
     },
+    initialNotify: initialNotify(),
     notifyOnResolve: notifyOnResolve(),
     guestDefaults: { ...guestDefaults() },
     guestDisableConnectivity: guestDisableConnectivity(),
@@ -344,6 +355,8 @@ export function useAlertsConfigurationSnapshotState(
     setScheduleGrouping,
     scheduleEscalation,
     setScheduleEscalation,
+    initialNotify,
+    setInitialNotify,
     notifyOnResolve,
     setNotifyOnResolve,
     guestDefaults,

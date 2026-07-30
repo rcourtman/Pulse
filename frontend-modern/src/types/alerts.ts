@@ -217,6 +217,7 @@ export interface AlertConfig {
     };
     cooldown?: number;
     maxAlertsHour?: number;
+    initialNotify?: string;
     notifyOnResolve?: boolean;
     grouping?: {
       enabled: boolean;

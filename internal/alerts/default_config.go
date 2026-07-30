@@ -163,6 +163,7 @@ func defaultAlertConfig() AlertConfig {
 			},
 			Cooldown:        5,  // ON - 5 minutes prevents spam
 			MaxAlertsHour:   10, // ON - 10 alerts/hour prevents flooding
+			InitialNotify:   "all",
 			NotifyOnResolve: true,
 			Escalation: EscalationConfig{
 				Enabled: false, // OFF - requires user configuration

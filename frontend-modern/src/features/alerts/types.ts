@@ -193,7 +193,8 @@ export interface GroupingConfig {
   byGuest?: boolean;
 }
 
-export type EscalationNotifyTarget = 'email' | 'webhook' | 'all';
+export type NotificationDeliveryTarget = 'email' | 'webhook' | 'apprise' | 'all';
+export type EscalationNotifyTarget = NotificationDeliveryTarget;
 
 export interface EscalationLevel {
   after: number;

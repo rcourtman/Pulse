@@ -1734,6 +1734,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 			alertConfig.Schedule.Grouping.ByNode,
 			alertConfig.Schedule.Grouping.ByGuest,
 		)
+		m.notificationMgr.SetInitialNotifyTarget(alertConfig.Schedule.InitialNotify)
 		m.notificationMgr.SetNotifyOnResolve(alertConfig.Schedule.NotifyOnResolve)
 	} else {
 		log.Warn().Err(err).Msg("failed to load alert configuration")

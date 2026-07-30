@@ -232,6 +232,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           setCooldown={state.setScheduleCooldown}
           grouping={state.scheduleGrouping}
           setGrouping={state.setScheduleGrouping}
+          initialNotify={state.initialNotify}
+          setInitialNotify={state.setInitialNotify}
           notifyOnResolve={state.notifyOnResolve}
           setNotifyOnResolve={state.setNotifyOnResolve}
           escalation={state.scheduleEscalation}

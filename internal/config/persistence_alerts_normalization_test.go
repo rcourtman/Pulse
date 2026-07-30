@@ -28,6 +28,7 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 				assert.True(t, cfg.Enabled)
 				assert.Equal(t, 5, cfg.Schedule.Cooldown)
 				assert.Equal(t, 10, cfg.Schedule.MaxAlertsHour)
+				assert.Equal(t, "all", cfg.Schedule.InitialNotify)
 				assert.True(t, cfg.Schedule.NotifyOnResolve)
 				assert.True(t, cfg.Schedule.Grouping.Enabled)
 				assert.Equal(t, 30, cfg.Schedule.Grouping.Window)
@@ -90,6 +91,26 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
 				assert.Equal(t, 5.0, cfg.HysteresisMargin)
+			},
+		},
+		{
+			name: "Schedule missing initialNotify defaults to all",
+			input: map[string]interface{}{
+				"schedule": map[string]interface{}{},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.Equal(t, "all", cfg.Schedule.InitialNotify)
+			},
+		},
+		{
+			name: "Schedule explicit initialNotify is preserved",
+			input: map[string]interface{}{
+				"schedule": map[string]interface{}{
+					"initialNotify": "apprise",
+				},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.Equal(t, "apprise", cfg.Schedule.InitialNotify)
 			},
 		},
 		{

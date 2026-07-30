@@ -17,6 +17,9 @@ describe('useAlertScheduleState', () => {
     const [quietHours, setQuietHours] = createSignal(createDefaultQuietHours());
     const [cooldown, setCooldown] = createSignal(createDefaultCooldown());
     const [grouping, setGrouping] = createSignal(createDefaultGrouping());
+    const [initialNotify, setInitialNotify] = createSignal<'email' | 'webhook' | 'apprise' | 'all'>(
+      'all',
+    );
     const [notifyOnResolve, setNotifyOnResolve] = createSignal(false);
     const [escalation, setEscalation] = createSignal(createDefaultEscalation());
 
@@ -29,6 +32,8 @@ describe('useAlertScheduleState', () => {
         setCooldown,
         grouping,
         setGrouping,
+        initialNotify,
+        setInitialNotify,
         notifyOnResolve,
         setNotifyOnResolve,
         escalation,
@@ -46,6 +51,7 @@ describe('useAlertScheduleState', () => {
     result.setGroupingEnabled(true);
     result.setGroupingWindow('8');
     result.setGroupingByNode(true);
+    result.setInitialNotifyTarget('apprise');
     result.setNotifyOnResolveEnabled(true);
     result.setEscalationEnabled(true);
     result.addEscalationLevel();
@@ -62,6 +68,7 @@ describe('useAlertScheduleState', () => {
     expect(result.weekendsOnly()).toBe(false);
     expect(cooldown()).toMatchObject({ enabled: true, minutes: 45, maxAlerts: 5 });
     expect(grouping()).toMatchObject({ enabled: true, window: 8, byNode: true });
+    expect(initialNotify()).toBe('apprise');
     expect(notifyOnResolve()).toBe(true);
     expect(escalation()).toMatchObject({
       enabled: true,
@@ -76,6 +83,7 @@ describe('useAlertScheduleState', () => {
     expect(quietHours()).toEqual(createDefaultQuietHours());
     expect(cooldown()).toEqual(createDefaultCooldown());
     expect(grouping()).toEqual(createDefaultGrouping());
+    expect(initialNotify()).toBe('all');
     expect(notifyOnResolve()).toBe(createDefaultResolveNotifications());
     expect(escalation()).toEqual(createDefaultEscalation());
   });

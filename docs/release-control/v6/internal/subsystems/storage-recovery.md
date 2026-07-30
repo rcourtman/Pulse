@@ -35,6 +35,10 @@ availability-check identity by replaying authoritative supplemental records.
 That availability composition remains owned by API contracts and unified
 resources; it does not make availability rows recovery points, storage health,
 backup evidence, or restore authority.
+The shared alerts API may persist and apply `schedule.initialNotify` for email,
+webhook, or Apprise delivery. That notification routing is not storage-health,
+backup, recovery-point, restore, or protection evidence; storage/recovery
+surfaces must not infer product state from the selected destination.
 The shared Proxmox config discovery path likewise persists powered-off cluster
 members and separates membership from member API reachability. Storage and
 recovery consumers may use the resulting provider-scoped node/instance

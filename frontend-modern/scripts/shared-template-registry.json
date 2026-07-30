@@ -1599,6 +1599,7 @@
         { "path": "src/components/shared/FilterBar/AddFilterMenu.tsx" },
         { "path": "src/components/shared/FilterToolbar.tsx" },
         { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
+        { "path": "src/features/alerts/AlertDeliveryRoutingSection.tsx" },
         { "path": "src/features/alerts/AlertEscalationSection.tsx" },
         { "path": "src/features/alerts/AlertQuietHoursSection.tsx" }
       ],

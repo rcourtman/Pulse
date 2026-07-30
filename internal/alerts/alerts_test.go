@@ -19316,6 +19316,30 @@ func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.
 	}
 }
 
+func TestUpdateConfigNormalizesNotificationDeliveryTargets(t *testing.T) {
+	manager := NewManager()
+	t.Cleanup(manager.Stop)
+
+	config := manager.GetConfig()
+	config.Schedule.InitialNotify = " APPRISE "
+	config.Schedule.Escalation.Levels = []EscalationLevel{
+		{After: 15, Notify: "WEBHOOKS"},
+		{After: 30, Notify: "unsupported"},
+	}
+	manager.UpdateConfig(config)
+
+	updated := manager.GetConfig()
+	if updated.Schedule.InitialNotify != "apprise" {
+		t.Fatalf("initial notify = %q, want apprise", updated.Schedule.InitialNotify)
+	}
+	if updated.Schedule.Escalation.Levels[0].Notify != "webhook" {
+		t.Fatalf("first escalation target = %q, want webhook", updated.Schedule.Escalation.Levels[0].Notify)
+	}
+	if updated.Schedule.Escalation.Levels[1].Notify != "all" {
+		t.Fatalf("invalid escalation target = %q, want all", updated.Schedule.Escalation.Levels[1].Notify)
+	}
+}
+
 func TestDiagnoseAlertDeliveryReady(t *testing.T) {
 	manager, now := newDeliveryDiagnosisManager(t)
 	alert := addDeliveryDiagnosisAlert(manager, &Alert{

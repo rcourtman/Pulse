@@ -102,6 +102,9 @@ export function AlertEscalationSection(props: AlertEscalationSectionProps) {
                       <option value="webhook">
                         {getAlertConfigEscalationNotifyLabel('webhook')}
                       </option>
+                      <option value="apprise">
+                        {getAlertConfigEscalationNotifyLabel('apprise')}
+                      </option>
                       <option value="all">{getAlertConfigEscalationNotifyLabel('all')}</option>
                     </FormSelect>
                   </div>

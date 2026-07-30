@@ -653,6 +653,7 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/FilterBar/AddFilterMenu.tsx',
       'src/components/shared/FilterToolbar.tsx',
       'src/features/alerts/AlertAppriseDestinationsSection.tsx',
+      'src/features/alerts/AlertDeliveryRoutingSection.tsx',
       'src/features/alerts/AlertEscalationSection.tsx',
       'src/features/alerts/AlertQuietHoursSection.tsx',
     ]);
