@@ -160,6 +160,54 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('projects agent-reported libvirt VM runtime metadata without Proxmox fields', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'vm-agent-domain-a1b2c3d4',
+          name: 'libvirt-app',
+          status: 'warning',
+          sources: ['agent'],
+          parentName: 'qnap-host',
+          vmid: undefined,
+          node: undefined,
+          instance: undefined,
+          proxmox: undefined,
+          virtualMachine: {
+            runtimeState: 'running',
+            hypervisor: 'libvirt',
+            vcpus: 6,
+          },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await waitForWorkloadCount(() => result!.workloads().length);
+
+    expect(result!.workloads()).toHaveLength(1);
+    expect(result!.workloads()[0]).toMatchObject({
+      id: 'vm-agent-domain-a1b2c3d4',
+      name: 'libvirt-app',
+      node: 'qnap-host',
+      status: 'running',
+      type: 'vm',
+      cpus: 6,
+      platformType: 'agent',
+    });
+
+    dispose();
+  });
+
   it('handles empty responses without mutating into undefined state', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [],

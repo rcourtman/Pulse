@@ -5821,3 +5821,39 @@ func TestPhysicalDiskRiskProjectionUsesSharedWearoutPredicate(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistryIngestsAgentLibvirtDomainUnderReportingHost(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{{
+		ID:       "host-1",
+		Hostname: "kvm-host",
+		Status:   "online",
+		LastSeen: now,
+		Libvirt: &models.HostLibvirtInventory{
+			CollectedAt: now,
+			Domains: []models.HostLibvirtDomain{{
+				ID:    "domain-a",
+				Name:  "app",
+				State: "running",
+				VCPUs: 4,
+			}},
+		},
+	}}})
+
+	vms := registry.ListByType(ResourceTypeVM)
+	if len(vms) != 1 {
+		t.Fatalf("libvirt VM resources = %+v", vms)
+	}
+	vm := vms[0]
+	if vm.Technology != "libvirt" ||
+		vm.VirtualMachine == nil ||
+		vm.VirtualMachine.VCPUs != 4 ||
+		vm.ParentID == nil {
+		t.Fatalf("libvirt VM resource = %+v", vm)
+	}
+	parent, ok := registry.Get(*vm.ParentID)
+	if !ok || parent.Type != ResourceTypeAgent || parent.Name != "kvm-host" {
+		t.Fatalf("libvirt VM parent = %+v, found=%v", parent, ok)
+	}
+}

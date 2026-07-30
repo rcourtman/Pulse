@@ -88,6 +88,34 @@ func TestMetricValueAlwaysCarriesNumericValueWhenObjectExists(t *testing.T) {
 	}
 }
 
+func TestProviderNeutralVirtualMachineJSONContract(t *testing.T) {
+	payload, err := json.Marshal(Resource{
+		Type: ResourceTypeVM,
+		VirtualMachine: &VirtualMachineData{
+			RuntimeState: "running",
+			Hypervisor:   "libvirt",
+			VCPUs:        4,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	facet, ok := decoded["virtualMachine"].(map[string]any)
+	if !ok ||
+		facet["runtimeState"] != "running" ||
+		facet["hypervisor"] != "libvirt" ||
+		facet["vcpus"] != float64(4) {
+		t.Fatalf("provider-neutral VM facet = %#v in %s", facet, payload)
+	}
+	if _, exists := decoded["proxmox"]; exists {
+		t.Fatalf("provider-neutral VM facet fabricated Proxmox metadata: %s", payload)
+	}
+}
+
 func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
 	roots := []string{"internal/api", "internal/ai", "internal/agentexec", "internal/hostagent", "internal/dockeragent", "internal/relay", "internal/workflow", "internal/workflows"}

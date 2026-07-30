@@ -2721,6 +2721,20 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 	}
 
+	var previousHostModel *models.Host
+	for i := range existingHostModels {
+		if existingHostModels[i].ID == identifier {
+			previousHostModel = &existingHostModels[i]
+			break
+		}
+	}
+	libvirtData := m.normalizeAgentLibvirtInventory(
+		report.Libvirt,
+		identifier,
+		previousHostModel,
+		observedAt,
+	)
+
 	agentUpdate := mergeAgentUpdateStatus(
 		previousHostAgentUpdate(m.state.GetHosts(), identifier),
 		convertAgentUpdateStatus(report.Agent.Update),
@@ -2771,6 +2785,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		RAID:                    raid,
 		Unraid:                  unraidData,
 		Ceph:                    cephData,
+		Libvirt:                 libvirtData,
 		Status:                  "online",
 		UptimeSeconds:           report.Host.UptimeSeconds,
 		IntervalSeconds:         report.Agent.IntervalSeconds,
@@ -3020,6 +3035,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				m.metricsStore.Write("agent", host.ID, "diskwrite", diskWriteRate, now)
 			}
 		}
+		m.writeLibvirtDomainMetrics(host, now)
 	}
 
 	// Store cluster peer sensor data if present and evict stale entries

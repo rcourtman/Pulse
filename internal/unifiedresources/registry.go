@@ -196,6 +196,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHost(host)
+		rr.ingestHostLibvirtDomains(host)
 	}
 	for _, host := range snapshot.Hosts {
 		rr.ingestHostUnraidStorage(host)
@@ -3264,6 +3265,9 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 			break
 		}
 		existing.Agent = incoming.Agent
+		if incoming.VirtualMachine != nil {
+			existing.VirtualMachine = incoming.VirtualMachine
+		}
 	case SourceDocker:
 		existing.Docker = incoming.Docker
 	case SourcePBS:

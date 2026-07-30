@@ -290,6 +290,9 @@ func mergePresentationHostResources(left, right Resource) Resource {
 	if merged.VMware == nil {
 		merged.VMware = secondary.VMware
 	}
+	if merged.VirtualMachine == nil {
+		merged.VirtualMachine = secondary.VirtualMachine
+	}
 	if merged.TrueNAS == nil {
 		merged.TrueNAS = secondary.TrueNAS
 	}

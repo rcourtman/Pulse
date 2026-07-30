@@ -56,6 +56,11 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 				return &MetricsTarget{ResourceType: "vm", ResourceID: resourceID}
 			}
 		}
+		if strings.EqualFold(strings.TrimSpace(resource.Technology), "libvirt") {
+			if st, ok := bySource[SourceAgent]; ok {
+				return &MetricsTarget{ResourceType: "vm", ResourceID: st.SourceID}
+			}
+		}
 	case ResourceTypeSystemContainer:
 		if st, ok := bySource[SourceProxmox]; ok {
 			return &MetricsTarget{ResourceType: "system-container", ResourceID: st.SourceID}

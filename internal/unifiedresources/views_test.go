@@ -2195,3 +2195,20 @@ func TestView_PhysicalDiskViewWearoutPassesThroughRealReadings(t *testing.T) {
 		}
 	}
 }
+
+func TestView_VMViewUsesProviderNeutralVirtualMachineFallback(t *testing.T) {
+	view := NewVMView(&Resource{
+		Type: ResourceTypeVM,
+		VirtualMachine: &VirtualMachineData{
+			RuntimeState: "paused",
+			Hypervisor:   "libvirt",
+			VCPUs:        6,
+		},
+	})
+	if got := view.RuntimeStatus(); got != "paused" {
+		t.Fatalf("RuntimeStatus() = %q, want paused", got)
+	}
+	if got := view.CPUs(); got != 6 {
+		t.Fatalf("CPUs() = %d, want 6", got)
+	}
+}

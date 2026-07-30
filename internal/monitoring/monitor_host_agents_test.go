@@ -710,6 +710,61 @@ func TestApplyHostReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) 
 	t.Fatal("accepted host report did not refresh the canonical headless read state")
 }
 
+func TestApplyHostReportProjectsAndPreservesLibvirtInventory(t *testing.T) {
+	monitor := newTestMonitor(t)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+	now := time.Now().UTC()
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "libvirt-host-agent", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:        "libvirt-host-machine",
+			MachineID: "libvirt-host-machine",
+			Hostname:  "kvm-host",
+			Platform:  "linux",
+		},
+		Libvirt: &agentshost.LibvirtInventory{Domains: []agentshost.LibvirtDomain{{
+			Name:               "app",
+			State:              "running",
+			VCPUs:              4,
+			MemoryCurrentBytes: 2 << 30,
+			MemoryMaximumBytes: 4 << 30,
+		}}},
+		Timestamp: now,
+	}
+
+	first, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if first.Libvirt == nil ||
+		len(first.Libvirt.Domains) != 1 ||
+		first.Libvirt.Domains[0].Name != "app" ||
+		first.Libvirt.Domains[0].ID == "" {
+		t.Fatalf("normalized libvirt inventory = %+v", first.Libvirt)
+	}
+	firstCollectedAt := first.Libvirt.CollectedAt
+	vms := adapter.VMs()
+	if len(vms) != 1 ||
+		vms[0].Name() != "app" ||
+		vms[0].RuntimeStatus() != "running" ||
+		vms[0].CPUs() != 4 {
+		t.Fatalf("canonical libvirt VM views = %+v", vms)
+	}
+
+	report.Libvirt = nil
+	report.Timestamp = now.Add(time.Second)
+	second, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport after collection failure: %v", err)
+	}
+	if second.Libvirt == nil ||
+		len(second.Libvirt.Domains) != 1 ||
+		!second.Libvirt.CollectedAt.Equal(firstCollectedAt) {
+		t.Fatalf("preserved libvirt inventory = %+v", second.Libvirt)
+	}
+}
+
 func TestUnifiedAgentHostAndDockerReportsShareOneCanonicalMachine(t *testing.T) {
 	now := time.Now().UTC()
 	hostReport := agentshost.Report{

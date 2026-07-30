@@ -805,3 +805,23 @@ func TestCloneResourceGivesRelationshipsTheirOwnBackingArray(t *testing.T) {
 		}
 	}
 }
+
+func TestCloneResourceIsolatesVirtualMachineFacet(t *testing.T) {
+	original := Resource{
+		ID:   "vm-agent-domain-a",
+		Type: ResourceTypeVM,
+		VirtualMachine: &VirtualMachineData{
+			RuntimeState: "running",
+			Hypervisor:   "libvirt",
+			VCPUs:        4,
+		},
+	}
+	cloned := cloneResource(&original)
+	if cloned.VirtualMachine == nil {
+		t.Fatal("cloned resource lost virtual machine facet")
+	}
+	cloned.VirtualMachine.RuntimeState = "paused"
+	if original.VirtualMachine.RuntimeState != "running" {
+		t.Fatal("cloned virtual machine facet aliases original")
+	}
+}

@@ -402,6 +402,7 @@ func cloneHost(src Host) Host {
 	dest.RAID = cloneHostRAIDArrays(src.RAID)
 	dest.Unraid = cloneHostUnraidStorage(src.Unraid)
 	dest.Ceph = cloneHostCephCluster(src.Ceph)
+	dest.Libvirt = cloneHostLibvirtInventory(src.Libvirt)
 	dest.PackageUpdates = cloneHostPackageUpdateStatus(src.PackageUpdates)
 	dest.StorageCleanup = cloneHostStorageCleanupStatus(src.StorageCleanup)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
@@ -409,6 +410,15 @@ func cloneHost(src Host) Host {
 	dest.DiskExclude = append([]string(nil), src.DiskExclude...)
 	dest.IdentityConflict = cloneHostIdentityConflict(src.IdentityConflict)
 	return dest.NormalizeCollections()
+}
+
+func cloneHostLibvirtInventory(src *HostLibvirtInventory) *HostLibvirtInventory {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.Domains = append([]HostLibvirtDomain(nil), src.Domains...)
+	return &dest
 }
 
 func cloneHostIdentityConflict(src *HostIdentityConflict) *HostIdentityConflict {

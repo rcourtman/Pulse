@@ -84,9 +84,23 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 - **Host Metrics**: CPU, memory, disk, network I/O, temperatures
 - **Docker Monitoring**: Container metrics, health checks, Swarm support (when enabled)
 - **Kubernetes Monitoring**: Cluster, node, pod, and deployment health (when enabled)
+- **Libvirt/KVM Monitoring**: Read-only VM inventory, state, vCPU, memory, and disk/network rates when the Linux host exposes `virsh`
 - **External Probes** (Pro): runs availability checks assigned to this agent from the Pulse server and reports the results back — see below
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
+
+On Linux, the host module automatically checks for `virsh`. When the agent can
+open the default libvirt connection read-only, defined domains appear as VM
+workloads under that host. Collection uses libvirt's bounded bulk statistics
+interface and does not grant Pulse VM start, stop, console, or configuration
+authority. If `virsh` is absent, the socket is inaccessible, or the driver does
+not support the requested statistics, normal host reporting continues without
+libvirt inventory.
+
+Appliance packaging can still differ. In particular, a QNAP installation must
+make its Container Station libvirt client/socket available to the agent service;
+the presence of KVM processes alone is not enough to establish a readable
+libvirt connection.
 
 ## External Probes (Pro)
 

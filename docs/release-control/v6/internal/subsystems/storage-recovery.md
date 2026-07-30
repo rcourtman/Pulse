@@ -2032,6 +2032,16 @@ capability over storage or recovery data.
 
 ## Current State
 
+### Provider-neutral libvirt VM facts are observation-only
+
+The shared unified-resource type now includes a provider-neutral
+`virtualMachine` facet for runtime state, hypervisor, and vCPU count. Storage
+and recovery consumers may preserve or display this facet, but a libvirt
+source does not imply snapshots, backup coverage, restore coordinates,
+migration support, storage ownership, or lifecycle authority. No libvirt URI,
+domain XML, console data, credential, or executable input enters recovery
+state through this extension point.
+
 ### Unified host read state preserves custom sensor evidence
 
 The shared host/unified-resource read-state boundary now carries typed custom

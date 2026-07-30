@@ -733,6 +733,12 @@ export interface ResourceProxmoxMeta {
   };
 }
 
+export interface ResourceVirtualMachineMeta {
+  runtimeState?: string;
+  hypervisor?: string;
+  vcpus?: number;
+}
+
 // Docker runtime, container, and Swarm service projection emitted by the
 // canonical adapter. Host resources use the runtime fields on the Docker
 // platform hosts table; `app-container` resources use the container fields
@@ -1554,6 +1560,7 @@ export interface Resource {
   truenas?: ResourceTrueNASMeta;
   pmg?: ResourcePMGMeta;
   vmware?: ResourceVMwareMeta;
+  virtualMachine?: ResourceVirtualMachineMeta;
   proxmox?: ResourceProxmoxMeta;
   pbs?: ResourcePBSMeta;
   availability?: ResourceAvailabilityMeta;

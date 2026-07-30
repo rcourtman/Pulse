@@ -467,6 +467,22 @@ func TestBuildMetricsTarget_UsesCanonicalAgentMetricIDForTrueNAS(t *testing.T) {
 	}
 }
 
+func TestBuildMetricsTarget_UsesAgentSourceIDForLibvirtVM(t *testing.T) {
+	target := BuildMetricsTarget(
+		Resource{Type: ResourceTypeVM, Technology: "libvirt"},
+		[]SourceTarget{{
+			Source:   SourceAgent,
+			SourceID: " host-1:libvirt:domain-a ",
+		}},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "vm" || target.ResourceID != "host-1:libvirt:domain-a" {
+		t.Fatalf("libvirt metrics target = %+v", target)
+	}
+}
+
 func TestBuildMetricsTarget_UsesCanonicalVMMetricIDForTrueNAS(t *testing.T) {
 	target := BuildMetricsTarget(
 		Resource{

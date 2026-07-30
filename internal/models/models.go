@@ -304,6 +304,7 @@ type Host struct {
 	RAID                    []HostRAIDArray         `json:"raid,omitempty"`
 	Unraid                  *HostUnraidStorage      `json:"unraid,omitempty"`
 	Ceph                    *HostCephCluster        `json:"ceph,omitempty"`
+	Libvirt                 *HostLibvirtInventory   `json:"libvirt,omitempty"`
 	Status                  string                  `json:"status"`
 	UptimeSeconds           int64                   `json:"uptimeSeconds,omitempty"`
 	IntervalSeconds         int                     `json:"intervalSeconds,omitempty"`
@@ -438,6 +439,10 @@ func (h Host) NormalizeCollections() Host {
 		ceph := h.Ceph.NormalizeCollections()
 		h.Ceph = &ceph
 	}
+	if h.Libvirt != nil {
+		libvirt := h.Libvirt.NormalizeCollections()
+		h.Libvirt = &libvirt
+	}
 	if h.Tags == nil {
 		h.Tags = []string{}
 	}
@@ -449,6 +454,43 @@ func (h Host) NormalizeCollections() Host {
 		h.IdentityConflict = &conflict
 	}
 	return h
+}
+
+// HostLibvirtInventory is the normalized server-side view of a local
+// read-only libvirt inventory reported by the Unified Agent.
+type HostLibvirtInventory struct {
+	Domains     []HostLibvirtDomain `json:"domains"`
+	CollectedAt time.Time           `json:"collectedAt"`
+}
+
+func (i HostLibvirtInventory) NormalizeCollections() HostLibvirtInventory {
+	if i.Domains == nil {
+		i.Domains = []HostLibvirtDomain{}
+	}
+	return i
+}
+
+// HostLibvirtDomain carries both cumulative source counters and the
+// server-derived point-in-time rates used by the unified VM resource.
+type HostLibvirtDomain struct {
+	ID                 string  `json:"id"`
+	Name               string  `json:"name"`
+	State              string  `json:"state"`
+	VCPUs              int     `json:"vcpus,omitempty"`
+	CPUTimeNanoseconds uint64  `json:"cpuTimeNanoseconds,omitempty"`
+	CPUUsagePercent    float64 `json:"cpuUsagePercent,omitempty"`
+	CPUUsageValid      bool    `json:"-"`
+	MemoryCurrentBytes int64   `json:"memoryCurrentBytes,omitempty"`
+	MemoryMaximumBytes int64   `json:"memoryMaximumBytes,omitempty"`
+	NetworkRXBytes     uint64  `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes     uint64  `json:"networkTxBytes,omitempty"`
+	DiskReadBytes      uint64  `json:"diskReadBytes,omitempty"`
+	DiskWriteBytes     uint64  `json:"diskWriteBytes,omitempty"`
+	NetworkInRate      float64 `json:"networkInRate,omitempty"`
+	NetworkOutRate     float64 `json:"networkOutRate,omitempty"`
+	DiskReadRate       float64 `json:"diskReadRate,omitempty"`
+	DiskWriteRate      float64 `json:"diskWriteRate,omitempty"`
+	IORatesValid       bool    `json:"-"`
 }
 
 // HostIdentityConflict records evidence that reports from more than one

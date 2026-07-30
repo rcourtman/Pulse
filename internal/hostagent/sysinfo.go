@@ -1,11 +1,14 @@
 package hostagent
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
@@ -38,6 +41,7 @@ type SystemCollector interface {
 	Chmod(name string, mode os.FileMode) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	CommandCombinedOutput(ctx context.Context, name string, arg ...string) (string, error)
+	CommandCombinedOutputLimited(ctx context.Context, maxBytes int, name string, arg ...string) (string, error)
 	LookPath(file string) (string, error)
 }
 
@@ -138,6 +142,67 @@ func (c *defaultCollector) CommandCombinedOutput(ctx context.Context, name strin
 	return string(out), err
 }
 
+func (c *defaultCollector) CommandCombinedOutputLimited(
+	ctx context.Context,
+	maxBytes int,
+	name string,
+	arg ...string,
+) (string, error) {
+	if maxBytes <= 0 {
+		return "", fmt.Errorf("command output limit must be positive")
+	}
+	output := &limitedCombinedBuffer{limit: maxBytes}
+	cmd := exec.CommandContext(ctx, name, arg...)
+	cmd.Stdout = output
+	cmd.Stderr = output
+	err := cmd.Run()
+	if output.Exceeded() {
+		return output.String(), fmt.Errorf("command output exceeds %d bytes", maxBytes)
+	}
+	return output.String(), err
+}
+
 func (c *defaultCollector) LookPath(file string) (string, error) {
 	return exec.LookPath(file)
+}
+
+// limitedCombinedBuffer bounds memory while preserving CombinedOutput-like
+// capture of stdout and stderr. Writes beyond the limit are accepted and
+// discarded so the child can exit normally or be stopped by its context.
+type limitedCombinedBuffer struct {
+	mu       sync.Mutex
+	buffer   bytes.Buffer
+	limit    int
+	exceeded bool
+}
+
+func (b *limitedCombinedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	originalLength := len(p)
+	remaining := b.limit - b.buffer.Len()
+	if remaining > 0 {
+		if remaining < len(p) {
+			_, _ = b.buffer.Write(p[:remaining])
+		} else {
+			_, _ = b.buffer.Write(p)
+		}
+	}
+	if originalLength > remaining {
+		b.exceeded = true
+	}
+	return originalLength, nil
+}
+
+func (b *limitedCombinedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.String()
+}
+
+func (b *limitedCombinedBuffer) Exceeded() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.exceeded
 }

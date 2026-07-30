@@ -1680,6 +1680,18 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+### Agent libvirt domains use a provider-neutral VM facet
+
+The registry projects a host's validated libvirt domains as `vm` resources
+with `technology=libvirt`, a parent relationship to the reporting host, and a
+provider-neutral `virtualMachine` facet for runtime state, hypervisor, and
+vCPU count. The source ID and metrics target are both
+`<host-id>:libvirt:<domain-id>`. CPU and I/O metrics are omitted until the
+monitoring layer proves a two-sample rate; memory is emitted only with a
+positive maximum. The last successful libvirt collection time, rather than
+the host heartbeat, controls guest source freshness. This facet must not
+borrow Proxmox or VMware identifiers and carries no mutation capability.
+
 ### Agent custom sensors remain typed, cloned host metadata
 
 `resourceFromHost` projects `models.HostSensorSummary.Custom` into

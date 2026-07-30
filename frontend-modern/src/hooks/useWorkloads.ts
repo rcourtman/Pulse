@@ -106,6 +106,11 @@ type APIResource = {
     osName?: string;
     osVersion?: string;
   };
+  virtualMachine?: {
+    runtimeState?: string;
+    hypervisor?: string;
+    vcpus?: number;
+  };
   agent?: {
     hostname?: string;
     uptimeSeconds?: number;
@@ -453,6 +458,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     instance,
     status: normalizeWorkloadStatus(
       resource.proxmox?.runtimeStatus ||
+        resource.virtualMachine?.runtimeState ||
         resource.status ||
         (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
     ),
@@ -465,7 +471,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
             ? 'pod'
             : 'app-container',
     cpu: getWorkloadCPUFraction(cpuPercent),
-    cpus: resource.proxmox?.cpus ?? 1,
+    cpus: resource.proxmox?.cpus ?? resource.virtualMachine?.vcpus ?? 1,
     memory: (() => {
       const base = buildMetric(resource.metrics?.memory);
       const cache = resource.proxmox?.memoryCache ?? 0;

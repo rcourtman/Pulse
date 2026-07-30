@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"time"
@@ -28,15 +29,21 @@ type mockCollector struct {
 	readFileFn      func(name string) ([]byte, error)
 	netInterfacesFn func() ([]net.Interface, error)
 
-	hostnameFn              func() (string, error)
-	lookupIPFn              func(host string) ([]net.IP, error)
-	dialTimeoutFn           func(network, address string, timeout time.Duration) (net.Conn, error)
-	statFn                  func(name string) (os.FileInfo, error)
-	mkdirAllFn              func(path string, perm os.FileMode) error
-	chmodFn                 func(name string, mode os.FileMode) error
-	writeFileFn             func(filename string, data []byte, perm os.FileMode) error
-	commandCombinedOutputFn func(ctx context.Context, name string, arg ...string) (string, error)
-	lookPathFn              func(file string) (string, error)
+	hostnameFn                     func() (string, error)
+	lookupIPFn                     func(host string) ([]net.IP, error)
+	dialTimeoutFn                  func(network, address string, timeout time.Duration) (net.Conn, error)
+	statFn                         func(name string) (os.FileInfo, error)
+	mkdirAllFn                     func(path string, perm os.FileMode) error
+	chmodFn                        func(name string, mode os.FileMode) error
+	writeFileFn                    func(filename string, data []byte, perm os.FileMode) error
+	commandCombinedOutputFn        func(ctx context.Context, name string, arg ...string) (string, error)
+	commandCombinedOutputLimitedFn func(
+		ctx context.Context,
+		maxBytes int,
+		name string,
+		arg ...string,
+	) (string, error)
+	lookPathFn func(file string) (string, error)
 }
 
 func (m *mockCollector) HostInfo(ctx context.Context) (*gohost.InfoStat, error) {
@@ -191,6 +198,22 @@ func (m *mockCollector) CommandCombinedOutput(ctx context.Context, name string, 
 		return m.commandCombinedOutputFn(ctx, name, arg...)
 	}
 	return "", nil
+}
+
+func (m *mockCollector) CommandCombinedOutputLimited(
+	ctx context.Context,
+	maxBytes int,
+	name string,
+	arg ...string,
+) (string, error) {
+	if m.commandCombinedOutputLimitedFn != nil {
+		return m.commandCombinedOutputLimitedFn(ctx, maxBytes, name, arg...)
+	}
+	output, err := m.CommandCombinedOutput(ctx, name, arg...)
+	if len(output) > maxBytes {
+		return output[:maxBytes], fmt.Errorf("command output exceeds %d bytes", maxBytes)
+	}
+	return output, err
 }
 
 func (m *mockCollector) LookPath(file string) (string, error) {

@@ -633,3 +633,55 @@ func TestReportAvailabilityResultsJSONRoundTrip(t *testing.T) {
 		t.Fatalf("empty availability results should be omitted: %s", bare)
 	}
 }
+
+func TestReportLibvirtInventoryJSONRoundTrip(t *testing.T) {
+	collectedAt := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	report := Report{
+		Libvirt: &LibvirtInventory{
+			CollectedAt: collectedAt,
+			Domains: []LibvirtDomain{{
+				ID:                 "domain-a",
+				Name:               "app",
+				State:              "running",
+				VCPUs:              4,
+				CPUTimeNanoseconds: 3_000_000_000,
+				MemoryCurrentBytes: 2 << 30,
+				MemoryMaximumBytes: 4 << 30,
+				NetworkRXBytes:     100,
+				DiskWriteBytes:     200,
+			}},
+		},
+	}
+
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	var decoded Report
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if decoded.Libvirt == nil ||
+		!decoded.Libvirt.CollectedAt.Equal(collectedAt) ||
+		len(decoded.Libvirt.Domains) != 1 {
+		t.Fatalf("libvirt inventory = %+v", decoded.Libvirt)
+	}
+	domain := decoded.Libvirt.Domains[0]
+	if domain.Name != "app" ||
+		domain.State != "running" ||
+		domain.VCPUs != 4 ||
+		domain.CPUTimeNanoseconds != 3_000_000_000 ||
+		domain.MemoryMaximumBytes != 4<<30 ||
+		domain.NetworkRXBytes != 100 ||
+		domain.DiskWriteBytes != 200 {
+		t.Fatalf("libvirt domain = %+v", domain)
+	}
+
+	bare, err := json.Marshal(Report{})
+	if err != nil {
+		t.Fatalf("marshal bare report: %v", err)
+	}
+	if contains(string(bare), "libvirt") {
+		t.Fatalf("nil libvirt inventory should be omitted: %s", bare)
+	}
+}

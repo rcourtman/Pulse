@@ -1110,6 +1110,11 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect Ceph cluster data (best effort - only on Ceph nodes)
 	cephData := a.collectCephStatus(collectCtx, runtimeConfig.disableCeph)
 
+	// Collect local libvirt domain inventory on KVM-capable Linux hosts.
+	// The collector uses a read-only connection and its own bounded deadline so
+	// an unavailable hypervisor cannot delay the rest of the host report.
+	libvirtData := a.collectLibvirtInventory(ctx)
+
 	// Collect S.M.A.R.T. disk data after topology owners. Enumeration and each
 	// device probe have their own deadlines; a single shared 10-second budget
 	// caused later disks on larger arrays to be cancelled before their probe.
@@ -1137,6 +1142,15 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	if updatedFrom != "" {
 		a.updatedFrom = ""
 	}
+	moduleStatus := a.currentModuleStatus()
+	if libvirtData != nil {
+		moduleStatus = append(moduleStatus, agentshost.ModuleStatus{
+			Name:      "libvirt",
+			Enabled:   true,
+			State:     "running",
+			UpdatedAt: libvirtData.CollectedAt,
+		})
+	}
 
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
@@ -1151,7 +1165,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			DiskExclude:             append([]string(nil), runtimeConfig.diskExclude...),
 			AppliedConfig:           runtimeConfig.appliedConfig,
 			Update:                  a.currentUpdateStatus(),
-			Modules:                 a.currentModuleStatus(),
+			Modules:                 moduleStatus,
 		},
 		Host: agentshost.HostInfo{
 			ID:             a.machineID,
@@ -1182,6 +1196,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		RAID:           raidData,
 		Unraid:         unraidData,
 		Ceph:           cephData,
+		Libvirt:        libvirtData,
 		ClusterSensors: clusterSensors,
 		// Results stay queued until the primary destination accepts this
 		// report, so a delivery failure retries them instead of losing them.

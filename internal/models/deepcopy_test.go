@@ -423,3 +423,17 @@ func TestCloneHosts_Nil(t *testing.T) {
 		t.Error("nil should clone to nil")
 	}
 }
+
+func TestCloneHostLibvirtInventoryIsolation(t *testing.T) {
+	src := Host{Libvirt: &HostLibvirtInventory{
+		Domains: []HostLibvirtDomain{{ID: "domain-a", Name: "app"}},
+	}}
+	dst := cloneHost(src)
+	if dst.Libvirt == nil || len(dst.Libvirt.Domains) != 1 {
+		t.Fatalf("cloned libvirt inventory = %+v", dst.Libvirt)
+	}
+	dst.Libvirt.Domains[0].Name = "mutated"
+	if src.Libvirt.Domains[0].Name != "app" {
+		t.Fatal("clone libvirt inventory aliases source domains")
+	}
+}

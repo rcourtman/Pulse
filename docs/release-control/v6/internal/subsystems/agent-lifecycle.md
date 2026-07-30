@@ -1507,6 +1507,23 @@ the intentionally sparse public response.
    `sensors.gpu` while mapping only direct `temperature.gpu` readings into
    existing `sensors.temperatureCelsius` `gpu_nvidia_<index>` keys for
    compatibility.
+   Linux libvirt inventory belongs to the host-agent report as a read-only,
+   auto-detected child workload source. `internal/hostagent/libvirt.go` may
+   locate only the local `virsh` executable and use its global `--readonly`
+   mode with `list --all --name` followed by one `domstats --raw --nowait`
+   query over at most 128 validated domain names. The collector has one
+   eight-second deadline, bounded list/stat output, fixed state/CPU/balloon/
+   interface/block field selection, and no server-authored URI, domain, or
+   command input. Missing clients, inaccessible sockets, unsupported drivers,
+   partial statistics, or parse failures omit the inventory without failing
+   host telemetry. Authenticated ingest derives CPU and I/O rates only after
+   two accepted samples and projects the domains as provider-neutral
+   `technology=libvirt` VM resources parented to the reporting host. It
+   preserves the last successful collection timestamp across a failed query so
+   the canonical source-staleness policy degrades the rows instead of making
+   every guest disappear, while a successful empty inventory removes them.
+   This path does not grant lifecycle, console, XML, snapshot, migration, or
+   storage mutation authority.
    Authenticated server ingest may reduce those typed samples into bounded
    host-level GPU utilization, VRAM pressure, and GPU temperature history on
    the existing agent identity, but that monitoring projection does not change

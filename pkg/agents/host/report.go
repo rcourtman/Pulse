@@ -53,6 +53,7 @@ type Report struct {
 	RAID           []RAIDArray          `json:"raid,omitempty"`
 	Unraid         *UnraidStorage       `json:"unraid,omitempty"`
 	Ceph           *CephCluster         `json:"ceph,omitempty"`
+	Libvirt        *LibvirtInventory    `json:"libvirt,omitempty"`
 	ClusterSensors []ClusterNodeSensors `json:"clusterSensors,omitempty"`
 	// AvailabilityResults carries availability checks the agent executed on
 	// behalf of the server for targets assigned to it. The server owns failure
@@ -61,6 +62,30 @@ type Report struct {
 	Tags                []string                  `json:"tags,omitempty"`
 	Timestamp           time.Time                 `json:"timestamp"`
 	SequenceID          string                    `json:"sequenceId,omitempty"`
+}
+
+// LibvirtInventory is the bounded, read-only domain inventory collected from
+// a local libvirt connection. A non-nil inventory with no domains means the
+// connection was readable but currently has no defined guests.
+type LibvirtInventory struct {
+	Domains     []LibvirtDomain `json:"domains"`
+	CollectedAt time.Time       `json:"collectedAt"`
+}
+
+// LibvirtDomain contains only stable virDomainStats fields. All byte counters
+// are cumulative; the server derives rates between accepted reports.
+type LibvirtDomain struct {
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	State              string `json:"state"`
+	VCPUs              int    `json:"vcpus,omitempty"`
+	CPUTimeNanoseconds uint64 `json:"cpuTimeNanoseconds,omitempty"`
+	MemoryCurrentBytes int64  `json:"memoryCurrentBytes,omitempty"`
+	MemoryMaximumBytes int64  `json:"memoryMaximumBytes,omitempty"`
+	NetworkRXBytes     uint64 `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes     uint64 `json:"networkTxBytes,omitempty"`
+	DiskReadBytes      uint64 `json:"diskReadBytes,omitempty"`
+	DiskWriteBytes     uint64 `json:"diskWriteBytes,omitempty"`
 }
 
 // AvailabilityProbeResult is one completed availability check reported by a

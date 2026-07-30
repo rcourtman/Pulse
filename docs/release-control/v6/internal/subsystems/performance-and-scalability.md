@@ -881,6 +881,16 @@ without contention or cross-delivery.
 
 ## Current State
 
+### Libvirt workload projection stays bounded and allocation-local
+
+The Linux host collector performs one domain-list call and one bulk `domstats`
+call under a shared eight-second deadline. It accepts at most 128 validated
+domain names and caps combined list and statistics output at 64 KiB and 1 MiB
+while the child process runs. Server normalization and registry projection are
+single bounded passes over that inventory. The frontend workload mapper reads
+the already-loaded provider-neutral VM facet in constant time per row; it adds
+no request, subscription, global lookup, or provider-specific scan.
+
 ### Custom metric drawer projection remains resource-local and bounded
 
 The Infrastructure detail drawer formats `sensors.custom` from the already

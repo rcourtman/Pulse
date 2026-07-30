@@ -79,3 +79,19 @@ func TestDefaultCollector_Smoke(t *testing.T) {
 	// Cleanup if possible (best effort)
 	os.Remove("/tmp/pulse-test-file")
 }
+
+func TestLimitedCombinedBufferCapsCapturedOutput(t *testing.T) {
+	buffer := &limitedCombinedBuffer{limit: 5}
+	if written, err := buffer.Write([]byte("123")); err != nil || written != 3 {
+		t.Fatalf("first write = (%d, %v)", written, err)
+	}
+	if written, err := buffer.Write([]byte("4567")); err != nil || written != 4 {
+		t.Fatalf("second write = (%d, %v)", written, err)
+	}
+	if got := buffer.String(); got != "12345" {
+		t.Fatalf("captured output = %q, want %q", got, "12345")
+	}
+	if !buffer.Exceeded() {
+		t.Fatal("expected buffer to record the output limit was exceeded")
+	}
+}

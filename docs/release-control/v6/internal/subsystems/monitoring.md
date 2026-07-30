@@ -902,6 +902,19 @@ changes.
 
 ## Current State
 
+### Local libvirt guests are bounded host-agent observations
+
+Authenticated Linux host reports may carry a read-only libvirt inventory for
+at most 128 domains. Server ingest discards source-authored IDs, validates and
+deduplicates names, derives stable domain IDs, clamps vCPU and memory values,
+and computes CPU and cumulative I/O rates only from two accepted samples.
+Missing inventory means collection failed and preserves the last successful
+sample with its original collection time; a present empty inventory is an
+authoritative removal. Domain metrics use
+`<host-id>:libvirt:<domain-id>` consistently for history, metrics storage, and
+unified-resource lookup. No libvirt lifecycle or configuration operation is
+part of the monitoring contract.
+
 ### Custom sensor evidence stays typed through host monitoring
 
 Authenticated host reports now copy bounded `sensors.custom` entries into the

@@ -46,6 +46,10 @@ func cloneResource(in *Resource) Resource {
 	out.Ceph = cloneCephMeta(in.Ceph)
 	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
 	out.VMware = cloneVMwareData(in.VMware)
+	if in.VirtualMachine != nil {
+		virtualMachine := *in.VirtualMachine
+		out.VirtualMachine = &virtualMachine
+	}
 	out.Availability = cloneAvailabilityData(in.Availability)
 	out.AvailabilityChecks = cloneAvailabilityDataSlice(in.AvailabilityChecks)
 	out.FacetCounts = resourceFacetCounts(out)

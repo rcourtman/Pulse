@@ -90,6 +90,17 @@ type Resource struct {
 	// AvailabilityChecks is the canonical plural facet. Availability remains
 	// the compatibility summary chosen from this set for existing consumers.
 	AvailabilityChecks []AvailabilityData `json:"availabilityChecks,omitempty"`
+
+	VirtualMachine *VirtualMachineData `json:"virtualMachine,omitempty"`
+}
+
+// VirtualMachineData carries provider-neutral VM facts that are useful across
+// libvirt and future hypervisor adapters without borrowing a Proxmox or VMware
+// source facet.
+type VirtualMachineData struct {
+	RuntimeState string `json:"runtimeState,omitempty"`
+	Hypervisor   string `json:"hypervisor,omitempty"`
+	VCPUs        int    `json:"vcpus,omitempty"`
 }
 
 // ResourceFacetCounts captures the total count of each resource facet that

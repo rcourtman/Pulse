@@ -98,10 +98,16 @@ func (v VMView) Status() ResourceStatus {
 }
 
 func (v VMView) RuntimeStatus() string {
-	if v.r == nil || v.r.Proxmox == nil {
+	if v.r == nil {
 		return ""
 	}
-	return strings.TrimSpace(v.r.Proxmox.RuntimeStatus)
+	if v.r.Proxmox != nil {
+		return strings.TrimSpace(v.r.Proxmox.RuntimeStatus)
+	}
+	if v.r.VirtualMachine != nil {
+		return strings.TrimSpace(v.r.VirtualMachine.RuntimeState)
+	}
+	return ""
 }
 
 func (v VMView) VMID() int {
@@ -154,10 +160,16 @@ func (v VMView) Template() bool {
 }
 
 func (v VMView) CPUs() int {
-	if v.r == nil || v.r.Proxmox == nil {
+	if v.r == nil {
 		return 0
 	}
-	return v.r.Proxmox.CPUs
+	if v.r.Proxmox != nil {
+		return v.r.Proxmox.CPUs
+	}
+	if v.r.VirtualMachine != nil {
+		return v.r.VirtualMachine.VCPUs
+	}
+	return 0
 }
 
 func (v VMView) Uptime() int64 {
