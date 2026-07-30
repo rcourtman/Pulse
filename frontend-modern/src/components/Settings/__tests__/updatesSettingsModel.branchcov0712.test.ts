@@ -261,7 +261,7 @@ describe('buildUpdateInstallGuide', () => {
       {
         id: 'proxmox-signed-installer',
         title: 'Follow the signed installer instructions',
-        note: 'Open https://github.com/rcourtman/Pulse/blob/main/docs/INSTALL.md and use the pinned SSH-signature verification flow. Do not run a legacy community-scripts `update` helper.',
+        note: 'Use docs/INSTALL.md from the matching Pulse release and follow its pinned SSH-signature verification flow. Do not run a legacy community-scripts `update` helper.',
       },
     ]);
   });
