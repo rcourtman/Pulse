@@ -201,7 +201,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 						}
 					}
 				}
-				m.checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, backupContext)
+				m.checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, backupContext, snapshot.Tags)
 			}
 		} else {
 			// For paused/suspended, clear powered-off alert
@@ -312,6 +312,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		Name:       name,
 		Node:       node,
 		Instance:   instanceName,
+		Tags:       snapshot.Tags,
 		CPU:        &UnifiedResourceMetric{Percent: cpu},
 		Memory:     memoryMetric,
 		Disk:       diskMetric,
@@ -375,6 +376,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				"freeBytes":  disk.Free,
 				"diskIndex":  idx,
 				"label":      label,
+				"tags":       append([]string(nil), snapshot.Tags...),
 			}
 			resourceType, ok := unifiedMetricResourceType(snapshot.resourceType())
 			if !ok {
@@ -464,6 +466,10 @@ func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instan
 }
 
 func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool, backupContext BackupIntentContext) {
+	m.checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, backupContext, nil)
+}
+
+func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool, backupContext BackupIntentContext, tags []string) {
 	alertID := fmt.Sprintf("guest-powered-off-%s", guestID)
 	severity := NormalizePoweredOffSeverity(thresholds.PoweredOffSeverity)
 	resourceType := unifiedresources.ResourceTypeVM
@@ -494,6 +500,14 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, nod
 		return
 	}
 
+	metadata := map[string]interface{}{
+		"monitorOnly":  monitorOnly,
+		"resourceType": strings.ToLower(guestType),
+	}
+	if len(tags) > 0 {
+		metadata["tags"] = append([]string(nil), tags...)
+	}
+
 	m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{
@@ -503,19 +517,16 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntent(guestID, name, nod
 				Observed: alertspecs.PowerStateOff,
 			},
 		},
-		Tracking:     tracking,
-		TrackingKey:  guestID,
-		AlertID:      alertID,
-		AlertType:    "powered-off",
-		ResourceID:   guestID,
-		ResourceName: name,
-		Node:         node,
-		Instance:     instanceName,
-		Message:      fmt.Sprintf("%s '%s' is powered off", guestType, name),
-		Metadata: map[string]interface{}{
-			"monitorOnly":  monitorOnly,
-			"resourceType": strings.ToLower(guestType),
-		},
+		Tracking:      tracking,
+		TrackingKey:   guestID,
+		AlertID:       alertID,
+		AlertType:     "powered-off",
+		ResourceID:    guestID,
+		ResourceName:  name,
+		Node:          node,
+		Instance:      instanceName,
+		Message:       fmt.Sprintf("%s '%s' is powered off", guestType, name),
+		Metadata:      metadata,
 		AddToRecent:   true,
 		AddToHistory:  true,
 		DispatchAsync: false,

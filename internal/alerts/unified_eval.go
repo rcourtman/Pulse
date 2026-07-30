@@ -44,6 +44,7 @@ type UnifiedResourceInput struct {
 	Name        string
 	Node        string
 	Instance    string
+	Tags        []string
 	CPU         *UnifiedResourceMetric
 	Memory      *UnifiedResourceMetric
 	Disk        *UnifiedResourceMetric
@@ -236,9 +237,28 @@ func (m *Manager) evaluateUnifiedMetrics(input *UnifiedResourceInput, thresholds
 		return
 	}
 
+	opts = metricOptionsWithTags(opts, input.Tags)
 	for _, candidate := range buildUnifiedMetricCandidates(input, thresholds) {
 		m.checkMetricWithCanonicalSpec(candidate.Spec, input.Name, input.Node, input.Instance, unifiedAlertType(input.Type), candidate.Value, candidate.Threshold, opts)
 	}
+}
+
+func metricOptionsWithTags(opts *metricOptions, tags []string) *metricOptions {
+	if len(tags) == 0 {
+		return opts
+	}
+
+	merged := metricOptions{}
+	if opts != nil {
+		merged = *opts
+	}
+	metadata := make(map[string]interface{}, len(merged.Metadata)+1)
+	for key, value := range merged.Metadata {
+		metadata[key] = value
+	}
+	metadata["tags"] = append([]string(nil), tags...)
+	merged.Metadata = metadata
+	return &merged
 }
 
 func buildUnifiedMetricCandidates(input *UnifiedResourceInput, thresholds ThresholdConfig) []unifiedMetricCandidate {
@@ -449,6 +469,7 @@ func UnifiedResourceInputFromResource(resource unifiedresources.Resource) (*Unif
 		Name:     unifiedResourceAlertName(resource),
 		Node:     unifiedResourceAlertNode(resource),
 		Instance: unifiedResourceAlertInstance(resource, typeKey),
+		Tags:     append([]string(nil), resource.Tags...),
 	}
 
 	if metrics := resource.Metrics; metrics != nil {

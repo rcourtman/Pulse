@@ -39,6 +39,8 @@ const createDefaultFormData = (): WebhookConfigFormData => ({
   payloadTemplate: '',
   customFields: {},
   mention: '',
+  tagFilter: [],
+  tagFilterMode: 'all',
 });
 
 const buildMapFromInputs = (
@@ -180,6 +182,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
         webhook.customFields || {},
       ),
       mention: webhook.mention || '',
+      tagFilter: webhook.tagFilter ?? [],
+      tagFilterMode: webhook.tagFilterMode === 'any' ? 'any' : 'all',
     });
 
     const headers = webhook.headers || {};
@@ -263,6 +267,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
       template: data.payloadTemplate,
       customFields: normalizedCustomFields,
       mention: data.mention,
+      tagFilter: data.tagFilter ?? [],
+      tagFilterMode: data.tagFilterMode === 'any' ? 'any' : 'all',
     });
     resetForm();
   };

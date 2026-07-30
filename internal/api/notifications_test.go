@@ -336,6 +336,60 @@ func TestNotificationHandlers(t *testing.T) {
 		mockPersistence.AssertExpectations(t)
 	})
 
+	t.Run("UpdateEmailConfig_PreservesOmittedTagRouting", func(t *testing.T) {
+		existing := notifications.EmailConfig{
+			TagFilter: []string{"customer:alpha", "critical"},
+			TagMode:   "any",
+		}
+		mockManager.On("GetEmailConfig").Return(existing).Once()
+		mockManager.On("SetEmailConfig", mock.MatchedBy(func(cfg notifications.EmailConfig) bool {
+			return assert.ObjectsAreEqual(
+				[]string{"customer:alpha", "critical"},
+				cfg.TagFilter,
+			) && cfg.TagMode == "any"
+		})).Return().Once()
+		mockPersistence.On("SaveEmailConfig", mock.MatchedBy(func(cfg notifications.EmailConfig) bool {
+			return assert.ObjectsAreEqual(
+				[]string{"customer:alpha", "critical"},
+				cfg.TagFilter,
+			) && cfg.TagMode == "any"
+		})).Return(nil).Once()
+
+		req := httptest.NewRequest(
+			"PUT",
+			"/api/notifications/email",
+			bytes.NewBufferString(`{"enabled":true}`),
+		)
+		w := httptest.NewRecorder()
+		h.UpdateEmailConfig(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("UpdateEmailConfig_ClearsTagRoutingExplicitly", func(t *testing.T) {
+		existing := notifications.EmailConfig{
+			TagFilter: []string{"customer:alpha"},
+			TagMode:   "any",
+		}
+		mockManager.On("GetEmailConfig").Return(existing).Once()
+		mockManager.On("SetEmailConfig", mock.MatchedBy(func(cfg notifications.EmailConfig) bool {
+			return len(cfg.TagFilter) == 0 && cfg.TagMode == "all"
+		})).Return().Once()
+		mockPersistence.On("SaveEmailConfig", mock.MatchedBy(func(cfg notifications.EmailConfig) bool {
+			return len(cfg.TagFilter) == 0 && cfg.TagMode == "all"
+		})).Return(nil).Once()
+
+		req := httptest.NewRequest(
+			"PUT",
+			"/api/notifications/email",
+			bytes.NewBufferString(`{"enabled":true,"tagFilter":[],"tagFilterMode":"all"}`),
+		)
+		w := httptest.NewRecorder()
+		h.UpdateEmailConfig(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
 	t.Run("UpdateEmailConfig_InvalidJSON", func(t *testing.T) {
 		req := httptest.NewRequest("PUT", "/api/notifications/email", bytes.NewReader([]byte("{invalid}")))
 		w := httptest.NewRecorder()
@@ -359,11 +413,13 @@ func TestNotificationHandlers(t *testing.T) {
 	t.Run("GetWebhooks", func(t *testing.T) {
 		webhooks := []notifications.WebhookConfig{
 			{
-				ID:      "wh1",
-				Name:    "Test Webhook",
-				URL:     "https://example.com",
-				Headers: map[string]string{"Authorization": "Bearer token"},
-				Mention: "@everyone",
+				ID:        "wh1",
+				Name:      "Test Webhook",
+				URL:       "https://example.com",
+				Headers:   map[string]string{"Authorization": "Bearer token"},
+				Mention:   "@everyone",
+				TagFilter: []string{"customer:alpha", "critical"},
+				TagMode:   "any",
 			},
 		}
 		mockManager.On("GetWebhooks").Return(webhooks).Once()
@@ -378,6 +434,8 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 1, len(resp))
 		assert.Equal(t, "wh1", resp[0]["id"])
 		assert.Equal(t, "@everyone", resp[0]["mention"])
+		assert.Equal(t, []interface{}{"customer:alpha", "critical"}, resp[0]["tagFilter"])
+		assert.Equal(t, "any", resp[0]["tagFilterMode"])
 		headers := resp[0]["headers"].(map[string]interface{})
 		assert.Equal(t, "***REDACTED***", headers["Authorization"])
 	})
@@ -478,6 +536,43 @@ func TestNotificationHandlers(t *testing.T) {
 		h.UpdateWebhook(w, req)
 
 		assert.Equal(t, 200, w.Code)
+	})
+
+	t.Run("UpdateWebhook_PreservesOmittedTagRouting", func(t *testing.T) {
+		existing := notifications.WebhookConfig{
+			ID:        "wh1",
+			URL:       "https://example.com/hook",
+			TagFilter: []string{"customer:alpha", "critical"},
+			TagMode:   "any",
+		}
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
+		mockManager.On("ValidateWebhookURL", existing.URL).Return(nil).Once()
+		mockManager.On(
+			"UpdateWebhook",
+			"wh1",
+			mock.MatchedBy(func(cfg notifications.WebhookConfig) bool {
+				return assert.ObjectsAreEqual(
+					[]string{"customer:alpha", "critical"},
+					cfg.TagFilter,
+				) && cfg.TagMode == "any"
+			}),
+		).Return(nil).Once()
+		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{existing}).Once()
+		mockPersistence.On("SaveWebhooks", mock.Anything).Return(nil).Once()
+
+		req := httptest.NewRequest(
+			"PUT",
+			"/api/notifications/webhooks/wh1",
+			bytes.NewBufferString(`{"name":"Updated","url":"https://example.com/hook"}`),
+		)
+		w := httptest.NewRecorder()
+		h.UpdateWebhook(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.Equal(t, []interface{}{"customer:alpha", "critical"}, response["tagFilter"])
+		assert.Equal(t, "any", response["tagFilterMode"])
 	})
 
 	t.Run("DeleteWebhook", func(t *testing.T) {

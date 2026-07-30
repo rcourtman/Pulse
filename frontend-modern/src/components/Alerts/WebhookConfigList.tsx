@@ -1,4 +1,4 @@
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
 import type { Webhook, WebhookTemplate } from '@/api/notifications';
@@ -75,6 +75,18 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               <span class="rounded bg-surface-alt px-2 py-0.5 text-base-content">
                 {webhook.method}
               </span>
+              <For each={webhook.tagFilter ?? []}>
+                {(tag) => (
+                  <span class="rounded bg-sky-50 px-2 py-0.5 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                    {tag}
+                  </span>
+                )}
+              </For>
+              <Show when={(webhook.tagFilter?.length ?? 0) > 1}>
+                <span class="rounded bg-surface-alt px-2 py-0.5 text-muted">
+                  Match {webhook.tagFilterMode === 'any' ? 'any' : 'all'}
+                </span>
+              </Show>
             </div>
             <p class="mt-2 break-all text-[11px] font-mono text-muted sm:text-xs">{webhook.url}</p>
             <div class="mt-3 flex flex-wrap gap-2 border-t border-border-subtle pt-2 sm:justify-end w-full">

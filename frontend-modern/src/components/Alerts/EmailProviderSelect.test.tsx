@@ -124,6 +124,34 @@ describe('EmailProviderSelect', () => {
     expect(emailProviderSelectSource).not.toContain('<textarea');
   });
 
+  it('edits resource tag routing and its all-or-any matching mode', () => {
+    render(() => (
+      <EmailProviderSelect
+        config={makeConfig({
+          tagFilter: ['customer:alpha', 'critical'],
+          tagFilterMode: 'all',
+        })}
+        onChange={onChangeMock}
+        onTest={onTestMock}
+      />
+    ));
+
+    expect(screen.getByText('Resource tag routing')).toBeInTheDocument();
+    expect(screen.getByText('customer:alpha')).toBeInTheDocument();
+    expect(screen.getByText('critical')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Tag matching' }), {
+      target: { value: 'any' },
+    });
+
+    expect(onChangeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tagFilter: ['customer:alpha', 'critical'],
+        tagFilterMode: 'any',
+      }),
+    );
+  });
+
   it('exposes canonical labels for provider and security selects', () => {
     render(() => (
       <EmailProviderSelect config={makeConfig()} onChange={onChangeMock} onTest={onTestMock} />

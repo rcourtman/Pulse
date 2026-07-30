@@ -24,7 +24,7 @@ export function normalizeAppriseConfig(
 }
 
 export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
-  return {
+  const payload: EmailConfig = {
     enabled: config.enabled,
     provider: config.provider,
     server: config.server,
@@ -35,7 +35,14 @@ export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
     to: config.to.map((entry) => entry.trim()).filter((entry) => entry.length > 0),
     tls: config.tls,
     startTLS: config.startTLS,
-  } as EmailConfig;
+  };
+  if (config.tagFilter !== undefined) {
+    payload.tagFilter = config.tagFilter;
+  }
+  if (config.tagFilterMode !== undefined) {
+    payload.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
+  }
+  return payload;
 }
 
 export function buildAppriseConfigPayload(config: UIAppriseConfig): AppriseConfig {

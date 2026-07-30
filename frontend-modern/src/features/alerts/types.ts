@@ -149,6 +149,8 @@ export interface UIEmailConfig {
   maxRetries: number;
   retryDelay: number;
   rateLimit: number;
+  tagFilter?: string[];
+  tagFilterMode?: 'all' | 'any';
 }
 
 export interface UIAppriseConfig {

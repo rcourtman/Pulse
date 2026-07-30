@@ -50,6 +50,34 @@ describe('alertDestinationsModel', () => {
     ).toEqual(['alice@test.com', 'charlie@test.com']);
   });
 
+  it('includes explicit email tag routing, including an empty filter used to clear routing', () => {
+    expect(
+      buildEmailConfigPayload({
+        enabled: true,
+        provider: 'smtp',
+        server: 'smtp.internal',
+        port: 587,
+        username: 'ops@example.com',
+        password: '',
+        from: 'pulse@example.com',
+        to: ['alerts@example.com'],
+        tls: true,
+        startTLS: true,
+        replyTo: '',
+        maxRetries: 3,
+        retryDelay: 60,
+        rateLimit: 0,
+        tagFilter: [],
+        tagFilterMode: 'any',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        tagFilter: [],
+        tagFilterMode: 'any',
+      }),
+    );
+  });
+
   it('builds outbound email and apprise payloads from UI state', () => {
     expect(
       buildEmailConfigPayload({

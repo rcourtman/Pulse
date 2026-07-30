@@ -73,6 +73,8 @@ These fields and behaviors are stable; ticket-routing integrations can rely on t
 
 **Tenant identity.** In multi-tenant organizations and MSP client runtimes, `{{.TenantID}}` and `{{.TenantName}}` identify which tenant fired the alert. Client runtimes get identity from the `PULSE_TENANT_ID` / `PULSE_TENANT_NAME` environment; shared-process organizations stamp the org ID and display name automatically.
 
+**Resource tag routing.** Email and each alert webhook can be limited to resources with selected tags in **Alerts → Notifications**. An empty filter receives every alert. With multiple tags, choose **Match all tags** or **Match any tag**. Matching ignores case. Proxmox tags are matched as shown; Docker container and service labels are exposed as `key:value` tags (or `key` when the label value is empty). Recovery notifications follow the destinations that received the firing alert, even if a resource's tags change before recovery.
+
 **Retries.** Failed deliveries retry with exponential backoff. The persistent notification queue makes up to 3 delivery attempts per notification; webhooks configured with transport-level retry add up to 3 more HTTP retries per attempt (1s doubling to a 30s cap, honoring `Retry-After` on HTTP 429). A receiver may therefore see the same logical event more than once.
 
 **Idempotency.** Every alert delivery carries an `X-Pulse-Event-ID` header of the form `<alertID>:<event>` (e.g. `a1b2c3:alert`, `a1b2c3:resolved`). It is identical across all retries of the same logical event — deduplicate on it.

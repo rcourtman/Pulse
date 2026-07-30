@@ -193,6 +193,40 @@ describe('WebhookConfig', () => {
     expect(screen.getByText('https://hooks.slack.com/services/abc')).toBeInTheDocument();
   });
 
+  it('renders and preserves webhook resource tag routing while editing', () => {
+    const webhook = makeWebhook({
+      id: 'wh-routed',
+      tagFilter: ['customer:alpha', 'critical'],
+      tagFilterMode: 'any',
+    });
+
+    render(() => (
+      <WebhookConfig
+        webhooks={[webhook]}
+        onAdd={onAddMock}
+        onUpdate={onUpdateMock}
+        onDelete={onDeleteMock}
+        onTest={onTestMock}
+      />
+    ));
+
+    expect(screen.getByText('customer:alpha')).toBeInTheDocument();
+    expect(screen.getByText('critical')).toBeInTheDocument();
+    expect(screen.getByText('Match any')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByRole('combobox', { name: 'Tag matching' })).toHaveValue('any');
+    fireEvent.click(screen.getByText('Update Webhook'));
+
+    expect(onUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'wh-routed',
+        tagFilter: ['customer:alpha', 'critical'],
+        tagFilterMode: 'any',
+      }),
+    );
+  });
+
   it('shows enabled count summary', () => {
     const webhooks = [
       makeWebhook({ id: 'wh-1', enabled: true }),

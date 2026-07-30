@@ -183,7 +183,9 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 
 	// Parse strict subset to check for presence of fields
 	var presenceCheck struct {
-		RateLimit *int `json:"rateLimit"`
+		RateLimit *int      `json:"rateLimit"`
+		TagFilter *[]string `json:"tagFilter"`
+		TagMode   *string   `json:"tagFilterMode"`
 	}
 	if err := json.Unmarshal(body, &presenceCheck); err != nil {
 		// Non-fatal, just means we can't do presence check
@@ -206,6 +208,12 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	// If rateLimit was NOT provided (nil in presence check), preserve existing
 	if presenceCheck.RateLimit == nil {
 		config.RateLimit = existingConfig.RateLimit
+	}
+	if presenceCheck.TagFilter == nil {
+		config.TagFilter = existingConfig.TagFilter
+	}
+	if presenceCheck.TagMode == nil {
+		config.TagMode = existingConfig.TagMode
 	}
 
 	log.Info().
@@ -327,6 +335,11 @@ func (h *NotificationHandlers) GetWebhooks(w http.ResponseWriter, r *http.Reques
 			whMap["mention"] = webhook.Mention
 		}
 
+		if len(webhook.TagFilter) > 0 {
+			whMap["tagFilter"] = append([]string(nil), webhook.TagFilter...)
+			whMap["tagFilterMode"] = webhook.TagMode
+		}
+
 		// Signal that a signing secret is configured without revealing it
 		if webhook.SigningSecret != "" {
 			whMap["signingSecret"] = "***REDACTED***"
@@ -385,6 +398,8 @@ func (h *NotificationHandlers) CreateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	responseData["id"] = webhook.ID
 	responseData["customFields"] = webhook.CustomFields
+	responseData["tagFilter"] = webhook.TagFilter
+	responseData["tagFilterMode"] = webhook.TagMode
 
 	if err := utils.WriteJSONResponse(w, responseData); err != nil {
 		log.Error().Err(err).Msg("Failed to write webhook creation response")
@@ -418,6 +433,11 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	var routingPresence struct {
+		TagFilter *[]string `json:"tagFilter"`
+		TagMode   *string   `json:"tagFilterMode"`
+	}
+	_ = json.Unmarshal(bodyBytes, &routingPresence)
 	webhook = notifications.NormalizeWebhookConfig(webhook)
 
 	// Preserve original headers/customFields if the incoming values are redacted
@@ -425,6 +445,12 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	existingWebhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
 	for _, existing := range existingWebhooks {
 		if existing.ID == webhookID {
+			if routingPresence.TagFilter == nil {
+				webhook.TagFilter = existing.TagFilter
+			}
+			if routingPresence.TagMode == nil {
+				webhook.TagMode = existing.TagMode
+			}
 			// Preserve headers if incoming contains redacted values
 			if len(webhook.Headers) > 0 && len(existing.Headers) > 0 {
 				hasRedacted := false
@@ -485,6 +511,8 @@ func (h *NotificationHandlers) UpdateWebhook(w http.ResponseWriter, r *http.Requ
 	}
 	responseData["id"] = webhookID
 	responseData["customFields"] = webhook.CustomFields
+	responseData["tagFilter"] = webhook.TagFilter
+	responseData["tagFilterMode"] = webhook.TagMode
 
 	if err := utils.WriteJSONResponse(w, responseData); err != nil {
 		log.Error().Err(err).Str("webhookID", webhookID).Msg("Failed to write webhook update response")

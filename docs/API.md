@@ -536,6 +536,12 @@ Triggers a test alert to all configured channels.
 - `GET /api/notifications/webhook-templates` (admin)
 - `GET /api/notifications/webhook-history` (admin)
 - `GET /api/notifications/email-providers` (admin)
+
+Email and webhook configurations accept optional `tagFilter` (an array of
+resource-tag strings) and `tagFilterMode` (`"all"` or `"any"`). An omitted
+field is preserved on update; an empty `tagFilter` clears routing and restores
+delivery for all resources.
+
 - `GET /api/notifications/health` (admin)
   - Queue health is `degraded` whenever any retained `failed` or `dlq`
     delivery exists, and `unavailable` when queue state cannot be read.

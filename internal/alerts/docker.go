@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -259,6 +260,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	nodeName := strings.TrimSpace(host.Hostname)
 	instanceName := dockerInstanceName(host)
 	resourceType := "app-container"
+	containerTags := dockerLabelTags(container.Labels)
 
 	m.mu.RLock()
 	overrideConfig, hasOverride := m.config.Overrides[resourceID]
@@ -313,6 +315,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 				"cpuCapacityPercent": cpuCapacityPercent,
 				"cpuRawPercent":      container.CPUPercent,
 				"cpuCapacityCores":   host.CPUs,
+				"tags":               containerTags,
 			}
 			spec, err := buildCanonicalMetricSpec(resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "cpu", thresholds.CPU)
 			if err != nil {
@@ -341,6 +344,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 				"metric":           "memory",
 				"memoryPercent":    container.MemoryPercent,
 				"memoryUsageBytes": container.MemoryUsage,
+				"tags":             containerTags,
 			}
 			if container.MemoryLimit > 0 {
 				memMetadata["memoryLimitBytes"] = container.MemoryLimit
@@ -378,6 +382,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 					"writableLayerBytes":  usedBytes,
 					"rootFilesystemBytes": totalBytes,
 					"mountCount":          len(container.Mounts),
+					"tags":                containerTags,
 				}
 				if container.BlockIO != nil {
 					diskMetadata["blockIoReadBytes"] = container.BlockIO.ReadBytes
@@ -461,6 +466,7 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 		"completedTasks": service.CompletedTasks,
 		"missingTasks":   missing,
 		"percentMissing": percentMissing,
+		"tags":           dockerLabelTags(service.Labels),
 	}
 	alertID := fmt.Sprintf("docker-service-health-%s", resourceID)
 
@@ -770,26 +776,16 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 				Observed: observedState,
 			},
 		},
-		Tracking:     m.dockerStateConfirm,
-		TrackingKey:  stateKey,
-		AlertID:      alertID,
-		AlertType:    "docker-container-state",
-		ResourceID:   resourceID,
-		ResourceName: containerName,
-		Node:         nodeName,
-		Instance:     instanceName,
-		Message:      fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status)),
-		Metadata: map[string]interface{}{
-			"resourceType":  "app-container",
-			"hostId":        host.ID,
-			"hostName":      host.DisplayName,
-			"hostHostname":  host.Hostname,
-			"containerId":   container.ID,
-			"containerName": containerName,
-			"image":         container.Image,
-			"state":         container.State,
-			"status":        container.Status,
-		},
+		Tracking:      m.dockerStateConfirm,
+		TrackingKey:   stateKey,
+		AlertID:       alertID,
+		AlertType:     "docker-container-state",
+		ResourceID:    resourceID,
+		ResourceName:  containerName,
+		Node:          nodeName,
+		Instance:      instanceName,
+		Message:       fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status)),
+		Metadata:      dockerContainerAlertMetadata(host, container, containerName),
 		AddToRecent:   true,
 		AddToHistory:  true,
 		DispatchAsync: true,
@@ -814,7 +810,30 @@ func dockerContainerAlertMetadata(host models.DockerHost, container models.Docke
 		"image":         container.Image,
 		"state":         container.State,
 		"status":        container.Status,
+		"tags":          dockerLabelTags(container.Labels),
 	}
+}
+
+func dockerLabelTags(labels map[string]string) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+
+	tags := make([]string, 0, len(labels))
+	for rawKey, rawValue := range labels {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			continue
+		}
+		value := strings.TrimSpace(rawValue)
+		if value == "" {
+			tags = append(tags, key)
+			continue
+		}
+		tags = append(tags, key+":"+value)
+	}
+	sort.Strings(tags)
+	return tags
 }
 
 func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {

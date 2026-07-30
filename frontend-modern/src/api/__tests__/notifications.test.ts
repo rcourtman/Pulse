@@ -79,6 +79,53 @@ describe('NotificationsAPI', () => {
     });
   });
 
+  it('maps email tag routing and sends explicit routing updates', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      enabled: true,
+      provider: 'smtp',
+      server: 'smtp.internal',
+      port: 587,
+      username: 'ops',
+      password: '',
+      from: 'pulse@internal',
+      to: ['alerts@internal'],
+      tls: false,
+      startTLS: true,
+      tagFilter: ['customer:alpha', 'critical'],
+      tagFilterMode: 'any',
+    });
+
+    const config = await NotificationsAPI.getEmailConfig();
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        tagFilter: ['customer:alpha', 'critical'],
+        tagFilterMode: 'any',
+      }),
+    );
+
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true });
+    await NotificationsAPI.updateEmailConfig({
+      ...config,
+      tagFilter: [],
+      tagFilterMode: 'all',
+    });
+
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
+      '/api/notifications/email',
+      expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('"tagFilter":[]'),
+      }),
+    );
+    expect(JSON.parse(apiFetchJSONMock.mock.calls.at(-1)?.[1]?.body as string)).toEqual(
+      expect.objectContaining({
+        tagFilter: [],
+        tagFilterMode: 'all',
+      }),
+    );
+  });
+
   it('normalizes malformed webhook collections to empty arrays', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ webhooks: [] } as any);
 

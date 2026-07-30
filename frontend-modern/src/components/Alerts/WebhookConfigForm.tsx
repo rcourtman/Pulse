@@ -45,6 +45,7 @@ import {
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
+import { TagInput } from '@/components/shared/TagInput';
 
 import type { CustomFieldInput, HeaderInput, WebhookConfigFormData } from './useWebhookConfigState';
 
@@ -165,6 +166,38 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           or <code class="font-mono text-[11px] text-muted">{ALERT_WEBHOOK_URL_HELP_QUERY}</code> to
           keep dynamic values URL-safe.
         </p>
+      </div>
+
+      <div class="space-y-2 border-t border-border pt-3">
+        <div>
+          <div class={labelClass()}>Resource tag routing</div>
+          <p class={formHelpText + ' mt-1'}>
+            Leave empty to receive all alerts. Add tags to route only alerts from matching resources
+            to this webhook.
+          </p>
+        </div>
+        <TagInput
+          tags={props.formData().tagFilter ?? []}
+          onChange={(tagFilter) => props.setFormData((prev) => ({ ...prev, tagFilter }))}
+          placeholder="Add a resource tag"
+        />
+        <Show when={(props.formData().tagFilter?.length ?? 0) > 1}>
+          <FormSelect
+            id="alert-webhook-tag-mode"
+            label="Tag matching"
+            value={props.formData().tagFilterMode === 'any' ? 'any' : 'all'}
+            onChange={(event) =>
+              props.setFormData((prev) => ({
+                ...prev,
+                tagFilterMode: event.currentTarget.value === 'any' ? 'any' : 'all',
+              }))
+            }
+            selectBaseClass={controlClass('px-2 py-1.5')}
+          >
+            <option value="all">Match all tags</option>
+            <option value="any">Match any tag</option>
+          </FormSelect>
+        </Show>
       </div>
 
       <Show

@@ -102,6 +102,8 @@ export const createDefaultEmailConfig = (): UIEmailConfig => ({
   maxRetries: 3,
   retryDelay: 5,
   rateLimit: 60,
+  tagFilter: [],
+  tagFilterMode: 'all',
 });
 
 export const readStringValue = (value: unknown, fallback = ''): string =>
@@ -134,6 +136,8 @@ export const normalizeEmailConfigFromAPI = (
     tls: readBooleanValue(value?.tls, defaults.tls),
     startTLS: readBooleanValue(value?.startTLS, defaults.startTLS),
     rateLimit: readNumberValue(value?.rateLimit, defaults.rateLimit),
+    tagFilter: readStringArrayValue(value?.tagFilter),
+    tagFilterMode: value?.tagFilterMode === 'any' ? 'any' : 'all',
   };
 };
 

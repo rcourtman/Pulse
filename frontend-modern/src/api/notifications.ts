@@ -54,6 +54,8 @@ export interface EmailConfig {
   tls: boolean;
   startTLS: boolean;
   rateLimit?: number;
+  tagFilter?: string[];
+  tagFilterMode?: 'all' | 'any';
 }
 
 export interface Webhook {
@@ -67,6 +69,8 @@ export interface Webhook {
   service?: string; // Added to support Discord, Slack, etc.
   customFields?: Record<string, string>;
   mention?: string; // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
+  tagFilter?: string[];
+  tagFilterMode?: 'all' | 'any';
 }
 
 export interface AppriseConfig {
@@ -269,7 +273,7 @@ export class NotificationsAPI {
     const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
-    return {
+    const config: EmailConfig = {
       enabled: strictBoolean(backendConfig.enabled),
       provider: strictString(backendConfig.provider),
       server: strictString(backendConfig.server),
@@ -282,6 +286,13 @@ export class NotificationsAPI {
       startTLS: strictBoolean(backendConfig.startTLS),
       rateLimit: finiteNumberOrUndefined(backendConfig.rateLimit),
     };
+    if (Array.isArray(backendConfig.tagFilter)) {
+      config.tagFilter = stringArray(backendConfig.tagFilter);
+    }
+    if (typeof backendConfig.tagFilterMode === 'string') {
+      config.tagFilterMode = backendConfig.tagFilterMode === 'any' ? 'any' : 'all';
+    }
+    return config;
   }
 
   static async updateEmailConfig(config: EmailConfig): Promise<{ success: boolean }> {
@@ -302,6 +313,12 @@ export class NotificationsAPI {
     // Only include rateLimit if it's explicitly set
     if (config.rateLimit !== undefined) {
       backendConfig.rateLimit = config.rateLimit;
+    }
+    if (config.tagFilter !== undefined) {
+      backendConfig.tagFilter = config.tagFilter;
+    }
+    if (config.tagFilterMode !== undefined) {
+      backendConfig.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
     }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {

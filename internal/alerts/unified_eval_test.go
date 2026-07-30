@@ -483,6 +483,7 @@ func TestUnifiedResourceInputFromKubernetesTrueNASAndVMwareResources(t *testing.
 		Type:       unifiedresources.ResourceTypePod,
 		Name:       "api-7d9f",
 		ParentName: "worker-1",
+		Tags:       []string{"customer:alpha", "critical"},
 		Sources:    []unifiedresources.DataSource{unifiedresources.SourceK8s},
 		Kubernetes: &unifiedresources.K8sData{
 			ClusterName: "prod",
@@ -503,6 +504,9 @@ func TestUnifiedResourceInputFromKubernetesTrueNASAndVMwareResources(t *testing.
 	}
 	if podInput.CPU == nil || podInput.CPU.Percent != 82 {
 		t.Fatalf("unexpected pod CPU metric: %+v", podInput.CPU)
+	}
+	if len(podInput.Tags) != 2 || podInput.Tags[0] != "customer:alpha" || podInput.Tags[1] != "critical" {
+		t.Fatalf("unexpected pod routing tags: %+v", podInput.Tags)
 	}
 
 	pool := unifiedresources.Resource{
@@ -1245,6 +1249,7 @@ func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
 				Name:   "web",
 				State:  "exited",
 				Status: "Exited (1) seconds ago",
+				Labels: map[string]string{"customer": "alpha", "critical": ""},
 			},
 		},
 	}
@@ -1259,6 +1264,10 @@ func TestCheckDockerContainerStateAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-runtime-state" {
 		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-runtime-state")
+	}
+	tags, ok := alert.Metadata["tags"].([]string)
+	if !ok || len(tags) != 2 || tags[0] != "critical" || tags[1] != "customer:alpha" {
+		t.Fatalf("container routing tags = %#v", alert.Metadata["tags"])
 	}
 }
 
@@ -1277,6 +1286,7 @@ func TestCheckDockerServiceAnnotatesCanonicalSpecMetadata(t *testing.T) {
 				DesiredTasks: 4,
 				RunningTasks: 2,
 				Mode:         "replicated",
+				Labels:       map[string]string{"customer": "alpha", "critical": ""},
 			},
 		},
 	}
@@ -1290,6 +1300,10 @@ func TestCheckDockerServiceAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 	if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-service-gap" {
 		t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-service-gap")
+	}
+	tags, ok := alert.Metadata["tags"].([]string)
+	if !ok || len(tags) != 2 || tags[0] != "critical" || tags[1] != "customer:alpha" {
+		t.Fatalf("service routing tags = %#v", alert.Metadata["tags"])
 	}
 }
 

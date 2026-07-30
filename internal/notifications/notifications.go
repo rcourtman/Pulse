@@ -289,6 +289,9 @@ func copyEmailConfig(cfg EmailConfig) EmailConfig {
 	if len(cfg.To) > 0 {
 		copy.To = append([]string(nil), cfg.To...)
 	}
+	if len(cfg.TagFilter) > 0 {
+		copy.TagFilter = append([]string(nil), cfg.TagFilter...)
+	}
 	return copy
 }
 
@@ -315,6 +318,9 @@ func copyWebhookConfigs(webhooks []WebhookConfig) []WebhookConfig {
 			}
 			clone.CustomFields = custom
 		}
+		if len(clone.TagFilter) > 0 {
+			clone.TagFilter = append([]string(nil), clone.TagFilter...)
+		}
 		copies = append(copies, clone)
 	}
 
@@ -334,6 +340,12 @@ func copyWebhookConfig(webhook WebhookConfig) WebhookConfig {
 // carry canonical webhook state and must not rely on legacy alias migration here.
 func NormalizeWebhookConfig(webhook WebhookConfig) WebhookConfig {
 	normalized := webhook
+	normalized.TagFilter = normalizeNotificationTagFilter(normalized.TagFilter)
+	if len(normalized.TagFilter) == 0 {
+		normalized.TagMode = ""
+	} else {
+		normalized.TagMode = normalizeNotificationTagMode(normalized.TagMode)
+	}
 	if strings.EqualFold(strings.TrimSpace(normalized.Service), "pushover") {
 		normalized.CustomFields = normalizePushoverWebhookCustomFields(normalized.CustomFields)
 	}
@@ -560,6 +572,8 @@ type EmailConfig struct {
 	TLS       bool     `json:"tls"`
 	StartTLS  bool     `json:"startTLS"`  // STARTTLS support
 	RateLimit int      `json:"rateLimit"` // Max emails per minute (0 = default 60)
+	TagFilter []string `json:"tagFilter,omitempty"`
+	TagMode   string   `json:"tagFilterMode,omitempty"` // "all" (default) or "any"
 }
 
 // WebhookConfig holds webhook settings
@@ -574,6 +588,8 @@ type WebhookConfig struct {
 	Template     string            `json:"template"` // Custom payload template
 	CustomFields map[string]string `json:"customFields,omitempty"`
 	Mention      string            `json:"mention,omitempty"` // Platform-specific mention (e.g., @everyone, @channel, <@USER_ID>)
+	TagFilter    []string          `json:"tagFilter,omitempty"`
+	TagMode      string            `json:"tagFilterMode,omitempty"` // "all" (default) or "any"
 	// SigningSecret enables HMAC-SHA256 signing of outbound deliveries.
 	// When set, requests carry X-Pulse-Timestamp and X-Pulse-Signature
 	// (v1=hex(hmac_sha256(secret, timestamp + "." + body))) so receivers
@@ -614,6 +630,12 @@ func normalizeEmailConfig(cfg EmailConfig) EmailConfig {
 	normalized.SMTPHost = strings.TrimSpace(normalized.SMTPHost)
 	normalized.Username = strings.TrimSpace(normalized.Username)
 	normalized.From = strings.TrimSpace(normalized.From)
+	normalized.TagFilter = normalizeNotificationTagFilter(normalized.TagFilter)
+	if len(normalized.TagFilter) == 0 {
+		normalized.TagMode = ""
+	} else {
+		normalized.TagMode = normalizeNotificationTagMode(normalized.TagMode)
+	}
 
 	if normalized.SMTPPort <= 0 || normalized.SMTPPort > 65535 {
 		log.Warn().
@@ -892,7 +914,7 @@ func (n *NotificationManager) SetGroupingOptions(byNode, byGuest bool) {
 func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.webhooks = append(n.webhooks, copyWebhookConfig(webhook))
+	n.webhooks = append(n.webhooks, copyWebhookConfig(NormalizeWebhookConfig(webhook)))
 }
 
 // UpdateWebhook updates an existing webhook
@@ -902,7 +924,7 @@ func (n *NotificationManager) UpdateWebhook(webhookID string, webhook WebhookCon
 
 	for i, w := range n.webhooks {
 		if w.ID == webhookID {
-			n.webhooks[i] = copyWebhookConfig(webhook)
+			n.webhooks[i] = copyWebhookConfig(NormalizeWebhookConfig(webhook))
 			return nil
 		}
 	}
@@ -1462,28 +1484,34 @@ func buildNotificationDeliveryJobsForTarget(
 
 	jobs := make([]notificationDeliveryJob, 0, 2+len(webhooks))
 	if emailConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetEmail) {
-		emailCopy := emailConfig
-		jobs = append(jobs, notificationDeliveryJob{
-			Type:        "email",
-			Event:       event,
-			Alerts:      alertsToSend,
-			ResolvedAt:  resolvedAt,
-			EmailConfig: &emailCopy,
-		})
+		routedAlerts := routeNotificationAlerts(alertsToSend, emailConfig.TagFilter, emailConfig.TagMode, event)
+		if len(routedAlerts) > 0 {
+			emailCopy := emailConfig
+			jobs = append(jobs, notificationDeliveryJob{
+				Type:        "email",
+				Event:       event,
+				Alerts:      routedAlerts,
+				ResolvedAt:  resolvedAt,
+				EmailConfig: &emailCopy,
+			})
+		}
 	}
 	if target == notificationDeliveryTargetAll || target == notificationDeliveryTargetWebhook {
 		for _, webhook := range webhooks {
 			if !webhook.Enabled {
 				continue
 			}
-			webhookCopy := webhook
-			jobs = append(jobs, notificationDeliveryJob{
-				Type:          "webhook",
-				Event:         event,
-				Alerts:        alertsToSend,
-				ResolvedAt:    resolvedAt,
-				WebhookConfig: &webhookCopy,
-			})
+			routedAlerts := routeNotificationAlerts(alertsToSend, webhook.TagFilter, webhook.TagMode, event)
+			if len(routedAlerts) > 0 {
+				webhookCopy := webhook
+				jobs = append(jobs, notificationDeliveryJob{
+					Type:          "webhook",
+					Event:         event,
+					Alerts:        routedAlerts,
+					ResolvedAt:    resolvedAt,
+					WebhookConfig: &webhookCopy,
+				})
+			}
 		}
 	}
 	if appriseConfig.Enabled && (target == notificationDeliveryTargetAll || target == notificationDeliveryTargetApprise) {
