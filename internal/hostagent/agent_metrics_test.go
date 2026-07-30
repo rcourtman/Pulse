@@ -593,19 +593,28 @@ func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
 			return hostmetrics.Snapshot{}, nil
 		},
 		lookPathFn: func(file string) (string, error) {
-			if file == "nvidia-smi" {
+			switch file {
+			case "powershell.exe":
+				return `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, nil
+			case "nvidia-smi":
 				return `C:\Windows\System32\nvidia-smi.exe`, nil
+			default:
+				return "", os.ErrNotExist
 			}
-			return "", os.ErrNotExist
 		},
 		commandCombinedOutputFn: func(_ context.Context, name string, arg ...string) (string, error) {
-			if name != `C:\Windows\System32\nvidia-smi.exe` {
-				t.Fatalf("command name = %q, want Windows nvidia-smi path", name)
+			switch name {
+			case `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`:
+				return `[{"deviceId":"0","friendlyName":"Windows NVMe","busType":"NVMe","mediaType":"SSD","sizeBytes":1000000000000,"temperature":39}]`, nil
+			case `C:\Windows\System32\nvidia-smi.exe`:
+				if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total" || arg[1] != "--format=csv,noheader,nounits" {
+					t.Fatalf("command args = %#v, want NVIDIA stats query", arg)
+				}
+				return "0, NVIDIA GeForce RTX 3070, 57, 31, 2048, 8192\r\n", nil
+			default:
+				t.Fatalf("unexpected Windows telemetry command %q", name)
+				return "", nil
 			}
-			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total" || arg[1] != "--format=csv,noheader,nounits" {
-				t.Fatalf("command args = %#v, want NVIDIA stats query", arg)
-			}
-			return "0, NVIDIA GeForce RTX 3070, 57, 31, 2048, 8192\r\n", nil
 		},
 	}
 
@@ -638,6 +647,12 @@ func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
 	}
 	if report.Sensors.GPU[0].MemoryTotalBytes == nil || *report.Sensors.GPU[0].MemoryTotalBytes != 8192*1024*1024 {
 		t.Fatalf("Windows GPU memory total = %#v, want 8192 MiB", report.Sensors.GPU[0].MemoryTotalBytes)
+	}
+	if len(report.Sensors.SMART) != 1 ||
+		report.Sensors.SMART[0].Device != "PhysicalDisk0" ||
+		report.Sensors.SMART[0].Type != "nvme" ||
+		report.Sensors.SMART[0].Temperature != 39 {
+		t.Fatalf("Windows storage temperatures = %+v, want native PhysicalDisk0 reading", report.Sensors.SMART)
 	}
 }
 

@@ -1279,6 +1279,14 @@ the shared model conversion helpers must preserve `sensors.thermalState`
 through ingest, read-state projection, and frontend conversion, while leaving
 `agent.temperature` and `metric=temperature` unset unless a real Celsius value
 exists.
+Windows Storage-module reliability temperatures use the existing host-agent
+physical-disk route rather than a provider-specific monitoring payload.
+Authenticated ingest must preserve each validated `sensors.smart` device,
+model, transport, capacity, temperature, and field-level
+`windows-storage-reliability` provenance through the canonical host resource,
+disk-temperature presentation, history, and alert boundaries. An unknown
+health value remains unknown; monitoring must not convert the presence of a
+temperature counter into SMART health evidence.
 Host-agent GPU sensor summaries follow that same descriptive-host-telemetry
 path. Monitoring must preserve typed GPU id, name, temperature, utilization,
 and VRAM readings from agent reports through models, read-state projection, and

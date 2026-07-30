@@ -1548,10 +1548,10 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	case "freebsd":
 		return a.collectFreeBSDTemperatures(ctx)
 	case "windows":
-		// Windows does not expose a reliable built-in CPU or motherboard
-		// temperature API. NVIDIA's driver does ship nvidia-smi, however, and
-		// the bounded query used on Linux is portable to Windows.
-		return a.collectNVIDIATemperatureSensors(ctx)
+		// Windows has no reliable built-in CPU or motherboard temperature API.
+		// Its Storage module does expose device-reported physical-disk
+		// reliability temperatures, and NVIDIA's driver supplies nvidia-smi.
+		return a.collectWindowsTemperatureSensors(ctx)
 	default:
 		return agentshost.Sensors{}
 	}

@@ -250,6 +250,9 @@ func TestAgent_collectTemperatures_CollectsNVIDIAOnWindows(t *testing.T) {
 	mc := &mockCollector{
 		goos: "windows",
 		lookPathFn: func(file string) (string, error) {
+			if file == "powershell.exe" || file == "powershell" {
+				return "", os.ErrNotExist
+			}
 			if file != "nvidia-smi" {
 				t.Fatalf("look path file = %q, want nvidia-smi", file)
 			}
