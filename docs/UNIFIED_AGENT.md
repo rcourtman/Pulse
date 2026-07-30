@@ -136,6 +136,61 @@ containers or hardened service units without `CAP_NET_RAW`, ICMP checks fail;
 prefer TCP or HTTP checks there, or grant the capability. See "ICMP probe
 privileges" in docs/CONFIGURATION.md.
 
+## Custom numeric sensors
+
+The host module can report numeric metrics produced by local executables. This
+is intended for site-specific signals such as queue depth, UPS load, pending
+updates, or an application counter that Pulse cannot collect natively.
+
+Create a private YAML file:
+
+```yaml
+version: 1
+sensors:
+  - id: queue_depth
+    name: Queue depth
+    command: /usr/local/libexec/pulse-queue-depth
+    unit: items
+    interval: 1m
+    timeout: 2s
+    warningAbove: 20
+    criticalAbove: 50
+    alertOnError: true
+```
+
+Then start or restart the agent with
+`--custom-sensors-file /etc/pulse/custom-sensors.yaml`, or set
+`PULSE_CUSTOM_SENSORS_FILE` to that absolute path. Each command must be an
+absolute executable path, receives no arguments, and must write exactly one
+finite number to standard output. Put any query logic in the executable or
+script itself.
+
+The agent evaluates optional `warningAbove`, `criticalAbove`, `warningBelow`,
+and `criticalBelow` thresholds locally. Pulse displays the typed value and unit
+under **Custom Metrics** and creates normal warning/critical alerts. A collection
+failure alerts by default; set `alertOnError: false` to make failures
+report-only. If a probe fails after a successful reading, the last good value is
+shown as stale with its original observation time.
+
+This feature is deliberately local-only. The Pulse server and remote agent
+configuration cannot supply commands or arguments. The file is limited to 32
+sensors; intervals must be between 10 seconds and 24 hours; timeouts must be
+between 100 milliseconds and 10 seconds and shorter than the interval. At most
+four probes run concurrently, output is bounded, and each executable is
+revalidated before use.
+
+On POSIX systems, the YAML file must be a regular, non-symlink file owned by
+the agent service user with no group/other permissions (normally mode `0600`).
+Commands and their immediate parent directories must also be regular,
+non-symlink, owned by the service user, and not group/other writable. Commands
+must have an executable bit. For example:
+
+```bash
+sudo chown root:root /etc/pulse/custom-sensors.yaml /usr/local/libexec/pulse-queue-depth
+sudo chmod 0600 /etc/pulse/custom-sensors.yaml
+sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
+```
+
 ## Configuration
 
 | Flag | Env Var | Description | Default |
@@ -143,6 +198,7 @@ privileges" in docs/CONFIGURATION.md.
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
 | `--observers-file` | `PULSE_OBSERVERS_FILE` | Private JSON file defining report-only destinations | *(none)* |
+| `--custom-sensors-file` | `PULSE_CUSTOM_SENSORS_FILE` | Private YAML file defining local numeric sensor executables and thresholds | *(none)* |
 | `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |

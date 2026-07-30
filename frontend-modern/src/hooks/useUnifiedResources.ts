@@ -98,6 +98,17 @@ type APIAgentSensorSummary = {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+  custom?: Array<{
+    id: string;
+    name: string;
+    unit?: string;
+    value?: number;
+    status: string;
+    observedAt: string;
+    error?: string;
+    alertOnError?: boolean;
+    stale?: boolean;
+  }>;
   thermalState?: {
     source?: string;
     pressure?: string;

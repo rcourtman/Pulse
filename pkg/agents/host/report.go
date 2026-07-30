@@ -254,13 +254,36 @@ type NetworkInterface struct {
 
 // Sensors captures optional sensor readings reported by the agent.
 type Sensors struct {
-	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
-	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
-	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"` // Power consumption (e.g., cpu_package, dram)
-	Additional         map[string]float64 `json:"additional,omitempty"`
-	GPU                []GPUSensor        `json:"gpu,omitempty"`
-	ThermalState       *ThermalState      `json:"thermalState,omitempty"`
-	SMART              []DiskSMART        `json:"smart,omitempty"` // S.M.A.R.T. disk data
+	TemperatureCelsius map[string]float64   `json:"temperatureCelsius,omitempty"`
+	FanRPM             map[string]float64   `json:"fanRpm,omitempty"`
+	PowerWatts         map[string]float64   `json:"powerWatts,omitempty"` // Power consumption (e.g., cpu_package, dram)
+	Additional         map[string]float64   `json:"additional,omitempty"`
+	Custom             []CustomSensorMetric `json:"custom,omitempty"`
+	GPU                []GPUSensor          `json:"gpu,omitempty"`
+	ThermalState       *ThermalState        `json:"thermalState,omitempty"`
+	SMART              []DiskSMART          `json:"smart,omitempty"` // S.M.A.R.T. disk data
+}
+
+const (
+	CustomSensorStatusOK       = "ok"
+	CustomSensorStatusWarning  = "warning"
+	CustomSensorStatusCritical = "critical"
+	CustomSensorStatusError    = "error"
+)
+
+// CustomSensorMetric is a bounded numeric reading produced by an explicitly
+// configured local executable. The agent, not the server, owns execution and
+// threshold evaluation.
+type CustomSensorMetric struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Unit         string    `json:"unit,omitempty"`
+	Value        *float64  `json:"value,omitempty"`
+	Status       string    `json:"status"`
+	ObservedAt   time.Time `json:"observedAt"`
+	Error        string    `json:"error,omitempty"`
+	AlertOnError bool      `json:"alertOnError,omitempty"`
+	Stale        bool      `json:"stale,omitempty"`
 }
 
 // GPUSensor captures direct GPU telemetry reported by a local host agent.

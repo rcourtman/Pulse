@@ -1502,6 +1502,22 @@ the intentionally sparse public response.
    the report or command protocol.
    Neither side may infer lifecycle health, command authority, enrollment
    state, or GPU workload/process inventory from `nvidia-smi` output.
+   Site-defined numeric sensors belong in the typed `sensors.custom` report
+   contract rather than the temperature-oriented `sensors.additional` map.
+   Their execution authority is local-only: the agent may load a private,
+   versioned YAML file named by `--custom-sensors-file` or
+   `PULSE_CUSTOM_SENSORS_FILE`, but server profiles, remote configuration, and
+   command transport must not author executable paths or arguments. The
+   runtime must reject shell strings and relative, symlinked, or insecure
+   executable/config paths; enforce bounded sensor count, intervals, timeouts,
+   output, and concurrency; revalidate executables before use; and accept only
+   one finite numeric value per execution. Typed identity, unit, status,
+   observation time, stale last-good value, and bounded error state must survive
+   report ingest, model/front-end conversion, unified-resource cloning, and
+   alert cleanup. Threshold evaluation remains agent-authored, while the server
+   maps warning, critical, and opted-in error states into canonical alerts.
+   Enabling custom sensors must not imply `agent:exec`, AI command authority, or
+   any general remote-shell capability.
    Runtime RAID collection uses `/proc/mdstat` as the canonical discovery
    baseline for Linux md arrays. `mdadm --detail` may enrich level, state,
    member, UUID, and rebuild fields when available, but missing or failing
@@ -2282,6 +2298,20 @@ Agent` secondary handoff against the live setup wizard instead of relying
     `internal/hostagent/smartctl_discovery_test.go`.
 
 ## Current State
+
+### Local custom numeric sensors are a bounded reporting module
+
+The host agent now accepts an optional private version-1 YAML file through
+`--custom-sensors-file` / `PULSE_CUSTOM_SENSORS_FILE`. Each of at most 32
+definitions names one absolute local executable, collection interval, timeout,
+unit, and optional upper/lower warning and critical thresholds. The executable
+receives no arguments and must emit exactly one finite number. Collection is
+bounded to four concurrent executions inside the existing ten-second host
+collection context; last-good values survive failures as stale evidence with
+their original observation time. The resulting typed `sensors.custom` array is
+reporting data only and grants no command, enrollment, lifecycle, remote-shell,
+or AI authority. Agent initialization fails closed on invalid configuration,
+and Windows service startup carries the same optional file path.
 
 ### Rootful Docker outranks rootless socket discovery and runtime labels are truthful
 

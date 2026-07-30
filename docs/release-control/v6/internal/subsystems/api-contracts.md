@@ -3771,6 +3771,18 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Host sensor payloads carry typed custom numeric readings
+
+Agent, host-model, frontend, and unified-resource sensor payloads now include a
+`custom` array whose entries preserve `id`, `name`, optional `unit` and numeric
+`value`, agent-authored `status`, `observedAt`, bounded `error`,
+`alertOnError`, and `stale`. This is an additive wire field: older agents and
+clients may omit it, and normalization exposes an empty collection rather than
+reinterpreting the legacy temperature-oriented `additional` map. Accepted
+report ingest and the JSON projection are pinned by
+`TestApplyHostReportPreservesTypedSensorSummary` and
+`TestHostCustomSensorMetaJSONContract`.
+
 ### System settings shed the dead auto-update schedule fields
 
 The system settings payload (`internal/config.SystemSettings`, projected by

@@ -41,6 +41,39 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostPreservesCustomSensorMeta(t *testing.T) {
+	value := 12.5
+	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
+	host := models.Host{
+		ID:       "agent-custom",
+		Hostname: "edge-1",
+		Sensors: models.HostSensorSummary{
+			Custom: []models.HostCustomSensorMetric{{
+				ID:           "queue_depth",
+				Name:         "Queue depth",
+				Unit:         "items",
+				Value:        &value,
+				Status:       "warning",
+				ObservedAt:   observedAt,
+				AlertOnError: true,
+			}},
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.Sensors == nil || len(resource.Agent.Sensors.Custom) != 1 {
+		t.Fatalf("custom sensor projection = %+v", resource.Agent)
+	}
+	custom := resource.Agent.Sensors.Custom[0]
+	if custom.ID != "queue_depth" || custom.Value == nil || *custom.Value != 12.5 || custom.ObservedAt != observedAt {
+		t.Fatalf("custom sensor projection = %+v", custom)
+	}
+	value = 99
+	if *custom.Value != 12.5 {
+		t.Fatal("custom sensor projection aliases the model value")
+	}
+}
+
 func TestResourceFromProxmoxNodeUsesDisplayNameWithoutChangingRawNodeIdentity(t *testing.T) {
 	node := models.Node{
 		ID:              "pve-cluster-node01",

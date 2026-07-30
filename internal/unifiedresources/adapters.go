@@ -248,7 +248,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors
-	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.PowerWatts) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.PowerWatts) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.Custom) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
 		sensorMeta := &HostSensorMeta{}
 		if len(host.Sensors.TemperatureCelsius) > 0 {
 			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
@@ -272,6 +272,22 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			sensorMeta.Additional = make(map[string]float64, len(host.Sensors.Additional))
 			for k, v := range host.Sensors.Additional {
 				sensorMeta.Additional[k] = v
+			}
+		}
+		if len(host.Sensors.Custom) > 0 {
+			sensorMeta.Custom = make([]HostCustomSensorMetric, len(host.Sensors.Custom))
+			for i, metric := range host.Sensors.Custom {
+				sensorMeta.Custom[i] = HostCustomSensorMetric{
+					ID:           metric.ID,
+					Name:         metric.Name,
+					Unit:         metric.Unit,
+					Value:        cloneFloat64Ptr(metric.Value),
+					Status:       metric.Status,
+					ObservedAt:   metric.ObservedAt,
+					Error:        metric.Error,
+					AlertOnError: metric.AlertOnError,
+					Stale:        metric.Stale,
+				}
 			}
 		}
 		if len(host.Sensors.GPU) > 0 {

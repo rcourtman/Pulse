@@ -597,6 +597,20 @@ tokens, and path-normalization variants.
 
 ## Current State
 
+### Custom sensor execution authority is local-only and fail-closed
+
+`pulse-agent` may load site-defined numeric probes only from the absolute path
+named by `--custom-sensors-file` or `PULSE_CUSTOM_SENSORS_FILE`. Server
+profiles, remote configuration, AI tooling, and command transport cannot author
+the executable or arguments. The strict versioned YAML schema accepts absolute
+executables with no shell or arguments; POSIX ownership, permissions, and
+symlink checks protect the config, executable, and immediate parent directory,
+and the executable is revalidated before each run. Count, concurrency, timeout,
+stdout, and error sizes are bounded. Probe stderr is discarded so credentials
+or query detail cannot enter reports or alerts; tests in
+`internal/hostagent/custom_sensors_test.go` pin unsafe-config rejection and the
+stderr boundary.
+
 ### System settings mutation surface no longer accepts dead schedule inputs
 
 The governed system-settings write path in `internal/api/system_settings.go`

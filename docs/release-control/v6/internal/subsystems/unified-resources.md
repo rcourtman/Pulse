@@ -1680,6 +1680,18 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+### Agent custom sensors remain typed, cloned host metadata
+
+`resourceFromHost` projects `models.HostSensorSummary.Custom` into
+`Agent.Sensors.Custom` with a private slice and numeric value pointers.
+Read-state cloning preserves identity, name, unit, status, observation time,
+bounded error, error-alert preference, and stale state without aliasing mutable
+host-model memory. The detail drawer reads this typed collection under
+**Custom Metrics**; it does not fold custom values into thermal metadata or
+change canonical resource identity. `TestResourceFromHostPreservesCustomSensorMeta`,
+`TestCloneResourceIsolatesCustomSensorValues`, and
+`TestHostCustomSensorMetaJSONContract` pin adapter, clone, and JSON behavior.
+
 ### Host views expose the integration-source discriminator
 
 `HostView.IntegrationSource()` names the platform integration ("vmware",

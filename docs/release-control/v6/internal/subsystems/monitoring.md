@@ -902,6 +902,18 @@ changes.
 
 ## Current State
 
+### Custom sensor evidence stays typed through host monitoring
+
+Authenticated host reports now copy bounded `sensors.custom` entries into the
+host model and the unified read state without folding their units or values
+into temperature maps. Value pointers and collections are cloned at report,
+model/frontend, and read-state boundaries; a stale last-good value keeps its
+original observation time. Monitoring passes the typed status to the alert
+subsystem but does not execute probes or recompute locally configured
+thresholds. `TestApplyHostReportPreservesTypedSensorSummary` and
+`TestHostSensorsFromReadStateViewPreservesTypedSensorData` pin accepted ingest
+and read-state preservation.
+
 ### PBS health is one completed-poll outcome
 
 PBS client construction is transport setup, not connectivity evidence. Initial

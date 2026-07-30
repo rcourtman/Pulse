@@ -6,6 +6,7 @@ import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
 import {
+  buildCustomSensorRows,
   buildTemperatureRows,
   formatSensorName,
 } from '@/components/Infrastructure/resourceDetailMappers';
@@ -625,6 +626,30 @@ describe('UnifiedResourceTable performance contract', () => {
         },
       ]);
       expect(resourceDetailMappersSource).not.toContain('nvidia-smi');
+      expect(resourceDetailMappersSource).not.toContain('fetch(');
+    });
+
+    it('keeps custom metric formatting bounded to the selected resource payload', () => {
+      expect(
+        buildCustomSensorRows({
+          custom: [
+            {
+              id: 'queue_depth',
+              name: 'Queue depth',
+              unit: 'items',
+              value: 12.5,
+              status: 'warning',
+              observedAt: '2026-07-30T19:00:00Z',
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Queue depth',
+          value: '12.5 items',
+          valueTitle: '12.5 items · Warning',
+        },
+      ]);
       expect(resourceDetailMappersSource).not.toContain('fetch(');
     });
 

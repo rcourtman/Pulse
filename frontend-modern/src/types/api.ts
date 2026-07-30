@@ -543,9 +543,22 @@ export interface HostSensorSummary {
   fanRpm?: Record<string, number>;
   powerWatts?: Record<string, number>;
   additional?: Record<string, number>;
+  custom?: HostCustomSensorMetric[];
   gpu?: HostGPUSensor[];
   thermalState?: HostThermalState;
   smart?: HostDiskSMART[]; // S.M.A.R.T. disk data
+}
+
+export interface HostCustomSensorMetric {
+  id: string;
+  name: string;
+  unit?: string;
+  value?: number;
+  status: 'ok' | 'warning' | 'critical' | 'error' | string;
+  observedAt: string;
+  error?: string;
+  alertOnError?: boolean;
+  stale?: boolean;
 }
 
 export interface HostGPUSensor {

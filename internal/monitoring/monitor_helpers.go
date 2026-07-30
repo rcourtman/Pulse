@@ -723,6 +723,27 @@ func convertAgentGPUToModels(gpus []agentshost.GPUSensor) []models.HostGPUSensor
 	return result
 }
 
+func convertAgentCustomSensorsToModels(metrics []agentshost.CustomSensorMetric) []models.HostCustomSensorMetric {
+	if len(metrics) == 0 {
+		return nil
+	}
+	result := make([]models.HostCustomSensorMetric, len(metrics))
+	for i, metric := range metrics {
+		result[i] = models.HostCustomSensorMetric{
+			ID:           strings.TrimSpace(metric.ID),
+			Name:         strings.TrimSpace(metric.Name),
+			Unit:         strings.TrimSpace(metric.Unit),
+			Value:        cloneFloat64Ptr(metric.Value),
+			Status:       strings.TrimSpace(metric.Status),
+			ObservedAt:   metric.ObservedAt,
+			Error:        strings.TrimSpace(metric.Error),
+			AlertOnError: metric.AlertOnError,
+			Stale:        metric.Stale,
+		}
+	}
+	return result
+}
+
 func convertAgentThermalStateToModels(src *agentshost.ThermalState) *models.HostThermalState {
 	if src == nil {
 		return nil

@@ -3533,6 +3533,22 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 			out.Additional[k] = v
 		}
 	}
+	if len(sensors.Custom) > 0 {
+		out.Custom = make([]models.HostCustomSensorMetric, len(sensors.Custom))
+		for i, metric := range sensors.Custom {
+			out.Custom[i] = models.HostCustomSensorMetric{
+				ID:           metric.ID,
+				Name:         metric.Name,
+				Unit:         metric.Unit,
+				Value:        cloneFloat64Ptr(metric.Value),
+				Status:       metric.Status,
+				ObservedAt:   metric.ObservedAt,
+				Error:        metric.Error,
+				AlertOnError: metric.AlertOnError,
+				Stale:        metric.Stale,
+			}
+		}
+	}
 	if len(sensors.GPU) > 0 {
 		out.GPU = make([]models.HostGPUSensor, len(sensors.GPU))
 		for i, gpu := range sensors.GPU {

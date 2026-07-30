@@ -399,6 +399,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			InsecureSkipVerify:  cfg.InsecureSkipVerify,
 			CACertPath:          cfg.CACertPath,
 			ServerFingerprint:   cfg.ServerFingerprint,
+			CustomSensorsFile:   cfg.CustomSensorsFile,
 			DeploySSHUser:       cfg.DeploySSHUser,
 			LogLevel:            cfg.LogLevel,
 			Logger:              &logger,
@@ -814,6 +815,7 @@ type Config struct {
 	ServerFingerprint  string
 	ObserversFile      string
 	Observers          []agenttarget.Observer
+	CustomSensorsFile  string
 	DeploySSHUser      string
 	LogLevel           zerolog.Level
 	LogFile            string
@@ -980,6 +982,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
 	envObserversFile := strings.TrimSpace(getenv("PULSE_OBSERVERS_FILE"))
+	envCustomSensorsFile := strings.TrimSpace(getenv("PULSE_CUSTOM_SENSORS_FILE"))
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -1034,6 +1037,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
 	observersFileFlag := fs.String("observers-file", envObserversFile, "Absolute path to a private JSON file defining report-only Pulse observer destinations")
+	customSensorsFileFlag := fs.String("custom-sensors-file", envCustomSensorsFile, "Absolute path to a private YAML file defining local numeric sensor commands")
 	deploySSHUserFlag := fs.String("deploy-ssh-user", envDeploySSHUser, "SSH user for peer deploy fan-out (default: root; non-root requires passwordless sudo)")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 	logFileFlag := fs.String("log-file", envLogFile, "Write rotating JSON logs to this file")
@@ -1183,6 +1187,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
 		ObserversFile:             strings.TrimSpace(*observersFileFlag),
 		Observers:                 observers,
+		CustomSensorsFile:         strings.TrimSpace(*customSensorsFileFlag),
 		DeploySSHUser:             deploySSHUser,
 		LogLevel:                  logLevel,
 		LogFile:                   strings.TrimSpace(*logFileFlag),

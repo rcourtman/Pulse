@@ -488,13 +488,26 @@ func (i HostNetworkInterface) NormalizeCollections() HostNetworkInterface {
 
 // HostSensorSummary captures optional per-host sensor readings.
 type HostSensorSummary struct {
-	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
-	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
-	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"`
-	Additional         map[string]float64 `json:"additional,omitempty"`
-	GPU                []HostGPUSensor    `json:"gpu,omitempty"`
-	ThermalState       *HostThermalState  `json:"thermalState,omitempty"`
-	SMART              []HostDiskSMART    `json:"smart,omitempty"` // S.M.A.R.T. disk data
+	TemperatureCelsius map[string]float64       `json:"temperatureCelsius,omitempty"`
+	FanRPM             map[string]float64       `json:"fanRpm,omitempty"`
+	PowerWatts         map[string]float64       `json:"powerWatts,omitempty"`
+	Additional         map[string]float64       `json:"additional,omitempty"`
+	Custom             []HostCustomSensorMetric `json:"custom,omitempty"`
+	GPU                []HostGPUSensor          `json:"gpu,omitempty"`
+	ThermalState       *HostThermalState        `json:"thermalState,omitempty"`
+	SMART              []HostDiskSMART          `json:"smart,omitempty"` // S.M.A.R.T. disk data
+}
+
+type HostCustomSensorMetric struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Unit         string    `json:"unit,omitempty"`
+	Value        *float64  `json:"value,omitempty"`
+	Status       string    `json:"status"`
+	ObservedAt   time.Time `json:"observedAt"`
+	Error        string    `json:"error,omitempty"`
+	AlertOnError bool      `json:"alertOnError,omitempty"`
+	Stale        bool      `json:"stale,omitempty"`
 }
 
 type HostGPUSensor struct {
@@ -527,6 +540,9 @@ func (s HostSensorSummary) NormalizeCollections() HostSensorSummary {
 	}
 	if s.Additional == nil {
 		s.Additional = map[string]float64{}
+	}
+	if s.Custom == nil {
+		s.Custom = []HostCustomSensorMetric{}
 	}
 	if s.GPU == nil {
 		s.GPU = []HostGPUSensor{}

@@ -608,13 +608,26 @@ type SMARTMeta struct {
 
 // HostSensorMeta contains host sensor readings.
 type HostSensorMeta struct {
-	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
-	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
-	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"`
-	Additional         map[string]float64 `json:"additional,omitempty"`
-	GPU                []HostGPUSensor    `json:"gpu,omitempty"`
-	ThermalState       *HostThermalState  `json:"thermalState,omitempty"`
-	SMART              []HostSMARTMeta    `json:"smart,omitempty"`
+	TemperatureCelsius map[string]float64       `json:"temperatureCelsius,omitempty"`
+	FanRPM             map[string]float64       `json:"fanRpm,omitempty"`
+	PowerWatts         map[string]float64       `json:"powerWatts,omitempty"`
+	Additional         map[string]float64       `json:"additional,omitempty"`
+	Custom             []HostCustomSensorMetric `json:"custom,omitempty"`
+	GPU                []HostGPUSensor          `json:"gpu,omitempty"`
+	ThermalState       *HostThermalState        `json:"thermalState,omitempty"`
+	SMART              []HostSMARTMeta          `json:"smart,omitempty"`
+}
+
+type HostCustomSensorMetric struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Unit         string    `json:"unit,omitempty"`
+	Value        *float64  `json:"value,omitempty"`
+	Status       string    `json:"status"`
+	ObservedAt   time.Time `json:"observedAt"`
+	Error        string    `json:"error,omitempty"`
+	AlertOnError bool      `json:"alertOnError,omitempty"`
+	Stale        bool      `json:"stale,omitempty"`
 }
 
 type HostGPUSensor struct {
@@ -945,10 +958,10 @@ type AgentData struct {
 	// machine folded into this host identity (usually template-cloned machines
 	// sharing the same /etc/machine-id).
 	IdentityConflict *models.HostIdentityConflict `json:"identityConflict,omitempty"`
-	NetInRate               float64                  `json:"netInRate,omitempty"`
-	NetOutRate              float64                  `json:"netOutRate,omitempty"`
-	DiskReadRate            float64                  `json:"diskReadRate,omitempty"`
-	DiskWriteRate           float64                  `json:"diskWriteRate,omitempty"`
+	NetInRate        float64                      `json:"netInRate,omitempty"`
+	NetOutRate       float64                      `json:"netOutRate,omitempty"`
+	DiskReadRate     float64                      `json:"diskReadRate,omitempty"`
+	DiskWriteRate    float64                      `json:"diskWriteRate,omitempty"`
 	// Internal link hints to proxmox resources.
 	LinkedNodeID      string `json:"-"`
 	LinkedVMID        string `json:"-"`

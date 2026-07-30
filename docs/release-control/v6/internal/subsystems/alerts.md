@@ -334,6 +334,19 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Agent custom sensors use canonical health-assessment alerts
+
+Typed `HostSensorSummary.Custom` readings with `warning` or `critical` status
+now map to one canonical `custom-sensor` alert per host and sensor ID.
+Collection errors map to warning only when the local definition reports
+`alertOnError`; healthy reports, removed definitions, disabled host thresholds,
+host removal, and telemetry expiry clear the same identity. Alert evaluation
+consumes the agent-authored typed status and never executes or receives the
+local sensor command. `TestHostCustomSensorAlertLifecycle` and
+`TestHostCustomSensorErrorCanBeReportOnly` in
+`internal/alerts/host_unraid_lifecycle_test.go` pin creation, recovery,
+opt-out, and cleanup.
+
 The alert resource-incident panel
 (`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`)
 dropped its "Open in Infrastructure / Workloads / Storage / Recovery"

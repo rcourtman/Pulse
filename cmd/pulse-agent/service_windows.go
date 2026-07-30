@@ -96,6 +96,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			InsecureSkipVerify:  ws.cfg.InsecureSkipVerify,
 			CACertPath:          ws.cfg.CACertPath,
 			ServerFingerprint:   ws.cfg.ServerFingerprint,
+			CustomSensorsFile:   ws.cfg.CustomSensorsFile,
 			DeploySSHUser:       ws.cfg.DeploySSHUser,
 			LogLevel:            ws.cfg.LogLevel,
 			Logger:              &ws.logger,

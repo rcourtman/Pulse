@@ -31,6 +31,7 @@ import {
 import { formatResourceAnalysisSummary } from '@/utils/resourceAnalysisPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
+  buildCustomSensorRows,
   buildTemperatureRows,
   toAgentFromResource,
   toNodeFromProxmox,
@@ -174,6 +175,7 @@ export const useResourceDetailDrawerDerivedState = (
   const proxmoxNode = createMemo(() => toNodeFromProxmox(resource));
   const agentInfo = createMemo(() => toAgentFromResource(resource, agentMeta()));
   const temperatureRows = createMemo(() => buildTemperatureRows(agentInfo()?.sensors));
+  const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
   const dockerHostSourceId = createMemo(
@@ -312,7 +314,7 @@ export const useResourceDetailDrawerDerivedState = (
       networkInterfaceCount: agentInfo()?.networkInterfaces?.length ?? 0,
       diskCount: agentInfo()?.disks?.length ?? 0,
       raidCount: agentMeta()?.raid?.length ?? 0,
-      temperatureRowCount: temperatureRows().length,
+      temperatureRowCount: temperatureRows().length + customSensorRows().length,
     }),
   );
   const hasHostDetails = createMemo(() => hostDetailCards().length > 0);
@@ -425,6 +427,7 @@ export const useResourceDetailDrawerDerivedState = (
     proxmoxNode,
     agentInfo,
     temperatureRows,
+    customSensorRows,
     dockerHostData,
     dockerHostSourceId,
     dockerUpdatesAvailable,

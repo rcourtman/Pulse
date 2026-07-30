@@ -2032,6 +2032,17 @@ capability over storage or recovery data.
 
 ## Current State
 
+### Unified host read state preserves custom sensor evidence
+
+The shared host/unified-resource read-state boundary now carries typed custom
+numeric readings as cloned evidence. Storage and recovery consumers may display
+or preserve that host snapshot, but must not reinterpret custom units as
+temperatures, execute probe paths, or treat a stale last-good value as a fresh
+observation. No custom executable path or arguments enter the server model,
+durable recovery data, or frontend payload. Adapter and clone isolation are
+pinned by `TestResourceFromHostPreservesCustomSensorMeta` and
+`TestCloneResourceIsolatesCustomSensorValues`.
+
 ### Shared system-settings boundary dropped dead auto-update schedule fields
 
 The shared `internal/api` system-settings surface this subsystem consumes

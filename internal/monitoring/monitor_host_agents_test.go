@@ -533,8 +533,19 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 	}
 }
 
-func TestHostSensorsFromReadStateViewPreservesSMARTSizeBytes(t *testing.T) {
+func TestHostSensorsFromReadStateViewPreservesTypedSensorData(t *testing.T) {
+	customValue := 12.5
+	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
 	sensors := &unifiedresources.HostSensorMeta{
+		Custom: []unifiedresources.HostCustomSensorMetric{{
+			ID:           "queue_depth",
+			Name:         "Queue depth",
+			Unit:         "items",
+			Value:        &customValue,
+			Status:       "warning",
+			ObservedAt:   observedAt,
+			AlertOnError: true,
+		}},
 		SMART: []unifiedresources.HostSMARTMeta{
 			{
 				Device:      "/dev/sda",
@@ -557,6 +568,16 @@ func TestHostSensorsFromReadStateViewPreservesSMARTSizeBytes(t *testing.T) {
 	}
 	if got.SMART[0].Temperature != 32 {
 		t.Fatalf("SMART temperature = %d, want 32", got.SMART[0].Temperature)
+	}
+	if len(got.Custom) != 1 || got.Custom[0].Value == nil || *got.Custom[0].Value != customValue {
+		t.Fatalf("custom sensors = %+v, want one typed reading", got.Custom)
+	}
+	if got.Custom[0].ObservedAt != observedAt || got.Custom[0].Status != "warning" || !got.Custom[0].AlertOnError {
+		t.Fatalf("custom sensor metadata was not preserved: %+v", got.Custom[0])
+	}
+	customValue = 99
+	if *got.Custom[0].Value != 12.5 {
+		t.Fatalf("custom sensor value was not cloned: %v", *got.Custom[0].Value)
 	}
 }
 
@@ -2609,7 +2630,7 @@ func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	}
 }
 
-func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
+func TestApplyHostReportPreservesTypedSensorSummary(t *testing.T) {
 	storeCfg := metrics.DefaultConfig(t.TempDir())
 	storeCfg.WriteBufferSize = 1
 	store, err := metrics.NewStore(storeCfg)
@@ -2633,6 +2654,8 @@ func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
 	utilization := 7.0
 	usedBytes := int64(2 * 1024 * 1024 * 1024)
 	totalBytes := int64(48 * 1024 * 1024 * 1024)
+	queueDepth := 12.5
+	customObservedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              "agent-gpu",
@@ -2649,6 +2672,15 @@ func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
 		},
 		Sensors: agentshost.Sensors{
 			TemperatureCelsius: map[string]float64{"gpu_nvidia_0": temperature},
+			Custom: []agentshost.CustomSensorMetric{{
+				ID:           "queue_depth",
+				Name:         "Queue depth",
+				Unit:         "items",
+				Value:        &queueDepth,
+				Status:       agentshost.CustomSensorStatusWarning,
+				ObservedAt:   customObservedAt,
+				AlertOnError: true,
+			}},
 			GPU: []agentshost.GPUSensor{
 				{
 					ID:                 "0",
@@ -2686,6 +2718,13 @@ func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
 	}
 	if host.Sensors.TemperatureCelsius["gpu_nvidia_0"] != temperature {
 		t.Fatalf("legacy GPU temperature compatibility = %+v, want %.1f", host.Sensors.TemperatureCelsius, temperature)
+	}
+	if len(host.Sensors.Custom) != 1 || host.Sensors.Custom[0].Value == nil || *host.Sensors.Custom[0].Value != queueDepth {
+		t.Fatalf("host custom sensors = %+v, want one typed reading", host.Sensors.Custom)
+	}
+	custom := host.Sensors.Custom[0]
+	if custom.ID != "queue_depth" || custom.Unit != "items" || custom.Status != agentshost.CustomSensorStatusWarning || custom.ObservedAt != customObservedAt || !custom.AlertOnError {
+		t.Fatalf("custom sensor metadata was not preserved: %+v", custom)
 	}
 
 	expectedMetrics := map[string]float64{

@@ -881,6 +881,17 @@ without contention or cross-delivery.
 
 ## Current State
 
+### Custom metric drawer projection remains resource-local and bounded
+
+The Infrastructure detail drawer formats `sensors.custom` from the already
+selected resource payload. It performs no fetch, subscription, global resource
+scan, or history query, and the native agent limits the source collection to 32
+definitions with four concurrent executions. Formatting is a bounded
+sort-and-map over that collection and remains outside table-row and virtualized
+viewport hot paths.
+`UnifiedResourceTable.performance.contract.test.tsx` pins the resource-local
+projection and no-fetch boundary.
+
 ### Workload refreshes retain one coherent paged generation
 
 The workload polling cache accepts a REST refresh only when every advertised

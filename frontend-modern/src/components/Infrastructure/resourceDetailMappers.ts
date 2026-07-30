@@ -515,6 +515,38 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   return rows;
 };
 
+const formatCustomSensorValue = (value: number, unit?: string): string => {
+  const formatted = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 3,
+  }).format(value);
+  const normalizedUnit = (unit || '').trim();
+  if (!normalizedUnit) return formatted;
+  if (normalizedUnit === '%' || normalizedUnit.startsWith('°')) return `${formatted}${normalizedUnit}`;
+  return `${formatted} ${normalizedUnit}`;
+};
+
+export const buildCustomSensorRows = (sensors?: HostSensorSummary) =>
+  (sensors?.custom ?? [])
+    .filter((metric) => metric.id?.trim() && metric.name?.trim())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((metric) => {
+      const status = (metric.status || 'unknown').trim().toLowerCase();
+      const hasValue = typeof metric.value === 'number' && Number.isFinite(metric.value);
+      const measured = hasValue
+        ? formatCustomSensorValue(metric.value as number, metric.unit)
+        : 'Unavailable';
+      const value = metric.stale ? `${measured} (stale)` : measured;
+      const details = [
+        status === 'ok' ? 'OK' : titleCaseDelimitedLabel(status),
+        metric.error?.trim(),
+      ].filter(Boolean);
+      return {
+        label: metric.name.trim(),
+        value,
+        valueTitle: details.length > 0 ? `${value} · ${details.join(' · ')}` : value,
+      };
+    });
+
 export const formatInteger = (value?: number): string => {
   if (value === undefined || value === null || Number.isNaN(value)) return '—';
   return new Intl.NumberFormat().format(Math.round(value));

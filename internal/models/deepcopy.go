@@ -256,10 +256,23 @@ func cloneHostSensorSummary(src HostSensorSummary) HostSensorSummary {
 		FanRPM:             cloneStringFloat64Map(src.FanRPM),
 		PowerWatts:         cloneStringFloat64Map(src.PowerWatts),
 		Additional:         cloneStringFloat64Map(src.Additional),
+		Custom:             cloneHostCustomSensors(src.Custom),
 		GPU:                cloneHostGPUSensors(src.GPU),
 		ThermalState:       cloneHostThermalState(src.ThermalState),
 		SMART:              cloneHostDiskSMART(src.SMART),
 	}.NormalizeCollections()
+}
+
+func cloneHostCustomSensors(src []HostCustomSensorMetric) []HostCustomSensorMetric {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]HostCustomSensorMetric, len(src))
+	for i, metric := range src {
+		dest[i] = metric
+		dest[i].Value = cloneFloat64Ptr(metric.Value)
+	}
+	return dest
 }
 
 func cloneHostGPUSensors(src []HostGPUSensor) []HostGPUSensor {

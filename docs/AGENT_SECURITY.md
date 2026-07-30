@@ -42,6 +42,17 @@ When enabled, commands still flow through Pulse's command policy and approval
 surfaces instead of silently turning every agent into an unrestricted remote
 shell.
 
+Custom numeric sensors are a separate, local configuration boundary. Enabling
+them with `--custom-sensors-file` does not enable remote commands and
+`--enable-commands` is not required. The server cannot add or alter a custom
+sensor command. The agent accepts only absolute executable paths with no
+arguments or shell interpretation, bounds concurrency, time, and output, and
+revalidates the command before every run. On POSIX systems the configuration,
+commands, and immediate command directories must pass ownership, symlink, and
+write-permission checks. Treat the configured executables as trusted agent
+code: the service commonly runs as root, so only administrators should be able
+to replace them.
+
 Agent command tokens must be bound to a host or agent identity before command
 registration is accepted. Proxmox install-command tokens are the only first-use
 exception: because the server mints them before the installer knows the final

@@ -2763,6 +2763,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
 			PowerWatts:         cloneStringFloatMap(report.Sensors.PowerWatts),
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
+			Custom:             convertAgentCustomSensorsToModels(report.Sensors.Custom),
 			GPU:                convertAgentGPUToModels(report.Sensors.GPU),
 			ThermalState:       convertAgentThermalStateToModels(report.Sensors.ThermalState),
 			SMART:              convertAgentSMARTToModels(report.Sensors.SMART),

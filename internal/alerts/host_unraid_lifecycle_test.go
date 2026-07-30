@@ -3,9 +3,79 @@ package alerts
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func TestHostCustomSensorAlertLifecycle(t *testing.T) {
+	manager := newTestManager(t)
+	manager.ClearActiveAlerts()
+	value := 23.0
+	host := models.Host{
+		ID:          "custom-sensor-host",
+		Hostname:    "edge-1",
+		DisplayName: "Edge 1",
+		Sensors: models.HostSensorSummary{
+			Custom: []models.HostCustomSensorMetric{{
+				ID:           "queue_depth",
+				Name:         "Queue depth",
+				Unit:         "items",
+				Value:        &value,
+				Status:       "critical",
+				ObservedAt:   time.Now().UTC(),
+				AlertOnError: true,
+			}},
+		},
+	}
+
+	manager.CheckHost(host)
+	if !hasAlertType(manager.GetActiveAlerts(), "custom-sensor") {
+		t.Fatal("expected custom sensor alert")
+	}
+
+	host.Sensors.Custom[0].Status = "ok"
+	manager.CheckHost(host)
+	if hasAlertType(manager.GetActiveAlerts(), "custom-sensor") {
+		t.Fatal("healthy custom sensor did not resolve its alert")
+	}
+
+	host.Sensors.Custom[0].Status = "error"
+	host.Sensors.Custom[0].Error = "probe timed out"
+	manager.CheckHost(host)
+	if !hasAlertType(manager.GetActiveAlerts(), "custom-sensor") {
+		t.Fatal("alertOnError custom sensor did not alert")
+	}
+
+	host.Sensors.Custom = nil
+	manager.CheckHost(host)
+	if hasAlertType(manager.GetActiveAlerts(), "custom-sensor") {
+		t.Fatal("removed custom sensor did not clear its alert")
+	}
+}
+
+func TestHostCustomSensorErrorCanBeReportOnly(t *testing.T) {
+	manager := newTestManager(t)
+	manager.ClearActiveAlerts()
+	host := models.Host{
+		ID:       "custom-sensor-report-only",
+		Hostname: "edge-2",
+		Sensors: models.HostSensorSummary{
+			Custom: []models.HostCustomSensorMetric{{
+				ID:         "optional_probe",
+				Name:       "Optional probe",
+				Status:     "error",
+				ObservedAt: time.Now().UTC(),
+				Error:      "not installed",
+			}},
+		},
+	}
+
+	manager.CheckHost(host)
+	if hasAlertType(manager.GetActiveAlerts(), "custom-sensor") {
+		t.Fatal("alertOnError=false custom sensor unexpectedly alerted")
+	}
+}
 
 func TestHandleHostOfflineExpiresUnraidOperationAlertBeforeConnectivityConfirmation(t *testing.T) {
 	manager := newTestManager(t)

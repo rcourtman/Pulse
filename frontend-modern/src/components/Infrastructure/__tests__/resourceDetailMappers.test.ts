@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCustomSensorRows,
   buildTemperatureRows,
   formatInteger,
   formatSensorName,
@@ -197,6 +198,68 @@ describe('resourceDetailMappers', () => {
           label: 'DRAM Power',
           value: '13.2 W',
           valueTitle: 'DRAM Power 13.2 W',
+        },
+      ]);
+    });
+  });
+
+  describe('buildCustomSensorRows', () => {
+    it('formats units, status, and stale last-good values without treating them as temperatures', () => {
+      expect(
+        buildCustomSensorRows({
+          custom: [
+            {
+              id: 'queue_depth',
+              name: 'Queue depth',
+              unit: 'items',
+              value: 12.25,
+              status: 'warning',
+              observedAt: '2026-07-30T19:00:00Z',
+            },
+            {
+              id: 'cache_hit_rate',
+              name: 'Cache hit rate',
+              unit: '%',
+              value: 98.5,
+              status: 'error',
+              observedAt: '2026-07-30T18:55:00Z',
+              error: 'probe timed out',
+              stale: true,
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Cache hit rate',
+          value: '98.5% (stale)',
+          valueTitle: '98.5% (stale) · Error · probe timed out',
+        },
+        {
+          label: 'Queue depth',
+          value: '12.25 items',
+          valueTitle: '12.25 items · Warning',
+        },
+      ]);
+    });
+
+    it('shows unavailable for a failed sensor with no last-good value', () => {
+      expect(
+        buildCustomSensorRows({
+          custom: [
+            {
+              id: 'failed',
+              name: 'Failed probe',
+              status: 'error',
+              observedAt: '2026-07-30T19:00:00Z',
+              error: 'invalid output',
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Failed probe',
+          value: 'Unavailable',
+          valueTitle: 'Unavailable · Error · invalid output',
         },
       ]);
     });

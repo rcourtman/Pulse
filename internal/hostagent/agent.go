@@ -51,6 +51,7 @@ type Config struct {
 	InsecureSkipVerify bool
 	CACertPath         string
 	ServerFingerprint  string
+	CustomSensorsFile  string
 	Observers          []ObserverTarget
 	RunOnce            bool
 	LogLevel           zerolog.Level
@@ -103,6 +104,7 @@ type Config struct {
 	updatedFromVersionFn func() string
 	packageUpdates       *packageUpdateManager
 	storageCleanup       *storageCleanupManager
+	customSensorExecute  customSensorExecution
 }
 
 // ObserverTarget is a report-only Pulse destination. It can receive the same
@@ -162,6 +164,7 @@ type Agent struct {
 	runCommandClient       func(*CommandClient, context.Context) error
 	packageUpdates         *packageUpdateManager
 	storageCleanup         *storageCleanupManager
+	customSensors          *customSensorRuntime
 	availability           *availabilityProbeModule
 	reportStreamID         string
 	reportSequence         atomic.Uint64
@@ -318,6 +321,10 @@ func New(cfg Config) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
+	customSensorDefinitions, err := loadCustomSensorDefinitions(cfg.CustomSensorsFile)
+	if err != nil {
+		return nil, fmt.Errorf("load custom sensors: %w", err)
+	}
 	agenttarget.MarkConfigured("host", "primary", "primary")
 	for _, observer := range observerReporters {
 		agenttarget.MarkConfigured("host", observer.target.Name, "observer")
@@ -394,8 +401,15 @@ func New(cfg Config) (*Agent, error) {
 		runCommandClient:    runCommandClientFn,
 		packageUpdates:      packageUpdates,
 		storageCleanup:      storageCleanup,
+		customSensors:       newCustomSensorRuntime(customSensorDefinitions, cfg.customSensorExecute),
 		availability:        newAvailabilityProbeModule(logger, cfg.AvailabilityTargets),
 		reportStreamID:      reportStreamID,
+	}
+	if len(customSensorDefinitions) > 0 {
+		logger.Info().
+			Int("sensorCount", len(customSensorDefinitions)).
+			Str("configPath", cfg.CustomSensorsFile).
+			Msg("Custom sensor execution enabled from local configuration")
 	}
 
 	// Create command client for AI command execution (only if enabled)
@@ -1088,6 +1102,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 
 	// Collect temperature data (best effort - don't fail if unavailable)
 	sensorData := a.collectTemperatures(collectCtx)
+	sensorData.Custom = a.customSensors.collect(collectCtx)
 
 	// Collect RAID array data (best effort - don't fail if unavailable)
 	raidData := a.collectRAIDArrays(collectCtx)

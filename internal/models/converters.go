@@ -885,7 +885,7 @@ func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
-	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.PowerWatts) == 0 && len(src.Additional) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
+	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.PowerWatts) == 0 && len(src.Additional) == 0 && len(src.Custom) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
 		return nil
 	}
 
@@ -901,6 +901,22 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 	}
 	if len(src.Additional) > 0 {
 		dest.Additional = copyStringFloatMap(src.Additional)
+	}
+	if len(src.Custom) > 0 {
+		dest.Custom = make([]HostCustomSensorMetricFrontend, len(src.Custom))
+		for i, metric := range src.Custom {
+			dest.Custom[i] = HostCustomSensorMetricFrontend{
+				ID:           metric.ID,
+				Name:         metric.Name,
+				Unit:         metric.Unit,
+				Value:        cloneFloat64Ptr(metric.Value),
+				Status:       metric.Status,
+				ObservedAt:   metric.ObservedAt,
+				Error:        metric.Error,
+				AlertOnError: metric.AlertOnError,
+				Stale:        metric.Stale,
+			}
+		}
 	}
 	if len(src.GPU) > 0 {
 		dest.GPU = make([]HostGPUSensorFrontend, len(src.GPU))

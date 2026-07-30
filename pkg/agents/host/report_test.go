@@ -246,6 +246,8 @@ func TestNetworkInterface_Fields(t *testing.T) {
 
 func TestSensors_Fields(t *testing.T) {
 	thermalWarningLevel := 0
+	customValue := 7.0
+	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
 	sensors := Sensors{
 		TemperatureCelsius: map[string]float64{
 			"cpu_package": 45.0,
@@ -258,6 +260,15 @@ func TestSensors_Fields(t *testing.T) {
 		Additional: map[string]float64{
 			"voltage": 12.0,
 		},
+		Custom: []CustomSensorMetric{{
+			ID:           "pending_updates",
+			Name:         "Pending updates",
+			Unit:         "count",
+			Value:        &customValue,
+			Status:       CustomSensorStatusWarning,
+			ObservedAt:   observedAt,
+			AlertOnError: true,
+		}},
 		GPU: []GPUSensor{
 			{
 				ID:                 "0",
@@ -283,6 +294,9 @@ func TestSensors_Fields(t *testing.T) {
 	}
 	if sensors.FanRPM["cpu_fan"] != 1200.0 {
 		t.Errorf("cpu_fan RPM = %f, want 1200.0", sensors.FanRPM["cpu_fan"])
+	}
+	if len(sensors.Custom) != 1 || sensors.Custom[0].Value == nil || *sensors.Custom[0].Value != 7 {
+		t.Fatalf("custom sensors = %+v, want one typed reading", sensors.Custom)
 	}
 	if len(sensors.GPU) != 1 {
 		t.Fatalf("GPU count = %d, want 1", len(sensors.GPU))

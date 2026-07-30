@@ -168,6 +168,7 @@ const HostDetailsDisclosure: Component<{
             <DisksCard disks={agent().disks} />
             <RaidCard arrays={props.drawer.agentMeta()?.raid} />
             <TemperaturesCard rows={props.drawer.temperatureRows()} title="Thermals" />
+            <TemperaturesCard rows={props.drawer.customSensorRows()} title="Custom Metrics" />
           </>
         )}
       </Show>

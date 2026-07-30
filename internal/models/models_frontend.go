@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
@@ -760,13 +761,26 @@ func (h HostFrontend) NormalizeCollections() HostFrontend {
 
 // HostSensorSummaryFrontend mirrors HostSensorSummary with primitives for the frontend.
 type HostSensorSummaryFrontend struct {
-	TemperatureCelsius map[string]float64      `json:"temperatureCelsius"`
-	FanRPM             map[string]float64      `json:"fanRpm"`
-	PowerWatts         map[string]float64      `json:"powerWatts"`
-	Additional         map[string]float64      `json:"additional"`
-	GPU                []HostGPUSensorFrontend `json:"gpu"`
-	ThermalState       *HostThermalState       `json:"thermalState,omitempty"`
-	SMART              []HostDiskSMARTFrontend `json:"smart"` // S.M.A.R.T. disk data
+	TemperatureCelsius map[string]float64               `json:"temperatureCelsius"`
+	FanRPM             map[string]float64               `json:"fanRpm"`
+	PowerWatts         map[string]float64               `json:"powerWatts"`
+	Additional         map[string]float64               `json:"additional"`
+	Custom             []HostCustomSensorMetricFrontend `json:"custom"`
+	GPU                []HostGPUSensorFrontend          `json:"gpu"`
+	ThermalState       *HostThermalState                `json:"thermalState,omitempty"`
+	SMART              []HostDiskSMARTFrontend          `json:"smart"` // S.M.A.R.T. disk data
+}
+
+type HostCustomSensorMetricFrontend struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Unit         string    `json:"unit,omitempty"`
+	Value        *float64  `json:"value,omitempty"`
+	Status       string    `json:"status"`
+	ObservedAt   time.Time `json:"observedAt"`
+	Error        string    `json:"error,omitempty"`
+	AlertOnError bool      `json:"alertOnError,omitempty"`
+	Stale        bool      `json:"stale,omitempty"`
 }
 
 type HostGPUSensorFrontend struct {
@@ -790,6 +804,9 @@ func (s HostSensorSummaryFrontend) NormalizeCollections() HostSensorSummaryFront
 	}
 	if s.Additional == nil {
 		s.Additional = map[string]float64{}
+	}
+	if s.Custom == nil {
+		s.Custom = []HostCustomSensorMetricFrontend{}
 	}
 	if s.GPU == nil {
 		s.GPU = []HostGPUSensorFrontend{}

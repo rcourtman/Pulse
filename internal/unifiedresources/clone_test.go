@@ -102,6 +102,33 @@ func TestCloneResource_MutateOriginalMetrics(t *testing.T) {
 	}
 }
 
+func TestCloneResourceIsolatesCustomSensorValues(t *testing.T) {
+	value := 12.5
+	original := &Resource{
+		ID: "agent-custom",
+		Agent: &AgentData{
+			Sensors: &HostSensorMeta{
+				Custom: []HostCustomSensorMetric{{
+					ID:     "queue_depth",
+					Name:   "Queue depth",
+					Value:  &value,
+					Status: "warning",
+				}},
+			},
+		},
+	}
+
+	cloned := cloneResource(original)
+	*cloned.Agent.Sensors.Custom[0].Value = 99
+	if *original.Agent.Sensors.Custom[0].Value != 12.5 {
+		t.Fatal("custom sensor value pointer was shared by clone")
+	}
+	cloned.Agent.Sensors.Custom[0].Name = "mutated"
+	if original.Agent.Sensors.Custom[0].Name != "Queue depth" {
+		t.Fatal("custom sensor slice was shared by clone")
+	}
+}
+
 func TestCloneResource_MutateIncidents(t *testing.T) {
 	original := &Resource{
 		ID: "r-1",

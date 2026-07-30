@@ -248,6 +248,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
 		m.clearHostUnraidAlerts(host.ID)
+		m.clearHostCustomSensorAlerts(host.ID)
 		return
 	}
 
@@ -256,6 +257,7 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostDiskAlerts(host.ID)
 		m.clearHostRAIDAlerts(host.ID)
 		m.clearHostUnraidAlerts(host.ID)
+		m.clearHostCustomSensorAlerts(host.ID)
 		return
 	}
 
@@ -287,6 +289,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	if len(host.Tags) > 0 {
 		baseMetadata["tags"] = append([]string(nil), host.Tags...)
 	}
+	m.syncHostCustomSensorAlerts(host, nodeName, instanceName, baseMetadata)
 
 	if thresholds.CPU != nil {
 		cpuMetadata := cloneMetadata(baseMetadata)
@@ -615,6 +618,7 @@ func (m *Manager) HandleHostRemoved(host models.Host) {
 	m.clearHostDiskAlerts(host.ID)
 	m.clearHostRAIDAlerts(host.ID)
 	m.clearHostUnraidAlerts(host.ID)
+	m.clearHostCustomSensorAlerts(host.ID)
 }
 
 // HandleHostTelemetryExpired re-evaluates transient storage-operation evidence
@@ -647,8 +651,10 @@ func (m *Manager) HandleHostTelemetryExpired(host models.Host) {
 	if !alertsEnabled || disableAllAgents || thresholds.Disabled {
 		m.clearHostRAIDAlerts(host.ID)
 		m.clearHostUnraidAlerts(host.ID)
+		m.clearHostCustomSensorAlerts(host.ID)
 		return
 	}
+	m.clearHostCustomSensorAlerts(host.ID)
 
 	if host.Unraid == nil {
 		m.clearHostUnraidAlerts(host.ID)
@@ -890,6 +896,123 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 			continue
 		}
 		m.clearAlertNoLock(alertID)
+	}
+}
+
+var customSensorAssessmentCodes = []string{
+	"custom_sensor_warning",
+	"custom_sensor_critical",
+	"custom_sensor_error",
+}
+
+func (m *Manager) syncHostCustomSensorAlerts(host models.Host, nodeName, instanceName string, baseMetadata map[string]interface{}) {
+	seen := make(map[string]struct{}, len(host.Sensors.Custom))
+	for _, metric := range host.Sensors.Custom {
+		metricID := sanitizeHostComponent(strings.TrimSpace(metric.ID))
+		if metricID == "" {
+			continue
+		}
+		resourceID := fmt.Sprintf("%s/custom:%s", hostResourceID(host.ID), metricID)
+		seen[resourceID] = struct{}{}
+
+		reasons := make([]storagehealth.Reason, 0, 1)
+		valueText := "unavailable"
+		if metric.Value != nil {
+			valueText = fmt.Sprintf("%g", *metric.Value)
+			if unit := strings.TrimSpace(metric.Unit); unit != "" {
+				valueText += " " + unit
+			}
+		}
+		switch strings.ToLower(strings.TrimSpace(metric.Status)) {
+		case "critical":
+			reasons = append(reasons, storagehealth.Reason{
+				Code:     "custom_sensor_critical",
+				Severity: storagehealth.RiskCritical,
+				Summary:  fmt.Sprintf("%s is critical at %s", metric.Name, valueText),
+			})
+		case "warning":
+			reasons = append(reasons, storagehealth.Reason{
+				Code:     "custom_sensor_warning",
+				Severity: storagehealth.RiskWarning,
+				Summary:  fmt.Sprintf("%s is warning at %s", metric.Name, valueText),
+			})
+		case "error":
+			if metric.AlertOnError {
+				message := strings.TrimSpace(metric.Error)
+				if message == "" {
+					message = "collector execution failed"
+				}
+				reasons = append(reasons, storagehealth.Reason{
+					Code:     "custom_sensor_error",
+					Severity: storagehealth.RiskWarning,
+					Summary:  fmt.Sprintf("%s custom sensor error: %s", metric.Name, message),
+				})
+			}
+		}
+
+		metadata := cloneMetadata(baseMetadata)
+		metadata["metric"] = "customSensor"
+		metadata["customSensorId"] = metric.ID
+		metadata["customSensorName"] = metric.Name
+		metadata["customSensorUnit"] = metric.Unit
+		metadata["customSensorStatus"] = metric.Status
+		metadata["customSensorStale"] = metric.Stale
+		if metric.Value != nil {
+			metadata["customSensorValue"] = *metric.Value
+		}
+		if metric.Error != "" {
+			metadata["customSensorError"] = metric.Error
+		}
+
+		resourceName := fmt.Sprintf("%s - %s", hostDisplayName(host), metric.Name)
+		_, _ = m.syncCanonicalHealthAssessmentAlert(canonicalHealthAssessmentAlertParams{
+			SpecID:         resourceID + "-health",
+			Signal:         "custom-sensor",
+			Codes:          customSensorAssessmentCodes,
+			Reasons:        reasons,
+			AlertID:        fmt.Sprintf("host-%s-custom-%s", host.ID, metricID),
+			AlertType:      "custom-sensor",
+			SpecResourceID: resourceID,
+			ResourceID:     resourceID,
+			ResourceName:   resourceName,
+			ResourceType:   unifiedresources.ResourceTypeAgent,
+			Node:           nodeName,
+			Instance:       instanceName,
+			Metadata:       metadata,
+			MessageBuilder: func(result alertspecs.EvaluationResult) (string, float64, float64) {
+				message := strings.Join(storageHealthReasonSummaries(reasons), "; ")
+				value := 0.0
+				if metric.Value != nil {
+					value = *metric.Value
+				}
+				return message, value, 0
+			},
+		})
+	}
+	m.cleanupHostCustomSensorAlerts(host.ID, seen)
+}
+
+func (m *Manager) clearHostCustomSensorAlerts(hostID string) {
+	m.cleanupHostCustomSensorAlerts(hostID, nil)
+}
+
+func (m *Manager) cleanupHostCustomSensorAlerts(hostID string, seen map[string]struct{}) {
+	if strings.TrimSpace(hostID) == "" {
+		return
+	}
+	prefix := hostResourceID(hostID) + "/custom:"
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil || !strings.HasPrefix(alert.ResourceID, prefix) {
+			continue
+		}
+		if seen != nil {
+			if _, exists := seen[alert.ResourceID]; exists {
+				continue
+			}
+		}
+		m.clearAlertNoLock(storageKey)
 	}
 }
 
