@@ -12,6 +12,7 @@ export function ThresholdsTableDockerContainersSection(props: ThresholdsTableSec
       <div ref={state.registerSection('dockerContainers')} class="scroll-mt-24">
         <ResourceTable
           title={state.sectionTitles.dockerContainers}
+          onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
           groupedResources={state.dockerContainersGroupedByHost()}
           groupHeaderMeta={state.dockerHostGroupMeta()}
           columns={[

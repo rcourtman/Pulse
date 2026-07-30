@@ -1472,6 +1472,34 @@ describe('ResourceTable', () => {
   });
 
   describe('delay settings', () => {
+    it('opens the canonical per-resource delay editor from the resource row', () => {
+      const onConfigureResourceIntent = vi.fn();
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'Database VM' })],
+        columns: ['CPU %', 'Memory %'],
+        onConfigureResourceIntent,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByLabelText('Configure alert delay for Database VM'));
+
+      expect(onConfigureResourceIntent).toHaveBeenCalledWith('vm-1', 'metric.cpu');
+    });
+
+    it('falls back to the offline signal when the row has no supported metric', () => {
+      const onConfigureResourceIntent = vi.fn();
+      const props = makeProps({
+        resources: [makeResource({ id: 'docker-host-1', name: 'Docker Host', type: 'dockerHost' })],
+        columns: [],
+        onConfigureResourceIntent,
+      });
+      render(() => <ResourceTable {...props} />);
+
+      fireEvent.click(screen.getByLabelText('Configure alert delay for Docker Host'));
+
+      expect(onConfigureResourceIntent).toHaveBeenCalledWith('docker-host-1', 'state.offline');
+    });
+
     it('shows delay toggle button when showDelayColumn and onMetricDelayChange are provided', () => {
       const props = makeProps({
         showDelayColumn: true,

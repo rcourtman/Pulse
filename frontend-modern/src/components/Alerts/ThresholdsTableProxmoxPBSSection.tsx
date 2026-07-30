@@ -24,6 +24,7 @@ export function ThresholdsTableProxmoxPBSSection(props: ThresholdsTableSectionPr
         <div id="threshold-section-pbs" ref={state.registerSection('pbs')} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.pbsServersWithOverrides()}
             columns={['CPU %', 'Memory %']}
             activeAlerts={tableProps.activeAlerts}

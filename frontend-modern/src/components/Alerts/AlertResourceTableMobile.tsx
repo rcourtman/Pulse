@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import Check from 'lucide-solid/icons/check';
 import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
+import Timer from 'lucide-solid/icons/timer';
 import X from 'lucide-solid/icons/x';
 
 import { ActionIconButton } from '@/components/shared/Button';
@@ -294,6 +295,28 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             size="sm"
                           >
                             <Pencil class="w-4 h-4" aria-hidden="true" />
+                          </ActionIconButton>
+                        </Show>
+                        <Show when={!isEditing() && props.table.onConfigureResourceIntent}>
+                          <ActionIconButton
+                            onClick={() => {
+                              const preferredMetric = ['cpu', 'memory', 'disk'].find(
+                                (metric) =>
+                                  props.table.columns.some(
+                                    (column) => normalizeAlertResourceMetricKey(column) === metric,
+                                  ) && alertResourceSupportsMetric(resource.type, metric),
+                              );
+                              props.table.onConfigureResourceIntent?.(
+                                resource.id,
+                                preferredMetric ? `metric.${preferredMetric}` : 'state.offline',
+                              );
+                            }}
+                            label={`Configure alert delay for ${getAlertResourceLabel(resource)}`}
+                            title="Configure individual alert delay"
+                            tone="neutral"
+                            size="sm"
+                          >
+                            <Timer class="w-4 h-4" aria-hidden="true" />
                           </ActionIconButton>
                         </Show>
                         <Show when={isEditing()}>

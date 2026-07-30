@@ -19,6 +19,7 @@ export function ThresholdsTableAgentsResourcesSection(props: ThresholdsTableSect
       <div ref={state.registerSection('agents')} class="scroll-mt-24">
         <ResourceTable
           title={state.sectionTitles.agents}
+          onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
           resources={state.agentsWithOverrides()}
           columns={['CPU %', 'Memory %', 'Disk %', 'Disk Temp °C']}
           activeAlerts={tableProps.activeAlerts}

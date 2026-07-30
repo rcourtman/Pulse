@@ -24,6 +24,7 @@ export function ThresholdsTableProxmoxGuestsSection(props: ThresholdsTableSectio
         <div ref={state.registerSection('guests')} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.guestsGroupedByNode()}
             groupHeaderMeta={state.guestGroupHeaderMeta()}
             columns={[

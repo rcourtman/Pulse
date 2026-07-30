@@ -24,6 +24,7 @@ export function ThresholdsTableProxmoxNodesSection(props: ThresholdsTableSection
         <div ref={state.registerSection('nodes')} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.nodesWithOverrides()}
             columns={['CPU %', 'Memory %', 'Disk %', 'Temp °C']}
             activeAlerts={tableProps.activeAlerts}

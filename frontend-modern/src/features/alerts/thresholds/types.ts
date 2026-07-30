@@ -6,6 +6,7 @@ import type {
   BackupAlertConfig,
 } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
+import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 
 export type OverrideType =
   | 'guest'
@@ -73,6 +74,7 @@ export interface SimpleThresholds {
 }
 
 export interface ThresholdsTableProps {
+  onConfigureResourceIntent?: (resourceId: string, signal: AlertIntentSignal) => void;
   overrides: () => Override[];
   setOverrides: (overrides: Override[]) => void;
   rawOverridesConfig: () => Record<string, RawOverrideConfig>;

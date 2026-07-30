@@ -60,7 +60,16 @@ const ruleFor = (
   signal: AlertIntentSignal,
 ): AlertIntentRule => document?.resources?.[resourceId]?.[signal] ?? {};
 
-export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }) {
+export interface AlertIntentPolicySelectionTarget {
+  resourceId: string;
+  signal: AlertIntentSignal;
+  requestId: number;
+}
+
+export function AlertIntentPolicyPanel(props: {
+  resources: readonly Resource[];
+  selectionTarget?: AlertIntentPolicySelectionTarget | null;
+}) {
   const [expanded, setExpanded] = createSignal(false);
   const [document, setDocument] = createSignal<AlertIntentPolicyDocument | null>(null);
   const [loading, setLoading] = createSignal(false);
@@ -98,6 +107,7 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
   const [previewBackupActive, setPreviewBackupActive] = createSignal(false);
   const [previewing, setPreviewing] = createSignal(false);
   const [preview, setPreview] = createSignal<AlertIntentPolicyPreview | null>(null);
+  let panelElement: HTMLDivElement | undefined;
 
   const selectedResource = createMemo(() =>
     sortedResources().find((resource) => resource.id === resourceId()),
@@ -142,6 +152,19 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
     if (!resources.some((resource) => resource.id === selected)) {
       setResourceId(resources[0].id);
     }
+  });
+
+  createEffect(() => {
+    const target = props.selectionTarget;
+    if (!target) return;
+    const requestId = target.requestId;
+    setResourceId(target.resourceId);
+    setSignal(target.signal);
+    setExpanded(true);
+    queueMicrotask(() => {
+      if (props.selectionTarget?.requestId !== requestId) return;
+      panelElement?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    });
   });
 
   createEffect(() => {
@@ -340,7 +363,12 @@ export function AlertIntentPolicyPanel(props: { resources: readonly Resource[] }
   );
 
   return (
-    <Card padding="md" class="space-y-4">
+    <Card
+      id="alert-intent-policy-panel"
+      ref={panelElement}
+      padding="md"
+      class="space-y-4 scroll-mt-24"
+    >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 class="text-base font-semibold text-base-content">Alert intent & grace</h2>

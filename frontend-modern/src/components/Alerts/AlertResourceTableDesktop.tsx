@@ -519,6 +519,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                         onSetOfflineState={props.table.onSetOfflineState}
                         onToggleBackup={props.table.onToggleBackup}
                         onToggleSnapshot={props.table.onToggleSnapshot}
+                        onConfigureResourceIntent={props.table.onConfigureResourceIntent}
                         globalDisableFlag={props.table.globalDisableFlag}
                         globalDisableOfflineFlag={props.table.globalDisableOfflineFlag}
                         editingNote={props.table.editingNote}
@@ -560,6 +561,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                       onSetOfflineState={props.table.onSetOfflineState}
                       onToggleBackup={props.table.onToggleBackup}
                       onToggleSnapshot={props.table.onToggleSnapshot}
+                      onConfigureResourceIntent={props.table.onConfigureResourceIntent}
                       globalDisableFlag={props.table.globalDisableFlag}
                       globalDisableOfflineFlag={props.table.globalDisableOfflineFlag}
                       editingNote={props.table.editingNote}

@@ -1,4 +1,4 @@
-import { render, cleanup } from '@solidjs/testing-library';
+import { render, cleanup, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ThresholdsTab } from '../tabs/ThresholdsTab';
@@ -271,6 +271,7 @@ const buildProps = (): ThresholdsTabProps =>
 describe('ThresholdsTab', () => {
   beforeEach(() => {
     captureThresholdsTableProps.mockReset();
+    captureIntentPolicyProps.mockReset();
   });
 
   afterEach(() => {
@@ -289,5 +290,29 @@ describe('ThresholdsTab', () => {
     expect(props.containerRuntimes).toEqual([]);
     expect(typeof props.guestDefaults).toBe('object');
     expect(typeof props.dockerDefaults).toBe('object');
+  });
+
+  it('routes a resource-row delay action into the canonical intent policy panel', async () => {
+    render(() => <ThresholdsTab {...buildProps()} />);
+
+    const tableProps = captureThresholdsTableProps.mock.calls[0][0] as {
+      onConfigureResourceIntent: (resourceId: string, signal: string) => void;
+    };
+    tableProps.onConfigureResourceIntent('vm-canonical', 'metric.memory');
+
+    await waitFor(() => {
+      const panelProps = captureIntentPolicyProps.mock.calls.at(-1)?.[0] as {
+        selectionTarget?: {
+          resourceId: string;
+          signal: string;
+          requestId: number;
+        };
+      };
+      expect(panelProps.selectionTarget).toEqual({
+        resourceId: 'vm-canonical',
+        signal: 'metric.memory',
+        requestId: 1,
+      });
+    });
   });
 });

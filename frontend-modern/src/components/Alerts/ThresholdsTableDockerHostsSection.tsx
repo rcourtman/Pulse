@@ -12,6 +12,7 @@ export function ThresholdsTableDockerHostsSection(props: ThresholdsTableSectionP
       <div ref={state.registerSection('dockerHosts')} class="scroll-mt-24">
         <ResourceTable
           title={state.sectionTitles.dockerHosts}
+          onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
           resources={state.dockerHostsWithOverrides()}
           columns={[]}
           activeAlerts={tableProps.activeAlerts}

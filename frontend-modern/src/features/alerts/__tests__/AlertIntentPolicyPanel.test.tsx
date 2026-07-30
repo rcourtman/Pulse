@@ -79,6 +79,23 @@ describe('AlertIntentPolicyPanel', () => {
     expect(await screen.findByLabelText('Resource')).toHaveValue(resource.id);
   });
 
+  it('opens directly on a row-selected resource and signal', async () => {
+    render(() => (
+      <AlertIntentPolicyPanel
+        resources={[resource]}
+        selectionTarget={{
+          resourceId: resource.id,
+          signal: 'metric.memory',
+          requestId: 1,
+        }}
+      />
+    ));
+
+    expect(await screen.findByRole('button', { name: 'Hide policies' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Resource')).toHaveValue(resource.id);
+    expect(screen.getByLabelText('Signal')).toHaveValue('metric.memory');
+  });
+
   it('saves field-level resource overrides without disabling inherited policy', async () => {
     render(() => <AlertIntentPolicyPanel resources={[resource]} />);
 

@@ -24,6 +24,7 @@ export function ThresholdsTableProxmoxPMGSection(props: ThresholdsTableSectionPr
         <div id="threshold-section-pmg" ref={state.registerSection('pmg')} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={state.pmgServersWithOverrides()}
             columns={[
               'Queue Warn',

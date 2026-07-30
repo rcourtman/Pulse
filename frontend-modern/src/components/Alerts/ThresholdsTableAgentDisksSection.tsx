@@ -24,6 +24,7 @@ export function ThresholdsTableAgentDisksSection(props: ThresholdsTableSectionPr
         <div ref={state.registerSection('agentDisks')} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.agentDisksGroupedByAgent()}
             groupHeaderMeta={state.agentGroupHeaderMeta()}
             columns={['Disk %']}

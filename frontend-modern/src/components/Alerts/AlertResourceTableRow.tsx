@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
+import Timer from 'lucide-solid/icons/timer';
 import X from 'lucide-solid/icons/x';
 
 import { ActionIconButton } from '@/components/shared/Button';
@@ -38,6 +39,7 @@ import {
   type AlertResourceThresholdMap,
 } from './alertResourceTableModel';
 import type { Alert } from '@/types/api';
+import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import type { Resource } from '@/features/alerts/thresholds/tableTypes';
 
 type OfflineState = 'off' | 'warning' | 'critical';
@@ -67,6 +69,7 @@ interface AlertResourceTableRowProps {
   onSetOfflineState?: (resourceId: string, state: OfflineState) => void;
   onToggleBackup?: (resourceId: string, forceState?: boolean) => void;
   onToggleSnapshot?: (resourceId: string, forceState?: boolean) => void;
+  onConfigureResourceIntent?: (resourceId: string, signal: AlertIntentSignal) => void;
   globalDisableFlag?: () => boolean;
   globalDisableOfflineFlag?: () => boolean;
   editingNote: () => string;
@@ -91,6 +94,17 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       isEditing(),
     );
   const isOverridden = (metric: string) => isAlertResourceMetricOverridden(props.resource, metric);
+  const preferredIntentSignal = (): AlertIntentSignal => {
+    for (const metric of ['cpu', 'memory', 'disk'] as const) {
+      if (
+        props.columns.some((column) => normalizeAlertResourceMetricKey(column) === metric) &&
+        alertResourceSupportsMetric(props.resource.type, metric)
+      ) {
+        return `metric.${metric}`;
+      }
+    }
+    return 'state.offline';
+  };
 
   const getThresholds = (): AlertResourceThresholdMap => thresholds();
 
@@ -595,10 +609,11 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                 props.resource.hasOverride ||
                 ((props.resource.type === 'agent' || props.resource.type === 'dockerHost') &&
                   props.resource.disableConnectivity);
+              const showIntent = typeof props.onConfigureResourceIntent === 'function';
 
               return (
                 <Show
-                  when={showEdit || showRevert}
+                  when={showEdit || showRevert || showIntent}
                   fallback={
                     <span class="text-xs text-muted" aria-hidden="true">
                       —
@@ -614,6 +629,22 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                       size="xs"
                     >
                       <Pencil class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
+                  </Show>
+                  <Show when={showIntent}>
+                    <ActionIconButton
+                      onClick={() =>
+                        props.onConfigureResourceIntent?.(
+                          props.resource.id,
+                          preferredIntentSignal(),
+                        )
+                      }
+                      label={`Configure alert delay for ${resourceLabel()}`}
+                      title="Configure individual alert delay"
+                      tone="neutral"
+                      size="xs"
+                    >
+                      <Timer class="w-4 h-4" aria-hidden="true" />
                     </ActionIconButton>
                   </Show>
                   <Show when={showRevert}>

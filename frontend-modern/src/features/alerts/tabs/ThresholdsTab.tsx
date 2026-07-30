@@ -1,13 +1,35 @@
+import { createSignal } from 'solid-js';
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
-import { AlertIntentPolicyPanel } from '../AlertIntentPolicyPanel';
+import {
+  AlertIntentPolicyPanel,
+  type AlertIntentPolicySelectionTarget,
+} from '../AlertIntentPolicyPanel';
+import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 
 import type { ThresholdsTabProps } from '../thresholds/thresholdsTabModel';
 
 export function ThresholdsTab(props: ThresholdsTabProps) {
+  const [intentSelectionTarget, setIntentSelectionTarget] =
+    createSignal<AlertIntentPolicySelectionTarget | null>(null);
+  let intentSelectionRequest = 0;
+
+  const configureResourceIntent = (resourceId: string, signal: AlertIntentSignal) => {
+    intentSelectionRequest += 1;
+    setIntentSelectionTarget({
+      resourceId,
+      signal,
+      requestId: intentSelectionRequest,
+    });
+  };
+
   return (
     <div class="space-y-4">
-      <AlertIntentPolicyPanel resources={props.allResources} />
+      <AlertIntentPolicyPanel
+        resources={props.allResources}
+        selectionTarget={intentSelectionTarget()}
+      />
       <ThresholdsTable
+        onConfigureResourceIntent={configureResourceIntent}
         overrides={props.overrides}
         setOverrides={props.setOverrides}
         rawOverridesConfig={props.rawOverridesConfig}

@@ -4758,6 +4758,14 @@ rendering remains in
 `frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and shared
 metric normalization remains in
 `frontend-modern/src/components/Alerts/alertResourceTableModel.ts`.
+Desktop rows and mobile resource cards also share one alert-delay handoff:
+their timer action emits the canonical resource id plus the first supported
+CPU, memory, or disk signal, while `ThresholdsTab.tsx` owns selection state and
+`AlertIntentPolicyPanel.tsx` owns expansion, scrolling, field inheritance, and
+API persistence. The action remains available for non-threshold-editable rows
+and falls back to `state.offline` when no supported metric exists. New
+platform threshold sections must forward this shared handoff rather than add a
+platform-local delay editor or a second intent-policy transport.
 `frontend-modern/src/features/alerts/useAlertDestinationsTabState.ts` now owns
 destination test actions, retry orchestration, and delivery-health loading while
 `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` stays the

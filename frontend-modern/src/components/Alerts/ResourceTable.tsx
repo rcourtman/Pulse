@@ -2,6 +2,7 @@ import { Show } from 'solid-js';
 import X from 'lucide-solid/icons/x';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { Alert } from '@/types/api';
+import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 import {
   ALERT_BULK_EDIT_CLEAR_LABEL,
   getAlertBulkEditOpenLabel,
@@ -16,6 +17,7 @@ export type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tab
 
 export interface ResourceTableProps {
   title: string;
+  onConfigureResourceIntent?: (resourceId: string, signal: AlertIntentSignal) => void;
   resources?: Resource[];
   groupedResources?: Record<string, Resource[]>;
   columns: string[];

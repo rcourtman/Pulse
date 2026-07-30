@@ -24,6 +24,7 @@ export function ThresholdsTableProxmoxStorageSection(props: ThresholdsTableSecti
         <div ref={state.registerSection('storage')} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             groupedResources={state.storageGroupedByNode()}
             groupHeaderMeta={state.guestGroupHeaderMeta()}
             columns={['Usage %']}

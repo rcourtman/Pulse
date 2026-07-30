@@ -57,6 +57,7 @@ function TrueNASResourceSection(
         <div ref={state.registerSection(props.id)} class="scroll-mt-24">
           <ResourceTable
             title=""
+            onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
             resources={props.resources()}
             columns={props.columns}
             activeAlerts={tableProps.activeAlerts}

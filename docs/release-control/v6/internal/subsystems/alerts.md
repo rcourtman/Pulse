@@ -1401,6 +1401,15 @@ coverage, duplicate and delayed reports, wall-clock changes, suppression
 reset, migration/restart continuity, backup hard-cap behavior, preview
 immutability, and first-match lifecycle identity.
 
+The thresholds resource rows expose that same policy owner directly through a
+per-resource alert-delay action. The action carries the canonical resource id
+and the first supported CPU, memory, or disk signal into the versioned
+intent-policy editor, expands it, and leaves persistence and inheritance with
+`/api/alerts/intent-policies`. Resources without a supported metric open on
+`state.offline`. Threshold rows must not create a parallel delay field in the
+legacy threshold override document or save intent changes through the
+threshold-config endpoint.
+
 ### Provider-observed storage and workload incident lifecycle
 
 Provider observations use one stable alert identity composed from provider,
