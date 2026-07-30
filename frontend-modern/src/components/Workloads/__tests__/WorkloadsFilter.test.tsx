@@ -150,6 +150,22 @@ describe('WorkloadsFilter', () => {
       expect(screen.getByRole('button', { name: 'List' })).toBeInTheDocument();
     });
 
+    it('offers a guest/host memory percentage basis when the owning page enables it', () => {
+      const setMemoryDisplayBasis = vi.fn();
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            memoryDisplayBasis: () => 'guest',
+            setMemoryDisplayBasis,
+          })}
+        />
+      ));
+
+      const group = screen.getByRole('group', { name: 'Memory percentage basis' });
+      fireEvent.click(within(group).getByRole('button', { name: 'Host' }));
+      expect(setMemoryDisplayBasis).toHaveBeenCalledWith('host');
+    });
+
     it('maps legacy container view modes onto the canonical "Containers" type chip', () => {
       render(() => (
         <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'app-container' as const) })} />

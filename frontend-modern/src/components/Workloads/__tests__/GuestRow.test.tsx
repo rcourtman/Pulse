@@ -78,8 +78,21 @@ vi.mock('../StackedDiskBar', () => ({
 }));
 
 vi.mock('../StackedMemoryBar', () => ({
-  StackedMemoryBar: (props: { used: number; total: number }) => (
-    <div data-testid="memory-bar" data-used={props.used} data-total={props.total} />
+  StackedMemoryBar: (props: {
+    used: number;
+    total: number;
+    unavailable?: boolean;
+    comparisonTotalLabel?: string;
+    tooltipTitle?: string;
+  }) => (
+    <div
+      data-testid="memory-bar"
+      data-used={props.used}
+      data-total={props.total}
+      data-unavailable={props.unavailable}
+      data-comparison-total-label={props.comparisonTotalLabel}
+      data-tooltip-title={props.tooltipTitle}
+    />
   ),
 }));
 
@@ -257,6 +270,41 @@ describe('GuestRow', () => {
     it('renders memory bar', () => {
       renderGuestRow({ guest: makeGuest() });
       expect(screen.getByTestId('memory-bar')).toBeTruthy();
+    });
+
+    it('compares guest memory use with the parent host total when requested', () => {
+      renderGuestRow({
+        guest: makeGuest({ memory: makeMemory({ used: 2 * 1024 ** 3, total: 4 * 1024 ** 3 }) }),
+        visibleColumnIds: ['name', 'memory'],
+        memoryDisplayBasis: 'host',
+        parentMemoryTotal: 16 * 1024 ** 3,
+        parentNodeName: 'pve-01',
+        metricDisplayMode: 'sparklines',
+      });
+
+      expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+        'data-total',
+        String(16 * 1024 ** 3),
+      );
+      expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+        'data-comparison-total-label',
+        'Host total',
+      );
+      expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+        'data-tooltip-title',
+        'pve-01 memory share',
+      );
+      expect(screen.queryByTestId('metric-mini-sparkline')).toBeNull();
+    });
+
+    it('marks host-relative memory unavailable when the parent total is missing', () => {
+      renderGuestRow({
+        guest: makeGuest(),
+        visibleColumnIds: ['name', 'memory'],
+        memoryDisplayBasis: 'host',
+      });
+
+      expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
     });
 
     it('renders disk bar when disk usage is available', () => {

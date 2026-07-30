@@ -8,6 +8,7 @@ import { useWorkloadsState } from '@/components/Workloads/useWorkloadsState';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   type WorkloadsStatusOption,
+  type WorkloadsMemoryDisplayBasis,
   type WorkloadsMetricDisplayMode,
 } from '@/components/Workloads/workloadsFilterModel';
 import {
@@ -146,6 +147,14 @@ export function ProxmoxPageSurface() {
           isWorkloadTableMetricHistoryRange(raw) ? raw : WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE,
       },
     );
+  const [memoryDisplayBasis, setMemoryDisplayBasis] =
+    usePersistentSignal<WorkloadsMemoryDisplayBasis>(
+      STORAGE_KEYS.WORKLOADS_MEMORY_DISPLAY_BASIS,
+      'guest',
+      {
+        deserialize: (raw) => (raw === 'host' ? 'host' : 'guest'),
+      },
+    );
 
   return (
     <div data-testid="proxmox-page" class="space-y-3">
@@ -199,6 +208,8 @@ export function ProxmoxPageSurface() {
                 setMetricDisplayMode={setMetricDisplayMode}
                 metricHistoryRange={metricHistoryRange}
                 setMetricHistoryRange={setMetricHistoryRange}
+                memoryDisplayBasis={memoryDisplayBasis}
+                setMemoryDisplayBasis={setMemoryDisplayBasis}
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
@@ -255,6 +266,8 @@ interface ProxmoxOverviewProps {
   setMetricDisplayMode: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
   setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
+  memoryDisplayBasis: Accessor<WorkloadsMemoryDisplayBasis>;
+  setMemoryDisplayBasis: (value: WorkloadsMemoryDisplayBasis) => void;
 }
 
 function ProxmoxOverview(props: ProxmoxOverviewProps) {
@@ -278,6 +291,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     onMetricDisplayModeChange: props.setMetricDisplayMode,
     metricHistoryRange: props.metricHistoryRange,
     onMetricHistoryRangeChange: props.setMetricHistoryRange,
+    memoryDisplayBasis: props.memoryDisplayBasis,
   });
   const showSharedFilterToolbar = createMemo(
     () =>
@@ -323,6 +337,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}
             metricHistoryRange={workloadsState.workloadMetricHistoryRange}
             setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}
+            memoryDisplayBasis={workloadsState.workloadMemoryDisplayBasis}
+            setMemoryDisplayBasis={props.setMemoryDisplayBasis}
             forcedPlatform={PROXMOX_PLATFORM_FILTER}
             pinnedSelectionActive={() =>
               Boolean(

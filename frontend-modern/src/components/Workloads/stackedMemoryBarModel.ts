@@ -23,6 +23,11 @@ export interface StackedMemoryBarProps {
   resourceId?: string;
   anomaly?: AnomalyReport | null;
   thresholds?: MetricDisplayThresholds | null;
+  /** Optional severity value when the bar geometry uses a different denominator. */
+  severityPercent?: number;
+  /** Render a direct used-vs-total comparison instead of composition/free rows. */
+  comparisonTotalLabel?: string;
+  tooltipTitle?: string;
 }
 
 export interface StackedMemorySegment {
@@ -115,13 +120,16 @@ function getSegments(
   const balloon = props.balloon || 0;
   const hasActiveBallooning = balloon > 0 && balloon < props.total;
   const usedPercent = (props.used / props.total) * 100;
+  const severityPercent = Number.isFinite(props.severityPercent)
+    ? (props.severityPercent as number)
+    : usedPercent;
   const cache = getEffectiveCache(props);
   const cachePercent = (cache / props.total) * 100;
 
   const segments: StackedMemorySegment[] = [];
   if (props.used > 0) {
     segments.push({
-      color: getMetricColorRgba(usedPercent, 'memory', props.thresholds),
+      color: getMetricColorRgba(severityPercent, 'memory', props.thresholds),
       label: 'Active',
       leftPercent: 0,
       widthPercent: usedPercent,
@@ -184,12 +192,25 @@ function getTooltipRows(
     }
   } else if (props.total > 0) {
     const usedPercent = (props.used / props.total) * 100;
+    const severityPercent = Number.isFinite(props.severityPercent)
+      ? (props.severityPercent as number)
+      : usedPercent;
     rows.push({
       borderTop: false,
       label: 'Used',
-      labelClass: USED_LABEL_CLASS[getMetricSeverity(usedPercent, 'memory', props.thresholds)],
+      labelClass: USED_LABEL_CLASS[getMetricSeverity(severityPercent, 'memory', props.thresholds)],
       value: formatBytes(props.used),
     });
+
+    if (props.comparisonTotalLabel) {
+      rows.push({
+        borderTop: true,
+        label: props.comparisonTotalLabel,
+        labelClass: 'text-slate-400',
+        value: formatBytes(props.total),
+      });
+      return rows;
+    }
 
     if (cache > 0) {
       rows.push({
@@ -281,7 +302,7 @@ export function buildStackedMemoryBarPresentation(
         ? Math.min(((props.swapUsed || 0) / props.swapTotal) * 100, 100)
         : 0,
     tooltipRows: getTooltipRows(props, displayLabel),
-    tooltipTitle: 'Memory Composition',
+    tooltipTitle: props.tooltipTitle ?? 'Memory Composition',
     unavailable: props.unavailable === true,
   };
 }

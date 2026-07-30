@@ -165,3 +165,8 @@ export const buildGuestParentNodeMap = (
 
   return mapping;
 };
+
+export const buildGuestParentNodeMapFromNodes = (
+  guests: WorkloadGuest[],
+  nodes: Node[],
+): Record<string, Node | undefined> => buildGuestParentNodeMap(guests, buildNodeByInstance(nodes));

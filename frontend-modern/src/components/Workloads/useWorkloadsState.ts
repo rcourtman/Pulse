@@ -29,6 +29,7 @@ import {
 } from './workloadSelectors';
 import {
   type WorkloadsGroupingMode,
+  type WorkloadsMemoryDisplayBasis,
   type WorkloadsMetricDisplayMode,
   type WorkloadsStatusOption,
   type WorkloadsSortKey,
@@ -45,6 +46,7 @@ import {
   buildNestedWorkloadContextByGuestId,
   type NestedWorkloadContextByGuestId,
 } from './nestedWorkloadContext';
+import { buildGuestParentNodeMapFromNodes } from './workloadTopology';
 
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
@@ -105,6 +107,9 @@ export interface WorkloadsSurfaceProps {
   onMetricDisplayModeChange?: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
   onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
+  // Proxmox can compare guest memory use with either the allocation assigned
+  // to that guest or the total memory of its resolved parent node.
+  memoryDisplayBasis?: Accessor<WorkloadsMemoryDisplayBasis>;
   // Platform pages can scope column preferences when a shared workload type
   // needs different defaults or labels on that platform-owned page.
   columnVisibilityStorageScope?: string;
@@ -304,6 +309,11 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
 
     return Array.from(merged.values());
   });
+  const workloadMemoryDisplayBasis: Accessor<WorkloadsMemoryDisplayBasis> =
+    props.memoryDisplayBasis ?? (() => 'guest');
+  const memoryParentNodeByGuestId = createMemo(() =>
+    buildGuestParentNodeMapFromNodes(allGuests(), infrastructureNodes()),
+  );
 
   const workloadsInfrastructureEmptyState = createMemo(() =>
     getWorkloadsInfrastructureEmptyState(),
@@ -376,7 +386,17 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   });
 
   const guestSortComparator = createMemo(() =>
-    createWorkloadSortComparator(sortKey() || '', sortDirection()),
+    createWorkloadSortComparator(sortKey() || '', sortDirection(), {
+      memoryValue: (guest) => {
+        if (workloadMemoryDisplayBasis() !== 'host') {
+          return guest.memory?.usage ?? 0;
+        }
+        const hostTotal =
+          memoryParentNodeByGuestId()[getCanonicalWorkloadId(guest)]?.memory?.total ?? 0;
+        const used = guest.memory?.used ?? 0;
+        return hostTotal > 0 && Number.isFinite(used) ? (used / hostTotal) * 100 : 0;
+      },
+    }),
   );
 
   const filteredGuests = createMemo(() => {
@@ -560,6 +580,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadIOEmphasis,
     workloadMetricHistoryRange,
     workloadMetricDisplayMode,
+    workloadMemoryDisplayBasis,
     workloadMetricHistory,
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,

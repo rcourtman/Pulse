@@ -100,6 +100,19 @@ export function GuestRow(props: GuestRowProps) {
   const cpuPercent = createMemo(() => getWorkloadCPUPercent(props.guest.cpu) ?? 0);
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
+  const isHostMemoryBasis = createMemo(() => props.memoryDisplayBasis === 'host');
+  const hostMemoryTotal = createMemo(() => {
+    const total = props.parentMemoryTotal;
+    return typeof total === 'number' && Number.isFinite(total) && total > 0 ? total : 0;
+  });
+  const memoryDisplayTotal = createMemo(() =>
+    isHostMemoryBasis() ? hostMemoryTotal() : (props.guest.memory?.total ?? 0),
+  );
+  const memoryDisplayUnavailable = createMemo(
+    () =>
+      props.guest.memory?.usageUnavailable === true ||
+      (isHostMemoryBasis() && hostMemoryTotal() <= 0),
+  );
   const detailControlsId = createMemo(() => buildSummaryDisclosureControlsId(guestId()));
   const nestedWorkloadCueLabel = createMemo(() => {
     const context = props.nestedWorkloadContext;
@@ -359,22 +372,37 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('memory')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="memory">
             <Show
-              when={isSparklineMode()}
+              when={isSparklineMode() && !isHostMemoryBasis()}
               fallback={
-                <div title={memoryTooltip() ?? undefined}>
+                <div title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}>
                   <StackedMemoryBar
                     used={props.guest.memory?.used || 0}
-                    total={props.guest.memory?.total || 0}
-                    unavailable={props.guest.memory?.usageUnavailable === true}
-                    percentOnly={memoryPercentOnly()}
-                    cache={props.guest.memory?.cache || 0}
-                    cacheInclusiveLabel="Shown in Proxmox"
-                    balloon={props.guest.memory?.balloon || 0}
-                    swapUsed={props.guest.memory?.swapUsed || 0}
-                    swapTotal={props.guest.memory?.swapTotal || 0}
+                    total={memoryDisplayTotal()}
+                    unavailable={memoryDisplayUnavailable()}
+                    percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
+                    cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
+                    cacheInclusiveLabel={isHostMemoryBasis() ? undefined : 'Shown in Proxmox'}
+                    balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
+                    swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
+                    swapTotal={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)}
                     resourceId={metricsKey()}
-                    anomaly={memoryAnomaly()}
+                    anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
                     thresholds={memoryThresholds()}
+                    severityPercent={
+                      isHostMemoryBasis()
+                        ? usagePercent(
+                            props.guest.memory?.used,
+                            props.guest.memory?.total,
+                            props.guest.memory?.usage,
+                          )
+                        : undefined
+                    }
+                    comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
+                    tooltipTitle={
+                      isHostMemoryBasis()
+                        ? `${props.parentNodeName?.trim() || 'Host'} memory share`
+                        : undefined
+                    }
                   />
                 </div>
               }

@@ -67,6 +67,23 @@ describe('buildStackedMemoryBarPresentation', () => {
     expect(rows['Shown in Proxmox']).toBe('63%');
   });
 
+  it('renders an explicit host-total comparison without implying the remainder is free', () => {
+    const presentation = buildStackedMemoryBarPresentation(
+      {
+        used: 4 * GiB,
+        total: 64 * GiB,
+        comparisonTotalLabel: 'Host total',
+        tooltipTitle: 'pve-01 memory share',
+      },
+      400,
+    );
+
+    expect(presentation.displayPercentValue).toBeCloseTo(6.25);
+    expect(presentation.tooltipTitle).toBe('pve-01 memory share');
+    expect(presentation.tooltipRows.map((row) => row.label)).toEqual(['Used', 'Host total']);
+    expect(presentation.tooltipRows.map((row) => row.value)).toEqual(['4.00 GB', '64.0 GB']);
+  });
+
   it('keeps the cache segment between active and the balloon limit', () => {
     const presentation = buildStackedMemoryBarPresentation(
       { used: 4 * GiB, total: 16 * GiB, cache: 2 * GiB, balloon: 8 * GiB },

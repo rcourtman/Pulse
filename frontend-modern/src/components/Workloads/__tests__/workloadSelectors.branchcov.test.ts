@@ -110,6 +110,33 @@ describe('workloadSelectors (branch coverage)', () => {
       expect([...guests].sort(memAsc!).map((g) => g.id)).toEqual(['a', 'b']);
     });
 
+    it('supports a page-owned memory comparison value', () => {
+      const guests = [
+        makeGuest(1, {
+          id: 'large-allocation',
+          name: 'large-allocation',
+          memory: { total: 100, used: 60, free: 40, usage: 60 },
+        }),
+        makeGuest(2, {
+          id: 'large-host-share',
+          name: 'large-host-share',
+          memory: { total: 100, used: 20, free: 80, usage: 20 },
+        }),
+      ];
+      const hostShare = new Map([
+        ['large-allocation', 10],
+        ['large-host-share', 40],
+      ]);
+      const comparator = createWorkloadSortComparator('memory', 'desc', {
+        memoryValue: (guest) => hostShare.get(guest.id),
+      });
+
+      expect([...guests].sort(comparator!).map((guest) => guest.id)).toEqual([
+        'large-host-share',
+        'large-allocation',
+      ]);
+    });
+
     it('sorts by disk usage percent via getDiskUsagePercent', () => {
       const guests = [
         makeGuest(1, {

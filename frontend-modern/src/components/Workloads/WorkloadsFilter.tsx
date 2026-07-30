@@ -10,14 +10,22 @@ import {
   type FilterDef,
   type FilterSelectOption,
 } from '@/components/shared/FilterBar';
-import { ChartVisibilityToggleButton, FilterActionButton } from '@/components/shared/FilterToolbar';
+import {
+  ChartVisibilityToggleButton,
+  FilterActionButton,
+  FilterSegmentedControl,
+} from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { isContainerWorkloadViewMode } from '@/utils/workloads';
 import type { ViewMode } from '@/types/workloads';
 import { MetricDisplayModeSegmentedControl } from './MetricDisplayModeSegmentedControl';
-import type { WorkloadsFilterProps, WorkloadsStatusMode } from './workloadsFilterModel';
+import type {
+  WorkloadsFilterProps,
+  WorkloadsMemoryDisplayBasis,
+  WorkloadsStatusMode,
+} from './workloadsFilterModel';
 import {
   DEFAULT_WORKLOADS_SORT_DIRECTION,
   DEFAULT_WORKLOADS_SORT_KEY,
@@ -266,6 +274,28 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
               onChange={props.setMetricDisplayMode!}
               range={props.metricHistoryRange?.()}
               onRangeChange={props.setMetricHistoryRange}
+            />
+          </Show>
+          <Show when={props.memoryDisplayBasis && props.setMemoryDisplayBasis}>
+            <FilterSegmentedControl
+              aria-label="Memory percentage basis"
+              label="Memory %"
+              value={props.memoryDisplayBasis!()}
+              onChange={(value) =>
+                props.setMemoryDisplayBasis!(value as WorkloadsMemoryDisplayBasis)
+              }
+              options={[
+                {
+                  value: 'guest',
+                  label: 'Guest',
+                  title: 'Show memory as a percentage of each guest allocation',
+                },
+                {
+                  value: 'host',
+                  label: 'Host',
+                  title: 'Show memory as a percentage of the Proxmox host total',
+                },
+              ]}
             />
           </Show>
           <Show when={props.onChartsToggle}>

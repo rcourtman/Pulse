@@ -72,6 +72,7 @@ type WorkloadPanelProps = Pick<
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
   | 'workloadMetricDisplayMode'
+  | 'workloadMemoryDisplayBasis'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
@@ -556,6 +557,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         onTagClick={props.handleTagClick}
                         activeSearch={props.search()}
                         parentNodeOnline={parentNodeOnline()}
+                        parentMemoryTotal={parentNode()?.memory?.total}
+                        parentNodeName={parentNode()?.name}
                         onCustomUrlUpdate={props.handleCustomUrlUpdate}
                         isGroupedView={props.groupingMode() === 'grouped'}
                         visibleColumnIds={props.workloadTableVisibleColumnIds()}
@@ -574,6 +577,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         })}
                         ioEmphasis={props.workloadIOEmphasis()}
                         metricDisplayMode={props.workloadMetricDisplayMode()}
+                        memoryDisplayBasis={props.workloadMemoryDisplayBasis()}
                         metricHistory={props.workloadMetricHistory}
                         nestedWorkloadContext={nestedWorkloadContext()}
                         onHoverChange={props.setHoveredWorkloadId}

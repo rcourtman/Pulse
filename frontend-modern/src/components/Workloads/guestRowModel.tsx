@@ -9,6 +9,7 @@ import type {
   WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
+import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
 export type WorkloadTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
 
@@ -88,6 +89,8 @@ export interface GuestRowProps {
   onTagClick?: (tag: string) => void;
   activeSearch?: string;
   parentNodeOnline?: boolean;
+  parentMemoryTotal?: number;
+  parentNodeName?: string;
   onCustomUrlUpdate?: (guestId: string, url: string) => void;
   isGroupedView?: boolean;
   visibleColumnIds?: string[];
@@ -97,6 +100,7 @@ export interface GuestRowProps {
   summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   ioEmphasis?: WorkloadIOEmphasis;
   metricDisplayMode?: 'bars' | 'sparklines';
+  memoryDisplayBasis?: WorkloadsMemoryDisplayBasis;
   metricHistory?: WorkloadMetricHistoryReader;
   nestedWorkloadContext?: Pick<NestedWorkloadContext, 'count' | 'label'>;
   workloadTableLayoutMode?: WorkloadTableLayoutMode;

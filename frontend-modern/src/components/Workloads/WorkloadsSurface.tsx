@@ -149,6 +149,9 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               setMetricDisplayMode={state.setWorkloadMetricDisplayMode}
               metricHistoryRange={state.workloadMetricHistoryRange}
               setMetricHistoryRange={state.setWorkloadMetricHistoryRange}
+              memoryDisplayBasis={
+                props.memoryDisplayBasis ? state.workloadMemoryDisplayBasis : undefined
+              }
               forcedPlatform={props.forcedPlatform}
               pinnedSelectionActive={() =>
                 Boolean(state.selectedGuestId() || state.focusedSummaryWorkloadGroupId())
@@ -208,6 +211,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             windowedGroupedGuests={state.windowedGroupedGuests}
             workloadIOEmphasis={state.workloadIOEmphasis}
             workloadMetricDisplayMode={state.workloadMetricDisplayMode}
+            workloadMemoryDisplayBasis={state.workloadMemoryDisplayBasis}
             workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}

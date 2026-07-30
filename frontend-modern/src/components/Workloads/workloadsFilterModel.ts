@@ -7,6 +7,7 @@ import type { WorkloadTableMetricHistoryRange } from './workloadMetricHistoryMod
 export type WorkloadsStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type WorkloadsGroupingMode = 'grouped' | 'flat';
 export type WorkloadsMetricDisplayMode = 'bars' | 'sparklines';
+export type WorkloadsMemoryDisplayBasis = 'guest' | 'host';
 export type WorkloadsSortKey = keyof WorkloadGuest | 'diskIo' | 'netIo';
 
 export interface WorkloadsStatusOption {
@@ -61,6 +62,8 @@ export interface WorkloadsFilterProps {
   setMetricDisplayMode?: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange?: () => WorkloadTableMetricHistoryRange;
   setMetricHistoryRange?: (value: WorkloadTableMetricHistoryRange) => void;
+  memoryDisplayBasis?: () => WorkloadsMemoryDisplayBasis;
+  setMemoryDisplayBasis?: (value: WorkloadsMemoryDisplayBasis) => void;
   pinnedSelectionActive?: () => boolean;
   onClearPinnedSelection?: () => void;
   searchTrailing?: JSX.Element;

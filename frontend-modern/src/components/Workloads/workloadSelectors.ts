@@ -237,6 +237,9 @@ export const getDiskUsagePercent = (guest: WorkloadGuest): number | null => {
 export const createWorkloadSortComparator = (
   sortKey: string,
   sortDirection: SortDirection,
+  options: {
+    memoryValue?: (guest: WorkloadGuest) => number | null | undefined;
+  } = {},
 ): ((a: WorkloadGuest, b: WorkloadGuest) => number) | null => {
   if (!sortKey) {
     return null;
@@ -257,8 +260,8 @@ export const createWorkloadSortComparator = (
       aVal = getWorkloadCPUPercent(a.cpu) ?? 0;
       bVal = getWorkloadCPUPercent(b.cpu) ?? 0;
     } else if (sortKey === 'memory') {
-      aVal = a.memory ? a.memory.usage || 0 : 0;
-      bVal = b.memory ? b.memory.usage || 0 : 0;
+      aVal = options.memoryValue ? (options.memoryValue(a) ?? 0) : a.memory?.usage || 0;
+      bVal = options.memoryValue ? (options.memoryValue(b) ?? 0) : b.memory?.usage || 0;
     } else if (sortKey === 'disk') {
       aVal = getDiskUsagePercent(a);
       bVal = getDiskUsagePercent(b);

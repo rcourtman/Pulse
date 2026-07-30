@@ -179,6 +179,7 @@ export const STORAGE_KEYS = {
   WORKLOADS_SEARCH_HISTORY: 'workloadsSearchHistory',
   WORKLOADS_METRIC_DISPLAY_MODE: 'workloadsMetricDisplayMode',
   WORKLOADS_METRIC_HISTORY_RANGE: 'workloadsMetricHistoryRange',
+  WORKLOADS_MEMORY_DISPLAY_BASIS: 'workloadsMemoryDisplayBasis',
   AGENTS_SEARCH_HISTORY: 'agentsSearchHistory',
 
   // Machines settings
