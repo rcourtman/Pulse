@@ -104,15 +104,17 @@ func TestCloneResource_MutateOriginalMetrics(t *testing.T) {
 
 func TestCloneResourceIsolatesCustomSensorValues(t *testing.T) {
 	value := 12.5
+	eventAt := time.Date(2026, 7, 30, 18, 0, 0, 0, time.UTC)
 	original := &Resource{
 		ID: "agent-custom",
 		Agent: &AgentData{
 			Sensors: &HostSensorMeta{
 				Custom: []HostCustomSensorMetric{{
-					ID:     "queue_depth",
-					Name:   "Queue depth",
-					Value:  &value,
-					Status: "warning",
+					ID:      "queue_depth",
+					Name:    "Queue depth",
+					Value:   &value,
+					EventAt: &eventAt,
+					Status:  "warning",
 				}},
 			},
 		},
@@ -126,6 +128,10 @@ func TestCloneResourceIsolatesCustomSensorValues(t *testing.T) {
 	cloned.Agent.Sensors.Custom[0].Name = "mutated"
 	if original.Agent.Sensors.Custom[0].Name != "Queue depth" {
 		t.Fatal("custom sensor slice was shared by clone")
+	}
+	*cloned.Agent.Sensors.Custom[0].EventAt = eventAt.Add(time.Hour)
+	if !original.Agent.Sensors.Custom[0].EventAt.Equal(eventAt) {
+		t.Fatal("custom sensor event time pointer was shared by clone")
 	}
 }
 

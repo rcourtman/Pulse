@@ -263,6 +263,47 @@ describe('resourceDetailMappers', () => {
         },
       ]);
     });
+
+    it('groups boolean and timestamp metrics and formats their typed values', () => {
+      expect(
+        buildCustomSensorRows({
+          custom: [
+            {
+              id: 'backup_age',
+              name: 'Last file backup',
+              group: 'Main server',
+              subgroup: 'Backup',
+              kind: 'timestamp',
+              value: 7_200,
+              status: 'warning',
+              observedAt: '2026-07-30T20:00:00Z',
+              eventAt: '2026-07-30T18:00:00Z',
+            },
+            {
+              id: 'dns_online',
+              name: 'DNS online',
+              group: 'Main server',
+              subgroup: 'Services',
+              kind: 'boolean',
+              value: 0,
+              status: 'critical',
+              observedAt: '2026-07-30T20:00:00Z',
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'Main server / Backup / Last file backup',
+          value: '2h ago',
+          valueTitle: '2h ago · Warning',
+        },
+        {
+          label: 'Main server / Services / DNS online',
+          value: 'Offline',
+          valueTitle: 'Offline · Critical',
+        },
+      ]);
+    });
   });
 
   describe('toNodeFromProxmox', () => {

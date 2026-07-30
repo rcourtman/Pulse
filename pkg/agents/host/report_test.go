@@ -92,6 +92,38 @@ func TestReport_JSONMarshal(t *testing.T) {
 	}
 }
 
+func TestCustomSensorMetricJSONRoundTrip(t *testing.T) {
+	value := 7200.0
+	eventAt := time.Date(2026, 7, 30, 18, 0, 0, 0, time.UTC)
+	original := CustomSensorMetric{
+		ID:           "backup_age",
+		Name:         "Last file backup",
+		Group:        "Main server",
+		Subgroup:     "Backup",
+		Kind:         CustomSensorKindTimestamp,
+		Unit:         "seconds",
+		Value:        &value,
+		Status:       CustomSensorStatusWarning,
+		ObservedAt:   time.Date(2026, 7, 30, 20, 0, 0, 0, time.UTC),
+		EventAt:      &eventAt,
+		AlertOnError: true,
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal custom sensor metric: %v", err)
+	}
+	var decoded CustomSensorMetric
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal custom sensor metric: %v", err)
+	}
+	if decoded.Group != original.Group || decoded.Subgroup != original.Subgroup ||
+		decoded.Kind != CustomSensorKindTimestamp || decoded.Value == nil ||
+		*decoded.Value != value || decoded.EventAt == nil || !decoded.EventAt.Equal(eventAt) {
+		t.Fatalf("custom sensor metric did not round trip: %+v", decoded)
+	}
+}
+
 func TestAgentInfo_Fields(t *testing.T) {
 	agent := AgentInfo{
 		ID:              "agent-123",

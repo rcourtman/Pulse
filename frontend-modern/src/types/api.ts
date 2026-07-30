@@ -552,10 +552,14 @@ export interface HostSensorSummary {
 export interface HostCustomSensorMetric {
   id: string;
   name: string;
+  group?: string;
+  subgroup?: string;
+  kind?: 'number' | 'boolean' | 'timestamp' | string;
   unit?: string;
   value?: number;
   status: 'ok' | 'warning' | 'critical' | 'error' | string;
   observedAt: string;
+  eventAt?: string;
   error?: string;
   alertOnError?: boolean;
   stale?: boolean;

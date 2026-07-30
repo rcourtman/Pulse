@@ -1684,11 +1684,13 @@ AI-only summary payloads, or page-local heuristics.
 
 `resourceFromHost` projects `models.HostSensorSummary.Custom` into
 `Agent.Sensors.Custom` with a private slice and numeric value pointers.
-Read-state cloning preserves identity, name, unit, status, observation time,
-bounded error, error-alert preference, and stale state without aliasing mutable
-host-model memory. The detail drawer reads this typed collection under
-**Custom Metrics**; it does not fold custom values into thermal metadata or
-change canonical resource identity. `TestResourceFromHostPreservesCustomSensorMeta`,
+Read-state cloning preserves identity, name, group, subgroup,
+numeric/boolean/timestamp kind, unit, status, observation time, optional event
+time, bounded error, error-alert preference, and stale state without aliasing
+mutable host-model memory. The detail drawer reads this typed collection under
+**Custom Metrics**, orders grouped labels, and renders boolean and event-age
+values without folding them into thermal metadata or changing canonical
+resource identity. `TestResourceFromHostPreservesCustomSensorMeta`,
 `TestCloneResourceIsolatesCustomSensorValues`, and
 `TestHostCustomSensorMetaJSONContract` pin adapter, clone, and JSON behavior.
 

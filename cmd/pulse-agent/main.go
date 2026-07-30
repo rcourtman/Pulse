@@ -1037,7 +1037,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
 	observersFileFlag := fs.String("observers-file", envObserversFile, "Absolute path to a private JSON file defining report-only Pulse observer destinations")
-	customSensorsFileFlag := fs.String("custom-sensors-file", envCustomSensorsFile, "Absolute path to a private YAML file defining local numeric sensor commands")
+	customSensorsFileFlag := fs.String("custom-sensors-file", envCustomSensorsFile, "Absolute path to a private YAML file defining command or REST custom metrics")
 	deploySSHUserFlag := fs.String("deploy-ssh-user", envDeploySSHUser, "SSH user for peer deploy fan-out (default: root; non-root requires passwordless sudo)")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 	logFileFlag := fs.String("log-file", envLogFile, "Write rotating JSON logs to this file")

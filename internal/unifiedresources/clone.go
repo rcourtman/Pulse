@@ -837,6 +837,7 @@ func cloneHostCustomSensors(in []HostCustomSensorMetric) []HostCustomSensorMetri
 	for i, metric := range in {
 		out[i] = metric
 		out[i].Value = cloneFloat64Ptr(metric.Value)
+		out[i].EventAt = cloneTimePtr(metric.EventAt)
 	}
 	return out
 }

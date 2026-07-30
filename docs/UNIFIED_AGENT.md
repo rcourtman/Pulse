@@ -136,11 +136,12 @@ containers or hardened service units without `CAP_NET_RAW`, ICMP checks fail;
 prefer TCP or HTTP checks there, or grant the capability. See "ICMP probe
 privileges" in docs/CONFIGURATION.md.
 
-## Custom numeric sensors
+## Custom metrics
 
-The host module can report numeric metrics produced by local executables. This
-is intended for site-specific signals such as queue depth, UPS load, pending
-updates, or an application counter that Pulse cannot collect natively.
+The host module can report numeric, boolean, and timestamp metrics produced by
+local executables or HTTP(S) REST endpoints. This is intended for site-specific
+signals such as queue depth, UPS load, service status, DNS update age, or a
+backup timestamp that Pulse cannot collect natively.
 
 Create a private YAML file:
 
@@ -156,14 +157,54 @@ sensors:
     warningAbove: 20
     criticalAbove: 50
     alertOnError: true
+
+  - id: main_dns_update
+    name: Main DNS update
+    group: Main server
+    subgroup: Domain
+    kind: timestamp
+    url: https://metrics.example.net/dns/main
+    interval: 1m
+    timeout: 2s
+    staleAfter: 10m
+    warningAbove: 3600
+    criticalAbove: 7200
+
+  - id: checkout_online
+    name: Checkout service
+    group: Main server
+    subgroup: Service statuses
+    kind: boolean
+    url: http://monitoring.internal/checkout
+    criticalBelow: 0.5
 ```
 
 Then start or restart the agent with
 `--custom-sensors-file /etc/pulse/custom-sensors.yaml`, or set
-`PULSE_CUSTOM_SENSORS_FILE` to that absolute path. Each command must be an
-absolute executable path, receives no arguments, and must write exactly one
-finite number to standard output. Put any query logic in the executable or
-script itself.
+`PULSE_CUSTOM_SENSORS_FILE` to that absolute path. Each metric configures
+exactly one source:
+
+- `command`: an absolute executable path. It receives no arguments and writes
+  one scalar to standard output.
+- `url`: an absolute HTTP(S) URL polled with `GET`. Redirects are not followed,
+  non-2xx responses fail, and the response is limited to 4 KiB.
+
+REST endpoints can return a plain scalar or a JSON object:
+
+```json
+{"value": 42.5, "observedAt": "2026-07-30T20:00:00Z"}
+```
+
+`value` may be a number, string, or boolean. `observedAt` is optional RFC3339
+source time. When `staleAfter` is configured, older source data becomes a stale
+error and follows `alertOnError`.
+
+`kind` defaults to `number`. Boolean metrics accept true/false, 1/0, yes/no,
+on/off, up/down, and online/offline; Pulse stores true as 1 and false as 0, so
+`criticalBelow: 0.5` alerts when a service is offline. Timestamp metrics accept
+RFC3339 or Unix seconds, display time since the event, and apply thresholds to
+the age in seconds. Optional `group` and `subgroup` values organize labels in
+the **Custom Metrics** card.
 
 The agent evaluates optional `warningAbove`, `criticalAbove`, `warningBelow`,
 and `criticalBelow` thresholds locally. Pulse displays the typed value and unit
@@ -172,12 +213,15 @@ failure alerts by default; set `alertOnError: false` to make failures
 report-only. If a probe fails after a successful reading, the last good value is
 shown as stale with its original observation time.
 
-This feature is deliberately local-only. The Pulse server and remote agent
-configuration cannot supply commands or arguments. The file is limited to 32
-sensors; intervals must be between 10 seconds and 24 hours; timeouts must be
-between 100 milliseconds and 10 seconds and shorter than the interval. At most
-four probes run concurrently, output is bounded, and each executable is
-revalidated before use.
+Configuration is deliberately local-only. The Pulse server and remote agent
+configuration cannot supply commands, URLs, or arguments. The file is limited
+to 32 metrics; intervals must be between 10 seconds and 24 hours; timeouts must
+be between 100 milliseconds and 10 seconds and shorter than the interval.
+`staleAfter` must be between 10 seconds and 30 days. At most four probes run
+concurrently, output is bounded, HTTP credentials in URLs are rejected, and
+each executable is revalidated before use. Standard TLS certificate validation
+applies to HTTPS endpoints; use network policy to constrain destinations where
+required.
 
 On POSIX systems, the YAML file must be a regular, non-symlink file owned by
 the agent service user with no group/other permissions (normally mode `0600`).
@@ -198,7 +242,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
 | `--observers-file` | `PULSE_OBSERVERS_FILE` | Private JSON file defining report-only destinations | *(none)* |
-| `--custom-sensors-file` | `PULSE_CUSTOM_SENSORS_FILE` | Private YAML file defining local numeric sensor executables and thresholds | *(none)* |
+| `--custom-sensors-file` | `PULSE_CUSTOM_SENSORS_FILE` | Private YAML file defining command/REST custom metrics and thresholds | *(none)* |
 | `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |

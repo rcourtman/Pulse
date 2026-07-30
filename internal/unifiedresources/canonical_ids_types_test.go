@@ -69,14 +69,19 @@ func TestHostSMARTMetaCarriesSizeBytesJSONContract(t *testing.T) {
 func TestHostCustomSensorMetaJSONContract(t *testing.T) {
 	value := 12.5
 	observedAt := "2026-07-30T19:00:00Z"
+	eventAt := "2026-07-30T18:00:00Z"
 	payload := HostSensorMeta{
 		Custom: []HostCustomSensorMetric{{
 			ID:         "queue_depth",
 			Name:       "Queue depth",
+			Group:      "Main server",
+			Subgroup:   "Backup",
+			Kind:       "timestamp",
 			Unit:       "items",
 			Value:      &value,
 			Status:     "warning",
 			ObservedAt: time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC),
+			EventAt:    timePointer(time.Date(2026, 7, 30, 18, 0, 0, 0, time.UTC)),
 		}},
 	}
 
@@ -87,9 +92,13 @@ func TestHostCustomSensorMetaJSONContract(t *testing.T) {
 	for _, expected := range []string{
 		`"custom":[`,
 		`"id":"queue_depth"`,
+		`"group":"Main server"`,
+		`"subgroup":"Backup"`,
+		`"kind":"timestamp"`,
 		`"value":12.5`,
 		`"status":"warning"`,
 		`"observedAt":"` + observedAt + `"`,
+		`"eventAt":"` + eventAt + `"`,
 	} {
 		if !strings.Contains(string(data), expected) {
 			t.Fatalf("custom sensor JSON missing %s: %s", expected, data)

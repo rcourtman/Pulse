@@ -3,6 +3,8 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -67,6 +69,41 @@ sensors:
 	}
 }
 
+func TestLoadCustomSensorDefinitionsSupportsGroupedHTTPKinds(t *testing.T) {
+	configPath, _ := writeCustomSensorFixture(t, `version: 1
+sensors:
+  - id: dns_update
+    name: Main DNS update
+    group: Main server
+    subgroup: Domain
+    kind: timestamp
+    url: https://metrics.example.test/dns
+    interval: 1m
+    timeout: 2s
+    staleAfter: 10m
+    warningAbove: 3600
+    criticalAbove: 7200
+`)
+
+	definitions, err := loadCustomSensorDefinitions(configPath)
+	if err != nil {
+		t.Fatalf("loadCustomSensorDefinitions: %v", err)
+	}
+	if len(definitions) != 1 {
+		t.Fatalf("definition count = %d, want 1", len(definitions))
+	}
+	definition := definitions[0]
+	if definition.Command != "" || definition.URL != "https://metrics.example.test/dns" {
+		t.Fatalf("unexpected HTTP source: %+v", definition)
+	}
+	if definition.Group != "Main server" || definition.Subgroup != "Domain" || definition.Kind != agentshost.CustomSensorKindTimestamp {
+		t.Fatalf("unexpected grouped kind: %+v", definition)
+	}
+	if definition.StaleAfter != 10*time.Minute {
+		t.Fatalf("staleAfter = %s, want 10m", definition.StaleAfter)
+	}
+}
+
 func TestLoadCustomSensorDefinitionsRejectsUnsafeAndAmbiguousConfiguration(t *testing.T) {
 	t.Run("unknown field", func(t *testing.T) {
 		configPath, _ := writeCustomSensorFixture(t, `version: 1
@@ -90,6 +127,31 @@ sensors:
 `)
 		if _, err := loadCustomSensorDefinitions(configPath); err == nil || !strings.Contains(err.Error(), "absolute path") {
 			t.Fatalf("expected relative command rejection, got %v", err)
+		}
+	})
+
+	t.Run("ambiguous source", func(t *testing.T) {
+		configPath, _ := writeCustomSensorFixture(t, `version: 1
+sensors:
+  - id: metric
+    name: Metric
+    command: __COMMAND__
+    url: https://metrics.example.test/value
+`)
+		if _, err := loadCustomSensorDefinitions(configPath); err == nil || !strings.Contains(err.Error(), "exactly one") {
+			t.Fatalf("expected ambiguous source rejection, got %v", err)
+		}
+	})
+
+	t.Run("unsafe url", func(t *testing.T) {
+		configPath, _ := writeCustomSensorFixture(t, `version: 1
+sensors:
+  - id: metric
+    name: Metric
+    url: file:///etc/passwd
+`)
+		if _, err := loadCustomSensorDefinitions(configPath); err == nil || !strings.Contains(err.Error(), "scheme") {
+			t.Fatalf("expected URL scheme rejection, got %v", err)
 		}
 	})
 
@@ -271,6 +333,80 @@ func TestParseCustomSensorValueAndStatus(t *testing.T) {
 	}
 	if got := customSensorStatus(definition, 11); got != agentshost.CustomSensorStatusOK {
 		t.Fatalf("healthy status = %q", got)
+	}
+}
+
+func TestCustomSensorKindsAndHTTPFreshness(t *testing.T) {
+	now := time.Date(2026, 7, 30, 20, 0, 0, 0, time.UTC)
+	booleanValue, eventAt, err := parseCustomSensorValueForKind("offline", agentshost.CustomSensorKindBoolean, now)
+	if err != nil || booleanValue != 0 || eventAt != nil {
+		t.Fatalf("boolean parse = %v, %v, %v", booleanValue, eventAt, err)
+	}
+	age, eventAt, err := parseCustomSensorValueForKind("2026-07-30T18:30:00Z", agentshost.CustomSensorKindTimestamp, now)
+	if err != nil || age != 90*time.Minute.Seconds() || eventAt == nil || !eventAt.Equal(now.Add(-90*time.Minute)) {
+		t.Fatalf("timestamp parse = %v, %v, %v", age, eventAt, err)
+	}
+
+	criticalBelow := 0.5
+	definition := customSensorDefinition{
+		ID:            "service",
+		Name:          "Service online",
+		Group:         "Main server",
+		Subgroup:      "Services",
+		Kind:          agentshost.CustomSensorKindBoolean,
+		URL:           "https://metrics.example.test/service",
+		Interval:      time.Minute,
+		Timeout:       time.Second,
+		StaleAfter:    5 * time.Minute,
+		CriticalBelow: &criticalBelow,
+		AlertOnError:  true,
+	}
+	customRuntime := newCustomSensorRuntime([]customSensorDefinition{definition}, nil)
+	customRuntime.now = func() time.Time { return now }
+	customRuntime.fetchHTTP = func(context.Context, string) (customSensorSourceReading, error) {
+		return customSensorSourceReading{output: "true", observedAt: now.Add(-10 * time.Minute)}, nil
+	}
+	readings := customRuntime.collect(context.Background())
+	if len(readings) != 1 || readings[0].Status != agentshost.CustomSensorStatusError || !readings[0].Stale {
+		t.Fatalf("expected stale HTTP reading: %+v", readings)
+	}
+	if readings[0].Group != "Main server" || readings[0].Subgroup != "Services" || readings[0].Value == nil || *readings[0].Value != 1 {
+		t.Fatalf("HTTP reading metadata/value not preserved: %+v", readings[0])
+	}
+}
+
+func TestFetchCustomSensorHTTPAcceptsBoundedScalarAndJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/json" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"value":false,"observedAt":"2026-07-30T19:00:00Z"}`))
+			return
+		}
+		if request.URL.Path == "/redirect" {
+			http.Redirect(w, request, "https://example.test/secret", http.StatusFound)
+			return
+		}
+		if request.URL.Path == "/large" {
+			_, _ = w.Write([]byte(strings.Repeat("1", maxCustomSensorOutputBytes+1)))
+			return
+		}
+		_, _ = w.Write([]byte("42.5\n"))
+	}))
+	defer server.Close()
+
+	scalar, err := fetchCustomSensorHTTP(context.Background(), server.URL+"/scalar")
+	if err != nil || scalar.output != "42.5" {
+		t.Fatalf("scalar HTTP reading = %+v, %v", scalar, err)
+	}
+	jsonReading, err := fetchCustomSensorHTTP(context.Background(), server.URL+"/json")
+	if err != nil || jsonReading.output != "false" || !jsonReading.observedAt.Equal(time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)) {
+		t.Fatalf("JSON HTTP reading = %+v, %v", jsonReading, err)
+	}
+	if _, err := fetchCustomSensorHTTP(context.Background(), server.URL+"/redirect"); err == nil || !strings.Contains(err.Error(), "status 302") {
+		t.Fatalf("expected redirect rejection, got %v", err)
+	}
+	if _, err := fetchCustomSensorHTTP(context.Background(), server.URL+"/large"); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected oversized response rejection, got %v", err)
 	}
 }
 

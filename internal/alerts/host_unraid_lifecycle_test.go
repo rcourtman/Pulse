@@ -12,6 +12,7 @@ func TestHostCustomSensorAlertLifecycle(t *testing.T) {
 	manager := newTestManager(t)
 	manager.ClearActiveAlerts()
 	value := 23.0
+	eventAt := time.Now().UTC().Add(-2 * time.Hour)
 	host := models.Host{
 		ID:          "custom-sensor-host",
 		Hostname:    "edge-1",
@@ -20,18 +21,34 @@ func TestHostCustomSensorAlertLifecycle(t *testing.T) {
 			Custom: []models.HostCustomSensorMetric{{
 				ID:           "queue_depth",
 				Name:         "Queue depth",
+				Group:        "Main server",
+				Subgroup:     "Backup",
+				Kind:         "timestamp",
 				Unit:         "items",
 				Value:        &value,
 				Status:       "critical",
 				ObservedAt:   time.Now().UTC(),
+				EventAt:      &eventAt,
 				AlertOnError: true,
 			}},
 		},
 	}
 
 	manager.CheckHost(host)
-	if !hasAlertType(manager.GetActiveAlerts(), "custom-sensor") {
+	active := manager.GetActiveAlerts()
+	if !hasAlertType(active, "custom-sensor") {
 		t.Fatal("expected custom sensor alert")
+	}
+	for _, alert := range active {
+		if alert.Type != "custom-sensor" {
+			continue
+		}
+		if alert.Metadata["customSensorGroup"] != "Main server" ||
+			alert.Metadata["customSensorSubgroup"] != "Backup" ||
+			alert.Metadata["customSensorKind"] != "timestamp" ||
+			alert.Metadata["customSensorEventAt"] != eventAt.Format(time.RFC3339) {
+			t.Fatalf("custom sensor alert metadata = %#v", alert.Metadata)
+		}
 	}
 
 	host.Sensors.Custom[0].Status = "ok"

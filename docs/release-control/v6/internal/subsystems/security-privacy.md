@@ -597,19 +597,23 @@ tokens, and path-normalization variants.
 
 ## Current State
 
-### Custom sensor execution authority is local-only and fail-closed
+### Custom metric source authority is local-only and fail-closed
 
-`pulse-agent` may load site-defined numeric probes only from the absolute path
+`pulse-agent` may load site-defined probes only from the absolute path
 named by `--custom-sensors-file` or `PULSE_CUSTOM_SENSORS_FILE`. Server
 profiles, remote configuration, AI tooling, and command transport cannot author
-the executable or arguments. The strict versioned YAML schema accepts absolute
-executables with no shell or arguments; POSIX ownership, permissions, and
-symlink checks protect the config, executable, and immediate parent directory,
-and the executable is revalidated before each run. Count, concurrency, timeout,
-stdout, and error sizes are bounded. Probe stderr is discarded so credentials
-or query detail cannot enter reports or alerts; tests in
+the executable, REST URL, or arguments. The strict versioned YAML schema accepts
+exactly one absolute executable or HTTP(S) URL per metric. Executables use no
+shell or arguments; POSIX ownership, permissions, and symlink checks protect the
+config, executable, and immediate parent directory, and the executable is
+revalidated before each run. REST URLs reject embedded credentials and
+fragments, retain standard TLS validation, do not follow redirects, and expose
+neither the configured URL nor transport errors that could contain query
+credentials in reports. Count, concurrency, timeout, output, response, label,
+and error sizes are bounded. Probe stderr is discarded so credentials or query
+detail cannot enter reports or alerts; tests in
 `internal/hostagent/custom_sensors_test.go` pin unsafe-config rejection and the
-stderr boundary.
+stderr, REST-shape, freshness, and response-size boundaries.
 
 ### System settings mutation surface no longer accepts dead schedule inputs
 

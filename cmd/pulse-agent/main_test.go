@@ -978,7 +978,7 @@ func TestLoadConfig(t *testing.T) {
 			t.Errorf("expected deploy SSH user from env, got %s", cfg.DeploySSHUser)
 		}
 		if cfg.CustomSensorsFile != "/etc/pulse/custom-sensors.yaml" {
-			t.Errorf("expected custom sensors file from env, got %s", cfg.CustomSensorsFile)
+			t.Errorf("expected command/REST custom metrics file from env, got %s", cfg.CustomSensorsFile)
 		}
 	})
 
@@ -1006,7 +1006,7 @@ func TestLoadConfig(t *testing.T) {
 			t.Errorf("expected deploy SSH user from flag, got %s", cfg.DeploySSHUser)
 		}
 		if cfg.CustomSensorsFile != "/tmp/custom-sensors.yaml" {
-			t.Errorf("expected custom sensors file from flag, got %s", cfg.CustomSensorsFile)
+			t.Errorf("expected command/REST custom metrics file from flag, got %s", cfg.CustomSensorsFile)
 		}
 	})
 

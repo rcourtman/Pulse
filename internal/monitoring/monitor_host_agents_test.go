@@ -536,14 +536,19 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 func TestHostSensorsFromReadStateViewPreservesTypedSensorData(t *testing.T) {
 	customValue := 12.5
 	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
+	eventAt := observedAt.Add(-2 * time.Hour)
 	sensors := &unifiedresources.HostSensorMeta{
 		Custom: []unifiedresources.HostCustomSensorMetric{{
 			ID:           "queue_depth",
 			Name:         "Queue depth",
+			Group:        "Main server",
+			Subgroup:     "Backup",
+			Kind:         "timestamp",
 			Unit:         "items",
 			Value:        &customValue,
 			Status:       "warning",
 			ObservedAt:   observedAt,
+			EventAt:      &eventAt,
 			AlertOnError: true,
 		}},
 		SMART: []unifiedresources.HostSMARTMeta{
@@ -572,12 +577,19 @@ func TestHostSensorsFromReadStateViewPreservesTypedSensorData(t *testing.T) {
 	if len(got.Custom) != 1 || got.Custom[0].Value == nil || *got.Custom[0].Value != customValue {
 		t.Fatalf("custom sensors = %+v, want one typed reading", got.Custom)
 	}
-	if got.Custom[0].ObservedAt != observedAt || got.Custom[0].Status != "warning" || !got.Custom[0].AlertOnError {
+	if got.Custom[0].ObservedAt != observedAt || got.Custom[0].EventAt == nil ||
+		!got.Custom[0].EventAt.Equal(eventAt) || got.Custom[0].Group != "Main server" ||
+		got.Custom[0].Subgroup != "Backup" || got.Custom[0].Kind != "timestamp" ||
+		got.Custom[0].Status != "warning" || !got.Custom[0].AlertOnError {
 		t.Fatalf("custom sensor metadata was not preserved: %+v", got.Custom[0])
 	}
 	customValue = 99
 	if *got.Custom[0].Value != 12.5 {
 		t.Fatalf("custom sensor value was not cloned: %v", *got.Custom[0].Value)
+	}
+	eventAt = eventAt.Add(time.Hour)
+	if got.Custom[0].EventAt.Equal(eventAt) {
+		t.Fatal("custom sensor event time was not cloned")
 	}
 }
 

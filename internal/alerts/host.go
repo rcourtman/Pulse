@@ -954,6 +954,9 @@ func (m *Manager) syncHostCustomSensorAlerts(host models.Host, nodeName, instanc
 		metadata["metric"] = "customSensor"
 		metadata["customSensorId"] = metric.ID
 		metadata["customSensorName"] = metric.Name
+		metadata["customSensorGroup"] = metric.Group
+		metadata["customSensorSubgroup"] = metric.Subgroup
+		metadata["customSensorKind"] = metric.Kind
 		metadata["customSensorUnit"] = metric.Unit
 		metadata["customSensorStatus"] = metric.Status
 		metadata["customSensorStale"] = metric.Stale
@@ -962,6 +965,9 @@ func (m *Manager) syncHostCustomSensorAlerts(host models.Host, nodeName, instanc
 		}
 		if metric.Error != "" {
 			metadata["customSensorError"] = metric.Error
+		}
+		if metric.EventAt != nil {
+			metadata["customSensorEventAt"] = metric.EventAt.UTC().Format(time.RFC3339)
 		}
 
 		resourceName := fmt.Sprintf("%s - %s", hostDisplayName(host), metric.Name)

@@ -619,15 +619,19 @@ type HostSensorMeta struct {
 }
 
 type HostCustomSensorMetric struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Unit         string    `json:"unit,omitempty"`
-	Value        *float64  `json:"value,omitempty"`
-	Status       string    `json:"status"`
-	ObservedAt   time.Time `json:"observedAt"`
-	Error        string    `json:"error,omitempty"`
-	AlertOnError bool      `json:"alertOnError,omitempty"`
-	Stale        bool      `json:"stale,omitempty"`
+	ID           string     `json:"id"`
+	Name         string     `json:"name"`
+	Group        string     `json:"group,omitempty"`
+	Subgroup     string     `json:"subgroup,omitempty"`
+	Kind         string     `json:"kind,omitempty"`
+	Unit         string     `json:"unit,omitempty"`
+	Value        *float64   `json:"value,omitempty"`
+	Status       string     `json:"status"`
+	ObservedAt   time.Time  `json:"observedAt"`
+	EventAt      *time.Time `json:"eventAt,omitempty"`
+	Error        string     `json:"error,omitempty"`
+	AlertOnError bool       `json:"alertOnError,omitempty"`
+	Stale        bool       `json:"stale,omitempty"`
 }
 
 type HostGPUSensor struct {

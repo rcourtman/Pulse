@@ -2299,19 +2299,26 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
-### Local custom numeric sensors are a bounded reporting module
+### Local command and REST custom metrics are a bounded reporting module
 
 The host agent now accepts an optional private version-1 YAML file through
 `--custom-sensors-file` / `PULSE_CUSTOM_SENSORS_FILE`. Each of at most 32
-definitions names one absolute local executable, collection interval, timeout,
-unit, and optional upper/lower warning and critical thresholds. The executable
-receives no arguments and must emit exactly one finite number. Collection is
+definitions names exactly one absolute local executable or HTTP(S) REST URL,
+plus collection interval, timeout, optional group/subgroup, numeric, boolean,
+or timestamp kind, source-freshness limit, and upper/lower warning and critical
+thresholds. Executables receive no arguments; REST collection uses bounded GET
+requests without redirects and accepts one scalar or a bounded JSON
+`value`/`observedAt` object. Boolean values normalize to 1/0 and timestamp
+values to event age in seconds before threshold evaluation. Collection remains
 bounded to four concurrent executions inside the existing ten-second host
 collection context; last-good values survive failures as stale evidence with
-their original observation time. The resulting typed `sensors.custom` array is
-reporting data only and grants no command, enrollment, lifecycle, remote-shell,
-or AI authority. Agent initialization fails closed on invalid configuration,
-and Windows service startup carries the same optional file path.
+their original observation and event times. The resulting typed
+`sensors.custom` array is reporting data only and grants no command, enrollment,
+lifecycle, remote-shell, or AI authority. Agent initialization fails closed on
+invalid configuration, and Windows service startup carries the same optional
+file path. `TestLoadConfig`, `TestCustomSensorKindsAndHTTPFreshness`, and
+`TestCustomSensorMetricJSONRoundTrip` pin CLI plumbing, runtime semantics, and
+the additive report wire shape.
 
 ### Rootful Docker outranks rootless socket discovery and runtime labels are truthful
 

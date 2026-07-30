@@ -3,10 +3,13 @@ package hostagent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +30,7 @@ const (
 	maxCustomSensorConfigBytes  = 64 * 1024
 	maxCustomSensorOutputBytes  = 4 * 1024
 	maxCustomSensorErrorBytes   = 256
+	maxCustomSensorLabelBytes   = 64
 	maxCustomSensors            = 32
 	maxConcurrentCustomSensors  = 4
 	defaultCustomSensorInterval = 5 * time.Minute
@@ -35,6 +39,7 @@ const (
 	maxCustomSensorInterval     = 24 * time.Hour
 	minCustomSensorTimeout      = 100 * time.Millisecond
 	maxCustomSensorTimeout      = 10 * time.Second
+	maxCustomSensorFutureSkew   = 5 * time.Minute
 )
 
 var (
@@ -50,10 +55,15 @@ type customSensorFile struct {
 type customSensorFileEntry struct {
 	ID            string   `yaml:"id"`
 	Name          string   `yaml:"name"`
-	Command       string   `yaml:"command"`
+	Group         string   `yaml:"group,omitempty"`
+	Subgroup      string   `yaml:"subgroup,omitempty"`
+	Kind          string   `yaml:"kind,omitempty"`
+	Command       string   `yaml:"command,omitempty"`
+	URL           string   `yaml:"url,omitempty"`
 	Unit          string   `yaml:"unit,omitempty"`
 	Interval      string   `yaml:"interval,omitempty"`
 	Timeout       string   `yaml:"timeout,omitempty"`
+	StaleAfter    string   `yaml:"staleAfter,omitempty"`
 	WarningAbove  *float64 `yaml:"warningAbove,omitempty"`
 	CriticalAbove *float64 `yaml:"criticalAbove,omitempty"`
 	WarningBelow  *float64 `yaml:"warningBelow,omitempty"`
@@ -64,10 +74,15 @@ type customSensorFileEntry struct {
 type customSensorDefinition struct {
 	ID            string
 	Name          string
+	Group         string
+	Subgroup      string
+	Kind          string
 	Command       string
+	URL           string
 	Unit          string
 	Interval      time.Duration
 	Timeout       time.Duration
+	StaleAfter    time.Duration
 	WarningAbove  *float64
 	CriticalAbove *float64
 	WarningBelow  *float64
@@ -76,6 +91,12 @@ type customSensorDefinition struct {
 }
 
 type customSensorExecution func(context.Context, string) (string, error)
+type customSensorHTTPFetch func(context.Context, string) (customSensorSourceReading, error)
+
+type customSensorSourceReading struct {
+	output     string
+	observedAt time.Time
+}
 
 type customSensorRuntimeState struct {
 	reading agentshost.CustomSensorMetric
@@ -88,6 +109,7 @@ type customSensorRuntime struct {
 	definitions []customSensorDefinition
 	states      map[string]customSensorRuntimeState
 	execute     customSensorExecution
+	fetchHTTP   customSensorHTTPFetch
 	now         func() time.Time
 }
 
@@ -164,12 +186,44 @@ func resolveCustomSensorDefinition(entry customSensorFileEntry) (customSensorDef
 		return customSensorDefinition{}, errors.New("unit contains unsupported characters or exceeds 24 characters")
 	}
 
-	command := filepath.Clean(strings.TrimSpace(entry.Command))
-	if !filepath.IsAbs(command) {
-		return customSensorDefinition{}, errors.New("command must be an absolute path")
-	}
-	if err := validateCustomSensorCommandFile(command); err != nil {
+	group, err := validateCustomSensorLabel(entry.Group, "group")
+	if err != nil {
 		return customSensorDefinition{}, err
+	}
+	subgroup, err := validateCustomSensorLabel(entry.Subgroup, "subgroup")
+	if err != nil {
+		return customSensorDefinition{}, err
+	}
+	kind := strings.ToLower(strings.TrimSpace(entry.Kind))
+	if kind == "" {
+		kind = agentshost.CustomSensorKindNumber
+	}
+	switch kind {
+	case agentshost.CustomSensorKindNumber, agentshost.CustomSensorKindBoolean, agentshost.CustomSensorKindTimestamp:
+	default:
+		return customSensorDefinition{}, errors.New("kind must be number, boolean, or timestamp")
+	}
+
+	command := strings.TrimSpace(entry.Command)
+	sourceURL := strings.TrimSpace(entry.URL)
+	if (command == "") == (sourceURL == "") {
+		return customSensorDefinition{}, errors.New("exactly one of command or url must be configured")
+	}
+	if command != "" {
+		command = filepath.Clean(command)
+		if !filepath.IsAbs(command) {
+			return customSensorDefinition{}, errors.New("command must be an absolute path")
+		}
+		if err := validateCustomSensorCommandFile(command); err != nil {
+			return customSensorDefinition{}, err
+		}
+	}
+	if sourceURL != "" {
+		normalizedURL, err := validateCustomSensorURL(sourceURL)
+		if err != nil {
+			return customSensorDefinition{}, err
+		}
+		sourceURL = normalizedURL
 	}
 
 	interval, err := parseCustomSensorDuration(entry.Interval, defaultCustomSensorInterval, minCustomSensorInterval, maxCustomSensorInterval, "interval")
@@ -182,6 +236,13 @@ func resolveCustomSensorDefinition(entry customSensorFileEntry) (customSensorDef
 	}
 	if timeout >= interval {
 		return customSensorDefinition{}, errors.New("timeout must be shorter than interval")
+	}
+	staleAfter, err := parseOptionalCustomSensorDuration(entry.StaleAfter, minCustomSensorInterval, 30*24*time.Hour, "staleAfter")
+	if err != nil {
+		return customSensorDefinition{}, err
+	}
+	if staleAfter > 0 && sourceURL == "" {
+		return customSensorDefinition{}, errors.New("staleAfter requires an HTTP url source with observedAt data")
 	}
 	for label, value := range map[string]*float64{
 		"warningAbove":  entry.WarningAbove,
@@ -218,16 +279,45 @@ func resolveCustomSensorDefinition(entry customSensorFileEntry) (customSensorDef
 	return customSensorDefinition{
 		ID:            id,
 		Name:          name,
+		Group:         group,
+		Subgroup:      subgroup,
+		Kind:          kind,
 		Command:       command,
+		URL:           sourceURL,
 		Unit:          unit,
 		Interval:      interval,
 		Timeout:       timeout,
+		StaleAfter:    staleAfter,
 		WarningAbove:  cloneFloat64(entry.WarningAbove),
 		CriticalAbove: cloneFloat64(entry.CriticalAbove),
 		WarningBelow:  cloneFloat64(entry.WarningBelow),
 		CriticalBelow: cloneFloat64(entry.CriticalBelow),
 		AlertOnError:  alertOnError,
 	}, nil
+}
+
+func validateCustomSensorLabel(raw, label string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if len(value) > maxCustomSensorLabelBytes || strings.IndexFunc(value, func(character rune) bool {
+		return character == '\n' || character == '\r' || !unicode.IsPrint(character)
+	}) >= 0 {
+		return "", fmt.Errorf("%s must be at most %d printable characters on one line", label, maxCustomSensorLabelBytes)
+	}
+	return value, nil
+}
+
+func validateCustomSensorURL(raw string) (string, error) {
+	parsed, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return "", errors.New("url must be a valid absolute HTTP(S) URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", errors.New("url scheme must be http or https")
+	}
+	if parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
+		return "", errors.New("url must include a host and must not include credentials or a fragment")
+	}
+	return parsed.String(), nil
 }
 
 func parseCustomSensorDuration(raw string, fallback, minimum, maximum time.Duration, label string) (time.Duration, error) {
@@ -243,6 +333,13 @@ func parseCustomSensorDuration(raw string, fallback, minimum, maximum time.Durat
 		return 0, fmt.Errorf("%s must be between %s and %s", label, minimum, maximum)
 	}
 	return parsed, nil
+}
+
+func parseOptionalCustomSensorDuration(raw string, minimum, maximum time.Duration, label string) (time.Duration, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 0, nil
+	}
+	return parseCustomSensorDuration(raw, 0, minimum, maximum, label)
 }
 
 func validateCustomSensorConfigFile(path string) error {
@@ -315,6 +412,7 @@ func newCustomSensorRuntime(definitions []customSensorDefinition, execute custom
 		definitions: append([]customSensorDefinition(nil), definitions...),
 		states:      make(map[string]customSensorRuntimeState, len(definitions)),
 		execute:     execute,
+		fetchHTTP:   fetchCustomSensorHTTP,
 		now:         time.Now,
 	}
 }
@@ -394,26 +492,54 @@ func (runtimeState *customSensorRuntime) collect(ctx context.Context) []agentsho
 }
 
 func (runtimeState *customSensorRuntime) executeOne(parent context.Context, definition customSensorDefinition, previous *agentshost.CustomSensorMetric, observedAt time.Time) agentshost.CustomSensorMetric {
-	if err := validateCustomSensorCommandFile(definition.Command); err != nil {
-		return customSensorErrorReading(definition, previous, observedAt, errors.New("custom sensor command failed security validation"))
-	}
 	ctx, cancel := context.WithTimeout(parent, definition.Timeout)
 	defer cancel()
 
-	output, err := runtimeState.execute(ctx, definition.Command)
+	sourceReading := customSensorSourceReading{observedAt: observedAt}
+	var err error
+	if definition.Command != "" {
+		if err := validateCustomSensorCommandFile(definition.Command); err != nil {
+			return customSensorErrorReading(definition, previous, observedAt, errors.New("custom sensor command failed security validation"))
+		}
+		sourceReading.output, err = runtimeState.execute(ctx, definition.Command)
+	} else {
+		sourceReading, err = runtimeState.fetchHTTP(ctx, definition.URL)
+		if sourceReading.observedAt.IsZero() {
+			sourceReading.observedAt = observedAt
+		}
+	}
 	if err != nil {
 		return customSensorErrorReading(definition, previous, observedAt, err)
 	}
-	value, err := parseCustomSensorValue(output)
+	if sourceReading.observedAt.After(observedAt.Add(maxCustomSensorFutureSkew)) {
+		return customSensorErrorReading(definition, previous, observedAt, errors.New("custom sensor source observation time is in the future"))
+	}
+	value, eventAt, err := parseCustomSensorValueForKind(sourceReading.output, definition.Kind, observedAt)
 	if err != nil {
 		return customSensorErrorReading(definition, previous, observedAt, err)
+	}
+	if definition.StaleAfter > 0 && observedAt.Sub(sourceReading.observedAt) > definition.StaleAfter {
+		reading := customSensorMetric(definition, &value, agentshost.CustomSensorStatusError, sourceReading.observedAt)
+		reading.EventAt = eventAt
+		reading.Stale = true
+		reading.Error = fmt.Sprintf("source data is stale; last observed at %s", sourceReading.observedAt.UTC().Format(time.RFC3339))
+		return reading
 	}
 	status := customSensorStatus(definition, value)
+	reading := customSensorMetric(definition, &value, status, sourceReading.observedAt)
+	reading.EventAt = eventAt
+	return reading
+}
+
+func customSensorMetric(definition customSensorDefinition, value *float64, status string, observedAt time.Time) agentshost.CustomSensorMetric {
 	return agentshost.CustomSensorMetric{
 		ID:           definition.ID,
 		Name:         definition.Name,
+		Group:        definition.Group,
+		Subgroup:     definition.Subgroup,
+		Kind:         definition.Kind,
 		Unit:         definition.Unit,
-		Value:        &value,
+		Value:        value,
 		Status:       status,
 		ObservedAt:   observedAt,
 		AlertOnError: definition.AlertOnError,
@@ -421,19 +547,13 @@ func (runtimeState *customSensorRuntime) executeOne(parent context.Context, defi
 }
 
 func customSensorErrorReading(definition customSensorDefinition, previous *agentshost.CustomSensorMetric, observedAt time.Time, err error) agentshost.CustomSensorMetric {
-	reading := agentshost.CustomSensorMetric{
-		ID:           definition.ID,
-		Name:         definition.Name,
-		Unit:         definition.Unit,
-		Status:       agentshost.CustomSensorStatusError,
-		ObservedAt:   observedAt,
-		AlertOnError: definition.AlertOnError,
-		Error:        boundedCustomSensorError(err),
-	}
+	reading := customSensorMetric(definition, nil, agentshost.CustomSensorStatusError, observedAt)
+	reading.Error = boundedCustomSensorError(err)
 	if previous != nil && previous.Value != nil {
 		value := *previous.Value
 		reading.Value = &value
 		reading.ObservedAt = previous.ObservedAt
+		reading.EventAt = cloneTime(previous.EventAt)
 		reading.Stale = true
 	}
 	return reading
@@ -451,6 +571,48 @@ func parseCustomSensorValue(output string) (float64, error) {
 	return value, nil
 }
 
+func parseCustomSensorValueForKind(output, kind string, now time.Time) (float64, *time.Time, error) {
+	switch kind {
+	case agentshost.CustomSensorKindBoolean:
+		switch strings.ToLower(strings.TrimSpace(output)) {
+		case "1", "true", "yes", "on", "up", "online", "healthy":
+			return 1, nil, nil
+		case "0", "false", "no", "off", "down", "offline", "unhealthy":
+			return 0, nil, nil
+		default:
+			return 0, nil, errors.New("boolean custom sensor output must be true/false, 1/0, yes/no, on/off, up/down, or online/offline")
+		}
+	case agentshost.CustomSensorKindTimestamp:
+		eventAt, err := parseCustomSensorTimestamp(output)
+		if err != nil {
+			return 0, nil, err
+		}
+		if eventAt.After(now.Add(maxCustomSensorFutureSkew)) {
+			return 0, nil, errors.New("timestamp custom sensor event time is in the future")
+		}
+		age := now.Sub(eventAt).Seconds()
+		if age < 0 {
+			age = 0
+		}
+		return age, &eventAt, nil
+	default:
+		value, err := parseCustomSensorValue(output)
+		return value, nil, err
+	}
+}
+
+func parseCustomSensorTimestamp(output string) (time.Time, error) {
+	raw := strings.TrimSpace(output)
+	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+		return parsed.UTC(), nil
+	}
+	seconds, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return time.Time{}, errors.New("timestamp custom sensor output must be RFC3339 or Unix seconds")
+	}
+	return time.Unix(seconds, 0).UTC(), nil
+}
+
 func customSensorStatus(definition customSensorDefinition, value float64) string {
 	if definition.CriticalAbove != nil && value >= *definition.CriticalAbove {
 		return agentshost.CustomSensorStatusCritical
@@ -465,6 +627,75 @@ func customSensorStatus(definition customSensorDefinition, value float64) string
 		return agentshost.CustomSensorStatusWarning
 	}
 	return agentshost.CustomSensorStatusOK
+}
+
+type customSensorHTTPResponse struct {
+	Value      any    `json:"value"`
+	ObservedAt string `json:"observedAt,omitempty"`
+}
+
+func fetchCustomSensorHTTP(ctx context.Context, sourceURL string) (customSensorSourceReading, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
+	if err != nil {
+		return customSensorSourceReading{}, errors.New("create custom sensor HTTP request")
+	}
+	request.Header.Set("Accept", "application/json, text/plain")
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		if contextError := ctx.Err(); contextError != nil {
+			return customSensorSourceReading{}, fmt.Errorf("custom sensor HTTP request: %w", contextError)
+		}
+		return customSensorSourceReading{}, errors.New("custom sensor HTTP request failed")
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return customSensorSourceReading{}, fmt.Errorf("custom sensor HTTP endpoint returned status %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxCustomSensorOutputBytes+1))
+	if err != nil {
+		return customSensorSourceReading{}, errors.New("read custom sensor HTTP response")
+	}
+	if len(body) > maxCustomSensorOutputBytes {
+		return customSensorSourceReading{}, fmt.Errorf("custom sensor HTTP response exceeds %d bytes", maxCustomSensorOutputBytes)
+	}
+	raw := strings.TrimSpace(string(body))
+	reading := customSensorSourceReading{output: raw, observedAt: time.Now().UTC()}
+	if !strings.HasPrefix(raw, "{") {
+		return reading, nil
+	}
+	var payload customSensorHTTPResponse
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payload); err != nil {
+		return customSensorSourceReading{}, errors.New("custom sensor HTTP response must be a scalar or JSON object with value")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return customSensorSourceReading{}, errors.New("custom sensor HTTP response must contain exactly one JSON value")
+	}
+	switch value := payload.Value.(type) {
+	case json.Number:
+		reading.output = value.String()
+	case string:
+		reading.output = value
+	case bool:
+		reading.output = strconv.FormatBool(value)
+	default:
+		return customSensorSourceReading{}, errors.New("custom sensor HTTP JSON value must be a number, string, or boolean")
+	}
+	if strings.TrimSpace(payload.ObservedAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, payload.ObservedAt)
+		if err != nil {
+			return customSensorSourceReading{}, errors.New("custom sensor HTTP observedAt must be RFC3339")
+		}
+		reading.observedAt = parsed.UTC()
+	}
+	return reading, nil
 }
 
 func executeCustomSensorCommand(ctx context.Context, path string) (string, error) {
@@ -533,5 +764,14 @@ func cloneFloat64(value *float64) *float64 {
 
 func cloneCustomSensorMetric(metric agentshost.CustomSensorMetric) agentshost.CustomSensorMetric {
 	metric.Value = cloneFloat64(metric.Value)
+	metric.EventAt = cloneTime(metric.EventAt)
 	return metric
+}
+
+func cloneTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }

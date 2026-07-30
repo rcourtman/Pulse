@@ -1296,6 +1296,17 @@ path. Monitoring must preserve `sensors.powerWatts` readings from agent reports
 through models, read-state projection, and frontend conversion without
 promoting wattage into temperature history, resource lifecycle, storage health,
 or alert metrics unless a separate governed contract adds that metric.
+Host-agent custom metrics may originate from a locally configured executable or
+an HTTP(S) REST endpoint, but remain agent-authored typed host metadata.
+Monitoring must preserve group, subgroup, numeric/boolean/timestamp kind,
+numeric threshold value, observation time, optional event time, status, bounded
+error, stale state, and error-alert preference through ingest and frontend
+projection. Boolean values use 1/0 and timestamp values use age in seconds so
+the existing threshold and canonical alert lifecycle remains authoritative.
+REST collection ownership stays in the agent: server configuration cannot
+inject destinations, redirects are not followed, response bodies are bounded,
+and an endpoint-supplied RFC3339 `observedAt` must trip the configured
+`staleAfter` policy when old.
 That same monitoring owner also owns canonical unified-resource publication on
 `/api/state` and the websocket `state.resources` hydrate path. Monitoring must
 publish those resources from the same canonical unified snapshot that

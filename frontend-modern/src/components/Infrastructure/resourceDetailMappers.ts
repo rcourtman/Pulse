@@ -525,23 +525,50 @@ const formatCustomSensorValue = (value: number, unit?: string): string => {
   return `${formatted} ${normalizedUnit}`;
 };
 
+const formatCustomSensorAge = (seconds: number): string => {
+  const normalized = Math.max(0, Math.floor(seconds));
+  if (normalized < 60) return `${normalized}s ago`;
+  if (normalized < 3600) return `${Math.floor(normalized / 60)}m ago`;
+  if (normalized < 86400) return `${Math.floor(normalized / 3600)}h ago`;
+  return `${Math.floor(normalized / 86400)}d ago`;
+};
+
 export const buildCustomSensorRows = (sensors?: HostSensorSummary) =>
   (sensors?.custom ?? [])
     .filter((metric) => metric.id?.trim() && metric.name?.trim())
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) =>
+      [a.group, a.subgroup, a.name]
+        .map((part) => part?.trim() ?? '')
+        .join('\u0000')
+        .localeCompare(
+          [b.group, b.subgroup, b.name]
+            .map((part) => part?.trim() ?? '')
+            .join('\u0000'),
+        ),
+    )
     .map((metric) => {
       const status = (metric.status || 'unknown').trim().toLowerCase();
       const hasValue = typeof metric.value === 'number' && Number.isFinite(metric.value);
-      const measured = hasValue
-        ? formatCustomSensorValue(metric.value as number, metric.unit)
-        : 'Unavailable';
+      const kind = (metric.kind || 'number').trim().toLowerCase();
+      let measured = 'Unavailable';
+      if (hasValue && kind === 'boolean') {
+        measured = (metric.value as number) >= 0.5 ? 'Online' : 'Offline';
+      } else if (hasValue && kind === 'timestamp') {
+        measured = formatCustomSensorAge(metric.value as number);
+      } else if (hasValue) {
+        measured = formatCustomSensorValue(metric.value as number, metric.unit);
+      }
       const value = metric.stale ? `${measured} (stale)` : measured;
       const details = [
         status === 'ok' ? 'OK' : titleCaseDelimitedLabel(status),
         metric.error?.trim(),
       ].filter(Boolean);
+      const label = [metric.group, metric.subgroup, metric.name]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(' / ');
       return {
-        label: metric.name.trim(),
+        label,
         value,
         valueTitle: details.length > 0 ? `${value} · ${details.join(' · ')}` : value,
       };

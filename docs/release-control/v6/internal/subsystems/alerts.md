@@ -336,13 +336,15 @@ inspectability, or convert missing/stale evidence into health.
 
 ### Agent custom sensors use canonical health-assessment alerts
 
-Typed `HostSensorSummary.Custom` readings with `warning` or `critical` status
-now map to one canonical `custom-sensor` alert per host and sensor ID.
+Typed `HostSensorSummary.Custom` numeric, boolean, or timestamp readings with
+`warning` or `critical` status map to one canonical `custom-sensor` alert per
+host and sensor ID. Alert evidence preserves the optional group, subgroup,
+kind, and event time alongside the evaluated numeric value.
 Collection errors map to warning only when the local definition reports
 `alertOnError`; healthy reports, removed definitions, disabled host thresholds,
 host removal, and telemetry expiry clear the same identity. Alert evaluation
 consumes the agent-authored typed status and never executes or receives the
-local sensor command. `TestHostCustomSensorAlertLifecycle` and
+local command or REST URL. `TestHostCustomSensorAlertLifecycle` and
 `TestHostCustomSensorErrorCanBeReportOnly` in
 `internal/alerts/host_unraid_lifecycle_test.go` pin creation, recovery,
 opt-out, and cleanup.

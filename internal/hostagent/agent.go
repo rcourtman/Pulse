@@ -409,7 +409,7 @@ func New(cfg Config) (*Agent, error) {
 		logger.Info().
 			Int("sensorCount", len(customSensorDefinitions)).
 			Str("configPath", cfg.CustomSensorsFile).
-			Msg("Custom sensor execution enabled from local configuration")
+			Msg("Custom metric collection enabled from local configuration")
 	}
 
 	// Create command client for AI command execution (only if enabled)

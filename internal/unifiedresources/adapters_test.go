@@ -44,6 +44,7 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 func TestResourceFromHostPreservesCustomSensorMeta(t *testing.T) {
 	value := 12.5
 	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)
+	eventAt := observedAt.Add(-2 * time.Hour)
 	host := models.Host{
 		ID:       "agent-custom",
 		Hostname: "edge-1",
@@ -51,10 +52,14 @@ func TestResourceFromHostPreservesCustomSensorMeta(t *testing.T) {
 			Custom: []models.HostCustomSensorMetric{{
 				ID:           "queue_depth",
 				Name:         "Queue depth",
+				Group:        "Main server",
+				Subgroup:     "Backup",
+				Kind:         "timestamp",
 				Unit:         "items",
 				Value:        &value,
 				Status:       "warning",
 				ObservedAt:   observedAt,
+				EventAt:      &eventAt,
 				AlertOnError: true,
 			}},
 		},
@@ -65,12 +70,18 @@ func TestResourceFromHostPreservesCustomSensorMeta(t *testing.T) {
 		t.Fatalf("custom sensor projection = %+v", resource.Agent)
 	}
 	custom := resource.Agent.Sensors.Custom[0]
-	if custom.ID != "queue_depth" || custom.Value == nil || *custom.Value != 12.5 || custom.ObservedAt != observedAt {
+	if custom.ID != "queue_depth" || custom.Group != "Main server" || custom.Subgroup != "Backup" ||
+		custom.Kind != "timestamp" || custom.Value == nil || *custom.Value != 12.5 ||
+		custom.ObservedAt != observedAt || custom.EventAt == nil || !custom.EventAt.Equal(eventAt) {
 		t.Fatalf("custom sensor projection = %+v", custom)
 	}
 	value = 99
 	if *custom.Value != 12.5 {
 		t.Fatal("custom sensor projection aliases the model value")
+	}
+	eventAt = eventAt.Add(time.Hour)
+	if custom.EventAt.Equal(eventAt) {
+		t.Fatal("custom sensor projection aliases the model event time")
 	}
 }
 

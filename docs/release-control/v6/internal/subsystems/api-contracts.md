@@ -3771,15 +3771,18 @@ auto-register mutation boundary.
 
 ## Current State
 
-### Host sensor payloads carry typed custom numeric readings
+### Host sensor payloads carry typed command and REST custom readings
 
 Agent, host-model, frontend, and unified-resource sensor payloads now include a
-`custom` array whose entries preserve `id`, `name`, optional `unit` and numeric
-`value`, agent-authored `status`, `observedAt`, bounded `error`,
-`alertOnError`, and `stale`. This is an additive wire field: older agents and
-clients may omit it, and normalization exposes an empty collection rather than
-reinterpreting the legacy temperature-oriented `additional` map. Accepted
-report ingest and the JSON projection are pinned by
+`custom` array whose entries preserve `id`, `name`, optional `group` and
+`subgroup`, `kind` (`number`, `boolean`, or `timestamp`), optional `unit`,
+normalized numeric `value`, agent-authored `status`, `observedAt`, optional
+`eventAt`, bounded `error`, `alertOnError`, and `stale`. Boolean values use 1/0
+and timestamp values use age in seconds on the wire. This is an additive wire
+shape: older agents and clients may omit the new fields, and normalization
+exposes an empty collection rather than reinterpreting the legacy
+temperature-oriented `additional` map. Accepted report ingest and the JSON
+projection are pinned by `TestCustomSensorMetricJSONRoundTrip`,
 `TestApplyHostReportPreservesTypedSensorSummary` and
 `TestHostCustomSensorMetaJSONContract`.
 
