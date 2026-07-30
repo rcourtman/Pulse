@@ -107,6 +107,92 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+func TestHelmChartShipsOpenShiftProfile(t *testing.T) {
+	read := func(parts ...string) string {
+		t.Helper()
+		content, err := os.ReadFile(repoFile(parts...))
+		if err != nil {
+			t.Fatalf("read %s: %v", filepath.Join(parts...), err)
+		}
+		return string(content)
+	}
+
+	values := read("deploy", "helm", "pulse", "values.yaml")
+	agent := read("deploy", "helm", "pulse", "templates", "agent.yaml")
+	deployment := read("deploy", "helm", "pulse", "templates", "deployment.yaml")
+	rbac := read("deploy", "helm", "pulse", "templates", "agent-rbac.yaml")
+	helmCI := read(".github", "workflows", "helm-ci.yml")
+	docs := read("docs", "KUBERNETES.md")
+
+	for _, required := range []string{
+		"openShift:",
+		"kubernetesAgent:",
+		"clusterID:",
+		"rbac:",
+	} {
+		if !strings.Contains(values, required) {
+			t.Fatalf("values.yaml missing OpenShift chart value %q", required)
+		}
+	}
+	for _, required := range []string{
+		`$openShiftAgent := and .Values.openShift.enabled .Values.openShift.kubernetesAgent.enabled`,
+		`- --enable-kubernetes`,
+		`- --enable-host=false`,
+		`"name" "PULSE_AGENT_ID"`,
+		`$dockerSocketEnabled := and .Values.agent.dockerSocket.enabled (not $openShiftAgent)`,
+		`"runAsNonRoot" true`,
+		`omit $openShiftSecurityContext "runAsUser" "runAsGroup"`,
+	} {
+		if !strings.Contains(agent, required) {
+			t.Fatalf("agent template missing OpenShift contract %q", required)
+		}
+	}
+	for _, required := range []string{
+		`.Values.openShift.enabled`,
+		`omit $openShiftContainerSecurityContext "runAsUser" "runAsGroup"`,
+		`"allowPrivilegeEscalation" false`,
+	} {
+		if !strings.Contains(deployment, required) {
+			t.Fatalf("server deployment missing OpenShift SCC contract %q", required)
+		}
+	}
+	for _, required := range []string{
+		"kind: ClusterRole",
+		"kind: ClusterRoleBinding",
+		`apiGroups: ["metrics.k8s.io"]`,
+		`resources: ["nodes", "pods"]`,
+		`apiGroups: ["discovery.k8s.io"]`,
+		`resources: ["endpointslices"]`,
+		`apiGroups: ["rbac.authorization.k8s.io"]`,
+	} {
+		if !strings.Contains(rbac, required) {
+			t.Fatalf("agent RBAC template missing read-only collector rule %q", required)
+		}
+	}
+	if strings.Contains(rbac, "- secrets") || strings.Contains(rbac, "- nodes/proxy") {
+		t.Fatal("OpenShift default role must not grant Secrets or direct kubelet proxy access")
+	}
+	for _, required := range []string{
+		"Render and verify the OpenShift profile",
+		"--show-only templates/agent-rbac.yaml",
+		`grep -Eq "runAs(User|Group):|fsGroup:"`,
+		`grep -q "/var/run/docker.sock"`,
+	} {
+		if !strings.Contains(helmCI, required) {
+			t.Fatalf("Helm CI missing OpenShift render assertion %q", required)
+		}
+	}
+	if !strings.Contains(docs, "--set openShift.enabled=true") ||
+		!strings.Contains(docs, "--set openShift.kubernetesAgent.enabled=true") ||
+		!strings.Contains(docs, "create secret generic pulse-server-env") ||
+		!strings.Contains(docs, "create secret generic pulse-agent-env") {
+		t.Fatal("Kubernetes guide must document the shipped OpenShift profile")
+	}
+	if strings.Contains(docs, "--set-string agent.secretEnv.data.PULSE_TOKEN") {
+		t.Fatal("OpenShift guide must not persist the agent token in Helm release values")
+	}
+}
+
 func shieldsBadgeMessage(value string) string {
 	return strings.ReplaceAll(value, "-", "--")
 }

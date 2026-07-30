@@ -87,11 +87,19 @@ Return the agent secret name.
 Return the agent service account name.
 */}}
 {{- define "pulse.agentServiceAccountName" -}}
-{{- if .Values.agent.serviceAccount.create -}}
+{{- $openShiftAgent := and .Values.openShift.enabled .Values.openShift.kubernetesAgent.enabled -}}
+{{- if or .Values.agent.serviceAccount.create $openShiftAgent -}}
 {{- default (printf "%s-agent" (include "pulse.fullname" .)) .Values.agent.serviceAccount.name -}}
 {{- else if .Values.agent.serviceAccount.name -}}
 {{- .Values.agent.serviceAccount.name -}}
 {{- else -}}
 {{- include "pulse.serviceAccountName" . -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+Return the read-only agent ClusterRole/ClusterRoleBinding name.
+*/}}
+{{- define "pulse.agentRBACName" -}}
+{{- default (printf "%s-agent-read" (include "pulse.fullname" .)) .Values.agent.rbac.name -}}
 {{- end -}}

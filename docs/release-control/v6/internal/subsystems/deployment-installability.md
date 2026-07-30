@@ -2817,3 +2817,25 @@ remains the final schema, permission, token-file, URL, and TLS-policy validator.
 Updates recover the observer-file argument from the existing service command so
 an in-place binary refresh does not silently collapse a multi-destination
 installation back to primary-only reporting.
+
+### OpenShift Helm installation is SCC-owned and socket-free
+
+`openShift.enabled` is the chart-owned compatibility switch for installing the
+Pulse server under OpenShift Security Context Constraints. It suppresses the
+chart's fixed UID, GID, and fsGroup defaults while retaining non-root,
+no-privilege-escalation container posture, so the namespace SCC assigns valid
+runtime identities.
+
+When `openShift.kubernetesAgent.enabled` is also true, the chart deploys one
+cluster-level Kubernetes collector as a `Deployment`, creates its service
+account plus a read-only ClusterRole/Binding, assigns a stable cluster agent
+ID, enables Kubernetes collection, disables host collection, and omits the
+Docker socket. Normal chart behavior is unchanged when the OpenShift switch is
+false. The default role does not grant Secrets or `nodes/proxy`; the metrics
+API is the supported OpenShift node/pod usage path, and unsupported
+OpenShift-native Routes and DeploymentConfigs remain outside this slice.
+
+`.github/workflows/helm-ci.yml` must render the profile and fail if the output
+contains a Docker socket mount or fixed `runAsUser`, `runAsGroup`, or `fsGroup`
+values. `scripts/installtests/build_release_assets_test.go` pins the packaged
+values, templates, RBAC, render assertions, and operator documentation.

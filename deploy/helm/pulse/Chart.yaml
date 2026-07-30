@@ -1,6 +1,6 @@
 apiVersion: v2
 name: pulse
-description: Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
+description: Helm chart for deploying the Pulse hub and optional Docker, Kubernetes, or OpenShift monitoring agent.
 type: application
 version: 6.2.0-rc.4
 appVersion: "6.2.0-rc.4"

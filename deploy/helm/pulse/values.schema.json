@@ -38,6 +38,28 @@
       },
       "description": "Image pull secrets for private registries"
     },
+    "openShift": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Use SCC-compatible server and agent security defaults"
+        },
+        "kubernetesAgent": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Deploy the socket-free OpenShift Kubernetes collector"
+            },
+            "clusterID": {
+              "type": "string",
+              "description": "Stable logical agent ID for the OpenShift cluster"
+            }
+          }
+        }
+      }
+    },
     "service": {
       "type": "object",
       "properties": {
@@ -159,6 +181,19 @@
           "type": "string",
           "enum": ["DaemonSet", "Deployment"],
           "description": "Agent deployment type"
+        },
+        "rbac": {
+          "type": "object",
+          "properties": {
+            "create": {
+              "type": "boolean",
+              "description": "Create the read-only Kubernetes collector ClusterRole and binding"
+            },
+            "name": {
+              "type": "string",
+              "description": "Override the Kubernetes collector ClusterRole name"
+            }
+          }
         },
         "healthPort": {
           "type": "integer",

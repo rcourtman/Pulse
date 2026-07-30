@@ -2,7 +2,7 @@
 
 ![Version: 6.2.0-rc.4](https://img.shields.io/badge/Version-6.2.0--rc.4-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 6.2.0-rc.4](https://img.shields.io/badge/AppVersion-6.2.0--rc.4-informational?style=flat-square)
 
-Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
+Helm chart for deploying the Pulse hub and optional Docker, Kubernetes, or OpenShift monitoring agent.
 
 **Homepage:** <https://github.com/rcourtman/Pulse>
 
@@ -50,6 +50,8 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 | agent.podAnnotations | object | `{}` |  |
 | agent.podLabels | object | `{}` |  |
 | agent.podSecurityContext | object | `{}` |  |
+| agent.rbac.create | bool | `false` | Create the read-only Kubernetes collector ClusterRole and binding. |
+| agent.rbac.name | string | `""` | Override the Kubernetes collector ClusterRole name. |
 | agent.readinessProbe.enabled | bool | `true` |  |
 | agent.readinessProbe.failureThreshold | int | `3` |  |
 | agent.readinessProbe.initialDelaySeconds | int | `5` |  |
@@ -93,6 +95,9 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 | monitoring.serviceMonitor.relabelings | list | `[]` |  |
 | monitoring.serviceMonitor.scrapeTimeout | string | `"10s"` |  |
 | nameOverride | string | `""` |  |
+| openShift.enabled | bool | `false` | Use SCC-compatible server and agent security defaults. |
+| openShift.kubernetesAgent.clusterID | string | `""` | Stable logical agent ID; defaults to the release fullname plus `-openshift`. |
+| openShift.kubernetesAgent.enabled | bool | `false` | Deploy the socket-free OpenShift Kubernetes collector. |
 | persistence.accessModes[0] | string | `"ReadWriteOnce"` |  |
 | persistence.annotations | object | `{}` |  |
 | persistence.enabled | bool | `true` |  |

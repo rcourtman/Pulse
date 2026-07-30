@@ -1,6 +1,8 @@
-{{- if .Values.agent.enabled }}
-{{- $kind := default "DaemonSet" .Values.agent.kind | lower }}
+{{- $openShiftAgent := and .Values.openShift.enabled .Values.openShift.kubernetesAgent.enabled }}
+{{- if or .Values.agent.enabled $openShiftAgent }}
+{{- $kind := ternary "deployment" (default "DaemonSet" .Values.agent.kind | lower) $openShiftAgent }}
 {{- $isDaemon := eq $kind "daemonset" }}
+{{- $dockerSocketEnabled := and .Values.agent.dockerSocket.enabled (not $openShiftAgent) }}
 {{- $workloadName := printf "%s-agent" (include "pulse.fullname" .) }}
 apiVersion: apps/v1
 kind: {{ if $isDaemon }}DaemonSet{{ else }}Deployment{{ end }}
@@ -11,7 +13,7 @@ metadata:
     app.kubernetes.io/component: agent
 spec:
   {{- if not $isDaemon }}
-  replicas: {{ .Values.agent.replicaCount }}
+  replicas: {{ ternary 1 .Values.agent.replicaCount $openShiftAgent }}
   {{- end }}
   selector:
     matchLabels:
@@ -48,11 +50,25 @@ spec:
           command:
             {{- toYaml .Values.agent.command | nindent 12 }}
           {{- end }}
-          {{- if .Values.agent.args }}
+          {{- if $openShiftAgent }}
+          args:
+            - --enable-kubernetes
+            - --enable-host=false
+          {{- else if .Values.agent.args }}
           args:
             {{- toYaml .Values.agent.args | nindent 12 }}
           {{- end }}
-          {{- $csec := .Values.agent.securityContext }}
+          {{- $openShiftSecurityContext := dict
+            "allowPrivilegeEscalation" false
+            "capabilities" (dict "drop" (list "ALL"))
+            "privileged" false
+            "readOnlyRootFilesystem" true
+            "runAsNonRoot" true }}
+          {{- $openShiftSecurityContext = mergeOverwrite $openShiftSecurityContext .Values.agent.securityContext }}
+          {{- $csec := ternary
+            (omit $openShiftSecurityContext "runAsUser" "runAsGroup")
+            .Values.agent.securityContext
+            $openShiftAgent }}
           {{- if $csec }}
           securityContext:
             {{- toYaml $csec | nindent 12 }}
@@ -63,6 +79,10 @@ spec:
           {{- end }}
           {{- range .Values.agent.extraEnv }}
           {{- $envList = append $envList . }}
+          {{- end }}
+          {{- if $openShiftAgent }}
+          {{- $clusterID := default (printf "%s-openshift" (include "pulse.fullname" .)) .Values.openShift.kubernetesAgent.clusterID }}
+          {{- $envList = append $envList (dict "name" "PULSE_AGENT_ID" "value" $clusterID) }}
           {{- end }}
           {{- $secret := .Values.agent.secretEnv }}
           {{- $secretKeys := list }}
@@ -86,9 +106,9 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-          {{- if or .Values.agent.dockerSocket.enabled .Values.agent.extraVolumeMounts }}
+          {{- if or $dockerSocketEnabled .Values.agent.extraVolumeMounts }}
           volumeMounts:
-            {{- if .Values.agent.dockerSocket.enabled }}
+            {{- if $dockerSocketEnabled }}
             - name: docker-socket
               mountPath: {{ .Values.agent.dockerSocket.path }}
             {{- end }}
@@ -120,9 +140,9 @@ spec:
             timeoutSeconds: {{ .Values.agent.readinessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.agent.readinessProbe.failureThreshold }}
           {{- end }}
-      {{- if or .Values.agent.dockerSocket.enabled .Values.agent.extraVolumes }}
+      {{- if or $dockerSocketEnabled .Values.agent.extraVolumes }}
       volumes:
-        {{- if .Values.agent.dockerSocket.enabled }}
+        {{- if $dockerSocketEnabled }}
         - name: docker-socket
           hostPath:
             path: {{ .Values.agent.dockerSocket.path }}

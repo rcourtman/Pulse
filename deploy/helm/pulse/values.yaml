@@ -19,6 +19,18 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+# OpenShift compatibility. When enabled, the server lets the namespace SCC
+# assign UID/GID/fsGroup values instead of pinning the chart defaults. The
+# optional Kubernetes agent is a single-replica, socket-free cluster reader.
+openShift:
+  # -- Use SCC-compatible server and agent security defaults.
+  enabled: false
+  kubernetesAgent:
+    # -- Deploy the socket-free OpenShift Kubernetes collector.
+    enabled: false
+    # -- Stable logical agent ID; defaults to the release fullname plus `-openshift`.
+    clusterID: ""
+
 serviceAccount:
   create: true
   annotations: {}
@@ -112,6 +124,11 @@ agent:
     create: false
     name: ""
     annotations: {}
+  rbac:
+    # -- Create the read-only Kubernetes collector ClusterRole and binding.
+    create: false
+    # -- Override the Kubernetes collector ClusterRole name.
+    name: ""
   image:
     # Defaults to the main Pulse image; the runtime stage now ships an arch-
     # resolved /usr/local/bin/pulse-agent symlink so the same image can serve

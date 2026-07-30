@@ -49,3 +49,33 @@ jobs:
             --set server.secretEnv.data.API_TOKENS=dummy-token \
             --set persistence.enabled=false \
             > /tmp/pulse-agent-rendered.yaml
+
+      - name: Render and verify the OpenShift profile
+        run: |
+          helm template pulse deploy/helm/pulse \
+            --namespace pulse \
+            --set openShift.enabled=true \
+            --set openShift.kubernetesAgent.enabled=true \
+            --set agent.secretEnv.create=true \
+            --set agent.secretEnv.data.PULSE_TOKEN=dummy-token \
+            --set persistence.enabled=false \
+            --show-only templates/deployment.yaml \
+            --show-only templates/agent.yaml \
+            --show-only templates/agent-serviceaccount.yaml \
+            --show-only templates/agent-rbac.yaml \
+            > /tmp/pulse-openshift-rendered.yaml
+
+          grep -q -- "--enable-kubernetes" /tmp/pulse-openshift-rendered.yaml
+          grep -q "PULSE_AGENT_ID" /tmp/pulse-openshift-rendered.yaml
+          grep -q "kind: ClusterRole" /tmp/pulse-openshift-rendered.yaml
+          grep -q "kind: ClusterRoleBinding" /tmp/pulse-openshift-rendered.yaml
+          grep -q "runAsNonRoot: true" /tmp/pulse-openshift-rendered.yaml
+
+          if grep -q "/var/run/docker.sock" /tmp/pulse-openshift-rendered.yaml; then
+            echo "OpenShift profile must not mount the Docker socket" >&2
+            exit 1
+          fi
+          if grep -Eq "runAs(User|Group):|fsGroup:" /tmp/pulse-openshift-rendered.yaml; then
+            echo "OpenShift profile must let the SCC assign UID/GID/fsGroup" >&2
+            exit 1
+          fi

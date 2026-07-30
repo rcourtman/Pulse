@@ -61,6 +61,61 @@ By default, this workload runs in container-monitoring mode (`--enable-docker --
 
 For Kubernetes monitoring, use a custom DaemonSet as shown below.
 
+### OpenShift profile (Helm)
+
+The chart has an SCC-compatible OpenShift profile for the Pulse server and an
+optional cluster-level Kubernetes collector:
+
+```bash
+export PULSE_TOKEN='replace-with-a-kubernetes-report-token'
+
+kubectl create namespace pulse --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n pulse create secret generic pulse-server-env \
+  --from-literal=API_TOKENS="${PULSE_TOKEN}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n pulse create secret generic pulse-agent-env \
+  --from-literal=PULSE_TOKEN="${PULSE_TOKEN}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+helm upgrade --install pulse pulse/pulse \
+  --namespace pulse \
+  --set openShift.enabled=true \
+  --set openShift.kubernetesAgent.enabled=true \
+  --set openShift.kubernetesAgent.clusterID=my-openshift-cluster \
+  --set server.secretEnv.name=pulse-server-env \
+  --set 'server.secretEnv.keys[0]=API_TOKENS' \
+  --set agent.secretEnv.name=pulse-agent-env \
+  --set 'agent.secretEnv.keys[0]=PULSE_TOKEN'
+```
+
+Using pre-created Secrets keeps the token out of Helm release values. For an
+agent reporting to an existing external Pulse server, omit the server Secret
+and override `agent.env[0].value` with that server's reachable `PULSE_URL`.
+
+The profile deliberately:
+
+- lets the OpenShift SCC assign the server and agent UID, GID, and filesystem
+  group instead of pinning `1000` or `0`;
+- runs one non-privileged agent replica with `--enable-kubernetes` and
+  `--enable-host=false`;
+- does not mount `/var/run/docker.sock` (OpenShift uses CRI-O);
+- creates a dedicated service account and read-only ClusterRole/Binding for
+  the Kubernetes objects Pulse collects; and
+- uses a stable cluster agent ID, configurable through
+  `openShift.kubernetesAgent.clusterID`.
+
+The default role intentionally does not grant Kubernetes `secrets` or
+`nodes/proxy`.
+Secret metadata inventory and direct kubelet-summary fallback therefore remain
+unavailable under this least-privilege profile; OpenShift's metrics API supplies
+the normal node and pod usage path.
+
+Standard Kubernetes resources—including nodes, pods, Deployments, StatefulSets,
+DaemonSets, Jobs, Services, Ingresses, storage, policy, RBAC summaries, events,
+and metrics—are collected. OpenShift-native Routes and DeploymentConfigs are
+not yet modeled; workloads managed only by those APIs may appear as pods
+without their OpenShift controller.
+
 ### Unified Agent on Kubernetes (DaemonSet)
 
 To monitor Kubernetes resources, run the unified agent as a DaemonSet and enable the Kubernetes module.
@@ -124,7 +179,8 @@ spec:
         - operator: Exists
 ```
 
-> **Note for ARM64 clusters**: Replace `pulse-agent-linux-amd64` with `pulse-agent-linux-arm64`.
+> **Note for ARM64 clusters**: The `/usr/local/bin/pulse-agent` symlink in the
+> main image resolves to the correct bundled binary for both amd64 and arm64.
 
 Use a token scoped for the agent:
 - `kubernetes:report` for Kubernetes reporting

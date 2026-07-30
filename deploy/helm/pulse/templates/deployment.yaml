@@ -25,11 +25,12 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "pulse.serviceAccountName" . }}
-      {{- $podSecurityContext :=
+      {{- $defaultPodSecurityContext :=
         ternary
           (merge (dict) .Values.podSecurityContext .Values.server.podSecurityContext)
           .Values.server.podSecurityContext
           .Values.podSecurityContext.enabled }}
+      {{- $podSecurityContext := ternary .Values.server.podSecurityContext $defaultPodSecurityContext .Values.openShift.enabled }}
       {{- if $podSecurityContext }}
       securityContext:
         {{- omit $podSecurityContext "enabled" | toYaml | nindent 8 }}
@@ -45,11 +46,18 @@ spec:
           ports:
             - name: http
               containerPort: 7655
-          {{- $containerSecurityContext :=
+          {{- $defaultContainerSecurityContext :=
             ternary
               (merge (dict) .Values.containerSecurityContext .Values.server.securityContext)
               .Values.server.securityContext
               .Values.containerSecurityContext.enabled }}
+          {{- $openShiftContainerSecurityContext := dict
+            "allowPrivilegeEscalation" false
+            "capabilities" (dict "drop" (list "ALL"))
+            "runAsNonRoot" true }}
+          {{- $openShiftContainerSecurityContext = mergeOverwrite $openShiftContainerSecurityContext .Values.server.securityContext }}
+          {{- $openShiftContainerSecurityContext = omit $openShiftContainerSecurityContext "runAsUser" "runAsGroup" }}
+          {{- $containerSecurityContext := ternary $openShiftContainerSecurityContext $defaultContainerSecurityContext .Values.openShift.enabled }}
           {{- if $containerSecurityContext }}
           securityContext:
             {{- omit $containerSecurityContext "enabled" | toYaml | nindent 12 }}
