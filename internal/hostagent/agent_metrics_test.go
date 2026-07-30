@@ -574,6 +574,73 @@ func TestBuildReportIncludesNVIDIASMITemperaturesWhenLMSensorsUnavailable(t *tes
 	}
 }
 
+func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
+	mc := &mockCollector{
+		goos:  "windows",
+		nowFn: func() time.Time { return time.Date(2026, 7, 30, 18, 0, 0, 0, time.UTC) },
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname: "windows-gpu-node",
+				OS:       "windows",
+				Platform: "Microsoft Windows 11 Pro",
+				HostID:   "windows-gpu-node-id",
+			}, nil
+		},
+		hostUptimeFn: func(context.Context) (uint64, error) {
+			return 3600, nil
+		},
+		metricsFn: func(context.Context, []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{}, nil
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file == "nvidia-smi" {
+				return `C:\Windows\System32\nvidia-smi.exe`, nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputFn: func(_ context.Context, name string, arg ...string) (string, error) {
+			if name != `C:\Windows\System32\nvidia-smi.exe` {
+				t.Fatalf("command name = %q, want Windows nvidia-smi path", name)
+			}
+			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total" || arg[1] != "--format=csv,noheader,nounits" {
+				t.Fatalf("command args = %#v, want NVIDIA stats query", arg)
+			}
+			return "0, NVIDIA GeForce RTX 3070, 57, 31, 2048, 8192\r\n", nil
+		},
+	}
+
+	agent, err := New(Config{
+		AgentID:   "windows-gpu-agent",
+		APIToken:  "token",
+		LogLevel:  -1,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("buildReport failed: %v", err)
+	}
+
+	if report.Host.Platform != "windows" {
+		t.Fatalf("report host platform = %q, want windows", report.Host.Platform)
+	}
+	if report.Sensors.TemperatureCelsius["gpu_nvidia_0"] != 57 {
+		t.Fatalf("Windows NVIDIA GPU temp = %v, want 57", report.Sensors.TemperatureCelsius["gpu_nvidia_0"])
+	}
+	if len(report.Sensors.GPU) != 1 {
+		t.Fatalf("Windows GPU stats = %d, want 1: %+v", len(report.Sensors.GPU), report.Sensors.GPU)
+	}
+	if report.Sensors.GPU[0].UtilizationPercent == nil || *report.Sensors.GPU[0].UtilizationPercent != 31 {
+		t.Fatalf("Windows GPU utilization = %#v, want 31", report.Sensors.GPU[0].UtilizationPercent)
+	}
+	if report.Sensors.GPU[0].MemoryTotalBytes == nil || *report.Sensors.GPU[0].MemoryTotalBytes != 8192*1024*1024 {
+		t.Fatalf("Windows GPU memory total = %#v, want 8192 MiB", report.Sensors.GPU[0].MemoryTotalBytes)
+	}
+}
+
 func TestBuildReportUsesResolvedNASOSIdentity(t *testing.T) {
 	fixedTime := time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC)
 

@@ -246,8 +246,44 @@ func TestAgent_queryNVIDIASMITemperatures_CommandNotInstalled(t *testing.T) {
 	}
 }
 
+func TestAgent_collectTemperatures_CollectsNVIDIAOnWindows(t *testing.T) {
+	mc := &mockCollector{
+		goos: "windows",
+		lookPathFn: func(file string) (string, error) {
+			if file != "nvidia-smi" {
+				t.Fatalf("look path file = %q, want nvidia-smi", file)
+			}
+			return `C:\Windows\System32\nvidia-smi.exe`, nil
+		},
+		commandCombinedOutputFn: func(_ context.Context, name string, arg ...string) (string, error) {
+			if name != `C:\Windows\System32\nvidia-smi.exe` {
+				t.Fatalf("command name = %q, want Windows nvidia-smi path", name)
+			}
+			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total" || arg[1] != "--format=csv,noheader,nounits" {
+				t.Fatalf("command args = %#v, want NVIDIA stats query", arg)
+			}
+			return "0, NVIDIA GeForce RTX 3070, 57, 31, 2048, 8192\r\n", nil
+		},
+	}
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+	got := a.collectTemperatures(context.Background())
+	if got.TemperatureCelsius["gpu_nvidia_0"] != 57 {
+		t.Fatalf("Windows NVIDIA GPU temp = %v, want 57", got.TemperatureCelsius["gpu_nvidia_0"])
+	}
+	if len(got.GPU) != 1 {
+		t.Fatalf("Windows GPU stats = %d, want 1: %+v", len(got.GPU), got.GPU)
+	}
+	if got.GPU[0].UtilizationPercent == nil || *got.GPU[0].UtilizationPercent != 31 {
+		t.Fatalf("Windows GPU utilization = %#v, want 31", got.GPU[0].UtilizationPercent)
+	}
+	if got.GPU[0].MemoryTotalBytes == nil || *got.GPU[0].MemoryTotalBytes != 8192*1024*1024 {
+		t.Fatalf("Windows GPU memory total = %#v, want 8192 MiB", got.GPU[0].MemoryTotalBytes)
+	}
+}
+
 func TestAgent_collectTemperatures_SkipsUnsupportedOS(t *testing.T) {
-	mc := &mockCollector{goos: "windows"}
+	mc := &mockCollector{goos: "plan9"}
 	a := &Agent{logger: zerolog.Nop(), collector: mc}
 
 	got := a.collectTemperatures(context.Background())

@@ -1487,16 +1487,19 @@ the intentionally sparse public response.
    it must report Darwin `pmset` thermal and performance pressure as
    `sensors.thermalState` instead of inventing Celsius readings from unavailable
    Apple silicon sensor values.
-   Linux NVIDIA GPU telemetry belongs in that same host-agent sensor contract:
-   the runtime may supplement `lm-sensors` with a bounded `nvidia-smi` query
-   for direct GPU temperature, utilization, and VRAM readings, and may use that
-   query as a best-effort fallback when `lm-sensors` is unavailable. The report
-   must keep typed GPU readings in `sensors.gpu` while mapping only direct
-   `temperature.gpu` readings into existing `sensors.temperatureCelsius`
-   `gpu_nvidia_<index>` keys for compatibility. Authenticated server ingest may
-   reduce those typed samples into bounded host-level GPU utilization, VRAM
-   pressure, and GPU temperature history on the existing agent identity, but
-   that monitoring projection does not change the report or command protocol.
+   Linux and Windows NVIDIA GPU telemetry belongs in that same host-agent
+   sensor contract: the runtime may use a bounded `nvidia-smi` query for direct
+   GPU temperature, utilization, and VRAM readings. Linux may supplement
+   `lm-sensors` with that query or use it as a best-effort fallback when
+   `lm-sensors` is unavailable; Windows may use it as its supported direct-GPU
+   provider without implying support for CPU, motherboard, or storage
+   temperatures. The report must keep typed GPU readings in `sensors.gpu`
+   while mapping only direct `temperature.gpu` readings into existing
+   `sensors.temperatureCelsius` `gpu_nvidia_<index>` keys for compatibility.
+   Authenticated server ingest may reduce those typed samples into bounded
+   host-level GPU utilization, VRAM pressure, and GPU temperature history on
+   the existing agent identity, but that monitoring projection does not change
+   the report or command protocol.
    Neither side may infer lifecycle health, command authority, enrollment
    state, or GPU workload/process inventory from `nvidia-smi` output.
    Runtime RAID collection uses `/proc/mdstat` as the canonical discovery
