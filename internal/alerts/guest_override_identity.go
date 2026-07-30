@@ -131,6 +131,64 @@ func clusteredGuestOverrideKey(ident guestOverrideIdentity) string {
 	return stableGuestOverrideKey(ident.instance, ident.vmid)
 }
 
+func guestOverridePrimaryKey(guest any, guestID string) string {
+	ident, ok := guestOverrideIdentityFromGuestOrID(guest, guestID)
+	if !ok {
+		return strings.TrimSpace(guestID)
+	}
+	if stableKey := clusteredGuestOverrideKey(ident); stableKey != "" {
+		return stableKey
+	}
+	return fmt.Sprintf("%s:%s:%d", ident.instance, ident.node, ident.vmid)
+}
+
+func guestDiskOverrideKey(guest any, guestID, diskKey string) string {
+	base := guestOverridePrimaryKey(guest, guestID)
+	diskKey = sanitizeAlertKey(diskKey)
+	if base == "" || diskKey == "" {
+		return ""
+	}
+	return fmt.Sprintf("guest-disk:%s/disk:%s", base, diskKey)
+}
+
+func lookupGuestDiskOverride(overrides map[string]ThresholdConfig, guest any, guestID, diskKey string) (ThresholdConfig, bool) {
+	ident, hasIdentity := guestOverrideIdentityFromGuestOrID(guest, guestID)
+	candidates := make([]string, 0, 5)
+	sanitizedDiskKey := sanitizeAlertKey(diskKey)
+	addCandidate := func(base string) {
+		base = strings.TrimSpace(base)
+		if base == "" || sanitizedDiskKey == "" {
+			return
+		}
+		key := fmt.Sprintf("guest-disk:%s/disk:%s", base, sanitizedDiskKey)
+		for _, existing := range candidates {
+			if existing == key {
+				return
+			}
+		}
+		candidates = append(candidates, key)
+	}
+
+	if hasIdentity {
+		if stableKey := clusteredGuestOverrideKey(ident); stableKey != "" {
+			addCandidate(stableKey)
+		}
+		addCandidate(fmt.Sprintf("%s:%s:%d", ident.instance, ident.node, ident.vmid))
+		addCandidate(legacyGuestStableOverrideKey(ident.instance, ident.vmid))
+		if ident.instance != ident.node {
+			addCandidate(legacyClusterGuestOverrideKey(ident.instance, ident.node, ident.vmid))
+		}
+	}
+	addCandidate(strings.TrimSpace(guestID))
+
+	for _, candidate := range candidates {
+		if override, ok := overrides[candidate]; ok {
+			return override, true
+		}
+	}
+	return ThresholdConfig{}, false
+}
+
 func lookupGuestOverride(overrides map[string]ThresholdConfig, guest any, guestID string) (ThresholdConfig, bool) {
 	ident, ok := guestOverrideIdentityFromGuestOrID(guest, guestID)
 	if ok {

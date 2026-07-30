@@ -834,3 +834,108 @@ func TestReevaluateActiveAlertsUsesVMwareResourceTypeMetadata(t *testing.T) {
 		t.Fatalf("expected vSphere metric alert to resolve when vSphere usage threshold is disabled")
 	}
 }
+
+func TestGuestFilesystemDisableOverrideExcludesMountAndAggregate(t *testing.T) {
+	m := newTestManager(t)
+	guestID := BuildGuestKey("pve1", "node1", 101)
+
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		Disk: &HysteresisThreshold{Trigger: 80, Clear: 75},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-disk:pve1:node1:101/disk:boot-dev-vda1": {Disabled: true},
+	}
+	m.mu.Unlock()
+
+	m.CheckGuest(models.VM{
+		ID:       guestID,
+		VMID:     101,
+		Name:     "flatcar",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disk:     models.Disk{Usage: 97},
+		Disks: []models.Disk{
+			{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 97, Total: 100, Used: 97, Free: 3},
+			{Mountpoint: "/", Device: "/dev/vda2", Usage: 50, Total: 100, Used: 50, Free: 50},
+		},
+	}, "pve1")
+
+	bootAlertID := canonicalMetricStateID(guestID+"-disk-boot-dev-vda1", "disk")
+	rootAlertID := canonicalMetricStateID(guestID+"-disk-dev-vda2", "disk")
+	aggregateAlertID := canonicalMetricStateID(guestID, "disk")
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := testLookupActiveAlert(t, m, bootAlertID); exists {
+		t.Fatalf("disabled /boot filesystem created alert %q", bootAlertID)
+	}
+	if _, exists := testLookupActiveAlert(t, m, rootAlertID); exists {
+		t.Fatalf("healthy root filesystem created alert %q", rootAlertID)
+	}
+	if _, exists := testLookupActiveAlert(t, m, aggregateAlertID); exists {
+		t.Fatalf("disabled /boot filesystem leaked into aggregate alert %q", aggregateAlertID)
+	}
+}
+
+func TestGuestFilesystemThresholdOverrideOwnsMountEvaluation(t *testing.T) {
+	m := newTestManager(t)
+	guestID := BuildGuestKey("pve1", "node1", 101)
+
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		Disk: &HysteresisThreshold{Trigger: 80, Clear: 75},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"guest-disk:guest:pve1:101/disk:boot-dev-vda1": {
+			Disk: &HysteresisThreshold{Trigger: 99, Clear: 95},
+		},
+	}
+	aggregateAlertID := canonicalMetricStateID(guestID, "disk")
+	m.activeAlerts[aggregateAlertID] = &Alert{
+		ID:         aggregateAlertID,
+		ResourceID: guestID,
+		Type:       "disk",
+		Value:      97,
+	}
+	m.mu.Unlock()
+
+	vm := models.VM{
+		ID:       guestID,
+		VMID:     101,
+		Name:     "flatcar",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		Disks: []models.Disk{
+			{Mountpoint: "/boot", Device: "/dev/vda1", Usage: 97, Total: 100, Used: 97, Free: 3},
+		},
+	}
+	m.CheckGuest(vm, "pve1")
+
+	bootAlertID := canonicalMetricStateID(guestID+"-disk-boot-dev-vda1", "disk")
+	m.mu.RLock()
+	_, existsAt97 := testLookupActiveAlert(t, m, bootAlertID)
+	_, aggregateExists := testLookupActiveAlert(t, m, aggregateAlertID)
+	m.mu.RUnlock()
+	if existsAt97 {
+		t.Fatalf("/boot alert fired below its 99%% override")
+	}
+	if aggregateExists {
+		t.Fatalf("dedicated filesystem override left stale aggregate alert %q", aggregateAlertID)
+	}
+
+	vm.Disks[0].Usage = 100
+	vm.Disks[0].Used = 100
+	vm.Disks[0].Free = 0
+	m.CheckGuest(vm, "pve1")
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, exists := testLookupActiveAlert(t, m, bootAlertID); !exists {
+		t.Fatalf("/boot alert did not fire above its 99%% override")
+	}
+}

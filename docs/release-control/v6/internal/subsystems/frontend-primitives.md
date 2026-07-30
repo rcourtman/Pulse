@@ -4677,6 +4677,13 @@ using the shared contract in
 Future infrastructure-thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`.
+The Proxmox threshold tab includes a separate Guest Filesystems section for
+QEMU guest-agent mounts. Rows use the live per-filesystem alert resource ID for
+status and delay actions, but carry explicit override candidates and a stable
+override storage ID into the shared mutation owners. This split is required:
+using the alert ID as the persistence key strands settings on VM node moves,
+while using only the persistence ID breaks active-alert and intent-policy
+linkage in the shared resource table.
 The Docker tab now follows that same composition pattern through
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx`,

@@ -31,6 +31,7 @@ interface ThresholdsOverrideMutationResources {
   nodesWithOverrides: Accessor<TableResource[]>;
   agentsWithOverrides: Accessor<TableResource[]>;
   agentDisksWithOverrides: Accessor<TableResource[]>;
+  guestDisksWithOverrides?: Accessor<TableResource[]>;
   dockerHostsWithOverrides: Accessor<TableResource[]>;
   guestsFlat: Accessor<TableResource[]>;
   dockerContainersFlat: Accessor<TableResource[]>;
@@ -84,6 +85,7 @@ export function useThresholdsOverrideMutations({
     ...resources.nodesWithOverrides(),
     ...resources.agentsWithOverrides(),
     ...resources.agentDisksWithOverrides(),
+    ...optionalResources(resources.guestDisksWithOverrides),
     ...resources.dockerHostsWithOverrides(),
     ...resources.pbsServersWithOverrides(),
     ...resources.pmgServersWithOverrides(),
@@ -281,9 +283,12 @@ export function useThresholdsOverrideMutations({
       const resource = proxmoxResources().find((entry) => entry.id === id);
       if (!resource) continue;
 
+      const { candidateIds, storageId } = getOverridePersistenceIdentity(resource);
       const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
-      const existingOverride = nextOverrides.find((override) => override.id === id);
-      const previousRaw = nextRawConfig[id];
+      const existingOverride = nextOverrides.find((override) => candidateIds.includes(override.id));
+      const previousRaw = candidateIds
+        .map((candidate) => nextRawConfig[candidate])
+        .find((entry): entry is RawOverrideConfig => Boolean(entry));
       const newThresholds: Record<string, number | undefined> = {
         ...(existingOverride?.thresholds ?? {}),
       };
@@ -309,14 +314,17 @@ export function useThresholdsOverrideMutations({
       );
 
       if (Object.keys(newThresholds).length === 0 && !hasStateOnlyOverride) {
-        const existingIndex = nextOverrides.findIndex((override) => override.id === id);
-        if (existingIndex !== -1) nextOverrides.splice(existingIndex, 1);
-        delete nextRawConfig[id];
+        for (let index = nextOverrides.length - 1; index >= 0; index -= 1) {
+          if (candidateIds.includes(nextOverrides[index]!.id)) {
+            nextOverrides.splice(index, 1);
+          }
+        }
+        candidateIds.forEach((candidate) => delete nextRawConfig[candidate]);
         continue;
       }
 
       const override: Override = {
-        id,
+        id: storageId,
         name: resource.name,
         type: resource.type as OverrideType,
         resourceType: resource.resourceType,
@@ -332,7 +340,7 @@ export function useThresholdsOverrideMutations({
         thresholds: newThresholds,
       };
 
-      const existingIndex = nextOverrides.findIndex((entry) => entry.id === id);
+      const existingIndex = nextOverrides.findIndex((entry) => candidateIds.includes(entry.id));
       if (existingIndex >= 0) {
         nextOverrides[existingIndex] = override;
       } else {
@@ -356,7 +364,8 @@ export function useThresholdsOverrideMutations({
         }
       }
 
-      nextRawConfig[id] = withThresholdEntries(hysteresisThresholds, newThresholds);
+      candidateIds.forEach((candidate) => delete nextRawConfig[candidate]);
+      nextRawConfig[storageId] = withThresholdEntries(hysteresisThresholds, newThresholds);
     }
 
     props.setOverrides(nextOverrides);

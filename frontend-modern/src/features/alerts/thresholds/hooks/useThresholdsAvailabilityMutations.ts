@@ -23,6 +23,7 @@ interface ThresholdsAvailabilityMutationResources {
   nodesWithOverrides: () => TableResource[];
   agentsWithOverrides: () => TableResource[];
   agentDisksWithOverrides: () => TableResource[];
+  guestDisksWithOverrides?: () => TableResource[];
   dockerHostsWithOverrides: () => TableResource[];
   guestsFlat: () => TableResource[];
   dockerContainersFlat: () => TableResource[];
@@ -75,6 +76,7 @@ export function useThresholdsAvailabilityMutations({
       ...resources.pbsServersWithOverrides(),
       ...resources.agentsWithOverrides(),
       ...resources.agentDisksWithOverrides(),
+      ...optionalResources(resources.guestDisksWithOverrides),
       ...optionalResources(resources.kubernetesClustersWithOverrides),
       ...optionalResources(resources.kubernetesNodesWithOverrides),
       ...optionalResources(resources.kubernetesNamespacesWithOverrides),
@@ -98,6 +100,7 @@ export function useThresholdsAvailabilityMutations({
         resource.type !== 'dockerContainer' &&
         resource.type !== 'agent' &&
         resource.type !== 'agentDisk' &&
+        resource.type !== 'guestDisk' &&
         resource.type !== 'kubernetesCluster' &&
         resource.type !== 'kubernetesNode' &&
         resource.type !== 'kubernetesNamespace' &&
@@ -168,6 +171,8 @@ export function useThresholdsAvailabilityMutations({
         props.removeAlerts(
           (alert) => alert.resourceId === resourceId && alert.type === 'powered-off',
         );
+      } else if (resource.type === 'guestDisk') {
+        props.removeAlerts((alert) => alert.resourceId === resourceId && alert.type === 'disk');
       } else if (resource.type === 'pbs') {
         const offlineId = `pbs-offline-${resourceId}`;
         props.removeAlerts(

@@ -10,6 +10,7 @@ import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
 
 export type OverrideType =
   | 'guest'
+  | 'guestDisk'
   | 'agent'
   | 'agentDisk'
   | 'storage'

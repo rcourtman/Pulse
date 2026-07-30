@@ -6,6 +6,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -267,6 +268,44 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		memoryMetric = &UnifiedResourceMetric{Percent: memUsage}
 	}
 	diskReadMetric, diskWriteMetric, networkInMetric, networkOutMetric := guestIORateMetrics(snapshot)
+	diskMetric := &UnifiedResourceMetric{Percent: diskUsage}
+	if len(disks) > 0 {
+		var aggregateTotal, aggregateUsed int64
+		hasDedicatedDiskOverride := false
+		seenAggregateDiskKeys := make(map[string]struct{})
+		for idx, disk := range disks {
+			if disk.Total <= 0 || disk.Usage < 0 {
+				continue
+			}
+			label, keySource, sanitizedKey := guestDiskIdentity(disk, idx)
+			if _, exists := seenAggregateDiskKeys[sanitizedKey]; exists {
+				continue
+			}
+			seenAggregateDiskKeys[sanitizedKey] = struct{}{}
+
+			m.mu.RLock()
+			diskOverride, hasDiskOverride := lookupGuestDiskOverride(m.config.Overrides, guest, guestID, keySource)
+			m.mu.RUnlock()
+			if hasDiskOverride && (diskOverride.Disabled || diskOverride.Disk != nil) {
+				hasDedicatedDiskOverride = true
+				log.Debug().
+					Str("guest", name).
+					Str("diskLabel", label).
+					Msg("Excluding guest filesystem with a dedicated override from aggregate disk alert")
+				continue
+			}
+			aggregateTotal += disk.Total
+			aggregateUsed += disk.Used
+		}
+		if hasDedicatedDiskOverride {
+			if aggregateTotal > 0 {
+				diskMetric.Percent = float64(aggregateUsed) / float64(aggregateTotal) * 100
+			} else {
+				diskMetric = nil
+				m.clearAlert(canonicalMetricStateID(guestID, "disk"))
+			}
+		}
+	}
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:         guestID,
 		Type:       snapshot.resourceType(),
@@ -275,14 +314,14 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		Instance:   instanceName,
 		CPU:        &UnifiedResourceMetric{Percent: cpu},
 		Memory:     memoryMetric,
-		Disk:       &UnifiedResourceMetric{Percent: diskUsage},
+		Disk:       diskMetric,
 		DiskRead:   diskReadMetric,
 		DiskWrite:  diskWriteMetric,
 		NetworkIn:  networkInMetric,
 		NetworkOut: networkOutMetric,
 	}, thresholds, evalOpts)
 
-	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 && len(disks) > 0 {
+	if len(disks) > 0 {
 		seenDiskKeys := make(map[string]struct{})
 		seenDiskResources := make(map[string]struct{})
 		for idx, disk := range disks {
@@ -293,22 +332,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				continue
 			}
 
-			label := strings.TrimSpace(disk.Mountpoint)
-			if label == "" {
-				label = strings.TrimSpace(disk.Device)
-			}
-			if label == "" {
-				label = fmt.Sprintf("Disk %d", idx+1)
-			}
-
-			keySource := label
-			if disk.Device != "" && !strings.EqualFold(disk.Device, label) {
-				keySource = fmt.Sprintf("%s-%s", label, disk.Device)
-			}
-			sanitizedKey := sanitizeAlertKey(keySource)
-			if sanitizedKey == "" {
-				sanitizedKey = fmt.Sprintf("disk-%d", idx+1)
-			}
+			label, keySource, sanitizedKey := guestDiskIdentity(disk, idx)
 
 			// Avoid duplicate checks if two disks resolve to the same key
 			if _, exists := seenDiskKeys[sanitizedKey]; exists {
@@ -319,6 +343,20 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			perDiskResourceID := fmt.Sprintf("%s-disk-%s", guestID, sanitizedKey)
 			seenDiskResources[perDiskResourceID] = struct{}{}
 			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
+
+			effectiveDiskThreshold := thresholds.Disk
+			m.mu.RLock()
+			diskOverride, hasDiskOverride := lookupGuestDiskOverride(m.config.Overrides, guest, guestID, keySource)
+			m.mu.RUnlock()
+			if hasDiskOverride {
+				if diskOverride.Disabled {
+					m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
+					continue
+				}
+				if diskOverride.Disk != nil {
+					effectiveDiskThreshold = ensureHysteresisThreshold(diskOverride.Disk)
+				}
+			}
 
 			log.Debug().
 				Str("guest", name).
@@ -340,14 +378,14 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			}
 			resourceType, ok := unifiedMetricResourceType(snapshot.resourceType())
 			if !ok {
-				m.checkMetric(perDiskResourceID, name, node, instanceName, snapshot.resourceType(), "disk", disk.Usage, thresholds.Disk, &metricOptions{
+				m.checkMetric(perDiskResourceID, name, node, instanceName, snapshot.resourceType(), "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{
 					Metadata:    metadata,
 					Message:     message,
 					MonitorOnly: monitorOnly,
 				})
 				continue
 			}
-			spec, err := buildCanonicalMetricSpec(perDiskResourceID, name, resourceType, "disk", thresholds.Disk)
+			spec, err := buildCanonicalMetricSpec(perDiskResourceID, name, resourceType, "disk", effectiveDiskThreshold)
 			if err != nil {
 				log.Warn().
 					Err(err).
@@ -357,7 +395,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				continue
 			}
 
-			m.checkMetricWithCanonicalSpec(spec, name, node, instanceName, snapshot.resourceType(), disk.Usage, thresholds.Disk, &metricOptions{
+			m.checkMetricWithCanonicalSpec(spec, name, node, instanceName, snapshot.resourceType(), disk.Usage, effectiveDiskThreshold, &metricOptions{
 				Metadata:    metadata,
 				Message:     message,
 				MonitorOnly: monitorOnly,
@@ -369,6 +407,26 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	} else if cleared := m.cleanupGuestDiskAlerts(guestID, nil); cleared > 0 {
 		m.saveActiveAlertsAsync("guest-disk-alerts-cleared")
 	}
+}
+
+func guestDiskIdentity(disk models.Disk, idx int) (label, keySource, sanitizedKey string) {
+	label = strings.TrimSpace(disk.Mountpoint)
+	if label == "" {
+		label = strings.TrimSpace(disk.Device)
+	}
+	if label == "" {
+		label = fmt.Sprintf("Disk %d", idx+1)
+	}
+
+	keySource = label
+	if disk.Device != "" && !strings.EqualFold(disk.Device, label) {
+		keySource = fmt.Sprintf("%s-%s", label, disk.Device)
+	}
+	sanitizedKey = sanitizeAlertKey(keySource)
+	if sanitizedKey == "" {
+		sanitizedKey = fmt.Sprintf("disk-%d", idx+1)
+	}
+	return label, keySource, sanitizedKey
 }
 
 func guestIORateMetrics(snapshot guestSnapshot) (diskRead, diskWrite, networkIn, networkOut *UnifiedResourceMetric) {

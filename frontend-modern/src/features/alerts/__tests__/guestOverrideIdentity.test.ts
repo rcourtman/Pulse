@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getGuestOverrideIdentity,
+  guestDiskAlertResourceId,
+  guestDiskOverrideIdCandidates,
+  guestDiskOverrideStorageId,
   guestOverrideIdCandidates,
   guestOverrideStorageId,
   normalizeGuestOverrideKey,
+  parseGuestDiskOverrideId,
 } from '../guestOverrideIdentity';
 
 describe('guestOverrideIdentity', () => {
@@ -287,6 +291,52 @@ describe('guestOverrideIdentity', () => {
     it('is idempotent for an already-stable cluster key', () => {
       const stable = normalizeGuestOverrideKey('cluster-a:node-1:100');
       expect(normalizeGuestOverrideKey(stable)).toBe(stable);
+    });
+  });
+
+  describe('guest filesystem override identity', () => {
+    const guest = {
+      id: 'cluster-a:node-1:100',
+      instance: 'cluster-a',
+      node: 'node-1',
+      vmid: 100,
+    };
+
+    it('uses the stable guest identity and the mount plus device', () => {
+      expect(guestDiskOverrideStorageId(guest, '/boot', '/dev/vda1')).toBe(
+        'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+      );
+      expect(guestDiskAlertResourceId(guest, '/boot', '/dev/vda1')).toBe(
+        'cluster-a:node-1:100-disk-boot-dev-vda1',
+      );
+    });
+
+    it('retains aliases so existing overrides survive node moves', () => {
+      expect(guestDiskOverrideIdCandidates(guest, '/boot', '/dev/vda1')).toEqual([
+        'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+        'guest-disk:cluster-a:node-1:100/disk:boot-dev-vda1',
+        'guest-disk:cluster-a-100/disk:boot-dev-vda1',
+        'guest-disk:cluster-a-node-1-100/disk:boot-dev-vda1',
+      ]);
+    });
+
+    it('normalizes root and Windows mount labels consistently', () => {
+      expect(guestDiskOverrideStorageId(guest, '/', undefined)).toBe(
+        'guest-disk:guest:cluster-a:100/disk:root',
+      );
+      expect(guestDiskOverrideStorageId(guest, 'C:\\', undefined)).toBe(
+        'guest-disk:guest:cluster-a:100/disk:c',
+      );
+    });
+
+    it('parses persisted filesystem override ids', () => {
+      expect(parseGuestDiskOverrideId('guest-disk:guest:cluster-a:100/disk:boot-dev-vda1')).toEqual(
+        {
+          guestKey: 'guest:cluster-a:100',
+          diskKey: 'boot-dev-vda1',
+        },
+      );
+      expect(parseGuestDiskOverrideId('guest:cluster-a:100')).toBeUndefined();
     });
   });
 });

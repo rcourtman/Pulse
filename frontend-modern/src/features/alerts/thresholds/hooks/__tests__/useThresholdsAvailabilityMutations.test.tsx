@@ -84,4 +84,64 @@ describe('useThresholdsAvailabilityMutations', () => {
     expect(setHasUnsavedChanges).toHaveBeenCalledWith(true);
     expect(removeAlerts).not.toHaveBeenCalled();
   });
+
+  it('persists guest filesystem disables under the stable override identity', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig, removeAlerts } = buildTableProps(overrideSignal);
+    const filesystemResource: TableResource = {
+      id: 'cluster-a:node-2:100-disk-boot-dev-vda1',
+      overrideIdCandidates: [
+        'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+        'guest-disk:cluster-a:node-2:100/disk:boot-dev-vda1',
+      ],
+      overrideStorageId: 'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+      name: '/boot',
+      type: 'guestDisk',
+      resourceType: 'Guest Filesystem',
+      thresholds: {},
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsAvailabilityMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          guestDisksWithOverrides: () => [filesystemResource],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        removeOverride: vi.fn(),
+      }),
+    );
+
+    result.toggleDisabled(filesystemResource.id, true);
+
+    expect(overrideSignal[0]()).toEqual([
+      expect.objectContaining({
+        id: 'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+        disabled: true,
+        type: 'guestDisk',
+      }),
+    ]);
+    expect(rawOverridesConfig()).toEqual({
+      'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1': {
+        disabled: true,
+      },
+    });
+
+    const removePredicate = removeAlerts.mock.calls[0]?.[0] as
+      ((alert: { resourceId: string; type: string }) => boolean) | undefined;
+    expect(removePredicate).toBeTypeOf('function');
+    expect(
+      removePredicate?.({
+        resourceId: filesystemResource.id,
+        type: 'disk',
+      }),
+    ).toBe(true);
+  });
 });

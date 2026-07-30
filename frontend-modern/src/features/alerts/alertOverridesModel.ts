@@ -12,6 +12,7 @@ import {
 } from './helpers';
 import {
   getGuestOverrideIdentity,
+  parseGuestDiskOverrideId,
   guestOverrideIdCandidates,
   guestOverrideStorageId,
   normalizeGuestOverrideKey,
@@ -440,6 +441,23 @@ export const buildProjectedOverrides = ({
   });
 
   Object.entries(rawConfig).forEach(([key, thresholds]) => {
+    const guestDiskIdentity = parseGuestDiskOverrideId(key);
+    if (guestDiskIdentity) {
+      const guest = guestMap.get(guestDiskIdentity.guestKey);
+      const diskName = guestDiskIdentity.diskKey === 'root' ? '/' : guestDiskIdentity.diskKey;
+      upsertProjectedOverride({
+        id: key,
+        name: diskName,
+        type: 'guestDisk',
+        resourceType: 'Guest Filesystem',
+        node: guest ? getAlertResourceDisplayLabel(guest) : guestDiskIdentity.guestKey,
+        instance: guestDiskIdentity.guestKey,
+        disabled: thresholds.disabled || false,
+        thresholds: extractTriggerValues(thresholds),
+      });
+      return;
+    }
+
     const alertPlatformResource = alertPlatformMap.get(key);
     if (alertPlatformResource) {
       const { resource, type, resourceType } = alertPlatformResource;

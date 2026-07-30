@@ -37,6 +37,24 @@ vi.mock('../useThresholdsData', () => ({
     dockerHostsWithOverrides: () => [],
     guestsFlat: () => [],
     guestsGroupedByNode: () => ({}),
+    guestDisksGroupedByGuest: () => ({
+      flatcar: [
+        {
+          id: 'cluster-a:node-1:100-disk-boot-dev-vda1',
+          name: '/boot',
+          type: 'guestDisk',
+          hasOverride: true,
+        },
+      ],
+    }),
+    guestDisksWithOverrides: () => [
+      {
+        id: 'cluster-a:node-1:100-disk-boot-dev-vda1',
+        name: '/boot',
+        type: 'guestDisk',
+        hasOverride: true,
+      },
+    ],
     guestGroupHeaderMeta: () => ({}),
     nodesWithOverrides: () => [],
     pbsServersWithOverrides: () => [],
@@ -186,6 +204,8 @@ describe('useThresholdsTableState', () => {
     expect(captured).toBeDefined();
     expect(captured!.activeTab()).toBe('systems');
     expect(captured!.hasDockerSpecificControls()).toBe(false);
+    expect(captured!.guestDisksWithOverrides()).toHaveLength(1);
+    expect(captured!.guestDisksGroupedByGuest().flatcar?.[0]?.name).toBe('/boot');
 
     captured!.dismissHelpBanner();
     expect(captured!.helpBannerDismissed()).toBe(true);
@@ -196,5 +216,26 @@ describe('useThresholdsTableState', () => {
 
     captured!.handleTabClick('vmware');
     expect(navigateSpy).toHaveBeenCalledWith('/alerts/thresholds/vmware');
+  });
+
+  it('includes guest filesystems in the Proxmox threshold summary', () => {
+    mockPathname = '/alerts/thresholds/proxmox';
+    let captured: ReturnType<typeof useThresholdsTableState> | undefined;
+
+    const Harness = () => {
+      captured = useThresholdsTableState(buildProps());
+      return null;
+    };
+
+    render(() => <Harness />);
+
+    expect(captured!.summaryItems()).toContainEqual(
+      expect.objectContaining({
+        key: 'guestDisks',
+        overrides: 1,
+        tab: 'proxmox',
+        total: 1,
+      }),
+    );
   });
 });

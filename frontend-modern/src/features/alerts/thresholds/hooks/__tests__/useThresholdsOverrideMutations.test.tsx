@@ -113,4 +113,64 @@ describe('useThresholdsOverrideMutations', () => {
     expect(setHasUnsavedChanges).toHaveBeenCalledWith(true);
     expect(cancelEdit).toHaveBeenCalledTimes(1);
   });
+
+  it('bulk-saves guest filesystem thresholds under the stable override identity', () => {
+    const overrideSignal = createSignal<any[]>([]);
+    const { props, rawOverridesConfig } = buildTableProps(overrideSignal);
+    const filesystemResource: TableResource = {
+      id: 'cluster-a:node-2:100-disk-boot-dev-vda1',
+      overrideIdCandidates: [
+        'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+        'guest-disk:cluster-a:node-2:100/disk:boot-dev-vda1',
+      ],
+      overrideStorageId: 'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+      name: '/boot',
+      type: 'guestDisk',
+      resourceType: 'Guest Filesystem',
+      defaults: { disk: 85 },
+      thresholds: {},
+    };
+
+    const { result } = renderHook(() =>
+      useThresholdsOverrideMutations({
+        props,
+        resources: {
+          nodesWithOverrides: () => [],
+          agentsWithOverrides: () => [],
+          agentDisksWithOverrides: () => [],
+          guestDisksWithOverrides: () => [filesystemResource],
+          dockerHostsWithOverrides: () => [],
+          guestsFlat: () => [],
+          dockerContainersFlat: () => [],
+          pbsServersWithOverrides: () => [],
+          pmgServersWithOverrides: () => [],
+          storageWithOverrides: () => [],
+        },
+        editingThresholds: () => ({}),
+        editingNote: () => '',
+        bulkEditIds: () => [filesystemResource.id],
+        cancelEdit: vi.fn(),
+        updateBackupDefaults: vi.fn(),
+        updateSnapshotDefaults: vi.fn(),
+      }),
+    );
+
+    result.handleSaveBulkEdit({ disk: 99 });
+
+    expect(overrideSignal[0]()).toEqual([
+      expect.objectContaining({
+        id: 'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1',
+        thresholds: { disk: 99 },
+        type: 'guestDisk',
+      }),
+    ]);
+    expect(rawOverridesConfig()).toEqual({
+      'guest-disk:guest:cluster-a:100/disk:boot-dev-vda1': {
+        disk: {
+          clear: 94,
+          trigger: 99,
+        },
+      },
+    });
+  });
 });

@@ -7,6 +7,9 @@ export const NODE_THRESHOLDS_FILTER_EMPTY_STATE =
 export const PBS_THRESHOLDS_FILTER_EMPTY_STATE = 'No PBS servers match the current filters.';
 export const GUEST_THRESHOLDS_FILTER_EMPTY_STATE =
   'No VMs or containers match the current filters.';
+export const GUEST_DISKS_EMPTY_STATE =
+  'No guest filesystems found. Filesystems reported by QEMU guest agents will appear here.';
+export const GUEST_DISKS_FILTER_EMPTY_STATE = 'No guest filesystems match the current filters.';
 export const GUEST_FILTERING_EMPTY_STATE = 'Configure VM and container filtering rules.';
 export const BACKUP_THRESHOLDS_EMPTY_STATE = 'Configure recovery alert thresholds.';
 export const SNAPSHOT_THRESHOLDS_EMPTY_STATE = 'Configure snapshot age thresholds.';
@@ -77,6 +80,7 @@ export const ALERT_THRESHOLDS_DOCKER_UPDATES_DELAY_DESCRIPTION =
 export const ALERT_THRESHOLDS_SECTION_TITLE_NODES = 'Virtualization Hosts';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PBS = 'PBS Servers';
 export const ALERT_THRESHOLDS_SECTION_TITLE_GUESTS = 'VMs & Containers';
+export const ALERT_THRESHOLDS_SECTION_TITLE_GUEST_DISKS = 'Guest Filesystems';
 export const ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING = 'VM and Container Filtering';
 export const ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS = 'Recovery';
 export const ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS = 'Snapshot Age';
@@ -176,6 +180,7 @@ export function getAlertThresholdsSectionTitles() {
     nodes: ALERT_THRESHOLDS_SECTION_TITLE_NODES,
     pbs: ALERT_THRESHOLDS_SECTION_TITLE_PBS,
     guests: ALERT_THRESHOLDS_SECTION_TITLE_GUESTS,
+    guestDisks: ALERT_THRESHOLDS_SECTION_TITLE_GUEST_DISKS,
     guestFiltering: ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING,
     backups: ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS,
     snapshots: ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS,

@@ -21,6 +21,8 @@ import {
   BACKUP_THRESHOLDS_EMPTY_STATE,
   CONTAINERS_FILTER_EMPTY_STATE,
   CONTAINER_RUNTIMES_FILTER_EMPTY_STATE,
+  GUEST_DISKS_EMPTY_STATE,
+  GUEST_DISKS_FILTER_EMPTY_STATE,
   GUEST_THRESHOLDS_EMPTY_STATE,
   GUEST_THRESHOLDS_FILTER_EMPTY_STATE,
   GUEST_FILTERING_EMPTY_STATE,
@@ -55,6 +57,7 @@ interface ThresholdsSummaryItem {
     | 'backups'
     | 'dockerContainers'
     | 'dockerHosts'
+    | 'guestDisks'
     | 'guests'
     | 'kubernetesClusters'
     | 'kubernetesDeployments'
@@ -261,6 +264,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     guestsGroupedByNode: rawGuestsGroupedByNode,
     guestsFlat: rawGuestsFlat,
     guestGroupHeaderMeta,
+    guestDisksGroupedByGuest: rawGuestDisksGroupedByGuest = () => ({}),
+    guestDisksWithOverrides: rawGuestDisksWithOverrides = () => [],
     kubernetesClustersWithOverrides: rawKubernetesClustersWithOverrides = () => [],
     kubernetesDeploymentsWithOverrides: rawKubernetesDeploymentsWithOverrides = () => [],
     kubernetesNamespacesWithOverrides: rawKubernetesNamespacesWithOverrides = () => [],
@@ -323,6 +328,10 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const dockerContainersFlat = createMemo(() => filterResources(rawDockerContainersFlat()));
   const guestsGroupedByNode = createMemo(() => filterGroupedResources(rawGuestsGroupedByNode()));
   const guestsFlat = createMemo(() => filterResources(rawGuestsFlat()));
+  const guestDisksGroupedByGuest = createMemo(() =>
+    filterGroupedResources(rawGuestDisksGroupedByGuest()),
+  );
+  const guestDisksWithOverrides = createMemo(() => filterResources(rawGuestDisksWithOverrides()));
   const kubernetesClustersWithOverrides = createMemo(() =>
     filterResources(rawKubernetesClustersWithOverrides()),
   );
@@ -565,6 +574,13 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           total: props.allGuests?.()?.length ?? 0,
         },
         {
+          key: 'guestDisks',
+          label: 'Guest Filesystems',
+          overrides: countOverrides(guestDisksWithOverrides()),
+          tab: 'proxmox',
+          total: guestDisksWithOverrides().length,
+        },
+        {
           key: 'kubernetesClusters',
           label: 'Kubernetes Clusters',
           overrides: countOverrides(kubernetesClustersWithOverrides()),
@@ -697,6 +713,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       nodesWithOverrides,
       agentsWithOverrides,
       agentDisksWithOverrides,
+      guestDisksWithOverrides,
       dockerHostsWithOverrides,
       guestsFlat,
       dockerContainersFlat,
@@ -732,6 +749,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
         nodesWithOverrides,
         agentsWithOverrides,
         agentDisksWithOverrides,
+        guestDisksWithOverrides,
         dockerHostsWithOverrides,
         guestsFlat,
         dockerContainersFlat,
@@ -865,10 +883,14 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     editingNote,
     editingThresholds,
     expandAll,
+    GUEST_DISKS_EMPTY_STATE,
+    GUEST_DISKS_FILTER_EMPTY_STATE,
     GUEST_FILTERING_EMPTY_STATE,
     GUEST_THRESHOLDS_EMPTY_STATE,
     GUEST_THRESHOLDS_FILTER_EMPTY_STATE,
     guestFilterPresentation,
+    guestDisksGroupedByGuest,
+    guestDisksWithOverrides,
     guestGroupHeaderMeta,
     guestsFlat,
     guestsGroupedByNode,

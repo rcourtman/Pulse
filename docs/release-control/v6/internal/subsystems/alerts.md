@@ -84,6 +84,18 @@ the one whose identity alerting honours. Standalone Pulse-agent machines belong
 to Machines, so the Virtualization Hosts section is fed by provider-owned
 virtualization nodes rather than by every resource of type `agent`.
 
+QEMU guest-agent filesystems have their own threshold identity:
+`guest-disk:<stable-guest-key>/disk:<mount-device-key>`. The stable guest key
+must use the same cluster-aware alias chain as guest thresholds so a VM node
+move does not strand its filesystem settings. A filesystem override may disable
+that mount or supply its own disk threshold. Once a mount has a dedicated
+override, it is evaluated only against that override and is excluded from the
+guest aggregate disk alert; otherwise the aggregate would still fire at the
+guest default and silently defeat a disabled or relaxed mount. The visible
+threshold row keeps the live `guestID-disk-*` alert resource identity for
+active-state and intent-policy linkage while persisting through the stable
+`guest-disk:*` override identity.
+
 A per-metric threshold is off whenever its trigger is `<= 0`. That boundary is
 engine truth (`internal/alerts/canonical_metric.go`,
 `internal/alerts/config_runtime.go`), not a display convention: `-1` is the

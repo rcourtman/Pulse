@@ -165,3 +165,70 @@ export const normalizeGuestOverrideKey = (key: string): string => {
   }
   return stableGuestOverrideKey(parsed.instance, parsed.vmid);
 };
+
+const sanitizeGuestDiskKey = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (trimmed === '/') return 'root';
+
+  const withoutOuterSlashes = trimmed.replace(/^[/\\\s]+|[/\\\s]+$/g, '') || 'root';
+  return (
+    withoutOuterSlashes
+      .toLowerCase()
+      .replace(/[^a-z0-9.]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/^\.+|\.+$/g, '') || 'disk'
+  );
+};
+
+const guestDiskKeySource = (mountpoint?: string, device?: string): string => {
+  const label = mountpoint?.trim() || device?.trim() || 'disk';
+  const normalizedDevice = device?.trim() || '';
+  return normalizedDevice && normalizedDevice.toLowerCase() !== label.toLowerCase()
+    ? `${label}-${normalizedDevice}`
+    : label;
+};
+
+const guestDiskOverrideId = (guestKey: string, diskKey: string): string =>
+  guestKey && diskKey ? `guest-disk:${guestKey}/disk:${diskKey}` : '';
+
+export const guestDiskOverrideStorageId = (
+  resource: GuestOverrideResourceLike,
+  mountpoint?: string,
+  device?: string,
+): string =>
+  guestDiskOverrideId(
+    guestOverrideStorageId(resource),
+    sanitizeGuestDiskKey(guestDiskKeySource(mountpoint, device)),
+  );
+
+export const guestDiskAlertResourceId = (
+  resource: GuestOverrideResourceLike,
+  mountpoint?: string,
+  device?: string,
+): string => {
+  const resourceId = asString(resource.id);
+  const diskKey = sanitizeGuestDiskKey(guestDiskKeySource(mountpoint, device));
+  return resourceId && diskKey ? `${resourceId}-disk-${diskKey}` : '';
+};
+
+export const guestDiskOverrideIdCandidates = (
+  resource: GuestOverrideResourceLike,
+  mountpoint?: string,
+  device?: string,
+): string[] => {
+  const diskKey = sanitizeGuestDiskKey(guestDiskKeySource(mountpoint, device));
+  return uniqueIds(
+    ...guestOverrideIdCandidates(resource).map((guestKey) =>
+      guestDiskOverrideId(guestKey, diskKey),
+    ),
+  );
+};
+
+export const parseGuestDiskOverrideId = (
+  key: string,
+): { guestKey: string; diskKey: string } | undefined => {
+  const match = key.trim().match(/^guest-disk:(.+)\/disk:([^/]+)$/);
+  if (!match?.[1] || !match[2]) return undefined;
+  return { guestKey: match[1], diskKey: match[2] };
+};

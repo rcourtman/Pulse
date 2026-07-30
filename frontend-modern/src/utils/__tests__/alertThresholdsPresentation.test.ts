@@ -198,6 +198,7 @@ describe('alertThresholdsPresentation', () => {
       nodes: 'Virtualization Hosts',
       pbs: 'PBS Servers',
       guests: 'VMs & Containers',
+      guestDisks: 'Guest Filesystems',
       guestFiltering: 'VM and Container Filtering',
       backups: 'Recovery',
       snapshots: 'Snapshot Age',

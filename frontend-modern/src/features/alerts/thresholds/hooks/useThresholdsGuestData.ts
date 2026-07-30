@@ -2,9 +2,13 @@ import { createMemo } from 'solid-js';
 
 import {
   getGuestOverrideIdentity,
+  guestDiskAlertResourceId,
+  guestDiskOverrideIdCandidates,
+  guestDiskOverrideStorageId,
   guestOverrideIdCandidates,
 } from '@/features/alerts/guestOverrideIdentity';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
+import type { Disk } from '@/types/api';
 
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
@@ -97,6 +101,110 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
     Object.values(guestsGroupedByNode() ?? {}).flat(),
   );
 
+  const guestDisksWithOverrides = createMemo<TableResource[]>((prev = []) => {
+    if (editingId()) {
+      return prev;
+    }
+
+    const search = searchTerm().toLowerCase();
+    const overridesMap = createOverridesMap(props.overrides());
+    const seen = new Set<string>();
+    const guestDisks: TableResource[] = [];
+
+    (props.allGuests() ?? []).forEach((guest) => {
+      const disks = guest.proxmox?.disks ?? [];
+      const guestName = getAlertResourceDisplayLabel(guest);
+      const guestIdentity = getGuestOverrideIdentity(guest);
+
+      disks.forEach((disk: Disk) => {
+        if (!disk || disk.total <= 0 || disk.usage < 0) return;
+
+        const candidates = guestDiskOverrideIdCandidates(guest, disk.mountpoint, disk.device);
+        const storageId = guestDiskOverrideStorageId(guest, disk.mountpoint, disk.device);
+        const alertResourceId = guestDiskAlertResourceId(guest, disk.mountpoint, disk.device);
+        if (!storageId || !alertResourceId) return;
+
+        const override = findOverrideByCandidates(overridesMap, candidates);
+        const label = disk.mountpoint?.trim() || disk.device?.trim() || 'disk';
+        const hasCustomThresholds = hasThresholdDiff(override, {
+          disk: props.guestDefaults.disk,
+        });
+        candidates.forEach((candidate) => seen.add(candidate));
+        seen.add(storageId);
+
+        guestDisks.push({
+          id: alertResourceId,
+          overrideIdCandidates: candidates,
+          overrideStorageId: storageId,
+          name: label,
+          displayName: label,
+          rawName: disk.device || label,
+          type: 'guestDisk' as const,
+          resourceType: 'Guest Filesystem',
+          host: guest.id,
+          node: guestName,
+          groupKey: guestIdentity
+            ? `${guestName} · ${guestIdentity.instance}/${guestIdentity.vmid}`
+            : guestName,
+          instance: disk.type || '',
+          vmid: guestIdentity?.vmid,
+          status: guest.status,
+          hasOverride: hasCustomThresholds || Boolean(override?.disabled),
+          disabled: override?.disabled || false,
+          thresholds: override?.thresholds || {},
+          defaults: { disk: props.guestDefaults.disk },
+          subtitle: `${(disk.used / 1024 / 1024 / 1024).toFixed(1)} / ${(disk.total / 1024 / 1024 / 1024).toFixed(1)} GB · ${disk.usage.toFixed(1)}%`,
+        } satisfies TableResource);
+      });
+    });
+
+    (props.overrides() ?? [])
+      .filter((override) => override.type === 'guestDisk' && !seen.has(override.id))
+      .forEach((override) => {
+        const name = override.name || override.id;
+        guestDisks.push({
+          id: override.id,
+          overrideIdCandidates: [override.id],
+          overrideStorageId: override.id,
+          name,
+          displayName: name,
+          rawName: name,
+          type: 'guestDisk' as const,
+          resourceType: 'Guest Filesystem',
+          node: override.node || 'Unknown Guest',
+          instance: override.instance || '',
+          status: 'unknown',
+          hasOverride: true,
+          disabled: override.disabled || false,
+          thresholds: override.thresholds || {},
+          defaults: { disk: props.guestDefaults.disk },
+        });
+      });
+
+    return search
+      ? guestDisks.filter(
+          (disk) =>
+            disk.name.toLowerCase().includes(search) ||
+            disk.node?.toLowerCase().includes(search) ||
+            disk.rawName?.toLowerCase().includes(search),
+        )
+      : guestDisks;
+  }, []);
+
+  const guestDisksGroupedByGuest = createMemo<Record<string, TableResource[]>>(() => {
+    const grouped: Record<string, TableResource[]> = {};
+    guestDisksWithOverrides().forEach((disk) => {
+      const guestName =
+        (typeof disk.groupKey === 'string' && disk.groupKey.trim()) ||
+        disk.node?.trim() ||
+        'Unknown Guest';
+      if (!grouped[guestName]) grouped[guestName] = [];
+      grouped[guestName].push(disk);
+    });
+    Object.values(grouped).forEach((disks) => disks.sort((a, b) => a.name.localeCompare(b.name)));
+    return grouped;
+  });
+
   const guestGroupHeaderMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
     (props.nodes ?? []).forEach((node) => {
@@ -109,6 +217,8 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
   });
 
   return {
+    guestDisksGroupedByGuest,
+    guestDisksWithOverrides,
     guestsGroupedByNode,
     guestsFlat,
     guestGroupHeaderMeta,
