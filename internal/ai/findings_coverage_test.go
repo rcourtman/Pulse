@@ -822,11 +822,13 @@ func TestFindingsStore_DeleteSuppressionRule_Explicit(t *testing.T) {
 
 func TestFindingsStore_DeleteSuppressionRule_ReactivatesFinding(t *testing.T) {
 	store := NewFindingsStore()
+	remindAt := time.Now().Add(24 * time.Hour)
 	store.findings["f1"] = &Finding{
 		ID:              "f1",
 		Severity:        FindingSeverityWarning,
 		DismissedReason: "not_an_issue",
 		Suppressed:      true,
+		RemindAt:        &remindAt,
 	}
 	store.activeCounts[FindingSeverityWarning] = 0
 
@@ -835,5 +837,12 @@ func TestFindingsStore_DeleteSuppressionRule_ReactivatesFinding(t *testing.T) {
 	}
 	if store.activeCounts[FindingSeverityWarning] != 1 {
 		t.Errorf("expected active count to increment, got %d", store.activeCounts[FindingSeverityWarning])
+	}
+	reopened := store.Get("f1")
+	if reopened.RemindAt != nil {
+		t.Fatalf("expected reopen to clear reminder, got %v", reopened.RemindAt)
+	}
+	if got := reopened.Lifecycle[len(reopened.Lifecycle)-1].Type; got != "undismissed" {
+		t.Fatalf("expected undismissed lifecycle event, got %q", got)
 	}
 }

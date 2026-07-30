@@ -730,6 +730,43 @@ func TestHandleDismissFinding_ValidReason(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteSuppressionRule_ReopensFindingInBothStores(t *testing.T) {
+	handler, patrol, unifiedStore, _ := setupAIHandlerWithPatrol(t)
+
+	detectedAt := time.Now().Add(-3 * time.Hour)
+	addPatrolFinding(t, patrol, "finding-reopen", detectedAt)
+	addUnifiedFinding(unifiedStore, "finding-reopen", detectedAt)
+	if !patrol.GetFindings().Dismiss("finding-reopen", "expected_behavior", "known load test") {
+		t.Fatal("expected patrol finding dismissal to succeed")
+	}
+	if !unifiedStore.Dismiss("finding-reopen", "expected_behavior", "known load test") {
+		t.Fatal("expected unified finding dismissal to succeed")
+	}
+
+	req := newLoopbackRequest(http.MethodDelete, "/api/ai/patrol/suppressions/finding_finding-reopen", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleDeleteSuppressionRule(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	patrolFinding := patrol.GetFindings().Get("finding-reopen")
+	if patrolFinding == nil || patrolFinding.DismissedReason != "" || patrolFinding.Suppressed {
+		t.Fatalf("expected patrol finding to be reopened: %+v", patrolFinding)
+	}
+	if patrolFinding.UserNote != "known load test" {
+		t.Fatalf("expected patrol note to survive reopen, got %q", patrolFinding.UserNote)
+	}
+	unifiedFinding := unifiedStore.Get("finding-reopen")
+	if unifiedFinding == nil || unifiedFinding.DismissedReason != "" || unifiedFinding.Suppressed {
+		t.Fatalf("expected unified finding to be reopened: %+v", unifiedFinding)
+	}
+	if unifiedFinding.UserNote != "known load test" {
+		t.Fatalf("expected unified note to survive reopen, got %q", unifiedFinding.UserNote)
+	}
+}
+
 func TestHandleSuppressFinding_SetsSuppressed(t *testing.T) {
 	handler, patrol, unifiedStore, learningStore := setupAIHandlerWithPatrol(t)
 

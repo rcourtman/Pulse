@@ -48,6 +48,10 @@ initial notification target into the notification manager. This adjacent
 alerts/notifications wiring grants no agent enrollment, reporting, removal,
 profile, update, probe-assignment, or command authority and must not mutate
 host-agent state.
+The shared `internal/api/ai_handlers.go` route may also reopen a dismissed
+Patrol finding and mirror that state into the unified findings store. This is
+AI finding-state management only; it grants no agent enrollment, report,
+profile, update, removal, command, or fleet-control authority.
 The JSON-excluded Proxmox VM/LXC I/O-rate validity fields carried by
 `internal/models/models.go` are likewise monitoring-owned sidecar evidence.
 They distinguish a valid idle interval from an unknown rate for history,

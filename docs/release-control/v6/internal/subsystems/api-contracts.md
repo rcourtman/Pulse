@@ -29,6 +29,11 @@ The accepted values are `all`, `email`, `webhook`, and `apprise`; the backend
 normalizes aliases and invalid values before responding, persisting, and
 updating the live notification runtime. Escalation levels use the same value
 vocabulary but remain independent of the initial target.
+`DELETE /api/ai/patrol/suppressions/finding_{findingID}` is the canonical
+reopen path for a dismissed Patrol finding. It removes the finding-backed
+suppression row, preserves the operator note, clears dismissal state in both
+the Patrol and unified stores, and returns not-found when the row is not
+currently dismissed or suppressed.
 Physical-disk payloads preserve optional SMART counter presence, including
 explicit zero values, and expose provider vendor metadata without converting
 missing data into health. Unified-resource clients may request bounded server

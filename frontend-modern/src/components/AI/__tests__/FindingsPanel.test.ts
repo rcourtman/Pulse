@@ -283,6 +283,14 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('Finding marked resolved');
   });
 
+  it('lets operators reopen dismissed findings from the centralized Findings view', () => {
+    expect(findingsPanelSource).toContain('handleReopen');
+    expect(findingsPanelSource).toContain('aiIntelligenceStore.reopenFinding(finding.id)');
+    expect(findingsPanelSource).toContain("finding.status === 'dismissed'");
+    expect(findingsPanelSource).toContain('Reopen finding');
+    expect(findingsPanelSource).toContain('Finding reopened');
+  });
+
   it('fails closed before creating a per-finding suppression rule without concrete scope', () => {
     // Empty resource/category fields are backend wildcards. The per-finding
     // shortcut must not turn missing metadata into a broad suppression rule.

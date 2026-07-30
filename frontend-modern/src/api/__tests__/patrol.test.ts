@@ -12,6 +12,7 @@ import {
   getPatrolRunHistoryWithToolCalls,
   getPatrolRunWithToolCalls,
   createSuppressionRuleFromFinding,
+  reopenFinding,
   resolveFinding,
   triggerPatrolRun,
   createPatrolAutopilotAcknowledgement,
@@ -384,6 +385,17 @@ describe('patrol api', () => {
       method: 'POST',
       body: JSON.stringify({ finding_id: 'finding-resolve-123' }),
     });
+  });
+
+  it('reopens a dismissed finding through its finding-backed suppression row', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true, message: 'ok' } as any);
+
+    await reopenFinding('finding/reopen 123');
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/ai/patrol/suppressions/finding_finding%2Freopen%20123',
+      { method: 'DELETE' },
+    );
   });
 
   it('refuses to create broad suppression rules from a finding shortcut', async () => {

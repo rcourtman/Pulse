@@ -675,6 +675,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     setDismissingId(null);
   };
 
+  const handleReopen = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setActionLoading(finding.id);
+    const ok = await aiIntelligenceStore.reopenFinding(finding.id);
+    setActionLoading(null);
+    if (ok) {
+      notificationStore.success('Finding reopened');
+    } else {
+      notificationStore.error('Failed to reopen finding');
+    }
+  };
+
   const handleSnooze = async (finding: UnifiedFinding, durationHours: number, e: Event) => {
     e.stopPropagation();
     setActionLoading(finding.id);
@@ -1804,6 +1816,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       Create rule from this
                     </button>
                   </Show>
+                </Show>
+                <Show when={finding.status === 'dismissed'}>
+                  <button
+                    type="button"
+                    onClick={(e) => handleReopen(finding, e)}
+                    class="rounded px-2 py-1 text-left text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:text-blue-300 dark:hover:bg-blue-900"
+                    disabled={actionLoading() === finding.id}
+                  >
+                    Reopen finding
+                  </button>
                 </Show>
               </div>
             </details>

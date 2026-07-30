@@ -411,6 +411,21 @@ export async function dismissFinding(
 }
 
 /**
+ * Reopen a dismissed finding.
+ *
+ * Dismissed findings are exposed by the backend as finding-backed suppression
+ * rows, so removing that row performs the canonical undismiss transition.
+ */
+export async function reopenFinding(
+  findingId: string,
+): Promise<{ success: boolean; message: string }> {
+  return apiFetchJSON(
+    `/api/ai/patrol/suppressions/${encodeURIComponent(`finding_${findingId}`)}`,
+    { method: 'DELETE' },
+  );
+}
+
+/**
  * Create a permanent suppression rule from a finding.
  *
  * Unlike dismissFinding (which acts on a single instance), this records a

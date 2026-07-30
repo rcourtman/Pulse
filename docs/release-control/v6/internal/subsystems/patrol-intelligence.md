@@ -18,6 +18,11 @@
 Own the Patrol intelligence route shell, feature surface, local state
 orchestration, findings and approval presentation, run-history rendering, and
 Patrol-specific presentation helpers.
+The centralized Findings surface loads full history for its All and Resolved
+filters, keeps saved operator notes editable and clearable, and offers
+`Reopen finding` only on dismissed findings. Reopening removes the
+finding-backed suppression row, refreshes both Patrol and unified finding
+sources, and retains the note as operator context.
 
 ## Canonical Files
 

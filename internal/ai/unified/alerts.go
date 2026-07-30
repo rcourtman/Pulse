@@ -990,6 +990,28 @@ func (s *UnifiedStore) Dismiss(findingID, reason, note string) bool {
 	return true
 }
 
+// Undismiss reopens a dismissed finding while preserving its operator note.
+// The Patrol findings store remains authoritative for lifecycle history; this
+// mirror keeps the unified findings projection immediately consistent.
+func (s *UnifiedStore) Undismiss(findingID string) bool {
+	s.mu.Lock()
+
+	f, ok := s.findings[findingID]
+	if !ok || (f.DismissedReason == "" && !f.Suppressed) {
+		s.mu.Unlock()
+		return false
+	}
+
+	f.DismissedReason = ""
+	f.Suppressed = false
+	f.AcknowledgedAt = nil
+	f.RemindAt = nil
+
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
 // Snooze snoozes a finding for the specified duration
 func (s *UnifiedStore) Snooze(findingID string, duration time.Duration) bool {
 	s.mu.Lock()

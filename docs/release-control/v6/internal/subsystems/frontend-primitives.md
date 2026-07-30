@@ -27,6 +27,11 @@ The alert schedule's initial-delivery selector composes `SettingsPanel` and
 exposes the same email, webhook, Apprise, and all-destination labels used by
 escalation. It must not introduce a page-local select shell or a second
 destination-label map.
+The centralized Findings surface loads active and historical Patrol findings,
+keeps operator notes editable (including clearing a note with an empty value),
+and exposes `Reopen finding` only for dismissed rows. Reopening uses the
+finding-backed suppression removal API, refreshes both unified and Patrol
+history, and must not discard the saved note.
 
 Platform-owned workload controls extend the shared `WorkloadsFilter` view
 options rather than creating page-local toolbar shells. The Proxmox overview

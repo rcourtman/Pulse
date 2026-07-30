@@ -2243,6 +2243,13 @@ func (s *FindingsStore) Undismiss(id string) bool {
 		return false
 	}
 
+	s.undismissLocked(f)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+func (s *FindingsStore) undismissLocked(f *Finding) {
 	// Clear dismissal state
 	f.DismissedReason = ""
 	f.Suppressed = false
@@ -2257,10 +2264,6 @@ func (s *FindingsStore) Undismiss(id string) bool {
 		s.activeCounts[f.Severity]++
 	}
 	s.syncLoopStateLocked(f)
-
-	s.mu.Unlock()
-	s.scheduleSave()
-	return true
 }
 
 // UpdateInvestigationRecord stores the durable investigation record for a finding.
@@ -2934,15 +2937,10 @@ func (s *FindingsStore) DeleteSuppressionRule(ruleID string) bool {
 	if strings.HasPrefix(ruleID, "finding_") {
 		findingID := strings.TrimPrefix(ruleID, "finding_")
 		if f, exists := s.findings[findingID]; exists && (f.Suppressed || f.DismissedReason != "") {
-			// Un-suppress/undismiss the finding
-			wasActive := f.IsActive()
-			f.Suppressed = false
-			f.DismissedReason = ""
-			f.AcknowledgedAt = nil
-			// If it wasn't active before but is now, increment count
-			if !wasActive && f.IsActive() {
-				s.activeCounts[f.Severity]++
-			}
+			// Finding-backed suppression rows are the management surface for
+			// dismissed findings. Use the canonical transition so reopening
+			// also clears RemindAt and records an undismissed lifecycle event.
+			s.undismissLocked(f)
 			s.mu.Unlock()
 			s.scheduleSave()
 			return true

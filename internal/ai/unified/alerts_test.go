@@ -411,6 +411,49 @@ func TestUnifiedStore_Dismiss(t *testing.T) {
 	}
 }
 
+func TestUnifiedStore_Undismiss(t *testing.T) {
+	store := NewUnifiedStore(DefaultAlertToFindingConfig())
+	finding, _ := store.AddFromAlert(&SimpleAlertAdapter{
+		AlertIdentifier: "alert-undismiss",
+		AlertType:       "cpu",
+		AlertLevel:      "warning",
+		ResourceID:      "vm-101",
+		ResourceName:    "web-server",
+		Value:           85.5,
+		Threshold:       80.0,
+		StartTime:       time.Now(),
+		LastSeen:        time.Now(),
+	})
+
+	if store.Undismiss(finding.ID) {
+		t.Fatal("expected an active finding not to be reopened")
+	}
+	if !store.Dismiss(finding.ID, "not_an_issue", "keep this note") {
+		t.Fatal("expected dismiss to succeed")
+	}
+	remindAt := time.Now().Add(time.Hour)
+	store.mu.Lock()
+	store.findings[finding.ID].RemindAt = &remindAt
+	store.mu.Unlock()
+
+	if !store.Undismiss(finding.ID) {
+		t.Fatal("expected dismissed finding to reopen")
+	}
+	reopened := store.Get(finding.ID)
+	if reopened.DismissedReason != "" || reopened.Suppressed || reopened.AcknowledgedAt != nil {
+		t.Fatalf("dismissal state was not cleared: %+v", reopened)
+	}
+	if reopened.RemindAt != nil {
+		t.Fatalf("expected reminder to clear, got %v", reopened.RemindAt)
+	}
+	if reopened.UserNote != "keep this note" {
+		t.Fatalf("expected operator note to survive reopen, got %q", reopened.UserNote)
+	}
+	if !reopened.IsActive() {
+		t.Fatal("expected reopened finding to be active")
+	}
+}
+
 func TestUnifiedStore_Snooze(t *testing.T) {
 	store := NewUnifiedStore(DefaultAlertToFindingConfig())
 

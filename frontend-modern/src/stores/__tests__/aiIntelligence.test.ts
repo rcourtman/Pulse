@@ -15,6 +15,7 @@ vi.mock('@/api/patrol', () => ({
   acknowledgeFinding: vi.fn(),
   snoozeFinding: vi.fn(),
   dismissFinding: vi.fn(),
+  reopenFinding: vi.fn(),
   resolveFinding: vi.fn(),
   setFindingNote: vi.fn(),
 }));
@@ -33,7 +34,7 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 }));
 
 import { AIAPI } from '@/api/ai';
-import { getPatrolFindings, resolveFinding } from '@/api/patrol';
+import { getPatrolFindings, reopenFinding, resolveFinding } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
 
@@ -297,6 +298,19 @@ describe('aiIntelligenceStore', () => {
     expect(resolveFinding).toHaveBeenCalledWith('finding-resolve');
     expect(AIAPI.getUnifiedFindings).toHaveBeenCalledTimes(1);
     expect(getPatrolFindings).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopens a dismissed finding and refreshes full Patrol history', async () => {
+    vi.mocked(reopenFinding).mockResolvedValueOnce({ success: true, message: 'ok' } as never);
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({ findings: [] } as never);
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([]);
+
+    const ok = await aiIntelligenceStore.reopenFinding('finding-reopen');
+
+    expect(ok).toBe(true);
+    expect(reopenFinding).toHaveBeenCalledWith('finding-reopen');
+    expect(AIAPI.getUnifiedFindings).toHaveBeenCalledTimes(1);
+    expect(getPatrolFindings).toHaveBeenCalledWith({ includeResolved: true, limit: 200 });
   });
 
   it('promotes remind_at on dismissed-as-will_fix_later patrol findings to camelCase remindAt', async () => {

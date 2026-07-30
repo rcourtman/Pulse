@@ -39,6 +39,10 @@ The shared alerts API may persist and apply `schedule.initialNotify` for email,
 webhook, or Apprise delivery. That notification routing is not storage-health,
 backup, recovery-point, restore, or protection evidence; storage/recovery
 surfaces must not infer product state from the selected destination.
+The shared AI handlers may reopen dismissed Patrol findings and synchronize
+the unified finding projection. That finding-state transition does not create,
+delete, validate, or restore recovery points and must not be treated as
+storage-health, backup, restore, or protection evidence.
 The shared Proxmox config discovery path likewise persists powered-off cluster
 members and separates membership from member API reachability. Storage and
 recovery consumers may use the resulting provider-scoped node/instance

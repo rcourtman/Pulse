@@ -15,6 +15,7 @@ import {
   resolveFinding,
   snoozeFinding,
   dismissFinding,
+  reopenFinding,
   setFindingNote,
   getPatrolFindings,
   type Finding as PatrolFinding,
@@ -660,6 +661,17 @@ export const aiIntelligenceStore = {
       return true;
     } catch (e) {
       logger.error('Failed to dismiss finding:', e);
+      return false;
+    }
+  },
+
+  async reopenFinding(findingId: string) {
+    try {
+      await reopenFinding(findingId);
+      await Promise.all([this.loadFindings(), this.loadPatrolFindings({ includeResolved: true })]);
+      return true;
+    } catch (e) {
+      logger.error('Failed to reopen finding:', e);
       return false;
     }
   },

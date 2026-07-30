@@ -7569,19 +7569,31 @@ func (h *AISettingsHandler) HandleDeleteSuppressionRule(w http.ResponseWriter, r
 	}
 
 	findings := patrol.GetFindings()
+	isFindingRule := strings.HasPrefix(ruleID, "finding_")
 
 	if !findings.DeleteSuppressionRule(ruleID) {
 		http.Error(w, "Rule not found", http.StatusNotFound)
 		return
 	}
 
+	if isFindingRule {
+		findingID := strings.TrimPrefix(ruleID, "finding_")
+		if unifiedStore := h.GetUnifiedStoreForOrg(GetOrgID(r.Context())); unifiedStore != nil {
+			unifiedStore.Undismiss(findingID)
+		}
+	}
+
 	log.Info().
 		Str("rule_id", ruleID).
 		Msg("AI Patrol: Suppression rule deleted")
 
+	message := "Suppression rule deleted"
+	if isFindingRule {
+		message = "Finding reopened"
+	}
 	response := map[string]interface{}{
 		"success": true,
-		"message": "Suppression rule deleted",
+		"message": message,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

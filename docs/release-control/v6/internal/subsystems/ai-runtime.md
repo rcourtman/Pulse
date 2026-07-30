@@ -35,6 +35,11 @@ read-state is available and the shared Proxmox guest CPU-percent normalizer for
 legacy snapshot fallback. It must not independently rescale by configured cores
 or substitute a linked in-guest host-agent CPU value, so Patrol evaluates the
 same guest observation as dashboard, alerts, and history.
+Dismissed Patrol findings remain durable operator history. Reopening a
+finding-backed suppression row must use the canonical undismiss transition:
+clear dismissal, suppression, acknowledgement, and reminder state; preserve the
+operator note; append an `undismissed` lifecycle event; and immediately mirror
+the reopened state into the unified findings projection.
 
 Interactive Assistant invocation authority is fail-closed and request-local.
 The `read_only` presentation means no model-invokable durable Pulse-state or
