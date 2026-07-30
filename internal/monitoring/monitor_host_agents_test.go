@@ -2610,12 +2610,22 @@ func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 }
 
 func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
 	monitor := &Monitor{
 		state:             models.NewState(),
 		alertManager:      alerts.NewManager(),
 		hostTokenBindings: make(map[string]string),
 		config:            &config.Config{},
 		rateTracker:       NewRateTracker(),
+		metricsHistory:    NewMetricsHistory(10, time.Hour),
+		metricsStore:      store,
 	}
 	t.Cleanup(func() { monitor.alertManager.Stop() })
 
@@ -2657,6 +2667,7 @@ func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyHostReport: %v", err)
 	}
+	store.Flush()
 	if len(host.Sensors.GPU) != 1 {
 		t.Fatalf("host GPU sensors = %+v, want one sensor", host.Sensors.GPU)
 	}
@@ -2675,6 +2686,23 @@ func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
 	}
 	if host.Sensors.TemperatureCelsius["gpu_nvidia_0"] != temperature {
 		t.Fatalf("legacy GPU temperature compatibility = %+v, want %.1f", host.Sensors.TemperatureCelsius, temperature)
+	}
+
+	expectedMetrics := map[string]float64{
+		"gpu":             utilization,
+		"gpu_memory":      (float64(usedBytes) / float64(totalBytes)) * 100,
+		"gpu_temperature": temperature,
+	}
+	history := monitor.GetGuestMetrics("agent:"+host.ID, time.Hour)
+	for metric, expected := range expectedMetrics {
+		storePoints := waitForStoredMetric(t, store, "agent", host.ID, metric)
+		if got := storePoints[len(storePoints)-1].Value; got != expected {
+			t.Fatalf("persisted %s = %f, want %f", metric, got, expected)
+		}
+		historyPoints := history[metric]
+		if len(historyPoints) == 0 || historyPoints[len(historyPoints)-1].Value != expected {
+			t.Fatalf("in-memory %s = %+v, want %f", metric, historyPoints, expected)
+		}
 	}
 
 	projected := hostSensorsFromReadStateView(&unifiedresources.HostSensorMeta{

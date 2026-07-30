@@ -15,6 +15,7 @@ import { Portal } from 'solid-js/web';
 import { AgentMetadataAPI, type AgentMetadata } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
+import { MetricBar } from '@/components/Workloads/MetricBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { ActionIconButton } from '@/components/shared/Button';
@@ -78,6 +79,8 @@ import { getWorkloadsGuestNetworkEmptyState } from '@/utils/workloadGuestPresent
 import {
   AGENT_MACHINE_COLUMNS,
   getAgentMachineCpuPercent,
+  getAgentMachineGPUTitle,
+  getAgentMachineGPUUtilizationPercent,
   getAgentMachineDiskIODetails,
   getAgentMachineDiskIOTotal,
   getAgentMachineIpValues,
@@ -1057,6 +1060,8 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'memory':
     case 'disk':
       return 'w-[20%] md:w-[8%]';
+    case 'gpu':
+      return 'hidden md:table-cell md:w-[8%]';
     case 'network':
     case 'diskio':
       return 'hidden lg:table-cell lg:w-[9%]';
@@ -1179,7 +1184,7 @@ export const AgentsMachinesTable: Component<{
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   const columnVisibility = useColumnVisibility(
-    'pulse:standalone:machines:columns:v3',
+    'pulse:standalone:machines:columns:v4',
     AGENT_MACHINE_COLUMNS,
     [],
     undefined,
@@ -1468,6 +1473,8 @@ export const AgentsMachinesTable: Component<{
                     const diskThresholds = () =>
                       alertsActivation.getMetricThresholds('agent', 'disk', alertResourceIds());
                     const cpuPercent = () => getAgentMachineCpuPercent(machine);
+                    const gpuUtilization = () => getAgentMachineGPUUtilizationPercent(machine);
+                    const gpuTitle = () => getAgentMachineGPUTitle(machine);
                     const cpuCores = () => cpuCoresFor(machine);
                     const cpuLoadAverage = () => cpuLoadAverageFor(machine);
                     const memoryUsed = () => memoryUsedFor(machine);
@@ -1646,6 +1653,24 @@ export const AgentsMachinesTable: Component<{
                               />
                             </Show>
                           </TableCell>
+                          <Show when={columnVisibility.isColumnVisible('gpu')}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('gpu')}`}
+                              title={gpuTitle()}
+                            >
+                              <Show
+                                when={canRenderMetrics() && gpuUtilization() !== undefined}
+                                fallback={telemetryFallbackMarker()}
+                              >
+                                <MetricBar
+                                  value={gpuUtilization() ?? 0}
+                                  label={`${Math.round(gpuUtilization() ?? 0)}%`}
+                                  type="generic"
+                                  resourceId={metricsKey()}
+                                />
+                              </Show>
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} ${machineColumnWidthClass('memory')}`}
                           >

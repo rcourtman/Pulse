@@ -2949,6 +2949,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		hostDiskPercent = host.Disks[0].Usage
 	}
 	hostTemperature := hostPrimaryTemperatureCelsius(host.Sensors)
+	hostGPUUtilization, hostGPUMemory, hostGPUTemperature := hostGPUMetrics(host.Sensors)
 
 	if !shouldSkipNativeMockStateMetricWrites() {
 		if m.metricsHistory != nil {
@@ -2959,6 +2960,15 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 			if hostTemperature != nil {
 				m.metricsHistory.AddGuestMetric(hostMetricKey, "temperature", *hostTemperature, now)
+			}
+			if hostGPUUtilization != nil {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "gpu", *hostGPUUtilization, now)
+			}
+			if hostGPUMemory != nil {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "gpu_memory", *hostGPUMemory, now)
+			}
+			if hostGPUTemperature != nil {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "gpu_temperature", *hostGPUTemperature, now)
 			}
 
 			if netInRate >= 0 {
@@ -2985,6 +2995,15 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
 			if hostTemperature != nil {
 				m.metricsStore.Write("agent", host.ID, "temperature", *hostTemperature, now)
+			}
+			if hostGPUUtilization != nil {
+				m.metricsStore.Write("agent", host.ID, "gpu", *hostGPUUtilization, now)
+			}
+			if hostGPUMemory != nil {
+				m.metricsStore.Write("agent", host.ID, "gpu_memory", *hostGPUMemory, now)
+			}
+			if hostGPUTemperature != nil {
+				m.metricsStore.Write("agent", host.ID, "gpu_temperature", *hostGPUTemperature, now)
 			}
 			m.writeHostSMARTMetrics(host, now)
 			if netInRate >= 0 {
@@ -3223,6 +3242,40 @@ func hostPrimaryTemperatureCelsius(sensors models.HostSensorSummary) *float64 {
 		return nil
 	}
 	return &best
+}
+
+func hostGPUMetrics(sensors models.HostSensorSummary) (
+	utilizationPercent *float64,
+	memoryPercent *float64,
+	temperatureCelsius *float64,
+) {
+	for _, gpu := range sensors.GPU {
+		if gpu.UtilizationPercent != nil {
+			value := *gpu.UtilizationPercent
+			if value >= 0 && value <= 100 &&
+				(utilizationPercent == nil || value > *utilizationPercent) {
+				copy := value
+				utilizationPercent = &copy
+			}
+		}
+		if gpu.MemoryUsedBytes != nil && gpu.MemoryTotalBytes != nil &&
+			*gpu.MemoryUsedBytes >= 0 && *gpu.MemoryTotalBytes > 0 {
+			value := float64(*gpu.MemoryUsedBytes) / float64(*gpu.MemoryTotalBytes) * 100
+			if value <= 100 && (memoryPercent == nil || value > *memoryPercent) {
+				copy := value
+				memoryPercent = &copy
+			}
+		}
+		if gpu.TemperatureCelsius != nil {
+			value := *gpu.TemperatureCelsius
+			if value > 0 && value <= 150 &&
+				(temperatureCelsius == nil || value > *temperatureCelsius) {
+				copy := value
+				temperatureCelsius = &copy
+			}
+		}
+	}
+	return utilizationPercent, memoryPercent, temperatureCelsius
 }
 
 func nodePrimaryTemperatureCelsius(temperature *models.Temperature) *float64 {

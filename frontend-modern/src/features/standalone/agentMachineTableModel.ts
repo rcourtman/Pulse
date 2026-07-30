@@ -2,7 +2,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { HostDiskIO, HostRAIDArray, HostRAIDDevice } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { getPlatformTableFiniteMetric } from '@/features/platformPage/sharedPlatformPage';
-import { normalizeDiskArray } from '@/utils/format';
+import { formatBytes, normalizeDiskArray } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 export type AgentMachineColumnId =
@@ -10,6 +10,7 @@ export type AgentMachineColumnId =
   | 'system'
   | 'agent'
   | 'cpu'
+  | 'gpu'
   | 'memory'
   | 'disk'
   | 'network'
@@ -28,6 +29,7 @@ export type AgentMachineSortKey =
   | 'system'
   | 'agent'
   | 'cpu'
+  | 'gpu'
   | 'memory'
   | 'disk'
   | 'network'
@@ -52,6 +54,7 @@ export const AGENT_MACHINE_COLUMNS: AgentMachineColumn[] = [
   { id: 'system', label: 'System', kind: 'text', sortKey: 'system', toggleable: true },
   { id: 'agent', label: 'Agent', kind: 'text', sortKey: 'agent', toggleable: true },
   { id: 'cpu', label: 'CPU', kind: 'metric-bar', sortKey: 'cpu' },
+  { id: 'gpu', label: 'GPU', kind: 'metric-bar', sortKey: 'gpu', toggleable: true },
   { id: 'memory', label: 'Memory', kind: 'metric-bar', sortKey: 'memory' },
   { id: 'disk', label: 'Disk', kind: 'metric-bar', sortKey: 'disk' },
   {
@@ -134,6 +137,7 @@ export const AGENT_MACHINE_COLUMNS: AgentMachineColumn[] = [
 
 const AGENT_MACHINE_SORT_DESC_DEFAULTS = new Set<AgentMachineSortKey>([
   'cpu',
+  'gpu',
   'memory',
   'disk',
   'network',
@@ -308,6 +312,44 @@ const getMetricPercent = (metric: Resource['cpu'] | undefined): number | undefin
 export const getAgentMachineCpuPercent = (machine: Resource): number | undefined =>
   getMetricPercent(machine.cpu);
 
+export const getAgentMachineGPUUtilizationPercent = (machine: Resource): number | undefined => {
+  const utilization = (machine.agent?.sensors?.gpu ?? [])
+    .map((gpu) => getPlatformTableFiniteMetric(gpu.utilizationPercent))
+    .filter((value): value is number => value !== undefined && value >= 0 && value <= 100);
+
+  return utilization.length > 0 ? Math.max(...utilization) : undefined;
+};
+
+export const getAgentMachineGPUTitle = (machine: Resource): string => {
+  const rows = (machine.agent?.sensors?.gpu ?? []).flatMap((gpu, index) => {
+    const name = asTrimmedString(gpu.name) ?? asTrimmedString(gpu.id) ?? `GPU ${index}`;
+    const utilization = getPlatformTableFiniteMetric(gpu.utilizationPercent);
+    const memoryUsed = getPlatformTableFiniteMetric(gpu.memoryUsedBytes);
+    const memoryTotal = getPlatformTableFiniteMetric(gpu.memoryTotalBytes);
+    const temperature = getPlatformTableFiniteMetric(gpu.temperatureCelsius);
+    const details: string[] = [];
+
+    if (utilization !== undefined && utilization >= 0 && utilization <= 100) {
+      details.push(`${Math.round(utilization)}% load`);
+    }
+    if (
+      memoryUsed !== undefined &&
+      memoryUsed >= 0 &&
+      memoryTotal !== undefined &&
+      memoryTotal > 0
+    ) {
+      details.push(`${formatBytes(memoryUsed)} / ${formatBytes(memoryTotal)} VRAM`);
+    }
+    if (temperature !== undefined && temperature > 0 && temperature <= 150) {
+      details.push(`${Math.round(temperature)} °C`);
+    }
+
+    return details.length > 0 ? [`${name}: ${details.join(', ')}`] : [];
+  });
+
+  return rows.join('\n');
+};
+
 export const getAgentMachineMemoryPercent = (machine: Resource): number | undefined => {
   if (!machine.memory && machine.agent?.memory?.usageUnavailable === true) {
     return undefined;
@@ -390,6 +432,14 @@ const sensorSearchValues = (machine: Resource): unknown[] => [
   ...Object.keys(machine.agent?.sensors?.temperatureCelsius ?? {}),
   ...Object.keys(machine.agent?.sensors?.fanRpm ?? {}),
   ...Object.keys(machine.agent?.sensors?.additional ?? {}),
+  ...(machine.agent?.sensors?.gpu ?? []).flatMap((gpu) => [
+    gpu.id,
+    gpu.name,
+    gpu.temperatureCelsius,
+    gpu.utilizationPercent,
+    gpu.memoryUsedBytes,
+    gpu.memoryTotalBytes,
+  ]),
   ...(machine.agent?.sensors?.smart ?? []).flatMap((disk) => [
     disk.device,
     disk.model,
@@ -838,6 +888,13 @@ export const sortAgentMachines = (
         result = compareNullableNumber(
           getAgentMachineCpuPercent(left),
           getAgentMachineCpuPercent(right),
+          direction,
+        );
+        break;
+      case 'gpu':
+        result = compareNullableNumber(
+          getAgentMachineGPUUtilizationPercent(left),
+          getAgentMachineGPUUtilizationPercent(right),
           direction,
         );
         break;

@@ -5530,3 +5530,21 @@ renders the canonical dataset name and formatted used, available, referenced,
 and mountpoint values. Empty dataset collections add no new panel, route, or
 navigation state. The presentation mapper owns byte formatting and missing
 mountpoint fallback so components do not reinterpret provider data.
+
+### Host GPU telemetry reuses shared metric and history primitives
+
+The standalone machine table may expose typed host GPU utilization as a
+toggleable, sortable `metric-bar` column, but it must render through the shared
+`MetricBar` primitive and use the unified resource's existing metric key. The
+row model owns validation, maximum-per-host selection, and the per-device
+inspection title; the component must not invent vendor-specific probes or a
+parallel GPU table.
+
+The shared resource drawer keeps `GuestDrawerHistory` as the sole history
+renderer. Resources with typed GPU sensors may extend its normal groups with
+core utilization, VRAM pressure, and GPU temperature series and provide current
+typed readings as initial fallbacks. Resources without GPU sensors retain the
+default history groups unchanged. Rendered table proof belongs in
+`frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx`;
+drawer grouping and fallback proof belongs in
+`frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`.

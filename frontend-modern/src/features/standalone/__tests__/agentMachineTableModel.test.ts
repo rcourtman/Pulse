@@ -3,6 +3,8 @@ import type { Resource } from '@/types/resource';
 import {
   getAgentMachineDiskPercent,
   getAgentMachineDiskIODetails,
+  getAgentMachineGPUTitle,
+  getAgentMachineGPUUtilizationPercent,
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineRaidArrayDetails,
   getAgentMachineTemperatureCelsius,
@@ -27,6 +29,44 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('agentMachineTableModel', () => {
+  it('summarizes and sorts typed GPU telemetry', () => {
+    const gpuMachine = resource({
+      id: 'gpu-host',
+      agent: {
+        sensors: {
+          gpu: [
+            {
+              id: '0',
+              name: 'NVIDIA RTX A6000',
+              utilizationPercent: 7,
+              memoryUsedBytes: 2 * 1024 ** 3,
+              memoryTotalBytes: 48 * 1024 ** 3,
+              temperatureCelsius: 63,
+            },
+            { id: '1', utilizationPercent: 81 },
+            { id: 'invalid', utilizationPercent: 101 },
+          ],
+        },
+      },
+    });
+    const cpuOnlyMachine = resource({ id: 'cpu-only' });
+
+    expect(getAgentMachineGPUUtilizationPercent(gpuMachine)).toBe(81);
+    expect(getAgentMachineGPUUtilizationPercent(cpuOnlyMachine)).toBeUndefined();
+    expect(getAgentMachineGPUTitle(gpuMachine)).toContain(
+      'NVIDIA RTX A6000: 7% load, 2.00 GB / 48.0 GB VRAM, 63 °C',
+    );
+    expect(
+      sortAgentMachines(
+        [cpuOnlyMachine, gpuMachine],
+        'gpu',
+        'desc',
+        () => '',
+        () => '',
+      ).map((machine) => machine.id),
+    ).toEqual(['gpu-host', 'cpu-only']);
+  });
+
   it('normalizes agent disk I/O device counters for table inspection', () => {
     const details = getAgentMachineDiskIODetails(
       resource({

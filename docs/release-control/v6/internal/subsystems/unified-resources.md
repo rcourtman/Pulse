@@ -464,9 +464,13 @@ history target.
 Typed GPU host telemetry follows the same canonical sensor route.
 `HostSensorMeta.gpu` may carry GPU id, name, temperature, utilization, and VRAM
 readings through clone, merge, transport, and frontend decode paths, but those
-readings remain descriptive host context. Unified-resource consumers must not
-promote GPU sensors into separate hardware resources, lifecycle state, workload
-identity, or history targets beyond direct numeric temperature compatibility.
+readings remain descriptive host context. Standalone machine consumers may
+present the maximum valid utilization as a sortable shared metric-bar column,
+include per-device utilization, VRAM, and temperature in inspection text, and
+add `gpu`, `gpu_memory`, and `gpu_temperature` series to the existing agent
+drawer history target. Those projections must stay on the host resource;
+consumers must not promote GPU sensors into separate hardware resources,
+lifecycle state, workload identity, or GPU-specific history identities.
 Host-agent wattage follows that same canonical sensor route.
 `HostSensorMeta.powerWatts` may carry named power readings through clone,
 merge, transport, and frontend decode paths, but those readings remain

@@ -1270,9 +1270,15 @@ exists.
 Host-agent GPU sensor summaries follow that same descriptive-host-telemetry
 path. Monitoring must preserve typed GPU id, name, temperature, utilization,
 and VRAM readings from agent reports through models, read-state projection, and
-frontend conversion, while still using only real Celsius readings for
-`agent.temperature` or `metric=temperature` and without promoting GPU workload
-or process inventory into monitoring state.
+frontend conversion. When typed readings are present, authenticated host-report
+ingest records bounded maximum-per-host `gpu`, `gpu_memory`, and
+`gpu_temperature` samples in both in-memory guest history and the persisted
+`agent` metrics-store stream. Utilization and VRAM pressure are percentages;
+VRAM pressure is derived only from non-negative used bytes and a positive total,
+and temperatures must be positive Celsius values no greater than 150. Missing
+or invalid fields omit only their own series. The aggregate remains attached to
+the existing agent resource and does not promote GPU workload or process
+inventory into monitoring state.
 Host-agent power sensor summaries follow the same descriptive-host-telemetry
 path. Monitoring must preserve `sensors.powerWatts` readings from agent reports
 through models, read-state projection, and frontend conversion without

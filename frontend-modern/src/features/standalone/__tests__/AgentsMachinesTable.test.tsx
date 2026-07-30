@@ -59,6 +59,17 @@ vi.mock('@/components/Workloads/EnhancedCPUBar', () => ({
   ),
 }));
 
+vi.mock('@/components/Workloads/MetricBar', () => ({
+  MetricBar: (props: { value: number; label: string; resourceId?: string }) => (
+    <div
+      data-testid="agent-machine-gpu-bar"
+      data-value={props.value}
+      data-label={props.label}
+      data-resource-id={props.resourceId}
+    />
+  ),
+}));
+
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
   StackedMemoryBar: (props: {
     used: number;
@@ -195,6 +206,18 @@ describe('AgentsMachinesTable', () => {
                   rebuildPercent: 0,
                 },
               ],
+              sensors: {
+                gpu: [
+                  {
+                    id: '0',
+                    name: 'NVIDIA RTX A6000',
+                    utilizationPercent: 67,
+                    memoryUsedBytes: 12 * 1024 ** 3,
+                    memoryTotalBytes: 48 * 1024 ** 3,
+                    temperatureCelsius: 71,
+                  },
+                ],
+              },
             },
           }),
         ]}
@@ -212,8 +235,13 @@ describe('AgentsMachinesTable', () => {
 
     expect(screen.getByRole('button', { name: 'Sort by Net I/O' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sort by Disk I/O' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by GPU' })).toBeInTheDocument();
     expect(screen.getByText('1.00 KB/s')).toBeInTheDocument();
     expect(screen.getByText('8.00 KB/s')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-machine-gpu-bar')).toHaveAttribute('data-value', '67');
+    expect(
+      screen.getByTitle('NVIDIA RTX A6000: 67% load, 12.0 GB / 48.0 GB VRAM, 71 °C'),
+    ).toBeInTheDocument();
 
     expect(screen.queryByRole('button', { name: 'Sort by IP' })).not.toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();

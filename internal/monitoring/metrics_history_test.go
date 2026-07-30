@@ -326,6 +326,9 @@ func TestAddGuestMetric(t *testing.T) {
 		value      float64
 	}{
 		{name: "cpu metric", guestID: "vm-100", metricType: "cpu", value: 75.5},
+		{name: "gpu metric", guestID: "vm-100", metricType: "gpu", value: 65.5},
+		{name: "gpu memory metric", guestID: "vm-100", metricType: "gpu_memory", value: 42.0},
+		{name: "gpu temperature metric", guestID: "vm-100", metricType: "gpu_temperature", value: 71.0},
 		{name: "memory metric", guestID: "vm-100", metricType: "memory", value: 80.0},
 		{name: "disk metric", guestID: "ct-101", metricType: "disk", value: 50.0},
 		{name: "diskread metric", guestID: "vm-102", metricType: "diskread", value: 100.5},
@@ -354,6 +357,12 @@ func TestAddGuestMetric(t *testing.T) {
 			switch tt.metricType {
 			case "cpu":
 				slice = metrics.CPU
+			case "gpu":
+				slice = metrics.GPU
+			case "gpu_memory":
+				slice = metrics.GPUMemory
+			case "gpu_temperature":
+				slice = metrics.GPUTemperature
 			case "memory":
 				slice = metrics.Memory
 			case "disk":
@@ -368,7 +377,8 @@ func TestAddGuestMetric(t *testing.T) {
 				slice = metrics.NetworkOut
 			default:
 				// Unknown types should not populate any slice
-				if len(metrics.CPU)+len(metrics.Memory)+len(metrics.Disk)+
+				if len(metrics.CPU)+len(metrics.GPU)+len(metrics.GPUMemory)+
+					len(metrics.GPUTemperature)+len(metrics.Memory)+len(metrics.Disk)+
 					len(metrics.DiskRead)+len(metrics.DiskWrite)+
 					len(metrics.NetworkIn)+len(metrics.NetworkOut) != 0 {
 					t.Error("unknown metric type populated a slice")
@@ -596,6 +606,9 @@ func TestGetGuestMetrics_AllMetricTypes(t *testing.T) {
 		value      float64
 	}{
 		{name: "cpu metric", metricType: "cpu", value: 50.5},
+		{name: "gpu metric", metricType: "gpu", value: 80.5},
+		{name: "gpu memory metric", metricType: "gpu_memory", value: 62.5},
+		{name: "gpu temperature metric", metricType: "gpu_temperature", value: 74.0},
 		{name: "memory metric", metricType: "memory", value: 70.0},
 		{name: "disk metric", metricType: "disk", value: 45.0},
 		{name: "diskread metric", metricType: "diskread", value: 1024.0},
@@ -745,17 +758,31 @@ func TestGetGuestMetrics_EmptyMetricsData(t *testing.T) {
 	// Directly populate an empty guest metrics entry
 	mh.mu.Lock()
 	mh.guestMetrics["vm-empty"] = &GuestMetrics{
-		CPU:        []MetricPoint{},
-		Memory:     []MetricPoint{},
-		Disk:       []MetricPoint{},
-		DiskRead:   []MetricPoint{},
-		DiskWrite:  []MetricPoint{},
-		NetworkIn:  []MetricPoint{},
-		NetworkOut: []MetricPoint{},
+		CPU:            []MetricPoint{},
+		GPU:            []MetricPoint{},
+		GPUMemory:      []MetricPoint{},
+		GPUTemperature: []MetricPoint{},
+		Memory:         []MetricPoint{},
+		Disk:           []MetricPoint{},
+		DiskRead:       []MetricPoint{},
+		DiskWrite:      []MetricPoint{},
+		NetworkIn:      []MetricPoint{},
+		NetworkOut:     []MetricPoint{},
 	}
 	mh.mu.Unlock()
 
-	metricTypes := []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
+	metricTypes := []string{
+		"cpu",
+		"gpu",
+		"gpu_memory",
+		"gpu_temperature",
+		"memory",
+		"disk",
+		"diskread",
+		"diskwrite",
+		"netin",
+		"netout",
+	}
 
 	for _, metricType := range metricTypes {
 		t.Run(metricType, func(t *testing.T) {
@@ -995,6 +1022,9 @@ func TestGetAllGuestMetrics(t *testing.T) {
 
 	// Add test data for multiple metric types
 	mh.AddGuestMetric("vm-100", "cpu", 50.0, now.Add(-30*time.Minute))
+	mh.AddGuestMetric("vm-100", "gpu", 80.0, now.Add(-29*time.Minute))
+	mh.AddGuestMetric("vm-100", "gpu_memory", 62.5, now.Add(-28*time.Minute))
+	mh.AddGuestMetric("vm-100", "gpu_temperature", 72.0, now.Add(-27*time.Minute))
 	mh.AddGuestMetric("vm-100", "memory", 70.0, now.Add(-25*time.Minute))
 	mh.AddGuestMetric("vm-100", "disk", 40.0, now.Add(-20*time.Minute))
 	mh.AddGuestMetric("vm-100", "diskread", 100.0, now.Add(-15*time.Minute))
@@ -1012,7 +1042,18 @@ func TestGetAllGuestMetrics(t *testing.T) {
 			name:     "get all metrics within hour",
 			guestID:  "vm-100",
 			duration: time.Hour,
-			wantKeys: []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"},
+			wantKeys: []string{
+				"cpu",
+				"gpu",
+				"gpu_memory",
+				"gpu_temperature",
+				"memory",
+				"disk",
+				"diskread",
+				"diskwrite",
+				"netin",
+				"netout",
+			},
 		},
 		{
 			name:     "nonexistent guest",
@@ -1024,7 +1065,18 @@ func TestGetAllGuestMetrics(t *testing.T) {
 			name:     "short duration filters out old",
 			guestID:  "vm-100",
 			duration: 10 * time.Minute,
-			wantKeys: []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}, // keys exist but may be empty
+			wantKeys: []string{
+				"cpu",
+				"gpu",
+				"gpu_memory",
+				"gpu_temperature",
+				"memory",
+				"disk",
+				"diskread",
+				"diskwrite",
+				"netin",
+				"netout",
+			}, // keys exist but may be empty
 		},
 	}
 

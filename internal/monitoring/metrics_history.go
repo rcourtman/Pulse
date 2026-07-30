@@ -14,14 +14,17 @@ type MetricPoint = models.MetricPoint
 
 // GuestMetrics holds historical metrics for a single guest
 type GuestMetrics struct {
-	CPU         []MetricPoint `json:"cpu"`
-	Memory      []MetricPoint `json:"memory"`
-	Disk        []MetricPoint `json:"disk"`
-	DiskRead    []MetricPoint `json:"diskread"`
-	DiskWrite   []MetricPoint `json:"diskwrite"`
-	NetworkIn   []MetricPoint `json:"netin"`
-	NetworkOut  []MetricPoint `json:"netout"`
-	Temperature []MetricPoint `json:"temperature"`
+	CPU            []MetricPoint `json:"cpu"`
+	Memory         []MetricPoint `json:"memory"`
+	Disk           []MetricPoint `json:"disk"`
+	GPU            []MetricPoint `json:"gpu"`
+	GPUMemory      []MetricPoint `json:"gpu_memory"`
+	GPUTemperature []MetricPoint `json:"gpu_temperature"`
+	DiskRead       []MetricPoint `json:"diskread"`
+	DiskWrite      []MetricPoint `json:"diskwrite"`
+	NetworkIn      []MetricPoint `json:"netin"`
+	NetworkOut     []MetricPoint `json:"netout"`
+	Temperature    []MetricPoint `json:"temperature"`
 }
 
 // StorageMetrics holds historical metrics for a single storage
@@ -110,14 +113,17 @@ func cloneGuestMetrics(metrics *GuestMetrics) *GuestMetrics {
 		return nil
 	}
 	return &GuestMetrics{
-		CPU:         append([]MetricPoint(nil), metrics.CPU...),
-		Memory:      append([]MetricPoint(nil), metrics.Memory...),
-		Disk:        append([]MetricPoint(nil), metrics.Disk...),
-		DiskRead:    append([]MetricPoint(nil), metrics.DiskRead...),
-		DiskWrite:   append([]MetricPoint(nil), metrics.DiskWrite...),
-		NetworkIn:   append([]MetricPoint(nil), metrics.NetworkIn...),
-		NetworkOut:  append([]MetricPoint(nil), metrics.NetworkOut...),
-		Temperature: append([]MetricPoint(nil), metrics.Temperature...),
+		CPU:            append([]MetricPoint(nil), metrics.CPU...),
+		Memory:         append([]MetricPoint(nil), metrics.Memory...),
+		Disk:           append([]MetricPoint(nil), metrics.Disk...),
+		GPU:            append([]MetricPoint(nil), metrics.GPU...),
+		GPUMemory:      append([]MetricPoint(nil), metrics.GPUMemory...),
+		GPUTemperature: append([]MetricPoint(nil), metrics.GPUTemperature...),
+		DiskRead:       append([]MetricPoint(nil), metrics.DiskRead...),
+		DiskWrite:      append([]MetricPoint(nil), metrics.DiskWrite...),
+		NetworkIn:      append([]MetricPoint(nil), metrics.NetworkIn...),
+		NetworkOut:     append([]MetricPoint(nil), metrics.NetworkOut...),
+		Temperature:    append([]MetricPoint(nil), metrics.Temperature...),
 	}
 }
 
@@ -153,6 +159,12 @@ func (mh *MetricsHistory) AddGuestMetric(guestID string, metricType string, valu
 		metrics.Memory = mh.appendMetric(metrics.Memory, point)
 	case "disk":
 		metrics.Disk = mh.appendMetric(metrics.Disk, point)
+	case "gpu":
+		metrics.GPU = mh.appendMetric(metrics.GPU, point)
+	case "gpu_memory":
+		metrics.GPUMemory = mh.appendMetric(metrics.GPUMemory, point)
+	case "gpu_temperature":
+		metrics.GPUTemperature = mh.appendMetric(metrics.GPUTemperature, point)
 	case "diskread":
 		metrics.DiskRead = mh.appendMetric(metrics.DiskRead, point)
 	case "diskwrite":
@@ -281,6 +293,12 @@ func (mh *MetricsHistory) addGuestMetricSeries(guestID, metricType string, value
 		metrics.Memory = mh.appendMetricSeries(metrics.Memory, values, timestamps)
 	case "disk":
 		metrics.Disk = mh.appendMetricSeries(metrics.Disk, values, timestamps)
+	case "gpu":
+		metrics.GPU = mh.appendMetricSeries(metrics.GPU, values, timestamps)
+	case "gpu_memory":
+		metrics.GPUMemory = mh.appendMetricSeries(metrics.GPUMemory, values, timestamps)
+	case "gpu_temperature":
+		metrics.GPUTemperature = mh.appendMetricSeries(metrics.GPUTemperature, values, timestamps)
 	case "diskread":
 		metrics.DiskRead = mh.appendMetricSeries(metrics.DiskRead, values, timestamps)
 	case "diskwrite":
@@ -378,6 +396,12 @@ func (mh *MetricsHistory) GetGuestMetrics(guestID string, metricType string, dur
 		data = metrics.Memory
 	case "disk":
 		data = metrics.Disk
+	case "gpu":
+		data = metrics.GPU
+	case "gpu_memory":
+		data = metrics.GPUMemory
+	case "gpu_temperature":
+		data = metrics.GPUTemperature
 	case "diskread":
 		data = metrics.DiskRead
 	case "diskwrite":
@@ -487,6 +511,12 @@ func guestMetricSeries(metrics *GuestMetrics, metricType string) []MetricPoint {
 		return metrics.Memory
 	case "disk":
 		return metrics.Disk
+	case "gpu":
+		return metrics.GPU
+	case "gpu_memory":
+		return metrics.GPUMemory
+	case "gpu_temperature":
+		return metrics.GPUTemperature
 	case "diskread":
 		return metrics.DiskRead
 	case "diskwrite":
@@ -508,7 +538,7 @@ func guestMetricsCoverageSpan(metrics *GuestMetrics, metricTypes []string, cutof
 	}
 
 	if len(metricTypes) == 0 {
-		metricTypes = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout", "temperature"}
+		metricTypes = []string{"cpu", "memory", "disk", "gpu", "gpu_memory", "gpu_temperature", "diskread", "diskwrite", "netin", "netout", "temperature"}
 	}
 
 	var best time.Duration
@@ -572,6 +602,9 @@ func (mh *MetricsHistory) GetAllGuestMetrics(guestID string, duration time.Durat
 	result["cpu"] = filterMetricsByTime(metrics.CPU, cutoffTime)
 	result["memory"] = filterMetricsByTime(metrics.Memory, cutoffTime)
 	result["disk"] = filterMetricsByTime(metrics.Disk, cutoffTime)
+	result["gpu"] = filterMetricsByTime(metrics.GPU, cutoffTime)
+	result["gpu_memory"] = filterMetricsByTime(metrics.GPUMemory, cutoffTime)
+	result["gpu_temperature"] = filterMetricsByTime(metrics.GPUTemperature, cutoffTime)
 	result["diskread"] = filterMetricsByTime(metrics.DiskRead, cutoffTime)
 	result["diskwrite"] = filterMetricsByTime(metrics.DiskWrite, cutoffTime)
 	result["netin"] = filterMetricsByTime(metrics.NetworkIn, cutoffTime)
@@ -693,6 +726,9 @@ func (mh *MetricsHistory) Cleanup() {
 		metrics.CPU = mh.cleanupMetrics(metrics.CPU, cutoffTime)
 		metrics.Memory = mh.cleanupMetrics(metrics.Memory, cutoffTime)
 		metrics.Disk = mh.cleanupMetrics(metrics.Disk, cutoffTime)
+		metrics.GPU = mh.cleanupMetrics(metrics.GPU, cutoffTime)
+		metrics.GPUMemory = mh.cleanupMetrics(metrics.GPUMemory, cutoffTime)
+		metrics.GPUTemperature = mh.cleanupMetrics(metrics.GPUTemperature, cutoffTime)
 		metrics.DiskRead = mh.cleanupMetrics(metrics.DiskRead, cutoffTime)
 		metrics.DiskWrite = mh.cleanupMetrics(metrics.DiskWrite, cutoffTime)
 		metrics.NetworkIn = mh.cleanupMetrics(metrics.NetworkIn, cutoffTime)
@@ -701,6 +737,7 @@ func (mh *MetricsHistory) Cleanup() {
 
 		// If all slices are empty, remove the map entry entirely to free memory
 		if len(metrics.CPU) == 0 && len(metrics.Memory) == 0 && len(metrics.Disk) == 0 &&
+			len(metrics.GPU) == 0 && len(metrics.GPUMemory) == 0 && len(metrics.GPUTemperature) == 0 &&
 			len(metrics.DiskRead) == 0 && len(metrics.DiskWrite) == 0 &&
 			len(metrics.NetworkIn) == 0 && len(metrics.NetworkOut) == 0 &&
 			len(metrics.Temperature) == 0 {

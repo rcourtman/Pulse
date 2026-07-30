@@ -61,6 +61,7 @@ import {
 } from './resourceDetailDrawerOperationalModel';
 import {
   getResourceMetricsHistoryFallbackMetrics,
+  getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
   resourceSupportsMetricsHistory,
 } from './resourceDetailDrawerMetricsHistoryModel';
@@ -344,6 +345,7 @@ export const useResourceDetailDrawerDerivedState = (
   const metricsHistoryFallbackMetrics = createMemo(() =>
     getResourceMetricsHistoryFallbackMetrics(resource),
   );
+  const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource));
   const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource));
   const hasDiscoveryTab = createMemo(
     () => isPulseAgentPlatformResource(resource) && Boolean(discoveryConfig()),
@@ -474,6 +476,7 @@ export const useResourceDetailDrawerDerivedState = (
     serviceDetailsSummary,
     metricsHistoryTarget,
     metricsHistoryFallbackMetrics,
+    metricsHistoryGroups,
     hasMetricsHistory,
     hasDiscoveryTab,
     hasVMwareDetails,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getResourceMetricsHistoryFallbackMetrics,
+  getResourceMetricsHistoryGroups,
   getResourceMetricsHistoryTarget,
 } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
 import type { MetricsHistoryTargetResourceType, Resource } from '@/types/resource';
@@ -128,6 +129,9 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       netout: 2000,
       diskread: 3000,
       diskwrite: 4000,
+      gpu: undefined,
+      gpu_memory: undefined,
+      gpu_temperature: undefined,
     });
   });
 
@@ -143,6 +147,9 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       netout: undefined,
       diskread: undefined,
       diskwrite: undefined,
+      gpu: undefined,
+      gpu_memory: undefined,
+      gpu_temperature: undefined,
     });
   });
 
@@ -207,7 +214,44 @@ describe('getResourceMetricsHistoryFallbackMetrics branch coverage', () => {
       netout: undefined,
       diskread: undefined,
       diskwrite: undefined,
+      gpu: undefined,
+      gpu_memory: undefined,
+      gpu_temperature: undefined,
     });
+  });
+
+  it('returns bounded aggregate GPU fallbacks and GPU history groups', () => {
+    const resource = baseResource({
+      agent: {
+        sensors: {
+          gpu: [
+            {
+              id: '0',
+              name: 'NVIDIA A6000',
+              utilizationPercent: 80,
+              memoryUsedBytes: 24,
+              memoryTotalBytes: 48,
+              temperatureCelsius: 70,
+            },
+            {
+              id: '1',
+              utilizationPercent: 101,
+              memoryUsedBytes: 7,
+              memoryTotalBytes: 8,
+              temperatureCelsius: 151,
+            },
+          ],
+        },
+      },
+    });
+
+    const metrics = getResourceMetricsHistoryFallbackMetrics(resource);
+    expect(metrics.gpu).toBe(80);
+    expect(metrics.gpu_memory).toBe(87.5);
+    expect(metrics.gpu_temperature).toBe(70);
+    expect(getResourceMetricsHistoryGroups(resource).map((group) => group.id)).toEqual(
+      expect.arrayContaining(['gpu-utilization', 'gpu-thermal']),
+    );
   });
 
   it('emits the memory ternary FALSE arm as undefined when memory is explicitly absent but disk is present', () => {
