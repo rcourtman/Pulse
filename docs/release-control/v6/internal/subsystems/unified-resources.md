@@ -538,6 +538,12 @@ The same presentation contract applies to Docker/Podman hosts and containers,
 standalone agents, PBS/PMG instances, Kubernetes clusters/nodes/workloads, and
 card or mobile variants. An absent URL is honestly absent, while an invalid or
 unsafe saved value remains visible as a non-interactive warning.
+Docker host URL metadata is keyed by the stable `Docker.HostSourceID`, with the
+registered host resource id as a compatibility fallback when source identity
+is unavailable. The Docker hosts table and drawer consume the same canonical
+`customUrl`: launch activation must not toggle or navigate the row, and a
+drawer save must update the current table projection immediately while the
+backend metadata projection remains authoritative on refresh.
 Persisted workload URLs must also use the same stable identity in the workload
 and infrastructure drawers. Docker app containers use
 `app-container:<host>:name:<normalized-name>`; Kubernetes pods, Deployments,

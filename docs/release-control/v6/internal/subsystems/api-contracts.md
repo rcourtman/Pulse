@@ -7254,6 +7254,12 @@ frontend consumers may normalize endpoint fields, but they must not fork the
 canonical collection-shape guard or reintroduce legacy `alert_identifier`
 field access once camelCase `alertIdentifier` has been promoted by the shared
 response helpers.
+For PBS nodes, `GET /api/config/nodes` and `PUT /api/config/nodes/{id}` expose
+`excludeDatastores` as a string collection. Omitting it from a partial update
+preserves the stored exclusion list, while an explicit empty collection clears
+it. The PBS node modal hydrates the collection into its comma-separated editor,
+parses the edited patterns back into the canonical array payload, and must not
+treat exclusions as client-only display state.
 The node update payload on `PUT /api/config/nodes/{id}` now also carries an
 optional write-only `clusterEndpointOverrides` collection of
 `{nodeName, ipOverride}` entries handled by

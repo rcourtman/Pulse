@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { DockerHostDrawer } from './DockerHostDrawer';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -328,6 +329,7 @@ export const DockerHostsTable: Component<{
                   {(host) => {
                     const docker = () => dockerHostMeta(host);
                     const name = () => asTrimmedString(host.name) || host.id;
+                    const [customUrl, setCustomUrl] = createSignal(asTrimmedString(host.customUrl));
                     const systemBadge = () => getDockerHostSystemBadge(host);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';
                     const containerCount = () => docker()?.containerCount ?? 0;
@@ -407,9 +409,11 @@ export const DockerHostsTable: Component<{
                                 title={host.status || 'unknown'}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <ResourceNameWithWebInterfaceLink
+                                name={name()}
+                                url={customUrl()}
+                                nameClass="truncate font-semibold text-base-content"
+                              />
                             </div>
                             <Show when={systemBadge()}>
                               {(badge) => (
@@ -516,7 +520,11 @@ export const DockerHostsTable: Component<{
                             colspan={drawerColspan()}
                             data-inline-docker-host-detail-for={host.id}
                           >
-                            <DockerHostDrawer host={host} />
+                            <DockerHostDrawer
+                              host={host}
+                              customUrl={customUrl()}
+                              onCustomUrlChange={setCustomUrl}
+                            />
                           </InlineDetailTableRow>
                         </Show>
                       </>

@@ -82,6 +82,14 @@ full backup point batch per poll cycle. Complete authoritative enumerations
 coalesce only within the same provider, ID-prefix, and instance scope; distinct
 source scopes and non-reconciling event batches remain FIFO so bounding memory
 does not discard independent recovery facts.
+PBS datastore exclusions are applied to the cheap datastore-name listing
+before any per-store RRD, status, garbage-collection, namespace, group, or
+backup request. Exact, prefix, suffix, and contains patterns use the canonical
+case-insensitive datastore matcher. An excluded datastore must be absent from
+the monitoring snapshot, storage projection, and backup enumeration, and the
+version-compatibility fallback must use the same pre-detail filter rather than
+reintroducing requests for excluded removable or intermittently offline
+stores.
 PBS snapshot-to-guest attribution for VMIDs that exist on more than one PVE
 location is evidence-driven, never guessed. When the direct PBS connection is
 authoritative and pbs-type storage contents are dropped from the PVE backup

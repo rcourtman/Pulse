@@ -3889,6 +3889,11 @@ That same node setup owner also includes
 `frontend-modern/src/utils/nodeModalPresentation.ts`, which now owns the
 canonical node-type defaults, endpoint/auth placeholders, monitoring coverage
 copy, and test-result styling for PVE, PBS, and PMG setup.
+For PBS connections, the monitoring section also owns the datastore collection
+scope editor beside the datastore and backup monitoring toggles. It must
+round-trip the stored `excludeDatastores` list, accept comma-separated exact or
+wildcard patterns, and submit the canonical collection without changing agent
+identity, credentials, registration, or connection lifecycle.
 That presentation layer remains presentation-only for those API-managed
 Proxmox, PBS, and PMG connections. Lifecycle guidance in that settings surface
 may explain monitored-system grouping, but monitored-system volume caps are

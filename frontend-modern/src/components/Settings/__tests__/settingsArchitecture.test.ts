@@ -71,6 +71,7 @@ import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?
 import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalModelSource from '../nodeModalModel.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
+import nodeModalPresentationSource from '../../../utils/nodeModalPresentation.ts?raw';
 import availabilityTargetSlotSource from '../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
 import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
@@ -1482,6 +1483,12 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('<NodeModalAuthenticationSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
+    expect(nodeModalMonitoringSectionSource).toContain('Excluded datastores (optional)');
+    expect(nodeModalMonitoringSectionSource).toContain("state.updateField('excludeDatastores'");
+    expect(nodeModalStateSource).toContain(
+      "excludeDatastores: pbsConfig?.excludeDatastores?.join(', ') ?? ''",
+    );
+    expect(nodeModalPresentationSource).toContain('excludeDatastores: formData.excludeDatastores');
     expect(nodeCredentialSlotSource).not.toContain('<Dialog');
     expect(nodeCredentialSlotSource).toContain('buildNodeImportPlan');
     expect(nodeCredentialSlotSource).toContain('MonitoredSystemLedgerAPI.preview');

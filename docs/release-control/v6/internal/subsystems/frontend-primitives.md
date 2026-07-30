@@ -3421,6 +3421,14 @@ warning rather than disappearing or becoming executable. Runtime/platform
 tables must not add separate `Web` columns, page-local external-link anchors,
 linked resource names, or duplicated new-tab safety handling for that launch
 affordance.
+Docker host rows follow the same primitive-owned contract end to end.
+`DockerHostsTable.tsx` composes `ResourceNameWithWebInterfaceLink` beside the
+inert host name, while the host drawer's Overview access surface embeds
+`WebInterfaceUrlField` with `metadataKind="docker-host"` and the stable host
+source id. The drawer must return saved URL changes to its owning table row so
+the adjacent launch control updates immediately; neither the table nor drawer
+may fork metadata transport, URL validation, or new-tab behavior into a
+Docker-local implementation.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of
 standardized repeated affordances, required consumers, and forbidden local

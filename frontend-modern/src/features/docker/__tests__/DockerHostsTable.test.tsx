@@ -17,6 +17,9 @@ const getMetricThresholdsMock = vi.hoisted(() =>
     metric === 'memory' ? { warning: 90, critical: 95 } : { warning: 80, critical: 85 },
   ),
 );
+const updateDockerHostMetadataMock = vi.hoisted(() =>
+  vi.fn(async (_runtimeId: string, metadata: { customUrl?: string }) => metadata),
+);
 
 vi.mock('@/components/shared/responsive', () => ({
   ResponsiveMetricCell: (props: {
@@ -42,6 +45,12 @@ vi.mock('@/stores/alertsActivation', () => ({
     detectionEnabled: () => true,
     getMetricThresholds: getMetricThresholdsMock,
   }),
+}));
+vi.mock('@/api/dockerHostMetadata', () => ({
+  DockerHostMetadataAPI: {
+    getMetadata: vi.fn(async () => ({})),
+    updateMetadata: updateDockerHostMetadataMock,
+  },
 }));
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
@@ -153,10 +162,7 @@ describe('DockerHostsTable', () => {
       />
     ));
 
-    expect(screen.getByTestId('responsive-cpu-metric')).toHaveAttribute(
-      'data-thresholds',
-      '80/85',
-    );
+    expect(screen.getByTestId('responsive-cpu-metric')).toHaveAttribute('data-thresholds', '80/85');
     expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute('data-thresholds', '90/95');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-thresholds', '80/85');
     expect(getMetricThresholdsMock).toHaveBeenCalledWith(
@@ -190,6 +196,68 @@ describe('DockerHostsTable', () => {
     expect(window.location.search).toBe('');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('type', 'button');
     expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('type', 'button');
+  });
+
+  it('opens a saved Docker host web interface without toggling the row', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            customUrl: 'https://docker-01.example:9443',
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const row = screen.getByText('docker-01').closest('tr')!;
+    const link = screen.getByRole('link', { name: 'Open web interface for docker-01' });
+    expect(link).toHaveAttribute('href', 'https://docker-01.example:9443');
+
+    fireEvent.click(link);
+
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('docker-host-drawer')).not.toBeInTheDocument();
+  });
+
+  it('edits the Docker host access URL in the drawer and updates the row link', async () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            docker: {
+              runtimeVersion: '27.5.1',
+              containerCount: 12,
+              hostSourceId: 'runtime-stable-id',
+            } as NonNullable<Resource['docker']>,
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('docker-01').closest('tr')!);
+
+    const drawer = screen.getByTestId('docker-host-drawer');
+    expect(within(drawer).getByText('Access')).toBeInTheDocument();
+    const input = within(drawer).getByRole('textbox');
+    fireEvent.input(input, { target: { value: 'https://portainer.example:9443' } });
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() => {
+      expect(updateDockerHostMetadataMock).toHaveBeenCalledWith('runtime-stable-id', {
+        customUrl: 'https://portainer.example:9443',
+      });
+      expect(
+        screen.getByRole('link', { name: 'Open web interface for docker-01' }),
+      ).toHaveAttribute('href', 'https://portainer.example:9443');
+    });
   });
 
   it('keeps an attached availability check visible in the host detail', () => {

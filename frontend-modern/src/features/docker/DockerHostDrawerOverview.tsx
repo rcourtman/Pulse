@@ -7,6 +7,7 @@ import {
 } from '@/components/Workloads/DrawerDiskListCard';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
@@ -25,6 +26,8 @@ import { hasDockerSwarmEvidence } from './dockerPageModel';
 
 interface DockerHostDrawerOverviewProps {
   host: Resource;
+  customUrl?: string;
+  onCustomUrlChange?: (url: string) => void;
 }
 
 interface DockerOverviewRow {
@@ -116,6 +119,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
   const docker = () => props.host.docker;
   const agent = () => props.host.agent;
   const linkedAgentId = () => cleanText(agent()?.agentId);
+  const metadataId = () => cleanText(docker()?.hostSourceId) || cleanText(props.host.id);
   const temperatureThresholds = createMemo(() =>
     alertsActivation.getMetricThresholds(
       'node',
@@ -453,6 +457,14 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
         <DrawerDiskListCard disks={perDiskItems()} testId="docker-host-drawer-disks" />
       </Show>
       <DetailCard title="Telemetry" rows={telemetryRows()} />
+      <WebInterfaceUrlField
+        metadataKind="docker-host"
+        metadataId={metadataId()}
+        targetLabel={cleanText(props.host.name) || 'Docker host'}
+        title="Access"
+        customUrl={props.customUrl ?? props.host.customUrl ?? ''}
+        onCustomUrlChange={props.onCustomUrlChange}
+      />
     </div>
   );
 }
