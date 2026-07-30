@@ -455,6 +455,11 @@ dense, and backed by the canonical guest `LastBackup` synchronization from PVE
 storage and PBS evidence; the Proxmox Backups tab is the drilldown for
 coverage, restore-point, and source-detail evidence, not the first place users
 must visit to learn whether a guest is backed up.
+The adjacent Proxmox overview memory-basis control is operational workload
+presentation only. Comparing a VM or LXC's used bytes with its parent-node
+memory total may change the memory bar and memory sort order, but it must not
+change Backup-column freshness, protection coverage, restore-point
+correlation, storage-health state, or recovery authority.
 That overview Backup signal belongs to Proxmox VMs and LXCs. If the embedded
 Workloads table demotes Docker-in-LXC `app-container` rows out of peer
 membership, the backup surface must still receive the page model's Proxmox

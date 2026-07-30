@@ -563,6 +563,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     duplicate hot-path type matching.
 16. Extend grouped workload derivation, summary fallbacks, and grouped/windowed table presentation through `frontend-modern/src/components/Workloads/useWorkloadsDerivedState.ts`, extend viewport-driven grouped table synchronization through `frontend-modern/src/components/Workloads/useWorkloadViewportSync.ts`, and extend node parent mapping through `frontend-modern/src/components/Workloads/workloadTopology.ts`, rather than rebuilding grouped selectors, summary snapshot math, scroll listeners, or topology lookups inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 17. Extend workload control defaults, persistent view preferences, keyboard reset behavior, column-visibility ownership, and tag-search flow through `frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts` and `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` rather than rebuilding sort/search/grouping state, reset drift, or column-toggle plumbing inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
+    A platform-owned memory comparison preference may be supplied as an
+    accessor to `useWorkloadsState`. Host-relative sorting must reuse the
+    bounded parent-node map from `workloadTopology.ts`; it must not scan the
+    node inventory per comparator call or resolve topology independently in
+    each row.
     Platform-owned Workloads surfaces may scope column visibility preferences
     when a shared workload metric has platform-specific meaning. Docker
     container surfaces must force the `app-container` column profile, suppress
@@ -592,6 +597,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
 19. Extend threshold-slider value-position math, title/label derivation, and drag scroll-lock runtime through `frontend-modern/src/components/Workloads/thresholdSliderModel.ts` and `frontend-modern/src/components/Workloads/useThresholdSliderState.ts` rather than rebuilding slider-local state and pointer lifecycle inside `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`
 20. Extend stacked disk-bar capacity math, segment/tooltip derivation, summary-strategy selection, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedDiskBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedDiskBarState.ts` rather than rebuilding disk-bar-local state, mode branching, and tooltip shaping inside `frontend-modern/src/components/Workloads/StackedDiskBar.tsx`. Compact multi-disk rows default to same-height per-disk lanes so each filesystem has its own visible usage bar without implying the whole host disk state is one max or aggregate percentage; explicit `mode="stacked"` remains the capacity-contribution stack for callers that intentionally need that presentation, and explicit aggregate callers may choose total-capacity or worst-disk summaries when the owning table's operator job needs one compact risk signal, while tooltips continue to carry the full per-disk breakdown.
 21. Extend stacked memory-bar capacity math, balloon/swap derivation, and resize-observer runtime through `frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts` and `frontend-modern/src/components/Workloads/useStackedMemoryBarState.ts` rather than rebuilding memory-bar-local state, tooltip shaping, and label-fit logic inside `frontend-modern/src/components/Workloads/StackedMemoryBar.tsx`
+    Direct used-versus-total comparisons may provide a comparison label and a
+    separate severity percentage. This lets Proxmox guest rows draw used bytes
+    against the host total while retaining guest-allocation threshold meaning.
+    Host-relative mode must not relabel guest-relative history as host history;
+    until raw-byte history supports the alternate denominator, the memory cell
+    stays on the current comparison bar when the rest of the table uses trends.
 22. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Workloads/metricBarModel.ts` and `frontend-modern/src/components/Workloads/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Workloads/MetricBar.tsx`
 23. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
     Workload and unified-resource metric bars may accept resolved alert display

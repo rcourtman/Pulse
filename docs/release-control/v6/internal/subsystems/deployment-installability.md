@@ -138,6 +138,13 @@ TLS floor in the dynamic config.
 
 ## Shared Boundaries
 
+`frontend-modern/src/utils/localStorage.ts` is a shared browser-preference key
+registry, not deployment state. Workload presentation preferences added there,
+including the Proxmox guest-memory comparison basis, must remain optional,
+client-local, and backwards-compatible: a missing or invalid stored value
+falls back to the shipped guest-allocation view and cannot affect install,
+upgrade, update, release, or artifact-selection behavior.
+
 1. `frontend-modern/src/api/updates.ts` shared with `api-contracts`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
    The version payload consumed by this client must preserve the distinction
    between the running app build `version` and the deployable

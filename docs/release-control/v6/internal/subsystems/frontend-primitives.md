@@ -23,6 +23,13 @@
 Own reusable frontend primitives and canonical page-shell patterns so feature
 work extends shared components instead of creating new local variants.
 
+Platform-owned workload controls extend the shared `WorkloadsFilter` view
+options rather than creating page-local toolbar shells. The Proxmox overview
+may expose a labelled `Guest` / `Host` memory-percentage basis control through
+the shared compact segmented-control primitive; the page owns and persists the
+preference, while the workload state, table, panel, and row contracts carry the
+selected basis and resolved parent-node data to the canonical memory bar.
+
 
 Presentation helpers that mirror a server-side classification must name the
 predicate they mirror and expose it as a single exported function rather than
