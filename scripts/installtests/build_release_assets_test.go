@@ -766,6 +766,31 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	}
 }
 
+func TestDockerRuntimeShipsPinnedAppriseCLI(t *testing.T) {
+	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	dockerfile := string(dockerfileBytes)
+	required := []string{
+		`ARG APPRISE_VERSION=1.12.0`,
+		`AS apprise-builder`,
+		`python3 -m venv /opt/apprise`,
+		`/opt/apprise/bin/pip install --no-cache-dir "apprise==${APPRISE_VERSION}"`,
+		`COPY --from=apprise-builder /opt/apprise /opt/apprise`,
+		`ln -s /opt/apprise/bin/apprise /usr/local/bin/apprise`,
+		`apprise --version | grep -F "Apprise v${APPRISE_VERSION}"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(dockerfile, needle) {
+			t.Fatalf("Dockerfile missing pinned Apprise runtime contract: %s", needle)
+		}
+	}
+	if strings.Count(dockerfile, `apprise --version | grep -F "Apprise v${APPRISE_VERSION}"`) < 2 {
+		t.Fatal("Dockerfile must verify the pinned Apprise CLI in both its build and runtime stages")
+	}
+}
+
 func TestAgentRuntimeImageDefaultsToUnifiedHostAndDockerMonitoring(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {

@@ -3,6 +3,7 @@ package notifications
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -70,5 +71,29 @@ func TestSendAppriseViaCLISuccessNoOutput(t *testing.T) {
 	}, "title", "body")
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
+	}
+}
+
+func TestSendAppriseViaCLIPreservesTelegramTopicTarget(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	const topicTarget = "tgram://bot-token/-1001234567890:42"
+	var receivedArgs []string
+	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
+		receivedArgs = slices.Clone(args)
+		return nil, nil
+	}
+
+	err := nm.sendAppriseViaCLI(AppriseConfig{
+		CLIPath:        "apprise",
+		TimeoutSeconds: 1,
+		Targets:        []string{topicTarget},
+	}, "title", "body")
+	if err != nil {
+		t.Fatalf("expected Telegram topic target delivery to succeed, got %v", err)
+	}
+	if len(receivedArgs) == 0 || receivedArgs[len(receivedArgs)-1] != topicTarget {
+		t.Fatalf("expected Telegram topic target to be preserved as one CLI argument, got %#v", receivedArgs)
 	}
 }

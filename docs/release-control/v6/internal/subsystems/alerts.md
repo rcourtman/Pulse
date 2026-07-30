@@ -1250,10 +1250,14 @@ Future config cleanup should extend the
 config transport hook, the config model, the override-projection hook, or the
 shared `frontend-modern/src/utils/alertDestinationsPresentation.ts` helper for
 customer-facing destinations copy instead of reviving inline retry, test, and
-error text across the feature tabs.
-destinations runtime hook based on which subsystem actually owns the behavior
-instead of letting the broader configuration hook absorb all four concerns
-again.
+error text across the feature tabs. Runtime cleanup should extend the
+destinations hook owned by the subsystem that carries the behavior instead of
+letting the broader configuration hook absorb all four concerns again.
+Local Apprise delivery is a shipped server-runtime capability, not an
+operator-installed optional. The shared presentation helper must show the
+Telegram `chat_id:topic` form, the notification backend must preserve each
+target as one CLI argument, and the deployment-installability contract must
+keep the pinned `apprise` executable available in every Pulse server image.
 The email destination provider picker now follows that same split:
 `frontend-modern/src/components/Alerts/useEmailProviderSelectState.ts` owns
 provider-catalog loading and provider-default application, while

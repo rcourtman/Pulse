@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 ARG BUILD_AGENT=1
+ARG APPRISE_VERSION=1.12.0
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
@@ -251,13 +252,29 @@ VOLUME ["/var/lib/pulse-agent"]
 
 ENTRYPOINT ["/usr/local/bin/pulse-agent"]
 
+# Build the pinned Apprise CLI separately so release runtimes only retain the
+# Python interpreter and installed notification dependencies, not pip.
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS apprise-builder
+
+ARG APPRISE_VERSION
+
+RUN apk --no-cache add python3 py3-pip && \
+    python3 -m venv /opt/apprise && \
+    /opt/apprise/bin/pip install --no-cache-dir "apprise==${APPRISE_VERSION}" && \
+    /opt/apprise/bin/apprise --version | grep -F "Apprise v${APPRISE_VERSION}"
+
 # Base Pulse server runtime shared by self-hosted and hosted tenant images.
 FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
+ARG APPRISE_VERSION
 
-RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client
+RUN apk --no-cache add ca-certificates tzdata su-exec openssh-client python3
+
+COPY --from=apprise-builder /opt/apprise /opt/apprise
+RUN ln -s /opt/apprise/bin/apprise /usr/local/bin/apprise && \
+    apprise --version | grep -F "Apprise v${APPRISE_VERSION}"
 
 WORKDIR /app
 

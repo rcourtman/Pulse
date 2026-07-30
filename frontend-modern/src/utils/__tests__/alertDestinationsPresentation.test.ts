@@ -77,10 +77,13 @@ describe('alertDestinationsPresentation', () => {
       'Choose how Pulse should execute Apprise notifications.',
     );
     expect(getAlertDestinationsAppriseTargetsHelp('cli')).toBe(
-      'Enter one Apprise URL per line. Commas are also supported.',
+      'Enter one Apprise URL per line. Commas are also supported. For Telegram forum topics, append :topic to the chat ID.',
     );
     expect(getAlertDestinationsAppriseTargetsHelp('http')).toBe(
       'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.',
+    );
+    expect(ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER).toContain(
+      'tgram://bot-token/-1001234567890:42',
     );
     expect(ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER).toContain('discord://token');
     expect(ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP).toBe(

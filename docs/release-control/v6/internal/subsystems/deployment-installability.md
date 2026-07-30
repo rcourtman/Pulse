@@ -1448,6 +1448,15 @@ jointly stage the canonical shipped docs set into the container build context
 before `npm run build` runs, rather than relying on a workstation-local
 checkout layout or leaving hosted runtime image builds unable to resolve
 `/app/docs/*.md`, `SECURITY.md`, or `TERMS.md`.
+The shared Pulse server runtime must also ship the local Apprise notification
+CLI promised by the alert destinations surface. `Dockerfile` must install an
+explicitly pinned Apprise release in a separate builder stage, copy that
+environment into `pulse-runtime-base`, retain only the runtime Python
+interpreter there, and verify the exact CLI version in both stages. Because
+hosted, E2E, and self-hosted server images all derive from that base, local
+Apprise delivery—including Telegram `chat_id:topic` targets—must not depend on
+an operator modifying a running container or on a mutable Alpine package
+version.
 That same Docker build graph must keep hosted tenant runtime images separate
 from release-installer assembly. `Dockerfile` must expose a `hosted_runtime`
 target derived from the shared Pulse server runtime base that copies only the

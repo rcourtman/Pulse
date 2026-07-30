@@ -21,10 +21,11 @@ export const ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL = 'Remote Apprise API';
 export const ALERT_DESTINATIONS_APPRISE_MODE_HELP =
   'Choose how Pulse should execute Apprise notifications.';
 export const ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL = 'Delivery targets';
-export const ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER = `discord://token
+export const ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER = `tgram://bot-token/-1001234567890:42
+discord://token
 mailto://alerts@example.com`;
 export const ALERT_DESTINATIONS_APPRISE_TARGETS_HELP_CLI =
-  'Enter one Apprise URL per line. Commas are also supported.';
+  'Enter one Apprise URL per line. Commas are also supported. For Telegram forum topics, append :topic to the chat ID.';
 export const ALERT_DESTINATIONS_APPRISE_TARGETS_HELP_HTTP =
   'Optional: override the URLs defined on your Apprise API instance. Leave blank to use the server defaults.';
 export const ALERT_DESTINATIONS_APPRISE_CLI_PATH_LABEL = 'CLI path';
