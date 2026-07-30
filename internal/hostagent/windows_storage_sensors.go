@@ -62,6 +62,7 @@ type windowsStorageTemperatureReading struct {
 
 func (a *Agent) collectWindowsTemperatureSensors(ctx context.Context) agentshost.Sensors {
 	result := a.collectWindowsStorageTemperatures(ctx)
+	a.mergeLibreHardwareMonitorTemperatures(ctx, &result)
 	a.mergeNVIDIATemperatures(ctx, &result)
 	return result
 }

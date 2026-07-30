@@ -21,16 +21,30 @@ Notes:
 - Temperatures appear automatically once the agent reports.
 - When a Proxmox host has recent usable agent temperature data, Pulse treats the agent as the source of truth and does not also try SSH temperature collection for that host.
 
-## Windows NVIDIA GPU temperatures
+## Windows temperatures
 
 On Windows hosts with an NVIDIA driver, the unified agent uses the driver's
 `nvidia-smi` executable to report GPU temperature, utilization, and VRAM
 usage. No extra Pulse configuration is required; `nvidia-smi.exe` must be
 available on the agent service's `PATH`.
 
-Windows does not provide a dependable built-in API for CPU, motherboard, or
-storage temperature sensors. Pulse does not report those readings on Windows
-unless and until a qualified driver-backed provider is available.
+Supported physical disks are read separately through Windows Storage
+reliability counters. Missing counters or unsupported devices are simply
+omitted.
+
+Windows does not provide a dependable built-in API for CPU or motherboard
+temperatures. For those readings, install and run
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)
+as Administrator, leave its port at `8085`, and enable
+**Options → Remote Web Server → Run**. Do not allow inbound network access to
+port `8085` in Windows Firewall; Pulse reads only the local
+`http://127.0.0.1:8085/data.json` endpoint. Web authentication must be disabled
+for this loopback integration.
+
+Pulse accepts only bounded CPU and motherboard Celsius readings from that
+endpoint. It ignores LibreHardwareMonitor disk and GPU nodes so the native
+Windows Storage and `nvidia-smi` providers remain authoritative. If the helper
+is absent or unavailable, the rest of the Windows report is unaffected.
 
 ## SSH-Based Collection (Fallback)
 

@@ -3,6 +3,8 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -575,6 +577,30 @@ func TestBuildReportIncludesNVIDIASMITemperaturesWhenLMSensorsUnavailable(t *tes
 }
 
 func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
+	libreHardwareMonitor := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/data.json" {
+			t.Fatalf("LibreHardwareMonitor path = %q, want /data.json", request.URL.Path)
+		}
+		_, _ = response.Write([]byte(`{
+			"Children": [{
+				"HardwareId": "/intelcpu/0",
+				"Children": [{
+					"SensorId": "/intelcpu/0/temperature/0",
+					"Type": "Temperature",
+					"RawValue": 51
+				}]
+			}, {
+				"HardwareId": "/lpc/nct6798d/0",
+				"Children": [{
+					"SensorId": "/lpc/nct6798d/0/temperature/1",
+					"Type": "Temperature",
+					"RawValue": 36
+				}]
+			}]
+		}`))
+	}))
+	t.Cleanup(libreHardwareMonitor.Close)
+
 	mc := &mockCollector{
 		goos:  "windows",
 		nowFn: func() time.Time { return time.Date(2026, 7, 30, 18, 0, 0, 0, time.UTC) },
@@ -627,6 +653,7 @@ func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
 	}
+	agent.libreHardwareMonitorEndpoint = libreHardwareMonitor.URL + "/data.json"
 
 	report, err := agent.buildReport(context.Background())
 	if err != nil {
@@ -638,6 +665,12 @@ func TestBuildReportIncludesNVIDIASMITelemetryOnWindows(t *testing.T) {
 	}
 	if report.Sensors.TemperatureCelsius["gpu_nvidia_0"] != 57 {
 		t.Fatalf("Windows NVIDIA GPU temp = %v, want 57", report.Sensors.TemperatureCelsius["gpu_nvidia_0"])
+	}
+	if report.Sensors.TemperatureCelsius["cpu_lhm_intelcpu_0_temperature_0"] != 51 {
+		t.Fatalf("Windows CPU temperature = %+v, want LibreHardwareMonitor reading", report.Sensors.TemperatureCelsius)
+	}
+	if report.Sensors.TemperatureCelsius["motherboard_lhm_lpc_nct6798d_0_temperature_1"] != 36 {
+		t.Fatalf("Windows motherboard temperature = %+v, want LibreHardwareMonitor reading", report.Sensors.TemperatureCelsius)
 	}
 	if len(report.Sensors.GPU) != 1 {
 		t.Fatalf("Windows GPU stats = %d, want 1: %+v", len(report.Sensors.GPU), report.Sensors.GPU)

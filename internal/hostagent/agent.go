@@ -168,6 +168,9 @@ type Agent struct {
 	availability           *availabilityProbeModule
 	reportStreamID         string
 	reportSequence         atomic.Uint64
+	// libreHardwareMonitorEndpoint is an unexported test seam. Production
+	// collection always uses the fixed loopback URL when this is empty.
+	libreHardwareMonitorEndpoint string
 
 	// lastAuthFailureLog throttles the actionable 401 error so a permanently
 	// rejected token does not spam the log every report interval. Only touched
@@ -1578,8 +1581,9 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		return a.collectFreeBSDTemperatures(ctx)
 	case "windows":
 		// Windows has no reliable built-in CPU or motherboard temperature API.
-		// Its Storage module does expose device-reported physical-disk
-		// reliability temperatures, and NVIDIA's driver supplies nvidia-smi.
+		// Pulse accepts those readings only from a local driver-backed
+		// LibreHardwareMonitor instance. The native Storage module supplies
+		// physical-disk temperatures, and NVIDIA's driver supplies nvidia-smi.
 		return a.collectWindowsTemperatureSensors(ctx)
 	default:
 		return agentshost.Sensors{}

@@ -1504,7 +1504,22 @@ the intentionally sparse public response.
    counters, malformed output, and unsupported devices omit that telemetry
    without failing the host report. This path must not use ACPI thermal zones,
    infer disk health, execute server-authored PowerShell, or imply support for
-   CPU or motherboard temperatures. The report must keep typed GPU readings in
+   CPU or motherboard temperatures.
+   Windows CPU and motherboard Celsius readings may come only from the
+   explicitly qualified, driver-backed LibreHardwareMonitor path in
+   `internal/hostagent/windows_librehardwaremonitor.go`. Production collection
+   must issue one unauthenticated two-second GET to the fixed loopback
+   `http://127.0.0.1:8085/data.json` endpoint, bypass proxies, reject redirects
+   and non-success responses, and cap the body at one MiB. Parsing must bound
+   node count, tree depth, sensor count, and key length; accept only finite
+   direct Celsius values in the supported range from CPU or motherboard
+   hardware identifiers; and ignore GPU, storage, unknown, malformed, or
+   unclassified nodes. An absent, stopped, authenticated, or incompatible
+   helper must omit these readings without failing the host report. The agent
+   must not poll a server-authored address, accept ACPI thermal zones as a
+   substitute, expose LibreHardwareMonitor lifecycle or hardware-control
+   authority, or displace the native Windows Storage and NVIDIA providers.
+   The report must keep typed GPU readings in
    `sensors.gpu` while mapping only direct `temperature.gpu` readings into
    existing `sensors.temperatureCelsius` `gpu_nvidia_<index>` keys for
    compatibility.
@@ -5720,3 +5735,14 @@ text fields. Dataset collection does not broaden registration, token,
 configuration, update, or command authority. Servers validate and copy the
 optional evidence during normal authenticated host-report ingest; agents that
 do not send it remain wire-compatible.
+
+### Windows CPU and motherboard temperatures require a local qualified provider
+
+Windows Unified Agents now supplement native Storage reliability counters and
+direct NVIDIA telemetry with CPU and motherboard Celsius readings from a
+running local LibreHardwareMonitor instance. The integration is optional and
+read-only: it polls only the fixed loopback `data.json` endpoint, admits only
+bounded and classified temperature nodes, and leaves the host report intact
+when the helper is absent or incompatible. It does not treat Windows ACPI
+thermal zones as hardware sensor evidence, accept remote provider locations,
+or grant Pulse hardware-control authority.

@@ -115,6 +115,30 @@ successful inventory while normal host metrics continue to report.
 This local integration covers one XCP-ng pool. Multi-pool deployments that
 need a central Xen Orchestra connection remain a separate integration surface.
 
+### Windows CPU and motherboard temperatures
+
+Windows does not expose dependable built-in CPU or motherboard temperature
+readings. The Unified Agent can import those readings from
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor),
+which supplies the required driver-backed hardware access:
+
+1. Run LibreHardwareMonitor as Administrator on the Windows host.
+2. Keep its HTTP port at the default `8085`.
+3. Select **Options → Remote Web Server → Run**.
+4. Do not permit inbound network access to port `8085` in Windows Firewall.
+   Pulse connects only to `http://127.0.0.1:8085/data.json`.
+
+LibreHardwareMonitor's web authentication must remain disabled for this
+loopback-only integration. Pulse uses a fixed local URL, follows no redirects,
+and accepts only bounded, validated CPU and motherboard Celsius readings.
+If LibreHardwareMonitor is stopped, unavailable, or returns unsupported data,
+the rest of the Windows host report continues normally.
+
+Native Windows Storage reliability counters remain the source for supported
+physical-disk temperatures. NVIDIA GPU telemetry continues to come directly
+from `nvidia-smi`; Pulse deliberately ignores LibreHardwareMonitor GPU and
+storage nodes to avoid duplicate or ambiguously correlated readings.
+
 ## External Probes (Pro)
 
 With the Pro `external_probe` entitlement, availability checks configured in
