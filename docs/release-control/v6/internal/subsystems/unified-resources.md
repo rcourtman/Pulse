@@ -126,6 +126,7 @@ about the same disk cannot diverge.
 8. `internal/unifiedresources/metrics.go`
 9. `internal/unifiedresources/metrics_targets.go`
 10. `internal/unifiedresources/registry.go`
+10a. `internal/unifiedresources/xcpng.go`
 11. `internal/unifiedresources/resolve.go`
 12. `internal/unifiedresources/resolve_context.go`
 13. `internal/unifiedresources/resolved_host_set.go`
@@ -1691,6 +1692,16 @@ monitoring layer proves a two-sample rate; memory is emitted only with a
 positive maximum. The last successful libvirt collection time, rather than
 the host heartbeat, controls guest source freshness. This facet must not
 borrow Proxmox or VMware identifiers and carries no mutation capability.
+
+### Agent XCP-ng pool inventories coalesce by platform UUID
+
+The registry projects XCP-ng guests through the same provider-neutral
+`virtualMachine` facet with `technology=xcp-ng`. Pool-wide copies reported by
+several agents use one `xcpng:<pool-uuid>:vm:<vm-uuid>` source identity, so a
+VM appears once. The resident XCP host UUID selects a real agent resource as
+parent when that node reports, and the pool name supplies host cluster
+grouping. Power state, vCPU, and bounded memory facts are observational only;
+the adapter advertises no lifecycle capability or nonexistent history target.
 
 ### Agent custom sensors remain typed, cloned host metadata
 

@@ -685,3 +685,38 @@ func TestReportLibvirtInventoryJSONRoundTrip(t *testing.T) {
 		t.Fatalf("nil libvirt inventory should be omitted: %s", bare)
 	}
 }
+
+func TestReportXCPNGInventoryJSONRoundTrip(t *testing.T) {
+	collectedAt := time.Date(2026, 7, 30, 15, 0, 0, 0, time.UTC)
+	report := Report{XCPNG: &XCPNGInventory{
+		PoolUUID:      "11111111-1111-1111-1111-111111111111",
+		PoolName:      "Lab Pool",
+		LocalHostUUID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		CollectedAt:   collectedAt,
+		VMs: []XCPNGVM{{
+			UUID:             "cccccccc-cccc-cccc-cccc-cccccccccccc",
+			Name:             "database",
+			PowerState:       "running",
+			VCPUs:            4,
+			MemoryActual:     4 << 30,
+			MemoryStaticMax:  8 << 30,
+			ResidentHostUUID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		}},
+	}}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	var decoded Report
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if decoded.XCPNG == nil ||
+		decoded.XCPNG.PoolName != "Lab Pool" ||
+		!decoded.XCPNG.CollectedAt.Equal(collectedAt) ||
+		len(decoded.XCPNG.VMs) != 1 ||
+		decoded.XCPNG.VMs[0].MemoryActual != 4<<30 ||
+		decoded.XCPNG.VMs[0].MemoryStaticMax != 8<<30 {
+		t.Fatalf("XCP-ng inventory = %+v", decoded.XCPNG)
+	}
+}

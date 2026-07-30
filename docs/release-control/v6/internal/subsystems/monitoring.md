@@ -428,6 +428,7 @@ changes.
 60. `internal/config/host_continuity.go`
 61. `internal/monitoring/docker_metadata_migration.go`
 62. `internal/monitoring/kubernetes_metadata_migration.go`
+62a. `internal/monitoring/monitor_xcpng.go`
 63. `internal/monitoring/metadata_stores.go`
 63a. `internal/config/docker_metadata.go`
 63b. `internal/config/guest_metadata.go`
@@ -914,6 +915,15 @@ authoritative removal. Domain metrics use
 `<host-id>:libvirt:<domain-id>` consistently for history, metrics storage, and
 unified-resource lookup. No libvirt lifecycle or configuration operation is
 part of the monitoring contract.
+
+### XCP-ng xe inventory is a bounded pool observation
+
+Authenticated host reports may carry one normalized XCP-ng pool inventory
+with at most 1024 VMs. Server ingest validates UUIDs and names, clamps vCPU and
+memory values, de-duplicates VMs, and preserves the last successful inventory
+when a later local `xe` query fails. A present empty VM list is authoritative.
+No XAPI action, console, migration, snapshot, or configuration operation is
+part of this monitoring contract.
 
 ### Custom sensor evidence stays typed through host monitoring
 

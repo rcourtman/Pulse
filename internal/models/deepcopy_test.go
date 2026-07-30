@@ -437,3 +437,18 @@ func TestCloneHostLibvirtInventoryIsolation(t *testing.T) {
 		t.Fatal("clone libvirt inventory aliases source domains")
 	}
 }
+
+func TestCloneHostXCPNGInventoryIsolation(t *testing.T) {
+	src := Host{XCPNG: &HostXCPNGInventory{
+		PoolUUID: "11111111-1111-1111-1111-111111111111",
+		VMs:      []HostXCPNGVM{{UUID: "vm-a", Name: "app"}},
+	}}
+	dst := cloneHost(src)
+	if dst.XCPNG == nil || len(dst.XCPNG.VMs) != 1 {
+		t.Fatalf("cloned XCP-ng inventory = %+v", dst.XCPNG)
+	}
+	dst.XCPNG.VMs[0].Name = "mutated"
+	if src.XCPNG.VMs[0].Name != "app" {
+		t.Fatal("cloned XCP-ng inventory aliases source VMs")
+	}
+}

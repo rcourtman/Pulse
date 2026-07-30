@@ -403,6 +403,7 @@ func cloneHost(src Host) Host {
 	dest.Unraid = cloneHostUnraidStorage(src.Unraid)
 	dest.Ceph = cloneHostCephCluster(src.Ceph)
 	dest.Libvirt = cloneHostLibvirtInventory(src.Libvirt)
+	dest.XCPNG = cloneHostXCPNGInventory(src.XCPNG)
 	dest.PackageUpdates = cloneHostPackageUpdateStatus(src.PackageUpdates)
 	dest.StorageCleanup = cloneHostStorageCleanupStatus(src.StorageCleanup)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
@@ -418,6 +419,15 @@ func cloneHostLibvirtInventory(src *HostLibvirtInventory) *HostLibvirtInventory 
 	}
 	dest := *src
 	dest.Domains = append([]HostLibvirtDomain(nil), src.Domains...)
+	return &dest
+}
+
+func cloneHostXCPNGInventory(src *HostXCPNGInventory) *HostXCPNGInventory {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.VMs = append([]HostXCPNGVM(nil), src.VMs...)
 	return &dest
 }
 

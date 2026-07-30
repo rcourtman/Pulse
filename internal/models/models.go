@@ -305,6 +305,7 @@ type Host struct {
 	Unraid                  *HostUnraidStorage      `json:"unraid,omitempty"`
 	Ceph                    *HostCephCluster        `json:"ceph,omitempty"`
 	Libvirt                 *HostLibvirtInventory   `json:"libvirt,omitempty"`
+	XCPNG                   *HostXCPNGInventory     `json:"xcpng,omitempty"`
 	Status                  string                  `json:"status"`
 	UptimeSeconds           int64                   `json:"uptimeSeconds,omitempty"`
 	IntervalSeconds         int                     `json:"intervalSeconds,omitempty"`
@@ -443,6 +444,10 @@ func (h Host) NormalizeCollections() Host {
 		libvirt := h.Libvirt.NormalizeCollections()
 		h.Libvirt = &libvirt
 	}
+	if h.XCPNG != nil {
+		xcpng := h.XCPNG.NormalizeCollections()
+		h.XCPNG = &xcpng
+	}
 	if h.Tags == nil {
 		h.Tags = []string{}
 	}
@@ -491,6 +496,34 @@ type HostLibvirtDomain struct {
 	DiskReadRate       float64 `json:"diskReadRate,omitempty"`
 	DiskWriteRate      float64 `json:"diskWriteRate,omitempty"`
 	IORatesValid       bool    `json:"-"`
+}
+
+// HostXCPNGInventory is the normalized server-side view of the XCP-ng pool
+// visible to a Unified Agent running in an XCP-ng control domain.
+type HostXCPNGInventory struct {
+	PoolUUID      string        `json:"poolUuid"`
+	PoolName      string        `json:"poolName,omitempty"`
+	MasterUUID    string        `json:"masterUuid,omitempty"`
+	LocalHostUUID string        `json:"localHostUuid,omitempty"`
+	VMs           []HostXCPNGVM `json:"vms"`
+	CollectedAt   time.Time     `json:"collectedAt"`
+}
+
+func (i HostXCPNGInventory) NormalizeCollections() HostXCPNGInventory {
+	if i.VMs == nil {
+		i.VMs = []HostXCPNGVM{}
+	}
+	return i
+}
+
+type HostXCPNGVM struct {
+	UUID             string `json:"uuid"`
+	Name             string `json:"name"`
+	PowerState       string `json:"powerState"`
+	VCPUs            int    `json:"vcpus,omitempty"`
+	MemoryActual     int64  `json:"memoryActualBytes,omitempty"`
+	MemoryStaticMax  int64  `json:"memoryStaticMaxBytes,omitempty"`
+	ResidentHostUUID string `json:"residentHostUuid,omitempty"`
 }
 
 // HostIdentityConflict records evidence that reports from more than one

@@ -161,6 +161,13 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	identity := identityFromHost(host)
 	hostProfile := agentHostProfileForHost(host)
 	platform := agentRuntimePlatformForHost(host, hostProfile)
+	if host.XCPNG != nil {
+		platform = "xcp-ng"
+		identity.ClusterName = firstNonEmpty(
+			strings.TrimSpace(host.XCPNG.PoolName),
+			strings.TrimSpace(host.XCPNG.PoolUUID),
+		)
+	}
 
 	agent := &AgentData{
 		AgentID:                 host.ID,
@@ -556,11 +563,24 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		Uptime:       host.UptimeSeconds,
 		Temperature:  agent.Temperature,
 		Agent:        agent,
-		Tags:         host.Tags,
+		Tags:         appendXCPNGTag(host.Tags, host.XCPNG != nil),
 		Capabilities: hostActionCapabilities(host),
 	}
 
 	return resource, identity
+}
+
+func appendXCPNGTag(tags []string, enabled bool) []string {
+	result := append([]string(nil), tags...)
+	if !enabled {
+		return result
+	}
+	for _, tag := range result {
+		if strings.EqualFold(strings.TrimSpace(tag), "xcp-ng") {
+			return result
+		}
+	}
+	return append(result, "xcp-ng")
 }
 
 const hostPackageUpdateHandler = "host.package_updates"

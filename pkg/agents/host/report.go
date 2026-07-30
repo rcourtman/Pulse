@@ -54,6 +54,7 @@ type Report struct {
 	Unraid         *UnraidStorage       `json:"unraid,omitempty"`
 	Ceph           *CephCluster         `json:"ceph,omitempty"`
 	Libvirt        *LibvirtInventory    `json:"libvirt,omitempty"`
+	XCPNG          *XCPNGInventory      `json:"xcpng,omitempty"`
 	ClusterSensors []ClusterNodeSensors `json:"clusterSensors,omitempty"`
 	// AvailabilityResults carries availability checks the agent executed on
 	// behalf of the server for targets assigned to it. The server owns failure
@@ -86,6 +87,29 @@ type LibvirtDomain struct {
 	NetworkTXBytes     uint64 `json:"networkTxBytes,omitempty"`
 	DiskReadBytes      uint64 `json:"diskReadBytes,omitempty"`
 	DiskWriteBytes     uint64 `json:"diskWriteBytes,omitempty"`
+}
+
+// XCPNGInventory is the bounded, read-only pool inventory collected through
+// the xe CLI available in an XCP-ng control domain.
+type XCPNGInventory struct {
+	PoolUUID      string    `json:"poolUuid"`
+	PoolName      string    `json:"poolName,omitempty"`
+	MasterUUID    string    `json:"masterUuid,omitempty"`
+	LocalHostUUID string    `json:"localHostUuid,omitempty"`
+	VMs           []XCPNGVM `json:"vms"`
+	CollectedAt   time.Time `json:"collectedAt"`
+}
+
+// XCPNGVM contains stable inventory fields returned by xe vm-list. Collection
+// is intentionally observational; no XAPI lifecycle operation is exposed.
+type XCPNGVM struct {
+	UUID             string `json:"uuid"`
+	Name             string `json:"name"`
+	PowerState       string `json:"powerState"`
+	VCPUs            int    `json:"vcpus,omitempty"`
+	MemoryActual     int64  `json:"memoryActualBytes,omitempty"`
+	MemoryStaticMax  int64  `json:"memoryStaticMaxBytes,omitempty"`
+	ResidentHostUUID string `json:"residentHostUuid,omitempty"`
 }
 
 // AvailabilityProbeResult is one completed availability check reported by a

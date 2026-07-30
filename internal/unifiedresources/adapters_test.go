@@ -41,6 +41,29 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostProjectsXCPNGPoolIdentity(t *testing.T) {
+	host := models.Host{
+		ID:       "agent-one",
+		Hostname: "xcp-one",
+		Platform: "linux",
+		Status:   "online",
+		LastSeen: time.Now().UTC(),
+		Tags:     []string{"lab"},
+		XCPNG: &models.HostXCPNGInventory{
+			PoolUUID: "11111111-1111-1111-1111-111111111111",
+			PoolName: "Lab Pool",
+		},
+	}
+	resource, identity := resourceFromHost(host)
+	if resource.Technology != "xcp-ng" ||
+		resource.Agent == nil ||
+		resource.Agent.Platform != "xcp-ng" ||
+		identity.ClusterName != "Lab Pool" ||
+		!reflect.DeepEqual(resource.Tags, []string{"lab", "xcp-ng"}) {
+		t.Fatalf("XCP-ng host projection = resource %+v identity %+v", resource, identity)
+	}
+}
+
 func TestResourceFromHostPreservesCustomSensorMeta(t *testing.T) {
 	value := 12.5
 	observedAt := time.Date(2026, 7, 30, 19, 0, 0, 0, time.UTC)

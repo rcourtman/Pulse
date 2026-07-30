@@ -2734,6 +2734,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		previousHostModel,
 		observedAt,
 	)
+	xcpngData := normalizeAgentXCPNGInventory(report.XCPNG, previousHostModel, observedAt)
 
 	agentUpdate := mergeAgentUpdateStatus(
 		previousHostAgentUpdate(m.state.GetHosts(), identifier),
@@ -2786,6 +2787,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		Unraid:                  unraidData,
 		Ceph:                    cephData,
 		Libvirt:                 libvirtData,
+		XCPNG:                   xcpngData,
 		Status:                  "online",
 		UptimeSeconds:           report.Host.UptimeSeconds,
 		IntervalSeconds:         report.Agent.IntervalSeconds,

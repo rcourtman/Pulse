@@ -198,6 +198,7 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 		rr.ingestHost(host)
 		rr.ingestHostLibvirtDomains(host)
 	}
+	rr.ingestHostXCPNGVMs(snapshot.Hosts)
 	for _, host := range snapshot.Hosts {
 		rr.ingestHostUnraidStorage(host)
 	}

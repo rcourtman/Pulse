@@ -4678,3 +4678,46 @@ func TestIssue1654LivePreexistingAgentIsNotSuperseded(t *testing.T) {
 		t.Fatalf("host count = %d, want both live identities preserved", got)
 	}
 }
+
+func TestNormalizeAgentXCPNGInventoryBoundsAndPreservesFailures(t *testing.T) {
+	now := time.Date(2026, 7, 30, 15, 0, 0, 0, time.UTC)
+	report := &agentshost.XCPNGInventory{
+		PoolUUID:      "11111111-1111-1111-1111-111111111111",
+		PoolName:      " Lab Pool ",
+		LocalHostUUID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		VMs: []agentshost.XCPNGVM{
+			{
+				UUID:             "cccccccc-cccc-cccc-cccc-cccccccccccc",
+				Name:             " Database ",
+				PowerState:       "RUNNING",
+				VCPUs:            5000,
+				MemoryActual:     10 << 30,
+				MemoryStaticMax:  8 << 30,
+				ResidentHostUUID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+			},
+			{UUID: "cccccccc-cccc-cccc-cccc-cccccccccccc", Name: "duplicate"},
+			{UUID: "bad", Name: "invalid"},
+		},
+	}
+	got := normalizeAgentXCPNGInventory(report, nil, now)
+	if got == nil || len(got.VMs) != 1 {
+		t.Fatalf("inventory = %+v", got)
+	}
+	if got.PoolName != "Lab Pool" ||
+		got.VMs[0].Name != "Database" ||
+		got.VMs[0].PowerState != "running" ||
+		got.VMs[0].VCPUs != 4096 ||
+		got.VMs[0].MemoryActual != 8<<30 {
+		t.Fatalf("normalized inventory = %+v", got)
+	}
+
+	previous := &models.Host{XCPNG: got}
+	preserved := normalizeAgentXCPNGInventory(nil, previous, now.Add(time.Minute))
+	if preserved == nil || len(preserved.VMs) != 1 || !preserved.CollectedAt.Equal(now) {
+		t.Fatalf("preserved inventory = %+v", preserved)
+	}
+	preserved.VMs[0].Name = "mutated"
+	if previous.XCPNG.VMs[0].Name != "Database" {
+		t.Fatal("preserved inventory aliases previous host state")
+	}
+}

@@ -1115,6 +1115,11 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// an unavailable hypervisor cannot delay the rest of the host report.
 	libvirtData := a.collectLibvirtInventory(ctx)
 
+	// XCP-ng exposes pool inventory through the local, read-only xe CLI. It has
+	// an independent bounded deadline so an unavailable XAPI cannot delay the
+	// normal host report.
+	xcpngData := a.collectXCPNGInventory(ctx)
+
 	// Collect S.M.A.R.T. disk data after topology owners. Enumeration and each
 	// device probe have their own deadlines; a single shared 10-second budget
 	// caused later disks on larger arrays to be cancelled before their probe.
@@ -1149,6 +1154,14 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Enabled:   true,
 			State:     "running",
 			UpdatedAt: libvirtData.CollectedAt,
+		})
+	}
+	if xcpngData != nil {
+		moduleStatus = append(moduleStatus, agentshost.ModuleStatus{
+			Name:      "xcp-ng",
+			Enabled:   true,
+			State:     "running",
+			UpdatedAt: xcpngData.CollectedAt,
 		})
 	}
 
@@ -1197,6 +1210,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Unraid:         unraidData,
 		Ceph:           cephData,
 		Libvirt:        libvirtData,
+		XCPNG:          xcpngData,
 		ClusterSensors: clusterSensors,
 		// Results stay queued until the primary destination accepts this
 		// report, so a delivery failure retries them instead of losing them.

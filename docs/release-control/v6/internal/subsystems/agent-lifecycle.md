@@ -97,6 +97,7 @@ observation.
    5d. `internal/kubernetesagent/agent.go`
    5e. `internal/agentexec/verifier_postconditions.go`
    5f. `pkg/agents/docker/report_limits.go`
+   5g. `internal/hostagent/xcpng.go`
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
@@ -1528,6 +1529,15 @@ the intentionally sparse public response.
    every guest disappear, while a successful empty inventory removes them.
    This path does not grant lifecycle, console, XML, snapshot, migration, or
    storage mutation authority.
+   XCP-ng inventory follows the same observation-only boundary. On Linux,
+   `internal/hostagent/xcpng.go` may auto-detect only the local `xe` client and
+   issue fixed, bounded `pool-list`, `host-list`, and `vm-list` requests under
+   one eight-second deadline. The report may carry one pool identity, the
+   reporting host's XCP UUID, and at most 1024 non-template, non-control-domain
+   VMs with UUID, power state, vCPU, configured/actual memory, and resident
+   host UUID. No server-authored xe argument, credential, lifecycle call, or
+   Xen Orchestra authority enters this path. Missing or invalid output omits
+   the new sample without failing normal host telemetry.
    Authenticated server ingest may reduce those typed samples into bounded
    host-level GPU utilization, VRAM pressure, and GPU temperature history on
    the existing agent identity, but that monitoring projection does not change

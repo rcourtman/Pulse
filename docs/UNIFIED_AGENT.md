@@ -85,6 +85,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 - **Docker Monitoring**: Container metrics, health checks, Swarm support (when enabled)
 - **Kubernetes Monitoring**: Cluster, node, pod, and deployment health (when enabled)
 - **Libvirt/KVM Monitoring**: Read-only VM inventory, state, vCPU, memory, and disk/network rates when the Linux host exposes `virsh`
+- **XCP-ng Monitoring**: Read-only pool and VM inventory, power state, vCPU, and memory when an XCP-ng control domain exposes `xe`
 - **External Probes** (Pro): runs availability checks assigned to this agent from the Pulse server and reports the results back — see below
 - **Auto-Update**: Automatically updates when a new version is released
 - **Multi-Platform**: Linux, macOS, Windows support
@@ -101,6 +102,18 @@ Appliance packaging can still differ. In particular, a QNAP installation must
 make its Container Station libvirt client/socket available to the agent service;
 the presence of KVM processes alone is not enough to establish a readable
 libvirt connection.
+
+On XCP-ng, the host module automatically checks for the local `xe` CLI. It
+uses only bounded `pool-list`, `host-list`, and `vm-list` queries: no XAPI
+credentials or VM lifecycle authority are added. The XCP-ng pool becomes the
+host's cluster grouping, and pool-wide VMs are de-duplicated by UUID and
+parented to the resident Pulse host when that node also reports. If several
+pool nodes run the Unified Agent, their identical pool views coalesce rather
+than creating duplicate workloads. A failed `xe` query preserves the last
+successful inventory while normal host metrics continue to report.
+
+This local integration covers one XCP-ng pool. Multi-pool deployments that
+need a central Xen Orchestra connection remain a separate integration surface.
 
 ## External Probes (Pro)
 

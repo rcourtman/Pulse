@@ -66,6 +66,99 @@ func TestMemoryStore_RecordActionAuditAppliesRedaction(t *testing.T) {
 	}
 }
 
+func TestRegistryProjectsAndDeduplicatesXCPNGPoolVMs(t *testing.T) {
+	now := time.Now().UTC()
+	poolUUID := "11111111-1111-1111-1111-111111111111"
+	hostOneUUID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	hostTwoUUID := "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	vm := models.HostXCPNGVM{
+		UUID:             "cccccccc-cccc-cccc-cccc-cccccccccccc",
+		Name:             "database",
+		PowerState:       "running",
+		VCPUs:            4,
+		MemoryActual:     4 << 30,
+		MemoryStaticMax:  8 << 30,
+		ResidentHostUUID: hostTwoUUID,
+	}
+	hosts := []models.Host{
+		{
+			ID:       "agent-one",
+			Hostname: "xcp-one",
+			Platform: "linux",
+			Status:   "online",
+			LastSeen: now,
+			XCPNG: &models.HostXCPNGInventory{
+				PoolUUID:      poolUUID,
+				PoolName:      "Lab Pool",
+				LocalHostUUID: hostOneUUID,
+				VMs:           []models.HostXCPNGVM{vm},
+				CollectedAt:   now,
+			},
+		},
+		{
+			ID:       "agent-two",
+			Hostname: "xcp-two",
+			Platform: "linux",
+			Status:   "online",
+			LastSeen: now.Add(time.Second),
+			XCPNG: &models.HostXCPNGInventory{
+				PoolUUID:      poolUUID,
+				PoolName:      "Lab Pool",
+				LocalHostUUID: hostTwoUUID,
+				VMs:           []models.HostXCPNGVM{vm},
+				CollectedAt:   now.Add(time.Second),
+			},
+		},
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: hosts})
+	vms := registry.ListByType(ResourceTypeVM)
+	if len(vms) != 1 {
+		t.Fatalf("XCP-ng VMs = %d, want one de-duplicated VM: %+v", len(vms), vms)
+	}
+	projected := vms[0]
+	if projected.Technology != "xcp-ng" ||
+		projected.Status != StatusOnline ||
+		projected.VirtualMachine == nil ||
+		projected.VirtualMachine.Hypervisor != "xcp-ng" ||
+		projected.VirtualMachine.VCPUs != 4 {
+		t.Fatalf("XCP-ng VM = %+v", projected)
+	}
+	if projected.Metrics == nil ||
+		projected.Metrics.Memory == nil ||
+		projected.Metrics.Memory.Percent != 50 {
+		t.Fatalf("XCP-ng VM memory = %+v", projected.Metrics)
+	}
+	if projected.ParentID == nil {
+		t.Fatal("XCP-ng VM has no resident parent")
+	}
+	parent, ok := registry.Get(*projected.ParentID)
+	if !ok || parent.Name != "xcp-two" || parent.Technology != "xcp-ng" {
+		t.Fatalf("resident parent = %+v, found=%v", parent, ok)
+	}
+	if parent.Identity.ClusterName != "Lab Pool" {
+		t.Fatalf("parent cluster identity = %+v", parent.Identity)
+	}
+	if BuildMetricsTargetForRegistry(registry, projected.ID) != nil {
+		t.Fatal("inventory-only XCP-ng VM must not advertise nonexistent metrics history")
+	}
+}
+
+func TestXCPNGResourceStatusMapping(t *testing.T) {
+	for state, want := range map[string]ResourceStatus{
+		"running":   StatusOnline,
+		"halted":    StatusOffline,
+		"paused":    StatusWarning,
+		"suspended": StatusWarning,
+		"unknown":   StatusUnknown,
+	} {
+		if got := xcpngResourceStatus(state); got != want {
+			t.Errorf("xcpngResourceStatus(%q) = %q, want %q", state, got, want)
+		}
+	}
+}
+
 func TestResourceRegistry_GetByReferenceResolvesSourceIDAndCanonicalAlias(t *testing.T) {
 	rr := NewRegistry(nil)
 	rr.IngestRecords(SourceProxmox, []IngestRecord{{
