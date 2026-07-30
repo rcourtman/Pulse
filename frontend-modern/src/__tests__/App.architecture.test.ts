@@ -620,4 +620,17 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("label: 'Patrol'");
     expect(appLayoutSource).toContain('countLabel: patrolAttentionCountLabel()');
   });
+
+  it('keeps licensed application branding inside the authenticated shell bootstrap', () => {
+    expect(appRuntimeStateSource).toContain(
+      'await Promise.all([loadSystemSettingsAndLayout(), loadRuntimeBranding()]);',
+    );
+    expect(appLayoutSource).toContain("import { runtimeBranding } from '@/stores/systemSettings';");
+    expect(appLayoutSource).toContain(
+      "const browserBrandName = createMemo(() => customBrandName() || 'Pulse');",
+    );
+    expect(appLayoutSource).toContain('data-testid="custom-brand-logo"');
+    expect(appRuntimeStateSource).not.toContain('/api/license/commercial-posture');
+    expect(appRuntimeStateSource).not.toContain('/api/license/entitlements');
+  });
 });

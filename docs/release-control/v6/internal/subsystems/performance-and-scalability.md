@@ -2102,3 +2102,15 @@ manipulation on the request already in hand. They add no inventory scan,
 persistence read, lock acquisition, metrics fan-out, or background work, and
 their cost is constant per SSO provider entry rendered in the admin settings
 response.
+
+### Runtime branding remains a bounded bootstrap read
+
+Authenticated application branding is loaded once alongside the existing
+system-settings and layout bootstrap work. `useAppRuntimeState.ts` must keep
+that request in the same parallel bootstrap group rather than serializing it
+ahead of state hydration, organization startup, or WebSocket connection.
+`GET /api/runtime/branding` performs one cached entitlement decision and at
+most one tenant-local system-settings read; it must not scan tenants, read
+external logo files, call a licensing network service, or add per-route and
+per-component refetches. The response remains bounded to an enabled flag, one
+120-character display name, and the already size-limited inline image.

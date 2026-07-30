@@ -5614,3 +5614,13 @@ callback builder already applied, and they neither mutate nor persist
 update targeting, or fleet-lifecycle authority is touched, and the
 extension-point expectations on `internal/api/` and `internal/api/router.go`
 are otherwise unchanged.
+
+### Runtime branding stays outside agent lifecycle authority
+
+The authenticated `GET /api/runtime/branding` presentation endpoint is an
+application-shell read, not an agent registration, configuration, update, or
+command route. It may read the active `white_label` entitlement and the
+tenant-local `reportBranding` settings record, but it must not enumerate
+agents, resolve install tokens, mutate agent state, or reuse agent lifecycle
+authority. Agent setup and reporting remain independent of whether an
+operator has configured a custom application name or logo.

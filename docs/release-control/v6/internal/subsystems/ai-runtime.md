@@ -6832,3 +6832,10 @@ that chrome. Assistant and Patrol shell state stays owned by
 `frontend-modern/src/stores/aiChat.ts` and the canonical Patrol path as before;
 this containment is a shell-level authority rule and must not be forked into a
 second AI-side scope check.
+
+Application branding in `frontend-modern/src/AppLayout.tsx` is presentation
+only. A licensed custom name or logo may replace the default Pulse lockup and
+browser-title suffix, but it must not rename Pulse Assistant, alter Assistant
+page context, change tool/provider identity, or enter prompt, transcript, or
+Patrol evidence payloads. The AI runtime continues to consume canonical route
+and resource context independently of the shell's displayed brand.

@@ -14,6 +14,7 @@ import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSect
 import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
 import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
+import brandingSettingsCardSource from '../BrandingSettingsCard.tsx?raw';
 import dockerRuntimeSettingsCardSource from '../DockerRuntimeSettingsCard.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
@@ -1779,6 +1780,17 @@ describe('settings architecture guardrails', () => {
     expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('const StatusBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+  });
+
+  it('keeps application branding in the canonical Appearance settings surface', () => {
+    expect(generalSettingsPanelSource).toContain(
+      "import { BrandingSettingsCard } from './BrandingSettingsCard';",
+    );
+    expect(generalSettingsPanelSource).toContain('<BrandingSettingsCard');
+    expect(brandingSettingsCardSource).toContain("when={hasFeature('white_label')}");
+    expect(brandingSettingsCardSource).toContain('<FeatureGateSection');
+    expect(brandingSettingsCardSource).toContain('maxlength={120}');
+    expect(brandingSettingsCardSource).toContain('BRAND_LOGO_MAX_BYTES = 36 * 1024');
   });
 
   it('keeps every PBS diagnostic failure string inside the export redaction boundary', () => {

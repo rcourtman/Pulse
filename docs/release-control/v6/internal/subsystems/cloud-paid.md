@@ -3233,3 +3233,14 @@ global banner block in `frontend-modern/src/App.tsx` (security, demo,
 commercial migration, update, what's-new, GitHub star) must be gated on the
 same predicate because those banners deep-link into settings destinations a
 scope-limited session cannot open.
+
+The authenticated shell may project tenant-local application branding only
+through the narrow `GET /api/runtime/branding` response after normal session
+and `monitoring:read` admission. The runtime must return
+`enabled=false` with empty presentation values unless the active license grants
+`white_label`; persisted `reportBranding` values must never become an
+unlicensed browser-side feature flag. `frontend-modern/src/AppLayout.tsx` may
+consume that filtered response for the header and document title, while
+`frontend-modern/src/useAppRuntimeState.ts` keeps the fetch inside the existing
+authenticated bootstrap and does not add a commercial-posture, checkout, or
+organization probe.
