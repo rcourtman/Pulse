@@ -27,6 +27,7 @@ describe('nodeModalPresentation', () => {
       authType: 'token',
       setupMode: 'auto',
       verifySSL: true,
+      excludeDatastores: '',
     });
     expect(getNodeModalDefaultFormData('pmg')).toMatchObject({
       authType: 'password',
@@ -88,6 +89,7 @@ describe('nodeModalPresentation', () => {
       monitorVerifyJobs: true,
       monitorPruneJobs: true,
       monitorGarbageJobs: true,
+      excludeDatastores: [],
     });
 
     const pmgPayload = buildNodeModalMonitoringPayload('pmg', getNodeModalDefaultFormData('pmg'));
@@ -123,6 +125,7 @@ describe('nodeModalPresentation', () => {
       monitorVerifyJobs: true,
       monitorPruneJobs: false,
       monitorGarbageJobs: false,
+      excludeDatastores: 'external-*, *removable*',
     };
     expect(buildNodeModalMonitoringPayload('pbs', form)).toMatchObject({
       monitorDatastores: true,
@@ -130,6 +133,7 @@ describe('nodeModalPresentation', () => {
       monitorVerifyJobs: true,
       monitorPruneJobs: false,
       monitorGarbageJobs: false,
+      excludeDatastores: ['external-*', '*removable*'],
     });
   });
 

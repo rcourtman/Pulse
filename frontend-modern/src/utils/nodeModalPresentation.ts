@@ -29,6 +29,7 @@ export interface NodeModalFormData {
   monitorVerifyJobs: boolean;
   monitorPruneJobs: boolean;
   monitorGarbageJobs: boolean;
+  excludeDatastores: string;
   monitorMailStats: boolean;
   monitorQueues: boolean;
   monitorQuarantine: boolean;
@@ -73,6 +74,7 @@ export function getNodeModalDefaultFormData(nodeType: NodeModalNodeType): NodeMo
     monitorVerifyJobs: true,
     monitorPruneJobs: true,
     monitorGarbageJobs: true,
+    excludeDatastores: '',
     monitorMailStats: true,
     monitorQueues: true,
     monitorQuarantine: true,
@@ -190,6 +192,10 @@ export function buildNodeModalMonitoringPayload(
         monitorVerifyJobs: formData.monitorVerifyJobs,
         monitorPruneJobs: formData.monitorPruneJobs,
         monitorGarbageJobs: formData.monitorGarbageJobs,
+        excludeDatastores: formData.excludeDatastores
+          .split(',')
+          .map((pattern) => pattern.trim())
+          .filter(Boolean),
       };
     case 'pmg':
       return {

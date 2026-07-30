@@ -268,6 +268,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
             monitorVerifyJobs?: boolean;
             monitorPruneJobs?: boolean;
             monitorGarbageJobs?: boolean;
+            excludeDatastores?: string[];
           })
         : undefined;
 
@@ -311,6 +312,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       monitorVerifyJobs: pbsConfig?.monitorVerifyJobs ?? true,
       monitorPruneJobs: pbsConfig?.monitorPruneJobs ?? true,
       monitorGarbageJobs: pbsConfig?.monitorGarbageJobs ?? true,
+      excludeDatastores: pbsConfig?.excludeDatastores?.join(', ') ?? '',
       monitorMailStats: pmgConfig?.monitorMailStats ?? true,
       monitorQueues: pmgConfig?.monitorQueues ?? true,
       monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,

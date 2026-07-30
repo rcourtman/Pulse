@@ -234,6 +234,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 		return
 	}
+	includeDatastore := func(datastoreName string) bool {
+		return !matchesDatastoreExclude(datastoreName, instanceCfg.ExcludeDatastores)
+	}
 
 	// Initialize PBS instance with default values
 	pbsInst = models.PBSInstance{
@@ -287,7 +290,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		// Use parent context for proper cancellation chain
 		ctx2, cancel2 := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel2()
-		_, datastoreErr := client.GetDatastores(ctx2)
+		_, datastoreErr := client.GetDatastoresFiltered(ctx2, includeDatastore)
 		if datastoreErr == nil {
 			pbsInst.Status = "online"
 			pbsInst.Version = "connected"
@@ -340,7 +343,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Poll datastores if enabled
 	if instanceCfg.MonitorDatastores {
-		datastores, err := client.GetDatastores(ctx)
+		datastores, err := client.GetDatastoresFiltered(ctx, includeDatastore)
 		if err != nil {
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get datastores")

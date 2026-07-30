@@ -222,6 +222,50 @@ describe('NodeCredentialSlot', () => {
     });
   });
 
+  it('edits PBS datastore exclusions and saves normalized patterns', async () => {
+    const settings = createSettings();
+    const editingNode = {
+      id: 'pbs-0',
+      type: 'pbs',
+      name: 'backup',
+      host: 'https://pbs.local:8007',
+      user: '',
+      tokenName: 'root@pam!pulse',
+      hasToken: true,
+      verifySSL: true,
+      monitorDatastores: true,
+      monitorSyncJobs: true,
+      monitorVerifyJobs: true,
+      monitorPruneJobs: true,
+      monitorGarbageJobs: true,
+      excludeDatastores: ['archive-*'],
+      status: 'connected',
+    } as unknown as NodeConfigWithStatus;
+
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pbs"
+        settings={settings}
+        editingNode={editingNode}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    const input = screen.getByLabelText('Excluded datastores (optional)') as HTMLInputElement;
+    expect(input.value).toBe('archive-*');
+
+    fireEvent.input(input, { target: { value: 'exthdd*, *removable*, exact-store' } });
+    fireEvent.submit(input.closest('form')!);
+
+    await vi.waitFor(() => {
+      expect(settings.saveNode).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(settings.saveNode).mock.calls[0][0]).toMatchObject({
+      excludeDatastores: ['exthdd*', '*removable*', 'exact-store'],
+    });
+  });
+
   it('keeps the editor open when the save fails', async () => {
     const settings = createSettings();
     vi.mocked(settings.saveNode).mockResolvedValue(false);

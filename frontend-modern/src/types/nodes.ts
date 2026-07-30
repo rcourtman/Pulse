@@ -90,6 +90,7 @@ export interface PBSNodeConfig {
   monitorVerifyJobs: boolean;
   monitorPruneJobs: boolean;
   monitorGarbageJobs: boolean;
+  excludeDatastores: string[];
 }
 
 export interface PMGNodeConfig {

@@ -673,8 +673,18 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	return &statusResult.Data, nil
 }
 
-// GetDatastores returns all datastores with their status
+// GetDatastores returns all datastores with their status.
 func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
+	return c.GetDatastoresFiltered(ctx, nil)
+}
+
+// GetDatastoresFiltered returns datastores with their status, applying include
+// to the cheap datastore-name listing before any per-datastore RRD, status, or
+// GC requests are made. A nil include function keeps every datastore.
+func (c *Client) GetDatastoresFiltered(
+	ctx context.Context,
+	include func(datastoreName string) bool,
+) ([]Datastore, error) {
 	// First get the list of datastores
 	resp, err := c.get(ctx, "/admin/datastore")
 	if err != nil {
@@ -714,6 +724,10 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 	// Now get status for each datastore
 	var datastores []Datastore
 	for _, ds := range datastoreList.Data {
+		if include != nil && !include(ds.Store) {
+			continue
+		}
+
 		// Try to get RRD data first which has more statistics
 		// RRD requires cf (consolidation function) and timeframe parameters
 		// Valid cf values: AVERAGE, MAXIMUM, MINIMUM (all caps per PBS API spec)

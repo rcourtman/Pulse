@@ -268,6 +268,29 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             </div>
           </label>
 
+          <Show when={state.formData().monitorDatastores}>
+            <div class={formField}>
+              <label for="pbs-excluded-datastores" class={labelClass()}>
+                Excluded datastores (optional)
+              </label>
+              <input
+                id="pbs-excluded-datastores"
+                type="text"
+                value={state.formData().excludeDatastores}
+                onInput={(event) =>
+                  state.updateField('excludeDatastores', event.currentTarget.value)
+                }
+                placeholder="exthdd1500gb, removable-*"
+                class={controlClass('font-mono')}
+              />
+              <p class={formHelpText}>
+                Comma-separated names or patterns. Use <code>name*</code>, <code>*name</code>, or{' '}
+                <code>*name*</code>. Pulse will not query matching removable or unmounted
+                datastores.
+              </p>
+            </div>
+          </Show>
+
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
               type="checkbox"
