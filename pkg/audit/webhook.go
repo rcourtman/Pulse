@@ -334,6 +334,14 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 		}
 	}
 
+	// NAT64, 6to4, Teredo and ISATAP addresses tunnel to an embedded IPv4
+	// destination that none of the checks above can see.
+	for _, embedded := range securityutil.EmbeddedIPv4Candidates(ip) {
+		if isPrivateOrReservedIP(embedded) {
+			return true
+		}
+	}
+
 	return false
 }
 

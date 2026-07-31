@@ -94,6 +94,65 @@ func TestIsPrivateOrReservedIP(t *testing.T) {
 	}
 }
 
+// TestIsPrivateOrReservedIPRejectsIPv6TransitionAddresses covers the SSRF
+// bypass where a NAT64, 6to4, Teredo, ISATAP or IPv4-compatible address routes
+// to an internal IPv4 destination while every net.IP predicate reports it as an
+// ordinary public address.
+func TestIsPrivateOrReservedIPRejectsIPv6TransitionAddresses(t *testing.T) {
+	cases := map[string]bool{
+		"64:ff9b::a9fe:a9fe":       true,  // NAT64 -> 169.254.169.254
+		"64:ff9b::7f00:1":          true,  // NAT64 -> 127.0.0.1
+		"64:ff9b::a00:1":           true,  // NAT64 -> 10.0.0.1
+		"64:ff9b:1::c0a8:1":        true,  // NAT64 local-use -> 192.168.0.1
+		"64:ff9b:1:a9fe:a9:fe00::": true,  // NAT64 local-use /48 -> 169.254.169.254
+		"2002:ac10:1::":            true,  // 6to4 -> 172.16.0.1
+		"2002:a9fe:a9fe::":         true,  // 6to4 -> 169.254.169.254
+		"2001:0:a9fe:a9fe::":       true,  // Teredo server -> 169.254.169.254
+		"2001:db8::5efe:c0a8:101":  true,  // ISATAP -> 192.168.1.1
+		"::192.168.1.1":            true,  // IPv4-compatible -> 192.168.1.1
+		"::ffff:0:10.0.0.1":        true,  // IPv4-translated -> 10.0.0.1
+		"64:ff9b::808:808":         false, // NAT64 -> 8.8.8.8
+		"2002:808:808::":           false, // 6to4 -> 8.8.8.8
+		"2001:db8::5efe:808:808":   false, // ISATAP -> 8.8.8.8
+		"2606:4700:4700::1111":     false, // ordinary global unicast
+	}
+	for ipStr, expected := range cases {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			t.Fatalf("failed to parse %q", ipStr)
+		}
+		if got := isPrivateOrReservedIP(ip); got != expected {
+			t.Fatalf("ip %s expected %v, got %v", ipStr, expected, got)
+		}
+	}
+}
+
+func TestValidateWebhookURLRejectsIPv6TransitionLiterals(t *testing.T) {
+	blocked := []string{
+		"https://[64:ff9b::a9fe:a9fe]/latest/meta-data/",
+		"https://[2002:ac10:1::]/hook",
+		"https://[2001:db8::5efe:c0a8:101]/hook",
+	}
+	for _, raw := range blocked {
+		if err := validateWebhookURL(context.Background(), raw); err == nil {
+			t.Fatalf("expected %s to be rejected", raw)
+		}
+	}
+}
+
+func TestValidateWebhookURLRejectsResolvedIPv6TransitionAddresses(t *testing.T) {
+	origResolver := resolveWebhookIPs
+	defer func() { resolveWebhookIPs = origResolver }()
+
+	resolveWebhookIPs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("64:ff9b::a9fe:a9fe")}}, nil
+	}
+
+	if err := validateWebhookURL(context.Background(), "https://webhook.example.com/hook"); err == nil {
+		t.Fatalf("expected hostname resolving to a NAT64 metadata address to be rejected")
+	}
+}
+
 func TestWebhookDelivery_QueueAndURLs(t *testing.T) {
 	delivery := NewWebhookDelivery([]string{"http://example.com"})
 	if delivery.QueueLength() != 0 {

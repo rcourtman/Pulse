@@ -65,6 +65,14 @@ func validateOutboundIP(ip net.IP, opts RestrictedOutboundHTTPOptions) error {
 	if !opts.AllowPrivateIPs && ip.IsPrivate() {
 		return fmt.Errorf("private addresses are not allowed")
 	}
+	// Every check above reads the literal address bytes, so an IPv6 transition
+	// address hides its real IPv4 destination from all of them. Hold the
+	// embedded destination to the same policy.
+	for _, embedded := range EmbeddedIPv4Candidates(ip) {
+		if err := validateOutboundIP(embedded, opts); err != nil {
+			return fmt.Errorf("IPv6 transition address embeds a blocked destination: %w", err)
+		}
+	}
 	return nil
 }
 

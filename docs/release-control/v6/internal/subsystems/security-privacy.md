@@ -710,6 +710,25 @@ tenant-monitor creation), because an allowlist that only the default org
 observes silently denies legitimate per-client private webhook targets and
 invites per-org security drift.
 
+Webhook SSRF classification is an address-reachability decision, not a
+byte-pattern decision. The `net.IP` predicates (`IsLoopback`, `IsPrivate`,
+`IsLinkLocalUnicast`, `IsMulticast`, `IsUnspecified`) read only the literal
+address handed to them, so an IPv6 transition address carries an internal IPv4
+destination past every one of them: `64:ff9b::a9fe:a9fe` reaches
+169.254.169.254 while reporting itself as ordinary global unicast. Both SSRF
+layers -- the webhook URL validator (`pkg/audit/webhook.go`) and the restricted
+outbound transport (`pkg/securityutil/outbound_http.go`) -- must therefore
+unwrap NAT64 (RFC 6052 well-known and RFC 8215 local-use prefixes), 6to4,
+Teredo, ISATAP, IPv4-compatible, and IPv4-translated encodings through the
+single shared `securityutil.EmbeddedIPv4Candidates` helper and apply the same
+policy to every embedded destination they find. Unwrapping is a shared helper
+rather than a per-layer predicate because a bypass that defeats one layer
+defeats the other identically, so the two layers must never drift on which
+encodings they recognize. The embedded destination inherits the caller's
+policy, not a stricter one: a NAT64 address wrapping a permitted public target
+stays permitted, and `AllowPrivateIPs`/`AllowLoopback` relax the embedded check
+exactly as they relax the outer one.
+
 This subsystem now gives `L14` an explicit governed home for privacy guidance
 and telemetry disclosures instead of leaving those trust surfaces as lane-level
 evidence with no subsystem ownership.
