@@ -129,6 +129,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 	}{
 		{version: "6.0.5-rc.4", want: "6.0.4"},
 		{version: "6.2.0-rc.4", want: "6.1.2"},
+		{version: "6.2.0-rc.5", want: "6.1.2"},
 	}
 
 	for _, test := range tests {
@@ -336,11 +337,14 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"is a hardening cut that supersedes `v6.2.0-rc.3`: it repairs stranded-action recovery, kiosk-session containment, alert and notification accounting, node-restricted Proxmox storage projection, installer container-runtime selection, and host-agent CPU sampling",
+		"is a capability and compatibility cut that supersedes `v6.2.0-rc.4`: it expands agent hypervisor, hardware, and custom-metric collection; adds storage, alert-routing, and OpenShift coverage; and carries the post-RC4 compatibility fixes",
+		"The preceding `v6.2.0-rc.4` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.4`.",
 		"The preceding `v6.2.0-rc.3` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.3`.",
 		"The preceding `v6.2.0-rc.2` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.2`.",
 		"The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.1`.",
-		"The `v"+version+"` server cut is classified `no-mobile-impact`; no companion build upload is part of this cut. The existing mobile candidate programme remains separate, and the release packet must not describe a public store rollout.",
+		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
+		"Pulse Mobile 1.0.0 iOS build 11 and Android versionCode 9 candidates, both using runtime version 2, were distributed to the existing beta cohort on 2026-07-30.",
+		"No new companion upload or public store rollout is part of this cut.",
 		"Authenticode signing through SignPath is the canonical Windows signing backend for the `v6.2.0` line.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)

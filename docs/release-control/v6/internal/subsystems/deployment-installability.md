@@ -1157,24 +1157,30 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.4` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.0-rc.5` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.4` release
+fallback, and Helm chart release metadata to the same `6.2.0-rc.5` release
 version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. Stable
 install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The fourth
-`v6.2.0` candidate is a hardening cut that supersedes `v6.2.0-rc.3`: it repairs
-stranded-action recovery, kiosk-session containment, alert and notification
-accounting, node-restricted Proxmox storage projection, installer
-container-runtime selection, and host-agent CPU sampling. The exact `main` SHA
-must pass the integrated release checks and immutable-candidate build before
-the single-build workflow crosses its public mutation boundary.
-The `v6.2.0-rc.4` server cut is classified `no-mobile-impact`; no companion
-build upload is part of this cut. The existing mobile candidate programme
-remains separate, and the release packet must not describe a public store
-rollout.
+continues to govern the stable line until this candidate is promoted. The fifth
+`v6.2.0` candidate is a capability and compatibility cut that supersedes
+`v6.2.0-rc.4`: it expands agent hypervisor, hardware, and custom-metric
+collection; adds storage, alert-routing, and OpenShift coverage; and carries
+the post-RC4 compatibility fixes. The exact `main` SHA must pass the integrated
+release checks and immutable-candidate build before the single-build workflow
+crosses its public mutation boundary.
+The `v6.2.0-rc.5` server cut is classified
+`existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
+build 11 and Android versionCode 9 candidates, both using runtime version 2,
+were distributed to the existing beta cohort on 2026-07-30. No new companion
+upload or public store rollout is part of this cut.
+The preceding `v6.2.0-rc.4` candidate used the same support-prerelease path
+with `rollback_version=v6.1.2` and pinned the same four install surfaces to
+`6.2.0-rc.4`. It is superseded by this cut and no longer governs the install
+pins; its packet stays in `docs/releases/` as the historical candidate record
+for the `v6.2.0` line.
 The preceding `v6.2.0-rc.3` candidate used the same support-prerelease path
 with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 `6.2.0-rc.3`. It is superseded by this cut and no longer governs the install
@@ -1339,8 +1345,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.4` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.4`
+For the active support prerelease `v6.2.0-rc.5` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.5`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release. Each new candidate on the
