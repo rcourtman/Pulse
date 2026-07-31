@@ -48,6 +48,12 @@ fixes that landed after the fourth candidate.
 
 ## Fixed
 
+- Windows Unified Agent install commands now honor **Skip TLS verification**
+  while downloading the installer, including on hosts where PowerShell's
+  certificate callback closure previously retained the wrong state.
+- Machine rows aggregate all agent-reported disks when a canonical disk
+  summary is unavailable, so multi-volume Windows hosts show their combined
+  usage instead of an empty disk summary.
 - Apprise Telegram deliveries retain their configured topic instead of losing
   the topic identifier in presentation or dispatch.
 - QNAP installs enforce one watchdog instance and keep their singleton proof

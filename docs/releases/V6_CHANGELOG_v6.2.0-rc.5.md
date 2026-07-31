@@ -23,6 +23,10 @@ _This changelog describes the changes since `v6.2.0-rc.4`.
 
 ## Fixed
 
+- Windows Unified Agent installer downloads honor the selected Skip TLS
+  verification setting and retain custom-CA certificate state correctly.
+- Machine rows aggregate agent-reported disks for multi-volume Windows hosts
+  when no canonical disk summary is present.
 - Telegram topic selection survives Apprise presentation and dispatch.
 - QNAP watchdog installation and runtime enforce a single active watchdog.
 - Configured-subnet discovery blocklists are honored.
