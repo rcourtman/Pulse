@@ -37,6 +37,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -3833,6 +3834,15 @@ func isBlockedFetchIP(ip net.IP) bool {
 	// Block multicast and other non-unicast targets.
 	if !ip.IsGlobalUnicast() {
 		return true
+	}
+	// SECURITY: every check above reads the literal address bytes, so an IPv6
+	// transition address (NAT64, 6to4, Teredo, ISATAP) tunnels to an internal
+	// IPv4 destination none of them can see. Hold the embedded destination to
+	// the same policy, including the loopback and private-IP escape hatches.
+	for _, embedded := range securityutil.EmbeddedIPv4Candidates(ip) {
+		if isBlockedFetchIP(embedded) {
+			return true
+		}
 	}
 	return false
 }

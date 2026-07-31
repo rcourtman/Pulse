@@ -6839,3 +6839,20 @@ browser-title suffix, but it must not rename Pulse Assistant, alter Assistant
 page context, change tool/provider identity, or enter prompt, transcript, or
 Patrol evidence payloads. The AI runtime continues to consume canonical route
 and resource context independently of the shell's displayed brand.
+
+The Assistant fetch tool's SSRF guard in `internal/ai/service.go` classifies a
+destination by reachability, not by the literal bytes of the address. The
+`net.IP` predicates it is built from (`IsLoopback`, `IsUnspecified`,
+`IsLinkLocalUnicast`, `IsPrivate`, `IsGlobalUnicast`) each inspect only the
+address handed to them, so an IPv6 transition address carries an internal IPv4
+destination past all of them: `64:ff9b::a9fe:a9fe` reaches 169.254.169.254
+while reporting itself as ordinary global unicast. `isBlockedFetchIP` must
+therefore unwrap NAT64, 6to4, Teredo, ISATAP, IPv4-compatible and
+IPv4-translated encodings through the shared
+`securityutil.EmbeddedIPv4Candidates` helper that the audit-webhook validator
+and the restricted outbound transport already use, and must not fork a
+second AI-local list of transition prefixes. Every embedded destination is held
+to the same policy as the outer address, so `PULSE_AI_ALLOW_LOOPBACK` and
+`PULSE_AI_ALLOW_PRIVATE_IPS` relax the embedded check exactly as they relax the
+outer one, and a transition address wrapping a permitted public target stays
+permitted.

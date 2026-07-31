@@ -138,6 +138,59 @@ func TestIsBlockedFetchIP(t *testing.T) {
 	}
 }
 
+// TestIsBlockedFetchIP_IPv6TransitionAddresses covers the SSRF bypass where a
+// NAT64, 6to4, Teredo, ISATAP or IPv4-compatible address carries an internal
+// IPv4 destination past every net.IP predicate.
+func TestIsBlockedFetchIP_IPv6TransitionAddresses(t *testing.T) {
+	tests := []struct {
+		ip      string
+		blocked bool
+	}{
+		{"64:ff9b::a9fe:a9fe", true},       // NAT64 -> 169.254.169.254
+		{"64:ff9b::7f00:1", true},          // NAT64 -> 127.0.0.1
+		{"64:ff9b::a00:1", true},           // NAT64 -> 10.0.0.1
+		{"64:ff9b:1::c0a8:1", true},        // NAT64 local-use -> 192.168.0.1
+		{"64:ff9b:1:a9fe:a9:fe00::", true}, // NAT64 local-use /48 -> 169.254.169.254
+		{"2002:ac10:1::", true},            // 6to4 -> 172.16.0.1
+		{"2002:a9fe:a9fe::", true},         // 6to4 -> 169.254.169.254
+		{"2001:0:a9fe:a9fe::", true},       // Teredo server -> 169.254.169.254
+		{"2001:db8::5efe:c0a8:101", true},  // ISATAP -> 192.168.1.1
+		{"::192.168.1.1", true},            // IPv4-compatible -> 192.168.1.1
+		{"::ffff:0:10.0.0.1", true},        // IPv4-translated -> 10.0.0.1
+		{"64:ff9b::808:808", false},        // NAT64 -> 8.8.8.8
+		{"2002:808:808::", false},          // 6to4 -> 8.8.8.8
+		{"2606:4700:4700::1111", false},    // ordinary global unicast
+	}
+
+	for _, tt := range tests {
+		ip := net.ParseIP(tt.ip)
+		if ip == nil {
+			t.Fatalf("failed to parse %q", tt.ip)
+		}
+		if got := isBlockedFetchIP(ip); got != tt.blocked {
+			t.Errorf("isBlockedFetchIP(%s) = %v, want %v", tt.ip, got, tt.blocked)
+		}
+	}
+}
+
+func TestIsBlockedFetchIP_IPv6TransitionHonoursEscapeHatches(t *testing.T) {
+	nat64Private := net.ParseIP("64:ff9b::c0a8:1")  // -> 192.168.0.1
+	nat64Loopback := net.ParseIP("64:ff9b::7f00:1") // -> 127.0.0.1
+
+	t.Setenv("PULSE_AI_ALLOW_PRIVATE_IPS", "true")
+	if isBlockedFetchIP(nat64Private) {
+		t.Error("NAT64-wrapped private IP should be allowed when PULSE_AI_ALLOW_PRIVATE_IPS=true")
+	}
+	if !isBlockedFetchIP(nat64Loopback) {
+		t.Error("NAT64-wrapped loopback should stay blocked when only private IPs are allowed")
+	}
+
+	t.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
+	if isBlockedFetchIP(nat64Loopback) {
+		t.Error("NAT64-wrapped loopback should be allowed when PULSE_AI_ALLOW_LOOPBACK=true")
+	}
+}
+
 func TestFetchURL_SizeLimit(t *testing.T) {
 	os.Setenv("PULSE_AI_ALLOW_LOOPBACK", "true")
 	defer os.Unsetenv("PULSE_AI_ALLOW_LOOPBACK")
