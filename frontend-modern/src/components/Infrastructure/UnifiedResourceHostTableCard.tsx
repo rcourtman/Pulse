@@ -1,7 +1,12 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
-import type { Disk } from '@/types/api';
-import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
+import {
+  formatBytes,
+  formatSpeed,
+  formatUptime,
+  getResourceDiskSummary,
+  normalizeDiskArray,
+} from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import {
   GROUPED_TABLE_ROW_BADGE_CLASS,
@@ -59,7 +64,7 @@ import {
 } from './useUnifiedResourceTableState';
 import { shouldShowClusterGroupTypeLabel } from './unifiedResourceTableStateModel';
 import { getOutlierEmphasis, isResourceOnline } from './unifiedResourceTableModel';
-import { type Resource, getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
+import { type Resource, getCpuPercent, getMemoryPercent } from '@/types/resource';
 
 interface UnifiedResourceHostTableCardProps {
   tableProps: UnifiedResourceTableProps;
@@ -302,9 +307,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 const memoryPercentValue = createMemo(() =>
                   resource.memory ? Math.round(getMemoryPercent(resource)) : null,
                 );
-                const diskPercentValue = createMemo(() =>
-                  resource.disk ? Math.round(getDiskPercent(resource)) : null,
-                );
+                const diskSummary = createMemo(() => getResourceDiskSummary(resource));
+                const diskPercentValue = createMemo(() => {
+                  const summary = diskSummary();
+                  return summary ? Math.round(summary.usage) : null;
+                });
 
                 const memorySublabel = createMemo(() => {
                   if (
@@ -317,13 +324,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 });
 
                 const diskSublabel = createMemo(() => {
-                  if (
-                    !resource.disk ||
-                    resource.disk.used === undefined ||
-                    resource.disk.total === undefined
-                  )
-                    return undefined;
-                  return `${formatBytes(resource.disk.used)}/${formatBytes(resource.disk.total)}`;
+                  const summary = diskSummary();
+                  if (!summary) return undefined;
+                  return `${formatBytes(summary.used)}/${formatBytes(summary.total)}`;
                 });
                 const networkTotal = createMemo(
                   () => (resource.network?.rxBytes ?? 0) + (resource.network?.txBytes ?? 0),
@@ -535,16 +538,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           <div class="w-full" title={diskSublabel()}>
                             <StackedDiskBar
                               disks={normalizeDiskArray(resource.agent?.disks)}
-                              aggregateDisk={
-                                resource.disk
-                                  ? ({
-                                      total: resource.disk.total ?? 0,
-                                      used: resource.disk.used ?? 0,
-                                      free: resource.disk.free ?? 0,
-                                      usage: resource.disk.current ?? 0,
-                                    } as Disk)
-                                  : undefined
-                              }
+                              aggregateDisk={diskSummary()}
                               thresholds={diskThresholds()}
                             />
                           </div>

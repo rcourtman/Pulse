@@ -1,5 +1,6 @@
 // Type-safe formatting utilities
 import type { Disk } from '@/types/api';
+import type { Resource } from '@/types/resource';
 
 type DiskInput = {
   device?: string;
@@ -337,4 +338,34 @@ export function normalizeDiskArray(disks?: DiskInput[]): Disk[] | undefined {
     };
   });
   return normalized.length > 0 ? normalized : undefined;
+}
+
+export function getResourceDiskSummary(
+  resource: Pick<Resource, 'agent' | 'disk'>,
+): Disk | undefined {
+  if (resource.disk) {
+    const total = resource.disk.total ?? 0;
+    const used = resource.disk.used ?? 0;
+    return {
+      total,
+      used,
+      free: resource.disk.free ?? Math.max(total - used, 0),
+      usage: total > 0 ? (used / total) * 100 : resource.disk.current,
+    };
+  }
+
+  const disks = normalizeDiskArray(resource.agent?.disks);
+  if (!disks) return undefined;
+
+  const total = disks.reduce((sum, disk) => sum + disk.total, 0);
+  if (total <= 0) return undefined;
+  const used = disks.reduce((sum, disk) => sum + disk.used, 0);
+  const free = disks.reduce((sum, disk) => sum + disk.free, 0);
+
+  return {
+    total,
+    used,
+    free,
+    usage: (used / total) * 100,
+  };
 }

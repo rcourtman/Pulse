@@ -296,6 +296,29 @@ describe('infrastructureSelectors', () => {
         'resource-3',
       ]);
     });
+
+    it('sorts by aggregate agent disks when the canonical disk summary is absent', () => {
+      const resources = [
+        makeResource(1, {
+          displayName: 'Higher usage',
+          agent: { disks: [{ total: 100, used: 80, free: 20 }] },
+        }),
+        makeResource(2, {
+          displayName: 'Lower usage',
+          agent: {
+            disks: [
+              { total: 100, used: 10, free: 90 },
+              { total: 300, used: 30, free: 270 },
+            ],
+          },
+        }),
+      ];
+
+      expect(sortResources(resources, 'disk', 'asc').map((resource) => resource.id)).toEqual([
+        'resource-2',
+        'resource-1',
+      ]);
+    });
   });
 
   describe('groupResources', () => {

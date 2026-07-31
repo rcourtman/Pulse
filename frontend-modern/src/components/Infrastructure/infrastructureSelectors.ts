@@ -1,10 +1,11 @@
 import type { Resource } from '@/types/resource';
-import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
+import { getCpuPercent, getMemoryPercent } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { getInfrastructureSystemIdentitySortLabel } from '@/utils/resourceBadgePresentation';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import { getResourceDiskSummary } from '@/utils/format';
 
 export interface IODistributionStats {
   median: number;
@@ -81,7 +82,7 @@ const getSortValue = (resource: Resource, key: string): number | string | null =
     case 'memory':
       return resource.memory ? getMemoryPercent(resource) : null;
     case 'disk':
-      return resource.disk ? getDiskPercent(resource) : null;
+      return getResourceDiskSummary(resource)?.usage ?? null;
     case 'network':
       return resource.network ? resource.network.rxBytes + resource.network.txBytes : null;
     case 'diskio':

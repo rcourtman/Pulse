@@ -3,6 +3,7 @@ import {
   formatPowerOnHours,
   estimateTextWidth,
   formatAnomalyRatio,
+  getResourceDiskSummary,
   getShortImageName,
   normalizeDiskArray,
   ANOMALY_SEVERITY_CLASS,
@@ -262,5 +263,35 @@ describe('normalizeDiskArray', () => {
         },
       ]),
     ).toBeUndefined();
+  });
+});
+
+describe('getResourceDiskSummary', () => {
+  it('aggregates multiple agent-reported Windows volumes when the resource summary is absent', () => {
+    const gib = 1024 ** 3;
+    const summary = getResourceDiskSummary({
+      disk: undefined,
+      agent: {
+        disks: [
+          { device: 'C:', mountpoint: 'C:\\', total: 499 * gib, used: 49.5 * gib },
+          { device: 'F:', mountpoint: 'F:\\', total: 250 * gib, used: 2.75 * gib },
+        ],
+      },
+    });
+
+    expect(summary).toMatchObject({
+      total: 749 * gib,
+      used: 52.25 * gib,
+    });
+    expect(summary?.usage).toBeCloseTo(6.98, 2);
+  });
+
+  it('keeps the canonical resource summary when one is available', () => {
+    expect(
+      getResourceDiskSummary({
+        disk: { current: 25, total: 400, used: 100, free: 300 },
+        agent: { disks: [{ total: 1000, used: 900 }] },
+      }),
+    ).toEqual({ total: 400, used: 100, free: 300, usage: 25 });
   });
 });

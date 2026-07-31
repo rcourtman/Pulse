@@ -113,7 +113,7 @@ describe('buildPowerShellInstallScriptBootstrap — bootstrap script wiring', ()
       '$pulsePrev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback;',
     );
     expect(script).toContain(
-      '[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { param($sender, $certificate, $chain, $sslPolicyErrors)',
+      '[System.Net.ServicePointManager]::ServerCertificateValidationCallback = ({ param($sender, $certificate, $chain, $sslPolicyErrors)',
     );
     expect(script).toContain(
       '} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev }',
@@ -122,7 +122,9 @@ describe('buildPowerShellInstallScriptBootstrap — bootstrap script wiring', ()
 
   it('short-circuits the callback to $true when PULSE_INSECURE_SKIP_VERIFY is "true"', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
-    expect(script).toContain('if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true") { return $true };');
+    expect(script).toContain(
+      'if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true") { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { param($sender, $certificate, $chain, $sslPolicyErrors) return $true }',
+    );
   });
 
   it('returns the raw sslPolicyErrors verdict when no custom CA was loaded', () => {
@@ -155,7 +157,7 @@ describe('buildPowerShellInstallScriptBootstrap — bootstrap script wiring', ()
     expect(script).toContain(
       'if ($pulseElement.Certificate.Thumbprint -eq $pulseCustomCa.Thumbprint) { return $true }',
     );
-    expect(script).toContain('return $false };');
+    expect(script).toContain('return $false }).GetNewClosure()');
   });
 
   it('fetches the script via `irm $pulseScriptUrl` inside both the custom-trust and the bare else arm', () => {

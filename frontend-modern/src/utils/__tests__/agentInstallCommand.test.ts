@@ -144,6 +144,10 @@ describe('agentInstallCommand', () => {
       'Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript',
     );
     expect(command).toContain(
+      'ServerCertificateValidationCallback={ param($sender,$certificate,$chain,$sslPolicyErrors) return $true }',
+    );
+    expect(command).not.toContain('$pulseAllowInsecure');
+    expect(command).toContain(
       '& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript -Url',
     );
     expect(command).toContain('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }');
@@ -152,6 +156,18 @@ describe('agentInstallCommand', () => {
     expect(command).not.toContain('-NonInteractive $true');
     expect(command).not.toContain('-Insecure $true');
     expect(command).not.toContain('$env:PULSE_TOKEN=');
+  });
+
+  it('captures a custom CA in the certificate callback when TLS verification stays enabled', () => {
+    const command = buildWindowsAgentInstallCommand({
+      baseUrl: 'https://pulse.example',
+      token: null,
+      caCertPath: 'C:\\Pulse\\custom-ca.cer',
+    });
+
+    expect(command).toContain('ServerCertificateValidationCallback=({ param(');
+    expect(command).toContain('return $false }).GetNewClosure()');
+    expect(command).not.toContain('return $true }; if ($null -eq $pulseCustomCa)');
   });
 
   it('supports tokenless shared Windows install transport for optional auth', () => {
