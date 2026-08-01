@@ -602,8 +602,9 @@ const AgentMachineRaidCell: Component<{
         <div class="max-h-[300px] space-y-2 overflow-y-auto pr-1">
           <For each={shownArrays()}>
             {(array, index) => {
-              const rebuilding = () =>
-                Number.isFinite(array.rebuildPercent) && array.rebuildPercent > 0;
+              const rebuildPercent = () => array.rebuildPercent ?? 0;
+              const devices = () => array.devices ?? [];
+              const rebuilding = () => Number.isFinite(rebuildPercent()) && rebuildPercent() > 0;
 
               return (
                 <div class="min-w-0" classList={{ 'border-t border-border pt-2': index() > 0 }}>
@@ -659,13 +660,13 @@ const AgentMachineRaidCell: Component<{
                       <div class="mb-0.5 flex items-center justify-between gap-3 text-[9px]">
                         <span class="text-amber-600 dark:text-amber-400">Rebuilding</span>
                         <span class="font-mono text-base-content">
-                          {Math.round(array.rebuildPercent)}%
+                          {Math.round(rebuildPercent())}%
                         </span>
                       </div>
                       <div class="h-1 overflow-hidden rounded-full bg-surface-alt">
                         <div
                           class="h-full rounded-full bg-amber-500"
-                          style={{ width: rebuildWidth(array.rebuildPercent) }}
+                          style={{ width: rebuildWidth(rebuildPercent()) }}
                         />
                       </div>
                       <Show when={array.rebuildSpeed}>
@@ -674,9 +675,9 @@ const AgentMachineRaidCell: Component<{
                     </div>
                   </Show>
 
-                  <Show when={array.devices.length > 0}>
+                  <Show when={devices().length > 0}>
                     <div class="mt-1.5 flex flex-wrap gap-1">
-                      <For each={array.devices.slice(0, 12)}>
+                      <For each={devices().slice(0, 12)}>
                         {(device) => (
                           <span
                             class={`inline-flex max-w-full items-center truncate rounded border px-1.5 py-0.5 text-[9px] font-medium ${getRaidDeviceBadgeClass(device)}`}
@@ -686,9 +687,9 @@ const AgentMachineRaidCell: Component<{
                           </span>
                         )}
                       </For>
-                      <Show when={array.devices.length > 12}>
+                      <Show when={devices().length > 12}>
                         <span class="rounded border border-border px-1.5 py-0.5 text-[9px] text-muted">
-                          +{array.devices.length - 12}
+                          +{devices().length - 12}
                         </span>
                       </Show>
                     </div>

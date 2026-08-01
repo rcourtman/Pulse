@@ -824,7 +824,7 @@ export const matchesAgentMachineSearch = (
       array.level,
       array.state,
       array.rebuildSpeed,
-      ...array.devices.flatMap((device) => [device.device, device.state, device.slot]),
+      ...(array.devices ?? []).flatMap((device) => [device.device, device.state, device.slot]),
     ]),
   );
   appendSearchValues(values, [getAgentMachineRaidSummary(machine), ...sensorSearchValues(machine)]);

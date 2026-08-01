@@ -30,10 +30,9 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
             const variant = () => getRaidStateVariant(array.state);
             const stateText = () => (array.state || '').trim() || 'unknown';
             const levelText = () => (array.level || '').trim() || 'unknown';
+            const rebuildPercent = () => array.rebuildPercent ?? 0;
             const rebuilding = () =>
-              Number.isFinite(array.rebuildPercent) &&
-              array.rebuildPercent > 0 &&
-              array.rebuildPercent < 100;
+              Number.isFinite(rebuildPercent()) && rebuildPercent() > 0 && rebuildPercent() < 100;
 
             return (
               <div class="rounded border border-dashed border-border p-2 overflow-hidden">
@@ -66,7 +65,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
                   <div class="mt-2 text-[10px] text-muted">
                     Rebuild:{' '}
                     <span class="font-medium text-base-content">
-                      {Math.round(array.rebuildPercent)}%
+                      {Math.round(rebuildPercent())}%
                     </span>
                     <Show when={array.rebuildSpeed}>
                       <span class="text-muted"> · </span>

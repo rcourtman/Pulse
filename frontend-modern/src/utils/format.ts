@@ -317,10 +317,22 @@ export function getShortImageName(fullImage: string | undefined): string {
 }
 
 /**
+ * A Disk whose numeric fields are guaranteed present. The wire type leaves
+ * them optional (the unified resources payload omits zero values); these
+ * helpers compute and default them so consumers can render without guards.
+ */
+export type NormalizedDisk = Disk & {
+  total: number;
+  used: number;
+  free: number;
+  usage: number;
+};
+
+/**
  * Normalize raw disk objects (from API/agent) into proper Disk[].
  * Calculates `usage` from used/total and defaults missing fields.
  */
-export function normalizeDiskArray(disks?: DiskInput[]): Disk[] | undefined {
+export function normalizeDiskArray(disks?: DiskInput[]): NormalizedDisk[] | undefined {
   if (!disks || disks.length === 0) return undefined;
   const normalized = disks.filter(shouldDisplayDisk).map((d) => {
     const total = d.total ?? 0;
@@ -342,7 +354,7 @@ export function normalizeDiskArray(disks?: DiskInput[]): Disk[] | undefined {
 
 export function getResourceDiskSummary(
   resource: Pick<Resource, 'agent' | 'disk'>,
-): Disk | undefined {
+): NormalizedDisk | undefined {
   if (resource.disk) {
     const total = resource.disk.total ?? 0;
     const used = resource.disk.used ?? 0;

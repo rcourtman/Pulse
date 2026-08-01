@@ -150,7 +150,7 @@ function evaluateMetricCondition(guest: FilterableItem, condition: MetricConditi
       value = 'memory' in guest && guest.memory ? guest.memory.usage : 0;
       break;
     case 'disk':
-      value = 'disk' in guest && guest.disk ? guest.disk.usage : 0;
+      value = 'disk' in guest && guest.disk ? (guest.disk.usage ?? 0) : 0;
       break;
     case 'uptime':
       // Uptime in seconds (only for running VMs/containers)

@@ -219,14 +219,16 @@ export function useGuestRowState(props: GuestRowProps) {
   });
 
   const diskPercent = createMemo(() => {
-    if (!props.guest.disk || props.guest.disk.total === 0) return 0;
-    if (props.guest.disk.usage === -1) return -1;
-    return (props.guest.disk.used / props.guest.disk.total) * 100;
+    const disk = props.guest.disk;
+    const total = disk?.total ?? 0;
+    if (!disk || total === 0) return 0;
+    if (disk.usage === -1) return -1;
+    return ((disk.used ?? 0) / total) * 100;
   });
 
   const hasDiskUsage = createMemo(() => {
     if (!props.guest.disk) return false;
-    if (props.guest.disk.total <= 0) return false;
+    if ((props.guest.disk.total ?? 0) <= 0) return false;
     return diskPercent() !== -1;
   });
 

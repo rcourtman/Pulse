@@ -1,6 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { Disk } from '@/types/api';
-import { formatBytes } from '@/utils/format';
+import { formatBytes, type NormalizedDisk } from '@/utils/format';
 import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
@@ -12,7 +12,7 @@ interface DisksCardProps {
 export const DisksCard: Component<DisksCardProps> = (props) => {
   if (!props.disks || props.disks.length === 0) return null;
 
-  const aggregateDisk = (): Disk | null => {
+  const aggregateDisk = (): NormalizedDisk | null => {
     const total = props.disks?.reduce((sum, disk) => sum + (disk.total || 0), 0) ?? 0;
     const used = props.disks?.reduce((sum, disk) => sum + (disk.used || 0), 0) ?? 0;
     if (total <= 0 && used <= 0) return null;
@@ -52,7 +52,9 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
       <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
         <For each={props.disks}>
           {(disk) => {
-            const usagePercent = disk.total > 0 ? (disk.used / disk.total) * 100 : 0;
+            const total = disk.total ?? 0;
+            const used = disk.used ?? 0;
+            const usagePercent = total > 0 ? (used / total) * 100 : 0;
             const barColor = getMetricColorRgba(usagePercent, 'disk');
             const textColor = getMetricTextColorClass(usagePercent, 'disk');
             return (
@@ -65,7 +67,7 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
                     <span class={`font-medium ${textColor}`}>{usagePercent.toFixed(0)}%</span>
                     <span class="text-muted">·</span>
                     <span class="text-muted">
-                      {formatBytes(disk.used)} / {formatBytes(disk.total)}
+                      {formatBytes(used)} / {formatBytes(total)}
                     </span>
                   </span>
                 </div>

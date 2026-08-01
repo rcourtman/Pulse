@@ -605,8 +605,8 @@ export interface HostRAIDArray {
   failedDevices: number;
   spareDevices: number;
   uuid?: string;
-  devices: HostRAIDDevice[];
-  rebuildPercent: number;
+  devices?: HostRAIDDevice[];
+  rebuildPercent?: number;
   rebuildSpeed?: string;
 }
 
@@ -1046,11 +1046,11 @@ export interface PBSBackupJob {
   id: string;
   store: string;
   type: string;
-  vmid: string;
+  vmid?: string;
   lastBackup: string;
-  nextRun: string;
+  nextRun?: string;
   status: string;
-  error: string;
+  error?: string;
 }
 
 export interface PBSSyncJob {
@@ -1059,8 +1059,8 @@ export interface PBSSyncJob {
   remote: string;
   status: string;
   lastSync: string;
-  nextRun: string;
-  error: string;
+  nextRun?: string;
+  error?: string;
 }
 
 export interface PBSVerifyJob {
@@ -1068,8 +1068,8 @@ export interface PBSVerifyJob {
   store: string;
   status: string;
   lastVerify: string;
-  nextRun: string;
-  error: string;
+  nextRun?: string;
+  error?: string;
 }
 
 export interface PBSPruneJob {
@@ -1077,8 +1077,8 @@ export interface PBSPruneJob {
   store: string;
   status: string;
   lastPrune: string;
-  nextRun: string;
-  error: string;
+  nextRun?: string;
+  error?: string;
 }
 
 export interface PBSGarbageJob {
@@ -1086,9 +1086,9 @@ export interface PBSGarbageJob {
   store: string;
   status: string;
   lastGarbage: string;
-  nextRun: string;
-  removedBytes: number;
-  error: string;
+  nextRun?: string;
+  removedBytes?: number;
+  error?: string;
 }
 
 export interface PBSJobHealthFreshness {
@@ -1141,13 +1141,18 @@ export interface Memory {
   swapTotal?: number;
 }
 
+// Models both the legacy state payload (models.Disk, numerics always present,
+// filesystem under `type`) and the unified resources facet (DiskInfo, every
+// field omitempty so zero values arrive absent, filesystem under `filesystem`).
+// Consumers must default absent numerics rather than assume presence (#1663).
 export interface Disk {
-  total: number;
-  used: number;
-  free: number;
-  usage: number;
+  total?: number;
+  used?: number;
+  free?: number;
+  usage?: number;
   mountpoint?: string;
   type?: string;
+  filesystem?: string;
   device?: string;
 }
 

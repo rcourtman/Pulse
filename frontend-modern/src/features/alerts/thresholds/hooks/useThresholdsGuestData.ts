@@ -155,7 +155,9 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
           groupKey: guestIdentity
             ? `${guestName} · ${guestIdentity.instance}/${guestIdentity.vmid}`
             : guestName,
-          instance: disk.type || '',
+          // Unified payloads carry the filesystem under `filesystem`; the
+          // legacy state payload uses `type`.
+          instance: disk.filesystem || disk.type || '',
           vmid: guestIdentity?.vmid,
           status: guest.status,
           hasOverride: hasCustomThresholds || Boolean(override?.disabled),

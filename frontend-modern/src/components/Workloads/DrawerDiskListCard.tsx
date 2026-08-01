@@ -17,11 +17,14 @@ export interface DrawerDiskListItem {
 }
 
 const getDiskUsagePercent = (disk: Disk): number => {
-  if (disk.total > 0 && Number.isFinite(disk.used)) {
-    return (disk.used / disk.total) * 100;
+  const total = disk.total ?? 0;
+  const used = disk.used ?? 0;
+  if (total > 0 && Number.isFinite(used)) {
+    return (used / total) * 100;
   }
-  if (Number.isFinite(disk.usage)) {
-    return disk.usage <= 1 ? disk.usage * 100 : disk.usage;
+  const usage = disk.usage;
+  if (typeof usage === 'number' && Number.isFinite(usage)) {
+    return usage <= 1 ? usage * 100 : usage;
   }
   return 0;
 };

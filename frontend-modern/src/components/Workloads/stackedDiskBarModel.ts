@@ -100,11 +100,13 @@ const SEGMENT_COLORS = [
 ];
 
 function getDiskUsagePercent(disk: Disk): number {
-  if (disk.total > 0) {
-    return (disk.used / disk.total) * 100;
+  const total = disk.total ?? 0;
+  if (total > 0) {
+    return ((disk.used ?? 0) / total) * 100;
   }
-  if (Number.isFinite(disk.usage)) {
-    return disk.usage <= 1 ? disk.usage * 100 : disk.usage;
+  const usage = disk.usage;
+  if (typeof usage === 'number' && Number.isFinite(usage)) {
+    return usage <= 1 ? usage * 100 : usage;
   }
   return 0;
 }
@@ -189,21 +191,21 @@ function buildTooltipContent(
           : getStackedDiskColor(percentValue, index, options.thresholds),
         label: getDiskLabel(disk, index),
         percent: formatPercent(percentValue),
-        total: formatBytes(disk.total),
-        used: formatBytes(disk.used),
+        total: formatBytes(disk.total ?? 0),
+        used: formatBytes(disk.used ?? 0),
       };
     });
   }
 
-  if (options.aggregateDisk && options.aggregateDisk.total > 0) {
+  if (options.aggregateDisk && (options.aggregateDisk.total ?? 0) > 0) {
     const percentValue = getDiskUsagePercent(options.aggregateDisk);
     return [
       {
         color: getMetricColorRgba(percentValue, 'disk', options.thresholds),
         label: 'Total',
         percent: formatPercent(percentValue),
-        total: formatBytes(options.aggregateDisk.total),
-        used: formatBytes(options.aggregateDisk.used),
+        total: formatBytes(options.aggregateDisk.total ?? 0),
+        used: formatBytes(options.aggregateDisk.used ?? 0),
       },
     ];
   }
@@ -223,8 +225,8 @@ function getMaxDiskInfo(disks: Disk[]): StackedDiskMaxInfo | null {
       maxInfo = {
         label: getDiskLabel(disk, index),
         percent,
-        total: disk.total,
-        used: disk.used,
+        total: disk.total ?? 0,
+        used: disk.used ?? 0,
       };
     }
   }
@@ -306,7 +308,7 @@ export function buildStackedDiskBarPresentation(
             disk,
             diskUsagePercent,
             index,
-            widthPercent: Math.min((disk.used / totalCapacity) * 100, 100),
+            widthPercent: Math.min(((disk.used ?? 0) / totalCapacity) * 100, 100),
           };
         })
       : [];
@@ -322,7 +324,7 @@ export function buildStackedDiskBarPresentation(
       percent,
       percentLabel,
       shortLabel,
-      title: `${label}: ${percentLabel} (${formatBytes(disk.used)}/${formatBytes(disk.total)})`,
+      title: `${label}: ${percentLabel} (${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)})`,
     };
   });
   const verticalBars: StackedDiskVerticalBar[] = verticalBarsMode
@@ -332,7 +334,7 @@ export function buildStackedDiskBarPresentation(
         return {
           color: getMetricColorRgba(percent, 'disk', props.thresholds),
           fillPercent: Math.max(0, Math.min(percent, 100)),
-          title: `${label}: ${formatPercent(percent)} (${formatBytes(disk.used)}/${formatBytes(disk.total)})`,
+          title: `${label}: ${formatPercent(percent)} (${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)})`,
         };
       })
     : [];

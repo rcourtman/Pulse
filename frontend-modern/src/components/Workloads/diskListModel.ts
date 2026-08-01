@@ -25,11 +25,12 @@ export const hasWorkloadsDiskCapacity = (disk: Disk): boolean =>
   typeof disk.total === 'number' && disk.total > 0;
 
 export const getWorkloadsDiskUsagePercent = (disk: Disk): number => {
-  if (!hasWorkloadsDiskCapacity(disk)) {
+  const total = disk.total ?? 0;
+  if (total <= 0) {
     return 0;
   }
 
-  return (disk.used / disk.total) * 100;
+  return ((disk.used ?? 0) / total) * 100;
 };
 
 export const getWorkloadsDiskLabel = (disk: Disk): string =>
@@ -40,7 +41,7 @@ export const getWorkloadsDiskLabelTitle = (label: string): string | undefined =>
 
 export const getWorkloadsDiskUsageText = (disk: Disk): string =>
   hasWorkloadsDiskCapacity(disk)
-    ? `${formatBytes(disk.used)}/${formatBytes(disk.total)}`
+    ? `${formatBytes(disk.used ?? 0)}/${formatBytes(disk.total ?? 0)}`
     : 'Usage unavailable';
 
 export const getWorkloadsDiskUsagePercentLabel = (disk: Disk): string =>
