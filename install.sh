@@ -4504,6 +4504,18 @@ EOF
     safe_systemctl daemon-reload
 }
 
+# Updates keep an existing unit file untouched (it may carry user
+# customizations such as FRONTEND_PORT), but a half-removed installation —
+# binary still present, unit deleted by hand (#1663) — must get a fresh unit
+# or the enable/start below fails with "Unit ... could not be found".
+ensure_systemd_service_installed() {
+    command -v systemctl >/dev/null 2>&1 || return 0
+    if [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
+        print_warn "systemd unit ${SERVICE_NAME}.service is missing; recreating it"
+        install_systemd_service
+    fi
+}
+
 # Tracks whether Pulse was running before an update-time stop, so start_pulse can
 # guarantee it comes back up afterward instead of silently leaving it stopped
 # (#1323: on unprivileged LXC the installer's restart can silently fail).
@@ -4561,7 +4573,20 @@ ensure_pulse_running_after_update() {
 
 start_pulse() {
     print_info "Starting Pulse..."
-    
+
+    # A missing unit is a broken installation, not an unprivileged-container
+    # quirk: "Unit ... could not be found" must never be softened into the
+    # container notes below and then reported as success (#1663). The
+    # installer always writes /etc/systemd/system/<name>.service; systemctl
+    # cat covers units living elsewhere.
+    if command -v systemctl >/dev/null 2>&1 \
+        && [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]] \
+        && ! timeout 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+        print_error "systemd unit ${SERVICE_NAME}.service does not exist; Pulse was not started"
+        print_info "Re-run the installer to recreate the service unit"
+        return 1
+    fi
+
     # Try to enable/start service (may fail in unprivileged containers)
     if ! safe_systemctl enable $SERVICE_NAME; then
         print_info "Note: systemctl enable failed (common in unprivileged containers)"
@@ -4816,8 +4841,14 @@ main() {
             stop_pulse_for_update
             create_user
             download_pulse
+            # A half-removed installation (binary present, /etc/pulse or the
+            # unit file deleted, #1663) reaches this update path; recreate
+            # the environment the steps below assume instead of crashing on
+            # a missing config dir or reporting success over a missing unit.
+            setup_directories
             setup_update_command
-            
+            ensure_systemd_service_installed
+
             # Setup auto-updates if requested
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                 setup_auto_updates
@@ -5018,8 +5049,13 @@ main() {
                 stop_pulse_for_update
                 create_user
                 download_pulse
+                # Same repair as the --version path: a half-removed
+                # installation (#1663) must get its config dir and unit
+                # file back before auto-update setup and start.
+                setup_directories
                 setup_update_command
-                
+                ensure_systemd_service_installed
+
                 # Setup auto-updates if requested during update; otherwise
                 # refresh assets a previous install already put in place so a
                 # stale helper (e.g. v5-pinned) doesn't survive the upgrade

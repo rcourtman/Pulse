@@ -2035,3 +2035,92 @@ func TestRootInstallScriptRepairAutoUpdateUnitsEntryPoint(t *testing.T) {
 	}
 	assertNoAutoUpdateStagingLitter(t, filepath.Dir(autoUpdateDest), filepath.Dir(servicePath))
 }
+
+// Regression tests for #1663: a half-removed installation (binary still at
+// /opt/pulse/bin/pulse, but /etc/pulse and the systemd unit deleted by hand)
+// re-ran the installer, which took the update path ("Reinstalling version
+// ..."). With auto-updates enabled it crashed writing system.json into the
+// missing config dir; without them it printed a success completion while
+// `systemctl enable/start` had failed with "Unit pulse.service could not be
+// found", softened into the unprivileged-container note. The update flows
+// must recreate the config dir and the unit, and start_pulse must fail
+// loudly when the unit does not exist at all.
+func TestRootInstallScriptUpdateFlowsRepairHalfRemovedInstall(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	wired := regexp.MustCompile(`(?m)^\s*download_pulse\n(?:\s*#[^\n]*\n)*\s*setup_directories\n\s*setup_update_command\n\s*ensure_systemd_service_installed$`)
+	if got := len(wired.FindAll(content, -1)); got != 2 {
+		t.Fatalf("expected both update flows (--version and menu update) to run setup_directories and ensure_systemd_service_installed after download_pulse, found %d", got)
+	}
+}
+
+func TestRootInstallEnsureSystemdServiceRecreatesMissingUnit(t *testing.T) {
+	script := `
+set -euo pipefail
+SERVICE_NAME="pulse-missing-unit-1663"
+print_warn() { echo "WARN: $*"; }
+systemctl() { return 0; }
+install_systemd_service() { echo "INSTALL_SYSTEMD_SERVICE_CALLED"; }
+` + extractRootInstallShellFunction(t, "ensure_systemd_service_installed") + `
+ensure_systemd_service_installed
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("ensure_systemd_service_installed failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "INSTALL_SYSTEMD_SERVICE_CALLED") {
+		t.Fatalf("missing unit was not recreated:\n%s", out)
+	}
+}
+
+func TestRootInstallStartPulseFailsWhenUnitMissing(t *testing.T) {
+	stubs := `
+set -euo pipefail
+PULSE_WAS_ACTIVE="false"
+print_info() { echo "INFO: $*"; }
+print_error() { echo "ERROR: $*"; }
+print_success() { echo "SUCCESS: $*"; }
+safe_systemctl() { return 0; }
+timeout() { shift; "$@"; }
+sleep() { :; }
+journalctl() { return 0; }
+ensure_pulse_running_after_update() { return 0; }
+` + extractRootInstallShellFunction(t, "start_pulse") + "\n"
+
+	// Unit genuinely absent: no unit file and `systemctl cat` cannot find it.
+	// start_pulse must fail with a clear error instead of reporting success
+	// behind the unprivileged-container note.
+	missing := stubs + `
+SERVICE_NAME="pulse-missing-unit-1663"
+systemctl() { return 1; }
+start_pulse
+`
+	out, err := exec.Command("bash", "-c", missing).CombinedOutput()
+	if err == nil {
+		t.Fatalf("start_pulse reported success with no unit installed:\n%s", out)
+	}
+	if !strings.Contains(string(out), "does not exist") {
+		t.Fatalf("start_pulse did not explain the missing unit:\n%s", out)
+	}
+	if strings.Contains(string(out), "SUCCESS:") {
+		t.Fatalf("start_pulse printed success for a missing unit:\n%s", out)
+	}
+
+	// Unit resolvable via systemctl cat: the guard must fall through and the
+	// normal start path must succeed.
+	present := stubs + `
+SERVICE_NAME="pulse-missing-unit-1663"
+systemctl() { return 0; }
+start_pulse
+`
+	out, err = exec.Command("bash", "-c", present).CombinedOutput()
+	if err != nil {
+		t.Fatalf("start_pulse failed with a resolvable unit: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "SUCCESS:") {
+		t.Fatalf("start_pulse did not report a successful start:\n%s", out)
+	}
+}

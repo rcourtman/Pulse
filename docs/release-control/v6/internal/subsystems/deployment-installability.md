@@ -2005,6 +2005,26 @@ is `safe_systemctl daemon-reload`, which returns 0 by design, so an unchecked
 write reported success over a truncated unit. The staged helper must also be
 rejected before the swap unless it is non-empty and begins with `#!`.
 
+Every update-shaped flow over an existing box (the `--version` path and the
+interactive update action, like the reinstall action before them) must repair
+a half-removed installation rather than assume the previous install's
+environment survived: the flow runs `setup_directories` before anything
+writes into the config dir, and recreates the systemd unit via
+`ensure_systemd_service_installed` when
+`/etc/systemd/system/<service>.service` is missing — while leaving an
+existing unit untouched so operator customizations (e.g. a non-default
+`FRONTEND_PORT`) survive normal updates. A box whose operator deleted
+`/etc/pulse`, the unit file and the binary symlink but kept
+`/opt/pulse/bin/pulse` takes exactly this path ("Reinstalling version ..."),
+and previously crashed writing `system.json` into the missing config dir
+when auto-updates were enabled, or — without them — printed a success
+completion while `systemctl enable/start` had failed with "Unit
+pulse.service could not be found" behind the unprivileged-container note
+(issue #1663). `start_pulse` must never report success when the unit does
+not exist at all: the installer always writes the unit file itself, even
+where systemctl cannot run, so a missing unit is a broken installation
+rather than an unprivileged-container quirk and must fail the run loudly.
+
 Changes to the generated units must be able to reach already-deployed boxes.
 A box installed before the sandbox was widened runs the installer from a
 `pulse-update.service` whose `ReadWritePaths` excludes the helper and unit
