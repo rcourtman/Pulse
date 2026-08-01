@@ -80,6 +80,19 @@ func TestRegistryChecker_CheckImageUpdate_CacheHits(t *testing.T) {
 	})
 }
 
+func TestRegistryChecker_CheckImageUpdate_ProBrokerRegistrySkipped(t *testing.T) {
+	logger := zerolog.Nop()
+	checker := NewRegistryChecker(logger)
+
+	// The entitled Pro registry requires a license credential the agent does
+	// not hold, so the checker must report nothing (no badge) instead of a
+	// permanent "authentication required" error on the Pulse Pro container.
+	result := checker.CheckImageUpdate(context.Background(), "license.pulserelay.pro/pulse-pro:6.1.1", "sha256:current", "amd64", "linux", "")
+	if result != nil {
+		t.Fatalf("Expected nil result for the entitled Pro registry, got %+v", result)
+	}
+}
+
 func TestRegistryChecker_CheckImageUpdate_FetchPaths(t *testing.T) {
 	logger := zerolog.Nop()
 

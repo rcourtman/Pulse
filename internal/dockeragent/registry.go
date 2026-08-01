@@ -132,6 +132,13 @@ func (r *RegistryChecker) ForceCheck() {
 	r.cache.entries = make(map[string]cacheEntry)
 }
 
+// proBrokerRegistry is the entitled Pulse Pro registry. Digest checks against
+// it require a license credential the agent does not hold, so an anonymous
+// HEAD can never succeed and would pin a permanent "authentication required"
+// badge on the Pulse Pro container. That container updates through the
+// broker's digest-pinned commands instead, so the generic checker stays out.
+const proBrokerRegistry = "license.pulserelay.pro"
+
 // CheckImageUpdate checks if a newer version of the image is available.
 func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDigest, arch, goos, variant string) *ImageUpdateResult {
 	if !r.Enabled() {
@@ -139,6 +146,10 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	registry, repository, tag := parseImageReference(image)
+
+	if registry == proBrokerRegistry {
+		return nil
+	}
 
 	// Skip digest-pinned images (image@sha256:...)
 	if registry == "" {
