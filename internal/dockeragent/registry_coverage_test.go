@@ -80,6 +80,28 @@ func TestRegistryChecker_CheckImageUpdate_CacheHits(t *testing.T) {
 	})
 }
 
+func TestRegistryChecker_CacheError_RateLimitBacksOffLonger(t *testing.T) {
+	logger := zerolog.Nop()
+	checker := NewRegistryChecker(logger)
+
+	checker.cacheError("limited", "rate limited")
+	checker.cacheError("transient", "registry error: 502")
+
+	checker.cache.mu.RLock()
+	limited := checker.cache.entries["limited"]
+	transient := checker.cache.entries["transient"]
+	checker.cache.mu.RUnlock()
+
+	// A refused HEAD still counts against the registry's allowance, so
+	// rate-limited lookups must back off well past the transient-error TTL.
+	if !limited.expiresAt.After(time.Now().Add(errorCacheTTL)) {
+		t.Errorf("Expected rate-limited entry to outlive the transient error TTL, expires %v", limited.expiresAt)
+	}
+	if transient.expiresAt.After(time.Now().Add(errorCacheTTL)) {
+		t.Errorf("Expected transient error entry to use the short TTL, expires %v", transient.expiresAt)
+	}
+}
+
 func TestRegistryChecker_CheckImageUpdate_ProBrokerRegistrySkipped(t *testing.T) {
 	logger := zerolog.Nop()
 	checker := NewRegistryChecker(logger)

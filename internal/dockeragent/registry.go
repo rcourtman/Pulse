@@ -45,6 +45,12 @@ const (
 	defaultCacheTTL = 6 * time.Hour
 	// ErrorCacheTTL is the TTL for caching errors (shorter to allow retry).
 	errorCacheTTL = 15 * time.Minute
+	// RateLimitCacheTTL is the TTL for rate-limited lookups. Retrying these on
+	// the short error TTL keeps hammering a registry whose allowance is
+	// already exhausted (every refused HEAD still counts against it), which
+	// can hold a strict registry's limit tripped indefinitely. Back off for
+	// an hour instead so the allowance can actually recover.
+	rateLimitCacheTTL = 1 * time.Hour
 	// DefaultCheckInterval is how often to check for updates.
 	defaultCheckInterval = 6 * time.Hour
 )
@@ -572,9 +578,14 @@ func (r *RegistryChecker) cacheError(key, errMsg string) {
 	r.cache.mu.Lock()
 	defer r.cache.mu.Unlock()
 
+	ttl := errorCacheTTL
+	if strings.Contains(strings.ToLower(errMsg), "rate limit") {
+		ttl = rateLimitCacheTTL
+	}
+
 	r.cache.entries[key] = cacheEntry{
 		err:       errMsg,
-		expiresAt: time.Now().Add(errorCacheTTL),
+		expiresAt: time.Now().Add(ttl),
 	}
 }
 
