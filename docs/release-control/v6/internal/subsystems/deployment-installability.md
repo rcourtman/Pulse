@@ -861,6 +861,16 @@ upgrade, update, release, or artifact-selection behavior.
    fail the public release workflow; future private Pro publication must not
    depend on an operator noticing a manual checklist step after the public RC
    has shipped.
+   A promotion-only failure must be recoverable by rerunning the public
+   release run's failed jobs: the paid-runtime R2 prefix is derived from
+   run-stable values (the run's creation date and run id, never the
+   wall-clock date at attempt time), and the private build dispatch sets
+   `reuse_existing_packet=true` so `Build Pro Release` validates a complete
+   signed packet already present at that prefix, skips the rebuild, and lets
+   the promotion re-execute against the packet the earlier attempt uploaded.
+   A rebuilt packet from identical inputs is waste and lineage churn; a
+   non-empty prefix that fails packet validation must fail the private build
+   instead of being overwritten.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,

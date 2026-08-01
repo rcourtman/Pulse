@@ -1390,7 +1390,11 @@ jobs:
   # Docker publication workflow to pass, then dispatches the pulse-pro live
   # promotion workflow and waits for the signed packet to update the license
   # broker. A failure here fails the release pipeline instead of leaving paid
-  # customers on a stale private manifest.
+  # customers on a stale private manifest. Rerunning this job after a
+  # promotion-only failure is safe: the R2 prefix is derived from run-stable
+  # values and the build is dispatched with reuse_existing_packet=true, so the
+  # enterprise side validates the packet the earlier attempt uploaded, skips
+  # the rebuild, and only the promotion re-executes.
   publish_private_pro_runtime:
     needs:
       - prepare
@@ -1475,7 +1479,22 @@ jobs:
             allow_ga_publish=true
           fi
 
-          r2_prefix="${TAG}-pro-$(date -u '+%Y%m%d')-${GITHUB_RUN_ID}"
+          # The R2 prefix must be identical across rerun attempts of this run:
+          # a rerun after a promotion-only failure has to reuse the packet the
+          # earlier attempt already uploaded instead of tripping the enterprise
+          # R2 overwrite guard. Run creation date and run id are stable across
+          # attempts; wall-clock date is not.
+          run_created_date="$(
+            gh run view "${GITHUB_RUN_ID}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json createdAt \
+              --jq '.createdAt' | cut -c1-10 | tr -d '-'
+          )"
+          if [[ ! "${run_created_date}" =~ ^[0-9]{8}$ ]]; then
+            echo "::error::Could not derive the release run creation date for the R2 prefix."
+            exit 1
+          fi
+          r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
           build_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           echo "Dispatching private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
           gh workflow run build-pro-release.yml \
@@ -1488,6 +1507,7 @@ jobs:
             -f publish_docker_image=true \
             -f docker_image=license.pulserelay.pro/pulse-pro \
             -f r2_prefix="${r2_prefix}" \
+            -f reuse_existing_packet=true \
             -f allow_stable_ga_publish="${allow_ga_publish}"
           wait_for_workflow rcourtman/pulse-enterprise "Build Pro Release" main "${build_started_at}" "private Pro build" 7200
 
