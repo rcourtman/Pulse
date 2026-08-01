@@ -402,6 +402,40 @@ func generateVirtualDisks() ([]models.Disk, models.Disk) {
 	return disks, aggregated
 }
 
+// ensureFreshFilesystemFixture guarantees the fixture graph always contains
+// at least one running guest with a zero-used filesystem. Freshly
+// provisioned mounts serialize with their zero-valued numerics omitted, a
+// wire shape consumers must tolerate (#1663), so every mock-backed surface
+// keeps exercising it.
+func ensureFreshFilesystemFixture(data *models.StateSnapshot) {
+	const freshBytes = int64(64) * 1024 * 1024 * 1024
+	fresh := models.Disk{
+		Total:      freshBytes,
+		Used:       0,
+		Free:       freshBytes,
+		Usage:      0,
+		Mountpoint: "/srv/fresh",
+		Type:       "ext4",
+		Device:     "/dev/vdz",
+	}
+	for i := range data.VMs {
+		vm := &data.VMs[i]
+		if vm.Status != "running" || len(vm.Disks) == 0 {
+			continue
+		}
+		vm.Disks = append(vm.Disks, fresh)
+		return
+	}
+	for i := range data.Containers {
+		ct := &data.Containers[i]
+		if ct.Status != "running" || len(ct.Disks) == 0 {
+			continue
+		}
+		ct.Disks = append(ct.Disks, fresh)
+		return
+	}
+}
+
 // buildFixtureState synthesizes the snapshot-backed portion of the canonical
 // fixture graph for demo and test environments.
 func buildFixtureState(config MockConfig) models.StateSnapshot {
@@ -566,6 +600,8 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 	}
 
 	data.ReplicationJobs = generateReplicationJobs(data.Nodes, data.VMs)
+
+	ensureFreshFilesystemFixture(&data)
 
 	// Calculate stats
 	data.Stats.StartTime = time.Now()

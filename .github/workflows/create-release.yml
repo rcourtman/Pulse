@@ -671,6 +671,99 @@ jobs:
         run: docker compose -f docker-compose.test.yml down -v || true
 
   # Create release after all checks pass
+  # Release smoke: render-level assertions on the primary surfaces (Proxmox,
+  # Docker, Kubernetes, Alert thresholds), run for EVERY cut including
+  # prereleases. integration_tests stays stable-only for depth; this job
+  # exists because v6.2.0-rc.5 shipped with its primary surfaces broken while
+  # the only coverage lived in non-gating CI tiers (#1663). A prerelease is
+  # the build users test — it must never skip the "do the pages render data"
+  # bar.
+  release_smoke:
+    needs:
+      - prepare
+      - frontend_checks
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PULSE_E2E_BOOTSTRAP_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Download verified frontend bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: frontend-modern/dist
+          name: release-frontend-${{ github.sha }}
+
+      - name: Copy frontend to embed location
+        run: |
+          rm -rf internal/api/frontend-modern
+          mkdir -p internal/api/frontend-modern
+          cp -r frontend-modern/dist internal/api/frontend-modern/
+
+      - name: Build Docker image for the smoke environment
+        # GO_BUILD_TAGS="" drops the release build tag so mock fixtures are
+        # available; the release-tagged binary itself is covered by
+        # backend_tests and build_release_candidate.
+        run: |
+          docker build -t pulse:test --target e2e_runtime --build-arg GO_BUILD_TAGS="" .
+          docker build -t pulse-mock-github:test tests/integration/mock-github-server
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+
+      - name: Install Playwright
+        working-directory: tests/integration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run release smoke
+        working-directory: tests/integration
+        env:
+          MOCK_CHECKSUM_ERROR: "false"
+          MOCK_NETWORK_ERROR: "false"
+          MOCK_RATE_LIMIT: "false"
+          MOCK_STALE_RELEASE: "false"
+        run: |
+          docker compose -f docker-compose.test.yml up -d
+
+          echo "Waiting for services to be healthy..."
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-mock-github | grep -q "healthy"; do sleep 2; done'
+          timeout 60 sh -c 'until docker inspect --format="{{json .State.Health.Status}}" pulse-test-server | grep -q "healthy"; do sleep 2; done'
+
+          for i in 1 2 3 4 5; do
+            if curl -f -s http://localhost:7655/api/health > /dev/null 2>&1; then
+              echo "Pulse server is reachable"
+              break
+            elif [ $i -eq 5 ]; then
+              docker logs pulse-test-server || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          npx playwright test tests/95-release-smoke.spec.ts \
+            --project=chromium \
+            --reporter=list
+
+          docker compose -f docker-compose.test.yml down -v
+
+      - name: Collect smoke diagnostics
+        if: failure()
+        working-directory: tests/integration
+        run: |
+          docker logs pulse-test-server || true
+          docker compose -f docker-compose.test.yml down -v || true
+
   create_release:
     needs:
       - prepare
@@ -680,8 +773,10 @@ jobs:
       - docker_build
       - helm_smoke
       - integration_tests
-    # Run if integration_tests passed OR was skipped (prereleases)
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
+      - release_smoke
+    # Run if integration_tests passed OR was skipped (prereleases). The
+    # release smoke has no skipped escape: it runs for prereleases too.
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1367,6 +1462,7 @@ jobs:
     name: Definitive Release Verdict
     needs:
       - prepare
+      - release_smoke
       - create_release
       - publish_docker
       - validate_release_assets
@@ -1384,6 +1480,7 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
           CREATE_RESULT: ${{ needs.create_release.result }}
+          SMOKE_RESULT: ${{ needs.release_smoke.result }}
           DOCKER_RESULT: ${{ needs.publish_docker.result }}
           VALIDATE_RESULT: ${{ needs.validate_release_assets.result }}
           INSTALL_RESULT: ${{ needs.install_sh_smoke.result }}
@@ -1403,6 +1500,7 @@ jobs:
             fi
           }
 
+          require_result "release smoke" "$SMOKE_RESULT" success
           require_result "release assembly" "$CREATE_RESULT" success
           require_result "release asset validation" "$VALIDATE_RESULT" success
 
