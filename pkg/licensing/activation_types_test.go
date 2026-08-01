@@ -2,6 +2,7 @@ package licensing
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
@@ -450,6 +451,31 @@ func TestLicenseServerError(t *testing.T) {
 	want := "invalid_token: Token expired"
 	if got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
+	}
+	if e.Unwrap() != nil {
+		t.Errorf("server-response error should have no transport cause, got %v", e.Unwrap())
+	}
+}
+
+func TestLicenseServerErrorTransportClassification(t *testing.T) {
+	cause := errors.New("dial tcp 127.0.0.1:9: connect: connection refused")
+	err := transportError("activate", cause)
+
+	var serverErr *LicenseServerError
+	if !errors.As(err, &serverErr) {
+		t.Fatalf("transportError should classify as *LicenseServerError, got %T", err)
+	}
+	if !serverErr.Retryable {
+		t.Errorf("transport failure must be retryable: %+v", serverErr)
+	}
+	if serverErr.StatusCode != 0 {
+		t.Errorf("transport failure must not carry an HTTP status, got %d", serverErr.StatusCode)
+	}
+	if serverErr.Code != "license_server_unreachable" {
+		t.Errorf("Code = %q, want license_server_unreachable", serverErr.Code)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("underlying transport cause must stay reachable through Unwrap")
 	}
 }
 

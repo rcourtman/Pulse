@@ -829,6 +829,13 @@ the App/AppLayout, routing, and desktop Actions journey tests.
    may allow plaintext only on direct loopback development targets, and must
    route outbound license-server fetches through the restricted HTTP client so
    DNS rebinding or private-network drift cannot silently reopen the boundary.
+   Outbound transport failures (DNS, connection refused/reset, TLS, timeout)
+   must classify as a retryable `LicenseServerError` rather than a plain
+   wrapped error, so activation surfaces present retry guidance instead of a
+   terminal contact-support fallback. The classification carries no HTTP
+   status, so revocation, suspension, and migration status gates never match
+   a request that produced no response, and the underlying cause stays
+   reachable through `Unwrap` so context-cancellation checks keep working.
 10. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
     That persistence boundary must encrypt new state only with the persistent
     random key file and the current HKDF-based derivation. Machine ID may

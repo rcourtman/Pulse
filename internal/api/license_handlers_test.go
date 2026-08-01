@@ -1449,6 +1449,32 @@ func TestUserFriendlyActivationError_ServerError(t *testing.T) {
 	}
 }
 
+func TestUserFriendlyActivationError_TransportErrorRetryable(t *testing.T) {
+	// A real transport failure (nothing listening on the loopback port) must
+	// surface the retryable "temporarily unavailable" message, not the
+	// generic contact-support fallback. Pins the end-to-end path from
+	// httpClient.Do through the client's error classification to the
+	// user-facing copy.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	unreachableURL := server.URL
+	server.Close()
+
+	client := pkglicensing.NewLicenseServerClient(unreachableURL)
+	_, err := client.Activate(context.Background(), pkglicensing.ActivateInstallationRequest{
+		ActivationKey:       "ppk_live_test123",
+		InstanceFingerprint: "fp-123",
+	})
+	if err == nil {
+		t.Fatal("expected transport error, got nil")
+	}
+
+	msg := userFriendlyActivationError(fmt.Errorf("activate license: %w", err))
+	want := "The license server is temporarily unavailable. Please try again in a few minutes."
+	if msg != want {
+		t.Errorf("transport error message = %q, want %q", msg, want)
+	}
+}
+
 // ========================================
 // HandleClearLicense tests
 // ========================================

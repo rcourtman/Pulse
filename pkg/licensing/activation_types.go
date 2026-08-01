@@ -338,8 +338,17 @@ type LicenseServerError struct {
 	Code       string `json:"code"`
 	Message    string `json:"message"`
 	Retryable  bool   `json:"retryable"`
+
+	// cause carries the underlying transport error when the request never
+	// produced an HTTP response, so errors.Is checks (e.g. context.Canceled
+	// in the status poller) keep working through the classification.
+	cause error
 }
 
 func (e *LicenseServerError) Error() string {
 	return e.Code + ": " + e.Message
+}
+
+func (e *LicenseServerError) Unwrap() error {
+	return e.cause
 }

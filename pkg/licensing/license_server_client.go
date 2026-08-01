@@ -106,6 +106,21 @@ func (c *LicenseServerClient) ready() error {
 	return nil
 }
 
+// transportError classifies an outbound transport failure (DNS, connection
+// refused/reset, TLS, timeout) as a retryable license-server error. The
+// request never reached the server, so retrying is always the right guidance;
+// StatusCode stays 0 so status-gated consumers (revocation, suspension,
+// migration classification) never match. The underlying error remains
+// reachable via Unwrap for context-cancellation checks.
+func transportError(label string, err error) error {
+	return &LicenseServerError{
+		Code:      "license_server_unreachable",
+		Message:   fmt.Sprintf("%s request failed: %v", label, err),
+		Retryable: true,
+		cause:     err,
+	}
+}
+
 // postActivationRequest POSTs an idempotent JSON request to the license
 // server and decodes the shared activation response shape. label feeds error
 // wrapping ("activate", "exchange").
@@ -128,7 +143,7 @@ func (c *LicenseServerClient) postActivationRequest(ctx context.Context, path, l
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("%s request failed: %w", label, err)
+		return nil, transportError(label, err)
 	}
 	defer resp.Body.Close()
 
@@ -180,7 +195,7 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 
 	resp, err := refreshClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("refresh request failed: %w", err)
+		return nil, transportError("refresh", err)
 	}
 	defer resp.Body.Close()
 
@@ -218,7 +233,7 @@ func (c *LicenseServerClient) CheckInstallationStatus(ctx context.Context, insta
 	statusClient.Timeout = 10 * time.Second
 	resp, err := statusClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("installation status request failed: %w", err)
+		return nil, transportError("installation status", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -260,7 +275,7 @@ func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sess
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("checkout session result request failed: %w", err)
+		return nil, transportError("checkout session result", err)
 	}
 	defer resp.Body.Close()
 
@@ -296,7 +311,7 @@ func (c *LicenseServerClient) CreateCheckoutPortalHandoff(ctx context.Context, r
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("checkout portal handoff request failed: %w", err)
+		return nil, transportError("checkout portal handoff", err)
 	}
 	defer resp.Body.Close()
 

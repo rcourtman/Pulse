@@ -3,6 +3,7 @@ package licensing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -47,6 +48,57 @@ func TestNewLicenseServerClient(t *testing.T) {
 		_, err := c.GetCheckoutSessionResult(context.Background(), "cs_test_123")
 		if err == nil || !strings.Contains(err.Error(), "must use https unless host is loopback") {
 			t.Fatalf("expected insecure URL error, got %v", err)
+		}
+	})
+}
+
+func TestClientTransportErrorRetryable(t *testing.T) {
+	t.Run("connection refused is a retryable server error", func(t *testing.T) {
+		// Grab a loopback URL with nothing listening on it.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		unreachableURL := server.URL
+		server.Close()
+
+		client := NewLicenseServerClient(unreachableURL)
+		_, err := client.Activate(context.Background(), ActivateInstallationRequest{
+			ActivationKey:       "ppk_live_test123",
+			InstanceFingerprint: "fp-123",
+		})
+		if err == nil {
+			t.Fatal("expected transport error, got nil")
+		}
+
+		var serverErr *LicenseServerError
+		if !errors.As(err, &serverErr) {
+			t.Fatalf("transport error should classify as *LicenseServerError, got %T: %v", err, err)
+		}
+		if !serverErr.Retryable {
+			t.Errorf("transport error should be retryable: %+v", serverErr)
+		}
+		if serverErr.StatusCode != 0 {
+			t.Errorf("transport error must not carry an HTTP status, got %d", serverErr.StatusCode)
+		}
+		if serverErr.Code != "license_server_unreachable" {
+			t.Errorf("Code = %q, want license_server_unreachable", serverErr.Code)
+		}
+	})
+
+	t.Run("context cancellation stays detectable through classification", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			<-r.Context().Done()
+		}))
+		defer server.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		client := NewLicenseServerClient(server.URL)
+		_, err := client.CheckInstallationStatus(ctx, "pit_live_token", InstallationStatusRequest{})
+		if err == nil {
+			t.Fatal("expected error from canceled context, got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("errors.Is(err, context.Canceled) should hold through the transport classification, got %v", err)
 		}
 	})
 }
