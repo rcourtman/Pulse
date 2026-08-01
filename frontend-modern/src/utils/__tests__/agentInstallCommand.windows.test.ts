@@ -61,6 +61,9 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
     const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
     await runPowerShell(
       `$ErrorActionPreference="Stop"; ` +
+        `if ($null -eq (Get-PSDrive -Name "Cert" -ErrorAction SilentlyContinue)) { ` +
+        `New-PSDrive -Name "Cert" -PSProvider "Certificate" -Root "\\" | Out-Null ` +
+        `}; ` +
         `$certificate=New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "Cert:\\CurrentUser\\My" -KeyExportPolicy Exportable; ` +
         `try { ` +
         `$password=ConvertTo-SecureString "pulse-test" -AsPlainText -Force; ` +
