@@ -326,6 +326,54 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 	}
 }
 
+// A PBS connection's identity must include the hostname the PBS node reports
+// about itself, not just the configured address: reported identity is what
+// lets the host agent running on the PBS machine attach to the PBS
+// connection when the connection was configured by IP or DNS alias, so the
+// ledger shows one system row instead of an API row plus an agent row.
+func TestBuildConnections_PBSHostAliasesIncludeReportedNodeName(t *testing.T) {
+	now := time.Now()
+	in := aggregatorInputs{
+		pbsInstances: []config.PBSInstance{
+			{Name: "backup", Host: "https://192.0.2.40:8007"},
+		},
+		pbsReportedNodeNames: map[string]string{"backup": "pbs01"},
+		now:                  now,
+	}
+
+	got := buildConnections(in)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+	if !reflect.DeepEqual(got[0].HostAliases, []string{"backup", "192.0.2.40", "pbs01"}) {
+		t.Fatalf("pbs host aliases = %+v, want reported node name included", got[0].HostAliases)
+	}
+
+	agent := Connection{
+		ID:          "agent:pbs01",
+		Type:        ConnectionTypeAgent,
+		Name:        "pbs01",
+		Address:     "pbs01",
+		HostAliases: []string{"pbs01", "10.10.0.4"},
+	}
+	connections := map[string]Connection{got[0].ID: got[0], agent.ID: agent}
+	if attached := directPlatformHostAttachment(agent, connections); attached != "pbs:backup" {
+		t.Fatalf("directPlatformHostAttachment() = %q, want %q", attached, "pbs:backup")
+	}
+}
+
+func TestPBSReportedNodeNamesByInstanceSkipsBlankIdentity(t *testing.T) {
+	got := pbsReportedNodeNamesByInstance([]models.PBSInstance{
+		{Name: "backup", NodeName: " pbs01 "},
+		{Name: "unnamed", NodeName: "   "},
+		{Name: "", NodeName: "orphan"},
+	})
+	want := map[string]string{"backup": "pbs01"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("pbsReportedNodeNamesByInstance() = %+v, want %+v", got, want)
+	}
+}
+
 func TestBuildConnections_ProjectsLegacyLinuxDistroToRuntimePlatform(t *testing.T) {
 	now := time.Now()
 	got := buildConnections(aggregatorInputs{

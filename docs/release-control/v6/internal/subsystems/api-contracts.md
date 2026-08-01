@@ -2995,7 +2995,11 @@ a new API state machine, queue contract, or verification-accounting field.
     Host matching uses normalized names, addresses, and aliases and fails
     closed when more than one enabled platform source matches; VMware remains
     excluded because a vCenter connection is not the ESXi host on which an
-    agent would run. Composition adds agent telemetry to the source row without
+    agent would run. PBS source aliases include the hostname the PBS node
+    reports about itself (state-side `PBSInstance.NodeName`), because reported
+    machine identity, not configured addressing, is what reconciles an
+    IP-or-alias-configured PBS connection with the host agent running on that
+    machine. Composition adds agent telemetry to the source row without
     converting provider health, credentials, or polling freshness into agent
     lifecycle evidence.
     Agent-backed

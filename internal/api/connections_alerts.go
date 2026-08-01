@@ -64,6 +64,7 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.agentDesiredConfigs = connectionAgentDesiredConfigFingerprints(monitor, inputs.hosts, inputs.apiTokens)
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
+		inputs.pbsReportedNodeNames = pbsReportedNodeNamesByInstance(monitor.PBSInstancesSnapshot())
 	} else {
 		inputs.hosts = []models.Host{}
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}

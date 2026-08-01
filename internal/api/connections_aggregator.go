@@ -123,6 +123,13 @@ type aggregatorInputs struct {
 	expectedAgentVersion string
 	now                  time.Time
 
+	// pbsReportedNodeNames maps a configured PBS instance name to the hostname
+	// that node reports about itself. Reported identity outranks configured
+	// addressing for grouping: it lets the host agent running on the PBS
+	// machine merge into the PBS connection row even when the connection was
+	// configured with an IP or DNS alias the agent never reports.
+	pbsReportedNodeNames map[string]string
+
 	// Configured poll cadences, used to scale the active→stale cutoff so slow
 	// cadences (e.g. 5 minutes) don't read as permanently stale. Zero means
 	// unknown and falls back to the connectionStaleThreshold floor. VMware and
@@ -154,7 +161,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 		out = append(out, buildPVEConnection(pve, in.instanceHealth, now, in.pvePollingInterval))
 	}
 	for _, pbs := range in.pbsInstances {
-		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now, in.pbsPollingInterval))
+		out = append(out, buildPBSConnection(pbs, in.instanceHealth, now, in.pbsPollingInterval, in.pbsReportedNodeNames[pbs.Name]))
 	}
 	for _, pmg := range in.pmgInstances {
 		out = append(out, buildPMGConnection(pmg, in.instanceHealth, now, in.pmgPollingInterval))
@@ -221,7 +228,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 	return conn
 }
 
-func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.InstanceHealth, now time.Time, pollInterval time.Duration) Connection {
+func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.InstanceHealth, now time.Time, pollInterval time.Duration, reportedNodeName string) Connection {
 	enabled := !inst.Disabled
 	surfaces := []string{"backups", "datastores", "syncJobs", "verifyJobs", "pruneJobs", "garbageJobs"}
 	scope := map[string]bool{
@@ -239,7 +246,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 		Type:         ConnectionTypePBS,
 		Name:         inst.Name,
 		Address:      inst.Host,
-		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host),
+		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host, reportedNodeName),
 		State:        state,
 		StateReason:  reason,
 		Enabled:      enabled,
@@ -1296,6 +1303,24 @@ func connectionAgentHostProfileIDFromIdentity(values ...string) string {
 		return ""
 	}
 	return profile.ID
+}
+
+// pbsReportedNodeNamesByInstance projects the hostname each PBS node reports
+// about itself out of monitoring state, keyed by configured instance name.
+func pbsReportedNodeNamesByInstance(instances []models.PBSInstance) map[string]string {
+	if len(instances) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(instances))
+	for _, instance := range instances {
+		name := strings.TrimSpace(instance.Name)
+		nodeName := strings.TrimSpace(instance.NodeName)
+		if name == "" || nodeName == "" {
+			continue
+		}
+		out[name] = nodeName
+	}
+	return out
 }
 
 func connectionHostAliasesForAgent(host models.Host, name, address string) []string {

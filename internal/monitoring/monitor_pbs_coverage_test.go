@@ -104,6 +104,68 @@ func TestPollPBSInstanceDoesNotQueryExcludedDatastoreDetails(t *testing.T) {
 	}
 }
 
+// The hostname a PBS node reports about itself (GET /nodes) is
+// machine-identity evidence for connected-system grouping: it merges the
+// host agent running on the PBS machine into the PBS connection even when
+// the connection was configured by IP or DNS alias. The fetch is optional
+// collection — capture it when available, never fail the poll on it.
+func TestPollPBSInstanceCapturesReportedNodeName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/version":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{"version": "3.4"},
+			})
+		case "/api2/json/nodes":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{{"node": "pbs01"}},
+			})
+		case "/api2/json/nodes/localhost/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{}})
+		default:
+			http.Error(w, "unexpected request", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	client, err := pbs.NewClient(pbs.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!pulse-token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	monitor := &Monitor{
+		config: &config.Config{
+			PBSInstances: []config.PBSInstance{{
+				Name: "pbs-nodename",
+				Host: server.URL,
+			}},
+		},
+		state:           models.NewState(),
+		authFailures:    make(map[string]int),
+		lastAuthAttempt: make(map[string]time.Time),
+		pollStatusMap:   make(map[string]*pollStatus),
+		circuitBreakers: make(map[string]*circuitBreaker),
+	}
+
+	monitor.pollPBSInstance(context.Background(), "pbs-nodename", client)
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.PBSInstances) != 1 {
+		t.Fatalf("PBS instances = %+v, want one", snapshot.PBSInstances)
+	}
+	instance := snapshot.PBSInstances[0]
+	if instance.NodeName != "pbs01" {
+		t.Fatalf("NodeName = %q, want %q", instance.NodeName, "pbs01")
+	}
+	if instance.Status != "online" || instance.ConnectionHealth != "healthy" {
+		t.Fatalf("status = %q health = %q, want online/healthy", instance.Status, instance.ConnectionHealth)
+	}
+}
+
 func TestMonitor_PollPBSInstance_AuthFailure(t *testing.T) {
 	// Setup mock server that returns 401
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

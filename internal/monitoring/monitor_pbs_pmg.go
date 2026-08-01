@@ -318,6 +318,16 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
+	// The PBS-reported node hostname is machine-identity evidence: connected
+	// systems grouping merges the host agent running on this machine into
+	// this PBS connection through it, even when the configured connection
+	// address is an IP or DNS alias the agent never reports.
+	if nodeName, nodeNameErr := client.GetNodeName(ctx); nodeNameErr == nil {
+		pbsInst.NodeName = strings.TrimSpace(nodeName)
+	} else if debugEnabled {
+		log.Debug().Err(nodeNameErr).Str("instance", instanceName).Msg("could not get PBS node name")
+	}
+
 	// Get node status (CPU, memory, etc.)
 	nodeStatus, err := client.GetNodeStatus(ctx)
 	if err != nil {

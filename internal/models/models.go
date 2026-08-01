@@ -2660,6 +2660,7 @@ type PBSInstance struct {
 	ID                string                 `json:"id"`
 	Name              string                 `json:"name"`
 	Host              string                 `json:"host"`
+	NodeName          string                 `json:"nodeName,omitempty"` // Hostname the PBS node reports about itself (GET /nodes)
 	GuestURL          string                 `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
 	Status            string                 `json:"status"`
 	Version           string                 `json:"version"`

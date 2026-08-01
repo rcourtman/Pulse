@@ -965,7 +965,11 @@ timeout, cancellation, and panic outcomes all publish `offline`/`error`, while
 a later success clears the current error and publishes `online`/`healthy`.
 Optional node, datastore, namespace, or job collection failures remain partial
 data evidence and do not turn a successful version/datastore connectivity
-probe into a connection failure.
+probe into a connection failure. Once connectivity is proven, the poll also
+captures the hostname the PBS node reports about itself (`GET /nodes`) on
+`models.PBSInstance.NodeName` as machine-identity evidence for connected-system
+grouping; node-name fetch failure is partial data like the other optional
+collections, never a poll failure.
 
 ### Host snapshots carry integration provenance; doctor copy is user-facing
 

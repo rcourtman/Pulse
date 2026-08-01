@@ -4,6 +4,29 @@ import (
 	"testing"
 )
 
+// clonePBSInstance must carry scalar identity fields, including the
+// PBS-reported node hostname that connected-system grouping relies on, and
+// its collection copies must stay independent of the source.
+func TestClonePBSInstance_PreservesReportedNodeName(t *testing.T) {
+	src := PBSInstance{
+		ID:         "pbs-backup",
+		Name:       "backup",
+		Host:       "https://192.0.2.40:8007",
+		NodeName:   "pbs01",
+		Datastores: []PBSDatastore{{Name: "internal"}},
+	}
+
+	dest := clonePBSInstance(src)
+	if dest.NodeName != "pbs01" {
+		t.Fatalf("NodeName = %q, want %q", dest.NodeName, "pbs01")
+	}
+
+	dest.Datastores[0].Name = "mutated"
+	if src.Datastores[0].Name != "internal" {
+		t.Fatalf("clone datastores share backing array with source")
+	}
+}
+
 // --- Pointer clone helpers ---
 
 func TestCloneBoolPtr_Nil(t *testing.T) {

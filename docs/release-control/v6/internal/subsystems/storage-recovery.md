@@ -997,9 +997,14 @@ recovery scope, or a storage/recovery-owned secret source.
    When those aliases uniquely identify one enabled single-host API source
    (including PBS) and one Pulse Agent, the API-owned grouped systems payload
    must compose them into one source row rather than expose duplicate machine
-   rows. This is presentation and collection-method composition only: agent
-   liveness cannot become PBS reachability, backup freshness, protection, or
-   recovery evidence.
+   rows. PBS connection aliases include the hostname the PBS node reports
+   about itself (`models.PBSInstance.NodeName`, captured during the PBS poll),
+   so this composition holds even when the PBS connection is configured by an
+   IP or DNS alias the agent never reports. This is presentation and
+   collection-method composition only: agent liveness cannot become PBS
+   reachability, backup freshness, protection, or recovery evidence, and the
+   reported node name is grouping identity, not a storage or recovery health
+   input.
    The settings-level manual discovery refresh at `/api/discovery/run` belongs
    to that adjacent discovery/API boundary. Storage and recovery surfaces may
    consume refreshed workload discovery records, but they must not reinterpret

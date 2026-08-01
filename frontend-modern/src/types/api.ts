@@ -900,6 +900,7 @@ export interface PBSInstance {
   id: string;
   name: string;
   host: string;
+  nodeName?: string; // Hostname the PBS node reports about itself
   guestURL?: string; // Optional guest-accessible URL (for navigation)
   status: string;
   version: string;

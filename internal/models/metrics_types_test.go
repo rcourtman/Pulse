@@ -215,6 +215,28 @@ func TestNativePoolHealthEvidenceNormalizesWithoutChangingIdentity(t *testing.T)
 // are monitoring-internal attribution evidence on State. They must never
 // leak into serialized state or snapshots, where they would read as an
 // agent- or API-facing contract.
+// PBSInstance.NodeName is the hostname the PBS node reports about itself and
+// is machine-identity evidence for connected-system grouping. It serializes
+// as camelCase `nodeName` and is omitted entirely until a poll captures it,
+// so pre-upgrade payload shapes stay byte-identical.
+func TestPBSInstanceNodeNameSerializesCamelCaseAndOmitsWhenEmpty(t *testing.T) {
+	withName, err := json.Marshal(PBSInstance{ID: "pbs-backup", Name: "backup", NodeName: "pbs01"})
+	if err != nil {
+		t.Fatalf("marshal PBSInstance: %v", err)
+	}
+	if !strings.Contains(string(withName), `"nodeName":"pbs01"`) {
+		t.Fatalf("payload = %s, want camelCase nodeName field", withName)
+	}
+
+	withoutName, err := json.Marshal(PBSInstance{ID: "pbs-backup", Name: "backup"})
+	if err != nil {
+		t.Fatalf("marshal PBSInstance: %v", err)
+	}
+	if strings.Contains(string(withoutName), "nodeName") {
+		t.Fatalf("payload = %s, empty NodeName must be omitted", withoutName)
+	}
+}
+
 func TestPBSGuestConfirmationEvidenceStaysOutOfSerializedState(t *testing.T) {
 	state := NewState()
 	state.UpdatePBSGuestConfirmationsForInstance("cluster-a", []PBSGuestConfirmation{

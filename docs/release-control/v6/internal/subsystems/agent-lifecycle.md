@@ -2479,6 +2479,12 @@ freshness only. When normalized host identity uniquely proves that a PBS API
 source and a Pulse Agent describe the same machine, the grouped systems
 payload composes them into one source row with API + Agent coverage; provider
 health and agent lifecycle facts remain independently authored inside that row.
+That host identity includes the hostname the PBS node reports about itself
+(`models.PBSInstance.NodeName`, captured by the PBS poll from `GET /nodes`),
+so an IP-or-alias-configured PBS connection still reconciles with the agent's
+reported hostname. The reported node name is identity evidence only: it never
+enrolls the machine, extends heartbeats, or substitutes for agent-source
+identity in lifecycle decisions.
 
 ### Docker and Podman report sizes share one exact-byte contract
 
