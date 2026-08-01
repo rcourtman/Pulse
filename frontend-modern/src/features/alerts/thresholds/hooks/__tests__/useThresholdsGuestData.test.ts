@@ -72,6 +72,69 @@ describe('useThresholdsGuestData guest filesystems', () => {
     });
   });
 
+  it('projects filesystems whose serialized usage was omitted without crashing', () => {
+    createRoot((dispose) => {
+      const props = {
+        allGuests: () => [
+          {
+            id: 'cluster-a:node-1:101',
+            name: 'files',
+            platformId: 'cluster-a',
+            status: 'online',
+            type: 'ct',
+            lastSeen: 1,
+            proxmox: {
+              instance: 'cluster-a',
+              node: 'node-1',
+              vmid: 101,
+              // The unified resources payload drops zero-valued numerics, so
+              // an untouched filesystem arrives with no usage/used fields.
+              disks: [
+                {
+                  device: 'rootfs',
+                  mountpoint: '/',
+                  total: 107374182400,
+                  type: 'ext4',
+                },
+                {
+                  device: 'mp0',
+                  mountpoint: '/data',
+                  total: 214748364800,
+                  used: 107374182400,
+                  free: 107374182400,
+                  type: 'ext4',
+                },
+              ],
+            },
+          },
+        ],
+        backupDefaults: () => ({ enabled: false }),
+        guestDefaults: { disk: 85 },
+        nodes: [],
+        overrides: () => [],
+        snapshotDefaults: () => ({ enabled: false }),
+      } as unknown as ThresholdsTableProps;
+
+      const data = useThresholdsGuestData({
+        props,
+        editingId: () => null,
+        searchTerm: () => '',
+      });
+
+      expect(data.guestDisksWithOverrides()).toEqual([
+        expect.objectContaining({
+          name: '/',
+          subtitle: '0.0 / 100.0 GB · 0.0%',
+        }),
+        expect.objectContaining({
+          name: '/data',
+          subtitle: '100.0 / 200.0 GB · 50.0%',
+        }),
+      ]);
+      dispose();
+    });
+  });
+
   it('keeps a persisted filesystem override visible after its guest disappears', () => {
     createRoot((dispose) => {
       const props = {

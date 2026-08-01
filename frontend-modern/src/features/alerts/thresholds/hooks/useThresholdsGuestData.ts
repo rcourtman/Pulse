@@ -117,7 +117,16 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
       const guestIdentity = getGuestOverrideIdentity(guest);
 
       disks.forEach((disk: Disk) => {
-        if (!disk || disk.total <= 0 || disk.usage < 0) return;
+        // The unified resources payload omits zero-valued numerics, so
+        // total/used/usage may all be absent; usage < 0 is the poller's
+        // "unknown" sentinel and stays excluded.
+        const total = disk?.total ?? 0;
+        const used = disk?.used ?? 0;
+        if (!disk || total <= 0 || (typeof disk.usage === 'number' && disk.usage < 0)) return;
+        const usagePercent =
+          typeof disk.usage === 'number' && Number.isFinite(disk.usage)
+            ? disk.usage
+            : (used / total) * 100;
 
         const candidates = guestDiskOverrideIdCandidates(guest, disk.mountpoint, disk.device);
         const storageId = guestDiskOverrideStorageId(guest, disk.mountpoint, disk.device);
@@ -153,7 +162,7 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
           disabled: override?.disabled || false,
           thresholds: override?.thresholds || {},
           defaults: { disk: props.guestDefaults.disk },
-          subtitle: `${(disk.used / 1024 / 1024 / 1024).toFixed(1)} / ${(disk.total / 1024 / 1024 / 1024).toFixed(1)} GB · ${disk.usage.toFixed(1)}%`,
+          subtitle: `${(used / 1024 / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024 / 1024).toFixed(1)} GB · ${usagePercent.toFixed(1)}%`,
         } satisfies TableResource);
       });
     });
