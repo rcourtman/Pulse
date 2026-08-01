@@ -13,7 +13,12 @@ _This changelog describes the changes since `v6.2.0-rc.5`.
 - Preserved Windows custom-CA and Skip TLS verification behavior through the
   generated PowerShell 5.1 installer command.
 - Unified direct PBS API connections with matching agent reports without
-  introducing ambiguous or VMware identity merges.
+  introducing ambiguous or VMware identity merges, including when the
+  configured connection address differs from the hostname the machine
+  reports about itself. The same identity pairing applies to PMG.
+- Backed container image update checks off for an hour after a registry
+  rate limit and stopped community-registry checks for the entitled Pro
+  runtime image.
 - Removed false Agent Doctor `Needs attention` states and fictitious deployed
   `v0` labels when only legacy profile-deployment history is absent.
 

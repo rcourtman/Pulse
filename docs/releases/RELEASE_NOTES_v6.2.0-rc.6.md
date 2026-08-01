@@ -34,7 +34,17 @@ for the affected pages and Windows installer path.
   custom certificate authorities and explicit TLS-skip commands.
 - Applied direct-platform attachment consistently to PVE, PBS, PMG, and
   TrueNAS while failing closed on ambiguous matches, preventing duplicate PBS
-  API and agent rows without incorrectly merging VMware systems.
+  API and agent rows without incorrectly merging VMware systems. PBS and PMG
+  connections now also pair with their host agents through the hostname the
+  node reports about itself and the shared machine-identity grouping, so the
+  merge no longer depends on the configured address literally matching a name
+  the agent reports.
+- Backed container image update checks off for an hour after a registry rate
+  limit instead of retrying every cycle, which kept the public rate allowance
+  permanently exhausted on busy Docker hosts.
+- Stopped community-registry update checks for the entitled Pro runtime
+  image, which always requires authentication and produced a persistent
+  false `authentication required` badge.
 - Made the current connection fingerprint the authoritative applied-profile
   signal. Real failed, pending, and version-drift states still warn, while a
   missing legacy status record stays quiet and the UI reports `Assigned vX`
