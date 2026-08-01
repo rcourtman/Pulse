@@ -538,6 +538,307 @@ func TestBuildConnectionSystems_AttachesHostAgentToMatchingProxmoxSourceWithoutN
 	}
 }
 
+// A PBS host running a Pulse agent must collapse into one "API + Agent" row
+// the way PVE hosts do, even when the configured PBS address (an FQDN or
+// DNS alias) shares no literal host string with anything the agent reports.
+// The pairing comes from the shared top-level-system resolver, which holds
+// short-form hostname equivalence — the same contract the Infrastructure
+// surfaces already use to count these as one system.
+func TestBuildConnectionSystems_AttachesHostAgentToPBSSourceByIdentityGrouping(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	now := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	adapter := unified.NewMonitorAdapter(nil)
+	adapter.PopulateSupplementalRecords(unified.SourcePBS, []unified.IngestRecord{
+		{
+			SourceID: "pbs-backup-01",
+			Resource: unified.Resource{
+				ID:       "resource-pbs-backup-01",
+				Type:     unified.ResourceTypePBS,
+				Name:     "backup-01",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourcePBS},
+				Identity: unified.ResourceIdentity{
+					Hostnames: []string{"pbs01.internal.example"},
+				},
+				PBS: &unified.PBSData{
+					InstanceID: "pbs-backup-01",
+					Hostname:   "pbs01.internal.example",
+					HostURL:    "https://pbs01.internal.example:8007",
+				},
+			},
+		},
+		{
+			SourceID: "pbs-backup-02",
+			Resource: unified.Resource{
+				ID:       "resource-pbs-backup-02",
+				Type:     unified.ResourceTypePBS,
+				Name:     "backup-02",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourcePBS},
+				Identity: unified.ResourceIdentity{
+					Hostnames: []string{"pbs02.internal.example"},
+				},
+				PBS: &unified.PBSData{
+					InstanceID: "pbs-backup-02",
+					Hostname:   "pbs02.internal.example",
+					HostURL:    "https://pbs02.internal.example:8007",
+				},
+			},
+		},
+	})
+	adapter.PopulateSupplementalRecords(unified.SourceAgent, []unified.IngestRecord{
+		{
+			SourceID: "agent-pbs01",
+			Resource: unified.Resource{
+				ID:       "resource-agent-pbs01",
+				Type:     unified.ResourceTypeAgent,
+				Name:     "pbs01",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					MachineID: "machine-pbs01",
+					Hostnames: []string{"pbs01"},
+				},
+				Agent: &unified.AgentData{
+					AgentID:   "agent-pbs01",
+					Hostname:  "pbs01",
+					MachineID: "machine-pbs01",
+				},
+			},
+		},
+		{
+			SourceID: "agent-pbs02",
+			Resource: unified.Resource{
+				ID:       "resource-agent-pbs02",
+				Type:     unified.ResourceTypeAgent,
+				Name:     "pbs02",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					MachineID: "machine-pbs02",
+					Hostnames: []string{"pbs02"},
+				},
+				Agent: &unified.AgentData{
+					AgentID:   "agent-pbs02",
+					Hostname:  "pbs02",
+					MachineID: "machine-pbs02",
+				},
+			},
+		},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	connections := []Connection{
+		{
+			ID:           "pbs:backup-01",
+			Type:         ConnectionTypePBS,
+			Name:         "backup-01",
+			Address:      "https://pbs01.internal.example:8007",
+			HostAliases:  []string{"backup-01", "pbs01.internal.example"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"backups", "datastores"},
+			Scope:        map[string]bool{"backups": true, "datastores": true},
+			Source:       ConnectionSourceManual,
+			Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+		},
+		{
+			ID:           "pbs:backup-02",
+			Type:         ConnectionTypePBS,
+			Name:         "backup-02",
+			Address:      "https://pbs02.internal.example:8007",
+			HostAliases:  []string{"backup-02", "pbs02.internal.example"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"backups", "datastores"},
+			Scope:        map[string]bool{"backups": true, "datastores": true},
+			Source:       ConnectionSourceManual,
+			Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+		},
+		{
+			ID:           "agent:agent-pbs01",
+			Type:         ConnectionTypeAgent,
+			Name:         "pbs01",
+			Address:      "pbs01",
+			HostAliases:  []string{"pbs01", "192.168.40.11"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"host"},
+			Scope:        map[string]bool{"host": true},
+			LastSeen:     &now,
+			Source:       ConnectionSourceAgent,
+			Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		},
+		{
+			ID:           "agent:agent-pbs02",
+			Type:         ConnectionTypeAgent,
+			Name:         "pbs02",
+			Address:      "pbs02",
+			HostAliases:  []string{"pbs02", "192.168.40.12"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"host"},
+			Scope:        map[string]bool{"host": true},
+			LastSeen:     &now,
+			Source:       ConnectionSourceAgent,
+			Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		},
+	}
+
+	systems := buildConnectionSystems(connections, monitor)
+	if len(systems) != 2 {
+		t.Fatalf("expected 2 grouped systems, got %d (%+v)", len(systems), systems)
+	}
+
+	systemsByID := make(map[string]ConnectionSystem, len(systems))
+	for _, system := range systems {
+		systemsByID[system.ID] = system
+	}
+
+	for pbsID, agentID := range map[string]string{
+		"pbs:backup-01": "agent:agent-pbs01",
+		"pbs:backup-02": "agent:agent-pbs02",
+	} {
+		system, ok := systemsByID[pbsID]
+		if !ok {
+			t.Fatalf("expected system %q, got %+v", pbsID, systems)
+		}
+		if len(system.Components) != 2 {
+			t.Fatalf("%s: expected API and agent components, got %+v", pbsID, system.Components)
+		}
+		componentRoles := make(map[string]ConnectionSystemComponentRole, len(system.Components))
+		for _, component := range system.Components {
+			componentRoles[component.ConnectionID] = component.Role
+		}
+		if componentRoles[pbsID] != ConnectionSystemComponentRolePrimary {
+			t.Fatalf("%s role = %q, want %q", pbsID, componentRoles[pbsID], ConnectionSystemComponentRolePrimary)
+		}
+		if componentRoles[agentID] != ConnectionSystemComponentRoleAttachment {
+			t.Fatalf("%s role = %q, want %q", agentID, componentRoles[agentID], ConnectionSystemComponentRoleAttachment)
+		}
+	}
+}
+
+// The PMG poller writes "pmg-<name>" instance IDs the same way PBS does, so
+// a PMG host running a Pulse agent gets the same identity-grouped pairing.
+func TestBuildConnectionSystems_AttachesHostAgentToPMGSourceByIdentityGrouping(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	now := time.Date(2026, 8, 1, 9, 30, 0, 0, time.UTC)
+	adapter := unified.NewMonitorAdapter(nil)
+	adapter.PopulateSupplementalRecords(unified.SourcePMG, []unified.IngestRecord{
+		{
+			SourceID: "pmg-mail-01",
+			Resource: unified.Resource{
+				ID:       "resource-pmg-mail-01",
+				Type:     unified.ResourceTypePMG,
+				Name:     "mail-01",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourcePMG},
+				Identity: unified.ResourceIdentity{
+					Hostnames: []string{"pmg01.internal.example"},
+				},
+				PMG: &unified.PMGData{
+					InstanceID: "pmg-mail-01",
+					Hostname:   "pmg01.internal.example",
+					HostURL:    "https://pmg01.internal.example:8006",
+				},
+			},
+		},
+	})
+	adapter.PopulateSupplementalRecords(unified.SourceAgent, []unified.IngestRecord{
+		{
+			SourceID: "agent-pmg01",
+			Resource: unified.Resource{
+				ID:       "resource-agent-pmg01",
+				Type:     unified.ResourceTypeAgent,
+				Name:     "pmg01",
+				Status:   unified.StatusOnline,
+				LastSeen: now,
+				Sources:  []unified.DataSource{unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					MachineID: "machine-pmg01",
+					Hostnames: []string{"pmg01"},
+				},
+				Agent: &unified.AgentData{
+					AgentID:   "agent-pmg01",
+					Hostname:  "pmg01",
+					MachineID: "machine-pmg01",
+				},
+			},
+		},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	connections := []Connection{
+		{
+			ID:           "pmg:mail-01",
+			Type:         ConnectionTypePMG,
+			Name:         "mail-01",
+			Address:      "https://pmg01.internal.example:8006",
+			HostAliases:  []string{"mail-01", "pmg01.internal.example"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"mailStats", "queues"},
+			Scope:        map[string]bool{"mailStats": true, "queues": true},
+			Source:       ConnectionSourceManual,
+			Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+		},
+		{
+			ID:           "agent:agent-pmg01",
+			Type:         ConnectionTypeAgent,
+			Name:         "pmg01",
+			Address:      "pmg01",
+			HostAliases:  []string{"pmg01", "192.168.40.21"},
+			State:        ConnectionStateActive,
+			Enabled:      true,
+			Surfaces:     []string{"host"},
+			Scope:        map[string]bool{"host": true},
+			LastSeen:     &now,
+			Source:       ConnectionSourceAgent,
+			Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		},
+	}
+
+	systems := buildConnectionSystems(connections, monitor)
+	if len(systems) != 1 {
+		t.Fatalf("expected 1 grouped system, got %d (%+v)", len(systems), systems)
+	}
+	system := systems[0]
+	if system.ID != "pmg:mail-01" {
+		t.Fatalf("system id = %q, want %q", system.ID, "pmg:mail-01")
+	}
+	if len(system.Components) != 2 {
+		t.Fatalf("expected API and agent components, got %+v", system.Components)
+	}
+	componentRoles := make(map[string]ConnectionSystemComponentRole, len(system.Components))
+	for _, component := range system.Components {
+		componentRoles[component.ConnectionID] = component.Role
+	}
+	if componentRoles["pmg:mail-01"] != ConnectionSystemComponentRolePrimary {
+		t.Fatalf("pmg:mail-01 role = %q, want %q", componentRoles["pmg:mail-01"], ConnectionSystemComponentRolePrimary)
+	}
+	if componentRoles["agent:agent-pmg01"] != ConnectionSystemComponentRoleAttachment {
+		t.Fatalf("agent:agent-pmg01 role = %q, want %q", componentRoles["agent:agent-pmg01"], ConnectionSystemComponentRoleAttachment)
+	}
+}
+
 func TestDirectPlatformHostAttachmentSupportsSingleHostAPISources(t *testing.T) {
 	tests := []struct {
 		name string

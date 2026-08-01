@@ -591,6 +591,13 @@ func resolveAgentAttachments(
 		}
 	}
 
+	for _, attachment := range identityGroupedAgentAttachments(connectionByID, hostIndex, resources) {
+		if _, exists := attachments[attachment.agentID]; exists {
+			continue
+		}
+		register(attachment.agentID, attachment.primaryID, false, true)
+	}
+
 	for _, agent := range sortedConnectionsByID(connectionByID) {
 		if agent.Type != ConnectionTypeAgent {
 			continue
@@ -609,6 +616,108 @@ func resolveAgentAttachments(
 		}
 	}
 
+	return attachments
+}
+
+type identityGroupedAgentAttachment struct {
+	agentID   string
+	primaryID string
+}
+
+// identityGroupedAgentAttachments pairs agent connections with the single
+// PBS, PMG, or TrueNAS connection whose host resolves into the same
+// top-level system group. The shared resolver holds the canonical
+// same-machine contract (machine identity, short-form hostname equivalence,
+// unique IPs), so a PBS host running a Pulse agent pairs here even when the
+// configured API address shares no literal host string with anything the
+// agent reports — the case the direct host fallback below cannot see.
+// Proxmox stays with the LinkedAgentID passes, which carry the
+// cluster-membership semantics this group view does not.
+func identityGroupedAgentAttachments(
+	connectionByID map[string]Connection,
+	hostIndex connectionHostIndex,
+	resources []unified.Resource,
+) []identityGroupedAgentAttachment {
+	// Mirror the monitored-system root set (infrastructure parents plus
+	// PBS, PMG, and Kubernetes cluster roots) so grouping resolves with the
+	// same ambiguity evidence the Infrastructure surfaces use.
+	roots := make([]unified.Resource, 0, len(resources))
+	for _, resource := range resources {
+		switch unified.CanonicalResourceType(resource.Type) {
+		case unified.ResourceTypeAgent, unified.ResourceTypePBS, unified.ResourceTypePMG,
+			unified.ResourceTypeK8sCluster:
+			roots = append(roots, resource)
+		}
+	}
+	if len(roots) == 0 {
+		return nil
+	}
+
+	resolver := unified.ResolveTopLevelSystems(roots)
+	type groupBucket struct {
+		agentIDs  []string
+		primaries map[string]struct{}
+	}
+	buckets := make(map[string]*groupBucket)
+	bucketFor := func(groupID string) *groupBucket {
+		bucket := buckets[groupID]
+		if bucket == nil {
+			bucket = &groupBucket{primaries: make(map[string]struct{})}
+			buckets[groupID] = bucket
+		}
+		return bucket
+	}
+	for _, resource := range roots {
+		groupID := resolver.GroupIDForResource(resource)
+		if groupID == "" {
+			continue
+		}
+		if resource.Agent != nil {
+			agentID := "agent:" + strings.TrimSpace(resource.Agent.AgentID)
+			if agent, ok := connectionByID[agentID]; ok && agent.Type == ConnectionTypeAgent {
+				bucketFor(groupID).agentIDs = append(bucketFor(groupID).agentIDs, agentID)
+			}
+		}
+		if resource.Proxmox != nil || resource.VMware != nil {
+			continue
+		}
+		primaryID := primaryConnectionIDForResource(resource, hostIndex)
+		if primaryID == "" {
+			continue
+		}
+		primary, ok := connectionByID[primaryID]
+		if !ok || primary.Type == ConnectionTypePVE || !isSingleHostPlatformConnectionType(primary.Type) {
+			continue
+		}
+		bucketFor(groupID).primaries[primaryID] = struct{}{}
+	}
+
+	groupIDs := make([]string, 0, len(buckets))
+	for groupID := range buckets {
+		groupIDs = append(groupIDs, groupID)
+	}
+	sort.Strings(groupIDs)
+
+	attachments := make([]identityGroupedAgentAttachment, 0)
+	for _, groupID := range groupIDs {
+		bucket := buckets[groupID]
+		// A group naming more than one platform connection is ambiguous
+		// evidence; fail closed the same way the direct host fallback does.
+		if len(bucket.primaries) != 1 || len(bucket.agentIDs) == 0 {
+			continue
+		}
+		var primaryID string
+		for id := range bucket.primaries {
+			primaryID = id
+		}
+		sort.Strings(bucket.agentIDs)
+		for _, agentID := range bucket.agentIDs {
+			attachments = append(attachments, identityGroupedAgentAttachment{
+				agentID:   agentID,
+				primaryID: primaryID,
+			})
+		}
+	}
 	return attachments
 }
 
@@ -745,11 +854,13 @@ func primaryConnectionIDForResource(
 		}
 	case resource.PBS != nil:
 		if instanceID := strings.TrimSpace(resource.PBS.InstanceID); instanceID != "" {
-			return "pbs:" + instanceID
+			// The PBS poller writes "pbs-<name>" instance IDs while
+			// connection IDs carry the bare configured instance name.
+			return "pbs:" + strings.TrimPrefix(instanceID, "pbs-")
 		}
 	case resource.PMG != nil:
 		if instanceID := strings.TrimSpace(resource.PMG.InstanceID); instanceID != "" {
-			return "pmg:" + instanceID
+			return "pmg:" + strings.TrimPrefix(instanceID, "pmg-")
 		}
 	}
 
