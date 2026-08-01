@@ -61,9 +61,8 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
     const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
     await runPowerShell(
       `$ErrorActionPreference="Stop"; ` +
-        `$rsa=[System.Security.Cryptography.RSA]::Create(); ` +
+        `$rsa=[System.Security.Cryptography.RSACryptoServiceProvider]::new(2048); ` +
         `try { ` +
-        `$rsa.KeySize=2048; ` +
         `$request=[System.Security.Cryptography.X509Certificates.CertificateRequest]::new(` +
         `"CN=localhost", $rsa, [System.Security.Cryptography.HashAlgorithmName]::SHA256, ` +
         `[System.Security.Cryptography.RSASignaturePadding]::Pkcs1); ` +
