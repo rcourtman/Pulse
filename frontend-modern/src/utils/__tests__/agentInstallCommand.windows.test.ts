@@ -61,15 +61,28 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
     const quote = (value: string) => `'${value.replace(/'/g, "''")}'`;
     await runPowerShell(
       `$ErrorActionPreference="Stop"; ` +
-        `if ($null -eq (Get-PSDrive -Name "Cert" -ErrorAction SilentlyContinue)) { ` +
-        `New-PSDrive -Name "Cert" -PSProvider "Certificate" -Root "\\" | Out-Null ` +
-        `}; ` +
-        `$certificate=New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "Cert:\\CurrentUser\\My" -KeyExportPolicy Exportable; ` +
+        `$rsa=[System.Security.Cryptography.RSA]::Create(); ` +
         `try { ` +
-        `$password=ConvertTo-SecureString "pulse-test" -AsPlainText -Force; ` +
-        `Export-PfxCertificate -Cert $certificate -FilePath ${quote(pfxPath)} -Password $password | Out-Null; ` +
-        `Export-Certificate -Cert $certificate -FilePath ${quote(derPath)} -Type CERT | Out-Null ` +
-        `} finally { Remove-Item -LiteralPath ("Cert:\\CurrentUser\\My\\"+$certificate.Thumbprint) }`,
+        `$rsa.KeySize=2048; ` +
+        `$request=[System.Security.Cryptography.X509Certificates.CertificateRequest]::new(` +
+        `"CN=localhost", $rsa, [System.Security.Cryptography.HashAlgorithmName]::SHA256, ` +
+        `[System.Security.Cryptography.RSASignaturePadding]::Pkcs1); ` +
+        // DER SubjectAlternativeName containing DNS:localhost. Building the
+        // extension directly keeps this fixture compatible with .NET Framework.
+        `[byte[]]$subjectAlternativeName=0x30,0x0b,0x82,0x09,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74; ` +
+        `$request.CertificateExtensions.Add(` +
+        `[System.Security.Cryptography.X509Certificates.X509Extension]::new(` +
+        `"2.5.29.17", $subjectAlternativeName, $false)); ` +
+        `$certificate=$request.CreateSelfSigned(` +
+        `[System.DateTimeOffset]::UtcNow.AddMinutes(-5), ` +
+        `[System.DateTimeOffset]::UtcNow.AddDays(1)); ` +
+        `try { ` +
+        `[System.IO.File]::WriteAllBytes(${quote(pfxPath)}, ` +
+        `$certificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, "pulse-test")); ` +
+        `[System.IO.File]::WriteAllBytes(${quote(derPath)}, ` +
+        `$certificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)) ` +
+        `} finally { $certificate.Dispose() } ` +
+        `} finally { $rsa.Dispose() }`,
       {},
     );
     const [pfx, der] = await Promise.all([readFile(pfxPath), readFile(derPath)]);
