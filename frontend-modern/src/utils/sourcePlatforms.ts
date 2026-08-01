@@ -97,6 +97,21 @@ export const normalizeSourcePlatformQueryValue = (value: string | null | undefin
   return normalizeSourcePlatformKey(normalized) || normalized;
 };
 
+// `proxmox-all` is a filter-only aggregate covering every Proxmox-family
+// scope (proxmox-pve, proxmox-pbs, proxmox-pmg). It never appears as a
+// resource scope itself, so any matcher comparing filter keys against scope
+// keys must resolve it here rather than by equality.
+export const sourcePlatformScopeMatchesFilter = (
+  scopeKey: string | null | undefined,
+  filterKey: string | null | undefined,
+): boolean => {
+  const scope = normalizeSourcePlatformQueryValue(scopeKey);
+  const filter = normalizeSourcePlatformQueryValue(filterKey);
+  if (!filter || filter === 'all') return true;
+  if (filter === 'proxmox-all') return scope.startsWith('proxmox-');
+  return scope === filter;
+};
+
 export const normalizeSourcePlatformScopes = (
   values?: readonly (string | null | undefined)[] | null,
   fallbackPlatform?: string | null | undefined,

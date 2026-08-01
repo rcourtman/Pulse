@@ -11,6 +11,7 @@ import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   normalizeSourcePlatformQueryValue,
+  sourcePlatformScopeMatchesFilter,
   normalizeSourcePlatformScopes,
 } from '@/utils/sourcePlatforms';
 
@@ -102,7 +103,9 @@ export const workloadMatchesPlatformScope = (
 ): boolean => {
   const normalizedScope = normalizeSourcePlatformQueryValue(platformScope);
   if (!normalizedScope || normalizedScope === 'all') return true;
-  return getWorkloadPlatformScopes(guest).includes(normalizedScope);
+  return getWorkloadPlatformScopes(guest).some((scope) =>
+    sourcePlatformScopeMatchesFilter(scope, normalizedScope),
+  );
 };
 
 export const resolveWorkloadType = (

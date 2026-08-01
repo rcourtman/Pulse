@@ -56,6 +56,34 @@ describe('workloadSelectors', () => {
       expect(result).toBe(guests);
     });
 
+    it('keeps Proxmox guests visible under the proxmox-all aggregate platform filter', () => {
+      const pveGuest = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm' as any,
+        platformType: 'proxmox-pve',
+        platformScopes: ['proxmox-pve'],
+      });
+      const dockerGuest = makeGuest(2, {
+        type: 'app-container',
+        workloadType: 'app-container' as any,
+        platformType: 'docker',
+        platformScopes: ['docker'],
+      });
+
+      const result = filterWorkloads({
+        guests: [pveGuest, dockerGuest],
+        viewMode: 'all',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+        selectedPlatform: 'proxmox-all',
+      });
+
+      expect(result).toEqual([pveGuest]);
+    });
+
     it('filters by view mode and status mode semantics', () => {
       const guests = [
         makeGuest(1, { status: 'running', type: 'vm', workloadType: 'vm' }),

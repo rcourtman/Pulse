@@ -9,6 +9,7 @@ import {
   resolvePlatformTypeFromSources,
   resolveResourcePlatformType,
   resolveSourceTypeFromSources,
+  sourcePlatformScopeMatchesFilter,
 } from '@/utils/sourcePlatforms';
 import {
   ADMITTED_PLATFORM_IDS,
@@ -263,6 +264,26 @@ describe('sourcePlatforms', () => {
       expect(resolveSourceTypeFromSources(['agent', 'availability'])).toBe('hybrid');
       expect(resolveSourceTypeFromSources(['availability'])).toBe('api');
       expect(resolveSourceTypeFromSources(['custom-source'])).toBe('api');
+    });
+  });
+
+  describe('sourcePlatformScopeMatchesFilter', () => {
+    it('matches concrete scopes exactly', () => {
+      expect(sourcePlatformScopeMatchesFilter('proxmox-pve', 'proxmox-pve')).toBe(true);
+      expect(sourcePlatformScopeMatchesFilter('docker', 'proxmox-pve')).toBe(false);
+    });
+
+    it('treats an empty or all filter as match-everything', () => {
+      expect(sourcePlatformScopeMatchesFilter('docker', null)).toBe(true);
+      expect(sourcePlatformScopeMatchesFilter('docker', 'all')).toBe(true);
+    });
+
+    it('resolves the proxmox-all aggregate across the Proxmox family only', () => {
+      expect(sourcePlatformScopeMatchesFilter('proxmox-pve', 'proxmox-all')).toBe(true);
+      expect(sourcePlatformScopeMatchesFilter('proxmox-pbs', 'proxmox-all')).toBe(true);
+      expect(sourcePlatformScopeMatchesFilter('proxmox-pmg', 'proxmox-all')).toBe(true);
+      expect(sourcePlatformScopeMatchesFilter('docker', 'proxmox-all')).toBe(false);
+      expect(sourcePlatformScopeMatchesFilter('', 'proxmox-all')).toBe(false);
     });
   });
 });

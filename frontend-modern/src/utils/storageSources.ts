@@ -1,6 +1,10 @@
 import type { Storage } from '@/types/api';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
-import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
+import {
+  getSourcePlatformLabel,
+  normalizeSourcePlatformKey,
+  sourcePlatformScopeMatchesFilter,
+} from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 export type StorageSourceTone = 'slate' | 'orange' | 'indigo' | 'rose' | 'teal' | 'cyan' | 'blue';
@@ -80,9 +84,7 @@ export const storageSourceMatchesFilter = (
 ): boolean => {
   const sourceKey = normalizeStorageSourceKey(source);
   const filterKey = normalizeStorageSourceKey(filter);
-  if (!filterKey || filterKey === 'all') return true;
-  if (filterKey === 'proxmox-all') return sourceKey.startsWith('proxmox-');
-  return sourceKey === filterKey;
+  return sourcePlatformScopeMatchesFilter(sourceKey, filterKey);
 };
 
 export const resolveStorageSourceKey = (storage: Storage): string => {
