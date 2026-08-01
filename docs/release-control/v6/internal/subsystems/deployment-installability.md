@@ -1171,6 +1171,16 @@ collection; adds storage, alert-routing, and OpenShift coverage; and carries
 the post-RC4 compatibility fixes. The exact `main` SHA must pass the integrated
 release checks and immutable-candidate build before the single-build workflow
 crosses its public mutation boundary.
+Every release cut, including a prerelease, now gates that mutation boundary on
+the complete frontend unit suite, frontend type-checking, and a deterministic
+render smoke against the verified frontend bundle. The smoke must render
+Proxmox nodes and workloads, Docker hosts and containers, Kubernetes clusters
+and pods, and Alert thresholds with an omitted-zero disk payload; an error
+boundary or uncaught browser error fails the cut. Failures retain Playwright
+diagnostics. The same release workflow also executes the generated self-signed
+and custom-CA Windows installer commands through Windows PowerShell 5.1 before
+release assembly, so the first HTTPS fetch is release proof rather than a
+string-shape assertion.
 The `v6.2.0-rc.5` server cut is classified
 `existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
 build 11 and Android versionCode 9 candidates, both using runtime version 2,

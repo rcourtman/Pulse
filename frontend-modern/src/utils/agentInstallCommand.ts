@@ -2,6 +2,77 @@ const shellQuoteArg = (value: string) => `'${value.replace(/'/g, `'\"'\"'`)}'`;
 export const powerShellQuote = (value: string) =>
   value.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$');
 
+const powerShellSingleQuotedLiteral = (value: string) => `'${value.replace(/'/g, "''")}'`;
+
+// ServicePointManager can invoke its validation callback on a worker thread
+// that has no PowerShell runspace. Windows PowerShell 5.1 therefore cannot
+// safely use a scriptblock delegate here. Keep the callback and PEM parsing in
+// a compiled .NET type that is compatible with both Windows PowerShell 5.1 and
+// modern PowerShell runtimes.
+const powerShellTlsValidatorSource = `
+using System;
+using System.IO;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
+
+public static class PulseInstallerCertificateValidator
+{
+    public static X509Certificate2 CustomCa;
+    public static readonly RemoteCertificateValidationCallback AcceptAnyCallback = AcceptAny;
+    public static readonly RemoteCertificateValidationCallback ValidateCustomCaCallback = ValidateCustomCa;
+
+    public static X509Certificate2 LoadCertificate(string path)
+    {
+        byte[] bytes = File.ReadAllBytes(path);
+        string text = System.Text.Encoding.ASCII.GetString(bytes);
+        if (text.Contains("-----BEGIN CERTIFICATE-----"))
+        {
+            string base64 = Regex.Replace(text, "-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\\\\s", "");
+            bytes = Convert.FromBase64String(base64);
+        }
+        return (X509Certificate2)Activator.CreateInstance(typeof(X509Certificate2), new object[] { bytes });
+    }
+
+    private static bool AcceptAny(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+    {
+        return true;
+    }
+
+    private static bool ValidateCustomCa(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+    {
+        if (certificate == null || CustomCa == null ||
+            (errors & (SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable)) != 0)
+        {
+            return false;
+        }
+
+        using (X509Chain candidateChain = new X509Chain())
+        {
+            candidateChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            candidateChain.ChainPolicy.ExtraStore.Add(CustomCa);
+            candidateChain.Build(new X509Certificate2(certificate));
+            foreach (X509ChainElement element in candidateChain.ChainElements)
+            {
+                if (String.Equals(element.Certificate.Thumbprint, CustomCa.Thumbprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}`.trim();
+
+const powerShellTlsValidatorBootstrap =
+  `if ($null -eq ("PulseInstallerCertificateValidator" -as [type])) { ` +
+  `Add-Type -TypeDefinition ${powerShellSingleQuotedLiteral(powerShellTlsValidatorSource)} ` +
+  `}; `;
+
+const powerShellLoadCustomCa = (pathExpression: string) =>
+  `$pulseCustomCa=[PulseInstallerCertificateValidator]::LoadCertificate(${pathExpression}); ` +
+  `[PulseInstallerCertificateValidator]::CustomCa=$pulseCustomCa; `;
+
 export const normalizeInstallerBaseUrl = (baseUrl: string) => baseUrl.replace(/\/+$/, '');
 
 export type AgentCommandPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
@@ -119,35 +190,20 @@ export const buildPowerShellInstallScriptBootstrap = (baseUrl: string) => {
   return (
     `& { $pulseScriptUrl="${scriptUrl}"; ` +
     `if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true" -or -not [string]::IsNullOrWhiteSpace($env:PULSE_CACERT)) { ` +
+    `${powerShellTlsValidatorBootstrap}` +
     `$pulseCustomCa = $null; ` +
     `if (-not [string]::IsNullOrWhiteSpace($env:PULSE_CACERT)) { ` +
-    `$pulseCustomCaBytes = [System.IO.File]::ReadAllBytes($env:PULSE_CACERT); ` +
-    `$pulseCustomCaText = [System.Text.Encoding]::ASCII.GetString($pulseCustomCaBytes); ` +
-    `if ($pulseCustomCaText.Contains("-----BEGIN CERTIFICATE-----")) { ` +
-    `$pulseCustomCa = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pulseCustomCaText) ` +
-    `} else { ` +
-    `$pulseCustomCa = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pulseCustomCaBytes) ` +
-    `} ` +
+    `${powerShellLoadCustomCa('$env:PULSE_CACERT')}` +
     `}; ` +
     `$pulsePrev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback; ` +
     `try { ` +
     `if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true") { ` +
-    `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { param($sender, $certificate, $chain, $sslPolicyErrors) return $true } ` +
+    `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::AcceptAnyCallback ` +
     `} else { ` +
-    `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = ({ param($sender, $certificate, $chain, $sslPolicyErrors) ` +
-    `if ($null -eq $pulseCustomCa) { return $sslPolicyErrors -eq [System.Net.Security.SslPolicyErrors]::None }; ` +
-    `if ($null -eq $certificate) { return $false }; ` +
-    `$pulseChain = [System.Security.Cryptography.X509Certificates.X509Chain]::new(); ` +
-    `$pulseChain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck; ` +
-    `$null = $pulseChain.ChainPolicy.ExtraStore.Add($pulseCustomCa); ` +
-    `$null = $pulseChain.Build($certificate); ` +
-    `foreach ($pulseElement in $pulseChain.ChainElements) { ` +
-    `if ($pulseElement.Certificate.Thumbprint -eq $pulseCustomCa.Thumbprint) { return $true } ` +
-    `}; ` +
-    `return $false }).GetNewClosure() ` +
+    `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::ValidateCustomCaCallback ` +
     `}; ` +
     `irm $pulseScriptUrl ` +
-    `} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev } ` +
+    `} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev; [PulseInstallerCertificateValidator]::CustomCa = $null } ` +
     `} else { irm $pulseScriptUrl } } | iex`
   );
 };
@@ -176,10 +232,10 @@ export const buildWindowsAgentInstallCommand = ({
     ...(normalizedToken ? ['-TokenFile $pulseTokenFile'] : []),
   ];
   const certificateValidationCallback = insecure
-    ? `{ param($sender,$certificate,$chain,$sslPolicyErrors) return $true }`
-    : `({ param($sender,$certificate,$chain,$sslPolicyErrors) if ($null -eq $pulseCustomCa) { return $sslPolicyErrors -eq [System.Net.Security.SslPolicyErrors]::None }; if ($null -eq $certificate) { return $false }; $pulseChain=[System.Security.Cryptography.X509Certificates.X509Chain]::new(); $pulseChain.ChainPolicy.RevocationMode=[System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck; $null=$pulseChain.ChainPolicy.ExtraStore.Add($pulseCustomCa); $null=$pulseChain.Build($certificate); foreach ($pulseElement in $pulseChain.ChainElements) { if ($pulseElement.Certificate.Thumbprint -eq $pulseCustomCa.Thumbprint) { return $true } }; return $false }).GetNewClosure()`;
+    ? `[PulseInstallerCertificateValidator]::AcceptAnyCallback`
+    : `[PulseInstallerCertificateValidator]::ValidateCustomCaCallback`;
   const customTrustFetch = installerFetchRequiresCustomTrust
-    ? `$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { $pulseCustomCaBytes=[System.IO.File]::ReadAllBytes($pulseCaCertPath); $pulseCustomCaText=[System.Text.Encoding]::ASCII.GetString($pulseCustomCaBytes); if ($pulseCustomCaText.Contains("-----BEGIN CERTIFICATE-----")) { $pulseCustomCa=[System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pulseCustomCaText) } else { $pulseCustomCa=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pulseCustomCaBytes) } }; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=${certificateValidationCallback}; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev }`
+    ? `${powerShellTlsValidatorBootstrap}$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { ${powerShellLoadCustomCa('$pulseCaCertPath')}}; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=${certificateValidationCallback}; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev; [PulseInstallerCertificateValidator]::CustomCa=$null }`
     : `Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript`;
 
   const tokenBootstrap = normalizedToken

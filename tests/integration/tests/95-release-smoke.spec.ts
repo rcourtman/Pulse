@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { ensureAuthenticated } from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+const pageErrors = new WeakMap<Page, Error[]>();
 
 // Release smoke: the minimum bar every cut ships against, prereleases
 // included. Each check asserts only that a primary surface renders real
@@ -20,6 +21,10 @@ async function expectNoErrorBoundary(page: Page) {
     page.getByText("This page couldn't load"),
     "an error boundary fired on a release-gating surface",
   ).toHaveCount(0);
+  expect(
+    pageErrors.get(page) ?? [],
+    "an uncaught browser error fired on a release-gating surface",
+  ).toEqual([]);
 }
 
 test.describe("Release smoke", () => {
@@ -31,6 +36,9 @@ test.describe("Release smoke", () => {
       "Release smoke gates on the desktop shell",
     );
     await page.setViewportSize(DESKTOP_VIEWPORT);
+    const errors: Error[] = [];
+    pageErrors.set(page, errors);
+    page.on("pageerror", (error) => errors.push(error));
     await ensureAuthenticated(page);
   });
 

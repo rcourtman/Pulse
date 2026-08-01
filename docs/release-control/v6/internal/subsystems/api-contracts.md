@@ -6318,6 +6318,14 @@ custom-CA or insecure-TLS certificate handling before `install.ps1` is fetched,
 not only after the installer starts executing. That bootstrap must accept the
 same PEM/CRT/CER trust input that `scripts/install.ps1` itself accepts, so the
 shared command contract does not narrow custom-CA behavior on the first fetch.
+That first-fetch contract includes Windows PowerShell 5.1 execution semantics:
+the generated API/UI command must install a compiled .NET certificate callback
+rather than a PowerShell scriptblock delegate, and it must decode PEM without
+calling runtime APIs absent from Windows PowerShell 5.1. Exact generated
+commands for insecure TLS and PEM custom-CA trust are executed against a
+self-signed HTTPS installer fixture in native Windows CI and again as a
+release-gating Windows smoke; substring assertions alone are not sufficient
+proof of this transport boundary.
 That same shell transport contract also applies to the governed setup-completion
 install handoff in `SetupCompletionPanel`: when the operator supplies a custom CA path
 or opts into insecure/self-signed transport, the shared Unix install builder

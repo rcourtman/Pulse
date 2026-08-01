@@ -124,6 +124,24 @@ func TestNativeWindowsSelfTestDoesNotPreseedLifecycleState(t *testing.T) {
 	}
 }
 
+func TestNativeWindowsExecutesGeneratedInstallCommand(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatalf("read native agent workflow: %v", err)
+	}
+
+	workflow := string(content)
+	for _, needle := range []string{
+		`frontend-modern/src/utils/agentInstallCommand.ts`,
+		`Execute generated command with Windows PowerShell 5.1`,
+		`agentInstallCommand.windows.test.ts`,
+	} {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("native Windows workflow missing generated install-command proof: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1OwnsWindowsServiceLoggingAndRecovery(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {

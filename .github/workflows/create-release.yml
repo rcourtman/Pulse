@@ -253,7 +253,7 @@ jobs:
     needs: prepare
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -277,6 +277,12 @@ jobs:
       - name: Check frontend copy-paste duplication
         run: npm --prefix frontend-modern run lint:cpd
 
+      - name: Type-check frontend
+        run: npm --prefix frontend-modern run type-check
+
+      - name: Test frontend
+        run: npm --prefix frontend-modern test
+
       - name: Build verified frontend bundle
         run: npm --prefix frontend-modern run build
 
@@ -289,6 +295,31 @@ jobs:
           retention-days: 1
           compression-level: 0
           overwrite: true
+
+  windows_install_command_smoke:
+    name: Windows PowerShell 5.1 Install Command Smoke
+    needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      - name: Install frontend test dependencies
+        working-directory: frontend-modern
+        run: npm ci
+
+      - name: Execute generated command with Windows PowerShell 5.1
+        working-directory: frontend-modern
+        run: npm test -- --run src/utils/__tests__/agentInstallCommand.windows.test.ts
 
   # Backend tests run in parallel with frontend checks
   backend_tests:
@@ -764,11 +795,23 @@ jobs:
           docker logs pulse-test-server || true
           docker compose -f docker-compose.test.yml down -v || true
 
+      - name: Upload smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-smoke-failures-${{ github.sha }}
+          path: |
+            tests/integration/test-results/
+            tests/integration/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
   create_release:
     needs:
       - prepare
       - build_release_candidate
       - frontend_checks
+      - windows_install_command_smoke
       - backend_tests
       - docker_build
       - helm_smoke
@@ -776,7 +819,7 @@ jobs:
       - release_smoke
     # Run if integration_tests passed OR was skipped (prereleases). The
     # release smoke has no skipped escape: it runs for prereleases too.
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_checks.result == 'success' && needs.windows_install_command_smoke.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && needs.release_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1463,6 +1506,7 @@ jobs:
     needs:
       - prepare
       - release_smoke
+      - windows_install_command_smoke
       - create_release
       - publish_docker
       - validate_release_assets
@@ -1481,6 +1525,7 @@ jobs:
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
           CREATE_RESULT: ${{ needs.create_release.result }}
           SMOKE_RESULT: ${{ needs.release_smoke.result }}
+          WINDOWS_INSTALL_COMMAND_RESULT: ${{ needs.windows_install_command_smoke.result }}
           DOCKER_RESULT: ${{ needs.publish_docker.result }}
           VALIDATE_RESULT: ${{ needs.validate_release_assets.result }}
           INSTALL_RESULT: ${{ needs.install_sh_smoke.result }}
@@ -1501,6 +1546,7 @@ jobs:
           }
 
           require_result "release smoke" "$SMOKE_RESULT" success
+          require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success
           require_result "release assembly" "$CREATE_RESULT" success
           require_result "release asset validation" "$VALIDATE_RESULT" success
 

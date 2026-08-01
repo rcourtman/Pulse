@@ -84,80 +84,79 @@ describe('buildPowerShellInstallScriptBootstrap — bootstrap script wiring', ()
     expect(script).toContain('-or -not [string]::IsNullOrWhiteSpace($env:PULSE_CACERT))');
   });
 
-  it('reads the custom CA bytes from $env:PULSE_CACERT when populated', () => {
+  it('loads the custom CA through the Windows PowerShell 5.1-compatible helper', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
     expect(script).toContain('if (-not [string]::IsNullOrWhiteSpace($env:PULSE_CACERT)) {');
     expect(script).toContain(
-      '$pulseCustomCaBytes = [System.IO.File]::ReadAllBytes($env:PULSE_CACERT);',
+      '[PulseInstallerCertificateValidator]::LoadCertificate($env:PULSE_CACERT)',
     );
   });
 
-  it('routes a PEM-encoded CA through X509Certificate2::CreateFromPem', () => {
+  it('decodes PEM certificates without the newer X509Certificate2::CreateFromPem API', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
-    expect(script).toContain('if ($pulseCustomCaText.Contains("-----BEGIN CERTIFICATE-----"))');
-    expect(script).toContain(
-      '$pulseCustomCa = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pulseCustomCaText)',
-    );
+    expect(script).toContain('if (text.Contains("-----BEGIN CERTIFICATE-----"))');
+    expect(script).toContain('bytes = Convert.FromBase64String(base64);');
+    expect(script).not.toContain('CreateFromPem');
   });
 
-  it('routes a DER-encoded CA through X509Certificate2::new (else arm)', () => {
+  it('passes PEM-decoded or raw DER bytes into X509Certificate2', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
     expect(script).toContain(
-      '$pulseCustomCa = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($pulseCustomCaBytes)',
+      'Activator.CreateInstance(typeof(X509Certificate2), new object[] { bytes })',
     );
   });
 
-  it('installs the X509 chain-validation ServerCertificateValidationCallback', () => {
+  it('installs the compiled X509 chain-validation callback', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
     expect(script).toContain(
       '$pulsePrev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback;',
     );
     expect(script).toContain(
-      '[System.Net.ServicePointManager]::ServerCertificateValidationCallback = ({ param($sender, $certificate, $chain, $sslPolicyErrors)',
+      '[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::ValidateCustomCaCallback',
     );
     expect(script).toContain(
-      '} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev }',
+      '} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev; [PulseInstallerCertificateValidator]::CustomCa = $null }',
     );
   });
 
-  it('short-circuits the callback to $true when PULSE_INSECURE_SKIP_VERIFY is "true"', () => {
+  it('uses the compiled accept-any callback when PULSE_INSECURE_SKIP_VERIFY is "true"', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
     expect(script).toContain(
-      'if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true") { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { param($sender, $certificate, $chain, $sslPolicyErrors) return $true }',
+      'if ($env:PULSE_INSECURE_SKIP_VERIFY -eq "true") { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::AcceptAnyCallback',
     );
   });
 
-  it('returns the raw sslPolicyErrors verdict when no custom CA was loaded', () => {
+  it('does not embed a PowerShell scriptblock callback', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
-    expect(script).toContain(
-      'if ($null -eq $pulseCustomCa) { return $sslPolicyErrors -eq [System.Net.Security.SslPolicyErrors]::None };',
-    );
+    expect(script).not.toContain('ServerCertificateValidationCallback = { param(');
+    expect(script).not.toContain('GetNewClosure');
   });
 
-  it('returns $false when the server supplied no certificate', () => {
+  it('fails closed when the server supplied no certificate or no custom CA', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
-    expect(script).toContain('if ($null -eq $certificate) { return $false };');
+    expect(script).toContain('if (certificate == null || CustomCa == null ||');
+    expect(script).toContain('SslPolicyErrors.RemoteCertificateNameMismatch');
+    expect(script).toContain('SslPolicyErrors.RemoteCertificateNotAvailable');
+    expect(script).toContain('return false;');
   });
 
   it('builds an X509Chain with NoCheck revocation and the custom CA in ExtraStore', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
+    expect(script).toContain('using (X509Chain candidateChain = new X509Chain())');
     expect(script).toContain(
-      '$pulseChain = [System.Security.Cryptography.X509Certificates.X509Chain]::new();',
+      'candidateChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;',
     );
-    expect(script).toContain(
-      '$pulseChain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck;',
-    );
-    expect(script).toContain('$null = $pulseChain.ChainPolicy.ExtraStore.Add($pulseCustomCa);');
-    expect(script).toContain('$null = $pulseChain.Build($certificate);');
+    expect(script).toContain('candidateChain.ChainPolicy.ExtraStore.Add(CustomCa);');
+    expect(script).toContain('candidateChain.Build(new X509Certificate2(certificate));');
   });
 
   it('walks ChainElements and trusts the chain when the custom CA Thumbprint matches', () => {
     const script = buildPowerShellInstallScriptBootstrap('https://pulse.example');
-    expect(script).toContain('foreach ($pulseElement in $pulseChain.ChainElements) {');
+    expect(script).toContain('foreach (X509ChainElement element in candidateChain.ChainElements)');
     expect(script).toContain(
-      'if ($pulseElement.Certificate.Thumbprint -eq $pulseCustomCa.Thumbprint) { return $true }',
+      'String.Equals(element.Certificate.Thumbprint, CustomCa.Thumbprint, StringComparison.OrdinalIgnoreCase)',
     );
-    expect(script).toContain('return $false }).GetNewClosure()');
+    expect(script).toContain('return true;');
   });
 
   it('fetches the script via `irm $pulseScriptUrl` inside both the custom-trust and the bare else arm', () => {

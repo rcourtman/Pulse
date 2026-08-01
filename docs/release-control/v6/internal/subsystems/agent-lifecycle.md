@@ -4986,6 +4986,16 @@ clipboard transport: the rendered Linux/macOS/BSD and Windows install snippets
 must already include the active token choice, custom-CA trust, insecure/plain-
 HTTP handling, install-profile flags, and command-execution mode instead of
 displaying one command and mutating it only during copy.
+Windows first-hop TLS overrides must remain executable on the oldest supported
+Windows PowerShell runtime. Generated install commands and inline
+`install.ps1` bootstraps use a compiled .NET
+`RemoteCertificateValidationCallback`, never a PowerShell scriptblock delegate
+that can be invoked on a worker thread without a runspace. Their custom-CA
+loader accepts PEM and DER without relying on `X509Certificate2.CreateFromPem`,
+which Windows PowerShell 5.1 does not provide. Native Windows verification and
+the release workflow both execute the generated insecure and PEM custom-CA
+commands against a self-signed HTTPS installer fixture, including the full
+preflight-to-install handoff.
 For Unix-family host installs, that same seamless installer contract requires
 the copied command to fetch the shared installer into an ephemeral directory,
 run `install.sh --preflight-only` before privilege escalation, and fail before

@@ -1842,6 +1842,52 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 }
 
+func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+
+	workflow := string(content)
+	frontendJob := workflowJobBlock(t, workflow, "frontend_checks")
+	windowsJob := workflowJobBlock(t, workflow, "windows_install_command_smoke")
+	smokeJob := workflowJobBlock(t, workflow, "release_smoke")
+	createJob := workflowJobBlock(t, workflow, "create_release")
+	verdictJob := workflowJobBlock(t, workflow, "release_verdict")
+
+	for _, needle := range []string{
+		`npm --prefix frontend-modern run type-check`,
+		`npm --prefix frontend-modern test`,
+	} {
+		if !strings.Contains(frontendJob, needle) {
+			t.Fatalf("frontend release gate missing %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`runs-on: windows-2025`,
+		`agentInstallCommand.windows.test.ts`,
+	} {
+		if !strings.Contains(windowsJob, needle) {
+			t.Fatalf("Windows install-command release gate missing %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`tests/95-release-smoke.spec.ts`,
+		`release-smoke-failures-${{ github.sha }}`,
+		`tests/integration/test-results/`,
+	} {
+		if !strings.Contains(smokeJob, needle) {
+			t.Fatalf("release render smoke missing %s", needle)
+		}
+	}
+	if !strings.Contains(createJob, `needs.windows_install_command_smoke.result == 'success'`) {
+		t.Fatal("release assembly must fail closed on the Windows install-command smoke")
+	}
+	if !strings.Contains(verdictJob, `require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success`) {
+		t.Fatal("definitive release verdict must report the Windows install-command smoke")
+	}
+}
+
 func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
 	if err != nil {
