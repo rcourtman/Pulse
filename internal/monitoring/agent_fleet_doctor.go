@@ -881,15 +881,13 @@ func diagnoseProfileDeployment(
 
 	deployment, ok := deploymentByAgentProfile[deploymentKey(assignment.AgentID, assignment.ProfileID)]
 	if !ok {
-		return []AgentFleetDiagnosticReason{{
-			Code:     "profile_deployment_missing",
-			Severity: AgentFleetStatusWarning,
-			Message:  "A profile is assigned, but no deployment acknowledgement exists for this agent.",
-			Evidence: []string{
-				fmt.Sprintf("Assigned profile: %s", firstNonEmpty(profile.Name, profile.ID)),
-				fmt.Sprintf("Expected profile version: %d", expectedVersion),
-			},
-		}}
+		// ProfileDeploymentStatus predates the applied-config fingerprint carried
+		// by current Unified Agent reports. Absence is therefore not failure
+		// evidence: config convergence is owned by the desired-versus-applied
+		// fingerprint contract projected through /api/connections. Retain real
+		// legacy acknowledgements below so explicit failed, pending, and stale
+		// deployments remain useful diagnostics.
+		return nil
 	}
 
 	reasons := []AgentFleetDiagnosticReason{}

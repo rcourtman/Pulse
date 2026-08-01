@@ -121,6 +121,30 @@ describe('Agent Doctor model', () => {
     expect(targets[0].commandBlockedReason).toBeUndefined();
   });
 
+  it('does not invent a deployed v0 profile version when no legacy acknowledgement exists', () => {
+    const connection = connectionFixture({
+      agentUpdateAvailable: false,
+      agentVersion: '6.2.0',
+      expectedAgentVersion: '6.2.0',
+    });
+    const targets = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          status: 'healthy',
+          reasons: [],
+          profileVersion: 4,
+          deployedProfileVersion: undefined,
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(targets[0]?.profileVersionLabel).toBe('Assigned v4');
+  });
+
   it('does not report healthy when telemetry is fresh but command admission is disconnected', () => {
     const connection = connectionFixture({
       agentUpdateAvailable: false,

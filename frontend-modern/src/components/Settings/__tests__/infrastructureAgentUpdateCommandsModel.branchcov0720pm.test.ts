@@ -1220,7 +1220,7 @@ describe('collectInfrastructureAgentDoctorTargets (evidence + profile labels)', 
     expect(none?.profileLabel).toBeUndefined();
   });
 
-  it('builds profileVersionLabel when profileVersion is present (defaulting deployed to 0)', () => {
+  it('builds profileVersionLabel without inventing a missing deployed version', () => {
     const withDeployed = runDoctor([agentConnection()], {
       diagnostics: [diagnostic({ profileVersion: 4, deployedProfileVersion: 3 })],
       diagnosticsAvailable: true,
@@ -1233,7 +1233,7 @@ describe('collectInfrastructureAgentDoctorTargets (evidence + profile labels)', 
       diagnosticsAvailable: true,
       targetVersion: '6.2.0',
     })[0];
-    expect(noDeployed?.profileVersionLabel).toBe('Expected v4 · deployed v0');
+    expect(noDeployed?.profileVersionLabel).toBe('Assigned v4');
 
     const absent = runDoctor([agentConnection()], {
       diagnostics: [diagnostic({ profileVersion: undefined })],

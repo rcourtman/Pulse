@@ -296,6 +296,47 @@ func TestAgentFleetDiagnosticsDetectsProfileVersionDrift(t *testing.T) {
 	}
 }
 
+func TestAgentFleetDiagnosticsDoesNotRequireLegacyProfileDeploymentAcknowledgement(t *testing.T) {
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	monitor := newAgentFleetDoctorTestMonitor(t)
+	monitor.state.UpsertHost(models.Host{
+		ID:              "agent-1",
+		Hostname:        "profile-node",
+		Status:          "online",
+		LastSeen:        now.Add(-30 * time.Second),
+		IntervalSeconds: 30,
+		AgentVersion:    "6.2.0",
+	})
+	saveAgentFleetProfileState(t, monitor.persistence,
+		[]models.AgentProfile{{
+			ID:      "profile-current",
+			Name:    "Current profile",
+			Version: 4,
+			Config:  models.AgentConfigMap{},
+		}},
+		[]models.AgentProfileAssignment{{
+			AgentID:        "agent-1",
+			ProfileID:      "profile-current",
+			ProfileVersion: 4,
+			UpdatedAt:      now,
+		}},
+		nil,
+	)
+
+	agent := requireAgentDiagnostic(t, monitor.GetAgentFleetDiagnostics("6.2.0", now), "agent-agent-1")
+	if agent.Status != AgentFleetStatusHealthy {
+		t.Fatalf("status = %q, want %q; reasons = %#v", agent.Status, AgentFleetStatusHealthy, agent.Reasons)
+	}
+	if agent.ProfileVersion != 4 || agent.DeployedProfileVersion != 0 {
+		t.Fatalf("profile versions = assigned %d deployed %d, want assigned 4 with no legacy deployment version", agent.ProfileVersion, agent.DeployedProfileVersion)
+	}
+	for _, reason := range agent.Reasons {
+		if reason.Code == "profile_deployment_missing" {
+			t.Fatalf("missing legacy deployment acknowledgement must not create attention: %#v", agent.Reasons)
+		}
+	}
+}
+
 func TestAgentFleetDiagnosticsRetainPlatformForRemovedAgents(t *testing.T) {
 	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	monitor := newAgentFleetDoctorTestMonitor(t)

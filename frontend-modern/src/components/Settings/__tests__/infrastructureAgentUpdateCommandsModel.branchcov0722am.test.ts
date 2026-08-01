@@ -366,12 +366,11 @@ describe('collectInfrastructureAgentDoctorTargets (diagnostic-only orphan shapin
     expect(target?.reasons).toEqual([]);
   });
 
-  it('defaults deployedProfileVersion to 0 in the orphan profileVersionLabel', () => {
-    // `deployedProfileVersion || 0` alternate arm on the diagnostic-only path.
+  it('does not invent deployed v0 in the orphan profileVersionLabel', () => {
     const [target] = runOrphans([
       orphanDiagnostic({ profileVersion: 7, deployedProfileVersion: undefined }),
     ]);
 
-    expect(target?.profileVersionLabel).toBe('Expected v7 · deployed v0');
+    expect(target?.profileVersionLabel).toBe('Assigned v7');
   });
 });

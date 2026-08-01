@@ -261,7 +261,7 @@ func TestBranchcov0722UniqueMatch(t *testing.T) {
 	// When two connections normalise to the same host string the match is
 	// ambiguous; uniqueMatch returns "" so primaryConnectionIDForResource
 	// does not silently pick whichever ID happened to be appended last.
-	// This mirrors directProxmoxHostAttachment's "more than one → no match"
+	// This mirrors directPlatformHostAttachment's "more than one → no match"
 	// contract, and is the reason the helper is named unique*Match.
 	t.Run("ambiguous_match_returns_empty", func(t *testing.T) {
 		idx := buildConnectionHostIndex([]Connection{

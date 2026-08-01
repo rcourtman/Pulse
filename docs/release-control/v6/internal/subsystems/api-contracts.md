@@ -2987,10 +2987,17 @@ a new API state machine, queue contract, or verification-accounting field.
     views of the same enrolled machine instead of showing a second
     "discovered" candidate row for an already represented source member or
     API-plus-agent source row. Exact host-agent matches for a configured
-    Proxmox primary source must also attach through the backend systems
+    single-host platform source (PVE, PBS, PMG, or TrueNAS) must also attach
+    through the backend systems
     payload when workload node inventory is absent because credentials or
     reachability are blocked, so the infrastructure ledger does not split the
     same physical host into an API row plus a standalone host-agent row.
+    Host matching uses normalized names, addresses, and aliases and fails
+    closed when more than one enabled platform source matches; VMware remains
+    excluded because a vCenter connection is not the ESXi host on which an
+    agent would run. Composition adds agent telemetry to the source row without
+    converting provider health, credentials, or polling freshness into agent
+    lifecycle evidence.
     Agent-backed
     connections also own canonical version/update facts on that same payload:
     when a source or attachment is backed by Pulse Agent, `/api/connections`

@@ -547,9 +547,7 @@ const doctorTargetFromBinding = (
 
   const profileLabel =
     diagnostic?.profileName?.trim() || diagnostic?.profileId?.trim() || undefined;
-  const profileVersionLabel = diagnostic?.profileVersion
-    ? `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion || 0}`
-    : undefined;
+  const profileVersionLabel = diagnosticProfileVersionLabel(diagnostic);
 
   return {
     key: connection.id,
@@ -604,6 +602,14 @@ const diagnosticContextLabel = (
   return `${labels.join(' + ')} agent`;
 };
 
+const diagnosticProfileVersionLabel = (
+  diagnostic?: AgentFleetAgentDiagnostic,
+): string | undefined => {
+  if (!diagnostic?.profileVersion) return undefined;
+  if (!diagnostic.deployedProfileVersion) return `Assigned v${diagnostic.profileVersion}`;
+  return `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion}`;
+};
+
 const diagnosticOnlyDoctorTarget = (
   diagnostic: AgentFleetAgentDiagnostic,
 ): InfrastructureAgentDoctorTarget => {
@@ -622,9 +628,7 @@ const diagnosticOnlyDoctorTarget = (
     needsUpdate: false,
     commandPlatform: resolveKnownAgentCommandPlatform(diagnostic.platform),
     profileLabel: diagnostic.profileName?.trim() || diagnostic.profileId?.trim() || undefined,
-    profileVersionLabel: diagnostic.profileVersion
-      ? `Expected v${diagnostic.profileVersion} · deployed v${diagnostic.deployedProfileVersion || 0}`
-      : undefined,
+    profileVersionLabel: diagnosticProfileVersionLabel(diagnostic),
     lastSeen: diagnostic.lastSeen,
     source: removed ? 'removed' : 'diagnostics',
   };

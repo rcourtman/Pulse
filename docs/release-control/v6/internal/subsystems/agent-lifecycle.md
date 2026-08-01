@@ -2468,14 +2468,17 @@ for IP literals), so short-name vs fully-qualified drift does not break
 admission. Legacy pre-v6.1.1 hostname-bound records still migrate exactly
 once on hostname match.
 
-### PBS connection health does not create agent lifecycle evidence
+### PBS connection composition does not create agent lifecycle evidence
 
 The shared API connections ledger and diagnostics now project PBS health from
 the monitoring scheduler's completed poll result and keep immediate diagnostics
 probes separate. This does not enroll a PBS host as a Pulse Agent, extend an
 agent heartbeat, prove command reachability, or create update/repair authority.
 Agent lifecycle consumers continue to use agent-source identity and report
-freshness only; same-hostname PBS connections remain distinct provider rows.
+freshness only. When normalized host identity uniquely proves that a PBS API
+source and a Pulse Agent describe the same machine, the grouped systems
+payload composes them into one source row with API + Agent coverage; provider
+health and agent lifecycle facts remain independently authored inside that row.
 
 ### Docker and Podman report sizes share one exact-byte contract
 
@@ -3935,15 +3938,16 @@ have been merged. `/api/agents/agent/{id}/config` must keep the existing
 config `signature` backward-compatible with installed agents by signing the
 legacy canonical payload shape only; newer clients validate `desiredConfig` by
 recomputing it from the signed command decision and signed settings payload,
-restricted to the agent-applied settings key schema. Broader applied-state
-reporting remains the next contract gap for managed config: until the runtime
-report carries a comparable applied config fingerprint for an assigned managed
-desired config, `/api/connections` must surface that desired config metadata as
-pending or unknown and must not claim rollout convergence from host report
-fields such as `commandsEnabled` or `diskExclude`. The empty default desired
-config is different: it may be signed and served for compatibility, but without
-a managed command decision or agent-applied setting it is not a rollout and
-must project as `configDrift: not-applicable` with a current applied rollout.
+restricted to the agent-applied settings key schema. Current Unified Agent
+reports carry the comparable applied fingerprint, and `/api/connections` owns
+managed-config convergence by comparing those fingerprints. Agent Doctor must
+not demand the separate legacy profile-deployment acknowledgement that current
+agents do not emit or label its absence as deployed version zero; it may still
+surface explicit persisted failed, pending, or version-drift records. The empty
+default desired config is different: it may be signed and served for
+compatibility, but without a managed command decision or agent-applied setting
+it is not a rollout and must project as `configDrift: not-applicable` with a
+current applied rollout.
 Command policy follows the same lifecycle truth boundary: the server desired
 command setting is not applied runtime truth until a current agent report
 confirms it. `/api/connections` must expose desired command policy, applied

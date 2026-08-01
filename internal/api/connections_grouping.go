@@ -598,7 +598,7 @@ func resolveAgentAttachments(
 		if _, exists := attachments[agent.ID]; exists {
 			continue
 		}
-		if primaryID := directProxmoxHostAttachment(agent, connectionByID); primaryID != "" {
+		if primaryID := directPlatformHostAttachment(agent, connectionByID); primaryID != "" {
 			register(agent.ID, primaryID, false, false)
 		}
 	}
@@ -623,7 +623,7 @@ func sortedConnectionsByID(connectionByID map[string]Connection) []Connection {
 	return connections
 }
 
-func directProxmoxHostAttachment(
+func directPlatformHostAttachment(
 	agent Connection,
 	connectionByID map[string]Connection,
 ) string {
@@ -633,7 +633,7 @@ func directProxmoxHostAttachment(
 
 	var matchedID string
 	for _, primary := range sortedConnectionsByID(connectionByID) {
-		if primary.Type != ConnectionTypePVE || !primary.Enabled {
+		if !isSingleHostPlatformConnectionType(primary.Type) || !primary.Enabled {
 			continue
 		}
 		if !connectionsShareHost(agent, primary) {
@@ -645,6 +645,15 @@ func directProxmoxHostAttachment(
 		matchedID = primary.ID
 	}
 	return matchedID
+}
+
+func isSingleHostPlatformConnectionType(typ ConnectionType) bool {
+	switch typ {
+	case ConnectionTypePVE, ConnectionTypePBS, ConnectionTypePMG, ConnectionTypeTrueNAS:
+		return true
+	default:
+		return false
+	}
 }
 
 func buildProxmoxClusterNames(

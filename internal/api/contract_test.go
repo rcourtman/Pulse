@@ -15721,6 +15721,52 @@ func TestContract_ConnectionSystemHostAgentAttachmentPayloadShapeStaysCanonical(
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_PBSHostAgentComposesIntoOwningSystem(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	connections := []Connection{
+		{
+			ID:          "pbs:pbs01",
+			Type:        ConnectionTypePBS,
+			Name:        "pbs01",
+			Address:     "https://pbs01:8007",
+			HostAliases: []string{"pbs01", "192.0.2.20"},
+			State:       ConnectionStateActive,
+			Enabled:     true,
+		},
+		{
+			ID:          "agent:agent-pbs01",
+			Type:        ConnectionTypeAgent,
+			Name:        "pbs01",
+			Address:     "192.0.2.20",
+			HostAliases: []string{"pbs01", "192.0.2.20"},
+			State:       ConnectionStateActive,
+			Enabled:     true,
+		},
+	}
+
+	systems := buildConnectionSystems(connections, monitor)
+	if len(systems) != 1 {
+		t.Fatalf("systems = %+v, want one composed PBS system", systems)
+	}
+	want := ConnectionSystem{
+		ID:   "pbs:pbs01",
+		Type: ConnectionTypePBS,
+		Components: []ConnectionSystemComponent{
+			{ConnectionID: "pbs:pbs01", Type: ConnectionTypePBS, Role: ConnectionSystemComponentRolePrimary},
+			{ConnectionID: "agent:agent-pbs01", Type: ConnectionTypeAgent, Role: ConnectionSystemComponentRoleAttachment},
+		},
+	}
+	if !reflect.DeepEqual(systems[0], want) {
+		t.Fatalf("system = %+v, want %+v", systems[0], want)
+	}
+}
+
 func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	conn := Connection{
 		ID:          "agent:host-1",

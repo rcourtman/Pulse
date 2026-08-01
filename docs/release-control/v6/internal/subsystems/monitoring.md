@@ -798,11 +798,16 @@ changes.
     inventory instead of flattening them into pods, deployments, or generic
     networking, storage, configuration, or controller rows.
     Agent Fleet Doctor diagnostics must derive from the current monitoring
-    `StateSnapshot`, agent-profile assignments, and profile deployment
-    acknowledgements only. `internal/monitoring/agent_fleet_doctor.go` may
-    explain liveness, version drift, identity splits, expected telemetry gaps,
-    and profile drift, but it must remain read-only and must not become a
-    separate collector, repair executor, or replacement for the canonical
+    `StateSnapshot`, agent-profile assignments, and any persisted legacy
+    profile deployment acknowledgements only. Absence of that legacy
+    acknowledgement is not failure evidence: current managed-config
+    convergence is owned by the desired-versus-applied fingerprint projected
+    through `/api/connections`. A persisted acknowledgement may still explain
+    explicit failed, pending, or version-drift state.
+    `internal/monitoring/agent_fleet_doctor.go` may explain liveness, version
+    drift, identity splits, expected telemetry gaps, and evidenced profile
+    drift, but it must remain read-only and must not become a separate
+    collector, repair executor, or replacement for the canonical
     `/api/connections` fleet projection.
 19. Add or change unified-resource alert synchronization through
     `internal/monitoring/monitor_alert_sync.go` and the alerts subsystem

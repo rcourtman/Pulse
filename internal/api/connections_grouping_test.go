@@ -538,6 +538,69 @@ func TestBuildConnectionSystems_AttachesHostAgentToMatchingProxmoxSourceWithoutN
 	}
 }
 
+func TestDirectPlatformHostAttachmentSupportsSingleHostAPISources(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  ConnectionType
+	}{
+		{name: "Proxmox VE", typ: ConnectionTypePVE},
+		{name: "Proxmox Backup Server", typ: ConnectionTypePBS},
+		{name: "Proxmox Mail Gateway", typ: ConnectionTypePMG},
+		{name: "TrueNAS", typ: ConnectionTypeTrueNAS},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			connections := map[string]Connection{
+				"platform:source": {
+					ID:          "platform:source",
+					Type:        test.typ,
+					Name:        "source-01",
+					Address:     "https://192.0.2.30:8443",
+					HostAliases: []string{"source-01", "192.0.2.30"},
+					Enabled:     true,
+				},
+				"agent:source": {
+					ID:          "agent:source",
+					Type:        ConnectionTypeAgent,
+					Name:        "source-01",
+					Address:     "192.0.2.30",
+					HostAliases: []string{"source-01", "192.0.2.30"},
+					Enabled:     true,
+				},
+			}
+			if got := directPlatformHostAttachment(connections["agent:source"], connections); got != "platform:source" {
+				t.Fatalf("directPlatformHostAttachment() = %q, want %q", got, "platform:source")
+			}
+		})
+	}
+
+	t.Run("ambiguous platform sources fail closed", func(t *testing.T) {
+		agent := Connection{ID: "agent:source", Type: ConnectionTypeAgent, Name: "source-01"}
+		connections := map[string]Connection{
+			agent.ID:          agent,
+			"pve:source":      {ID: "pve:source", Type: ConnectionTypePVE, Name: "source-01", Enabled: true},
+			"pbs:source":      {ID: "pbs:source", Type: ConnectionTypePBS, Name: "source-01", Enabled: true},
+			"vmware:source":   {ID: "vmware:source", Type: ConnectionTypeVMware, Name: "source-01", Enabled: true},
+			"disabled:source": {ID: "disabled:source", Type: ConnectionTypePMG, Name: "source-01"},
+		}
+		if got := directPlatformHostAttachment(agent, connections); got != "" {
+			t.Fatalf("directPlatformHostAttachment() = %q, want an ambiguous fail-closed result", got)
+		}
+	})
+
+	t.Run("vCenter is not a single-host attachment", func(t *testing.T) {
+		agent := Connection{ID: "agent:source", Type: ConnectionTypeAgent, Name: "source-01"}
+		connections := map[string]Connection{
+			agent.ID:        agent,
+			"vmware:source": {ID: "vmware:source", Type: ConnectionTypeVMware, Name: "source-01", Enabled: true},
+		}
+		if got := directPlatformHostAttachment(agent, connections); got != "" {
+			t.Fatalf("directPlatformHostAttachment() = %q, want no vCenter attachment", got)
+		}
+	})
+}
+
 // One vCenter connection spans many ESXi hosts, so vSphere host resources
 // compose as members of their owning vmware connection the way Proxmox
 // cluster nodes compose under their cluster source. Resources pointing at an
