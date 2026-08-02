@@ -107,6 +107,8 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 		}
 	}
 
+	m.migrateAvailabilityLinksToCanonicalIDs(resources)
+
 	m.alertManager.CheckUnifiedResourceMetrics(resources)
 	m.alertManager.SyncUnifiedResourceIncidents(resources)
 	m.syncAlertsToState()

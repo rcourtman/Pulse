@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +32,58 @@ func SourceSpecificID(resourceType ResourceType, source DataSource, sourceID str
 // a machine key, so operator-owned rows follow the resource to its new ID.
 func MachineIdentityCanonicalID(resourceType ResourceType, machineID string) string {
 	return buildHashID(resourceType, "machine:"+strings.TrimSpace(machineID))
+}
+
+// ProxmoxGuestIdentityKey returns the node-independent identity key for a
+// Proxmox guest. VMIDs are unique within a cluster (and an instance maps to
+// one cluster or one standalone node), so instance+VMID survives live
+// migration between cluster nodes while the node-scoped source ID does not.
+func ProxmoxGuestIdentityKey(instance string, vmid int) string {
+	instance = strings.TrimSpace(instance)
+	if instance == "" || vmid <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", instance, vmid)
+}
+
+// ProxmoxGuestCanonicalID returns the canonical ID the registry mints for a
+// Proxmox guest keyed by its node-independent identity (see
+// ProxmoxGuestIdentityKey). Consumers that persist guest resource IDs
+// (recovery subjects, migrations) derive through this instead of hashing the
+// node-scoped source ID.
+func ProxmoxGuestCanonicalID(resourceType ResourceType, instance string, vmid int) string {
+	key := ProxmoxGuestIdentityKey(instance, vmid)
+	if key == "" {
+		return ""
+	}
+	return buildHashID(resourceType, "proxmox-guest:"+key)
+}
+
+// ParseProxmoxGuestSourceID splits a node-scoped guest source ID
+// ("instance:node:vmid", the makeGuestID format) into its components. The
+// instance segment may itself contain colons, so the node and VMID are taken
+// from the right.
+func ParseProxmoxGuestSourceID(sourceID string) (instance, node string, vmid int, ok bool) {
+	sourceID = strings.TrimSpace(sourceID)
+	lastSep := strings.LastIndex(sourceID, ":")
+	if lastSep <= 0 || lastSep == len(sourceID)-1 {
+		return "", "", 0, false
+	}
+	parsedVMID, err := strconv.Atoi(sourceID[lastSep+1:])
+	if err != nil || parsedVMID <= 0 {
+		return "", "", 0, false
+	}
+	rest := sourceID[:lastSep]
+	nodeSep := strings.LastIndex(rest, ":")
+	if nodeSep <= 0 || nodeSep == len(rest)-1 {
+		return "", "", 0, false
+	}
+	instance = strings.TrimSpace(rest[:nodeSep])
+	node = strings.TrimSpace(rest[nodeSep+1:])
+	if instance == "" || node == "" {
+		return "", "", 0, false
+	}
+	return instance, node, parsedVMID, true
 }
 
 // CanonicalResourceID returns the canonical v6 resource identifier.

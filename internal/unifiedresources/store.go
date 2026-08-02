@@ -153,6 +153,15 @@ type SQLiteResourceStore struct {
 	identityPinCache []ResourceIdentityPin
 	identityPinFresh bool
 
+	// successionCache caches the canonical_id_successions table (old ID →
+	// successor ID). It memoizes ApplyCanonicalIDSuccessions so steady-state
+	// rebuild ticks re-declaring the same retired eras cost no SQL, and it
+	// feeds change-journal era expansion for resources without identity pins
+	// (Proxmox guests, record-declared successions).
+	successionMu    sync.Mutex
+	successionCache map[string]string
+	successionFresh bool
+
 	retentionStop     chan struct{}
 	retentionDone     chan struct{}
 	retentionStopOnce sync.Once
@@ -463,6 +472,13 @@ func (s *SQLiteResourceStore) initSchema() error {
 		related_resources TEXT,
 		metadata_json TEXT
 	);
+
+	CREATE TABLE IF NOT EXISTS canonical_id_successions (
+		old_canonical_id TEXT PRIMARY KEY,
+		new_canonical_id TEXT NOT NULL,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_canonical_id_successions_new ON canonical_id_successions(new_canonical_id);
 
 	CREATE TABLE IF NOT EXISTS action_audits (
 		id TEXT PRIMARY KEY,
@@ -1569,7 +1585,9 @@ func (s *SQLiteResourceStore) queryResourceIdentityPins() ([]ResourceIdentityPin
 // strongest identity key was known hash a weaker key (cluster+hostname during
 // a boot window vs machine ID in steady state); the pinned identity makes
 // every era's ID recomputable, so reads merge the eras without rewriting
-// history. Unknown IDs expand to themselves.
+// history. Resources without pins (Proxmox guests, record-declared eras)
+// merge through the durable canonical_id_successions record instead. Unknown
+// IDs expand to themselves.
 func (s *SQLiteResourceStore) resourceChangeIDSet(canonicalID string) []string {
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID == "" {
@@ -1587,19 +1605,55 @@ func (s *SQLiteResourceStore) resourceChangeIDSet(canonicalID string) []string {
 	pins := s.identityPinCache
 	s.identityPinMu.Unlock()
 
-	return expandResourceChangeIDs(canonicalID, pins)
+	return expandResourceChangeIDs(canonicalID, pins, s.successionMap())
 }
 
-func expandResourceChangeIDs(canonicalID string, pins []ResourceIdentityPin) []string {
+func expandResourceChangeIDs(canonicalID string, pins []ResourceIdentityPin, successors map[string]string) []string {
+	ids := []string{canonicalID}
 	for _, pin := range pins {
 		eraIDs := pin.EraIDs()
 		for _, eraID := range eraIDs {
 			if eraID == canonicalID {
-				return eraIDs
+				ids = eraIDs
+				break
 			}
 		}
+		if len(ids) > 1 {
+			break
+		}
 	}
-	return []string{canonicalID}
+	return appendSupersededChangeIDs(ids, successors)
+}
+
+// appendSupersededChangeIDs walks the succession record backwards from the
+// requested IDs so journal rows written under any retired predecessor era
+// stay readable, including chained eras (A succeeded into B, B into C).
+func appendSupersededChangeIDs(ids []string, successors map[string]string) []string {
+	if len(successors) == 0 || len(ids) == 0 {
+		return ids
+	}
+	predecessors := make(map[string][]string, len(successors))
+	for oldID, newID := range successors {
+		predecessors[newID] = append(predecessors[newID], oldID)
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		seen[id] = struct{}{}
+	}
+	queue := append([]string(nil), ids...)
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		for _, oldID := range predecessors[id] {
+			if _, dup := seen[oldID]; dup {
+				continue
+			}
+			seen[oldID] = struct{}{}
+			ids = append(ids, oldID)
+			queue = append(queue, oldID)
+		}
+	}
+	return ids
 }
 
 func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
@@ -3182,6 +3236,7 @@ type MemoryStore struct {
 	resourceOperatorState  map[string]ResourceOperatorState
 	loopReports            map[string]LoopReport
 	identityPins           map[string]ResourceIdentityPin
+	canonicalSuccessions   map[string]string
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -3252,7 +3307,7 @@ func (m *MemoryStore) resourceChangeIDSetLocked(canonicalID string) []string {
 	for _, pin := range m.identityPins {
 		pins = append(pins, pin)
 	}
-	return expandResourceChangeIDs(canonicalID, pins)
+	return expandResourceChangeIDs(canonicalID, pins, m.canonicalSuccessions)
 }
 
 func (m *MemoryStore) AddLink(link ResourceLink) error {

@@ -1919,3 +1919,23 @@ func TestResourceAdaptersPreserveUnavailableMemoryAsRawEvidence(t *testing.T) {
 		t.Fatalf("Docker raw memory = %+v, want explicit unavailable evidence", dockerResource.Docker)
 	}
 }
+
+// Proxmox guest adapters must publish the node-independent identity key so
+// canonical ID derivation survives live migration (#1669); guests without an
+// instance+VMID stay keyless and fall back to source-specific derivation.
+func TestResourceFromGuestSetsProxmoxGuestKey(t *testing.T) {
+	_, vmIdentity := resourceFromVM(models.VM{ID: "delly:pve1:100", VMID: 100, Name: "web-vm", Node: "pve1", Instance: "delly"})
+	if want := ProxmoxGuestIdentityKey("delly", 100); vmIdentity.ProxmoxGuestKey != want {
+		t.Fatalf("VM ProxmoxGuestKey = %q, want %q", vmIdentity.ProxmoxGuestKey, want)
+	}
+
+	_, ctIdentity := resourceFromContainer(models.Container{ID: "delly:pve1:112", VMID: 112, Name: "debian-ct", Node: "pve1", Instance: "delly"})
+	if want := ProxmoxGuestIdentityKey("delly", 112); ctIdentity.ProxmoxGuestKey != want {
+		t.Fatalf("container ProxmoxGuestKey = %q, want %q", ctIdentity.ProxmoxGuestKey, want)
+	}
+
+	_, keyless := resourceFromVM(models.VM{ID: "legacy-opaque-id", Name: "old-vm"})
+	if keyless.ProxmoxGuestKey != "" {
+		t.Fatalf("keyless VM must not carry a guest key, got %q", keyless.ProxmoxGuestKey)
+	}
+}

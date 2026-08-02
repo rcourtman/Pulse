@@ -3235,3 +3235,45 @@ func TestSQLiteResourceStoreCloseJoinsRetentionLoopAndIsIdempotent(t *testing.T)
 		t.Fatalf("second Close: %v", err)
 	}
 }
+
+// Change-journal rows written under a retired guest era stay readable under
+// the new canonical ID: the durable succession record merges eras at read
+// time without rewriting history (#1669).
+func TestSuccessionMergesGuestChangeJournalEras(t *testing.T) {
+	now := time.Now().UTC()
+	store, err := NewSQLiteResourceStore(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	legacyID := SourceSpecificID(ResourceTypeVM, SourceProxmox, "delly:pve1:100")
+	newID := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 100)
+	if err := store.RecordChange(ResourceChange{
+		ID:         "chg-legacy-1",
+		ResourceID: legacyID,
+		ObservedAt: now.Add(-time.Hour),
+		Kind:       "status_transition",
+		SourceType: "system",
+		Confidence: "confirmed",
+	}); err != nil {
+		t.Fatalf("record legacy change: %v", err)
+	}
+
+	rr := NewRegistry(store)
+	rr.IngestSnapshot(proxmoxGuestMigrationSnapshot(now, "pve2"))
+
+	changes, err := store.GetRecentChanges(newID, now.Add(-2*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("read changes: %v", err)
+	}
+	found := false
+	for _, change := range changes {
+		if change.ID == "chg-legacy-1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("legacy-era journal row missing from new-ID read: %+v", changes)
+	}
+}

@@ -624,3 +624,44 @@ func TestAvailabilityRepeatedProjectionKeepsHostRelationshipsStable(t *testing.T
 		}
 	}
 }
+
+// An explicit availability link saved under the guest's retired node-scoped
+// canonical ID (or its raw node-scoped source ID) must keep resolving after
+// the guest live-migrates (#1669). The link is fail-closed, so only
+// provider-declared persistence keys resolve.
+func TestProxmoxGuestAvailabilityLinkFollowsRetiredIDs(t *testing.T) {
+	now := time.Now().UTC()
+
+	refs := map[string]string{
+		"retired canonical id": SourceSpecificID(ResourceTypeVM, SourceProxmox, "delly:pve1:100"),
+		"old-node source id":   "delly:pve1:100",
+	}
+	for name, ref := range refs {
+		t.Run(name, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(proxmoxGuestMigrationSnapshot(now, "pve2"))
+
+			rr.IngestRecords(SourceAvailability, []IngestRecord{
+				availabilityProbeRecord("probe-guest", "192.0.2.50", &AvailabilityData{
+					LinkedResourceID: ref,
+					Address:          "192.0.2.50",
+					Protocol:         "icmp",
+					Enabled:          true,
+					Available:        true,
+					LastChecked:      &now,
+					Evidence:         availabilityProbeEvidence(t, "probe-guest", now),
+				}),
+			})
+
+			guestID := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 100)
+			guest, ok := rr.Get(guestID)
+			if !ok || guest == nil {
+				t.Fatalf("guest %q missing", guestID)
+			}
+			if guest.Availability == nil || guest.Availability.CorrelationState != AvailabilityCorrelationAttached ||
+				guest.Availability.CorrelationRule != "explicit_resource_link" {
+				t.Fatalf("availability facet = %+v, want attached explicit link for ref %q", guest.Availability, ref)
+			}
+		})
+	}
+}

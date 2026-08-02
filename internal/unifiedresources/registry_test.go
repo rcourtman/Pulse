@@ -5950,3 +5950,146 @@ func TestRegistryIngestsAgentLibvirtDomainUnderReportingHost(t *testing.T) {
 		t.Fatalf("libvirt VM parent = %+v, found=%v", parent, ok)
 	}
 }
+
+func proxmoxGuestMigrationSnapshot(now time.Time, node string) models.StateSnapshot {
+	return models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "delly-pve1", Name: "pve1", Instance: "delly", ClusterName: "delly", Status: "online", LastSeen: now},
+			{ID: "delly-pve2", Name: "pve2", Instance: "delly", ClusterName: "delly", Status: "online", LastSeen: now},
+		},
+		VMs: []models.VM{
+			{
+				ID:       "delly:" + node + ":100",
+				VMID:     100,
+				Name:     "web-vm",
+				Node:     node,
+				Instance: "delly",
+				Status:   "running",
+				LastSeen: now,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:       "delly:" + node + ":112",
+				VMID:     112,
+				Name:     "debian-ct",
+				Node:     node,
+				Instance: "delly",
+				Status:   "running",
+				LastSeen: now,
+			},
+		},
+	}
+}
+
+// A live migration changes the guest's node and therefore its node-scoped
+// source ID, but the canonical resource ID must stay put so operator-owned
+// rows (availability links, overrides, operator state) keep following the
+// guest (#1669).
+func TestProxmoxGuestCanonicalIDSurvivesNodeMigration(t *testing.T) {
+	now := time.Now().UTC()
+
+	before := NewRegistry(nil)
+	before.IngestSnapshot(proxmoxGuestMigrationSnapshot(now, "pve1"))
+	after := NewRegistry(nil)
+	after.IngestSnapshot(proxmoxGuestMigrationSnapshot(now, "pve2"))
+
+	for _, resourceType := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer} {
+		beforeList := before.ListByType(resourceType)
+		afterList := after.ListByType(resourceType)
+		if len(beforeList) != 1 || len(afterList) != 1 {
+			t.Fatalf("%s: expected exactly one guest before and after migration, got %d and %d", resourceType, len(beforeList), len(afterList))
+		}
+		if beforeList[0].ID != afterList[0].ID {
+			t.Fatalf("%s: canonical ID changed across node migration: %q -> %q", resourceType, beforeList[0].ID, afterList[0].ID)
+		}
+	}
+
+	vms := before.ListByType(ResourceTypeVM)
+	if want := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 100); vms[0].ID != want {
+		t.Fatalf("VM canonical ID = %q, want node-independent %q", vms[0].ID, want)
+	}
+	cts := before.ListByType(ResourceTypeSystemContainer)
+	if want := ProxmoxGuestCanonicalID(ResourceTypeSystemContainer, "delly", 112); cts[0].ID != want {
+		t.Fatalf("container canonical ID = %q, want node-independent %q", cts[0].ID, want)
+	}
+}
+
+// The retired node-scoped canonical IDs must be declared superseded for every
+// node the instance knows, so rows orphaned by a migration that happened
+// before the upgrade still succeed into the new ID.
+func TestProxmoxGuestDeclaresNodeScopedSupersededEras(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(proxmoxGuestMigrationSnapshot(now, "pve2"))
+
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != 1 {
+		t.Fatalf("expected one VM, got %d", len(vms))
+	}
+	superseded := make(map[string]struct{}, len(vms[0].SupersededCanonicalIDs))
+	for _, id := range vms[0].SupersededCanonicalIDs {
+		superseded[id] = struct{}{}
+	}
+	for _, node := range []string{"pve1", "pve2"} {
+		legacy := SourceSpecificID(ResourceTypeVM, SourceProxmox, "delly:"+node+":100")
+		if _, ok := superseded[legacy]; !ok {
+			t.Fatalf("superseded IDs %v missing legacy era for node %s (%s)", vms[0].SupersededCanonicalIDs, node, legacy)
+		}
+	}
+}
+
+// Operator-owned rows persisted under a retired node-scoped ID re-key to the
+// node-independent ID during snapshot ingest.
+func TestProxmoxGuestSuccessionRekeysOperatorState(t *testing.T) {
+	now := time.Now().UTC()
+	store := NewMemoryStore()
+	legacyID := SourceSpecificID(ResourceTypeVM, SourceProxmox, "delly:pve1:100")
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:          legacyID,
+		NeverAutoRemediate:   true,
+		IntentionallyOffline: false,
+	}); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+
+	rr := NewRegistry(store)
+	// Guest already migrated to pve2 before the upgrade: the legacy row keyed
+	// by its pve1-era ID must still follow it.
+	rr.IngestSnapshot(proxmoxGuestMigrationSnapshot(now, "pve2"))
+
+	newID := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 100)
+	state, ok, err := store.GetResourceOperatorState(newID)
+	if err != nil || !ok {
+		t.Fatalf("operator state missing under new canonical ID %q (ok=%v err=%v)", newID, ok, err)
+	}
+	if !state.NeverAutoRemediate {
+		t.Fatalf("re-keyed operator state lost its fields: %+v", state)
+	}
+	if _, stale, _ := store.GetResourceOperatorState(legacyID); stale {
+		t.Fatalf("operator state still present under retired ID %q", legacyID)
+	}
+}
+
+// Guests that cannot derive an instance+VMID identity keep the
+// source-specific derivation, as do VM resources from other providers.
+func TestProxmoxGuestKeylessFallsBackToSourceSpecificID(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "legacy-opaque-id", Name: "old-vm", Status: "running", LastSeen: now},
+		},
+	})
+
+	vms := rr.ListByType(ResourceTypeVM)
+	if len(vms) != 1 {
+		t.Fatalf("expected one VM, got %d", len(vms))
+	}
+	if want := SourceSpecificID(ResourceTypeVM, SourceProxmox, "legacy-opaque-id"); vms[0].ID != want {
+		t.Fatalf("keyless guest ID = %q, want source-specific %q", vms[0].ID, want)
+	}
+	if len(vms[0].SupersededCanonicalIDs) != 0 {
+		t.Fatalf("keyless guest must not declare superseded eras, got %v", vms[0].SupersededCanonicalIDs)
+	}
+}

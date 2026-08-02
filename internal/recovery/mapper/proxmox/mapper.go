@@ -44,6 +44,14 @@ func subjectResourceID(resourceType unifiedresources.ResourceType, resourceID, s
 		return resourceID
 	}
 	if sourceID = strings.TrimSpace(sourceID); sourceID != "" {
+		// Guests derive node-independently (instance+VMID, #1669) so a
+		// registry miss during a boot window still mints the same subject ID
+		// the live resource carries.
+		if instance, _, vmid, ok := unifiedresources.ParseProxmoxGuestSourceID(sourceID); ok {
+			if id := unifiedresources.ProxmoxGuestCanonicalID(resourceType, instance, vmid); id != "" {
+				return id
+			}
+		}
 		return unifiedresources.SourceSpecificID(resourceType, unifiedresources.SourceProxmox, sourceID)
 	}
 	return ""

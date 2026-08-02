@@ -316,18 +316,19 @@ func TestRoutingError_ForAI(t *testing.T) {
 }
 
 func TestRouteToAgent_VMIDRoutingWithInstance(t *testing.T) {
-	// VMID 106 exists on two nodes within the same instance (cluster-b).
-	// The routing code calls lookupGuestsByVMID(106, "cluster-b") which returns
-	// both containers (multiple matches), then the collision resolution path
-	// picks the first match whose instance matches the request context.
+	// VMID 106 briefly appears on two nodes of the same instance (cluster-b),
+	// the transient dual report Proxmox emits mid live-migration. VMIDs are
+	// unique within a cluster, so the registry's node-independent guest
+	// identity (#1669) merges both reports into one resource and routing
+	// resolves a single unambiguous guest instead of a phantom collision.
 	snapshot := models.StateSnapshot{
 		Nodes: []models.Node{
 			{ID: "node/node-a", Name: "node-a", Instance: "cluster-b", Status: "online"},
 			{ID: "node/node-b", Name: "node-b", Instance: "cluster-b", Status: "online"},
 		},
 		Containers: []models.Container{
-			{ID: "lxc/106-b", VMID: 106, Node: "node-b", Name: "ct-b", Instance: "cluster-b"},
-			{ID: "lxc/106-a", VMID: 106, Node: "node-a", Name: "ct-a", Instance: "cluster-b"},
+			{ID: "cluster-b:node-b:106", VMID: 106, Node: "node-b", Name: "ct-migrating", Instance: "cluster-b"},
+			{ID: "cluster-b:node-a:106", VMID: 106, Node: "node-a", Name: "ct-migrating", Instance: "cluster-b"},
 		},
 	}
 	registry := unifiedresources.NewRegistry(nil)
@@ -347,12 +348,11 @@ func TestRouteToAgent_VMIDRoutingWithInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Both containers match instance "cluster-b", so we get vmid_lookup_with_instance routing.
-	// The first matching container's node determines the agent.
-	if result.RoutingMethod != "vmid_lookup_with_instance" {
-		t.Errorf("RoutingMethod = %q, want %q", result.RoutingMethod, "vmid_lookup_with_instance")
+	if result.RoutingMethod != "vmid_lookup" {
+		t.Errorf("RoutingMethod = %q, want %q", result.RoutingMethod, "vmid_lookup")
 	}
-	// The result should route to one of the agents that has a container with VMID 106
+	// The merged guest lives on whichever node's report won the merge; either
+	// agent is a correct owner-node target during the migration window.
 	if result.AgentID != "agent-a" && result.AgentID != "agent-b" {
 		t.Errorf("AgentID = %q, want agent-a or agent-b", result.AgentID)
 	}

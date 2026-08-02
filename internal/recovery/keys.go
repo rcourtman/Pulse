@@ -113,6 +113,16 @@ func normalizeProxmoxGuestSourceID(resourceType unifiedresources.ResourceType, s
 	return normalized
 }
 
+// CanonicalSubjectResourceID maps a stored proxmox guest subject resource ID
+// to the guest's current canonical unified resource ID when the row carries
+// enough identity to re-derive it. Non-guest rows and rows without a
+// recognizable guest identity are returned unchanged. The store's startup
+// backfill uses this to converge historical rows onto the node-independent
+// guest derivation.
+func CanonicalSubjectResourceID(provider Provider, subjectResourceID string, subjectRef *ExternalRef) string {
+	return canonicalizeProxmoxLinkedSubjectResourceID(provider, subjectResourceID, subjectRef)
+}
+
 func canonicalizeProxmoxLinkedSubjectResourceID(provider Provider, subjectResourceID string, subjectRef *ExternalRef) string {
 	rid := strings.TrimSpace(subjectResourceID)
 	if rid == "" || !isProxmoxProvider(provider) {
@@ -128,6 +138,29 @@ func canonicalizeProxmoxLinkedSubjectResourceID(provider Provider, subjectResour
 	refID := ""
 	if subjectRef != nil {
 		refID = normalizeProxmoxGuestSourceID(resourceType, subjectRef.ID)
+	}
+
+	// Guest canonical IDs are node-independent (instance+VMID, #1669): a row
+	// that still carries the node-scoped source triple re-derives through the
+	// current ladder so a guest's rollup does not fork when it live-migrates.
+	// The rid must plausibly refer to the ref's guest before it is adopted:
+	// the current derivation, the retired node-scoped hash, or the raw triple
+	// of the same instance+VMID on any node.
+	if instance, _, vmid, ok := unifiedresources.ParseProxmoxGuestSourceID(refID); ok {
+		nodeIndependentID := unifiedresources.ProxmoxGuestCanonicalID(resourceType, instance, vmid)
+		legacyFromRef := unifiedresources.SourceSpecificID(resourceType, unifiedresources.SourceProxmox, refID)
+		if rid == nodeIndependentID || normalizedRID == nodeIndependentID ||
+			rid == legacyFromRef || normalizedRID == legacyFromRef ||
+			normalizedRID == refID {
+			return nodeIndependentID
+		}
+		if ridInstance, _, ridVMID, ridOK := unifiedresources.ParseProxmoxGuestSourceID(normalizedRID); ridOK &&
+			ridInstance == instance && ridVMID == vmid {
+			return nodeIndependentID
+		}
+	}
+	if instance, _, vmid, ok := unifiedresources.ParseProxmoxGuestSourceID(normalizedRID); ok {
+		return unifiedresources.ProxmoxGuestCanonicalID(resourceType, instance, vmid)
 	}
 
 	if refID != "" {
@@ -177,13 +210,24 @@ func proxmoxGuestExternalKey(provider Provider, ref *ExternalRef) string {
 		h.Write([]byte{0})
 	}
 
+	// A node-scoped source triple collapses to instance:vmid, and the node
+	// label (Class) is excluded for those refs: guest identity is
+	// node-independent (#1669), so an unlinked guest's backups do not split
+	// into separate rollups when it live-migrates.
+	externalID := normalizeProxmoxGuestSourceID(resourceType, ref.ID)
+	nodeLabel := ref.Class
+	if instance, _, vmid, ok := unifiedresources.ParseProxmoxGuestSourceID(externalID); ok {
+		externalID = unifiedresources.ProxmoxGuestIdentityKey(instance, vmid)
+		nodeLabel = ""
+	}
+
 	write(subjectKeyExternalPrefix)
 	write(string(provider))
 	write(typeValue)
 	write(ref.UID)
-	write(normalizeProxmoxGuestSourceID(resourceType, ref.ID))
+	write(externalID)
 	write(ref.Namespace)
-	write(ref.Class)
+	write(nodeLabel)
 
 	// Proxmox guest names are presentation data, not identity. Excluding Name prevents one guest
 	// from splitting into multiple rollups when comments or display labels change.

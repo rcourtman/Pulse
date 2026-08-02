@@ -3330,6 +3330,20 @@ canonical linked guest identity for the same friendly label, guest type, and
 VMID/CTID, the store must relink later unresolved PBS points and backfill older
 split rows onto that canonical protected item instead of leaving protected
 inventory freshness to disagree with recovery events.
+That same key boundary is node-independent for Proxmox guests (#1669).
+Unified guest canonical IDs derive from instance+VMID
+(`unifiedresources.ProxmoxGuestCanonicalID`), so recovery subject identity
+must not embed the node a guest happened to run on: any subject resource ID
+or external guest ref that still carries the node-scoped
+`instance:node:vmid` source triple converges on the node-independent
+derivation (`recovery.CanonicalSubjectResourceID`, the mapper's
+registry-miss fallback in `subjectResourceID`, and the node-dropping arm of
+`proxmoxGuestExternalKey`), and the store's startup `BackfillKeys` pass
+rewrites historical `subject_resource_id` values and subject keys onto that
+derivation — sweeping protection-posture rows stranded under retired
+subject keys — so a live migration or a canonical-ID era change never forks
+one guest's protected item into stale and fresh rows. Rows without a
+recomputable guest identity keep their stored keys unchanged.
 That same hook-boundary normalization also owns the runtime recovery display
 model. Canonical recovery points and rollups must expose `display.itemLabel`
 and `display.itemType` to recovery consumers, while legacy transport fields

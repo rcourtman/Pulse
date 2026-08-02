@@ -658,10 +658,12 @@ func TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows(t *testing.T) {
 
 	linkedTime := time.Date(2026, 2, 23, 2, 30, 19, 0, time.UTC)
 	currentTime := time.Date(2026, 3, 29, 1, 30, 13, 0, time.UTC)
-	currentRID := unifiedresources.SourceSpecificID(
+	// Reopening runs the startup backfill, which converges guest rows onto
+	// the node-independent canonical derivation (#1669).
+	currentRID := unifiedresources.ProxmoxGuestCanonicalID(
 		unifiedresources.ResourceTypeSystemContainer,
-		unifiedresources.SourceProxmox,
-		"pi:pi:140",
+		"pi",
+		140,
 	)
 
 	linked := recovery.RecoveryPoint{

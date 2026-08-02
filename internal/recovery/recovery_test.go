@@ -571,6 +571,13 @@ func TestSubjectKey_CanonicalizesProxmoxLinkedGuestAliases(t *testing.T) {
 		unifiedresources.SourceProxmox,
 		"system-container-fb42a70d89bd20a6",
 	)
+	// Rows carrying the node-scoped source triple converge on the
+	// node-independent guest derivation so rollups survive live migration.
+	nodeIndependentRID := unifiedresources.ProxmoxGuestCanonicalID(
+		unifiedresources.ResourceTypeSystemContainer,
+		"delly",
+		112,
+	)
 
 	tests := []struct {
 		name              string
@@ -591,7 +598,7 @@ func TestSubjectKey_CanonicalizesProxmoxLinkedGuestAliases(t *testing.T) {
 			expected: "res:" + expectedContainerRID,
 		},
 		{
-			name:              "legacy raw container source id is re-keyed to canonical hash",
+			name:              "legacy raw container source id is re-keyed to the node-independent id",
 			subjectResourceID: "system-container-fb42a70d89bd20a6",
 			subjectRef: &ExternalRef{
 				Type:      "proxmox-lxc",
@@ -600,10 +607,10 @@ func TestSubjectKey_CanonicalizesProxmoxLinkedGuestAliases(t *testing.T) {
 				ID:        "delly:minipc:112",
 				Class:     "minipc",
 			},
-			expected: "res:" + expectedContainerRID,
+			expected: "res:" + nodeIndependentRID,
 		},
 		{
-			name:              "legacy lxc-prefixed id is normalized before hashing",
+			name:              "legacy lxc-prefixed id is normalized before re-keying",
 			subjectResourceID: "lxc-fb42a70d89bd20a6",
 			subjectRef: &ExternalRef{
 				Type:      "proxmox-lxc",
@@ -612,7 +619,7 @@ func TestSubjectKey_CanonicalizesProxmoxLinkedGuestAliases(t *testing.T) {
 				ID:        "delly:minipc:112",
 				Class:     "minipc",
 			},
-			expected: "res:" + expectedContainerRID,
+			expected: "res:" + nodeIndependentRID,
 		},
 	}
 

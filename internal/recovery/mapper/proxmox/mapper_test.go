@@ -14,11 +14,9 @@ func TestSubjectResourceIDPrefersCanonicalIdentityAndFallsBackToSourceIdentity(t
 
 	resourceType := unifiedresources.ResourceTypeVM
 	sourceID := "pve-main:pve-a:100"
-	fallback := unifiedresources.SourceSpecificID(
-		resourceType,
-		unifiedresources.SourceProxmox,
-		sourceID,
-	)
+	// A node-scoped source triple falls back to the node-independent guest
+	// derivation so registry-miss rows key identically to the live resource.
+	fallback := unifiedresources.ProxmoxGuestCanonicalID(resourceType, "pve-main", 100)
 
 	tests := []struct {
 		name       string

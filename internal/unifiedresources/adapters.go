@@ -1791,8 +1791,9 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	}
 	resource.Capabilities = proxmoxGuestLifecycleCapabilities("vm", "qemu", vm.Status, vm.Template, vm.Lock)
 	identity := ResourceIdentity{
-		Hostnames:   uniqueStrings([]string{vm.Name}),
-		IPAddresses: uniqueStrings(vm.IPAddresses),
+		Hostnames:       uniqueStrings([]string{vm.Name}),
+		IPAddresses:     uniqueStrings(vm.IPAddresses),
+		ProxmoxGuestKey: ProxmoxGuestIdentityKey(vm.Instance, vm.VMID),
 	}
 	return resource, identity
 }
@@ -1854,8 +1855,9 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 	}
 	resource.Capabilities = proxmoxGuestLifecycleCapabilities("ct", "lxc", ct.Status, ct.Template, ct.Lock)
 	identity := ResourceIdentity{
-		Hostnames:   uniqueStrings([]string{ct.Name}),
-		IPAddresses: uniqueStrings(ct.IPAddresses),
+		Hostnames:       uniqueStrings([]string{ct.Name}),
+		IPAddresses:     uniqueStrings(ct.IPAddresses),
+		ProxmoxGuestKey: ProxmoxGuestIdentityKey(ct.Instance, ct.VMID),
 	}
 	return resource, identity
 }

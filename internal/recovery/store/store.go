@@ -836,6 +836,12 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 		}
 		defer stmt.Close()
 
+		ridStmt, err := tx.PrepareContext(ctx, "UPDATE recovery_points SET subject_resource_id = ? WHERE id = ?")
+		if err != nil {
+			return err
+		}
+		defer ridStmt.Close()
+
 		for _, item := range subjectItems {
 			var ref recovery.ExternalRef
 			_ = unmarshalJSON(item.refRaw, &ref) // best-effort
@@ -844,11 +850,20 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 				refPtr = &ref
 			}
 
-			key := recovery.SubjectKey(
-				recovery.Provider(strings.TrimSpace(item.provider)),
-				strings.TrimSpace(item.rid),
-				refPtr,
-			)
+			provider := recovery.Provider(strings.TrimSpace(item.provider))
+			rid := strings.TrimSpace(item.rid)
+
+			// Converge historical guest rows onto the node-independent
+			// canonical derivation (#1669) so pre-migration history keeps
+			// joining the live resource.
+			if canonicalRID := recovery.CanonicalSubjectResourceID(provider, rid, refPtr); canonicalRID != "" && canonicalRID != rid {
+				if _, err := ridStmt.ExecContext(ctx, canonicalRID, item.id); err != nil {
+					return err
+				}
+				rid = canonicalRID
+			}
+
+			key := recovery.SubjectKey(provider, rid, refPtr)
 			if strings.TrimSpace(key) == "" || strings.TrimSpace(item.subjectKey.String) == key {
 				continue
 			}
@@ -860,6 +875,17 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+
+		// Subject re-keys can strand materialized posture rows under keys no
+		// point references anymore; sweep them so retired-era subjects do not
+		// linger as ghost protected items.
+		_, _ = s.db.ExecContext(ctx, `
+			DELETE FROM protection_postures
+			WHERE subject_key NOT IN (
+				SELECT DISTINCT subject_key FROM recovery_points
+				WHERE subject_key IS NOT NULL AND TRIM(subject_key) != ''
+			)
+		`)
 	}
 
 	_, _ = s.db.ExecContext(ctx, `

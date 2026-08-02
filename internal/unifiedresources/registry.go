@@ -94,6 +94,11 @@ type ResourceRegistry struct {
 	exclusions   map[string]struct{}
 	identityPins *identityPinIndex
 	pbsBackups   []models.PBSBackup
+	// supersededIndex maps record-declared retired canonical IDs to the live
+	// resource that superseded them, so references persisted under a retired
+	// ID (availability links, API reads) keep resolving. An empty value marks
+	// an ambiguous claim and never resolves.
+	supersededIndex map[string]string
 
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
@@ -188,9 +193,23 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	// cluster names to VMs/Containers (their parent-ID lookup may fail
 	// when the node ID uses clusterName instead of instanceName).
 	clusterByInstance := make(map[string]string)
+	// Instance→node-names lookup (current names plus native aliases) feeds
+	// the guest superseded-era sweep: a guest's retired node-scoped canonical
+	// IDs are recomputable for every node it could have lived on, so
+	// operator-owned rows orphaned by a pre-upgrade migration still succeed
+	// into the node-independent guest ID.
+	nodeNamesByInstance := make(map[string][]string)
 	for _, node := range snapshot.Nodes {
 		if node.ClusterName != "" && node.Instance != "" {
 			clusterByInstance[node.Instance] = node.ClusterName
+		}
+		if instance := strings.TrimSpace(node.Instance); instance != "" {
+			names := append([]string{node.Name}, node.NativeNameAliases...)
+			for _, name := range names {
+				if name = strings.TrimSpace(name); name != "" {
+					nodeNamesByInstance[instance] = append(nodeNamesByInstance[instance], name)
+				}
+			}
 		}
 		rr.ingestProxmoxNode(node, inferredLinkedHostByNodeID[strings.TrimSpace(node.ID)])
 	}
@@ -218,12 +237,14 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	for _, instance := range snapshot.PMGInstances {
 		rr.ingestPMGInstance(instance)
 	}
+	var guestSuccessions []CanonicalIDSuccession
 	for _, vm := range snapshot.VMs {
-		rr.ingestVM(vm, clusterByInstance)
+		guestSuccessions = append(guestSuccessions, rr.ingestVM(vm, clusterByInstance, nodeNamesByInstance)...)
 	}
 	for _, ct := range snapshot.Containers {
-		rr.ingestContainer(ct, clusterByInstance)
+		guestSuccessions = append(guestSuccessions, rr.ingestContainer(ct, clusterByInstance, nodeNamesByInstance)...)
 	}
+	rr.applyRecordSuccessions(guestSuccessions)
 	for _, storage := range snapshot.Storage {
 		rr.ingestStorage(storage)
 	}
@@ -584,6 +605,59 @@ func (rr *ResourceRegistry) retainSupersededCanonicalIDs(resourceID string, supe
 		ids = append(ids, supersededID)
 	}
 	resource.SupersededCanonicalIDs = uniqueTrimmed(ids...)
+	rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
+}
+
+func (rr *ResourceRegistry) indexSupersededCanonicalIDsLocked(resourceID string, supersededIDs []string) {
+	if resourceID == "" || len(supersededIDs) == 0 {
+		return
+	}
+	if rr.supersededIndex == nil {
+		rr.supersededIndex = make(map[string]string)
+	}
+	for _, supersededID := range supersededIDs {
+		if current, claimed := rr.supersededIndex[supersededID]; claimed && current != resourceID {
+			// Two live resources claiming the same retired ID is ambiguous;
+			// fail closed rather than resolving to either.
+			rr.supersededIndex[supersededID] = ""
+			continue
+		}
+		rr.supersededIndex[supersededID] = resourceID
+	}
+}
+
+// supersededResourceIDLocked resolves a reference persisted under a retired
+// canonical ID to the live resource that declared it superseded. Ambiguous
+// claims and unknown references return "".
+func (rr *ResourceRegistry) supersededResourceIDLocked(ref string) string {
+	ref = CanonicalResourceID(ref)
+	if ref == "" {
+		return ""
+	}
+	return rr.supersededIndex[ref]
+}
+
+// proxmoxGuestResourceIDForSourceRefLocked resolves a node-scoped guest
+// source reference ("instance:node:vmid") to the guest's node-independent
+// canonical resource. The node segment is deliberately ignored: references
+// written while the guest lived on another cluster node must still resolve
+// after a live migration.
+func (rr *ResourceRegistry) proxmoxGuestResourceIDForSourceRefLocked(ref string) string {
+	instance, _, vmid, ok := ParseProxmoxGuestSourceID(ref)
+	if !ok {
+		return ""
+	}
+	matches := map[string]struct{}{}
+	for _, resourceType := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer} {
+		candidateID := ProxmoxGuestCanonicalID(resourceType, instance, vmid)
+		if candidateID == "" {
+			continue
+		}
+		if rr.resources[candidateID] != nil {
+			matches[candidateID] = struct{}{}
+		}
+	}
+	return uniqueResourceIDMatch(matches)
 }
 
 // applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
@@ -669,6 +743,9 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	rr.mu.Lock()
 	for _, resourceID := range seededIDs {
 		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
+		if resource := rr.resources[resourceID]; resource != nil {
+			rr.indexSupersededCanonicalIDsLocked(resourceID, resource.SupersededCanonicalIDs)
+		}
 	}
 	rr.applyManualLinks(thresholds)
 	rr.refreshStorageConsumersLocked()
@@ -1247,7 +1324,9 @@ func (rr *ResourceRegistry) GetByReference(ref string) (*Resource, string, bool)
 	}
 
 	for _, resolvedID := range []string{
+		rr.supersededResourceIDLocked(ref),
 		rr.uniqueSourceResourceIDLocked(ref),
+		rr.proxmoxGuestResourceIDForSourceRefLocked(ref),
 		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
 	} {
 		if resolvedID == "" {
@@ -1633,7 +1712,7 @@ func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
 	rr.ingest(SourcePMG, sourceID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string) {
+func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string, nodeNamesByInstance map[string][]string) []CanonicalIDSuccession {
 	resource, identity := resourceFromVM(vm)
 	sourceID := proxmoxVMSourceID(vm)
 	clusterName := clusterByInstance[vm.Instance]
@@ -1644,10 +1723,11 @@ func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]
 	if clusterName != "" && resource.Proxmox != nil {
 		resource.Proxmox.ClusterName = clusterName
 	}
-	rr.ingest(SourceProxmox, sourceID, resource, identity)
+	newID := rr.ingest(SourceProxmox, sourceID, resource, identity)
+	return rr.declareGuestSupersededEras(newID, ResourceTypeVM, sourceID, vm.Instance, vm.Node, vm.VMID, nodeNamesByInstance)
 }
 
-func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string) {
+func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string, nodeNamesByInstance map[string][]string) []CanonicalIDSuccession {
 	resource, identity := resourceFromContainer(ct)
 	sourceID := proxmoxContainerSourceID(ct)
 	clusterName := clusterByInstance[ct.Instance]
@@ -1658,7 +1738,70 @@ func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstan
 	if clusterName != "" && resource.Proxmox != nil {
 		resource.Proxmox.ClusterName = clusterName
 	}
-	rr.ingest(SourceProxmox, sourceID, resource, identity)
+	newID := rr.ingest(SourceProxmox, sourceID, resource, identity)
+	return rr.declareGuestSupersededEras(newID, ResourceTypeSystemContainer, sourceID, ct.Instance, ct.Node, ct.VMID, nodeNamesByInstance)
+}
+
+// declareGuestSupersededEras names the node-scoped canonical IDs a Proxmox
+// guest was minted under before the node-independent instance+VMID derivation
+// (#1669). The retired IDs are recomputable for every node currently known to
+// the instance (plus prior native-name aliases), so operator-owned rows
+// orphaned by a pre-upgrade live migration still succeed into the guest's
+// current canonical ID. The IDs are retained on the resource for alert
+// override migration and old-reference resolution, and returned as
+// successions for the store re-key pass.
+func (rr *ResourceRegistry) declareGuestSupersededEras(newID string, resourceType ResourceType, sourceID, instance, node string, vmid int, nodeNamesByInstance map[string][]string) []CanonicalIDSuccession {
+	newID = CanonicalResourceID(newID)
+	if newID == "" || ProxmoxGuestIdentityKey(instance, vmid) == "" {
+		// Guests without an instance+VMID identity keep the source-specific
+		// derivation; there is no retired era to succeed from.
+		return nil
+	}
+
+	legacySourceIDs := []string{sourceID}
+	seenNodes := map[string]struct{}{}
+	for _, nodeName := range append([]string{node}, nodeNamesByInstance[strings.TrimSpace(instance)]...) {
+		nodeName = strings.TrimSpace(nodeName)
+		if nodeName == "" {
+			continue
+		}
+		if _, dup := seenNodes[nodeName]; dup {
+			continue
+		}
+		seenNodes[nodeName] = struct{}{}
+		legacySourceIDs = append(legacySourceIDs, fmt.Sprintf("%s:%s:%d", strings.TrimSpace(instance), nodeName, vmid))
+	}
+
+	supersededIDs := make([]string, 0, len(legacySourceIDs))
+	seenIDs := map[string]struct{}{}
+	for _, legacySourceID := range legacySourceIDs {
+		legacySourceID = normalizeSourceID(legacySourceID)
+		if legacySourceID == "" {
+			continue
+		}
+		legacyID := rr.sourceSpecificID(resourceType, SourceProxmox, legacySourceID)
+		if legacyID == newID {
+			continue
+		}
+		if _, dup := seenIDs[legacyID]; dup {
+			continue
+		}
+		seenIDs[legacyID] = struct{}{}
+		supersededIDs = append(supersededIDs, legacyID)
+	}
+	if len(supersededIDs) == 0 {
+		return nil
+	}
+
+	rr.retainSupersededCanonicalIDs(newID, supersededIDs)
+	successions := make([]CanonicalIDSuccession, 0, len(supersededIDs))
+	for _, supersededID := range supersededIDs {
+		successions = append(successions, CanonicalIDSuccession{
+			OldCanonicalID: supersededID,
+			NewCanonicalID: newID,
+		})
+	}
+	return successions
 }
 
 func (rr *ResourceRegistry) linkedAgentIDForResource(resourceID string) string {
@@ -2989,8 +3132,14 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 		return ""
 	}
 
+	// References persisted under a retired canonical ID or under a
+	// node-scoped guest source ID follow the resource across identity eras
+	// and live migrations. These arms resolve provider-declared persistence
+	// keys, not display aliases, so the explicit link stays fail-closed.
 	for _, candidateID := range uniqueTrimmed(
+		rr.supersededResourceIDLocked(exactID),
 		rr.uniqueSourceResourceIDLocked(ref),
+		rr.proxmoxGuestResourceIDForSourceRefLocked(ref),
 		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
 	) {
 		existing := rr.resources[candidateID]
@@ -4343,6 +4492,14 @@ func (rr *ResourceRegistry) chooseNewID(resourceType ResourceType, identity Reso
 		if identity.MachineID != "" || identity.DMIUUID != "" {
 			return rr.canonicalIDFromIdentity(resourceType, identity)
 		}
+	case ResourceTypeVM, ResourceTypeSystemContainer:
+		// Proxmox guests key on instance+VMID so live migration between
+		// cluster nodes keeps the canonical ID (#1669). Other VM providers
+		// (TrueNAS, XCP-ng, libvirt, VMware) do not set the guest key and
+		// keep their source-specific derivation.
+		if identity.ProxmoxGuestKey != "" {
+			return rr.canonicalIDFromIdentity(resourceType, identity)
+		}
 	}
 	return rr.sourceSpecificID(resourceType, source, sourceID)
 }
@@ -4361,6 +4518,8 @@ func (rr *ResourceRegistry) sourceResourceID(source DataSource, sourceID string)
 func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, identity ResourceIdentity) string {
 	var stable string
 	switch {
+	case identity.ProxmoxGuestKey != "":
+		stable = "proxmox-guest:" + identity.ProxmoxGuestKey
 	case identity.MachineID != "":
 		stable = "machine:" + strings.TrimSpace(identity.MachineID)
 	case identity.DMIUUID != "":
@@ -4896,6 +5055,9 @@ func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) Resourc
 	}
 	if existing.ClusterName == "" {
 		existing.ClusterName = incoming.ClusterName
+	}
+	if existing.ProxmoxGuestKey == "" {
+		existing.ProxmoxGuestKey = incoming.ProxmoxGuestKey
 	}
 	existing.Hostnames = uniqueStrings(append(existing.Hostnames, incoming.Hostnames...))
 	existing.IPAddresses = uniqueStrings(append(existing.IPAddresses, incoming.IPAddresses...))

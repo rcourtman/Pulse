@@ -205,3 +205,100 @@ func TestSyncUnifiedResourceAlertsPersistsAndEvaluatesTrueNASOverrideSuccession(
 		t.Fatalf("restarted manager lost persisted TrueNAS hysteresis: %+v", override.Memory)
 	}
 }
+
+func TestMigrateAvailabilityLinkedResources(t *testing.T) {
+	t.Parallel()
+
+	guestID := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "delly", 100)
+	retiredID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeVM, unifiedresources.SourceProxmox, "delly:pve1:100")
+	resources := []unifiedresources.Resource{
+		{
+			ID:                     guestID,
+			Type:                   unifiedresources.ResourceTypeVM,
+			SupersededCanonicalIDs: []string{retiredID},
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance: "delly",
+				VMID:     100,
+				NodeName: "pve2",
+			},
+		},
+		{
+			ID:   "agent-1234567890abcdef",
+			Type: unifiedresources.ResourceTypeAgent,
+		},
+	}
+
+	targets := []config.AvailabilityTarget{
+		{ID: "t-live", LinkedResourceID: guestID},
+		{ID: "t-retired", LinkedResourceID: retiredID},
+		{ID: "t-old-node-source", LinkedResourceID: "delly:pve1:100"},
+		{ID: "t-unrelated", LinkedResourceID: "agent-1234567890abcdef"},
+		{ID: "t-unknown", LinkedResourceID: "delly:pve9:999"},
+		{ID: "t-unlinked"},
+	}
+
+	migrated, changed := migrateAvailabilityLinkedResources(targets, resources)
+	if !changed {
+		t.Fatal("expected migration to report changes")
+	}
+
+	byID := make(map[string]config.AvailabilityTarget, len(migrated))
+	for _, target := range migrated {
+		byID[target.ID] = target
+	}
+	if got := byID["t-live"].LinkedResourceID; got != guestID {
+		t.Fatalf("live link rewritten: %q", got)
+	}
+	if got := byID["t-retired"].LinkedResourceID; got != guestID {
+		t.Fatalf("retired canonical link = %q, want %q", got, guestID)
+	}
+	if got := byID["t-old-node-source"].LinkedResourceID; got != guestID {
+		t.Fatalf("old-node source link = %q, want %q", got, guestID)
+	}
+	if got := byID["t-unrelated"].LinkedResourceID; got != "agent-1234567890abcdef" {
+		t.Fatalf("unrelated link rewritten: %q", got)
+	}
+	if got := byID["t-unknown"].LinkedResourceID; got != "delly:pve9:999" {
+		t.Fatalf("unknown guest link rewritten: %q", got)
+	}
+
+	// Input slice must stay untouched: the migration returns a copy.
+	if targets[1].LinkedResourceID != retiredID {
+		t.Fatalf("input slice mutated: %q", targets[1].LinkedResourceID)
+	}
+
+	if _, changedAgain := migrateAvailabilityLinkedResources(migrated, resources); changedAgain {
+		t.Fatal("second pass must be a no-op")
+	}
+}
+
+// Two guests claiming the same retired ID (or the same instance+VMID) is
+// ambiguous; the link must fail closed rather than re-home to either.
+func TestMigrateAvailabilityLinkedResourcesFailsClosedOnAmbiguity(t *testing.T) {
+	t.Parallel()
+
+	retiredID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeVM, unifiedresources.SourceProxmox, "delly:pve1:100")
+	resources := []unifiedresources.Resource{
+		{
+			ID:                     "vm-aaaaaaaaaaaaaaaa",
+			Type:                   unifiedresources.ResourceTypeVM,
+			SupersededCanonicalIDs: []string{retiredID},
+			Proxmox:                &unifiedresources.ProxmoxData{Instance: "delly", VMID: 100},
+		},
+		{
+			ID:                     "vm-bbbbbbbbbbbbbbbb",
+			Type:                   unifiedresources.ResourceTypeVM,
+			SupersededCanonicalIDs: []string{retiredID},
+			Proxmox:                &unifiedresources.ProxmoxData{Instance: "delly", VMID: 100},
+		},
+	}
+	targets := []config.AvailabilityTarget{
+		{ID: "t-ambiguous", LinkedResourceID: retiredID},
+		{ID: "t-ambiguous-source", LinkedResourceID: "delly:pve1:100"},
+	}
+
+	migrated, changed := migrateAvailabilityLinkedResources(targets, resources)
+	if changed {
+		t.Fatalf("ambiguous claims must not migrate, got %+v", migrated)
+	}
+}

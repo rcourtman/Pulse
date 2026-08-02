@@ -1082,7 +1082,21 @@ continues to emit its own `network-endpoint` supplemental record regardless of
 that correlation outcome; monitoring never substitutes a matched host or
 service identity for the configured check. Monitoring does not perform the
 correlation decision itself; it only forwards the link hint for the registry
-to resolve. Every completed probe also authors an operational-trust
+to resolve.
+Monitoring does own keeping that stored link hint current across canonical-ID
+eras. On the same cadence as the alert-override migration,
+`migrateAvailabilityLinksToCanonicalIDs`
+(`internal/monitoring/availability_link_migration.go`) re-homes a
+`LinkedResourceID` that references a retired canonical resource ID (declared
+via `SupersededCanonicalIDs` by exactly one live resource) or a node-scoped
+Proxmox guest source triple whose instance+VMID matches exactly one live
+guest (#1669), rewriting it to the resource's current canonical ID and
+persisting through `SaveAvailabilityTargets`. Only provider-declared
+persistence keys migrate — never address, hostname, or display-alias
+coincidences — ambiguous claims fail closed, and a link that resolves to a
+live canonical ID is never touched, so the explicit link stays authoritative
+and fail-closed. Regression coverage: `TestMigrateAvailabilityLinkedResources`
+in `internal/monitoring/monitor_alert_override_migration_test.go`. Every completed probe also authors an operational-trust
 `EvidenceEnvelope` with provider `availability`, collector
 `availability-poller`, the saved target as its provider reference, the exact
 observation/ingest times, and a validity window of twice the effective polling

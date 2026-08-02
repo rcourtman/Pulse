@@ -1678,6 +1678,49 @@ AI-only summary payloads, or page-local heuristics.
     `TestCloneResourceGivesRelationshipsTheirOwnBackingArray` in
     `internal/unifiedresources/clone_test.go`.
 
+30. Keep Proxmox guest canonical IDs node-independent. VMIDs are unique
+    within a cluster, so `ResourceTypeVM` / `ResourceTypeSystemContainer`
+    resources ingested from `SourceProxmox` derive their canonical ID
+    from `ResourceIdentity.ProxmoxGuestKey` (`instance:vmid`, hashed as
+    `proxmox-guest:<instance>:<vmid>` in `canonicalIDFromIdentity`), not
+    from the node-scoped source ID, so a live migration between cluster
+    nodes never re-mints the guest (#1669). Guests without an
+    instance+VMID identity — and VM resources from every other provider
+    (TrueNAS, XCP-ng, libvirt, VMware) — keep the source-specific
+    derivation. Ingest declares the retired node-scoped canonical IDs
+    superseded for every node the instance currently knows (current
+    names plus native aliases, `declareGuestSupersededEras`), so
+    operator-owned rows orphaned by a pre-upgrade migration still re-key
+    through record-declared succession, alert overrides migrate through
+    `MigrateCanonicalOverrideKeys`, and explicit availability links and
+    API reads keyed by a retired ID or a node-scoped guest source ID
+    resolve through the registry's superseded index and
+    `ParseProxmoxGuestSourceID` (persistence keys, never display
+    aliases; ambiguity fails closed). Successions are durably recorded
+    in the `canonical_id_successions` table, which memoizes the re-key
+    (steady-state rebuilds re-declare the same eras every tick and must
+    stay SQL-free) and lets change-journal reads merge retired guest
+    eras without identity pins; pins remain host-only. The succession
+    re-key also covers manual link/exclusion rows. Availability target
+    configuration re-homes retired `LinkedResourceID` values through
+    `migrateAvailabilityLinkedResources`
+    (`internal/monitoring/availability_link_migration.go`), and recovery
+    subjects converge on the same derivation through
+    `CanonicalSubjectResourceID` plus the store's startup backfill.
+    Metrics history and frontend row identity key off the node-scoped
+    source ID and are deliberately unaffected. Regression coverage: the
+    `TestProxmoxGuest*` cases in
+    `internal/unifiedresources/registry_test.go`,
+    `internal/unifiedresources/ids_test.go`,
+    `internal/unifiedresources/adapters_test.go`, and
+    `internal/unifiedresources/availability_link_test.go`;
+    `TestSuccessionMergesGuestChangeJournalEras` in
+    `internal/unifiedresources/store_test.go`; and the recovery-side pins
+    in `internal/recovery/recovery_test.go`
+    (`TestSubjectKey_CanonicalizesProxmoxLinkedGuestAliases`) and
+    `internal/recovery/store/store_test.go`
+    (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
+
 
 ## Current State
 

@@ -112,3 +112,56 @@ func TestMachineIdentityCanonicalIDMatchesRegistryMachineArm(t *testing.T) {
 		t.Fatalf("MachineIdentityCanonicalID = %q, want registry machine-arm ID %q", got, want)
 	}
 }
+
+func TestParseProxmoxGuestSourceID(t *testing.T) {
+	cases := []struct {
+		in       string
+		instance string
+		node     string
+		vmid     int
+		ok       bool
+	}{
+		{"delly:pve1:100", "delly", "pve1", 100, true},
+		{"cluster:with:colons:pve2:112", "cluster:with:colons", "pve2", 112, true},
+		{"delly:pve1:0", "", "", 0, false},
+		{"delly:100", "delly", "", 0, false},
+		{"just-a-name", "", "", 0, false},
+		{"vm-1a2b3c4d5e6f7788", "", "", 0, false},
+		{"", "", "", 0, false},
+		{"delly:pve1:abc", "", "", 0, false},
+	}
+	for _, tc := range cases {
+		instance, node, vmid, ok := ParseProxmoxGuestSourceID(tc.in)
+		if ok != tc.ok {
+			t.Fatalf("ParseProxmoxGuestSourceID(%q) ok = %v, want %v", tc.in, ok, tc.ok)
+		}
+		if !tc.ok {
+			continue
+		}
+		if instance != tc.instance || node != tc.node || vmid != tc.vmid {
+			t.Fatalf("ParseProxmoxGuestSourceID(%q) = (%q, %q, %d), want (%q, %q, %d)", tc.in, instance, node, vmid, tc.instance, tc.node, tc.vmid)
+		}
+	}
+}
+
+// ProxmoxGuestCanonicalID must mint exactly what the registry's guest
+// identity arm mints, so external consumers (recovery subjects, migrations)
+// derive the same node-independent ID as live ingest.
+func TestProxmoxGuestCanonicalIDMatchesRegistryDerivation(t *testing.T) {
+	registry := NewRegistry(nil)
+	want := registry.canonicalIDFromIdentity(ResourceTypeVM, ResourceIdentity{ProxmoxGuestKey: ProxmoxGuestIdentityKey("delly", 100)})
+	if got := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 100); got != want {
+		t.Fatalf("ProxmoxGuestCanonicalID = %q, want registry guest-arm ID %q", got, want)
+	}
+}
+
+// A VM and a container never share a VMID inside one cluster, but a VMID can
+// be destroyed and recreated as the other guest type; the type prefix keeps
+// those identities distinct.
+func TestProxmoxGuestCanonicalIDSeparatesTypes(t *testing.T) {
+	vmID := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 200)
+	ctID := ProxmoxGuestCanonicalID(ResourceTypeSystemContainer, "delly", 200)
+	if vmID == ctID {
+		t.Fatalf("VM and container canonical IDs must differ, both %q", vmID)
+	}
+}

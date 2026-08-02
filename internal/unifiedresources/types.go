@@ -301,6 +301,11 @@ type ResourceIdentity struct {
 	IPAddresses  []string `json:"ipAddresses,omitempty"`
 	MACAddresses []string `json:"macAddresses,omitempty"`
 	ClusterName  string   `json:"clusterName,omitempty"`
+	// ProxmoxGuestKey is the node-independent Proxmox guest identity
+	// ("instance:vmid", see ProxmoxGuestIdentityKey). VMIDs are unique within
+	// a cluster, so canonical IDs derived from this key survive live
+	// migration between cluster nodes (#1669).
+	ProxmoxGuestKey string `json:"proxmoxGuestKey,omitempty"`
 }
 
 // MatchResult describes a potential identity match.
