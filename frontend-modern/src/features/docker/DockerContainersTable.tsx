@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
+import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import {
   GroupedTableModeSegmentedControl,
   type GroupedTableMode,
@@ -137,6 +138,7 @@ const RESTART_ATTENTION_THRESHOLD = 5;
 const updateStatusLabel = (resource: Resource): string => {
   const update = resource.docker?.updateStatus;
   if (!update) return '—';
+  if (isContainerUpdatePinned(update)) return 'Pinned';
   if (asTrimmedString(update.error)) return 'Error';
   return update.updateAvailable ? 'Available' : 'Current';
 };

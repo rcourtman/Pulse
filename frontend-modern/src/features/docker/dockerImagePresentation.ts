@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 export type DockerImageUpdateTone = 'danger' | 'warning' | 'success' | 'muted';
@@ -57,7 +58,9 @@ export function getDockerImageOperationalPresentation(
   const updateStates = [image, ...consumers]
     .map((resource) => resource.docker?.updateStatus)
     .filter((state): state is NonNullable<typeof state> => state !== undefined);
-  const failed = updateStates.find((state) => trimmed(state.error).length > 0);
+  const failed = updateStates.find(
+    (state) => trimmed(state.error).length > 0 && !isContainerUpdatePinned(state),
+  );
 
   if (failed) {
     return {
@@ -75,6 +78,16 @@ export function getDockerImageOperationalPresentation(
       updateLabel: 'Update available',
       updateDetail: 'At least one running container is behind the latest reported digest.',
       updateTone: 'warning',
+    };
+  }
+  if (updateStates.some((state) => isContainerUpdatePinned(state))) {
+    return {
+      consumerCount,
+      consumerSummary: summarizeConsumers(consumers, reportedCount),
+      updateLabel: 'Pinned',
+      updateDetail:
+        'The image is pinned to a specific digest, so there is no tag to check against.',
+      updateTone: 'muted',
     };
   }
   if (updateStates.some((state) => state.updateAvailable === false)) {

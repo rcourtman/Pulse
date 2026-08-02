@@ -62,6 +62,41 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByText('Check failed')).toBeInTheDocument();
   });
 
+  it('renders the pinned badge instead of a failure for digest-pinned images', () => {
+    render(() => (
+      <ContainerUpdateBadge
+        updateStatus={{
+          updateAvailable: false,
+          lastChecked: 0,
+          error: 'digest-pinned image',
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Pinned')).toBeInTheDocument();
+    expect(screen.queryByText('Check failed')).not.toBeInTheDocument();
+  });
+
+  it('renders the pinned badge through the update button for digest-pinned images', () => {
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="container-1"
+        containerName="backup"
+        updateStatus={{
+          updateAvailable: false,
+          currentDigest: 'sha256:current',
+          lastChecked: 0,
+          error: 'digest-pinned image',
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Pinned')).toBeInTheDocument();
+    expect(screen.queryByText('Check failed')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('renders the update action button when an update is available', () => {
     render(() => (
       <UpdateButton

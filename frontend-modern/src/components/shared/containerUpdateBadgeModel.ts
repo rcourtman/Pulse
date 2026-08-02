@@ -48,16 +48,29 @@ export function hasContainerUpdate(updateStatus?: DockerContainerUpdateStatus): 
   return updateStatus?.updateAvailable === true;
 }
 
+// Sentinel the agent reports for image@sha256 references, where there is no
+// tag to resolve against the registry. Not a failure, so the surfaces render
+// it as its own neutral state instead of "Check failed" (#1666).
+const DIGEST_PINNED_SENTINEL = 'digest-pinned image';
+
+export function isContainerUpdatePinned(updateStatus?: { error?: string }): boolean {
+  return updateStatus?.error?.trim() === DIGEST_PINNED_SENTINEL;
+}
+
 export function hasContainerUpdateError(updateStatus?: DockerContainerUpdateStatus): boolean {
-  return Boolean(updateStatus?.error);
+  return Boolean(updateStatus?.error) && !isContainerUpdatePinned(updateStatus);
 }
 
 export function hasContainerUpdateCurrent(updateStatus?: DockerContainerUpdateStatus): boolean {
-  return updateStatus?.updateAvailable === false && !hasContainerUpdateError(updateStatus);
+  return updateStatus?.updateAvailable === false && !updateStatus?.error;
 }
 
 export function getContainerUpdateErrorTooltip(updateStatus?: DockerContainerUpdateStatus): string {
   return `Update check failed: ${updateStatus?.error || 'Unknown error'}`;
+}
+
+export function getContainerUpdatePinnedTooltip(): string {
+  return 'This image is pinned to a specific digest, so there is no newer tag to check against';
 }
 
 export function getContainerUpdateCurrentTooltip(

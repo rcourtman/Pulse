@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { Card } from '@/components/shared/Card';
+import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { formatInteger } from './resourceDetailMappers';
@@ -85,6 +86,7 @@ const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['d
   const updateState = () => {
     const update = updateStatus();
     if (!update) return '';
+    if (isContainerUpdatePinned(update)) return 'Pinned digest';
     if (trimmedDockerValue(update.error)) return 'Check failed';
     return update.updateAvailable ? 'Available' : 'Current';
   };

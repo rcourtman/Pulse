@@ -5,11 +5,13 @@ import {
   getContainerUpdateBadgeTooltip,
   getContainerUpdateCurrentTooltip,
   getContainerUpdateErrorTooltip,
+  getContainerUpdatePinnedTooltip,
   getUpdateButtonClass,
   getUpdateIconTooltip,
   hasContainerUpdate,
   hasContainerUpdateCurrent,
   hasContainerUpdateError,
+  isContainerUpdatePinned,
   type ContainerUpdateBadgeProps,
   type UpdateButtonProps,
   type UpdateIconProps,
@@ -76,6 +78,7 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
       when={
         hasContainerUpdate(props.updateStatus) ||
         hasContainerUpdateError(props.updateStatus) ||
+        isContainerUpdatePinned(props.updateStatus) ||
         (props.showCurrent && hasContainerUpdateCurrent(props.updateStatus))
       }
     >
@@ -101,6 +104,22 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
             <Show when={!props.compact}>
               <span>Update</span>
             </Show>
+          </span>
+        </Match>
+        <Match when={isContainerUpdatePinned(props.updateStatus)}>
+          <span
+            class="inline-flex items-center justify-center gap-1 rounded-full bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium text-muted cursor-help"
+            aria-label={getContainerUpdatePinnedTooltip()}
+            onMouseEnter={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              showTooltip(getContainerUpdatePinnedTooltip(), rect.left + rect.width / 2, rect.top, {
+                align: 'center',
+                direction: 'up',
+              });
+            }}
+            onMouseLeave={() => hideTooltip()}
+          >
+            <span>Pinned</span>
           </span>
         </Match>
         <Match when={hasContainerUpdateError(props.updateStatus)}>
@@ -200,6 +219,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
     state.currentState() === 'idle' &&
     (hasContainerUpdateError(props.updateStatus) ||
       hasContainerUpdateCurrent(props.updateStatus) ||
+      isContainerUpdatePinned(props.updateStatus) ||
       (state.settingsLoaded() && state.shouldHideButton()));
 
   return (

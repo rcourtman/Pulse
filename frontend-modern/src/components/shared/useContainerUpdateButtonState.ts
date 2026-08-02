@@ -17,6 +17,7 @@ import {
   hasContainerUpdate,
   hasContainerUpdateCurrent,
   hasContainerUpdateError,
+  isContainerUpdatePinned,
   type UpdateButtonProps,
   type UpdateState,
 } from './containerUpdateBadgeModel';
@@ -74,6 +75,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     hasContainerUpdate(props.updateStatus) ||
     hasContainerUpdateError(props.updateStatus) ||
     hasContainerUpdateCurrent(props.updateStatus) ||
+    isContainerUpdatePinned(props.updateStatus) ||
     currentState() !== 'idle';
 
   // Server-evaluated refusal for the update capability (agent disconnected,

@@ -4026,6 +4026,8 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 			Networks:      generateDockerNetworks(hostIdx, i),
 		}
 
+		container.UpdateStatus = generateDockerContainerUpdateStatus(now)
+
 		if pod != nil {
 			container.Podman = &models.DockerPodmanContainer{
 				PodName:           pod.Name,
@@ -4045,6 +4047,31 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 	}
 
 	return containers
+}
+
+// generateDockerContainerUpdateStatus mirrors the states the docker agent's
+// registry checker reports: unchecked, current, update available, and the
+// digest-pinned sentinel for image@sha256 references (no error states, since
+// mock data also feeds the public demo).
+func generateDockerContainerUpdateStatus(now time.Time) *models.DockerContainerUpdateStatus {
+	roll := rand.Float64()
+	if roll < 0.45 {
+		return nil
+	}
+	status := &models.DockerContainerUpdateStatus{
+		CurrentDigest: fmt.Sprintf("sha256:%016x%016x%016x%016x", rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64()),
+		LastChecked:   now.Add(-time.Duration(10+rand.Intn(170)) * time.Minute),
+	}
+	switch {
+	case roll < 0.50:
+		status.Error = "digest-pinned image"
+	case roll < 0.65:
+		status.UpdateAvailable = true
+		status.LatestDigest = fmt.Sprintf("sha256:%016x%016x%016x%016x", rand.Uint64(), rand.Uint64(), rand.Uint64(), rand.Uint64())
+	default:
+		status.LatestDigest = status.CurrentDigest
+	}
+	return status
 }
 
 func generateDockerPorts() []models.DockerContainerPort {
