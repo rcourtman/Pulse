@@ -1631,7 +1631,10 @@ bars/trends, chart visibility, Guest/Host memory basis, and Columns — compose
 the shared `ViewOptionsMenu` through `FilterBar.viewOptionsTrailing` instead of
 rendering as equally prominent filter toggles. The sparkline range remains
 inline only while trends are active because it is the frequently changed
-analytical window. On Proxmox, the non-default Host basis must remain visible
+analytical window, and its compact control must include a visible `Trend range`
+label so the values are not an orphaned set of durations. Columns must expand
+inside the scrolling View surface instead of opening a nested absolute panel
+that can be clipped by the menu boundary. On Proxmox, the non-default Host basis must remain visible
 in the workload memory column header after the View menu closes. Workload chart
 visibility remains a display preference: its menu action must expose explicit
 `Show charts` / `Hide charts` pressed state, and hiding charts must remove the

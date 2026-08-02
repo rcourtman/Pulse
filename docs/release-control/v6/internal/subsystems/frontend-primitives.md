@@ -39,7 +39,10 @@ choices compose the shared `ViewOptionsMenu` instead of occupying the primary
 filter rail: layout, metric style, chart visibility, memory basis, and columns
 remain discoverable behind one `View` trigger, while the trend range may stay
 inline only when trends are active because it is the frequent analytical
-control. The Proxmox page owns and persists the `Guest` / `Host` memory basis;
+control. That inline range must carry a visible contextual label. Controls
+inside the scrolling View panel must expand as inline disclosures rather than
+opening nested absolute panels that can clip or create competing overlay
+stacks. The Proxmox page owns and persists the `Guest` / `Host` memory basis;
 the workload state, table, panel, and row contracts carry the selected basis
 and resolved parent-node data to the canonical memory bar, and the memory
 column header must expose the non-default Host basis after the control closes.
@@ -811,7 +814,10 @@ not a replacement status card, CTA band, or page-local nested card.
    The shared menu owns trigger, panel, outside-click, Escape, focus-return,
    remembered-preference explanation, and viewport-safe geometry; feature
    surfaces own the controls placed inside it. They must not restore a row of
-   equally prominent preference toggles or a page-local popover shell.
+   equally prominent preference toggles or a page-local popover shell. The
+   panel must anchor into the viewport from the trigger's leading edge when the
+   filter rail wraps, so a left-edge View trigger cannot push a right-aligned
+   panel off-screen.
    Standard command buttons and button-styled route actions belong to the
    shared `Button` primitive family. Feature pages may choose the action label,
    icon, route, click handler, and contextual layout, but secondary/primary/

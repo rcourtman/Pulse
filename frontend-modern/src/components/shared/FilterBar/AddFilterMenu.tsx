@@ -1,9 +1,5 @@
 import { Component, For, createMemo, createUniqueId } from 'solid-js';
-import {
-  filterGroupClass,
-  filterLabelClass,
-  filterSelectClass,
-} from '@/components/shared/FilterToolbar';
+import { filterGroupClass, filterLabelClass } from '@/components/shared/FilterToolbar';
 import { FormSelect } from '@/components/shared/FormSelect';
 import {
   isFilterSet,
@@ -109,8 +105,8 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
       label="Filter"
       fieldBaseClass={`${filterGroupClass} flex-shrink-0`}
       labelClass={props.showLabel === false ? 'sr-only' : filterLabelClass}
-      selectBaseClass={filterSelectClass}
-      selectClass="min-w-[9rem] disabled:cursor-not-allowed disabled:opacity-50"
+      selectBaseClass="rounded-md border border-transparent bg-surface-hover px-2 py-1 text-xs font-medium text-muted outline-none ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content focus:border-blue-500"
+      selectClass="min-w-[7.5rem] disabled:cursor-not-allowed disabled:opacity-50"
       value=""
       onChange={handleChange}
       disabled={isDisabled()}

@@ -57,6 +57,27 @@ describe('ColumnPicker', () => {
     expect(onToggle).toHaveBeenCalledWith('subject');
   });
 
+  it('expands inline when embedded in a scrolling preferences panel', async () => {
+    render(() => (
+      <ColumnPicker
+        inline
+        columns={[{ id: 'memory', label: 'Memory' }]}
+        isHidden={() => false}
+        onToggle={vi.fn()}
+      />
+    ));
+
+    const button = screen.getByRole('button', { name: /columns/i });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Show Columns')).not.toBeInTheDocument();
+
+    fireEvent.click(button);
+
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByText('Show Columns')).toBeInTheDocument();
+    expect(screen.getByLabelText('Memory')).toBeInTheDocument();
+  });
+
   it('labels hidden column count with explicit context', () => {
     render(() => (
       <ColumnPicker

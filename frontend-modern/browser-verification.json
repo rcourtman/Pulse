@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "e74fea4bbc8f199dad6560d806defab470ef347a",
+  "verified_at": "2026-08-02T19:42:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/MetricDisplayModeSegmentedControl.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/shared/ColumnPicker.tsx",
+    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx",
+    "frontend-modern/src/components/shared/useColumnPickerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/MetricDisplayModeSegmentedControl.tsx": "849f9d635e8d7de1f0e016db36374e51c3c63d79186d59c3cf2907ad86cdf40a",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "26acb004ac78b27a85b762462d6d812a00f1e27f5ed661eba7f84e273fbaa200",
+    "frontend-modern/src/components/shared/ColumnPicker.tsx": "5a830afac9cba7d6dce432c4a069f3b79fbcb5461ed9593f0aca8fde5a3c2139",
+    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx": "3fd83a6ceb6bcbc0c79ab34c1bc57f7dfe500d8ca0a04c033dc0d8061cc9919b",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "199ce8198808516644184b7eca777130e19a20033de90bca10b896b42a89303b",
+    "frontend-modern/src/components/shared/useColumnPickerState.ts": "7b7801ebfbaed83a4e8553a98c1cb19a730069d4c68d3bb1d723637d14fe0961"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop wrapped toolbar with View closed and Trend range visible",
+    "Desktop View preferences open",
+    "Desktop inline Columns disclosure open",
+    "Desktop grouped and list layouts",
+    "Desktop bars and trends metric modes",
+    "Desktop guest-relative and host-relative memory trends",
+    "Narrow filter controls collapsed",
+    "Narrow filter controls expanded",
+    "Narrow View preferences open",
+    "Narrow inline Columns disclosure open"
+  ],
+  "interactions": [
+    "Opened View preferences and confirmed the panel stayed inside the viewport",
+    "Opened Columns inline and confirmed all options remained reachable without a clipped nested popover",
+    "Enabled and disabled the IP column and confirmed the header and hidden count updated, then restored it",
+    "Switched Grouped to List and back and confirmed pressed state",
+    "Switched Trends to Bars and back and confirmed trend cells and the range control hid and returned",
+    "Switched Host capacity to Guest allocation and back and confirmed memory trend semantics and the Mem Host header",
+    "Changed trend range to 24h, reloaded, confirmed persistence, and restored 1h",
+    "Closed View by clicking outside",
+    "Closed View with Escape and confirmed focus returned to the View trigger",
+    "Repeated View and Columns expansion at 390px and confirmed no horizontal overflow",
+    "Checked browser console warnings and errors"
+  ]
+}

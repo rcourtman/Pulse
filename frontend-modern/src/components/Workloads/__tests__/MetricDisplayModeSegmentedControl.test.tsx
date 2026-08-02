@@ -42,4 +42,18 @@ describe('MetricDisplayModeSegmentedControl', () => {
 
     expect(onRangeChange).toHaveBeenCalledWith('24h');
   });
+
+  it('left-aligns the metric controls inside a preferences section', () => {
+    render(() => (
+      <MetricDisplayModeSegmentedControl
+        value="sparklines"
+        onChange={vi.fn()}
+        range="1h"
+        onRangeChange={vi.fn()}
+      />
+    ));
+
+    const group = screen.getByRole('group', { name: 'Sparkline range' });
+    expect(group.parentElement).toHaveClass('justify-start');
+  });
 });

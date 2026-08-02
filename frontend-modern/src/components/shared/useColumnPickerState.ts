@@ -7,6 +7,7 @@ export interface ColumnPickerProps {
   isHidden: (id: string) => boolean;
   onToggle: (id: string) => void;
   onReset?: () => void;
+  inline?: boolean;
 }
 
 export function useColumnPickerState(props: ColumnPickerProps) {

@@ -24,6 +24,7 @@ interface MetricDisplayModeSegmentedControlProps extends Omit<
 interface MetricHistoryRangeSegmentedControlProps {
   range: WorkloadTableMetricHistoryRange;
   onRangeChange: (range: WorkloadTableMetricHistoryRange) => void;
+  label?: JSX.Element;
 }
 
 export const MetricHistoryRangeSegmentedControl: Component<
@@ -31,6 +32,7 @@ export const MetricHistoryRangeSegmentedControl: Component<
 > = (props) => (
   <FilterSegmentedControl
     aria-label="Sparkline range"
+    label={props.label}
     value={props.range}
     onChange={(value) => props.onRangeChange(value as WorkloadTableMetricHistoryRange)}
     options={WORKLOAD_TABLE_HISTORY_RANGES.map((range) => ({
@@ -49,7 +51,7 @@ export const MetricDisplayModeSegmentedControl: Component<
   return (
     <div
       {...divProps}
-      class={`flex flex-wrap items-center justify-end gap-2 ${divProps.class ?? ''}`.trim()}
+      class={`flex flex-wrap items-center justify-start gap-2 ${divProps.class ?? ''}`.trim()}
     >
       <FilterSegmentedControl
         aria-label={divProps['aria-label'] ?? 'Metric display'}

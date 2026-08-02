@@ -51,7 +51,11 @@ vi.mock('@/components/shared/SearchInput', () => ({
 }));
 
 vi.mock('@/components/shared/ColumnPicker', () => ({
-  ColumnPicker: () => <div data-testid="column-picker">ColumnPicker</div>,
+  ColumnPicker: (props: { inline?: boolean }) => (
+    <div data-testid="column-picker" data-inline={props.inline ? 'true' : 'false'}>
+      ColumnPicker
+    </div>
+  ),
 }));
 
 function makeProps(overrides: Partial<WorkloadsFilterProps> = {}): WorkloadsFilterProps {
@@ -212,6 +216,7 @@ describe('WorkloadsFilter', () => {
       ));
 
       expect(screen.getByRole('group', { name: 'Sparkline range' })).toBeInTheDocument();
+      expect(screen.getByText('Trend range')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Trends' })).not.toBeInTheDocument();
       expect(within(openViewPreferences()).getByRole('button', { name: 'Trends' })).toHaveAttribute(
         'aria-pressed',
@@ -737,7 +742,10 @@ describe('WorkloadsFilter', () => {
         />
       ));
       expect(screen.queryByTestId('column-picker')).not.toBeInTheDocument();
-      expect(within(openViewPreferences()).getByTestId('column-picker')).toBeInTheDocument();
+      expect(within(openViewPreferences()).getByTestId('column-picker')).toHaveAttribute(
+        'data-inline',
+        'true',
+      );
     });
 
     it('does not render ColumnPicker when columnVisibility is absent', () => {

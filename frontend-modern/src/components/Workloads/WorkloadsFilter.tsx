@@ -349,6 +349,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                     Table
                   </div>
                   <ColumnPicker
+                    inline
                     columns={visibility().availableColumns}
                     isHidden={visibility().isColumnHidden}
                     onToggle={visibility().onColumnToggle}
@@ -367,6 +368,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             }
           >
             <MetricHistoryRangeSegmentedControl
+              label="Trend range"
               range={props.metricHistoryRange!()}
               onRangeChange={props.setMetricHistoryRange!}
             />

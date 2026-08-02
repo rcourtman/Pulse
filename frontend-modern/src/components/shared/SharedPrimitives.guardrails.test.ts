@@ -8169,7 +8169,9 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain('option.value !== filter.defaultValue');
     expect(addFilterMenuSource).toContain('GROUP_ORDER');
     expect(addFilterMenuSource).toContain('filterGroupClass');
-    expect(addFilterMenuSource).toContain('filterSelectClass');
+    expect(addFilterMenuSource).toContain('min-w-[7.5rem]');
+    expect(addFilterMenuSource).toContain('bg-surface-hover');
+    expect(addFilterMenuSource).toContain('ring-border-subtle');
     expect(addFilterMenuSource).toContain('aria-label="Filter"');
     expect(addFilterMenuSource).not.toContain('LabeledFilterSelect');
     // Add-filter selection is intentionally direct: the shared primitive

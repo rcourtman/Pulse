@@ -1242,6 +1242,9 @@ describe('Workloads performance contract', () => {
       expect(workloadsFilterSource).toContain('MetricDisplayModeSegmentedControl');
       expect(workloadsFilterSource).toContain('ViewOptionsMenu');
       expect(workloadsFilterSource).toContain('MetricHistoryRangeSegmentedControl');
+      expect(workloadsFilterSource).toContain('label="Trend range"');
+      expect(workloadsFilterSource).toContain('<ColumnPicker');
+      expect(workloadsFilterSource).toContain('inline');
       expect(workloadsFilterSource).toContain('showAddFilterLabel={false}');
       expect(workloadsFilterSource).not.toContain('label="Memory %"');
       expect(workloadsFilterSource).toContain('metricHistoryRange');
@@ -1249,6 +1252,7 @@ describe('Workloads performance contract', () => {
         'WORKLOAD_TABLE_HISTORY_RANGES.map',
       );
       expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Sparkline range"');
+      expect(metricDisplayModeSegmentedControlSource).toContain('justify-start');
       expect(workloadTableHeaderSource).toContain('getWorkloadColumnHeaderLabel');
       expect(workloadTableHeaderSource).toContain('`${defaultLabel} · Host`');
       expect(workloadsFilterSource).toContain('pinnedSelectionActive');

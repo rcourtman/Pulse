@@ -18,6 +18,10 @@ describe('ViewOptionsMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View' }));
 
     expect(screen.getByRole('dialog', { name: 'View preferences' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'View preferences' })).toHaveClass(
+      'left-0',
+      'right-auto',
+    );
     expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View' })).toHaveAttribute('aria-expanded', 'true');
   });

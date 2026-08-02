@@ -8,6 +8,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import SlidersHorizontalIcon from 'lucide-solid/icons/sliders-horizontal';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 
 import { FilterActionButton, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
 
@@ -58,9 +59,14 @@ export const ViewOptionsMenu: Component<ViewOptionsMenuProps> = (props) => {
         aria-expanded={open()}
         aria-controls={open() ? panelId : undefined}
         title="Change table presentation"
+        class="text-base-content"
       >
         <SlidersHorizontalIcon class="h-3.5 w-3.5" aria-hidden="true" />
         View
+        <ChevronDownIcon
+          class={`h-3.5 w-3.5 transition-transform ${open() ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
       </FilterActionButton>
 
       <Show when={open()}>
@@ -68,8 +74,8 @@ export const ViewOptionsMenu: Component<ViewOptionsMenuProps> = (props) => {
           id={panelId}
           role="dialog"
           aria-label={props.label ?? 'View preferences'}
-          widthClass="w-72 max-w-[calc(100vw-2rem)]"
-          class="top-[calc(100%+0.25rem)] z-50 max-h-[min(32rem,calc(100vh-8rem))] overflow-y-auto p-3"
+          widthClass="w-80 max-w-[calc(100vw-2rem)]"
+          class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 max-h-[min(38rem,calc(100vh-8rem))] overflow-y-auto p-3"
         >
           <div class="mb-3 border-b border-border-subtle pb-2">
             <div class="text-xs font-medium text-base-content">
