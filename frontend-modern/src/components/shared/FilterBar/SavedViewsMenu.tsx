@@ -11,7 +11,7 @@ import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import PlusIcon from 'lucide-solid/icons/plus';
 import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
-import { FilterActionButton, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
+import { FilterPopoverTrigger, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
 import { useSavedViews, type SavedView } from './useSavedViews';
 
 interface SavedViewsMenuProps {
@@ -99,24 +99,24 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
   };
 
   return (
-    <div ref={containerRef} class="relative inline-flex">
-      <FilterActionButton
+    <div ref={containerRef} class="relative shrink-0">
+      <FilterPopoverTrigger
         ref={triggerRef}
-        active={open()}
+        open={open()}
         onClick={() => (open() ? close() : setOpen(true))}
         aria-haspopup="dialog"
         aria-expanded={open()}
         aria-controls={open() ? panelId : undefined}
         aria-label="Saved views"
       >
-        <BookmarkIcon class="h-3 w-3" />
+        <BookmarkIcon class="h-3.5 w-3.5" aria-hidden="true" />
         Saved
         <Show when={views().length > 0}>
           <span class="ml-0.5 rounded-full bg-surface-hover px-1.5 py-px text-[10px] font-medium text-base-content">
             {views().length}
           </span>
         </Show>
-      </FilterActionButton>
+      </FilterPopoverTrigger>
 
       <Show when={open()}>
         <FilterToolbarPanel

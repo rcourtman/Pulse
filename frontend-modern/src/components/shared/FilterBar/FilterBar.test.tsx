@@ -69,7 +69,10 @@ describe('FilterBar', () => {
     expect(setType).toHaveBeenCalledWith('vm');
     const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
     expect(filterSelect).toHaveValue('');
-    expect(within(filterSelect).getByRole('option', { name: 'Add filter' })).toBeEnabled();
+    const placeholder = filterSelect.querySelector('option[value=""]');
+    expect(placeholder).toHaveTextContent('Add filter');
+    expect(placeholder).toBeDisabled();
+    expect(placeholder).toHaveAttribute('hidden');
     expect(
       within(filterSelect).queryByRole('option', { name: 'Type: VMs' }),
     ).not.toBeInTheDocument();
@@ -194,5 +197,7 @@ describe('FilterBar', () => {
     const select = screen.getByRole('combobox', { name: 'Filter' });
     const label = document.querySelector(`label[for="${select.id}"]`);
     expect(label).toHaveClass('sr-only');
+    expect(select).toHaveClass('h-7');
+    expect(select.parentElement).not.toHaveClass('p-0.5');
   });
 });

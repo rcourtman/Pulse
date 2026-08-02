@@ -295,6 +295,7 @@ import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?
 import filterBarOptionPresentationSource from '@/components/shared/FilterBar/filterOptionPresentation.tsx?raw';
 import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
 import savedViewsMenuSource from '@/components/shared/FilterBar/SavedViewsMenu.tsx?raw';
+import viewOptionsMenuSource from '@/components/shared/FilterBar/ViewOptionsMenu.tsx?raw';
 import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import orgSwitcherSource from '@/components/OrgSwitcher.tsx?raw';
@@ -8179,6 +8180,10 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain('bg-surface-hover');
     expect(addFilterMenuSource).toContain('ring-border-subtle');
     expect(addFilterMenuSource).toContain('aria-label="Filter"');
+    expect(addFilterMenuSource).toContain('filterToolbarControlClass');
+    expect(addFilterMenuSource).toContain(
+      "props.showLabel === false ? 'flex-shrink-0' : `${filterGroupClass} flex-shrink-0`",
+    );
     expect(addFilterMenuSource).not.toContain('LabeledFilterSelect');
     // Add-filter selection is intentionally direct: the shared primitive
     // exposes a single native select grouped by filter category instead of a
@@ -8190,7 +8195,7 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain('{filter.filter.label}: {option.option.label}');
     expect(addFilterMenuSource).toContain('selected.filter.setValue(selected.option.value)');
     expect(addFilterMenuSource).toContain('<Show when={!isDisabled()}>');
-    expect(addFilterMenuSource).toContain('<option value="">Add filter</option>');
+    expect(addFilterMenuSource).toContain('<option value="" disabled hidden>');
     expect(addFilterMenuSource).not.toContain('No filters');
     expect(addFilterMenuSource).not.toContain('Search filters');
     expect(addFilterMenuSource).not.toContain('Search values');
@@ -8220,6 +8225,12 @@ describe('shared primitive guardrails', () => {
     expect(useSavedViewsSource).toContain("window.location.search.replace(/^\\?/, '')");
 
     expect(savedViewsMenuSource).toContain("from './useSavedViews';");
+    expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
+    expect(filterToolbarSource).toContain("filterToolbarControlClass = 'h-7");
+    expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
+    expect(savedViewsMenuSource).toContain('<FilterPopoverTrigger');
+    expect(savedViewsMenuSource).toContain('class="relative shrink-0"');
+    expect(savedViewsMenuSource).toContain('class="h-3.5 w-3.5"');
     expect(savedViewsMenuSource).toContain('aria-label="Saved views"');
     expect(savedViewsMenuSource).toContain('aria-haspopup="dialog"');
     expect(savedViewsMenuSource).toContain('role="dialog"');

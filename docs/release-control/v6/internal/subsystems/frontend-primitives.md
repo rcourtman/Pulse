@@ -3910,6 +3910,18 @@ has a persistent label, and destructive view controls remain visibly
 discoverable at narrow touch viewports instead of depending on hover. The
 panel remains end-anchored to its trigger so its management actions cannot run
 past the viewport edge on the expanded mobile filter rail.
+Saved Views and View are peer filter-bar popovers and must compose the shared
+`FilterPopoverTrigger`; the shared trigger owns their matching text emphasis,
+icon geometry, disclosure chevron, active state, and button alignment instead
+of allowing each popup wrapper to restyle that contract independently.
+The Add filter select and adjacent action/popover triggers share the canonical
+`filterToolbarControlClass` height. When the Add filter label is visually
+hidden, its `FormSelect` must also omit the labelled group's outer padded/ring
+shell so the native select does not become a double-framed, oversized control;
+its extra width remains intentional space for dynamic filter-value labels. The
+visible `Add filter` value is a disabled, hidden placeholder, not an actionable
+option repeated at the top of the opened native list; only real filter values
+belong in that choice list.
 Counts or orientation strips presented as part of a filtered resource table
 must derive from that table's canonical filtered collection as well. They must
 not continue showing page-wide inventory totals after FilterBar state, saved

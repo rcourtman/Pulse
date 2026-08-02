@@ -1,5 +1,9 @@
 import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
-import { filterGroupClass, filterLabelClass } from '@/components/shared/FilterToolbar';
+import {
+  filterGroupClass,
+  filterLabelClass,
+  filterToolbarControlClass,
+} from '@/components/shared/FilterToolbar';
 import { FormSelect } from '@/components/shared/FormSelect';
 import {
   isFilterSet,
@@ -90,6 +94,8 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
   });
 
   const isDisabled = () => selectableByToken().size === 0;
+  const fieldBaseClass = () =>
+    props.showLabel === false ? 'flex-shrink-0' : `${filterGroupClass} flex-shrink-0`;
 
   const handleChange = (event: Event) => {
     const select = event.currentTarget as HTMLSelectElement;
@@ -104,15 +110,17 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
       <FormSelect
         id={selectId}
         label="Filter"
-        fieldBaseClass={`${filterGroupClass} flex-shrink-0`}
+        fieldBaseClass={fieldBaseClass()}
         labelClass={props.showLabel === false ? 'sr-only' : filterLabelClass}
-        selectBaseClass="rounded-md border border-transparent bg-surface-hover px-2 py-1 text-xs font-medium text-muted outline-none ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content focus:border-blue-500"
+        selectBaseClass={`${filterToolbarControlClass} border border-transparent bg-surface-hover px-2 text-muted outline-none ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content focus:border-blue-500`}
         selectClass="min-w-[7.5rem]"
         value=""
         onChange={handleChange}
         aria-label="Filter"
       >
-        <option value="">Add filter</option>
+        <option value="" disabled hidden>
+          Add filter
+        </option>
         <For each={selectableGroups()}>
           {(group) => (
             <optgroup label={GROUP_LABELS[group.key]}>

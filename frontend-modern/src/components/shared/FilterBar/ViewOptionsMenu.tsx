@@ -8,9 +8,8 @@ import {
   onCleanup,
 } from 'solid-js';
 import SlidersHorizontalIcon from 'lucide-solid/icons/sliders-horizontal';
-import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 
-import { FilterActionButton, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
+import { FilterPopoverTrigger, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
 
 interface ViewOptionsMenuProps {
   children: JSX.Element;
@@ -51,23 +50,18 @@ export const ViewOptionsMenu: Component<ViewOptionsMenuProps> = (props) => {
 
   return (
     <div ref={containerRef} class="relative shrink-0">
-      <FilterActionButton
+      <FilterPopoverTrigger
         ref={triggerRef}
-        active={open()}
+        open={open()}
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="dialog"
         aria-expanded={open()}
         aria-controls={open() ? panelId : undefined}
         title="Change table presentation"
-        class="text-base-content"
       >
         <SlidersHorizontalIcon class="h-3.5 w-3.5" aria-hidden="true" />
         View
-        <ChevronDownIcon
-          class={`h-3.5 w-3.5 transition-transform ${open() ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        />
-      </FilterActionButton>
+      </FilterPopoverTrigger>
 
       <Show when={open()}>
         <FilterToolbarPanel

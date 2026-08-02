@@ -1,5 +1,6 @@
 import { Component, For, JSX, Show, splitProps } from 'solid-js';
 import BarChartIcon from 'lucide-solid/icons/bar-chart';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { FormSelect } from './FormSelect';
 import {
@@ -16,11 +17,10 @@ export const filterGroupClass =
   'inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5 ring-1 ring-border-subtle';
 export const filterLabelClass =
   'px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted';
-export const filterActionButtonClass =
-  'inline-flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content';
+export const filterToolbarControlClass = 'h-7 rounded-md text-xs font-medium';
+export const filterActionButtonClass = `inline-flex items-center gap-1.5 ${filterToolbarControlClass} bg-surface-hover px-2.5 text-muted ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content`;
 export const filterActionButtonActiveClass = 'bg-surface text-base-content shadow-sm';
-export const filterSelectClass =
-  'rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500';
+export const filterSelectClass = `${filterToolbarControlClass} border border-border bg-surface px-2 text-base-content outline-none focus:border-blue-500`;
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
 export const filterPanelClass =
   'absolute right-0 top-[calc(100%+0.5rem)] z-[80] rounded-md border border-border bg-surface p-3 shadow-lg';
@@ -384,6 +384,27 @@ export const FilterActionButton: Component<FilterActionButtonProps> = (props) =>
     >
       {local.children}
     </button>
+  );
+};
+
+interface FilterPopoverTriggerProps extends Omit<FilterActionButtonProps, 'active'> {
+  open: boolean;
+}
+
+export const FilterPopoverTrigger: Component<FilterPopoverTriggerProps> = (props) => {
+  const [local, buttonProps] = splitProps(props, ['open', 'children', 'class']);
+  return (
+    <FilterActionButton
+      {...buttonProps}
+      active={local.open}
+      class={`text-base-content ${local.class ?? ''}`.trim()}
+    >
+      {local.children}
+      <ChevronDownIcon
+        class={`h-3.5 w-3.5 transition-transform ${local.open ? 'rotate-180' : ''}`}
+        aria-hidden="true"
+      />
+    </FilterActionButton>
   );
 };
 

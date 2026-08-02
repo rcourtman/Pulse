@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ChartVisibilityToggleButton,
   FilterHeader,
+  FilterPopoverTrigger,
   FilterToolbarPanel,
   FilterSegmentedControl,
   LabeledFilterSelect,
@@ -256,6 +257,31 @@ describe('FilterHeader', () => {
     expect(filterPanelClass).not.toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterPanelDefaultWidthClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterToolbarSource).toContain("'flex min-h-10 items-center gap-1.5");
+  });
+
+  it('keeps peer popover triggers aligned and exposes their disclosure state', () => {
+    const [open, setOpen] = createSignal(false);
+    render(() => (
+      <FilterPopoverTrigger
+        open={open()}
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open()}
+      >
+        Saved
+      </FilterPopoverTrigger>
+    ));
+
+    const trigger = screen.getByRole('button', { name: 'Saved' });
+    const chevron = trigger.querySelector('svg');
+    expect(trigger).toHaveClass('h-7');
+    expect(trigger).toHaveClass('text-base-content');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(chevron).not.toHaveClass('rotate-180');
+
+    trigger.click();
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(chevron).toHaveClass('rotate-180');
   });
 
   it('allows narrow shared popovers to opt out of the default wide panel width', () => {
