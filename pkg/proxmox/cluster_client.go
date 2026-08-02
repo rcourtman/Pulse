@@ -227,12 +227,14 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 		return nil, lastErr, false
 	}
 
+	// A member without a stored per-endpoint fingerprint fails against the
+	// base config's pinned fingerprint (the primary's). Cluster members carry
+	// their own certificates, so capture the member's fingerprint on first
+	// use just like discovery does, instead of pinning it to the primary's
+	// certificate forever.
 	cc.mu.RLock()
 	_, hasTOFU := cc.endpointFingerprints[endpoint]
 	cc.mu.RUnlock()
-	if !hasTOFU {
-		return nil, lastErr, false
-	}
 
 	newFingerprint, err := tlsutil.FetchFingerprint(endpoint)
 	if err != nil {
@@ -248,10 +250,17 @@ func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, end
 	cc.endpointFingerprints[endpoint] = newFingerprint
 	cc.mu.Unlock()
 
-	log.Warn().
-		Str("cluster", cc.name).
-		Str("endpoint", endpoint).
-		Msg("Detected TLS certificate change; refreshed TOFU fingerprint")
+	if hasTOFU {
+		log.Warn().
+			Str("cluster", cc.name).
+			Str("endpoint", endpoint).
+			Msg("Detected TLS certificate change; refreshed TOFU fingerprint")
+	} else {
+		log.Warn().
+			Str("cluster", cc.name).
+			Str("endpoint", endpoint).
+			Msg("Trusting cluster member certificate on first use; the pinned primary fingerprint cannot match per-node certificates")
+	}
 
 	cfg := cc.config
 	cfg.Host = endpoint

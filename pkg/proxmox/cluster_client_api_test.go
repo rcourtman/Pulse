@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -549,5 +550,66 @@ func TestClusterClient_GetTaskLog(t *testing.T) {
 	}
 	if lines[0].Text != "INFO: Starting Backup of VM 101 (qemu)" || lines[0].LineNumber != 1 {
 		t.Errorf("unexpected first line: %+v", lines[0])
+	}
+}
+
+// Issue #1664: refreshTOFUFingerprintAndRetry only refreshed endpoints that
+// already had a per-endpoint fingerprint entry, so it recovered certificate
+// rotation on known members but never first trust of a newly joined member.
+// A new member has no entry and fell back to the primary's pinned
+// fingerprint forever.
+func TestClusterClient_TOFUFirstUse_TrustsNewMemberCert(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api2/json/nodes" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"node":"member-b","status":"online"}]}`)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{
+		Host:        server.URL,
+		TokenName:   "root@pam!pulse",
+		TokenValue:  "secret",
+		Fingerprint: "DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF:DE:AD:BE:EF",
+	}
+	// Single endpoint skips the initial health check; the member endpoint has
+	// no per-endpoint fingerprint entry, exactly like a freshly joined node.
+	cc := NewClusterClient("issue1664", cfg, []string{server.URL}, nil)
+
+	mismatch := errors.New("certificate fingerprint mismatch: expected DE:AD, got EF:B5")
+	client, err, refreshed := cc.refreshTOFUFingerprintAndRetry(context.Background(), server.URL, 2*time.Second, mismatch)
+	if !refreshed {
+		t.Fatal("expected TOFU refresh to run for an endpoint with no stored fingerprint")
+	}
+	if err != nil {
+		t.Fatalf("expected retry with freshly captured fingerprint to succeed, got %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected a working client after first-use trust")
+	}
+
+	cc.mu.RLock()
+	stored := cc.endpointFingerprints[server.URL]
+	cc.mu.RUnlock()
+	if stored == "" {
+		t.Fatal("expected member fingerprint to be stored for future connections")
+	}
+}
+
+// Non-mismatch errors must not trigger TOFU capture.
+func TestClusterClient_TOFURefresh_IgnoresNonTLSMismatch(t *testing.T) {
+	cfg := ClientConfig{Host: "https://127.0.0.1:1", TokenName: "u@p!t", TokenValue: "v"}
+	cc := NewClusterClient("issue1664b", cfg, []string{"https://127.0.0.1:1"}, nil)
+
+	plainErr := errors.New("connection refused")
+	_, err, refreshed := cc.refreshTOFUFingerprintAndRetry(context.Background(), "https://127.0.0.1:1", time.Second, plainErr)
+	if refreshed {
+		t.Fatal("expected no TOFU refresh for a non-mismatch error")
+	}
+	if !errors.Is(err, plainErr) {
+		t.Fatalf("expected original error back, got %v", err)
 	}
 }

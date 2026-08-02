@@ -116,11 +116,11 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 
 	originalValidate := validatePVEClusterNode
 	t.Cleanup(func() { validatePVEClusterNode = originalValidate })
-	validatePVEClusterNode = func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string) {
+	validatePVEClusterNode = func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string, string) {
 		if node.Name == "pve-a" {
-			return true, "fingerprint-a"
+			return true, "fingerprint-a", ""
 		}
-		return false, ""
+		return false, "", "not reachable"
 	}
 	lastSeen := time.Now().Add(-time.Hour).UTC()
 

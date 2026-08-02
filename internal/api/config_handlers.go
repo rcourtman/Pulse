@@ -1005,10 +1005,45 @@ func ensureHostHasPort(host, port string) string {
 	return net.JoinHostPort(trimmed, port)
 }
 
+// isNodeValidationTLSError reports whether a validation error came from TLS
+// certificate or fingerprint verification rather than the Proxmox API itself.
+func isNodeValidationTLSError(errStr string) bool {
+	return strings.Contains(errStr, "fingerprint") || strings.Contains(errStr, "x509") || strings.Contains(errStr, "certificate")
+}
+
+// isNodeValidationAuthError reports whether the node's API answered but denied
+// access — proof enough that a real Proxmox endpoint is listening.
+func isNodeValidationAuthError(errStr string) bool {
+	return strings.Contains(errStr, "401") || strings.Contains(errStr, "403") || strings.Contains(errStr, "permission")
+}
+
+// nodeValidationFailureReason maps a validation error to a short operator-facing
+// category so cluster discovery can distinguish "could not resolve or connect"
+// from "TLS rejected" without leaking raw error internals.
+func nodeValidationFailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	errStr := err.Error()
+	switch {
+	case isNodeValidationTLSError(errStr):
+		return "TLS certificate validation failed"
+	case strings.Contains(errStr, "no such host"):
+		return "hostname did not resolve from the Pulse server"
+	case strings.Contains(errStr, "connection refused"):
+		return "connection refused"
+	case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded"):
+		return "connection timed out"
+	default:
+		return "not reachable"
+	}
+}
+
 // validateNodeAPI tests if a cluster node has a working Proxmox API
 // This helps filter out qdevice VMs and other non-Proxmox participants.
-// Returns (isValid, fingerprint) - fingerprint is captured for TOFU (Trust On First Use).
-func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string) {
+// Returns (isValid, fingerprint, failureReason) - fingerprint is captured for
+// TOFU (Trust On First Use); failureReason is empty when the node validates.
+func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string, string) {
 	// Determine the host to test - prefer IP if available, otherwise use node name
 	testHost := clusterNode.IP
 	if testHost == "" {
@@ -1017,7 +1052,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 
 	// Skip empty hostnames (shouldn't happen but be safe)
 	if testHost == "" {
-		return false, ""
+		return false, "", "no hostname or IP reported for this cluster member"
 	}
 
 	scheme, defaultPort := deriveSchemeAndPort(baseConfig.Host)
@@ -1064,9 +1099,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 		// same fingerprint will fail. Fall back to a relaxed TLS check so we can
 		// still detect valid cluster members while keeping other errors (like
 		// auth) as hard failures.
-		errStr := err.Error()
-		isTLSMismatch := strings.Contains(errStr, "fingerprint") || strings.Contains(errStr, "x509") || strings.Contains(errStr, "certificate")
-		if isTLSMismatch {
+		if isNodeValidationTLSError(err.Error()) {
 			log.Debug().
 				Str("node", clusterNode.Name).
 				Msg("Retrying cluster node validation without fingerprint pinning")
@@ -1079,7 +1112,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 				Str("node", clusterNode.Name).
 				Err(err).
 				Msg("Failed to create test client for cluster node")
-			return false, ""
+			return false, "", nodeValidationFailureReason(err)
 		}
 	}
 
@@ -1094,26 +1127,59 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 		// If we reached the API but were denied (common when per-node permissions
 		// differ), treat it as valid. We only want to filter out hosts that aren't
 		// actually Proxmox endpoints.
-		if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "403") || strings.Contains(errMsg, "permission") {
+		if isNodeValidationAuthError(errMsg) {
 			log.Debug().
 				Str("node", clusterNode.Name).
 				Err(err).
 				Msg("Cluster node API responded but denied access; accepting for discovery")
-			return true, capturedFingerprint
+			return true, capturedFingerprint, ""
+		}
+
+		// A pinned-fingerprint mismatch surfaces here, not from NewClient: the
+		// verifier runs during the TLS handshake of the first request. Cluster
+		// members normally carry their own per-node certificates, so retry with
+		// the member's own captured fingerprint before rejecting it.
+		if isNodeValidationTLSError(errMsg) {
+			retryConfig := testConfig
+			retryConfig.Fingerprint = capturedFingerprint
+			if capturedFingerprint == "" {
+				retryConfig.VerifySSL = false
+			}
+			if retryNodeValidation(retryConfig) {
+				log.Debug().
+					Str("node", clusterNode.Name).
+					Msg("Cluster node validated with its own certificate after pinned-fingerprint mismatch")
+				return true, capturedFingerprint, ""
+			}
 		}
 
 		log.Debug().
 			Str("node", clusterNode.Name).
 			Err(err).
 			Msg("Node failed Proxmox API validation - likely not a Proxmox node")
-		return false, ""
+		return false, "", nodeValidationFailureReason(err)
 	}
 
 	log.Debug().
 		Str("node", clusterNode.Name).
 		Msg("Node passed Proxmox API validation")
 
-	return true, capturedFingerprint
+	return true, capturedFingerprint, ""
+}
+
+// retryNodeValidation re-runs the lightweight validation call with an adjusted
+// TLS configuration. Auth denials still count as success (see validateNodeAPI).
+func retryNodeValidation(cfg proxmox.ClientConfig) bool {
+	retryClient, err := proxmox.NewClient(cfg)
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := retryClient.GetNodes(ctx); err != nil {
+		return isNodeValidationAuthError(err.Error())
+	}
+	return true
 }
 
 // findExistingGuestURL looks up the GuestURL for a node from existing endpoints
@@ -1348,7 +1414,7 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 			// Reachability enriches a member endpoint but never defines cluster
 			// membership. Powered-off nodes remain canonical members even
 			// though their individual API cannot answer during discovery.
-			isValid, nodeFingerprint := validatePVEClusterNode(clusterNode, clientConfig)
+			isValid, nodeFingerprint, failureReason := validatePVEClusterNode(clusterNode, clientConfig)
 			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
 			if !isValid {
 				log.Info().
@@ -1387,6 +1453,9 @@ func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string,
 			}
 			if !isValid {
 				endpoint.PulseError = "Proxmox API endpoint unavailable during cluster discovery"
+				if failureReason != "" {
+					endpoint.PulseError = fmt.Sprintf("Proxmox API endpoint unavailable during cluster discovery (%s)", failureReason)
+				}
 			}
 
 			// Populate Host field with hostname (if available) for TLS certificate validation
