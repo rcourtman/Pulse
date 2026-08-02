@@ -2272,6 +2272,85 @@ func staleHostIdentityForReenrollment(report agentshost.Report, tokenRecord *con
 	return bestID
 }
 
+// hostRenameHealSource returns the host record that keeps a renamed machine's
+// identity forked: same host ID, same reporting token, same machine ID, a
+// different hostname, and no report for several health windows. A cloned VM
+// sharing a machine ID (#1584) keeps reporting under the old hostname, so it
+// never matches; only a machine that stopped reporting under its previous
+// hostname does (#1667).
+func hostRenameHealSource(hosts []models.Host, id, tokenID, machineID, hostname string, now time.Time) (models.Host, bool) {
+	id = strings.TrimSpace(id)
+	tokenID = strings.TrimSpace(tokenID)
+	machineID = strings.TrimSpace(machineID)
+	if id == "" || tokenID == "" || machineID == "" {
+		return models.Host{}, false
+	}
+	for _, candidate := range hosts {
+		if strings.TrimSpace(candidate.ID) != id {
+			continue
+		}
+		if strings.TrimSpace(candidate.TokenID) != tokenID ||
+			strings.TrimSpace(candidate.MachineID) != machineID ||
+			hostAgentHostnamesMatch(candidate.Hostname, hostname) {
+			return models.Host{}, false
+		}
+		if candidate.LastSeen.IsZero() ||
+			now.Sub(candidate.LastSeen) > 3*hostAgentHealthWindow(candidate.IntervalSeconds) {
+			return candidate, true
+		}
+		return models.Host{}, false
+	}
+	return models.Host{}, false
+}
+
+// removeSupersededHostRecord removes a host record that a live identity has
+// superseded, along with its bindings, continuity, and tracking state. This is
+// an internal supersession, not a user removal: no tombstone, no token
+// revocation.
+func (m *Monitor) removeSupersededHostRecord(staleID, replacementID, reason string) bool {
+	staleID = strings.TrimSpace(staleID)
+	if staleID == "" {
+		return false
+	}
+	removed, ok := m.state.RemoveHost(staleID)
+	if !ok {
+		return false
+	}
+	m.state.RemoveConnectionHealth(hostConnectionPrefix + staleID)
+	m.state.UnlinkNodesFromHostAgent(staleID)
+	m.clearAgentLXCFilesystems(staleID)
+
+	m.mu.Lock()
+	for key, boundID := range m.hostTokenBindings {
+		if strings.TrimSpace(boundID) == staleID {
+			delete(m.hostTokenBindings, key)
+		}
+	}
+	m.clearHostAgentIdentityTrackingLocked(staleID)
+	m.mu.Unlock()
+
+	m.hostReportOrderMu.Lock()
+	delete(m.hostReportOrders, staleID)
+	m.hostReportOrderMu.Unlock()
+
+	if m.hostContinuityStore != nil {
+		if err := m.hostContinuityStore.Delete(staleID); err != nil {
+			log.Warn().Err(err).Str("staleHostID", staleID).Msg("Failed to remove superseded host continuity entry")
+		}
+	}
+	if m.alertManager != nil {
+		m.alertManager.HandleHostRemoved(removed)
+		m.SyncAlertState()
+	}
+
+	log.Info().
+		Str("host", removed.Hostname).
+		Str("staleHostID", staleID).
+		Str("replacementHostID", replacementID).
+		Msg(reason)
+	return true
+}
+
 // supersedeStaleHostAgentDuplicates removes older generations left behind by
 // installs completed before this cleanup existed. This is an internal
 // supersession, not a user removal: it deliberately creates no tombstone and
@@ -2314,42 +2393,7 @@ func (m *Monitor) supersedeStaleHostAgentDuplicates(current models.Host, tokenRe
 			continue
 		}
 
-		removed, ok := m.state.RemoveHost(staleID)
-		if !ok {
-			continue
-		}
-		m.state.RemoveConnectionHealth(hostConnectionPrefix + staleID)
-		m.state.UnlinkNodesFromHostAgent(staleID)
-		m.clearAgentLXCFilesystems(staleID)
-
-		m.mu.Lock()
-		for key, boundID := range m.hostTokenBindings {
-			if strings.TrimSpace(boundID) == staleID {
-				delete(m.hostTokenBindings, key)
-			}
-		}
-		m.clearHostAgentIdentityTrackingLocked(staleID)
-		m.mu.Unlock()
-
-		m.hostReportOrderMu.Lock()
-		delete(m.hostReportOrders, staleID)
-		m.hostReportOrderMu.Unlock()
-
-		if m.hostContinuityStore != nil {
-			if err := m.hostContinuityStore.Delete(staleID); err != nil {
-				log.Warn().Err(err).Str("staleHostID", staleID).Msg("Failed to remove superseded host continuity entry")
-			}
-		}
-		if m.alertManager != nil {
-			m.alertManager.HandleHostRemoved(removed)
-			m.SyncAlertState()
-		}
-
-		log.Info().
-			Str("host", removed.Hostname).
-			Str("staleHostID", staleID).
-			Str("replacementHostID", current.ID).
-			Msg("Superseded stale host agent record after re-enrollment")
+		m.removeSupersededHostRecord(staleID, current.ID, "Superseded stale host agent record after re-enrollment")
 	}
 }
 
@@ -2435,6 +2479,22 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		// even if another colliding host disappears later.
 		if boundID != "" {
 			identifier = boundID
+			// A machine renamed while its old record still existed was forked
+			// onto a suffixed identity to stay safe against cloned VMs
+			// sharing a machine ID (#1584). Once the pre-rename record has
+			// clearly stopped reporting, the collision is proven to be a
+			// rename, not a clone, so heal back to the base identity that
+			// workload modules still report under (#1667).
+			if boundID != baseIdentifier {
+				if stale, ok := hostRenameHealSource(existingHostModels, baseIdentifier, tokenID, strings.TrimSpace(report.Host.MachineID), hostname, receivedAt); ok {
+					m.removeSupersededHostRecord(stale.ID, baseIdentifier, "Superseded stale pre-rename host record to heal forked identity")
+					m.removeSupersededHostRecord(boundID, baseIdentifier, "Retired forked host identity after rename heal")
+					m.mu.Lock()
+					m.hostTokenBindings[bindingKey] = baseIdentifier
+					m.mu.Unlock()
+					identifier = baseIdentifier
+				}
+			}
 		} else {
 			bindingID := baseIdentifier
 			reusedStaleID := staleHostIdentityForReenrollment(report, tokenRecord, existingHostModels)
@@ -2449,6 +2509,14 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 					break
 				}
 				if hostAgentHostnamesMatch(candidate.Hostname(), hostname) && strings.TrimSpace(candidate.TokenID()) == tokenID {
+					break
+				}
+
+				// A colliding record that stopped reporting under its old
+				// hostname is a rename, not a clone: supersede it and keep
+				// the base identity instead of forking (#1667).
+				if stale, ok := hostRenameHealSource(existingHostModels, bindingID, tokenID, strings.TrimSpace(report.Host.MachineID), hostname, receivedAt); ok {
+					m.removeSupersededHostRecord(stale.ID, bindingID, "Superseded stale pre-rename host record instead of forking identity")
 					break
 				}
 
