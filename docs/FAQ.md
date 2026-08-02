@@ -134,3 +134,10 @@ Pulse defaults to same-origin only. If you access the API from a different domai
 
 ### High memory usage?
 If you are storing long history windows, reduce metrics retention (see [METRICS_HISTORY.md](METRICS_HISTORY.md)). Also confirm your polling intervals match your environment size.
+
+---
+
+## 🧑‍💻 The Project
+
+### Is Pulse developed with AI?
+Yes, extensively and openly. Code, docs, and issue replies may all involve AI tools, and everything ships under the maintainer's review and responsibility. See [AI-Assisted Development](AI_TRANSPARENCY.md) for the full position.

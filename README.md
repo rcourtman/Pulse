@@ -180,6 +180,7 @@ and Recovery desktop history-table layout are all aligned.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
 - **[AI Features](docs/AI.md)**: Pulse Assistant (Chat), Pulse Patrol, and the Pulse MCP external-agent adapter.
+- **[AI-Assisted Development](docs/AI_TRANSPARENCY.md)**: How AI tools are used to build and maintain Pulse itself.
 - **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise/internal multi-organization setup and configuration.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 - **[Agent Security](docs/AGENT_SECURITY.md)**: Agent privilege model, Proxmox API-only choices, and checksum/signature verification.
