@@ -60,6 +60,9 @@ func TestSQLiteResourceStoreDoesNotPersistRawOperationReceiptProtocolOrReplayAut
 		if strings.Contains(lower, "operation_receipt_version") || name == "operation_receipts" {
 			t.Fatalf("resource store acquired raw protocol or agent replay authority: table=%q schema=%q", name, schema)
 		}
+		if name == "resource_metadata" {
+			t.Fatalf("resource store declares the dead resource_metadata table; guest metadata lives in the JSON-file store (internal/config/guest_metadata.go): schema=%q", schema)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)

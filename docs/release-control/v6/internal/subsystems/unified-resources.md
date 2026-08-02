@@ -4334,3 +4334,22 @@ narrow. Shared resource adapters may admit explicit aliases such as `host`,
 through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
+
+### Resource store does not declare a resource_metadata table
+
+The SQLite resource store schema in `internal/unifiedresources/store.go` no
+longer declares the `resource_metadata` table (canonical_id-keyed
+custom_url/custom_name/notes/tags rows) or its
+`idx_resource_metadata_canonical` index. The table had no readers or writers
+anywhere in the codebase, including `pulse-enterprise`; guest metadata is
+owned by the JSON-file store in `internal/config/guest_metadata.go`, keyed by
+`instance:node:vmid`. The unified-resource store must not grow a competing
+user-metadata surface — reintroducing a metadata table here would fork
+metadata ownership across two stores with different keying models.
+
+Existing deployed databases are intentionally left alone: no `DROP TABLE`
+migration is issued, because a stale unused table is harmless while a
+destructive migration is not. The boundary is only that fresh schema creation
+stops declaring dead tables.
+`internal/unifiedresources/store_test.go` pins this by failing if a fresh
+store's `sqlite_master` contains `resource_metadata`.

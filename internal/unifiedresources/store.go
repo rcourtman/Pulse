@@ -444,18 +444,6 @@ func (s *SQLiteResourceStore) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_resource_exclusions_a ON resource_exclusions(resource_a);
 	CREATE INDEX IF NOT EXISTS idx_resource_exclusions_b ON resource_exclusions(resource_b);
 
-	CREATE TABLE IF NOT EXISTS resource_metadata (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		canonical_id TEXT NOT NULL UNIQUE,
-		custom_url TEXT,
-		custom_name TEXT,
-		notes TEXT,
-		tags TEXT,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_by TEXT
-	);
-	CREATE INDEX IF NOT EXISTS idx_resource_metadata_canonical ON resource_metadata(canonical_id);
-
 	CREATE TABLE IF NOT EXISTS resource_changes (
 		id TEXT PRIMARY KEY,
 		canonical_id TEXT NOT NULL,
