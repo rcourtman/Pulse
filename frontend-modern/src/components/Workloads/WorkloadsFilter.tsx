@@ -18,6 +18,10 @@ import {
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import {
+  normalizeSourcePlatformQueryValue,
+  sourcePlatformScopeMatchesFilter,
+} from '@/utils/sourcePlatforms';
 import { isContainerWorkloadViewMode } from '@/utils/workloads';
 import type { ViewMode } from '@/types/workloads';
 import { MetricDisplayModeSegmentedControl } from './MetricDisplayModeSegmentedControl';
@@ -35,16 +39,20 @@ import {
 } from './workloadsFilterModel';
 import { WORKLOAD_STATUS_FILTER_OPTIONS, WORKLOAD_TYPE_OPTIONS } from './workloadFilterConfigModel';
 
-const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
-
 export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   const { isMobile } = useBreakpoint();
 
   const typeValue = () =>
     isContainerWorkloadViewMode(props.viewMode()) ? 'container' : props.viewMode();
 
-  const isProxmoxScope = () =>
-    (props.forcedPlatform ?? '').trim().toLowerCase() === PROXMOX_PLATFORM_FILTER;
+  const isProxmoxScope = () => {
+    const forcedPlatform = normalizeSourcePlatformQueryValue(props.forcedPlatform);
+    return (
+      forcedPlatform !== '' &&
+      forcedPlatform !== 'all' &&
+      sourcePlatformScopeMatchesFilter('proxmox-pve', forcedPlatform)
+    );
+  };
 
   const workloadTypeOptions = (): FilterSelectOption[] =>
     (isProxmoxScope()

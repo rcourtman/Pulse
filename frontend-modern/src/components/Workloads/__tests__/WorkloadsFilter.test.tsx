@@ -197,6 +197,32 @@ describe('WorkloadsFilter', () => {
       pickInlineFilter('Type', 'VMs');
       expect(setViewMode).toHaveBeenCalledWith('vm');
     });
+
+    it.each(['proxmox-pve', 'proxmox-all', 'proxmox'])(
+      'limits the %s platform scope to Proxmox workload types',
+      (forcedPlatform) => {
+        render(() => <WorkloadsFilter {...makeProps({ forcedPlatform })} />);
+
+        const typeFilter = within(inlineFilterGroup('Type'));
+        expect(typeFilter.getByRole('button', { name: 'All' })).toBeInTheDocument();
+        expect(typeFilter.getByRole('button', { name: 'VMs' })).toBeInTheDocument();
+        expect(typeFilter.getByRole('button', { name: 'LXCs' })).toBeInTheDocument();
+        expect(typeFilter.queryByRole('button', { name: 'Containers' })).not.toBeInTheDocument();
+        expect(typeFilter.queryByRole('button', { name: 'Pods' })).not.toBeInTheDocument();
+      },
+    );
+
+    it.each([undefined, '', 'all', 'kubernetes'])(
+      'keeps global workload types for the %s platform scope',
+      (forcedPlatform) => {
+        render(() => <WorkloadsFilter {...makeProps({ forcedPlatform })} />);
+
+        const typeFilter = within(inlineFilterGroup('Type'));
+        expect(typeFilter.getByRole('button', { name: 'Containers' })).toBeInTheDocument();
+        expect(typeFilter.getByRole('button', { name: 'Pods' })).toBeInTheDocument();
+        expect(typeFilter.queryByRole('button', { name: 'LXCs' })).not.toBeInTheDocument();
+      },
+    );
   });
 
   describe('status filter', () => {

@@ -1644,7 +1644,10 @@ Workload type option labels are part of that filter-config model ownership:
 instead of embedding its own `System containers` / `App containers` wording in
 the shell, with platform-first presentation allowed to narrow or relabel that
 catalog only when the owning platform scope makes the broader v6 options
-inapplicable (for example Proxmox rendering the container option as `LXCs`).
+inapplicable. Proxmox narrowing must resolve the forced platform through the
+canonical `sourcePlatformScopeMatchesFilter` helper against `proxmox-pve`, so
+both the PVE scope and the `proxmox-all` aggregate expose only `All`, `VMs`, and
+`LXCs`; the global `Pods` option must not leak into that platform-owned surface.
 The Type and Status filters must remain one-click inline `FilterBar` controls
 because they are the high-frequency workload narrowing path; dynamic scope
 filters such as node, platform, namespace, and runtime stay menu-backed.
