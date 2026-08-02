@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
@@ -281,7 +281,7 @@ describe('filterPlatformResources', () => {
 });
 
 describe('PlatformTableToolbar', () => {
-  it('keeps table view options inside the shared filter toolbar with the row counter', () => {
+  it('owns the View popover while keeping the row counter permanently visible', () => {
     render(() =>
       PlatformTableToolbar({
         search: () => '',
@@ -293,15 +293,22 @@ describe('PlatformTableToolbar', () => {
         visible: 2,
         total: 3,
         rowNoun: 'rows',
-        viewOptionsTrailing: 'Columns',
+        viewOptions: 'Columns',
       }),
     );
 
-    const columnsLabel = screen.getByText('Columns');
-    const filterBar = columnsLabel.closest('.filter-bar');
+    const viewTrigger = screen.getByRole('button', { name: 'View' });
+    const filterBar = viewTrigger.closest('.filter-bar');
 
     expect(filterBar).not.toBeNull();
     expect(filterBar).toContainElement(screen.getByText('2 of 3 rows'));
+    expect(screen.queryByText('Columns')).not.toBeInTheDocument();
+
+    fireEvent.click(viewTrigger);
+
+    const viewDialog = screen.getByRole('dialog', { name: 'View preferences' });
+    expect(viewDialog).toHaveTextContent('Columns');
+    expect(viewDialog).not.toContainElement(screen.getByText('2 of 3 rows'));
   });
 });
 

@@ -8102,6 +8102,7 @@ describe('shared primitive guardrails', () => {
     expect(filterBarIndexSource).toContain("export { FilterChip } from './FilterChip';");
     expect(filterBarIndexSource).toContain("export { AddFilterMenu } from './AddFilterMenu';");
     expect(filterBarIndexSource).toContain("export { SavedViewsMenu } from './SavedViewsMenu';");
+    expect(filterBarIndexSource).toContain("export { ViewOptionsMenu } from './ViewOptionsMenu';");
     expect(filterBarIndexSource).toContain("export { useSavedViews } from './useSavedViews';");
     expect(filterBarIndexSource).toContain(
       "export { filterChipStatusDot } from './filterOptionPresentation';",
@@ -8229,6 +8230,11 @@ describe('shared primitive guardrails', () => {
     expect(filterToolbarSource).toContain("filterToolbarControlClass = 'h-7");
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
     expect(savedViewsMenuSource).toContain('<FilterPopoverTrigger');
+    expect(sharedPlatformPageSource).toContain('viewOptions?: JSX.Element;');
+    expect(sharedPlatformPageSource).toContain(
+      '<ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>',
+    );
+    expect(sharedPlatformPageSource).not.toContain('viewOptionsTrailing?: JSX.Element;');
     expect(savedViewsMenuSource).toContain('class="relative shrink-0"');
     expect(savedViewsMenuSource).toContain('class="h-3.5 w-3.5"');
     expect(savedViewsMenuSource).toContain('aria-label="Saved views"');

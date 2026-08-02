@@ -1,16 +1,21 @@
 {
   "version": 1,
-  "base_sha": "b109c1230f3efce7d89750318e996afa00dcf40c",
-  "verified_at": "2026-08-02T22:47:16Z",
+  "base_sha": "8be236e99a1f6328cc8e246d4789b84283484e01",
+  "verified_at": "2026-08-02T23:15:31Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx"
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "36071da0390d3b831526b33989f587ee00b7c16c16b607fe9dd3097223442e0b"
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "ffa97a53dae52e2072ea2adb3fd9bda36654275776c4ba96cc12cd515641ca5f",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "32618bee6d96fad013fa0cb2efc0a93c3eabac1ab402d117b56f621f59639930",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "91302f9489dcee2b3cb9fa0b3042b4552397d358091767e77fc94c1d72eb9d5a"
   },
   "routes": [
-    "/docker/overview"
+    "/docker/overview",
+    "/standalone/machines"
   ],
   "viewports": [
     {
@@ -23,20 +28,25 @@
     }
   ],
   "states": [
-    "Desktop Docker container toolbar with the shared View trigger closed",
-    "Desktop Docker View preferences popover open with Grouped selected",
-    "Desktop flat container layout with List selected",
-    "Reloaded desktop View preferences with the persisted List selection",
-    "Phone-width expanded filter rail with the View trigger closed",
-    "Phone-width View preferences popover open with Grouped selected"
+    "Desktop Docker toolbar with View closed and its resource counter permanently visible",
+    "Desktop Docker View preferences open with Grouped and List inside the Layout section",
+    "Docker List layout before and after reload with host group rows absent",
+    "Phone-width Docker filter rail collapsed and expanded",
+    "Phone-width Docker View preferences open with the popover contained inside the viewport",
+    "Desktop Machines toolbar with only View and the machine counter permanently visible",
+    "Desktop Machines View preferences with Columns collapsed and expanded",
+    "Phone-width Machines filter rail collapsed and expanded",
+    "Phone-width Machines View preferences with Columns collapsed and expanded",
+    "Machines IP column preference before toggle, after toggle, after reload, and restored"
   ],
   "interactions": [
-    "Opened Docker View preferences and confirmed Grouped and List are no longer permanent toolbar controls",
-    "Selected List and confirmed host group header rows were removed from the container table",
-    "Reloaded Docker Overview, reopened View, and confirmed List remained selected",
-    "Restored Grouped and confirmed host group headers returned",
-    "Expanded the phone-width filter rail, opened View, and confirmed the popover remained inside the viewport",
-    "Pressed Escape and confirmed the popover closed and focus returned to the View trigger",
-    "Confirmed the browser console reported no errors during the final desktop and phone-width pass"
+    "Opened Docker View and confirmed Grouped and List are no longer permanent toolbar controls",
+    "Selected Docker List, confirmed host group rows were removed, reloaded, and confirmed List remained selected",
+    "Pressed Escape from Docker View and confirmed the popover closed and focus returned to View",
+    "Expanded the phone-width Docker filter rail and confirmed the View popover remained inside the viewport",
+    "Opened Machines View and expanded the nested Columns control at desktop and phone widths",
+    "Toggled the Machines IP column, reloaded, confirmed the persisted checked state, and restored the original preference",
+    "Pressed Escape from nested Machines column content and confirmed the View popover dismissed",
+    "Confirmed both routes had no horizontal page overflow at 390px and no browser console errors"
   ]
 }

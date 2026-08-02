@@ -1394,13 +1394,19 @@ export const AgentsMachinesTable: Component<{
           rowNoun="machines"
           hasActiveFilters={tableState.hasActiveFilters()}
           onResetFilters={tableState.resetFilters}
-          viewOptionsTrailing={
-            <ColumnPicker
-              columns={columnVisibility.availableToggles()}
-              isHidden={columnVisibility.isHiddenByUser}
-              onToggle={columnVisibility.toggle}
-              onReset={columnVisibility.resetToDefaults}
-            />
+          viewOptions={
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Table
+              </div>
+              <ColumnPicker
+                inline
+                columns={columnVisibility.availableToggles()}
+                isHidden={columnVisibility.isHiddenByUser}
+                onToggle={columnVisibility.toggle}
+                onReset={columnVisibility.resetToDefaults}
+              />
+            </div>
           }
         />
 

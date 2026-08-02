@@ -12,7 +12,12 @@ import {
 } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
-import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
+import {
+  FilterBar,
+  ViewOptionsMenu,
+  filterChipStatusDot,
+  type FilterDef,
+} from '@/components/shared/FilterBar';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
@@ -1003,7 +1008,12 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   // chips behind "+ Filter".
   filters?: FilterDef[];
   savedViewsKey?: string;
-  viewOptionsTrailing?: JSX.Element;
+  /**
+   * Low-frequency table presentation controls. PlatformTableToolbar owns the
+   * shared View popover so feature tables cannot accidentally render these as
+   * permanent toolbar controls.
+   */
+  viewOptions?: JSX.Element;
 }) {
   const { isMobile } = useBreakpoint();
 
@@ -1056,7 +1066,9 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       savedViewsKey={props.savedViewsKey}
       viewOptionsTrailing={
         <>
-          {props.viewOptionsTrailing}
+          <Show when={props.viewOptions}>
+            <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
+          </Show>
           <PlatformResourceCounter
             visible={props.visible}
             total={props.total}

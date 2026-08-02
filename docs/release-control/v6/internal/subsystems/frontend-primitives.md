@@ -3881,7 +3881,10 @@ and chip popovers (`AddFilterMenu` and `FilterChip`). Low-frequency view options
 (grouping segmented control, charts toggle, columns picker, sort key) compose
 the shared `ViewOptionsMenu` inside the `viewOptionsTrailing` slot instead of
 remaining as permanent toolbar controls; table counters and other persistent
-orientation readouts may remain adjacent in that slot. Recovery is event-first
+orientation readouts may remain adjacent in that slot. Platform tables using
+`PlatformTableToolbar` pass only their panel content through its `viewOptions`
+prop: the shared toolbar owns `ViewOptionsMenu` creation, and feature consumers
+must not pass or render their own View trigger. Recovery is event-first
 and does not use equal workspace subtabs for protected rollups versus event
 history; Storage subtabs (Pools / Physical Disks) sit above the bar as
 navigation, not filters.

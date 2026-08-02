@@ -1,6 +1,6 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
-import { ViewOptionsMenu, type FilterDef } from '@/components/shared/FilterBar';
+import { type FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { isContainerUpdatePinned } from '@/components/shared/containerUpdateBadgeModel';
 import {
@@ -725,19 +725,17 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             rowNoun="containers"
             hasActiveFilters={hasActiveFilters()}
             onResetFilters={resetFilters}
-            viewOptionsTrailing={
+            viewOptions={
               <Show when={isGroupable()}>
-                <ViewOptionsMenu>
-                  <div>
-                    <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                      Layout
-                    </div>
-                    <GroupedTableModeSegmentedControl
-                      value={groupingMode()}
-                      onChange={setGroupingModePreference}
-                    />
+                <div>
+                  <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    Layout
                   </div>
-                </ViewOptionsMenu>
+                  <GroupedTableModeSegmentedControl
+                    value={groupingMode()}
+                    onChange={setGroupingModePreference}
+                  />
+                </div>
               </Show>
             }
           />

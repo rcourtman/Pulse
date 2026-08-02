@@ -206,6 +206,7 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PlatformTableToolbar');
       expect(source).toContain('createPlatformTableFilterState');
       expect(source).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
+      expect(source).not.toContain('ViewOptionsMenu');
       expect(source).not.toContain("from '@/components/shared/SearchInput'");
       expect(source).not.toContain("from '@/components/shared/FilterButtonGroup'");
       // Forbid a bespoke search signal (`const [search, setSearch] = createSignal`)

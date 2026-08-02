@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentMetadataAPI } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
@@ -116,6 +116,14 @@ const getAllAgentMetadataMock = vi.mocked(AgentMetadataAPI.getAllMetadata);
 const deleteAgentMetadataMock = vi.mocked(AgentMetadataAPI.deleteMetadata);
 const deleteAgentMock = vi.mocked(MonitoringAPI.deleteAgent);
 
+const openMachineColumnPicker = async () => {
+  const viewTrigger = screen.getByRole('button', { name: 'View' });
+  await fireEvent.click(viewTrigger);
+  const viewDialog = screen.getByRole('dialog', { name: 'View preferences' });
+  await fireEvent.click(within(viewDialog).getByTitle('Choose which columns to display'));
+  return viewDialog;
+};
+
 beforeEach(() => {
   getAllAgentMetadataMock.mockResolvedValue({});
   deleteAgentMetadataMock.mockResolvedValue(undefined);
@@ -138,7 +146,7 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
-  it('keeps the column picker inside the shared machine filter toolbar', () => {
+  it('keeps the column picker inside the shared View preferences popover', async () => {
     render(() => (
       <AgentsMachinesTable
         resources={[resource({ id: 'tower', name: 'Tower' })]}
@@ -149,11 +157,16 @@ describe('AgentsMachinesTable', () => {
     ));
 
     const search = screen.getByPlaceholderText('Search machines');
-    const columnsButton = screen.getByTitle('Choose which columns to display');
-    const filterBar = columnsButton.closest('.filter-bar');
+    const viewTrigger = screen.getByRole('button', { name: 'View' });
+    const filterBar = viewTrigger.closest('.filter-bar');
 
     expect(filterBar).not.toBeNull();
     expect(filterBar).toContainElement(search);
+    expect(screen.queryByTitle('Choose which columns to display')).not.toBeInTheDocument();
+
+    const viewDialog = await openMachineColumnPicker();
+    expect(within(viewDialog).getByText('Table')).toBeInTheDocument();
+    expect(within(viewDialog).getByLabelText('IP')).toBeInTheDocument();
   });
 
   it('surfaces machine-native monitoring columns for agent machines', async () => {
@@ -229,7 +242,7 @@ describe('AgentsMachinesTable', () => {
 
     expect(screen.queryByRole('button', { name: 'Sort by Net I/O' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sort by Disk I/O' })).not.toBeInTheDocument();
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Net I/O'));
     await fireEvent.click(screen.getByLabelText('Disk I/O'));
 
@@ -519,7 +532,7 @@ describe('AgentsMachinesTable', () => {
 
     expect(screen.queryByText('192.168.0.21 | seen 5m ago')).not.toBeInTheDocument();
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Last seen'));
 
     expect(screen.getByText('192.168.0.21 | seen 5m ago')).toBeInTheDocument();
@@ -685,7 +698,7 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Net I/O'));
     const trigger = container.querySelector('[data-agent-machine-network-trigger="true"]');
     expect(trigger).not.toBeNull();
@@ -730,7 +743,7 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('IP'));
 
     const trigger = container.querySelector('[data-agent-machine-ip-trigger="true"]');
@@ -779,7 +792,7 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Disk I/O'));
     const trigger = container.querySelector('[data-agent-machine-diskio-trigger="true"]');
     expect(trigger).not.toBeNull();
@@ -835,7 +848,7 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('RAID'));
 
     const trigger = container.querySelector('[data-agent-machine-raid-trigger="true"]');
@@ -905,7 +918,7 @@ describe('AgentsMachinesTable', () => {
 
     expect(screen.queryByText('arm64')).not.toBeInTheDocument();
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Arch'));
 
     expect(screen.getByText('arm64')).toBeInTheDocument();
@@ -983,7 +996,7 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Temp'));
     const trigger = container.querySelector('[data-agent-machine-temperature-trigger="true"]');
     expect(trigger).not.toBeNull();
@@ -1026,7 +1039,7 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await openMachineColumnPicker();
     await fireEvent.click(screen.getByLabelText('Temp'));
     const pressure = await screen.findByText('Nominal');
 

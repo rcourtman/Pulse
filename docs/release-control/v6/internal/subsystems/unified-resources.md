@@ -311,6 +311,9 @@ a frequently changed resource filter. Multi-host Overview therefore exposes
 Grouped versus List inside the frontend-primitives-owned shared View
 preferences popover, matching the Proxmox workload surface, and must not leave
 that segmented control permanently inline beside Status, Add filter, and Saved.
+Docker supplies only the layout preference content to `PlatformTableToolbar`;
+the shared toolbar owns the View trigger and popover so this consumer cannot
+drift back to a page-local presentation control.
 The empty state for this route must preserve that runtime-lens contract:
 standalone Docker / Podman hosts use a local runtime agent, while Docker inside
 Proxmox LXCs is represented as the explicitly opted-in Proxmox host-side guest
