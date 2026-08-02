@@ -1011,7 +1011,7 @@ func TestGetSystemMetricHistoryUsesReportingRPC(t *testing.T) {
 			t.Fatalf("unexpected history params: %#v", historyReq.Params)
 		}
 		graphs, ok := params[0].([]any)
-		if !ok || len(graphs) != 4 {
+		if !ok || len(graphs) != 5 {
 			t.Fatalf("unexpected history graphs: %#v", params[0])
 		}
 		query, ok := params[1].(map[string]any)

@@ -29,14 +29,18 @@ type SystemInfo struct {
 	CPUCount             int
 	MemoryTotalBytes     int64
 	MemoryAvailableBytes int64
-	CPUPercent           float64
-	NetInRate            float64
-	NetOutRate           float64
-	DiskReadRate         float64
-	DiskWriteRate        float64
-	TemperatureCelsius   map[string]float64
-	IntervalSeconds      int
-	CollectedAt          time.Time
+	// ARCSizeBytes is the ZFS ARC cache size. The kernel's MemAvailable does
+	// not count ARC even though it shrinks under memory pressure, so usage
+	// derived from total-available alone reads ~95% on every ZFS system.
+	ARCSizeBytes       int64
+	CPUPercent         float64
+	NetInRate          float64
+	NetOutRate         float64
+	DiskReadRate       float64
+	DiskWriteRate      float64
+	TemperatureCelsius map[string]float64
+	IntervalSeconds    int
+	CollectedAt        time.Time
 }
 
 // Pool mirrors the subset of TrueNAS pool fields needed for unified mapping.
@@ -187,6 +191,7 @@ type SystemMetricHistory struct {
 	MemoryUsedBytes      []TimeSeriesPoint
 	MemoryAvailableBytes []TimeSeriesPoint
 	MemoryTotalBytes     []TimeSeriesPoint
+	ARCSizeBytes         []TimeSeriesPoint
 	NetInRate            []TimeSeriesPoint
 	NetOutRate           []TimeSeriesPoint
 	DiskReadRate         []TimeSeriesPoint

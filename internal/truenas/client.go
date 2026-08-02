@@ -1853,6 +1853,9 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	if telemetry.MemoryAvailableBytes > 0 {
 		system.MemoryAvailableBytes = telemetry.MemoryAvailableBytes
 	}
+	if telemetry.ARCSizeBytes > 0 {
+		system.ARCSizeBytes = telemetry.ARCSizeBytes
+	}
 	system.CPUPercent = telemetry.CPUPercent
 	system.NetInRate = telemetry.NetInRate
 	system.NetOutRate = telemetry.NetOutRate
@@ -2613,6 +2616,7 @@ func (c *trueNASRPCClient) getSystemMetricHistory(ctx context.Context, duration 
 	response, err := c.getReportingDataWithQuery(ctx, []map[string]any{
 		{"name": "cpu", "identifier": nil},
 		{"name": "memory", "identifier": nil},
+		{"name": "arcsize", "identifier": nil},
 		{"name": "interface", "identifier": nil},
 		{"name": "disk", "identifier": nil},
 	}, map[string]any{
@@ -2873,6 +2877,7 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 	available := readInt64Any(memory, "physical_memory_available", "available", "free", "available_bytes", "free_bytes")
 	telemetry.MemoryTotalBytes = total
 	telemetry.MemoryAvailableBytes = available
+	telemetry.ARCSizeBytes = readInt64Any(memory, "arc_size")
 
 	interfaces := readMapAny(fields, "interfaces")
 	for _, raw := range interfaces {
@@ -2957,7 +2962,7 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 	for _, response := range responses {
 		name := strings.TrimSpace(strings.ToLower(response.Name))
 		switch name {
-		case "cpu", "memory", "interface", "disk":
+		case "cpu", "memory", "arcsize", "interface", "disk":
 		default:
 			continue
 		}
@@ -2986,6 +2991,10 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 				if value, ok := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total"); ok {
 					history.MemoryTotalBytes = appendTimeSeriesPoint(history.MemoryTotalBytes, timestamp, value)
 				}
+			case "arcsize":
+				if value, ok := pickReportingValue(values, "arc_size", "size", "arcsize"); ok {
+					history.ARCSizeBytes = appendTimeSeriesPoint(history.ARCSizeBytes, timestamp, value)
+				}
 			case "interface":
 				if value, ok := pickReportingValue(values, "received", "received_bytes", "rx", "rx_bytes", "netin", "in"); ok {
 					history.NetInRate = appendTimeSeriesPoint(history.NetInRate, timestamp, value)
@@ -3009,6 +3018,7 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 		len(history.MemoryUsedBytes) == 0 &&
 		len(history.MemoryAvailableBytes) == 0 &&
 		len(history.MemoryTotalBytes) == 0 &&
+		len(history.ARCSizeBytes) == 0 &&
 		len(history.NetInRate) == 0 &&
 		len(history.NetOutRate) == 0 &&
 		len(history.DiskReadRate) == 0 &&

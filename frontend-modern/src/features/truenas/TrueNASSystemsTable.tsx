@@ -324,6 +324,8 @@ export const TrueNASSystemsTable: Component<{
                     const memoryTotal = () =>
                       getPlatformTableFiniteMetric(system.memory?.total) ?? 0;
                     const memoryUsed = () => getPlatformTableFiniteMetric(system.memory?.used) ?? 0;
+                    const memoryCache = () =>
+                      getPlatformTableFiniteMetric(system.agent?.memory?.cache) ?? 0;
                     const memoryPercentOnly = () =>
                       memoryTotal() > 0
                         ? undefined
@@ -406,6 +408,8 @@ export const TrueNASSystemsTable: Component<{
                               <StackedMemoryBar
                                 used={memoryUsed()}
                                 total={memoryTotal()}
+                                cache={memoryCache()}
+                                cacheInclusiveLabel="Used with ARC cache"
                                 percentOnly={memoryPercentOnly()}
                                 thresholds={memoryThresholds()}
                               />

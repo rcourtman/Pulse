@@ -897,6 +897,36 @@ func metricsFromTrueNASApp(app App, hostMemoryTotalBytes int64) *unifiedresource
 	return metrics
 }
 
+// trueNASReclaimableARC returns the ZFS ARC size clamped so that
+// used + cache + free never exceeds total.
+func trueNASReclaimableARC(system SystemInfo) int64 {
+	arc := system.ARCSizeBytes
+	if arc <= 0 {
+		return 0
+	}
+	headroom := system.MemoryTotalBytes - system.MemoryAvailableBytes
+	if headroom < 0 {
+		headroom = 0
+	}
+	if arc > headroom {
+		arc = headroom
+	}
+	return arc
+}
+
+// trueNASEffectiveMemoryUsed treats the ZFS ARC as reclaimable cache, the
+// same way node memory accounting treats buffers and page cache: the
+// kernel's MemAvailable does not count ARC even though it shrinks under
+// pressure, so raw total-available reads ~95% used on every ZFS system
+// (#1668).
+func trueNASEffectiveMemoryUsed(system SystemInfo) int64 {
+	used := system.MemoryTotalBytes - system.MemoryAvailableBytes - trueNASReclaimableARC(system)
+	if used < 0 {
+		used = 0
+	}
+	return used
+}
+
 func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64) *unifiedresources.ResourceMetrics {
 	hasRealtimeTelemetry := !system.CollectedAt.IsZero() || system.IntervalSeconds > 0
 	metrics := &unifiedresources.ResourceMetrics{
@@ -913,10 +943,7 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 	}
 
 	if system.MemoryTotalBytes > 0 {
-		used := system.MemoryTotalBytes - system.MemoryAvailableBytes
-		if used < 0 {
-			used = 0
-		}
+		used := trueNASEffectiveMemoryUsed(system)
 		memory := &unifiedresources.MetricValue{
 			Used:   &used,
 			Total:  &system.MemoryTotalBytes,
@@ -981,10 +1008,7 @@ func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, disks []
 	}
 
 	if system.MemoryTotalBytes > 0 {
-		used := system.MemoryTotalBytes - system.MemoryAvailableBytes
-		if used < 0 {
-			used = 0
-		}
+		used := trueNASEffectiveMemoryUsed(system)
 		free := system.MemoryAvailableBytes
 		if free < 0 {
 			free = 0
@@ -993,6 +1017,7 @@ func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, disks []
 			Total: system.MemoryTotalBytes,
 			Used:  used,
 			Free:  free,
+			Cache: trueNASReclaimableARC(system),
 		}
 	}
 	if temperature := maxTrueNASSystemTemperature(system); temperature != nil {
@@ -2679,7 +2704,14 @@ func systemMemoryPercentHistory(history *SystemMetricHistory, fallbackTotalBytes
 	if history == nil {
 		return nil
 	}
-	if len(history.MemoryPercent) > 0 {
+
+	// The netdata memory series counts the ZFS ARC as used, which reads ~95%
+	// on every ZFS system. Subtract the ARC series per point so history
+	// matches the ARC-aware current value (#1668). Without ARC data the raw
+	// series passes through unchanged.
+	arcAt := arcSizeLookup(history.ARCSizeBytes)
+
+	if len(history.MemoryPercent) > 0 && len(arcAt) == 0 {
 		return cloneTimeSeriesPoints(history.MemoryPercent)
 	}
 
@@ -2690,15 +2722,26 @@ func systemMemoryPercentHistory(history *SystemMetricHistory, fallbackTotalBytes
 		}
 	}
 	if totalBytes <= 0 {
+		if len(history.MemoryPercent) > 0 {
+			return cloneTimeSeriesPoints(history.MemoryPercent)
+		}
 		return nil
+	}
+
+	clampPercent := func(value float64) float64 {
+		if value < 0 {
+			return 0
+		}
+		return value
 	}
 
 	if len(history.MemoryUsedBytes) > 0 {
 		points := make([]TimeSeriesPoint, 0, len(history.MemoryUsedBytes))
 		for _, point := range history.MemoryUsedBytes {
+			used := point.Value - arcAt[point.Timestamp.Unix()]
 			points = append(points, TimeSeriesPoint{
 				Timestamp: point.Timestamp,
-				Value:     (point.Value / totalBytes) * 100,
+				Value:     clampPercent((used / totalBytes) * 100),
 			})
 		}
 		return points
@@ -2706,14 +2749,31 @@ func systemMemoryPercentHistory(history *SystemMetricHistory, fallbackTotalBytes
 	if len(history.MemoryAvailableBytes) > 0 {
 		points := make([]TimeSeriesPoint, 0, len(history.MemoryAvailableBytes))
 		for _, point := range history.MemoryAvailableBytes {
+			used := totalBytes - point.Value - arcAt[point.Timestamp.Unix()]
 			points = append(points, TimeSeriesPoint{
 				Timestamp: point.Timestamp,
-				Value:     ((totalBytes - point.Value) / totalBytes) * 100,
+				Value:     clampPercent((used / totalBytes) * 100),
 			})
 		}
 		return points
 	}
+	if len(history.MemoryPercent) > 0 {
+		return cloneTimeSeriesPoints(history.MemoryPercent)
+	}
 	return nil
+}
+
+// arcSizeLookup indexes an ARC size series by unix timestamp. Missing
+// timestamps read as zero, leaving those points unadjusted.
+func arcSizeLookup(series []TimeSeriesPoint) map[int64]float64 {
+	if len(series) == 0 {
+		return nil
+	}
+	lookup := make(map[int64]float64, len(series))
+	for _, point := range series {
+		lookup[point.Timestamp.Unix()] = point.Value
+	}
+	return lookup
 }
 
 // trueNASSystemMetricResourceID must stay systemSourceID minus its "system:"
