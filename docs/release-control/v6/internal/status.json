@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-07-22",
+  "updated_at": "2026-08-02",
   "scope": {
     "active_repos": [
       "pulse",
@@ -5008,6 +5008,66 @@
           "repo": "pulse-mobile",
           "path": "src/generated/coreCompatibility.ts",
           "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA44",
+      "summary": "Every commit with a user-visible Pulse frontend source change carries fresh browser verification bound to that commit's parent and final staged content: the current build is exercised through the deepest changed interaction, actual rendered pixels are inspected at desktop and narrow widths, affected states and cross-control behavior are recorded, and DOM-only, stale, or pre-final-edit proof cannot satisfy completion.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L8"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra44-frontend-browser-verification-guard",
+          "run": [
+            "python3",
+            "scripts/release_control/browser_verification_guard_test.py"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": ".github/workflows/canonical-governance.yml",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": ".husky/pre-commit",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/CANONICAL_DEVELOPMENT_PROTOCOL.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/repoctl/canonical_development_protocol_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/browser_verification_guard.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/browser_verification_guard_test.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     }

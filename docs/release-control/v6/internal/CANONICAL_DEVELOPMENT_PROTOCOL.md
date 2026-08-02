@@ -198,6 +198,56 @@ must be declared explicitly in `registry.json` and mirrored in the contract's
 state. Shared-boundary entries must use the exact registry-derived sentence
 shape rather than freeform wording.
 
+## Frontend Browser Verification Gate
+
+Every change with a user-visible effect in `frontend-modern` must be exercised
+in the current built application before it can be committed or described as
+complete. Unit tests, DOM assertions, accessibility snapshots, type checking,
+and successful builds remain required where applicable, but none of them prove
+that the rendered result is visible, usable, aligned, unclipped, and coherent.
+
+The verification pass must be task-specific and must:
+
+1. list the changed route or routes
+2. inspect actual pixels at a normal desktop width and a supported narrow width
+3. exercise every applicable changed state, including default, open, closed,
+   selected, disabled, empty, loading, error, and persisted/reloaded states
+4. exercise the deepest changed interaction rather than stopping at its parent
+   container
+5. cover applicable pointer, outside-click, Escape, keyboard-focus, dismissal,
+   and cross-control behavior
+6. explicitly inspect placement, clipping, stacking, scrolling, and focus
+   return for menus, popovers, nested overlays, dialogs, drawers, and tooltips
+7. repeat the affected matrix after any code change made in response to the
+   browser pass
+
+A control that exists in the DOM but is clipped, obscured, visually disabled,
+misaligned, off-screen, or otherwise unusable fails this gate. Known browser
+defects in the changed journey remain part of the current task and block the
+commit unless the user explicitly narrows the requested scope.
+
+The durable proof boundary is
+`frontend-modern/browser-verification.json`. Every commit that changes
+user-visible source under `frontend-modern/src/` or the frontend HTML entry
+must update that receipt with:
+
+1. `base_sha`, equal to the parent revision whose current build was exercised
+2. the exact changed user-visible frontend source paths and SHA-256 digests of
+   their final staged content
+3. the verified routes
+4. at least one desktop and one narrow viewport
+5. the states inspected
+6. the interactions exercised
+7. a UTC verification timestamp and `result: "passed"`
+
+`scripts/release_control/browser_verification_guard.py` enforces the receipt
+against the staged index locally and against each changed commit in canonical
+governance CI. A stale receipt, later source edit, incomplete path coverage,
+missing responsive viewport, or omitted state/interaction evidence is a hard failure. Agents may
+print a non-passing receipt skeleton with
+`python3 scripts/release_control/browser_verification_guard.py --print-template`
+after staging the intended frontend paths.
+
 ## Task Completion Protocol
 
 Every substantial task must finish by checking these questions:
@@ -273,12 +323,11 @@ Every substantial task must finish by checking these questions:
     Missing evidence items, current-vs-target score, and proof counts are
     signals that help locate the real same-lane gap.
 10ab. Have I checked real browser truth for a customer-facing surface?
-    For important customer-facing UI, code-level proof is not enough by
-    itself. If the surface is meant to be trusted or used normally, exercise
-    it in-browser and judge whether it actually deserves more iteration in its
-    current shape. If the slice changed frontend code, inspect the changed
-    surface in Playwright after the current build before treating the work as
-    progress, improvement, or done.
+    For customer-facing UI, code-level proof is not enough. Complete the
+    Frontend Browser Verification Gate against the current build, exercise the
+    deepest changed interaction and adjacent states, inspect desktop and narrow
+    pixels, and stage a fresh browser-verification receipt before treating the
+    work as progress, improvement, or done.
     They are not the work item by themselves unless the remaining gap is
     explicitly governance-only.
     For ordinary lane work, identify the runtime, product, ownership, or

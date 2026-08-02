@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-07-22
+Last updated: 2026-08-02
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -382,6 +382,12 @@ Assertion design rules:
     a slice requires its own isolated hooks, staged scope, and dirty state —
     for example when a subagent needs to mutate independently and land back
     cleanly.
+26. User-visible frontend work is incomplete until the current build has been
+    exercised in-browser through the deepest changed interaction at desktop
+    and narrow widths. The commit must carry a fresh, parent-bound browser
+    verification receipt with exact routes, changed paths, final-content
+    digests, states, and interactions. DOM presence, unit tests, snapshots, and
+    a successful build cannot substitute for rendered-pixel and behavior proof.
 
 ## Non-Negotiable Release Gates
 

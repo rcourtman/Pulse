@@ -67,6 +67,9 @@ staged_files_match() {
     printf '%s\n' "$STAGED_FILES" | grep -qE "$1"
 }
 
+echo "Running browser verification guard..."
+python3 scripts/release_control/browser_verification_guard.py
+
 # Governance checks gating.
 # Run the full governance audit + Go test suite only when:
 #   (a) the internal governance directory is present (skipped on fresh public-repo clones), AND
@@ -118,6 +121,7 @@ python3 scripts/release_control/readiness_assertion_guard.py --staged --active-t
 
 echo "Running release-control helper unit tests..."
 python3 scripts/release_control/canonical_completion_guard_test.py
+python3 scripts/release_control/browser_verification_guard_test.py
 python3 scripts/release_control/control_plane_audit_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/format_staged_go_test.py

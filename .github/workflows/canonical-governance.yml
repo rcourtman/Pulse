@@ -171,6 +171,12 @@ jobs:
               echo "Canonical completion guard failed for commit ${commit}."
               status=1
             fi
+            if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
+              | python3 scripts/release_control/browser_verification_guard.py \
+                  --files-from-stdin --commit "${commit}"; then
+              echo "Browser verification guard failed for commit ${commit}."
+              status=1
+            fi
             echo "::endgroup::"
           done
           exit ${status}
@@ -208,6 +214,9 @@ jobs:
 
       - name: Run canonical completion guard unit tests
         run: python3 scripts/release_control/canonical_completion_guard_test.py
+
+      - name: Run browser verification guard unit tests
+        run: python3 scripts/release_control/browser_verification_guard_test.py
 
       - name: Run control plane audit unit tests
         run: python3 scripts/release_control/control_plane_audit_test.py
