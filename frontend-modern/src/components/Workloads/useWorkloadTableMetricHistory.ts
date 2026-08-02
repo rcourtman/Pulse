@@ -2,7 +2,6 @@ import { createMemo, type Accessor } from 'solid-js';
 
 import type { WorkloadChartsResponse } from '@/api/charts';
 import type { Node } from '@/types/api';
-import type { WorkloadGuest } from '@/types/workloads';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   fetchInfrastructureSummaryAndCache,
@@ -94,13 +93,17 @@ export function useWorkloadTableMetricHistory(
     pollMs: WORKLOAD_TABLE_HISTORY_POLL_MS,
   });
 
-  const getGuestMetricSeries = (guest: WorkloadGuest, metric: WorkloadTableMetric) => {
+  const getGuestMetricSeries: WorkloadMetricHistoryReader['getGuestMetricSeries'] = (
+    guest,
+    metric,
+    seriesOptions,
+  ) => {
     const response = workloadHistory.value();
     const chartData = findChartDataForCandidates(getWorkloadChartKeyCandidates(guest), [
       response.data,
       response.dockerData,
     ]);
-    return getMetricSparklineSeriesFromChartData(chartData, metric);
+    return getMetricSparklineSeriesFromChartData(chartData, metric, seriesOptions);
   };
 
   const getNodeMetricSeries = (node: Node, metric: WorkloadTableMetric) => {

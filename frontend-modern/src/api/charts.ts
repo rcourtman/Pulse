@@ -25,6 +25,7 @@ export interface AggregatedMetricPoint {
 export interface ChartData {
   cpu?: MetricPoint[];
   memory?: MetricPoint[];
+  memoryused?: MetricPoint[];
   disk?: MetricPoint[];
   diskread?: MetricPoint[];
   diskwrite?: MetricPoint[];

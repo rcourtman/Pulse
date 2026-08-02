@@ -83,6 +83,40 @@ describe('workloadMetricHistoryModel', () => {
     expect(series[0].points[1].value).toBe(20);
   });
 
+  it('derives host-relative memory history from raw used bytes', () => {
+    const gib = 1024 ** 3;
+    const series = getMetricSparklineSeriesFromChartData(
+      {
+        memory: [
+          { timestamp: 1, value: 50 },
+          { timestamp: 2, value: 75 },
+        ],
+        memoryused: [
+          { timestamp: 1, value: 2 * gib },
+          { timestamp: 2, value: 4 * gib },
+        ],
+      },
+      'memory',
+      { memoryDisplayBasis: 'host', parentMemoryTotal: 16 * gib },
+    );
+
+    expect(series[0].label).toBe('Host memory share');
+    expect(series[0].points).toEqual([
+      { timestamp: 1, value: 12.5 },
+      { timestamp: 2, value: 25 },
+    ]);
+  });
+
+  it('does not relabel guest-relative percentages when raw host-relative history is absent', () => {
+    const series = getMetricSparklineSeriesFromChartData(
+      { memory: [{ timestamp: 1, value: 75 }] },
+      'memory',
+      { memoryDisplayBasis: 'host', parentMemoryTotal: 16 * 1024 ** 3 },
+    );
+
+    expect(series[0].points).toEqual([]);
+  });
+
   it('builds bounded mini sparkline paths', () => {
     const scale = getMetricMiniSparklineScale(
       [

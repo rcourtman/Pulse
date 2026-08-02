@@ -6847,6 +6847,7 @@ type guestChartSourceView interface {
 	SourceID() string
 	CPUPercent() float64
 	MemoryPercent() float64
+	MemoryUsed() int64
 	DiskPercent() float64
 	NetIn() float64
 	NetOut() float64
@@ -6874,7 +6875,7 @@ func collectGuestChartData[V guestChartSourceView](
 			requests = append(requests, monitoring.GuestChartRequest{InMemoryKey: id, SQLResourceID: id})
 		}
 	}
-	batch := monitor.GetGuestMetricsForChartBatch(storeType, requests, duration, infrastructureSummaryMetricOrder...)
+	batch := monitor.GetGuestMetricsForChartBatch(storeType, requests, duration, guestSparklineMetricOrder...)
 	for _, g := range guests {
 		if g == zero {
 			continue
@@ -6890,6 +6891,7 @@ func collectGuestChartData[V guestChartSourceView](
 		if len(chartData[id]["cpu"]) == 0 {
 			chartData[id]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: g.CPUPercent()}}
 			chartData[id]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: g.MemoryPercent()}}
+			chartData[id]["memoryused"] = []MetricPoint{{Timestamp: currentTime, Value: float64(g.MemoryUsed())}}
 			chartData[id]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: g.DiskPercent()}}
 			chartData[id]["netin"] = []MetricPoint{{Timestamp: currentTime, Value: g.NetIn()}}
 			chartData[id]["netout"] = []MetricPoint{{Timestamp: currentTime, Value: g.NetOut()}}
@@ -6922,18 +6924,30 @@ func fillChartSeriesFromBatch(dst VMChartData, batchMetrics map[string][]monitor
 }
 
 var sparklineMetrics = map[string]bool{
-	"cpu":       true,
-	"memory":    true,
-	"disk":      true,
-	"diskread":  true,
-	"diskwrite": true,
-	"netin":     true,
-	"netout":    true,
+	"cpu":        true,
+	"memory":     true,
+	"memoryused": true,
+	"disk":       true,
+	"diskread":   true,
+	"diskwrite":  true,
+	"netin":      true,
+	"netout":     true,
 }
 
 var infrastructureSummaryMetricOrder = []string{
 	"cpu",
 	"memory",
+	"disk",
+	"diskread",
+	"diskwrite",
+	"netin",
+	"netout",
+}
+
+var guestSparklineMetricOrder = []string{
+	"cpu",
+	"memory",
+	"memoryused",
 	"disk",
 	"diskread",
 	"diskwrite",
@@ -7471,11 +7485,11 @@ func (r *Router) buildWorkloadChartsResponse(
 	workloadChartsBatchWG.Add(4)
 	go func() {
 		defer workloadChartsBatchWG.Done()
-		vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
+		vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, guestSparklineMetricOrder...)
 	}()
 	go func() {
 		defer workloadChartsBatchWG.Done()
-		containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, infrastructureSummaryMetricOrder...)
+		containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, guestSparklineMetricOrder...)
 	}()
 	go func() {
 		defer workloadChartsBatchWG.Done()
@@ -7496,6 +7510,7 @@ func (r *Router) buildWorkloadChartsResponse(
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
 			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.MemoryPercent()}}
+			series["memoryused"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.MemoryUsed())}}
 			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.DiskPercent()}}
 			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetIn()}}
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
@@ -7512,6 +7527,7 @@ func (r *Router) buildWorkloadChartsResponse(
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
 			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.MemoryPercent()}}
+			series["memoryused"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.MemoryUsed())}}
 			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.DiskPercent()}}
 			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetIn()}}
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}

@@ -8,6 +8,7 @@ import {
   persistWorkloadsSummaryCache,
   readInMemoryWorkloadsSummaryCache,
   readWorkloadsSummaryCache,
+  WORKLOADS_SUMMARY_CACHE_VERSION,
   workloadsSummaryCacheScopeKey,
 } from '@/utils/workloadsSummaryCache';
 
@@ -41,7 +42,7 @@ vi.mock('@/utils/apiClient', () => ({
 // the org-switch cache-invalidation handler by emitting the event.
 
 const ORG_FROM_GETORGID = 'test-org';
-const VERSION = 6;
+const VERSION = WORKLOADS_SUMMARY_CACHE_VERSION;
 const PREFIX = 'pulse.workloadsSummaryCharts.';
 
 // Mirrors the module's private `resolveOrgScope` (with the mocked getOrgID) for
@@ -69,6 +70,7 @@ const makeResponse = (cpu?: MetricPoint[]): WorkloadChartsResponse => ({
     w1: {
       cpu: cpu ?? [metric(1), metric(2)],
       memory: [metric(3), metric(4)],
+      memoryused: [metric(15), metric(16)],
       disk: [metric(5), metric(6)],
       diskread: [metric(7), metric(8)],
       diskwrite: [metric(9), metric(10)],

@@ -628,6 +628,18 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			}
 		}
 	}
+	seedStoreGuestMemoryUsedSeries := func(resourceType, resourceID string, memoryTotal float64) {
+		if ms == nil || strings.TrimSpace(resourceID) == "" || memoryTotal <= 0 {
+			return
+		}
+		for _, plan := range mockStoreSeedPlans {
+			coverageKey := metrics.NormalizedSeriesKey(resourceType, resourceID, "memoryused")
+			for _, ts := range seedStoreGapTimestamps(plan, coverageKey) {
+				percent := clampFloat(sampler.SampleMetric(resourceType, resourceID, "memory", ts), 0, 100)
+				queueStorePoint(resourceType, resourceID, "memoryused", memoryTotal*(percent/100), ts, plan.tier)
+			}
+		}
+	}
 	recordStorageTimeline := func(storageID string, currentTotal float64) {
 		if strings.TrimSpace(storageID) == "" || currentTotal <= 0 || numPoints == 0 {
 			return
@@ -737,6 +749,22 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		}
 		seedStoreSeries(storeType, storeID, storeMetrics...)
 	}
+	recordGuestMemoryUsed := func(metricIDs []string, storeType, storeID string, memoryTotal float64) {
+		if len(metricIDs) == 0 || strings.TrimSpace(storeID) == "" || memoryTotal <= 0 {
+			return
+		}
+		percentSeries := canonicalMetricSeriesWithSampler(sampler, storeType, storeID, "memory", seedTimestamps)
+		usedSeries := make([]float64, len(percentSeries))
+		for i, percent := range percentSeries {
+			usedSeries[i] = memoryTotal * (clampFloat(percent, 0, 100) / 100)
+		}
+		for _, metricID := range metricIDs {
+			if id := strings.TrimSpace(metricID); id != "" {
+				mh.addGuestMetricSeries(id, "memoryused", usedSeries, seedTimestamps)
+			}
+		}
+		seedStoreGuestMemoryUsedSeries(storeType, storeID, memoryTotal)
+	}
 
 	log.Debug().Int("count", len(state.Nodes)).Msg("mock seeding: processing nodes")
 	for _, node := range state.Nodes {
@@ -752,6 +780,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	log.Debug().Int("total", len(state.VMs)).Int("running", runningVMs).Msg("mock seeding: processing VMs (including stopped)")
 	for _, vm := range state.VMs {
 		recordGuest([]string{vm.ID}, "vm", vm.ID, true, true, true)
+		recordGuestMemoryUsed([]string{vm.ID}, "vm", vm.ID, float64(vm.Memory.Total))
 	}
 
 	runningContainers := 0
@@ -763,6 +792,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	log.Debug().Int("total", len(state.Containers)).Int("running", runningContainers).Msg("mock seeding: processing containers (including stopped)")
 	for _, ct := range state.Containers {
 		recordGuest([]string{ct.ID}, "container", ct.ID, true, true, true)
+		recordGuestMemoryUsed([]string{ct.ID}, "container", ct.ID, float64(ct.Memory.Total))
 	}
 
 	k8sNodeCount := 0
@@ -1306,17 +1336,20 @@ func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, sampler 
 type guestMetricSource interface {
 	GetID() string
 	GetStatus() string
+	GetMemoryTotal() int64
 }
 
 type vmAdapter struct{ *models.VM }
 
-func (v vmAdapter) GetID() string     { return v.VM.ID }
-func (v vmAdapter) GetStatus() string { return v.VM.Status }
+func (v vmAdapter) GetID() string         { return v.VM.ID }
+func (v vmAdapter) GetStatus() string     { return v.VM.Status }
+func (v vmAdapter) GetMemoryTotal() int64 { return v.VM.Memory.Total }
 
 type containerAdapter struct{ *models.Container }
 
-func (c containerAdapter) GetID() string     { return c.Container.ID }
-func (c containerAdapter) GetStatus() string { return c.Container.Status }
+func (c containerAdapter) GetID() string         { return c.Container.ID }
+func (c containerAdapter) GetStatus() string     { return c.Container.Status }
+func (c containerAdapter) GetMemoryTotal() int64 { return c.Container.Memory.Total }
 
 func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Store, sampler mock.MetricSampler, guests []T, prefix string, ts time.Time) {
 	for _, guest := range guests {
@@ -1327,6 +1360,7 @@ func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Sto
 		id := guest.GetID()
 		cpu := sampler.SampleMetric(prefix, id, "cpu", ts)
 		memory := sampler.SampleMetric(prefix, id, "memory", ts)
+		memoryUsed := float64(guest.GetMemoryTotal()) * (clampFloat(memory, 0, 100) / 100)
 		disk := sampler.SampleMetric(prefix, id, "disk", ts)
 		diskread := sampler.SampleMetric(prefix, id, "diskread", ts)
 		diskwrite := sampler.SampleMetric(prefix, id, "diskwrite", ts)
@@ -1335,6 +1369,9 @@ func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Sto
 
 		mh.AddGuestMetric(id, "cpu", cpu, ts)
 		mh.AddGuestMetric(id, "memory", memory, ts)
+		if guest.GetMemoryTotal() > 0 {
+			mh.AddGuestMetric(id, "memoryused", memoryUsed, ts)
+		}
 		mh.AddGuestMetric(id, "disk", disk, ts)
 		mh.AddGuestMetric(id, "diskread", diskread, ts)
 		mh.AddGuestMetric(id, "diskwrite", diskwrite, ts)
@@ -1344,6 +1381,9 @@ func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Sto
 		if ms != nil {
 			ms.Write(prefix, id, "cpu", cpu, ts)
 			ms.Write(prefix, id, "memory", memory, ts)
+			if guest.GetMemoryTotal() > 0 {
+				ms.Write(prefix, id, "memoryused", memoryUsed, ts)
+			}
 			ms.Write(prefix, id, "disk", disk, ts)
 			ms.Write(prefix, id, "diskread", diskread, ts)
 			ms.Write(prefix, id, "diskwrite", diskwrite, ts)

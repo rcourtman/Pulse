@@ -134,7 +134,7 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 		}
 		if vm.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(vm.DiskRead, vm.DiskWrite, vm.NetworkIn, vm.NetworkOut, vm.IORateValidity)
-			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), vm.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
+			m.recordGuestMetric("vm", vm.ID, unifiedresources.ProxmoxGuestCPUPercent(vm.CPU), historyMemoryUsage(vm.Memory), historyMemoryUsed(vm.Memory), vm.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
 	for _, ct := range allContainers {
@@ -143,7 +143,7 @@ func (m *Monitor) recordGuestMetrics(allVMs []models.VM, allContainers []models.
 		}
 		if ct.Status == "running" {
 			diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(ct.DiskRead, ct.DiskWrite, ct.NetworkIn, ct.NetworkOut, ct.IORateValidity)
-			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), ct.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
+			m.recordGuestMetric("container", ct.ID, unifiedresources.ProxmoxGuestCPUPercent(ct.CPU), historyMemoryUsage(ct.Memory), historyMemoryUsed(ct.Memory), ct.Disk.Usage, diskRead, diskWrite, networkIn, networkOut, now)
 		}
 	}
 }
@@ -172,11 +172,18 @@ func historyMemoryUsage(memory models.Memory) float64 {
 	return memory.Usage
 }
 
+func historyMemoryUsed(memory models.Memory) float64 {
+	if !memory.HasKnownUsage() {
+		return -1
+	}
+	return float64(memory.Used)
+}
+
 // recordGuestMetric records metrics for a single guest (VM or container) to both
 // the in-memory metrics history and the persistent metrics store.
 func (m *Monitor) recordGuestMetric(
 	resourceType, resourceID string,
-	cpu, memory, diskUsage float64,
+	cpu, memory, memoryUsed, diskUsage float64,
 	diskRead, diskWrite, networkIn, networkOut int64,
 	now time.Time,
 ) {
@@ -188,6 +195,9 @@ func (m *Monitor) recordGuestMetric(
 		m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
 		if memory >= 0 {
 			m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
+		}
+		if memoryUsed >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "memoryused", memoryUsed, now)
 		}
 		if diskUsage >= 0 {
 			m.metricsHistory.AddGuestMetric(resourceID, "disk", diskUsage, now)
@@ -210,6 +220,9 @@ func (m *Monitor) recordGuestMetric(
 		m.metricsStore.Write(resourceType, resourceID, "cpu", cpu, now)
 		if memory >= 0 {
 			m.metricsStore.Write(resourceType, resourceID, "memory", memory, now)
+		}
+		if memoryUsed >= 0 {
+			m.metricsStore.Write(resourceType, resourceID, "memoryused", memoryUsed, now)
 		}
 		if diskUsage >= 0 {
 			m.metricsStore.Write(resourceType, resourceID, "disk", diskUsage, now)

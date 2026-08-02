@@ -272,7 +272,20 @@ describe('GuestRow', () => {
       expect(screen.getByTestId('memory-bar')).toBeTruthy();
     });
 
-    it('compares guest memory use with the parent host total when requested', () => {
+    it('renders raw-byte memory history against the parent host total when requested', () => {
+      const getGuestMetricSeries = vi.fn(
+        (_guest: WorkloadGuest, _metric: string, _options?: unknown) => [
+          {
+            id: 'memory',
+            label: 'Host memory share',
+            color: '#f59e0b',
+            points: [
+              { timestamp: 1, value: 10 },
+              { timestamp: 2, value: 12.5 },
+            ],
+          },
+        ],
+      );
       renderGuestRow({
         guest: makeGuest({ memory: makeMemory({ used: 2 * 1024 ** 3, total: 4 * 1024 ** 3 }) }),
         visibleColumnIds: ['name', 'memory'],
@@ -280,21 +293,22 @@ describe('GuestRow', () => {
         parentMemoryTotal: 16 * 1024 ** 3,
         parentNodeName: 'pve-01',
         metricDisplayMode: 'sparklines',
+        metricHistory: {
+          getGuestMetricSeries,
+          getNodeMetricSeries: () => [],
+        },
       });
 
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute(
-        'data-total',
-        String(16 * 1024 ** 3),
+      expect(screen.getByTestId('metric-mini-sparkline')).toHaveAttribute(
+        'title',
+        'test-vm host memory share history',
       );
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute(
-        'data-comparison-total-label',
-        'Host total',
-      );
-      expect(screen.getByTestId('memory-bar')).toHaveAttribute(
-        'data-tooltip-title',
-        'pve-01 memory share',
-      );
-      expect(screen.queryByTestId('metric-mini-sparkline')).toBeNull();
+      expect(screen.getByText('13%')).toBeTruthy();
+      expect(screen.queryByTestId('memory-bar')).toBeNull();
+      expect(getGuestMetricSeries).toHaveBeenCalledWith(expect.any(Object), 'memory', {
+        memoryDisplayBasis: 'host',
+        parentMemoryTotal: 16 * 1024 ** 3,
+      });
     });
 
     it('marks host-relative memory unavailable when the parent total is missing', () => {
@@ -305,6 +319,21 @@ describe('GuestRow', () => {
       });
 
       expect(screen.getByTestId('memory-bar')).toHaveAttribute('data-unavailable', 'true');
+    });
+
+    it('does not inflate a sub-one-percent host memory share', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          memory: makeMemory({ used: 128 * 1024 ** 2, total: 4 * 1024 ** 3 }),
+        }),
+        visibleColumnIds: ['name', 'memory'],
+        memoryDisplayBasis: 'host',
+        parentMemoryTotal: 16 * 1024 ** 3,
+        metricDisplayMode: 'sparklines',
+      });
+
+      expect(screen.getByText('1%')).toBeTruthy();
+      expect(screen.queryByText('78%')).toBeNull();
     });
 
     it('renders disk bar when disk usage is available', () => {

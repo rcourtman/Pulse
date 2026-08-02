@@ -477,9 +477,12 @@ changes.
    trimmed connection ID with defaults applied" active-connection policy. A
    new platform poller of this family must reuse both rather than copying
    the TrueNAS/VMware loop, and traditional PVE guest polling records
-   per-guest series through the canonical `recordGuestMetric` helper in
+    per-guest series through the canonical `recordGuestMetric` helper in
    `internal/monitoring/monitor_pve_guest_helpers.go` instead of inline
-   metric writes.
+   metric writes. Proxmox guest memory history stores both the canonical
+   guest-relative `memory` percentage and raw `memoryused` bytes so API
+   consumers can apply alternate capacity denominators without reconstructing
+   bytes from a mutable guest allocation.
    Discovery config and configured-host IP resolution must stay off the
    monitor lock. `internal/monitoring/monitor_discovery_helpers.go` exposes
    the canonical `discoveryConfigSnapshot()` that discovery providers consume,

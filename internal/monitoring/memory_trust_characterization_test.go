@@ -881,6 +881,7 @@ func TestRecordGuestMetric_SkipsNativeWritesInMockMode(t *testing.T) {
 		"test:node1:101",
 		42,
 		48,
+		1024,
 		51,
 		1024,
 		512,
@@ -905,8 +906,8 @@ func TestRecordGuestMetricPreservesHistoryWhenLiveMemoryIsUnavailable(t *testing
 	defer mon.notificationMgr.Stop()
 
 	now := time.Now().UTC()
-	mon.recordGuestMetric("vm", "test:node1:101", 20, 76, 40, -1, -1, -1, -1, now.Add(-time.Minute))
-	mon.recordGuestMetric("vm", "test:node1:101", 25, -1, 42, -1, -1, -1, -1, now)
+	mon.recordGuestMetric("vm", "test:node1:101", 20, 76, 1024, 40, -1, -1, -1, -1, now.Add(-time.Minute))
+	mon.recordGuestMetric("vm", "test:node1:101", 25, -1, -1, 42, -1, -1, -1, -1, now)
 
 	points := mon.metricsHistory.GetGuestMetrics("test:node1:101", "memory", time.Hour)
 	if len(points) != 1 {
@@ -914,6 +915,10 @@ func TestRecordGuestMetricPreservesHistoryWhenLiveMemoryIsUnavailable(t *testing
 	}
 	if points[0].Value != 76 {
 		t.Fatalf("memory history value = %.2f, want 76", points[0].Value)
+	}
+	usedPoints := mon.metricsHistory.GetGuestMetrics("test:node1:101", "memoryused", time.Hour)
+	if len(usedPoints) != 1 || usedPoints[0].Value != 1024 {
+		t.Fatalf("memory-used history = %+v, want one trusted 1024-byte point", usedPoints)
 	}
 }
 

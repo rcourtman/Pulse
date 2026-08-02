@@ -13,10 +13,16 @@ export interface WorkloadMetricSparklineSeries {
   points: MetricPoint[];
 }
 
+export interface WorkloadGuestMetricSeriesOptions {
+  memoryDisplayBasis?: 'guest' | 'host';
+  parentMemoryTotal?: number;
+}
+
 export interface WorkloadMetricHistoryReader {
   getGuestMetricSeries: (
     guest: WorkloadGuest,
     metric: WorkloadTableMetric,
+    options?: WorkloadGuestMetricSeriesOptions,
   ) => WorkloadMetricSparklineSeries[];
   getNodeMetricSeries: (node: Node, metric: WorkloadTableMetric) => WorkloadMetricSparklineSeries[];
 }
@@ -199,6 +205,7 @@ const sanitizeMetricPoints = (
 export const getMetricSparklineSeriesFromChartData = (
   chartData: ChartData | undefined,
   metric: WorkloadTableMetric,
+  options?: WorkloadGuestMetricSeriesOptions,
 ): WorkloadMetricSparklineSeries[] => {
   if (!chartData) return [];
 
@@ -213,6 +220,24 @@ export const getMetricSparklineSeriesFromChartData = (
         },
       ];
     case 'memory':
+      if (options?.memoryDisplayBasis === 'host') {
+        const hostTotal = options.parentMemoryTotal;
+        const points =
+          typeof hostTotal === 'number' && Number.isFinite(hostTotal) && hostTotal > 0
+            ? chartData.memoryused?.map((point) => ({
+                timestamp: point.timestamp,
+                value: (point.value / hostTotal) * 100,
+              }))
+            : undefined;
+        return [
+          {
+            id: 'memory',
+            label: 'Host memory share',
+            color: MEMORY_COLOR,
+            points: sanitizeMetricPoints(points, clampPercent),
+          },
+        ];
+      }
       return [
         {
           id: 'memory',

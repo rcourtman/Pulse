@@ -31,7 +31,10 @@ import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresenta
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
-import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
+import type {
+  WorkloadMetricHistoryReader,
+  WorkloadTableMetric,
+} from './workloadMetricHistoryModel';
 
 type Guest = WorkloadGuest;
 
@@ -120,21 +123,21 @@ export function GuestRow(props: GuestRowProps) {
     const noun = context.count === 1 ? 'container' : 'containers';
     return `${context.count} nested ${context.label} ${noun}. Open row for details.`;
   });
-  const normalizeMetricPercent = (value: number | null | undefined): number => {
+  const clampMetricPercent = (value: number | null | undefined): number => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-    return value <= 1 ? Math.max(0, value * 100) : Math.max(0, value);
+    return Math.max(0, Math.min(100, value));
   };
   const formatMetricPercent = (value: number | null | undefined): string =>
-    `${Math.round(normalizeMetricPercent(value))}%`;
+    `${Math.round(clampMetricPercent(value))}%`;
   const usagePercent = (
     used?: number | null,
     total?: number | null,
     fallbackUsage?: number | null,
   ): number => {
     if (typeof used === 'number' && typeof total === 'number' && total > 0) {
-      return normalizeMetricPercent((used / total) * 100);
+      return Math.max(0, Math.min(100, (used / total) * 100));
     }
-    return normalizeMetricPercent(fallbackUsage);
+    return clampMetricPercent(fallbackUsage);
   };
   const renderMetricSparkline = (
     metric: WorkloadTableMetric,
@@ -143,9 +146,10 @@ export function GuestRow(props: GuestRowProps) {
     unit = '%',
     valueLabelMode: 'inline' | 'tooltip' | 'hidden' = 'inline',
     formatValue?: (value: number) => string,
+    seriesOptions?: Parameters<WorkloadMetricHistoryReader['getGuestMetricSeries']>[2],
   ) => (
     <MetricMiniSparkline
-      series={props.metricHistory?.getGuestMetricSeries(props.guest, metric) ?? []}
+      series={props.metricHistory?.getGuestMetricSeries(props.guest, metric, seriesOptions) ?? []}
       valueLabel={valueLabel}
       valueLabelMode={valueLabelMode}
       title={title}
@@ -372,7 +376,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('memory')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="memory">
             <Show
-              when={isSparklineMode() && !isHostMemoryBasis()}
+              when={isSparklineMode()}
               fallback={
                 <div title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}>
                   <StackedMemoryBar
@@ -409,19 +413,25 @@ export function GuestRow(props: GuestRowProps) {
             >
               {renderMetricSparkline(
                 'memory',
-                props.guest.memory?.usageUnavailable
+                memoryDisplayUnavailable()
                   ? 'N/A'
                   : formatMetricPercent(
                       usagePercent(
                         props.guest.memory?.used,
-                        props.guest.memory?.total,
-                        props.guest.memory?.usage,
+                        memoryDisplayTotal(),
+                        isHostMemoryBasis() ? undefined : props.guest.memory?.usage,
                       ),
                     ),
-                `${props.guest.name} memory history`,
+                isHostMemoryBasis()
+                  ? `${props.guest.name} host memory share history`
+                  : `${props.guest.name} memory history`,
                 '%',
                 'inline',
                 formatMetricPercent,
+                {
+                  memoryDisplayBasis: props.memoryDisplayBasis,
+                  parentMemoryTotal: props.parentMemoryTotal,
+                },
               )}
             </Show>
           </td>

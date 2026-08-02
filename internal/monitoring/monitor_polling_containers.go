@@ -391,6 +391,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				ct.ID,
 				unifiedresources.ProxmoxGuestCPUPercent(ct.CPU),
 				historyMemoryUsage(ct.Memory),
+				historyMemoryUsed(ct.Memory),
 				ct.Disk.Usage,
 				diskRead,
 				diskWrite,

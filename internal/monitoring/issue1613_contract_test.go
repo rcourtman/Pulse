@@ -94,7 +94,7 @@ func TestIssue1613HistoryWritesValidZeroAndSkipsUnknownRates(t *testing.T) {
 	now := time.Now()
 
 	diskRead, diskWrite, networkIn, networkOut := guestHistoryRates(0, 0, 0, 0, models.IORateValidity{Explicit: true})
-	monitor.recordGuestMetric("vm", "unknown", 0, 0, 0, diskRead, diskWrite, networkIn, networkOut, now)
+	monitor.recordGuestMetric("vm", "unknown", 0, 0, 0, 0, diskRead, diskWrite, networkIn, networkOut, now)
 	if points := monitor.metricsHistory.GetGuestMetrics("unknown", "diskread", time.Hour); len(points) != 0 {
 		t.Fatalf("unknown disk read rate was written to history: %+v", points)
 	}
@@ -106,7 +106,7 @@ func TestIssue1613HistoryWritesValidZeroAndSkipsUnknownRates(t *testing.T) {
 		NetworkIn:  true,
 		NetworkOut: true,
 	})
-	monitor.recordGuestMetric("vm", "idle", 0, 0, 0, diskRead, diskWrite, networkIn, networkOut, now)
+	monitor.recordGuestMetric("vm", "idle", 0, 0, 0, 0, diskRead, diskWrite, networkIn, networkOut, now)
 	points := monitor.metricsHistory.GetGuestMetrics("idle", "diskread", time.Hour)
 	if len(points) != 1 || points[0].Value != 0 {
 		t.Fatalf("valid idle disk read rate was not written as zero: %+v", points)

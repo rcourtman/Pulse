@@ -604,9 +604,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     Direct used-versus-total comparisons may provide a comparison label and a
     separate severity percentage. This lets Proxmox guest rows draw used bytes
     against the host total while retaining guest-allocation threshold meaning.
-    Host-relative mode must not relabel guest-relative history as host history;
-    until raw-byte history supports the alternate denominator, the memory cell
-    stays on the current comparison bar when the rest of the table uses trends.
+    Host-relative mode must not relabel guest-relative history as host history.
+    Proxmox guest history records raw `memoryused` byte samples alongside the
+    guest-relative percentage, and the workload table derives every host-share
+    trend point from those bytes and the bounded parent-node total. If raw-byte
+    history is unavailable, the trend remains empty rather than substituting the
+    guest-relative percentage.
 22. Extend metric-bar width, label-fit logic, and resize-observer runtime through `frontend-modern/src/components/Workloads/metricBarModel.ts` and `frontend-modern/src/components/Workloads/useMetricBarState.ts` rather than rebuilding metric-local state and threshold mapping inside `frontend-modern/src/components/Workloads/MetricBar.tsx`
 23. Extend enhanced CPU bar usage/anomaly presentation and tooltip runtime through `frontend-modern/src/components/Workloads/enhancedCpuBarModel.ts` and `frontend-modern/src/components/Workloads/useEnhancedCPUBarState.ts` rather than rebuilding tooltip-local state and CPU-threshold formatting inside `frontend-modern/src/components/Workloads/EnhancedCPUBar.tsx`
     Workload and unified-resource metric bars may accept resolved alert display

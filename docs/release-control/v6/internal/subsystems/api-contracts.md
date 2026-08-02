@@ -305,6 +305,10 @@ Proxmox legacy model CPU fields have the inverse compatibility shape:
 `models.Node.CPU`, `models.VM.CPU`, and `models.Container.CPU` remain 0..1
 ratios, but `/api/metrics-store/history` live fallback points must convert
 those ratios to 0..100 chart percentages before serialization.
+Proxmox VM and system-container chart payloads add a `memoryused` byte series
+beside the existing guest-relative `memory` percentage series. Consumers that
+present memory against a host denominator must derive that trend from
+`memoryused`; they must not relabel the percentage series.
 
 Candidate import plans for PVE/PBS/PMG onboarding are API-contract consumers,
 not local UI estimates. Probe and Discovery candidates must build their

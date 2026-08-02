@@ -16,6 +16,7 @@ type MetricPoint = models.MetricPoint
 type GuestMetrics struct {
 	CPU            []MetricPoint `json:"cpu"`
 	Memory         []MetricPoint `json:"memory"`
+	MemoryUsed     []MetricPoint `json:"memoryused"`
 	Disk           []MetricPoint `json:"disk"`
 	GPU            []MetricPoint `json:"gpu"`
 	GPUMemory      []MetricPoint `json:"gpu_memory"`
@@ -115,6 +116,7 @@ func cloneGuestMetrics(metrics *GuestMetrics) *GuestMetrics {
 	return &GuestMetrics{
 		CPU:            append([]MetricPoint(nil), metrics.CPU...),
 		Memory:         append([]MetricPoint(nil), metrics.Memory...),
+		MemoryUsed:     append([]MetricPoint(nil), metrics.MemoryUsed...),
 		Disk:           append([]MetricPoint(nil), metrics.Disk...),
 		GPU:            append([]MetricPoint(nil), metrics.GPU...),
 		GPUMemory:      append([]MetricPoint(nil), metrics.GPUMemory...),
@@ -157,6 +159,8 @@ func (mh *MetricsHistory) AddGuestMetric(guestID string, metricType string, valu
 		metrics.CPU = mh.appendMetric(metrics.CPU, point)
 	case "memory":
 		metrics.Memory = mh.appendMetric(metrics.Memory, point)
+	case "memoryused":
+		metrics.MemoryUsed = mh.appendMetric(metrics.MemoryUsed, point)
 	case "disk":
 		metrics.Disk = mh.appendMetric(metrics.Disk, point)
 	case "gpu":
@@ -197,6 +201,8 @@ func (mh *MetricsHistory) AddNodeMetric(nodeID string, metricType string, value 
 		metrics.CPU = mh.appendMetric(metrics.CPU, point)
 	case "memory":
 		metrics.Memory = mh.appendMetric(metrics.Memory, point)
+	case "memoryused":
+		metrics.MemoryUsed = mh.appendMetric(metrics.MemoryUsed, point)
 	case "disk":
 		metrics.Disk = mh.appendMetric(metrics.Disk, point)
 	case "netin":
@@ -291,6 +297,8 @@ func (mh *MetricsHistory) addGuestMetricSeries(guestID, metricType string, value
 		metrics.CPU = mh.appendMetricSeries(metrics.CPU, values, timestamps)
 	case "memory":
 		metrics.Memory = mh.appendMetricSeries(metrics.Memory, values, timestamps)
+	case "memoryused":
+		metrics.MemoryUsed = mh.appendMetricSeries(metrics.MemoryUsed, values, timestamps)
 	case "disk":
 		metrics.Disk = mh.appendMetricSeries(metrics.Disk, values, timestamps)
 	case "gpu":
@@ -325,6 +333,8 @@ func (mh *MetricsHistory) addNodeMetricSeries(nodeID, metricType string, values 
 		metrics.CPU = mh.appendMetricSeries(metrics.CPU, values, timestamps)
 	case "memory":
 		metrics.Memory = mh.appendMetricSeries(metrics.Memory, values, timestamps)
+	case "memoryused":
+		metrics.MemoryUsed = mh.appendMetricSeries(metrics.MemoryUsed, values, timestamps)
 	case "disk":
 		metrics.Disk = mh.appendMetricSeries(metrics.Disk, values, timestamps)
 	case "netin":
@@ -394,6 +404,8 @@ func (mh *MetricsHistory) GetGuestMetrics(guestID string, metricType string, dur
 		data = metrics.CPU
 	case "memory":
 		data = metrics.Memory
+	case "memoryused":
+		data = metrics.MemoryUsed
 	case "disk":
 		data = metrics.Disk
 	case "gpu":
@@ -445,6 +457,8 @@ func (mh *MetricsHistory) GetNodeMetrics(nodeID string, metricType string, durat
 		data = metrics.CPU
 	case "memory":
 		data = metrics.Memory
+	case "memoryused":
+		data = metrics.MemoryUsed
 	case "disk":
 		data = metrics.Disk
 	case "netin":
@@ -509,6 +523,8 @@ func guestMetricSeries(metrics *GuestMetrics, metricType string) []MetricPoint {
 		return metrics.CPU
 	case "memory":
 		return metrics.Memory
+	case "memoryused":
+		return metrics.MemoryUsed
 	case "disk":
 		return metrics.Disk
 	case "gpu":
@@ -538,7 +554,7 @@ func guestMetricsCoverageSpan(metrics *GuestMetrics, metricTypes []string, cutof
 	}
 
 	if len(metricTypes) == 0 {
-		metricTypes = []string{"cpu", "memory", "disk", "gpu", "gpu_memory", "gpu_temperature", "diskread", "diskwrite", "netin", "netout", "temperature"}
+		metricTypes = []string{"cpu", "memory", "memoryused", "disk", "gpu", "gpu_memory", "gpu_temperature", "diskread", "diskwrite", "netin", "netout", "temperature"}
 	}
 
 	var best time.Duration
@@ -601,6 +617,7 @@ func (mh *MetricsHistory) GetAllGuestMetrics(guestID string, duration time.Durat
 
 	result["cpu"] = filterMetricsByTime(metrics.CPU, cutoffTime)
 	result["memory"] = filterMetricsByTime(metrics.Memory, cutoffTime)
+	result["memoryused"] = filterMetricsByTime(metrics.MemoryUsed, cutoffTime)
 	result["disk"] = filterMetricsByTime(metrics.Disk, cutoffTime)
 	result["gpu"] = filterMetricsByTime(metrics.GPU, cutoffTime)
 	result["gpu_memory"] = filterMetricsByTime(metrics.GPUMemory, cutoffTime)

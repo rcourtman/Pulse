@@ -8,7 +8,7 @@ import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 
-export const WORKLOADS_SUMMARY_CACHE_VERSION = 6;
+export const WORKLOADS_SUMMARY_CACHE_VERSION = 7;
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
@@ -18,7 +18,7 @@ const MAX_IN_MEMORY_WORKLOAD_ENTRIES = 20;
 
 type CachedChartData = Pick<
   ChartData,
-  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout'
+  'cpu' | 'memory' | 'memoryused' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout'
 >;
 
 type CachedWorkloadsSummary = {
@@ -88,6 +88,7 @@ const trimPoints = <T>(points: T[] | undefined, max: number): T[] => {
 const toCachedChartData = (data: ChartData): CachedChartData => ({
   cpu: trimPoints(data.cpu, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   memory: trimPoints(data.memory, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
+  memoryused: trimPoints(data.memoryused, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   disk: trimPoints(data.disk, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   diskread: trimPoints(data.diskread, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
   diskwrite: trimPoints(data.diskwrite, WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),

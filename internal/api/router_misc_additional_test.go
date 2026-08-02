@@ -466,11 +466,14 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 	}
 
 	// With no history in the test monitor, handleCharts falls back to synthetic points:
-	// guests: cpu/memory/disk/netin/netout (5 — diskread/diskwrite excluded from sparkline payloads)
+	// guests: cpu/memory/memoryused/disk/netin/netout (6 — diskread/diskwrite excluded from sparkline payloads)
 	// nodes: cpu/memory/disk (3)
 	// storage: disk (1)
-	if decoded.Stats.PointCounts.Guests != 5 {
-		t.Fatalf("expected stats.pointCounts.guests=5, got %d", decoded.Stats.PointCounts.Guests)
+	if decoded.Stats.PointCounts.Guests != 6 {
+		t.Fatalf("expected stats.pointCounts.guests=6, got %d", decoded.Stats.PointCounts.Guests)
+	}
+	if points := decoded.ChartData["vm-1"]["memoryused"]; len(points) != 1 || points[0].Value != 0 {
+		t.Fatalf("expected additive raw memory-used fallback point, got %+v", points)
 	}
 	if decoded.Stats.PointCounts.Nodes != 3 {
 		t.Fatalf("expected stats.pointCounts.nodes=3, got %d", decoded.Stats.PointCounts.Nodes)
@@ -1342,7 +1345,7 @@ func TestHandleWorkloadCharts_UnknownNodeFilterFallsBackToGlobalScope(t *testing
 		Node:     "pve-1",
 		Instance: "pve",
 		CPU:      0.3,
-		Memory:   models.Memory{Usage: 42},
+		Memory:   models.Memory{Total: 100, Used: 42, Free: 58, Usage: 42},
 		Disk:     models.Disk{Usage: 55},
 	}}
 
@@ -1362,6 +1365,11 @@ func TestHandleWorkloadCharts_UnknownNodeFilterFallsBackToGlobalScope(t *testing
 	}
 	if len(decoded.ChartData) == 0 {
 		t.Fatalf("expected fallback to global scope when node filter is stale")
+	}
+	for _, series := range decoded.ChartData {
+		if points := series["memoryused"]; len(points) != 1 || points[0].Value != 42 {
+			t.Fatalf("expected raw memory-used workload fallback point, got %+v", points)
+		}
 	}
 }
 
