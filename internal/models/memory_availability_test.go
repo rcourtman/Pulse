@@ -38,8 +38,8 @@ func TestMemoryHasKnownUsageAcceptsTrustedZeroUsage(t *testing.T) {
 
 func TestMemoryHasKnownUsageRejectsNonFiniteAndContradictoryValues(t *testing.T) {
 	for name, memory := range map[string]Memory{
-		"nan":          {Total: 8 << 30, Used: 4 << 30, Free: 4 << 30, Usage: math.NaN()},
-		"infinity":     {Total: 8 << 30, Used: 4 << 30, Free: 4 << 30, Usage: math.Inf(1)},
+		"nan":           {Total: 8 << 30, Used: 4 << 30, Free: 4 << 30, Usage: math.NaN()},
+		"infinity":      {Total: 8 << 30, Used: 4 << 30, Free: 4 << 30, Usage: math.Inf(1)},
 		"free overflow": {Total: 8 << 30, Free: 9 << 30},
 	} {
 		t.Run(name, func(t *testing.T) {
