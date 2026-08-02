@@ -377,6 +377,18 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
   });
 
+  it('keeps Overview guest totals aligned with the filtered Workloads collection', () => {
+    expect(proxmoxPageSurfaceSource).toContain(
+      'const visibleGuestStats = createMemo(() => workloadsState.totalStats())',
+    );
+    expect(proxmoxPageSurfaceSource).not.toContain(
+      'currentModel().summary.runningGuestCount} running',
+    );
+    expect(proxmoxPageSurfaceSource).not.toContain(
+      'currentModel().summary.stoppedGuestCount} stopped',
+    );
+  });
+
   it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {
     expect(proxmoxPageSurfaceSource).toContain("const PROXMOX_PLATFORM_FILTER = 'proxmox-all';");
     expect(proxmoxPageSurfaceSource).toContain('forcedSourceFilter={PROXMOX_PLATFORM_FILTER}');

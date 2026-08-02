@@ -299,6 +299,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
+  const visibleGuestStats = createMemo(() => workloadsState.totalStats());
   const filteredNodes = createMemo(() =>
     filterProxmoxNodesForSearch(
       currentModel().pveNodes,
@@ -373,28 +374,28 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         emptyStateTitle="No Proxmox workloads"
         emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
       />
-      {/* v5 dashboard closed with a running/stopped totals strip; the counts
-          are platform-wide, matching the status-chip vocabulary above. */}
-      <Show when={currentModel().summary.guestCount > 0}>
+      {/* Keep this orientation strip aligned with the rows the operator can
+          currently see rather than the unfiltered page-wide inventory. */}
+      <Show when={visibleGuestStats().total > 0}>
         <div
           class="flex items-center gap-2 rounded border border-border bg-surface-alt px-2 py-1 text-xs text-muted"
           data-testid="proxmox-guest-totals"
         >
           <span class="flex items-center gap-1.5">
             <StatusDot size="xs" variant="success" ariaHidden />
-            {currentModel().summary.runningGuestCount} running
+            {visibleGuestStats().running} running
           </span>
-          <Show when={currentModel().summary.degradedGuestCount > 0}>
+          <Show when={visibleGuestStats().degraded > 0}>
             <span aria-hidden="true">|</span>
             <span class="flex items-center gap-1.5">
               <StatusDot size="xs" variant="warning" ariaHidden />
-              {currentModel().summary.degradedGuestCount} attention
+              {visibleGuestStats().degraded} attention
             </span>
           </Show>
           <span aria-hidden="true">|</span>
           <span class="flex items-center gap-1.5">
             <StatusDot size="xs" variant="danger" ariaHidden />
-            {currentModel().summary.stoppedGuestCount} stopped
+            {visibleGuestStats().stopped} stopped
           </span>
         </div>
       </Show>

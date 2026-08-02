@@ -7,6 +7,7 @@ const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
 const mockStorageProps = vi.hoisted(() => vi.fn());
+const mockTotalStats = vi.hoisted(() => vi.fn());
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -81,6 +82,7 @@ vi.mock('@/components/Workloads/useWorkloadsState', () => ({
     surfaceConnected: () => false,
     surfaceInitialDataReceived: () => false,
     allGuests: () => [],
+    totalStats: mockTotalStats,
     search: () => '',
     setSearch: vi.fn(),
   }),
@@ -129,6 +131,16 @@ describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/proxmox/overview');
     mockVersionInfo.mockReturnValue(null);
+    mockTotalStats.mockReturnValue({
+      total: 3,
+      running: 1,
+      degraded: 1,
+      stopped: 1,
+      vms: 3,
+      containers: 0,
+      appContainers: 0,
+      pods: 0,
+    });
   });
 
   afterEach(() => {
@@ -186,7 +198,7 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
-  it('renders the v5-style guest totals strip from the page summary', () => {
+  it('renders guest totals from the filtered workload collection', () => {
     setResources([
       makeResource({
         id: 'agent:pve-1',
@@ -212,12 +224,22 @@ describe('ProxmoxPageSurface contract', () => {
         proxmox: { nodeName: 'pve-1', vmid: 102 },
       }),
     ]);
+    mockTotalStats.mockReturnValue({
+      total: 1,
+      running: 0,
+      degraded: 0,
+      stopped: 1,
+      vms: 1,
+      containers: 0,
+      appContainers: 0,
+      pods: 0,
+    });
 
     render(() => <ProxmoxPageSurface />);
 
     const totals = screen.getByTestId('proxmox-guest-totals');
-    expect(totals).toHaveTextContent('1 running');
-    expect(totals).toHaveTextContent('1 attention');
+    expect(totals).toHaveTextContent('0 running');
+    expect(totals).not.toHaveTextContent('attention');
     expect(totals).toHaveTextContent('1 stopped');
   });
 

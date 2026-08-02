@@ -3902,6 +3902,10 @@ navigation (`pulse:filterbar:saved-views:<key>`); `SavedViewsMenu` owns
 the dropdown chrome. A "view" is the page's URL query string at save
 time, so saved views double as shareable links: copying the bar URL
 after applying a view gives someone else the exact filtered state.
+Counts or orientation strips presented as part of a filtered resource table
+must derive from that table's canonical filtered collection as well. They must
+not continue showing page-wide inventory totals after FilterBar state, saved
+views, or search has narrowed the rows the operator can see.
 Implicit "remember last filters" is intentionally not added — defaulting
 to yesterday's filter state on a monitoring page hides real problems.
 That same shared filter-toolbar boundary also owns controlled select continuity

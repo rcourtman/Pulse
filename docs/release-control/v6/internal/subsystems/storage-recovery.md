@@ -468,6 +468,11 @@ presentation only. Comparing a VM or LXC's used bytes with its parent-node
 memory total may change the memory bar and memory sort order, but it must not
 change Backup-column freshness, protection coverage, restore-point
 correlation, storage-health state, or recovery authority.
+The adjacent Proxmox overview guest-totals strip is likewise presentation-only
+and must consume the embedded Workloads surface's filtered statistics. It must
+not fall back to page-wide guest summary counts when search, type, status, or
+node filters have narrowed the visible workload inventory; backup and recovery
+authority remain unchanged by either set of presentation counts.
 That overview Backup signal belongs to Proxmox VMs and LXCs. If the embedded
 Workloads table demotes Docker-in-LXC `app-container` rows out of peer
 membership, the backup surface must still receive the page model's Proxmox

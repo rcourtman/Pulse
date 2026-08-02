@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "b3dbc26d545b7526f62ed466884c4006f07cf8cb",
-  "verified_at": "2026-08-02T20:27:26Z",
+  "base_sha": "c143a7cf322b407e8091ca4e27a16e92a5178cef",
+  "verified_at": "2026-08-02T20:53:27Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts": "cd34929cd632fcf6eda163b34def13df0666d91f279e5df9e329ee8b0b05ee33"
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "3dafdf4fec6e6843082f347258c7913f96bc1bf9fc23b10e2461d87ffa90110f"
   },
   "routes": [
     "/proxmox/overview"
@@ -18,30 +18,22 @@
       "height": 900
     },
     {
-      "width": 640,
-      "height": 800
-    },
-    {
       "width": 390,
       "height": 844
     }
   ],
   "states": [
-    "Desktop default filter toolbar",
-    "Desktop empty search-history menu",
-    "Desktop populated search-history menu",
-    "Desktop active search with history closed",
-    "Tablet-width empty search-history menu",
-    "Phone-width populated search-history menu",
-    "Restored empty search and cleared history"
+    "Desktop filtered saved view with one stopped VM",
+    "Phone-width filtered saved view with one stopped VM",
+    "Desktop zero-result Attention filter",
+    "Desktop unfiltered workload inventory",
+    "Clean unfiltered state after saved-view removal and reload"
   ],
   "interactions": [
-    "Opened the empty search-history menu and confirmed it remained bounded to 512px on the 1280px desktop viewport",
-    "Confirmed the same menu used the full available search width at 640px and 390px",
-    "Measured zero document-level horizontal overflow at all three verified widths",
-    "Entered edge, committed it with Enter, and confirmed the search filtered the workload table",
-    "Reopened history and confirmed the populated entry and clear-history action rendered within the bounded menu",
-    "Closed history and confirmed the active-search filter toolbar remained usable",
-    "Cleared history and the active search, then confirmed the overview returned to its clean default state"
+    "Confirmed the one-row VMs, Stopped, and Node pve1 view rendered 0 running and 1 stopped instead of estate-wide totals",
+    "Inspected the filtered totals strip at 1280x900 and 390x844 for alignment, clipping, and horizontal overflow",
+    "Cleared the saved filters and confirmed the totals returned to the full visible workload collection",
+    "Applied the Attention filter and confirmed the totals strip was absent beside the canonical zero-result state",
+    "Removed the temporary saved view, cleared filters, reloaded the route, and confirmed no saved default or filter state remained"
   ]
 }
