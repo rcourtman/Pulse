@@ -2845,6 +2845,34 @@ create_user() {
     fi
 }
 
+prune_config_backups() {
+    # Unattended updates create one snapshot per run; without rotation they
+    # fill small root filesystems (issue #1646). Keep the newest snapshots
+    # and delete the rest. Snapshot names embed a sortable timestamp, so a
+    # lexicographic sort orders them oldest-first.
+    local backup_parent="$1"
+    local snapshot_prefix="$2"
+    local keep="${CONFIG_BACKUP_KEEP_COUNT:-5}"
+    local backups=()
+    local entry
+
+    while IFS= read -r entry; do
+        [[ -n "$entry" ]] && backups+=("$entry")
+    done < <(find "$backup_parent" -maxdepth 1 -mindepth 1 -type d -name "${snapshot_prefix}*" 2>/dev/null | sort)
+
+    local excess=$(( ${#backups[@]} - keep ))
+    if (( excess <= 0 )); then
+        return 0
+    fi
+
+    local i
+    for (( i = 0; i < excess; i++ )); do
+        if ! rm -rf -- "${backups[$i]}"; then
+            print_warn "Could not remove old configuration backup ${backups[$i]}"
+        fi
+    done
+}
+
 backup_existing() {
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
@@ -2863,6 +2891,7 @@ backup_existing() {
             rm -rf "$backup_dir"
             return 1
         fi
+        prune_config_backups "$backup_parent" "$(basename "$CONFIG_DIR").backup."
     fi
 }
 

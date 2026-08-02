@@ -326,6 +326,87 @@ func TestRootInstallScriptConfigBackupCleansPartialCopy(t *testing.T) {
 	}
 }
 
+// Issue #1646: unattended updates created one config snapshot per run under
+// the hardened-unit fallback directory and never pruned old ones, so small
+// root filesystems filled up. backup_existing must rotate snapshots after a
+// successful copy.
+func TestRootInstallScriptConfigBackupRotatesOldSnapshots(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores write bits, so the read-only fallback path cannot be simulated")
+	}
+	configDir := t.TempDir()
+	installDir := t.TempDir()
+	backupParent := filepath.Join(installDir, "config-backups")
+	if err := os.MkdirAll(backupParent, 0755); err != nil {
+		t.Fatalf("mkdir backup parent: %v", err)
+	}
+	prefix := filepath.Base(configDir) + ".backup."
+	oldStamps := []string{"20260701-020000", "20260702-020000", "20260703-020000", "20260704-020000", "20260705-020000"}
+	for _, stamp := range oldStamps {
+		if err := os.MkdirAll(filepath.Join(backupParent, prefix+stamp), 0755); err != nil {
+			t.Fatalf("mkdir old snapshot: %v", err)
+		}
+	}
+
+	script := `
+		set -euo pipefail
+		print_error() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		CONFIG_DIR="$CONFIG_DIR_UNDER_TEST"
+		INSTALL_DIR="$INSTALL_DIR_UNDER_TEST"
+		CONFIG_BACKUP_MIN_EXTRA_BYTES=0
+` + extractRootInstallShellFunction(t, "bytes_to_human") + `
+` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractRootInstallShellFunction(t, "get_directory_size_bytes") + `
+` + extractRootInstallShellFunction(t, "ensure_config_backup_headroom") + `
+` + extractRootInstallShellFunction(t, "prune_config_backups") + `
+` + extractRootInstallShellFunction(t, "backup_existing") + `
+		date() { printf '20260706-020000\n'; }
+		chmod a-w "$(dirname "$CONFIG_DIR_UNDER_TEST")" 2>/dev/null || true
+		trap 'chmod u+w "$(dirname "$CONFIG_DIR_UNDER_TEST")" 2>/dev/null || true' EXIT
+		backup_existing
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(),
+		"CONFIG_DIR_UNDER_TEST="+configDir,
+		"INSTALL_DIR_UNDER_TEST="+installDir,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	entries, err := os.ReadDir(backupParent)
+	if err != nil {
+		t.Fatalf("read backup parent: %v", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if len(names) != 5 {
+		t.Fatalf("expected 5 snapshots after rotation, got %d: %v", len(names), names)
+	}
+	for _, gone := range []string{prefix + "20260701-020000"} {
+		for _, name := range names {
+			if name == gone {
+				t.Fatalf("expected oldest snapshot %s to be pruned, still present: %v", gone, names)
+			}
+		}
+	}
+	found := false
+	for _, name := range names {
+		if name == prefix+"20260706-020000" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected fresh snapshot to exist, got %v", names)
+	}
+}
+
 func TestRootInstallScriptV5ToV6PreflightWarnsWhenAgentScopeMissing(t *testing.T) {
 	configDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(configDir, "api_tokens.json"), []byte(`[{"id":"tok-1","name":"admin","hash":"hash","scopes":["settings:read"]}]`), 0600); err != nil {
