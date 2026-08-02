@@ -3902,6 +3902,14 @@ navigation (`pulse:filterbar:saved-views:<key>`); `SavedViewsMenu` owns
 the dropdown chrome. A "view" is the page's URL query string at save
 time, so saved views double as shareable links: copying the bar URL
 after applying a view gives someone else the exact filtered state.
+Because that popover combines view application, default selection, removal,
+and an inline naming form, it is a labelled non-modal dialog rather than an
+ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus
+to the trigger (or from the naming form to the save action), the naming field
+has a persistent label, and destructive view controls remain visibly
+discoverable at narrow touch viewports instead of depending on hover. The
+panel remains end-anchored to its trigger so its management actions cannot run
+past the viewport edge on the expanded mobile filter rail.
 Counts or orientation strips presented as part of a filtered resource table
 must derive from that table's canonical filtered collection as well. They must
 not continue showing page-wide inventory totals after FilterBar state, saved

@@ -1,19 +1,13 @@
 {
   "version": 1,
-  "base_sha": "bacff3e2ebbb53dfa54881132d971e11e50d452e",
-  "verified_at": "2026-08-02T21:27:13Z",
+  "base_sha": "09b6de599ef2613309d2d021b6d090891ce478bc",
+  "verified_at": "2026-08-02T22:02:49Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/hooks/useWorkloads.ts",
-    "frontend-modern/src/types/workloads.ts"
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "bca56f3abac29d36ed30e361747f4b32138bd0fd75112ff04aed8e2ca15dc01d",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "a26664090d776ac8c99bfd14c52fafa3157cf8aebf275807b2a65588664b1fe7",
-    "frontend-modern/src/hooks/useWorkloads.ts": "f6064a2dd39d50d2c24c91f7499e21bcb4f115f9e99ae90420536c8e6834b06a",
-    "frontend-modern/src/types/workloads.ts": "52996a1fa0b08da1167770522302053f72da4f9d40ec3b0cd17b0dd9b1c91749"
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx": "9490a292a06872a06baffb04cb9bbe7faa74189acff1b526d9002e2363619202"
   },
   "routes": [
     "/proxmox/overview"
@@ -29,17 +23,22 @@
     }
   ],
   "states": [
-    "Desktop unfiltered Proxmox workload inventory",
-    "Desktop Attention filter with 11 warning-health guests",
-    "Desktop Stopped filter with 5 stopped-health guests",
-    "Phone-width expanded filters with Attention selected",
-    "Clean unfiltered state after clearing filters and reload"
+    "Desktop saved-views dialog with an existing view and all management actions",
+    "Desktop empty saved-views dialog and inline naming form",
+    "Desktop saved Stopped view applied to the filtered workload table",
+    "Desktop save-form Escape state and closed-dialog trigger focus state",
+    "Phone-width expanded filter rail with the saved-views dialog open",
+    "Phone-width saved-view row with visible default and remove actions",
+    "Neutral Grouped, Bars, Guest, All-status state after cleanup and reload"
   ],
   "interactions": [
-    "Applied Attention and confirmed the 11 node-offline warning guests rendered instead of an empty result",
-    "Applied Stopped and confirmed only the 5 genuinely stopped guests remained",
-    "Confirmed filtered totals omitted zero-value categories and stray separators",
-    "Expanded the phone-width filter controls, selected Attention, and inspected table alignment and viewport clipping",
-    "Cleared filters, reloaded the route, and confirmed the unfiltered totals restored to 53 running, 11 attention, and 5 stopped"
+    "Created a Stopped saved view, applied it, and confirmed the table summary narrowed to 5 stopped workloads",
+    "Set the saved view as default, reloaded the page, confirmed the default marker persisted, and then unset it",
+    "Pressed Escape in the naming form and confirmed focus returned to Save current view as, then pressed Escape again and confirmed focus returned to the trigger",
+    "Clicked the search field outside the dialog and confirmed the dialog closed without stealing search focus",
+    "Dismissed a populated naming draft with the trigger, reopened the dialog, and confirmed the draft and form state were reset",
+    "Inspected the end-anchored dialog at 390 pixels and confirmed the default and remove controls remained visible inside the viewport",
+    "Removed the temporary saved view on the phone layout and confirmed focus returned to Save current view as",
+    "Restored Grouped, Bars, Guest, All-status defaults and reloaded before finishing verification"
   ]
 }

@@ -8221,9 +8221,18 @@ describe('shared primitive guardrails', () => {
 
     expect(savedViewsMenuSource).toContain("from './useSavedViews';");
     expect(savedViewsMenuSource).toContain('aria-label="Saved views"');
+    expect(savedViewsMenuSource).toContain('aria-haspopup="dialog"');
+    expect(savedViewsMenuSource).toContain('role="dialog"');
+    expect(savedViewsMenuSource).not.toContain('role="menu"');
+    expect(savedViewsMenuSource).not.toContain('role="menuitem"');
     expect(savedViewsMenuSource).toContain('Save current view as...');
     expect(savedViewsMenuSource).toContain("event.key === 'Enter'");
     expect(savedViewsMenuSource).toContain('queueMicrotask(() => nameInputRef?.focus())');
+    expect(savedViewsMenuSource).toContain('queueMicrotask(() => triggerRef?.focus())');
+    expect(savedViewsMenuSource).toContain('for={nameInputId}');
+    expect(savedViewsMenuSource).toContain('class="left-auto right-0');
+    expect(savedViewsMenuSource).toContain('opacity-100 transition-opacity');
+    expect(savedViewsMenuSource).toContain('sm:opacity-0');
 
     // FilterBar consumers — each migrated page should declare a catalog of
     // FilterDef entries rather than rendering the labelled-select row from

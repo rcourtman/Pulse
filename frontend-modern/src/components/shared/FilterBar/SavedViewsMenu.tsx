@@ -1,9 +1,17 @@
-import { Component, For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createSignal,
+  createUniqueId,
+  onCleanup,
+} from 'solid-js';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import PlusIcon from 'lucide-solid/icons/plus';
 import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
-import { filterActionButtonClass } from '@/components/shared/FilterToolbar';
+import { FilterActionButton, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
 import { useSavedViews, type SavedView } from './useSavedViews';
 
 interface SavedViewsMenuProps {
@@ -17,13 +25,33 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
   const [open, setOpen] = createSignal(false);
   const [savePromptOpen, setSavePromptOpen] = createSignal(false);
   const [name, setName] = createSignal('');
+  const panelId = createUniqueId();
+  const nameInputId = createUniqueId();
   let containerRef: HTMLDivElement | undefined;
+  let triggerRef: HTMLButtonElement | undefined;
+  let saveActionRef: HTMLButtonElement | undefined;
   let nameInputRef: HTMLInputElement | undefined;
 
-  const close = () => {
+  const close = (restoreFocus = false) => {
     setOpen(false);
     setSavePromptOpen(false);
     setName('');
+    if (restoreFocus) queueMicrotask(() => triggerRef?.focus());
+  };
+
+  const closeSavePrompt = () => {
+    setSavePromptOpen(false);
+    setName('');
+    queueMicrotask(() => saveActionRef?.focus());
+  };
+
+  const restoreViewActionFocus = (viewId: string, action: string) => {
+    queueMicrotask(() => {
+      const actions = containerRef?.querySelectorAll<HTMLElement>(`[data-view-action="${action}"]`);
+      Array.from(actions ?? [])
+        .find((element) => element.dataset.viewId === viewId)
+        ?.focus();
+    });
   };
 
   const handleClickOutside = (event: MouseEvent) => {
@@ -34,12 +62,12 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
 
   const handleEscape = (event: KeyboardEvent) => {
     if (event.key !== 'Escape') return;
+    event.preventDefault();
     if (savePromptOpen()) {
-      setSavePromptOpen(false);
-      setName('');
+      closeSavePrompt();
       return;
     }
-    close();
+    close(true);
   };
 
   createEffect(() => {
@@ -67,18 +95,19 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
 
   const handleApply = (view: SavedView) => {
     applyView(view);
-    close();
+    close(true);
   };
 
   return (
     <div ref={containerRef} class="relative inline-flex">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-haspopup="menu"
+      <FilterActionButton
+        ref={triggerRef}
+        active={open()}
+        onClick={() => (open() ? close() : setOpen(true))}
+        aria-haspopup="dialog"
         aria-expanded={open()}
+        aria-controls={open() ? panelId : undefined}
         aria-label="Saved views"
-        class={filterActionButtonClass}
       >
         <BookmarkIcon class="h-3 w-3" />
         Saved
@@ -87,20 +116,23 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
             {views().length}
           </span>
         </Show>
-      </button>
+      </FilterActionButton>
 
       <Show when={open()}>
-        <div
-          role="menu"
-          class="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg sm:left-auto sm:right-0"
+        <FilterToolbarPanel
+          id={panelId}
+          role="dialog"
+          aria-label="Saved views"
+          widthClass="w-64 max-w-[calc(100vw-2rem)]"
+          class="left-auto right-0 top-[calc(100%+0.25rem)] z-50 p-0"
         >
           <Show
             when={savePromptOpen()}
             fallback={
               <>
                 <button
+                  ref={saveActionRef}
                   type="button"
-                  role="menuitem"
                   onClick={() => setSavePromptOpen(true)}
                   class="flex w-full items-center gap-1.5 border-b border-border-subtle px-3 py-1.5 text-left text-xs text-base-content hover:bg-surface-hover"
                 >
@@ -121,6 +153,8 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                           <button
                             type="button"
                             onClick={() => handleApply(view)}
+                            data-view-id={view.id}
+                            data-view-action="apply"
                             class="min-w-0 flex-1 truncate px-3 py-1.5 text-left text-xs text-base-content"
                             title={view.name}
                           >
@@ -135,7 +169,10 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                               } else {
                                 setDefault(view.id);
                               }
+                              restoreViewActionFocus(view.id, 'default');
                             }}
+                            data-view-id={view.id}
+                            data-view-action="default"
                             aria-label={
                               view.isDefault === true
                                 ? `Unset "${view.name}" as default`
@@ -161,9 +198,12 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                             onClick={(event) => {
                               event.stopPropagation();
                               removeView(view.id);
+                              queueMicrotask(() => saveActionRef?.focus());
                             }}
+                            data-view-id={view.id}
+                            data-view-action="remove"
                             aria-label={`Remove view "${view.name}"`}
-                            class="mr-2 rounded-full p-0.5 text-muted opacity-0 transition-opacity hover:bg-surface hover:text-base-content group-hover:opacity-100 focus-visible:opacity-100"
+                            class="mr-2 rounded-full p-0.5 text-muted opacity-100 transition-opacity hover:bg-surface hover:text-base-content sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                           >
                             <XIcon class="h-3 w-3" />
                           </button>
@@ -176,11 +216,15 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
             }
           >
             <div class="p-3">
-              <label class="block text-[10px] font-semibold uppercase tracking-wide text-muted">
+              <label
+                for={nameInputId}
+                class="block text-[10px] font-semibold uppercase tracking-wide text-muted"
+              >
                 Name this view
               </label>
               <input
                 ref={nameInputRef}
+                id={nameInputId}
                 type="text"
                 value={name()}
                 onInput={(event) => setName(event.currentTarget.value)}
@@ -196,10 +240,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
               <div class="mt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSavePromptOpen(false);
-                    setName('');
-                  }}
+                  onClick={closeSavePrompt}
                   class="rounded-md px-2 py-1 text-xs text-muted hover:text-base-content"
                 >
                   Cancel
@@ -215,7 +256,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
               </div>
             </div>
           </Show>
-        </div>
+        </FilterToolbarPanel>
       </Show>
     </div>
   );
