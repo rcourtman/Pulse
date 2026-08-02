@@ -129,6 +129,15 @@ git push origin pulse/v6-release
 
 4. Validate the integrated release result:
    - Treat `Definitive Release Verdict` as the release result.
+   - If the verdict is red only because `publish_private_pro_runtime` failed
+     after the private build succeeded (a promotion-only failure, for example
+     a transient live-gate error), rerun the public run's failed jobs. The
+     paid-runtime R2 prefix is derived from run-stable values and the private
+     build is dispatched with `reuse_existing_packet=true`, so pulse-enterprise
+     validates the signed packet the earlier attempt uploaded, skips the
+     rebuild, and only the promotion re-executes. Do not hand-dispatch a fresh
+     `Build Pro Release` against the same prefix; it will refuse to overwrite
+     the existing packet.
    - Confirm assets exist and checksums match.
    - Confirm GitHub marks the release as a prerelease.
    - Confirm the rendered release body retains its standalone headings, lists,
