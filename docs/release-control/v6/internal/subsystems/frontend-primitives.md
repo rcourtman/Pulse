@@ -3877,10 +3877,12 @@ Storage, Recovery Protection coverage, Recovery events) compose the chip-based
 of `PageControls`. Each page declares a `FilterDef[]` catalog (label, options,
 value, defaultValue, group); `FilterBar` renders chips for active filters and
 exposes the rest behind a "+ Filter" menu, with type-ahead at both the menu
-and chip popovers (`AddFilterMenu` and `FilterChip`). View options
-(grouping segmented control, charts toggle, columns picker, sort key) sit in
-the `viewOptionsTrailing` slot and are not chips. Recovery is event-first and
-does not use equal workspace subtabs for protected rollups versus event
+and chip popovers (`AddFilterMenu` and `FilterChip`). Low-frequency view options
+(grouping segmented control, charts toggle, columns picker, sort key) compose
+the shared `ViewOptionsMenu` inside the `viewOptionsTrailing` slot instead of
+remaining as permanent toolbar controls; table counters and other persistent
+orientation readouts may remain adjacent in that slot. Recovery is event-first
+and does not use equal workspace subtabs for protected rollups versus event
 history; Storage subtabs (Pools / Physical Disks) sit above the bar as
 navigation, not filters.
 Primary filters with small, stable option sets should stay one-click controls
@@ -3888,8 +3890,9 @@ inside that same `FilterDef[]` catalog by setting `inline: true`; `FilterBar`
 renders those as unlabeled compact segmented controls in the same second-row
 rail as view options, matching the v5 filter-bar pattern, and keeps longer or
 dynamic scope filters in the menu/chip path. Feature surfaces must not fork
-local filter rows or bury high-frequency Type, Status, or Group-by filters
-behind an extra menu just to regain one-click behavior.
+local filter rows or bury high-frequency Type, Status, or other true filter
+facets behind an extra menu just to regain one-click behavior; persistent
+presentation preferences such as grouped versus flat layout belong in View.
 Legacy `PageControls` and labelled select/toggle primitives are not the
 resource-list filter shape. If a future surface needs a new filtering
 affordance, it should extend the FilterBar catalog model or add a new

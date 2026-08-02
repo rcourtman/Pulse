@@ -478,6 +478,44 @@ describe('Docker native tables', () => {
     expect(container.querySelector('[data-docker-host-group]')).toBeNull();
   });
 
+  it('keeps Docker grouping inside the shared View preferences popover', () => {
+    const { container } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: { hostname: 'edge-02', image: 'redis:7.4', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Group by' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'View preferences' });
+    expect(within(dialog).getByText('Layout')).toBeInTheDocument();
+    expect(within(dialog).getByRole('group', { name: 'Group by' })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'List' }));
+    expect(container.querySelector('[data-docker-host-group]')).toBeNull();
+    expect(window.localStorage.getItem('dockerContainersGroupingMode')).toBe('flat');
+  });
+
   it('renders a distinct container launch control without linking the name', () => {
     renderInRouter(() => (
       <DockerContainersTable

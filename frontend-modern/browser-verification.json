@@ -1,22 +1,16 @@
 {
   "version": 1,
-  "base_sha": "3e3839022df46c9c13c478bafd3fa18da27f4320",
-  "verified_at": "2026-08-02T22:32:51Z",
+  "base_sha": "b109c1230f3efce7d89750318e996afa00dcf40c",
+  "verified_at": "2026-08-02T22:47:16Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterToolbar.tsx",
-    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx",
-    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx",
-    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx"
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterToolbar.tsx": "edd710a295605fee5fc1611b31e52fe7eb848f981b1f366d573666b48d9fed07",
-    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx": "41b928014dbfeb768c1fb5ca035e88aac3912169083abfaf5cbd1bf8b3bed4c9",
-    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx": "84d3e93bcaf8104cf2c58415ef226503d09cc8407a2d3ae127660c36ba037ba1",
-    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "6a39c1878e722bd0c5f5c8422158cb3c2d6e1659daf6feee359fb32c84bdcb3d"
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "36071da0390d3b831526b33989f587ee00b7c16c16b607fe9dd3097223442e0b"
   },
   "routes": [
-    "/proxmox/overview"
+    "/docker/overview"
   ],
   "viewports": [
     {
@@ -29,16 +23,20 @@
     }
   ],
   "states": [
-    "Desktop filter toolbar with Add filter, Saved, and View controls closed",
-    "Phone-width expanded filter rail with aligned Add filter, Saved, and View controls",
-    "Phone-width Saved views dialog open and end-anchored inside the viewport",
-    "Phone-width View preferences dialog open inside the viewport"
+    "Desktop Docker container toolbar with the shared View trigger closed",
+    "Desktop Docker View preferences popover open with Grouped selected",
+    "Desktop flat container layout with List selected",
+    "Reloaded desktop View preferences with the persisted List selection",
+    "Phone-width expanded filter rail with the View trigger closed",
+    "Phone-width View preferences popover open with Grouped selected"
   ],
   "interactions": [
-    "Confirmed the hidden disabled Add filter placeholder is absent from the accessible native option list and only real Node values are actionable",
-    "Selected Node pve4, confirmed the filter chip appeared and the Add filter control was exhausted, then removed the chip to restore the neutral state",
-    "Opened and dismissed Saved views at phone width and confirmed trigger alignment, chevron state, and viewport-safe panel placement",
-    "Opened and dismissed View preferences at phone width and confirmed matching trigger geometry and viewport-safe panel placement",
+    "Opened Docker View preferences and confirmed Grouped and List are no longer permanent toolbar controls",
+    "Selected List and confirmed host group header rows were removed from the container table",
+    "Reloaded Docker Overview, reopened View, and confirmed List remained selected",
+    "Restored Grouped and confirmed host group headers returned",
+    "Expanded the phone-width filter rail, opened View, and confirmed the popover remained inside the viewport",
+    "Pressed Escape and confirmed the popover closed and focus returned to the View trigger",
     "Confirmed the browser console reported no errors during the final desktop and phone-width pass"
   ]
 }
