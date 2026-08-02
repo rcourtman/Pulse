@@ -3998,7 +3998,7 @@ func buildFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateF
 
 func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateSnapshot) models.StateFrontend {
 	frontendState := buildFrontendStateFromSnapshot(snapshot)
-	m.updateResourceStore(snapshot)
+	m.updateResourceStoreForRead(snapshot)
 	if m != nil && m.alertManager != nil {
 		if liveAlerts := m.activeAlertsSnapshot(); len(liveAlerts) > 0 || len(frontendState.ActiveAlerts) > 0 {
 			frontendState.ActiveAlerts = liveAlerts
@@ -4693,6 +4693,60 @@ func (m *Monitor) shouldSkipNodeMetrics(nodeName string) bool {
 			Msg("Skipping detailed node metrics - host agent provides data")
 	}
 	return should
+}
+
+// readPathRegistryFreshness bounds how stale the unified registry may be
+// when a read path (state API, websocket hydrate) serves it without
+// rebuilding. It only needs to be wide enough to collapse same-cycle rebuild
+// storms (agent report + broadcast + state request); it must stay well under
+// the poll cadence so every poll-cycle broadcast still publishes a fresh
+// registry.
+const readPathRegistryFreshness = 2 * time.Second
+
+// readRefreshResourceStore is implemented by stores whose read paths can
+// refresh without queueing behind ingest rebuilds (see MonitorAdapter).
+type readRefreshResourceStore interface {
+	TryReplaceRegistryForRead(snapshot models.StateSnapshot, maxAge time.Duration, supply func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool
+}
+
+// updateResourceStoreForRead keeps the resource store fresh on behalf of a
+// read path. Ingest boundaries (agent reports) call updateResourceStore and
+// always rebuild; serving state must not redo work an ingest just did, and
+// above all must not queue behind an in-flight rebuild whose change-record
+// and identity-pin persistence can take seconds per transaction on slow
+// volumes (#1665: /api/state stuck for minutes with SQLite on NFS).
+func (m *Monitor) updateResourceStoreForRead(state models.StateSnapshot) {
+	m.mu.RLock()
+	store := m.resourceStore
+	m.mu.RUnlock()
+
+	if store == nil {
+		return
+	}
+	readStore, ok := store.(readRefreshResourceStore)
+	if !ok {
+		m.updateResourceStore(state)
+		return
+	}
+
+	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
+		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
+	}
+	snapshotForStore := state
+	if ownedSources := m.providerOwnedSnapshotSources(); len(ownedSources) > 0 {
+		snapshotForStore = unifiedresources.SnapshotWithoutSources(state, ownedSources)
+	}
+	rebuilt := readStore.TryReplaceRegistryForRead(snapshotForStore, readPathRegistryFreshness, m.collectSupplementalRecordsBySource)
+	if !rebuilt {
+		return
+	}
+	recordSupplementalResourceChanges(store, m.collectSupplementalChanges())
+	m.syncUnifiedAgentMetrics(store)
+	m.syncUnifiedVMMetrics(store)
+	m.syncUnifiedStorageMetrics(store)
+	m.syncUnifiedPhysicalDiskMetrics(store)
+	m.syncUnifiedAppContainerMetrics(store)
+	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
 // updateResourceStore populates the canonical resource store from current

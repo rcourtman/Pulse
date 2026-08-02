@@ -146,13 +146,69 @@ func (a *MonitorAdapter) ResolveCanonicalResourceID(ref string) (string, bool) {
 	return canonicalID, ok
 }
 
+// LastRebuiltAt returns when the registry last published a generation. Zero
+// when no snapshot or supplemental ingest has completed yet.
+func (a *MonitorAdapter) LastRebuiltAt() time.Time {
+	if a == nil {
+		return time.Time{}
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.lastRebuiltAt
+}
+
+// TryReplaceRegistryForRead rebuilds the registry on behalf of a read path
+// (/api/state, websocket hydrate). Unlike the ingest-driven populate methods
+// it never queues behind an in-flight rebuild and skips entirely while the
+// current generation is younger than maxAge, so serving state cannot stall
+// on registry persistence (change records and identity pins write to SQLite,
+// which can take seconds per transaction on slow volumes — #1665). The
+// supplemental payload is only materialized via supply() once a rebuild is
+// committed, keeping consume-once providers undrained on skipped refreshes.
+// The one exception is a cold start: before the first generation exists a
+// read path must block and build it, or first loads would render empty.
+// Returns true when a rebuild ran.
+func (a *MonitorAdapter) TryReplaceRegistryForRead(snapshot models.StateSnapshot, maxAge time.Duration, supply func() map[DataSource][]IngestRecord) bool {
+	if a == nil {
+		return false
+	}
+	if last := a.LastRebuiltAt(); !last.IsZero() {
+		if maxAge > 0 && time.Since(last) < maxAge {
+			return false
+		}
+		if !a.mutationMu.TryLock() {
+			// An ingest rebuild is already publishing a generation at least
+			// as fresh as this snapshot; serve the current one instead.
+			return false
+		}
+	} else {
+		a.mutationMu.Lock()
+	}
+	defer a.mutationMu.Unlock()
+	// Re-check under the lock: another rebuild may have published while this
+	// caller was acquiring it.
+	if last := a.LastRebuiltAt(); !last.IsZero() && maxAge > 0 && time.Since(last) < maxAge {
+		return false
+	}
+	var recordsBySource map[DataSource][]IngestRecord
+	if supply != nil {
+		recordsBySource = supply()
+	}
+	a.replaceRegistryLocked(snapshot, recordsBySource)
+	return true
+}
+
 func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
 	if a == nil {
 		return
 	}
 	a.mutationMu.Lock()
 	defer a.mutationMu.Unlock()
+	a.replaceRegistryLocked(snapshot, recordsBySource)
+}
 
+// replaceRegistryLocked is the rebuild body; callers must hold mutationMu.
+func (a *MonitorAdapter) replaceRegistryLocked(snapshot models.StateSnapshot, recordsBySource map[DataSource][]IngestRecord) {
 	registry := a.currentRegistry()
 	if registry == nil {
 		return
