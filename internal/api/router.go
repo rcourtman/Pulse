@@ -7058,6 +7058,39 @@ func convertMetricsForChart(
 	return converted
 }
 
+// guestLiveMetricsView is the slice of the unified workload view API needed
+// to seed a chart from live values; VM and container views both satisfy it.
+type guestLiveMetricsView interface {
+	CPUPercent() float64
+	MemoryPercent() float64
+	MemoryUsed() int64
+	DiskPercent() float64
+	NetIn() float64
+	NetOut() float64
+}
+
+// guestChartSeriesWithLiveFallback converts a guest's batched metric history
+// into chart series, substituting single live-value points when no history
+// exists yet so freshly added guests still chart.
+func guestChartSeriesWithLiveFallback(
+	metrics map[string][]monitoring.MetricPoint,
+	guest guestLiveMetricsView,
+	oldestTimestamp *int64,
+	maxPoints int,
+	currentTime int64,
+) VMChartData {
+	series := convertMetricsForChart(metrics, oldestTimestamp, maxPoints)
+	if len(series["cpu"]) == 0 {
+		series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: guest.CPUPercent()}}
+		series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: guest.MemoryPercent()}}
+		series["memoryused"] = []MetricPoint{{Timestamp: currentTime, Value: float64(guest.MemoryUsed())}}
+		series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: guest.DiskPercent()}}
+		series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: guest.NetIn()}}
+		series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: guest.NetOut()}}
+	}
+	return series
+}
+
 const (
 	mockWorkloadMinSeriesPoints = 24
 	mockWorkloadMaxSeriesPoints = 180
@@ -7530,35 +7563,15 @@ func (r *Router) buildWorkloadChartsResponse(
 	for idx, vm := range vmList {
 		responseKey := vmResponseKeys[idx]
 		metricID := vmRequests[idx].SQLResourceID
-		series := convertMetricsForChart(vmBatchMetrics[metricID], &oldestTimestamp, maxPoints)
 		guestTypes[responseKey] = "vm"
-
-		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.MemoryPercent()}}
-			series["memoryused"] = []MetricPoint{{Timestamp: currentTime, Value: float64(vm.MemoryUsed())}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.DiskPercent()}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetIn()}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
-		}
-		chartData[responseKey] = series
+		chartData[responseKey] = guestChartSeriesWithLiveFallback(vmBatchMetrics[metricID], vm, &oldestTimestamp, maxPoints, currentTime)
 	}
 
 	for idx, ct := range containerList {
 		responseKey := containerResponseKeys[idx]
 		metricID := containerRequests[idx].SQLResourceID
-		series := convertMetricsForChart(containerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
 		guestTypes[responseKey] = "system-container"
-
-		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.MemoryPercent()}}
-			series["memoryused"] = []MetricPoint{{Timestamp: currentTime, Value: float64(ct.MemoryUsed())}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.DiskPercent()}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetIn()}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}
-		}
-		chartData[responseKey] = series
+		chartData[responseKey] = guestChartSeriesWithLiveFallback(containerBatchMetrics[metricID], ct, &oldestTimestamp, maxPoints, currentTime)
 	}
 
 	for _, pod := range podList {

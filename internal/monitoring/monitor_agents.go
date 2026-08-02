@@ -1542,8 +1542,8 @@ func (m *Monitor) ClearUnauthenticatedAgents() (int, int) {
 	m.mu.Lock()
 	m.dockerTokenBindings = make(map[string]string)
 	m.hostTokenBindings = make(map[string]string)
-	m.dockerIdentityFlaps = make(map[string]*dockerIdentityFlapTracker)
-	m.hostIdentityFlaps = make(map[string]*hostIdentityFlapTracker)
+	m.dockerIdentityFlaps = make(map[string]*identityFlapTracker)
+	m.hostIdentityFlaps = make(map[string]*identityFlapTracker)
 	m.mu.Unlock()
 
 	if hostCount > 0 || dockerCount > 0 {

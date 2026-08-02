@@ -94,7 +94,7 @@ func TestGroupedAlertsUseInitialNotifyTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create queue: %v", err)
 	}
-	defer queue.Stop()
+	defer func() { _ = queue.Stop() }()
 
 	manager := &NotificationManager{
 		enabled:       true,

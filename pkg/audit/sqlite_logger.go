@@ -339,7 +339,7 @@ func (l *SQLiteLogger) migrateLegacyTimestamps() error {
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		needsRebuild, err := auditEventsNeedRebuild(tx)
 		if err != nil {
@@ -726,7 +726,7 @@ func (l *SQLiteLogger) QueryPage(filter QueryFilter) ([]Event, int, error) {
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		events, err = queryAuditEvents(tx, filter)
 		if err != nil {
@@ -1080,7 +1080,7 @@ func (l *SQLiteLogger) cleanupOldEvents() {
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		result, err := tx.Exec(`DELETE FROM audit_events WHERE timestamp < ?`, cutoff)
 		if err != nil {

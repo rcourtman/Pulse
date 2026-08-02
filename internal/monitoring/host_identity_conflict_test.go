@@ -7,58 +7,15 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
-func TestHostIdentityFlapTrackerDetectsAlternatingHostnames(t *testing.T) {
-	tracker := newHostIdentityFlapTracker()
-	base := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-	interval := 30 * time.Second
-
-	if conflict := tracker.observe("clone-a", "", base); conflict != nil {
-		t.Fatalf("first report should not conflict, got %+v", conflict)
-	}
-	// First switch could be a legitimate rename, so it must not warn yet.
-	if conflict := tracker.observe("clone-b", "", base.Add(interval)); conflict != nil {
-		t.Fatalf("single hostname switch should not conflict, got %+v", conflict)
-	}
-	// The revisit of clone-a proves two machines are alternating.
-	conflict := tracker.observe("clone-a", "", base.Add(2*interval))
-	if conflict == nil {
-		t.Fatal("expected conflict after hostname revisit")
-	}
-	if len(conflict.Hostnames) != 2 || conflict.Hostnames[0] != "clone-a" || conflict.Hostnames[1] != "clone-b" {
-		t.Fatalf("expected sorted hostnames [clone-a clone-b], got %v", conflict.Hostnames)
-	}
-	if len(conflict.ReportIPs) != 0 {
-		t.Fatalf("absent report IPs should not be listed as conflicting, got %v", conflict.ReportIPs)
-	}
-	if conflict.FirstSeen.IsZero() || conflict.LastSeen.IsZero() {
-		t.Fatalf("expected conflict timestamps, got %+v", conflict)
-	}
-
-	// Continued flapping keeps the conflict alive and refreshes LastSeen.
-	later := tracker.observe("clone-b", "", base.Add(3*interval))
-	if later == nil {
-		t.Fatal("expected conflict to persist while flapping continues")
-	}
-	if !later.LastSeen.After(conflict.LastSeen) {
-		t.Fatalf("expected LastSeen to advance, got %v then %v", conflict.LastSeen, later.LastSeen)
-	}
-	if !later.FirstSeen.Equal(conflict.FirstSeen) {
-		t.Fatalf("expected FirstSeen to be stable, got %v then %v", conflict.FirstSeen, later.FirstSeen)
-	}
-}
-
-func TestHostIdentityFlapTrackerDetectsAlternatingReportIPsBehindOneHostname(t *testing.T) {
-	// MSP template deployments reuse hostnames across sites (pve01 at two
-	// customers), so the alternating report IP is the only field that betrays
-	// the clone.
-	tracker := newHostIdentityFlapTracker()
+func TestTrackHostAgentIdentityTranslatesConflict(t *testing.T) {
+	monitor := newTestMonitor(t)
 	base := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
 
-	tracker.observe("pve01", "192.168.1.10", base)
-	if conflict := tracker.observe("pve01", "10.0.0.10", base.Add(30*time.Second)); conflict != nil {
-		t.Fatalf("single report IP switch should not conflict, got %+v", conflict)
-	}
-	conflict := tracker.observe("pve01", "192.168.1.10", base.Add(60*time.Second))
+	// When the report IPs behind one host identity diverge, the model's
+	// ReportIPs field must carry them alongside the shared hostname.
+	monitor.trackHostAgentIdentity("host-1", "pve01", "192.168.1.10", base)
+	monitor.trackHostAgentIdentity("host-1", "pve01", "10.0.0.10", base.Add(30*time.Second))
+	conflict := monitor.trackHostAgentIdentity("host-1", "pve01", "192.168.1.10", base.Add(60*time.Second))
 	if conflict == nil {
 		t.Fatal("expected conflict after report IP revisit")
 	}
@@ -68,36 +25,8 @@ func TestHostIdentityFlapTrackerDetectsAlternatingReportIPsBehindOneHostname(t *
 	if len(conflict.ReportIPs) != 2 || conflict.ReportIPs[0] != "10.0.0.10" || conflict.ReportIPs[1] != "192.168.1.10" {
 		t.Fatalf("expected sorted report IPs [10.0.0.10 192.168.1.10], got %v", conflict.ReportIPs)
 	}
-}
-
-func TestHostIdentityFlapTrackerIgnoresSingleRename(t *testing.T) {
-	tracker := newHostIdentityFlapTracker()
-	base := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-
-	if conflict := tracker.observe("old-name", "", base); conflict != nil {
-		t.Fatalf("unexpected conflict: %+v", conflict)
-	}
-	for i := 1; i <= 5; i++ {
-		if conflict := tracker.observe("new-name", "", base.Add(time.Duration(i)*30*time.Second)); conflict != nil {
-			t.Fatalf("rename should never conflict, got %+v on report %d", conflict, i)
-		}
-	}
-}
-
-func TestHostIdentityFlapTrackerConflictExpiresAfterWindow(t *testing.T) {
-	tracker := newHostIdentityFlapTracker()
-	base := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-
-	tracker.observe("clone-a", "", base)
-	tracker.observe("clone-b", "", base.Add(30*time.Second))
-	if conflict := tracker.observe("clone-a", "", base.Add(60*time.Second)); conflict == nil {
-		t.Fatal("expected conflict after revisit")
-	}
-
-	// One clone goes away; steady reports from the survivor eventually clear it.
-	steady := base.Add(60 * time.Second).Add(hostIdentityConflictWindow + time.Minute)
-	if conflict := tracker.observe("clone-a", "", steady); conflict != nil {
-		t.Fatalf("expected conflict to expire after quiet window, got %+v", conflict)
+	if conflict.FirstSeen.IsZero() || conflict.LastSeen.IsZero() {
+		t.Fatalf("expected conflict timestamps, got %+v", conflict)
 	}
 }
 

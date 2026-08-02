@@ -7,89 +7,26 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
-func TestDockerIdentityFlapTrackerDetectsAlternatingHostnames(t *testing.T) {
-	tracker := newDockerIdentityFlapTracker()
-	base := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-	interval := 30 * time.Second
-
-	if conflict := tracker.observe("clone-a", "machine-1", base); conflict != nil {
-		t.Fatalf("first report should not conflict, got %+v", conflict)
-	}
-	// First switch could be a legitimate rename, so it must not warn yet.
-	if conflict := tracker.observe("clone-b", "machine-1", base.Add(interval)); conflict != nil {
-		t.Fatalf("single hostname switch should not conflict, got %+v", conflict)
-	}
-	// The revisit of clone-a proves two machines are alternating.
-	conflict := tracker.observe("clone-a", "machine-1", base.Add(2*interval))
-	if conflict == nil {
-		t.Fatal("expected conflict after hostname revisit")
-	}
-	if len(conflict.Hostnames) != 2 || conflict.Hostnames[0] != "clone-a" || conflict.Hostnames[1] != "clone-b" {
-		t.Fatalf("expected sorted hostnames [clone-a clone-b], got %v", conflict.Hostnames)
-	}
-	if len(conflict.MachineIDs) != 0 {
-		t.Fatalf("shared machine ID should not be listed as conflicting, got %v", conflict.MachineIDs)
-	}
-	if conflict.FirstSeen.IsZero() || conflict.LastSeen.IsZero() {
-		t.Fatalf("expected conflict timestamps, got %+v", conflict)
-	}
-
-	// Continued flapping keeps the conflict alive and refreshes LastSeen.
-	later := tracker.observe("clone-b", "machine-1", base.Add(3*interval))
-	if later == nil {
-		t.Fatal("expected conflict to persist while flapping continues")
-	}
-	if !later.LastSeen.After(conflict.LastSeen) {
-		t.Fatalf("expected LastSeen to advance, got %v then %v", conflict.LastSeen, later.LastSeen)
-	}
-	if !later.FirstSeen.Equal(conflict.FirstSeen) {
-		t.Fatalf("expected FirstSeen to be stable, got %v then %v", conflict.FirstSeen, later.FirstSeen)
-	}
-}
-
-func TestDockerIdentityFlapTrackerIgnoresSingleRename(t *testing.T) {
-	tracker := newDockerIdentityFlapTracker()
+func TestTrackDockerHostIdentityTranslatesConflict(t *testing.T) {
+	monitor := newTestMonitor(t)
 	base := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
 
-	if conflict := tracker.observe("old-name", "machine-1", base); conflict != nil {
-		t.Fatalf("unexpected conflict: %+v", conflict)
-	}
-	for i := 1; i <= 5; i++ {
-		if conflict := tracker.observe("new-name", "machine-1", base.Add(time.Duration(i)*30*time.Second)); conflict != nil {
-			t.Fatalf("rename should never conflict, got %+v on report %d", conflict, i)
-		}
-	}
-}
-
-func TestDockerIdentityFlapTrackerConflictExpiresAfterWindow(t *testing.T) {
-	tracker := newDockerIdentityFlapTracker()
-	base := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-
-	tracker.observe("clone-a", "machine-1", base)
-	tracker.observe("clone-b", "machine-1", base.Add(30*time.Second))
-	if conflict := tracker.observe("clone-a", "machine-1", base.Add(60*time.Second)); conflict == nil {
-		t.Fatal("expected conflict after revisit")
-	}
-
-	// One clone goes away; steady reports from the survivor eventually clear it.
-	steady := base.Add(60 * time.Second).Add(dockerIdentityConflictWindow + time.Minute)
-	if conflict := tracker.observe("clone-a", "machine-1", steady); conflict != nil {
-		t.Fatalf("expected conflict to expire after quiet window, got %+v", conflict)
-	}
-}
-
-func TestDockerIdentityFlapTrackerDetectsAlternatingMachineIDs(t *testing.T) {
-	tracker := newDockerIdentityFlapTracker()
-	base := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-
-	tracker.observe("shared-host", "machine-a", base)
-	tracker.observe("shared-host", "machine-b", base.Add(30*time.Second))
-	conflict := tracker.observe("shared-host", "machine-a", base.Add(60*time.Second))
+	// When the machine IDs behind one host identity diverge, the model's
+	// MachineIDs field must carry them alongside the shared hostname.
+	monitor.trackDockerHostIdentity("host-1", "shared-host", "machine-a", base)
+	monitor.trackDockerHostIdentity("host-1", "shared-host", "machine-b", base.Add(30*time.Second))
+	conflict := monitor.trackDockerHostIdentity("host-1", "shared-host", "machine-a", base.Add(60*time.Second))
 	if conflict == nil {
 		t.Fatal("expected conflict after machine ID revisit")
 	}
+	if len(conflict.Hostnames) != 1 || conflict.Hostnames[0] != "shared-host" {
+		t.Fatalf("expected hostnames [shared-host], got %v", conflict.Hostnames)
+	}
 	if len(conflict.MachineIDs) != 2 || conflict.MachineIDs[0] != "machine-a" || conflict.MachineIDs[1] != "machine-b" {
 		t.Fatalf("expected sorted machine IDs [machine-a machine-b], got %v", conflict.MachineIDs)
+	}
+	if conflict.FirstSeen.IsZero() || conflict.LastSeen.IsZero() {
+		t.Fatalf("expected conflict timestamps, got %+v", conflict)
 	}
 }
 

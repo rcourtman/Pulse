@@ -55,46 +55,7 @@ func AssessPhysicalDisk(disk models.PhysicalDisk) Assessment {
 		Wearout:      disk.Wearout,
 		WearoutKnown: WearoutReported(disk.Wearout, disk.Type),
 	}
-	if attrs := disk.SmartAttributes; attrs != nil {
-		if attrs.PowerOnHours != nil {
-			sample.PowerOnHours = *attrs.PowerOnHours
-		}
-		if attrs.PowerCycles != nil {
-			sample.PowerCycles = *attrs.PowerCycles
-		}
-		if attrs.ReallocatedSectors != nil {
-			sample.ReallocatedSectors = *attrs.ReallocatedSectors
-		}
-		if attrs.PendingSectors != nil {
-			sample.PendingSectors = *attrs.PendingSectors
-		}
-		if attrs.OfflineUncorrectable != nil {
-			sample.OfflineUncorrectable = *attrs.OfflineUncorrectable
-		}
-		if attrs.UDMACRCErrors != nil {
-			sample.UDMACRCErrors = *attrs.UDMACRCErrors
-		}
-		if attrs.PercentageUsed != nil {
-			sample.PercentageUsed = *attrs.PercentageUsed
-			if remaining := RemainingLifeFromPercentageUsed(*attrs.PercentageUsed); remaining >= 0 {
-				sample.Wearout = remaining
-				sample.WearoutKnown = true
-			} else {
-				sample.Wearout = -1
-				sample.WearoutKnown = false
-			}
-		}
-		if attrs.AvailableSpare != nil {
-			sample.AvailableSpare = *attrs.AvailableSpare
-			sample.AvailableSpareKnown = true
-		}
-		if attrs.MediaErrors != nil {
-			sample.MediaErrors = *attrs.MediaErrors
-		}
-		if attrs.UnsafeShutdowns != nil {
-			sample.UnsafeShutdowns = *attrs.UnsafeShutdowns
-		}
-	}
+	applySMARTAttributes(&sample, disk.SmartAttributes)
 	return AssessSample(sample)
 }
 
@@ -105,47 +66,52 @@ func AssessHostSMARTDisk(disk models.HostDiskSMART) Assessment {
 		Temperature: disk.Temperature,
 		Wearout:     -1,
 	}
-	if attrs := disk.Attributes; attrs != nil {
-		if attrs.PowerOnHours != nil {
-			sample.PowerOnHours = *attrs.PowerOnHours
-		}
-		if attrs.PowerCycles != nil {
-			sample.PowerCycles = *attrs.PowerCycles
-		}
-		if attrs.ReallocatedSectors != nil {
-			sample.ReallocatedSectors = *attrs.ReallocatedSectors
-		}
-		if attrs.PendingSectors != nil {
-			sample.PendingSectors = *attrs.PendingSectors
-		}
-		if attrs.OfflineUncorrectable != nil {
-			sample.OfflineUncorrectable = *attrs.OfflineUncorrectable
-		}
-		if attrs.UDMACRCErrors != nil {
-			sample.UDMACRCErrors = *attrs.UDMACRCErrors
-		}
-		if attrs.PercentageUsed != nil {
-			sample.PercentageUsed = *attrs.PercentageUsed
-			if remaining := RemainingLifeFromPercentageUsed(*attrs.PercentageUsed); remaining >= 0 {
-				sample.Wearout = remaining
-				sample.WearoutKnown = true
-			} else {
-				sample.Wearout = -1
-				sample.WearoutKnown = false
-			}
-		}
-		if attrs.AvailableSpare != nil {
-			sample.AvailableSpare = *attrs.AvailableSpare
-			sample.AvailableSpareKnown = true
-		}
-		if attrs.MediaErrors != nil {
-			sample.MediaErrors = *attrs.MediaErrors
-		}
-		if attrs.UnsafeShutdowns != nil {
-			sample.UnsafeShutdowns = *attrs.UnsafeShutdowns
+	applySMARTAttributes(&sample, disk.Attributes)
+	return AssessSample(sample)
+}
+
+func applySMARTAttributes(sample *Sample, attrs *models.SMARTAttributes) {
+	if attrs == nil {
+		return
+	}
+	if attrs.PowerOnHours != nil {
+		sample.PowerOnHours = *attrs.PowerOnHours
+	}
+	if attrs.PowerCycles != nil {
+		sample.PowerCycles = *attrs.PowerCycles
+	}
+	if attrs.ReallocatedSectors != nil {
+		sample.ReallocatedSectors = *attrs.ReallocatedSectors
+	}
+	if attrs.PendingSectors != nil {
+		sample.PendingSectors = *attrs.PendingSectors
+	}
+	if attrs.OfflineUncorrectable != nil {
+		sample.OfflineUncorrectable = *attrs.OfflineUncorrectable
+	}
+	if attrs.UDMACRCErrors != nil {
+		sample.UDMACRCErrors = *attrs.UDMACRCErrors
+	}
+	if attrs.PercentageUsed != nil {
+		sample.PercentageUsed = *attrs.PercentageUsed
+		if remaining := RemainingLifeFromPercentageUsed(*attrs.PercentageUsed); remaining >= 0 {
+			sample.Wearout = remaining
+			sample.WearoutKnown = true
+		} else {
+			sample.Wearout = -1
+			sample.WearoutKnown = false
 		}
 	}
-	return AssessSample(sample)
+	if attrs.AvailableSpare != nil {
+		sample.AvailableSpare = *attrs.AvailableSpare
+		sample.AvailableSpareKnown = true
+	}
+	if attrs.MediaErrors != nil {
+		sample.MediaErrors = *attrs.MediaErrors
+	}
+	if attrs.UnsafeShutdowns != nil {
+		sample.UnsafeShutdowns = *attrs.UnsafeShutdowns
+	}
 }
 
 func AssessSample(sample Sample) Assessment {

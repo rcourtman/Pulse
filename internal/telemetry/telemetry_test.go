@@ -1012,7 +1012,9 @@ func TestSend_Success(t *testing.T) {
 		OS:                 "linux",
 		Arch:               "amd64",
 	}
-	send(ctx, ping)
+	if err := send(ctx, ping); err != nil {
+		t.Fatalf("send: %v", err)
+	}
 
 	if received.Load() != 1 {
 		t.Fatalf("expected 1 request to reach server, got %d", received.Load())
@@ -1053,7 +1055,7 @@ func TestSend_UsesReducedCommercialSignals(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	send(ctx, Ping{
+	if err := send(ctx, Ping{
 		InstallID:    "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 		Version:      "6.0.0",
 		Event:        "heartbeat",
@@ -1062,7 +1064,9 @@ func TestSend_UsesReducedCommercialSignals(t *testing.T) {
 		Arch:         "amd64",
 		PaidLicense:  true,
 		HasAPITokens: true,
-	})
+	}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
 
 	var payload map[string]any
 	if err := json.Unmarshal(rawBody, &payload); err != nil {
