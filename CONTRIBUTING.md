@@ -1,6 +1,9 @@
 # Contributing to Pulse
 
-Pulse is maintained as a single-maintainer project.
+Pulse is maintained as a single-maintainer project. It is developed with
+extensive AI assistance, openly declared. See
+[docs/AI_TRANSPARENCY.md](docs/AI_TRANSPARENCY.md) for how AI is used and
+where its output is labelled.
 
 I am not accepting unsolicited external pull requests for this repository.
 If you have found a bug, want to propose a feature, or have a concrete
