@@ -64,9 +64,19 @@ public static class PulseInstallerCertificateValidator
     }
 }`.trim();
 
+// The copied command is pasted into a console, and console hosts execute
+// pasted input line by line, so any literal newline inside the command breaks
+// it in both Windows PowerShell 5.1 and PowerShell 7. C# is whitespace
+// insensitive (and the source carries no line comments), so the type
+// definition collapses onto the command's single line.
+const powerShellTlsValidatorInlineSource = powerShellTlsValidatorSource.replace(
+  /\s*\r?\n\s*/g,
+  ' ',
+);
+
 const powerShellTlsValidatorBootstrap =
   `if ($null -eq ("PulseInstallerCertificateValidator" -as [type])) { ` +
-  `Add-Type -TypeDefinition ${powerShellSingleQuotedLiteral(powerShellTlsValidatorSource)} ` +
+  `Add-Type -TypeDefinition ${powerShellSingleQuotedLiteral(powerShellTlsValidatorInlineSource)} ` +
   `}; `;
 
 const powerShellLoadCustomCa = (pathExpression: string) =>

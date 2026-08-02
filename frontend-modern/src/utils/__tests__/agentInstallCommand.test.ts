@@ -119,6 +119,27 @@ describe('agentInstallCommand', () => {
     expect(command).not.toContain('token_file=');
   });
 
+  it('keeps every copied Windows command on a single line', () => {
+    // Console hosts execute pasted input line by line, so a literal newline
+    // anywhere in the copied command breaks it in PowerShell 5.1 and 7 alike.
+    const variants = [
+      buildWindowsAgentInstallCommand({ baseUrl: 'https://pulse.example' }),
+      buildWindowsAgentInstallCommand({
+        baseUrl: 'https://pulse.example',
+        token: 'token-123',
+        insecure: true,
+      }),
+      buildWindowsAgentInstallCommand({
+        baseUrl: 'https://pulse.example',
+        token: 'token-123',
+        caCertPath: 'C:\\Pulse\\custom-ca.cer',
+      }),
+    ];
+    for (const command of variants) {
+      expect(command).not.toMatch(/[\r\n]/);
+    }
+  });
+
   it('builds shared Windows install transport with token, insecure TLS, and custom CA continuity', () => {
     const command = buildWindowsAgentInstallCommand({
       baseUrl: 'https://pulse.example/base/',
