@@ -4094,6 +4094,18 @@ the projection to the Finding before calling the orchestrator. This
 is the one in-process write path that decides what the orchestrator
 sees about operator commitments; all consumers (in-process Patrol,
 external Claude Code, and MCP-speaking clients) read the same enriched shape.
+The provider closure must tolerate the findings runtime's mixed
+resource key spaces: unified-derived findings reference the hashed
+canonical resource ID, but Patrol guest inventory rows reference the
+node-scoped Proxmox source ID (`instance:node:vmid`). Operator state
+is keyed by canonical ID only, so a reference that misses the store
+directly resolves through the registry (`GetByReference`, which also
+covers retired canonical-ID eras and node-scoped guest references
+after #1669) before the provider reports no state — without that
+hop, maintenance windows and intentionally-offline intent silently
+never reach guest findings. Pinned by
+`TestContract_FindingsResourceOperatorStateProviderIsWired` in
+`internal/api/contract_test.go`.
 
 `/api/agent/events` is the agent SSE stream — the substrate piece
 that closes the agent-paradigm triangle (discovery + bundled reads +

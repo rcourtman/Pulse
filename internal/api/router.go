@@ -2419,12 +2419,38 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			// `internal/unifiedresources` import.
 			patrol.GetFindings().SetResourceOperatorStateProvider(
 				ai.ResourceOperatorStateProviderFunc(
-					func(canonicalID string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
+					func(resourceRef string, now time.Time) (ai.ResourceOperatorStateProjection, bool) {
 						orgStore, lookupErr := r.resourceHandlers.getStore(orgID)
 						if lookupErr != nil {
 							return ai.ResourceOperatorStateProjection{}, false
 						}
+						// Findings carry whatever resource ID their
+						// producer used: unified-derived findings hold
+						// the canonical hash, but Patrol guest inventory
+						// rows hold the node-scoped Proxmox source ID.
+						// Operator state is keyed by canonical ID only,
+						// so a reference that misses directly resolves
+						// through the registry before giving up —
+						// otherwise maintenance windows and
+						// intentionally-offline intent silently never
+						// reach guest findings.
+						canonicalID := resourceRef
 						state, found, fetchErr := orgStore.GetResourceOperatorState(canonicalID)
+						if fetchErr != nil {
+							return ai.ResourceOperatorStateProjection{}, false
+						}
+						if !found {
+							registry, registryErr := r.resourceHandlers.buildRegistry(orgID)
+							if registryErr != nil || registry == nil {
+								return ai.ResourceOperatorStateProjection{}, false
+							}
+							_, resolvedID, resolved := registry.GetByReference(resourceRef)
+							if !resolved || resolvedID == canonicalID {
+								return ai.ResourceOperatorStateProjection{}, false
+							}
+							canonicalID = resolvedID
+							state, found, fetchErr = orgStore.GetResourceOperatorState(canonicalID)
+						}
 						if fetchErr != nil || !found {
 							return ai.ResourceOperatorStateProjection{}, false
 						}
