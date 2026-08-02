@@ -241,42 +241,6 @@ function Load-CustomCaCertificate {
     return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($resolvedPath)
 }
 
-function Test-CertificateTrustedByCustomCa {
-    param(
-        [System.Security.Cryptography.X509Certificates.X509Certificate]$Certificate,
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]$CustomCaCertificate
-    )
-
-    if ($null -eq $Certificate -or $null -eq $CustomCaCertificate) {
-        return $false
-    }
-
-    $leaf = if ($Certificate -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
-        $Certificate
-    } else {
-        [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($Certificate)
-    }
-
-    $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
-    try {
-        $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
-        $chain.ChainPolicy.VerificationFlags = [System.Security.Cryptography.X509Certificates.X509VerificationFlags]::AllowUnknownCertificateAuthority
-        $null = $chain.ChainPolicy.ExtraStore.Add($CustomCaCertificate)
-        if (-not $chain.Build($leaf)) {
-            return $false
-        }
-
-        foreach ($element in $chain.ChainElements) {
-            if ($element.Certificate.Thumbprint -eq $CustomCaCertificate.Thumbprint) {
-                return $true
-            }
-        }
-        return $false
-    } finally {
-        $chain.Dispose()
-    }
-}
-
 function Test-PEBinary {
     param([string]$FilePath)
     if (-not (Test-Path $FilePath)) { return $false }
@@ -370,6 +334,95 @@ function Invoke-InstallerSignatureVerification {
     Write-Host "Cryptographic signature verified." -ForegroundColor Green
 }
 
+# ServicePointManager can invoke its validation callback on a worker thread
+# that has no PowerShell runspace, where a scriptblock delegate fails closed
+# and the download dies with a TLS error even though the certificate policy
+# would have accepted it. Keep the callback in a compiled .NET type that runs
+# on any thread, mirroring the copied install command's validator.
+$script:PulseTlsValidatorSource = @'
+using System;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+
+public static class PulseAgentInstallTlsValidator
+{
+    public static bool AllowInsecure;
+    public static string PinnedSha256Fingerprint;
+    public static X509Certificate2 CustomCa;
+    public static readonly RemoteCertificateValidationCallback Callback = Validate;
+
+    private static bool Validate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors errors)
+    {
+        if (!String.IsNullOrEmpty(PinnedSha256Fingerprint))
+        {
+            if (certificate == null)
+            {
+                return false;
+            }
+            try
+            {
+                using (SHA256 sha256 = SHA256.Create())
+                {
+                    string actual = BitConverter.ToString(sha256.ComputeHash(certificate.GetRawCertData())).Replace("-", "");
+                    return String.Equals(actual, PinnedSha256Fingerprint, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        if (AllowInsecure)
+        {
+            return true;
+        }
+
+        if (errors == SslPolicyErrors.None)
+        {
+            return true;
+        }
+
+        if (certificate == null || CustomCa == null)
+        {
+            return false;
+        }
+
+        X509Certificate2 leaf = certificate as X509Certificate2;
+        if (leaf == null)
+        {
+            leaf = new X509Certificate2(certificate);
+        }
+
+        using (X509Chain candidateChain = new X509Chain())
+        {
+            candidateChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            candidateChain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+            candidateChain.ChainPolicy.ExtraStore.Add(CustomCa);
+            if (!candidateChain.Build(leaf))
+            {
+                return false;
+            }
+            foreach (X509ChainElement element in candidateChain.ChainElements)
+            {
+                if (String.Equals(element.Certificate.Thumbprint, CustomCa.Thumbprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+'@
+
+function Initialize-PulseTlsValidator {
+    if ($null -eq ("PulseAgentInstallTlsValidator" -as [type])) {
+        Add-Type -TypeDefinition $script:PulseTlsValidatorSource
+    }
+}
+
 function Invoke-WithOptionalInsecureTls {
     param(
         [bool]$AllowInsecure,
@@ -377,43 +430,25 @@ function Invoke-WithOptionalInsecureTls {
         [scriptblock]$Action
     )
 
-    $previousCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
-    if ($AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
-        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {
-            param($sender, $certificate, $chain, $sslPolicyErrors)
-
-            if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
-                try {
-                    $sha256 = [System.Security.Cryptography.SHA256]::Create()
-                    try {
-                        $actualFingerprint = ([System.BitConverter]::ToString($sha256.ComputeHash($certificate.GetRawCertData()))).Replace('-', '').ToLowerInvariant()
-                    } finally {
-                        $sha256.Dispose()
-                    }
-                    return [string]::Equals($actualFingerprint, $ServerFingerprint, [System.StringComparison]::OrdinalIgnoreCase)
-                } catch {
-                    return $false
-                }
-            }
-
-            if ($AllowInsecure) {
-                return $true
-            }
-
-            if ($sslPolicyErrors -eq [System.Net.Security.SslPolicyErrors]::None) {
-                return $true
-            }
-
-            return Test-CertificateTrustedByCustomCa -Certificate $certificate -CustomCaCertificate $CustomCaCertificate
-        }
+    $needsCallback = $AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)
+    if (-not $needsCallback) {
+        & $Action
+        return
     }
 
+    Initialize-PulseTlsValidator
+    $previousCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    [PulseAgentInstallTlsValidator]::AllowInsecure = $AllowInsecure
+    [PulseAgentInstallTlsValidator]::PinnedSha256Fingerprint = $ServerFingerprint
+    [PulseAgentInstallTlsValidator]::CustomCa = $CustomCaCertificate
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseAgentInstallTlsValidator]::Callback
     try {
         & $Action
     } finally {
-        if ($AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
-            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $previousCallback
-        }
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $previousCallback
+        [PulseAgentInstallTlsValidator]::AllowInsecure = $false
+        [PulseAgentInstallTlsValidator]::PinnedSha256Fingerprint = $null
+        [PulseAgentInstallTlsValidator]::CustomCa = $null
     }
 }
 

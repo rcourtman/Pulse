@@ -195,7 +195,7 @@ func TestInstallPS1PersistsAndVerifiesServerFingerprint(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`[string]$ServerFingerprint = $env:PULSE_SERVER_FINGERPRINT,`,
-		`$sha256.ComputeHash($certificate.GetRawCertData())`,
+		`sha256.ComputeHash(certificate.GetRawCertData())`,
 		`$lines += "PULSE_SERVER_FINGERPRINT='$ServerFingerprint'"`,
 		`$ServerFingerprint = Get-ConnectionStateValue "PULSE_SERVER_FINGERPRINT"`,
 		`$ServiceArgs += @("--server-fingerprint", "` + "`" + `"$ServerFingerprint` + "`" + `"")`,
@@ -346,9 +346,12 @@ func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`function Invoke-WithOptionalInsecureTls {`,
-		`if ($AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {`,
-		`if ($AllowInsecure) {`,
-		`return Test-CertificateTrustedByCustomCa -Certificate $certificate -CustomCaCertificate $CustomCaCertificate`,
+		`$needsCallback = $AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)`,
+		// The callback must be a compiled delegate, not a scriptblock:
+		// ServicePointManager can invoke it on a worker thread with no
+		// PowerShell runspace, where a scriptblock fails closed.
+		`[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseAgentInstallTlsValidator]::Callback`,
+		`[PulseAgentInstallTlsValidator]::AllowInsecure = $AllowInsecure`,
 		`if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {`,
 		`Plain HTTP Pulse URL detected; enabling insecure mode for persisted agent update checks.`,
 		`Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {`,
@@ -479,8 +482,8 @@ func TestInstallPS1SupportsCustomCATransport(t *testing.T) {
 		`[string]$CACertPath = $env:PULSE_CACERT,`,
 		`function Load-CustomCaCertificate {`,
 		`return [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($resolvedPath)`,
-		`function Test-CertificateTrustedByCustomCa {`,
-		`$chain.ChainPolicy.ExtraStore.Add($CustomCaCertificate)`,
+		`public static class PulseAgentInstallTlsValidator`,
+		`candidateChain.ChainPolicy.ExtraStore.Add(CustomCa);`,
 		`Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {`,
 		`Show-Error "Invalid CA certificate path. File does not exist.`,
 		`Show-Error "Invalid CA certificate file. Provide a PEM, CRT, or CER certificate.`,
