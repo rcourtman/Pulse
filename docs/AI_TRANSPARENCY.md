@@ -36,9 +36,10 @@ useful, so here is the breakdown.
   against the actual code and behaviour before publishing.
 - **Issue triage and support.** AI helps investigate reports, reproduce bugs,
   and draft replies. When a response comes from an automated triage run
-  rather than from me at the keyboard, it says so in the reply itself. I
-  would rather you know you are reading automation than wonder whether you
-  are.
+  rather than from me at the keyboard, it posts under the dedicated
+  pulse-triage bot identity and carries a footer saying so, with a link back
+  to this page. I would rather you know you are reading automation than
+  wonder whether you are.
 
 ## What stays human
 
