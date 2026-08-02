@@ -677,14 +677,14 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ).toEqual(['c1', 'c2']);
     });
 
-    it('matches status exactly (case-sensitive) in running mode', () => {
+    it('matches running status case-insensitively', () => {
       const guests = [
         makeGuest(1, { id: 'lower', status: 'running' }),
         makeGuest(2, { id: 'capital', status: 'Running' }),
       ];
       expect(
         filterWorkloads({ ...baseFilterParams, guests, statusMode: 'running' }).map((g) => g.id),
-      ).toEqual(['lower']);
+      ).toEqual(['lower', 'capital']);
     });
 
     it('counts DEGRADED-set and unknown statuses as degraded, excluding running and OFFLINE-set', () => {
@@ -700,16 +700,15 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ).toEqual(['warn', 'migrating', 'empty']);
     });
 
-    it('treats capitalized "Running" as stopped due to the case-sensitive !== running check', () => {
+    it('normalizes status casing before assigning mutually exclusive buckets', () => {
       const guests = [
         makeGuest(1, { id: 'capital', status: 'Running' }),
         makeGuest(2, { id: 'lower', status: 'running' }),
         makeGuest(3, { id: 'stopped', status: 'stopped' }),
       ];
-      // stopped mode keeps g.status !== 'running' -> 'Running' survives (case quirk).
       expect(
         filterWorkloads({ ...baseFilterParams, guests, statusMode: 'stopped' }).map((g) => g.id),
-      ).toEqual(['capital', 'stopped']);
+      ).toEqual(['stopped']);
     });
 
     it('applies no status filter for an unrecognized statusMode (else arm)', () => {

@@ -238,7 +238,7 @@ describe('ProxmoxPageSurface contract', () => {
     render(() => <ProxmoxPageSurface />);
 
     const totals = screen.getByTestId('proxmox-guest-totals');
-    expect(totals).toHaveTextContent('0 running');
+    expect(totals).not.toHaveTextContent('running');
     expect(totals).not.toHaveTextContent('attention');
     expect(totals).toHaveTextContent('1 stopped');
   });

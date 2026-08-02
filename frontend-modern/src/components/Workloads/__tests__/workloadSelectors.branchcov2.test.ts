@@ -261,7 +261,7 @@ describe('workloadSelectors (branch coverage 2)', () => {
       expect(result.map((g) => g.id)).toEqual(['empty']);
     });
 
-    it('matches status case-sensitively in running mode (capital "Running" is excluded)', () => {
+    it('normalizes status casing in running mode', () => {
       const guests = [
         makeGuest(1, { id: 'capital', name: 'capital', status: 'Running' }),
         makeGuest(2, { id: 'lower', name: 'lower', status: 'running' }),
@@ -273,8 +273,7 @@ describe('workloadSelectors (branch coverage 2)', () => {
         statusMode: 'running',
       });
 
-      // g.status === 'running' is an exact, case-sensitive comparison.
-      expect(result.map((g) => g.id)).toEqual(['lower']);
+      expect(result.map((g) => g.id)).toEqual(['capital', 'lower']);
     });
 
     it('matches the numeric vmid and string status/instance text-search candidates', () => {
@@ -409,7 +408,7 @@ describe('workloadSelectors (branch coverage 2)', () => {
       });
     });
 
-    it('classifies a capitalized "Running" status as stopped due to case-sensitive running check', () => {
+    it('classifies a capitalized "Running" status as running', () => {
       const guests = [
         makeGuest(1, {
           id: 'capital',
@@ -420,13 +419,11 @@ describe('workloadSelectors (branch coverage 2)', () => {
         }),
       ];
 
-      // g.status === 'running' is exact; the degraded check lowercases, so
-      // 'Running' is neither running nor degraded and lands in stopped.
       expect(computeWorkloadStats(guests)).toStrictEqual({
         total: 1,
-        running: 0,
+        running: 1,
         degraded: 0,
-        stopped: 1,
+        stopped: 0,
         vms: 1,
         containers: 0,
         appContainers: 0,

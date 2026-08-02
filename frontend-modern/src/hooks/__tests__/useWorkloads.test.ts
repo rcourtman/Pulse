@@ -276,7 +276,7 @@ describe('useWorkloads', () => {
     dispose();
   });
 
-  it('keeps Proxmox power state stable while aggregate freshness changes, then removes an authoritative deletion', async () => {
+  it('keeps Proxmox power state stable while carrying aggregate health, then removes an authoritative deletion', async () => {
     const guest = (vmid: number, status: string, runtimeStatus: string) => ({
       ...sampleResource,
       id: `cluster-a-pve1-${vmid}`,
@@ -330,6 +330,11 @@ describe('useWorkloads', () => {
       'running',
       'running',
       'running',
+    ]);
+    expect(result!.workloads().map((workload) => workload.resourceStatus)).toEqual([
+      'warning',
+      'online',
+      'warning',
     ]);
 
     apiFetchJSONMock.mockResolvedValueOnce({

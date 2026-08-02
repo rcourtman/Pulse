@@ -472,7 +472,9 @@ The adjacent Proxmox overview guest-totals strip is likewise presentation-only
 and must consume the embedded Workloads surface's filtered statistics. It must
 not fall back to page-wide guest summary counts when search, type, status, or
 node filters have narrowed the visible workload inventory; backup and recovery
-authority remain unchanged by either set of presentation counts.
+authority remain unchanged by either set of presentation counts. Filtered
+totals omit zero-value status categories and their separators so the strip
+does not add false orientation noise beside a narrowed result set.
 That overview Backup signal belongs to Proxmox VMs and LXCs. If the embedded
 Workloads table demotes Docker-in-LXC `app-container` rows out of peer
 membership, the backup surface must still receive the page model's Proxmox

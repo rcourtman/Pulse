@@ -272,6 +272,12 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    seed a missing `status` parameter when a platform page is revisited, but the
    restore path must write the URL once with `replace` and must not force row
    filtering through a separate page-local state channel.
+   Status buckets must remain mutually exclusive and derive from the already-
+   loaded workload snapshot: warning or offline unified-resource health takes
+   precedence for filter/stats posture, while healthy resources continue to use
+   the provider-authored runtime power state. `useWorkloads.ts` carries both
+   values; selectors must not collapse warning health into `Stopped` or add a
+   second resource lookup to recover it.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
    Agent command authorization is likewise a dispatch-time point lookup and
    atomic approval consume, not a route-wide scan or request-hot-path fan-out;

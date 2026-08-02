@@ -124,7 +124,40 @@ describe('workloadSelectors', () => {
         selectedHostHint: null,
         selectedKubernetesContext: null,
       });
-      expect(stopped.map((g) => g.status)).toEqual(['warning', 'migrating', 'offline']);
+      expect(stopped.map((g) => g.status)).toEqual(['offline']);
+    });
+
+    it('lets canonical resource health override stale runtime power for status filters', () => {
+      const guests = [
+        makeGuest(1, { status: 'stopped', resourceStatus: 'warning' }),
+        makeGuest(2, { status: 'running', resourceStatus: 'offline' }),
+        makeGuest(3, { status: 'running', resourceStatus: 'online' }),
+      ];
+
+      const filterByStatus = (statusMode: 'running' | 'degraded' | 'stopped') =>
+        filterWorkloads({
+          guests,
+          viewMode: 'all',
+          statusMode,
+          searchTerm: '',
+          selectedNode: null,
+          selectedHostHint: null,
+          selectedKubernetesContext: null,
+        }).map((guest) => guest.id);
+
+      expect(filterByStatus('running')).toEqual([guests[2].id]);
+      expect(filterByStatus('degraded')).toEqual([guests[0].id]);
+      expect(filterByStatus('stopped')).toEqual([guests[1].id]);
+      expect(computeWorkloadStats(guests)).toEqual({
+        total: 3,
+        running: 1,
+        degraded: 1,
+        stopped: 1,
+        vms: 2,
+        containers: 0,
+        appContainers: 1,
+        pods: 0,
+      });
     });
 
     it('applies text and metric search filters, and supports combined filtering', () => {

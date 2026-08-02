@@ -12,6 +12,8 @@ export type ViewMode = 'all' | 'vm' | WorkloadContainerViewMode | 'pod';
 
 export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
+  /** Canonical unified-resource health, kept separate from runtime power state in `status`. */
+  resourceStatus?: string;
   displayId?: string;
   image?: string;
   // Provider/runtime-native identifier for app-container actions such as Docker image updates.

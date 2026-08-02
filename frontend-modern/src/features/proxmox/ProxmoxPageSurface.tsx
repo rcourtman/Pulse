@@ -381,22 +381,30 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
           class="flex items-center gap-2 rounded border border-border bg-surface-alt px-2 py-1 text-xs text-muted"
           data-testid="proxmox-guest-totals"
         >
-          <span class="flex items-center gap-1.5">
-            <StatusDot size="xs" variant="success" ariaHidden />
-            {visibleGuestStats().running} running
-          </span>
+          <Show when={visibleGuestStats().running > 0}>
+            <span class="flex items-center gap-1.5">
+              <StatusDot size="xs" variant="success" ariaHidden />
+              {visibleGuestStats().running} running
+            </span>
+          </Show>
           <Show when={visibleGuestStats().degraded > 0}>
-            <span aria-hidden="true">|</span>
+            <Show when={visibleGuestStats().running > 0}>
+              <span aria-hidden="true">|</span>
+            </Show>
             <span class="flex items-center gap-1.5">
               <StatusDot size="xs" variant="warning" ariaHidden />
               {visibleGuestStats().degraded} attention
             </span>
           </Show>
-          <span aria-hidden="true">|</span>
-          <span class="flex items-center gap-1.5">
-            <StatusDot size="xs" variant="danger" ariaHidden />
-            {visibleGuestStats().stopped} stopped
-          </span>
+          <Show when={visibleGuestStats().stopped > 0}>
+            <Show when={visibleGuestStats().running > 0 || visibleGuestStats().degraded > 0}>
+              <span aria-hidden="true">|</span>
+            </Show>
+            <span class="flex items-center gap-1.5">
+              <StatusDot size="xs" variant="danger" ariaHidden />
+              {visibleGuestStats().stopped} stopped
+            </span>
+          </Show>
         </div>
       </Show>
     </div>

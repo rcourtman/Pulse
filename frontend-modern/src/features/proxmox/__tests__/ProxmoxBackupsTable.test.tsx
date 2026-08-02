@@ -387,6 +387,12 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxPageSurfaceSource).not.toContain(
       'currentModel().summary.stoppedGuestCount} stopped',
     );
+    expect(proxmoxPageSurfaceSource).toContain(
+      '<Show when={visibleGuestStats().running > 0}>',
+    );
+    expect(proxmoxPageSurfaceSource).toContain(
+      '<Show when={visibleGuestStats().stopped > 0}>',
+    );
   });
 
   it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {

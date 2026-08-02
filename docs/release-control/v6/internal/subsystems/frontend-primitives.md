@@ -3905,7 +3905,9 @@ after applying a view gives someone else the exact filtered state.
 Counts or orientation strips presented as part of a filtered resource table
 must derive from that table's canonical filtered collection as well. They must
 not continue showing page-wide inventory totals after FilterBar state, saved
-views, or search has narrowed the rows the operator can see.
+views, or search has narrowed the rows the operator can see. Filtered summary
+strips should omit zero-value categories and their separators rather than
+turning absent states into persistent visual noise.
 Implicit "remember last filters" is intentionally not added — defaulting
 to yesterday's filter state on a monitoring page hides real problems.
 That same shared filter-toolbar boundary also owns controlled select continuity

@@ -462,6 +462,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         resource.status ||
         (platformType === 'vmware-vsphere' ? resource.vmware?.powerState : null),
     ),
+    resourceStatus: (resource.status || '').trim().toLowerCase() || undefined,
     type:
       workloadType === 'vm'
         ? 'vm'

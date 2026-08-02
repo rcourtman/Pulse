@@ -5,7 +5,7 @@ import { computeIOScale } from '@/components/Infrastructure/infrastructureSelect
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
-import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
+import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import {
   isContainerWorkloadViewMode,
@@ -47,6 +47,29 @@ export interface WorkloadStats {
   appContainers: number;
   pods: number;
 }
+
+type WorkloadStatusBucket = 'running' | 'degraded' | 'stopped';
+
+const RUNNING_HEALTH_STATUSES = new Set(['online', 'running', 'healthy']);
+
+const classifyWorkloadStatus = (status: string): WorkloadStatusBucket => {
+  const normalized = status.trim().toLowerCase();
+  if (RUNNING_HEALTH_STATUSES.has(normalized)) return 'running';
+  if (OFFLINE_HEALTH_STATUSES.has(normalized)) return 'stopped';
+  return 'degraded';
+};
+
+const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket => {
+  const resourceStatus = (guest.resourceStatus || '').trim().toLowerCase();
+
+  // Unified-resource health owns warning/offline posture, while a healthy
+  // resource still defers to the provider-authored runtime power state.
+  if (resourceStatus && !RUNNING_HEALTH_STATUSES.has(resourceStatus)) {
+    return classifyWorkloadStatus(resourceStatus);
+  }
+
+  return classifyWorkloadStatus(guest.status || '');
+};
 
 type SortDirection = 'asc' | 'desc';
 
@@ -152,17 +175,11 @@ export const filterWorkloads = ({
   }
 
   if (statusMode === 'running') {
-    guests = guests.filter((g) => g.status === 'running');
+    guests = guests.filter((g) => resolveWorkloadStatusBucket(g) === 'running');
   } else if (statusMode === 'degraded') {
-    guests = guests.filter((g) => {
-      const status = (g.status || '').toLowerCase();
-      return (
-        DEGRADED_HEALTH_STATUSES.has(status) ||
-        (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
-      );
-    });
+    guests = guests.filter((g) => resolveWorkloadStatusBucket(g) === 'degraded');
   } else if (statusMode === 'stopped') {
-    guests = guests.filter((g) => g.status !== 'running');
+    guests = guests.filter((g) => resolveWorkloadStatusBucket(g) === 'stopped');
   }
 
   const trimmedSearch = searchTerm.trim();
@@ -437,15 +454,15 @@ export const buildWorkloadSummaryGroupScopeMap = ({
 };
 
 export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => {
-  const running = guests.filter((g) => g.status === 'running').length;
-  const degraded = guests.filter((g) => {
-    const status = (g.status || '').toLowerCase();
-    return (
-      DEGRADED_HEALTH_STATUSES.has(status) ||
-      (status !== 'running' && !OFFLINE_HEALTH_STATUSES.has(status))
-    );
-  }).length;
-  const stopped = guests.length - running - degraded;
+  let running = 0;
+  let degraded = 0;
+  let stopped = 0;
+  guests.forEach((guest) => {
+    const bucket = resolveWorkloadStatusBucket(guest);
+    if (bucket === 'running') running += 1;
+    else if (bucket === 'degraded') degraded += 1;
+    else stopped += 1;
+  });
   const vms = guests.filter((g) => resolveWorkloadType(g) === 'vm').length;
   const containers = guests.filter((g) => resolveWorkloadType(g) === 'system-container').length;
   const appContainers = guests.filter((g) => resolveWorkloadType(g) === 'app-container').length;
