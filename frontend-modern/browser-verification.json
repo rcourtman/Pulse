@@ -1,21 +1,34 @@
 {
   "version": 1,
-  "base_sha": "8be236e99a1f6328cc8e246d4789b84283484e01",
-  "verified_at": "2026-08-02T23:15:31Z",
+  "base_sha": "62ca94d6ea372bcf7c79c5b09cddf0f3ac4d312a",
+  "verified_at": "2026-08-02T23:39:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts",
+    "frontend-modern/src/components/shared/FilterBar/index.ts",
     "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "ffa97a53dae52e2072ea2adb3fd9bda36654275776c4ba96cc12cd515641ca5f",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "32618bee6d96fad013fa0cb2efc0a93c3eabac1ab402d117b56f621f59639930",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "91302f9489dcee2b3cb9fa0b3042b4552397d358091767e77fc94c1d72eb9d5a"
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "feca5d8342d5e38d9b4299b55f21870f4b6dac611f91ac75399b1cf01516551f",
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "a9f1038440b0a47670862a65646c14e1367552fb92c4f8b73e95b6520be83ebd",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "bec3d85c0285a5d4583faf42fc1f6922696750bfc6ebe6f7258064b86a145670",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "7f5406058751a3f35bfa4bbd95a1a0f5ed561da97b36d5d000d99e26a45b3b48",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "c13a319f872e8a38cf1c450e782f32906be12861d650ec99c2193ab080b45739",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "f67694f00a5b3fb278f5b618204da8f1e0b757abe7d82bfb0695087f6a52c56d",
+    "frontend-modern/src/components/shared/FilterBar/index.ts": "cc57c752d3a2bffbbe80801cdf6fa202ccd154eda2a3de41a0018876b158343e",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "c74dfdc8a08a02bab99c9b447115816ff1d6a37c60ded66f26bcdd6d18b09a3b",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "3afc764d29f92bc746673a8a09cedebe3ac344e8b0215cb277024b51f6dcb4f0"
   },
   "routes": [
-    "/docker/overview",
-    "/standalone/machines"
+    "/proxmox/storage",
+    "/proxmox/overview",
+    "/settings/security-audit"
   ],
   "viewports": [
     {
@@ -28,25 +41,24 @@
     }
   ],
   "states": [
-    "Desktop Docker toolbar with View closed and its resource counter permanently visible",
-    "Desktop Docker View preferences open with Grouped and List inside the Layout section",
-    "Docker List layout before and after reload with host group rows absent",
-    "Phone-width Docker filter rail collapsed and expanded",
-    "Phone-width Docker View preferences open with the popover contained inside the viewport",
-    "Desktop Machines toolbar with only View and the machine counter permanently visible",
-    "Desktop Machines View preferences with Columns collapsed and expanded",
-    "Phone-width Machines filter rail collapsed and expanded",
-    "Phone-width Machines View preferences with Columns collapsed and expanded",
-    "Machines IP column preference before toggle, after toggle, after reload, and restored"
+    "Desktop Storage toolbar with Saved and View aligned and sort controls absent from the permanent rail",
+    "Desktop Storage View preferences open with the Order section fully contained inside the viewport",
+    "Phone-width Storage filter rail collapsed and expanded with View in the auxiliary row",
+    "Phone-width Storage View preferences open without horizontal page overflow",
+    "Desktop Proxmox workload toolbar with layout, metrics, memory basis, and columns hidden behind View",
+    "Proxmox Trends mode with Guest allocation and Host capacity memory bases",
+    "Proxmox Trend range visible outside View while trends are active",
+    "Phone-width Proxmox overview with host-relative memory trend sparklines rendered",
+    "Audit Log route in the live demo runtime showing its expected paid-runtime capability gate"
   ],
   "interactions": [
-    "Opened Docker View and confirmed Grouped and List are no longer permanent toolbar controls",
-    "Selected Docker List, confirmed host group rows were removed, reloaded, and confirmed List remained selected",
-    "Pressed Escape from Docker View and confirmed the popover closed and focus returned to View",
-    "Expanded the phone-width Docker filter rail and confirmed the View popover remained inside the viewport",
-    "Opened Machines View and expanded the nested Columns control at desktop and phone widths",
-    "Toggled the Machines IP column, reloaded, confirmed the persisted checked state, and restored the original preference",
-    "Pressed Escape from nested Machines column content and confirmed the View popover dismissed",
-    "Confirmed both routes had no horizontal page overflow at 390px and no browser console errors"
+    "Opened Storage View, selected Usage sort, and confirmed the canonical sort URL parameter",
+    "Pressed Escape from Storage View and confirmed the popover closed and focus returned to View",
+    "Expanded the phone-width Storage filter rail and confirmed the View popover remained inside the viewport",
+    "Opened Proxmox View, enabled Trends, and confirmed Trend range remained a frequent control outside the popover",
+    "Switched Proxmox memory basis from Guest allocation to Host capacity and confirmed host-memory trend sparklines continued rendering",
+    "Pressed Escape from Proxmox View and confirmed the popover closed and focus returned to View",
+    "Confirmed the Audit Log live route is capability-gated in this demo runtime; its View pagination composition is covered by focused component and shared-contract tests",
+    "Confirmed the verified routes had no horizontal page overflow at 390px and no browser console errors"
   ]
 }

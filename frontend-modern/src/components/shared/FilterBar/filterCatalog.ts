@@ -47,7 +47,12 @@ export interface FilterBarSearch {
 export interface FilterBarProps {
   search: FilterBarSearch;
   filters: FilterDef[];
-  viewOptionsTrailing?: JSX.Element;
+  /** Contextual, frequently used actions rendered immediately before View. */
+  leadingControls?: JSX.Element;
+  /** Low-frequency presentation controls; FilterBar owns the shared View popover. */
+  viewOptions?: JSX.Element;
+  /** Persistent orientation/status controls rendered immediately after View. */
+  trailingControls?: JSX.Element;
   searchTrailing?: JSX.Element;
   isMobile: Accessor<boolean>;
   role?: string;

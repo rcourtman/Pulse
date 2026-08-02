@@ -21,6 +21,8 @@ describe('ViewOptionsMenu', () => {
     expect(screen.getByRole('dialog', { name: 'View preferences' })).toHaveClass(
       'left-0',
       'right-auto',
+      'md:left-auto',
+      'md:right-0',
     );
     expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View' })).toHaveAttribute('aria-expanded', 'true');

@@ -274,6 +274,9 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupsTableSource).not.toContain(
       'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
     );
+    expect(proxmoxBackupsTableSource).toContain('trailingControls={');
+    expect(proxmoxBackupsTableSource).toContain('<PlatformResourceCounter');
+    expect(proxmoxBackupsTableSource).not.toContain('viewOptionsTrailing');
 
     // The two top-level views exist...
     expect(screen.getByRole('group', { name: /backups view/i })).toBeInTheDocument();
@@ -387,12 +390,8 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxPageSurfaceSource).not.toContain(
       'currentModel().summary.stoppedGuestCount} stopped',
     );
-    expect(proxmoxPageSurfaceSource).toContain(
-      '<Show when={visibleGuestStats().running > 0}>',
-    );
-    expect(proxmoxPageSurfaceSource).toContain(
-      '<Show when={visibleGuestStats().stopped > 0}>',
-    );
+    expect(proxmoxPageSurfaceSource).toContain('<Show when={visibleGuestStats().running > 0}>');
+    expect(proxmoxPageSurfaceSource).toContain('<Show when={visibleGuestStats().stopped > 0}>');
   });
 
   it('keeps the shared storage surface scoped to the whole Proxmox product family', () => {

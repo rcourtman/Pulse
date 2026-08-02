@@ -7,6 +7,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { AddFilterMenu } from './AddFilterMenu';
 import { FilterChip } from './FilterChip';
 import { SavedViewsMenu } from './SavedViewsMenu';
+import { ViewOptionsMenu } from './ViewOptionsMenu';
 import {
   clearFilter,
   hasAddableFilterOptions,
@@ -80,14 +81,15 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
     if (props.showClearAll) return props.showClearAll() || activeCount() > 0;
     return activeCount() > 0;
   };
-  const hasDesktopViewOptions = () => Boolean(props.viewOptionsTrailing);
+  const hasAuxiliaryControls = () =>
+    Boolean(props.leadingControls || props.viewOptions || props.trailingControls);
   const hasSavedViews = () => Boolean(props.savedViewsKey);
   const showDesktopControlsRow = () =>
     !props.isMobile() &&
     (inlineFilters().length > 0 ||
       hasMenuFilters() ||
       hasSavedViews() ||
-      hasDesktopViewOptions() ||
+      hasAuxiliaryControls() ||
       hasClearableState());
   const showInlineRow = () => props.isMobile() && mobileExpanded() && inlineFilters().length > 0;
   const showDesktopChipRow = () => !props.isMobile() && activeMenuFilters().length > 0;
@@ -149,7 +151,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             <Show
               when={
                 inlineFilters().length > 0 &&
-                (hasAddableMenuFilters() || hasSavedViews() || hasDesktopViewOptions())
+                (hasAddableMenuFilters() || hasSavedViews() || hasAuxiliaryControls())
               }
             >
               <FilterBarRailDivider />
@@ -168,14 +170,18 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             <Show
               when={
                 (hasAddableMenuFilters() || hasSavedViews() || hasClearableState()) &&
-                hasDesktopViewOptions()
+                hasAuxiliaryControls()
               }
             >
               <FilterBarRailDivider />
             </Show>
-            <Show when={props.viewOptionsTrailing}>
+            <Show when={hasAuxiliaryControls()}>
               <div class="inline-flex flex-shrink-0 flex-wrap items-center gap-2">
-                {props.viewOptionsTrailing}
+                {props.leadingControls}
+                <Show when={props.viewOptions}>
+                  <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
+                </Show>
+                {props.trailingControls}
               </div>
             </Show>
           </div>
@@ -210,9 +216,13 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
           </div>
         </Show>
 
-        <Show when={showMobileBody() && props.viewOptionsTrailing}>
+        <Show when={showMobileBody() && hasAuxiliaryControls()}>
           <div class="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-2">
-            {props.viewOptionsTrailing}
+            {props.leadingControls}
+            <Show when={props.viewOptions}>
+              <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
+            </Show>
+            {props.trailingControls}
           </div>
         </Show>
       </div>

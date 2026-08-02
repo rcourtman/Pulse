@@ -173,7 +173,7 @@ describe('FilterBar', () => {
         search={search}
         filters={[inlineTypeFilter(vi.fn(), 'vm')]}
         isMobile={() => false}
-        viewOptionsTrailing={<button type="button">View</button>}
+        viewOptions={<span>Density</span>}
       />
     ));
 
@@ -182,6 +182,47 @@ describe('FilterBar', () => {
       .map((button) => button.textContent?.trim())
       .filter(Boolean);
     expect(labels.indexOf('Clear filters')).toBeLessThan(labels.indexOf('View'));
+  });
+
+  it('owns View composition while keeping contextual and orientation controls visible', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter()]}
+        isMobile={() => false}
+        leadingControls={<button type="button">Clear selection</button>}
+        viewOptions={<span>Density</span>}
+        trailingControls={<span>12 items</span>}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Clear selection' })).toBeInTheDocument();
+    expect(screen.getByText('12 items')).toBeInTheDocument();
+    expect(screen.queryByText('Density')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+
+    expect(screen.getByRole('dialog', { name: 'View preferences' })).toHaveTextContent('Density');
+  });
+
+  it('reveals the shared View trigger with persistent controls in the expanded mobile rail', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter()]}
+        isMobile={() => true}
+        viewOptions={<span>Density</span>}
+        trailingControls={<span>12 items</span>}
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+    expect(screen.queryByText('12 items')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument();
+    expect(screen.getByText('12 items')).toBeInTheDocument();
   });
 
   it('can hide the redundant visual Filter label without changing the accessible name', () => {

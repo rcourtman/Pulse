@@ -12,12 +12,7 @@ import {
 } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
-import {
-  FilterBar,
-  ViewOptionsMenu,
-  filterChipStatusDot,
-  type FilterDef,
-} from '@/components/shared/FilterBar';
+import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
@@ -1064,17 +1059,13 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       }}
       filters={allFilters}
       savedViewsKey={props.savedViewsKey}
-      viewOptionsTrailing={
-        <>
-          <Show when={props.viewOptions}>
-            <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
-          </Show>
-          <PlatformResourceCounter
-            visible={props.visible}
-            total={props.total}
-            rowNoun={props.rowNoun}
-          />
-        </>
+      viewOptions={props.viewOptions}
+      trailingControls={
+        <PlatformResourceCounter
+          visible={props.visible}
+          total={props.total}
+          rowNoun={props.rowNoun}
+        />
       }
       showClearAll={() => Boolean(props.hasActiveFilters && props.onResetFilters)}
       onClearAll={props.onResetFilters}

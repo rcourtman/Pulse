@@ -69,7 +69,7 @@ export const ViewOptionsMenu: Component<ViewOptionsMenuProps> = (props) => {
           role="dialog"
           aria-label={props.label ?? 'View preferences'}
           widthClass="w-80 max-w-[calc(100vw-2rem)]"
-          class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 max-h-[min(38rem,calc(100vh-8rem))] overflow-y-auto p-3"
+          class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 max-h-[min(38rem,calc(100vh-8rem))] overflow-y-auto p-3 md:left-auto md:right-0"
         >
           <div class="mb-3 border-b border-border-subtle pb-2">
             <div class="text-xs font-medium text-base-content">

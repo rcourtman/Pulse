@@ -594,7 +594,7 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     as column-picker options without creating blank default columns.
     Non-Docker Workloads surfaces keep the global `disk` default unless they
     declare their own scoped contract.
-18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. View options (grouped/list, charts, columns) sit in the shared `viewOptionsTrailing` slot.
+18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
     Workload filter option semantics stay workload-owned, but FilterBar chip
     presentation is frontend-primitives-owned: status and runtime leading dots
     must use `filterChipStatusDot` rather than workload-local span factories.
@@ -1633,9 +1633,11 @@ the filter and presentation rails wrap-capable instead of forcing a single
 no-wrap row that clips trailing actions. The workload shell leaves Type,
 Status, dynamic scope, saved views, and contextual `Clear filters` actions on
 the primary filter rail. Durable presentation choices — grouped/list mode,
-bars/trends, chart visibility, Guest/Host memory basis, and Columns — compose
-the shared `ViewOptionsMenu` through `FilterBar.viewOptionsTrailing` instead of
-rendering as equally prominent filter toggles. The sparkline range remains
+bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
+their panel content through `FilterBar.viewOptions` instead of importing or
+wrapping `ViewOptionsMenu` in the workload feature or rendering as equally
+prominent filter toggles. The shared FilterBar owns View composition across
+desktop and mobile layouts. The sparkline range remains
 inline only while trends are active because it is the frequently changed
 analytical window, and its compact control must include a visible `Trend range`
 label so the values are not an orphaned set of durations. Columns must expand

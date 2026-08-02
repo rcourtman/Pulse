@@ -1240,7 +1240,8 @@ describe('Workloads performance contract', () => {
         'workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}',
       );
       expect(workloadsFilterSource).toContain('MetricDisplayModeSegmentedControl');
-      expect(workloadsFilterSource).toContain('ViewOptionsMenu');
+      expect(workloadsFilterSource).toContain('viewOptions={');
+      expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
       expect(workloadsFilterSource).toContain('MetricHistoryRangeSegmentedControl');
       expect(workloadsFilterSource).toContain('label="Trend range"');
       expect(workloadsFilterSource).toContain('<ColumnPicker');

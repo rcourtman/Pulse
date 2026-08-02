@@ -1016,7 +1016,7 @@ describe('settings architecture guardrails', () => {
     expect(systemSettingsPresentationSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');
   });
 
-  it('keeps audit-log filter labels on the audit presentation owner', () => {
+  it('keeps audit-log filter labels and pagination on their presentation owners', () => {
     expect(auditLogPanelSource).toContain('AUDIT_EVENT_FILTER_ALL_LABEL');
     expect(auditLogPanelSource).toContain('AUDIT_EVENT_CONFIG_CHANGE_LABEL');
     expect(auditLogPanelSource).toContain('AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL');
@@ -1024,6 +1024,10 @@ describe('settings architecture guardrails', () => {
     expect(auditLogPanelSource).not.toContain('All Events');
     expect(auditLogPanelSource).not.toContain('All Verification');
     expect(auditLogPanelSource).not.toContain('Success Only');
+    expect(auditLogPanelSource).toContain('viewOptions={');
+    expect(auditLogPanelSource).toContain('Pagination');
+    expect(auditLogPanelSource).toContain('label="Audit page size"');
+    expect(auditLogPanelSource).not.toContain('viewOptionsTrailing');
     expect(auditLogPresentationSource).toContain(
       "AUDIT_EVENT_FILTER_ALL_LABEL = getAllFilterOptionLabel('events')",
     );

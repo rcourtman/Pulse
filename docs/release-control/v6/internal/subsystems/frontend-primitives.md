@@ -3879,12 +3879,13 @@ value, defaultValue, group); `FilterBar` renders chips for active filters and
 exposes the rest behind a "+ Filter" menu, with type-ahead at both the menu
 and chip popovers (`AddFilterMenu` and `FilterChip`). Low-frequency view options
 (grouping segmented control, charts toggle, columns picker, sort key) compose
-the shared `ViewOptionsMenu` inside the `viewOptionsTrailing` slot instead of
-remaining as permanent toolbar controls; table counters and other persistent
-orientation readouts may remain adjacent in that slot. Platform tables using
-`PlatformTableToolbar` pass only their panel content through its `viewOptions`
-prop: the shared toolbar owns `ViewOptionsMenu` creation, and feature consumers
-must not pass or render their own View trigger. Recovery is event-first
+the shared `ViewOptionsMenu` through `FilterBar`'s `viewOptions` prop instead of
+remaining as permanent toolbar controls. `FilterBar` owns the View trigger and
+popover; feature consumers pass only panel content and must not import or render
+`ViewOptionsMenu` themselves. Contextual frequent actions may use
+`leadingControls`, while table counters, active trend ranges, and other
+persistent orientation readouts may use `trailingControls`. Platform tables
+inherit the same ownership through `PlatformTableToolbar`. Recovery is event-first
 and does not use equal workspace subtabs for protected rollups versus event
 history; Storage subtabs (Pools / Physical Disks) sit above the bar as
 navigation, not filters.
@@ -4051,7 +4052,9 @@ Error` strings or unbounded page sizes as local hook behavior.
 Audit-log page loads are latest-request-wins. Changing the page size atomically
 resets the offset and starts one replacement request, and any superseded
 request is aborted or ignored so an older response cannot overwrite the new
-page. A failed load clears previously rendered events and totals, and a
+page. Page size is a durable table-presentation preference and belongs inside
+the shared `FilterBar.viewOptions` popover rather than as a permanent filter
+control. A failed load clears previously rendered events and totals, and a
 successful payload must contain an event array rather than treating `null` or
 an absent list as an empty audit history.
 That shared filter-option primitive is also the canonical owner for default

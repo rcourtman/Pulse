@@ -313,8 +313,11 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           }}
           searchTrailing={props.searchTrailing}
           filters={buildFilters()}
-          viewOptionsTrailing={
-            <>
+          viewOptions={
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Order
+              </div>
               <div class={STORAGE_FILTER_SORT_WRAP_CLASS}>
                 <FormSelect
                   label="Sort by"
@@ -357,7 +360,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
                   </svg>
                 </button>
               </div>
-            </>
+            </div>
           }
           onClearAll={handleClearAll}
           showClearAll={showClearAll}

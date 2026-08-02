@@ -631,7 +631,7 @@ export const ProxmoxBackupsTable: Component<{
                 </button>
               </Show>
             }
-            viewOptionsTrailing={
+            trailingControls={
               <PlatformResourceCounter
                 visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
                 total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}

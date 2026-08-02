@@ -114,6 +114,12 @@ const expectStorageInlineFilter = (filterLabel: string, optionLabel: string) => 
   );
 };
 
+const openStorageViewOptions = () => {
+  expect(screen.queryByLabelText('Sort by')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'View' }));
+  return screen.getByRole('dialog', { name: 'View preferences' });
+};
+
 const getStorageChipOptions = async (label: string): Promise<string[]> => {
   const chip = queryStorageChip(label);
   if (!chip) throw new Error(`No chip found for filter "${label}"`);
@@ -591,7 +597,10 @@ describe('Storage', () => {
     const usageHeader = screen.getByRole('columnheader', { name: 'Usage' });
     fireEvent.click(within(usageHeader).getByRole('button', { name: 'Sort Usage column' }));
     expect(usageHeader).toHaveAttribute('aria-sort', 'descending');
-    expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
+    const viewOptions = openStorageViewOptions();
+    expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
+      'usage',
+    );
 
     fireEvent.click(
       within(usageHeader).getByRole('button', { name: 'Sort Usage column ascending' }),
@@ -646,10 +655,13 @@ describe('Storage', () => {
       'true',
     );
     // Menu filter state surfaces as chips on the FilterBar; primary filters
-    // stay visible as inline controls. Sort remains a labelled select in the
-    // view-options trailing slot.
+    // stay visible as inline controls. Sort is a durable presentation choice
+    // owned by the shared View popover.
     expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
-    expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
+    const viewOptions = openStorageViewOptions();
+    expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
+      'usage',
+    );
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('tab', { name: 'Storage' }));
@@ -722,7 +734,10 @@ describe('Storage', () => {
       'true',
     );
     expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
-    expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('usage');
+    const viewOptions = openStorageViewOptions();
+    expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
+      'usage',
+    );
   });
 
   it('canonicalizes source aliases in storage URL params back to owned option values', async () => {

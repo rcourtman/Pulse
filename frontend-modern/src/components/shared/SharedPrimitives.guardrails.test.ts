@@ -8102,7 +8102,7 @@ describe('shared primitive guardrails', () => {
     expect(filterBarIndexSource).toContain("export { FilterChip } from './FilterChip';");
     expect(filterBarIndexSource).toContain("export { AddFilterMenu } from './AddFilterMenu';");
     expect(filterBarIndexSource).toContain("export { SavedViewsMenu } from './SavedViewsMenu';");
-    expect(filterBarIndexSource).toContain("export { ViewOptionsMenu } from './ViewOptionsMenu';");
+    expect(filterBarIndexSource).not.toContain('ViewOptionsMenu');
     expect(filterBarIndexSource).toContain("export { useSavedViews } from './useSavedViews';");
     expect(filterBarIndexSource).toContain(
       "export { filterChipStatusDot } from './filterOptionPresentation';",
@@ -8230,11 +8230,16 @@ describe('shared primitive guardrails', () => {
     expect(filterToolbarSource).toContain("filterToolbarControlClass = 'h-7");
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
     expect(savedViewsMenuSource).toContain('<FilterPopoverTrigger');
+    expect(filterCatalogSource).toContain('leadingControls?: JSX.Element;');
+    expect(filterCatalogSource).toContain('viewOptions?: JSX.Element;');
+    expect(filterCatalogSource).toContain('trailingControls?: JSX.Element;');
+    expect(filterCatalogSource).not.toContain('viewOptionsTrailing');
+    expect(filterBarSource).toContain("import { ViewOptionsMenu } from './ViewOptionsMenu';");
+    expect(filterBarSource).toContain('<ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>');
     expect(sharedPlatformPageSource).toContain('viewOptions?: JSX.Element;');
-    expect(sharedPlatformPageSource).toContain(
-      '<ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>',
-    );
-    expect(sharedPlatformPageSource).not.toContain('viewOptionsTrailing?: JSX.Element;');
+    expect(sharedPlatformPageSource).toContain('viewOptions={props.viewOptions}');
+    expect(sharedPlatformPageSource).toContain('trailingControls={');
+    expect(sharedPlatformPageSource).not.toContain('ViewOptionsMenu');
     expect(savedViewsMenuSource).toContain('class="relative shrink-0"');
     expect(savedViewsMenuSource).toContain('class="h-3.5 w-3.5"');
     expect(savedViewsMenuSource).toContain('aria-label="Saved views"');
@@ -8275,7 +8280,10 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).toContain("id: 'workloads-type'");
     expect(workloadsFilterSource).toContain("id: 'workloads-status'");
     expect(workloadsFilterSource).toContain('inline: true');
-    expect(workloadsFilterSource).toContain('viewOptionsTrailing={');
+    expect(workloadsFilterSource).toContain('leadingControls={');
+    expect(workloadsFilterSource).toContain('viewOptions={');
+    expect(workloadsFilterSource).toContain('trailingControls={');
+    expect(workloadsFilterSource).not.toContain('ViewOptionsMenu');
     expect(workloadsFilterSource).toContain('GroupedTableModeSegmentedControl');
     expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
     expect(workloadsFilterSource).toContain('<ColumnPicker');
@@ -8288,7 +8296,7 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).not.toContain('const statusDot = (className: string)');
 
     // StoragePageControls — Subtabs sit above the FilterBar; sort key/sort
-    // direction live in viewOptionsTrailing as raw view-options (not chips).
+    // direction live in the FilterBar-owned View popover (not chips).
     // Per-view catalog filters (inline Group by and Status plus menu-backed
     // Source on Pools; Role/Group on Physical Disks) flow through the FilterBar
     // catalog. The legacy
@@ -8310,7 +8318,13 @@ describe('shared primitive guardrails', () => {
     expect(storagePageControlsSource).toContain("id: 'storage-status'");
     expect(storagePageControlsSource).toContain("id: 'storage-disk-role'");
     expect(storagePageControlsSource).toContain("id: 'storage-disk-group'");
-    expect(storagePageControlsSource).toContain('viewOptionsTrailing={');
+    expect(storagePageControlsSource).toContain('viewOptions={');
+    expect(storagePageControlsSource).toContain('Order');
+    expect(storagePageControlsSource).not.toContain('viewOptionsTrailing');
+    expect(auditLogPanelSource).toContain('viewOptions={');
+    expect(auditLogPanelSource).toContain('Pagination');
+    expect(auditLogPanelSource).not.toContain('viewOptionsTrailing');
+    expect(proxmoxBackupsTableSource).toContain('trailingControls={');
     expect(storagePageControlsSource).toContain('aria-label="Sort by"');
     expect(storagePageControlsSource).toContain('aria-label="Sort direction"');
     expect(storagePageControlsSource).toContain('onClearAll={handleClearAll}');

@@ -6,7 +6,6 @@ import XIcon from 'lucide-solid/icons/x';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import {
   FilterBar,
-  ViewOptionsMenu,
   filterChipStatusDot,
   type FilterDef,
   type FilterSelectOption,
@@ -265,115 +264,116 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       filters={buildFilters()}
       showAddFilterLabel={false}
       savedViewsKey={props.savedViewsKey}
-      viewOptionsTrailing={
+      leadingControls={
+        <Show when={props.pinnedSelectionActive?.() && props.onClearPinnedSelection}>
+          <FilterActionButton
+            aria-label="Clear pinned selection"
+            title="Clear pinned selection"
+            onClick={() => props.onClearPinnedSelection?.()}
+          >
+            <XIcon class="h-3 w-3" />
+            Clear selection
+          </FilterActionButton>
+        </Show>
+      }
+      viewOptions={
         <>
-          <Show when={props.pinnedSelectionActive?.() && props.onClearPinnedSelection}>
-            <FilterActionButton
-              aria-label="Clear pinned selection"
-              title="Clear pinned selection"
-              onClick={() => props.onClearPinnedSelection?.()}
-            >
-              <XIcon class="h-3 w-3" />
-              Clear selection
-            </FilterActionButton>
-          </Show>
-          <ViewOptionsMenu>
+          <div>
+            <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              Layout
+            </div>
+            <GroupedTableModeSegmentedControl
+              value={props.groupingMode()}
+              onChange={props.setGroupingMode}
+            />
+          </div>
+
+          <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
             <div>
               <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Layout
+                Metrics
               </div>
-              <GroupedTableModeSegmentedControl
-                value={props.groupingMode()}
-                onChange={props.setGroupingMode}
+              <MetricDisplayModeSegmentedControl
+                value={props.metricDisplayMode!()}
+                onChange={props.setMetricDisplayMode!}
               />
             </div>
+          </Show>
 
-            <Show when={props.metricDisplayMode && props.setMetricDisplayMode}>
+          <Show when={props.memoryDisplayBasis && props.setMemoryDisplayBasis}>
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Memory relative to
+              </div>
+              <FilterSegmentedControl
+                aria-label="Memory percentage basis"
+                value={props.memoryDisplayBasis!()}
+                onChange={(value) =>
+                  props.setMemoryDisplayBasis!(value as WorkloadsMemoryDisplayBasis)
+                }
+                options={[
+                  {
+                    value: 'guest',
+                    label: 'Guest allocation',
+                    ariaLabel: 'Guest',
+                    title: 'Show memory as a percentage of each guest allocation',
+                  },
+                  {
+                    value: 'host',
+                    label: 'Host capacity',
+                    ariaLabel: 'Host',
+                    title: 'Show memory as a percentage of the Proxmox host total',
+                  },
+                ]}
+              />
+            </div>
+          </Show>
+
+          <Show when={props.onChartsToggle}>
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Summary
+              </div>
+              <ChartVisibilityToggleButton
+                class="!inline-flex"
+                collapsed={props.chartsCollapsed?.() ?? false}
+                onToggle={() => props.onChartsToggle?.()}
+              />
+            </div>
+          </Show>
+
+          <Show when={props.columnVisibility}>
+            {(visibility) => (
               <div>
                 <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Metrics
+                  Table
                 </div>
-                <MetricDisplayModeSegmentedControl
-                  value={props.metricDisplayMode!()}
-                  onChange={props.setMetricDisplayMode!}
+                <ColumnPicker
+                  inline
+                  columns={visibility().availableColumns}
+                  isHidden={visibility().isColumnHidden}
+                  onToggle={visibility().onColumnToggle}
+                  onReset={visibility().onColumnReset}
                 />
               </div>
-            </Show>
-
-            <Show when={props.memoryDisplayBasis && props.setMemoryDisplayBasis}>
-              <div>
-                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Memory relative to
-                </div>
-                <FilterSegmentedControl
-                  aria-label="Memory percentage basis"
-                  value={props.memoryDisplayBasis!()}
-                  onChange={(value) =>
-                    props.setMemoryDisplayBasis!(value as WorkloadsMemoryDisplayBasis)
-                  }
-                  options={[
-                    {
-                      value: 'guest',
-                      label: 'Guest allocation',
-                      ariaLabel: 'Guest',
-                      title: 'Show memory as a percentage of each guest allocation',
-                    },
-                    {
-                      value: 'host',
-                      label: 'Host capacity',
-                      ariaLabel: 'Host',
-                      title: 'Show memory as a percentage of the Proxmox host total',
-                    },
-                  ]}
-                />
-              </div>
-            </Show>
-
-            <Show when={props.onChartsToggle}>
-              <div>
-                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Summary
-                </div>
-                <ChartVisibilityToggleButton
-                  class="!inline-flex"
-                  collapsed={props.chartsCollapsed?.() ?? false}
-                  onToggle={() => props.onChartsToggle?.()}
-                />
-              </div>
-            </Show>
-
-            <Show when={props.columnVisibility}>
-              {(visibility) => (
-                <div>
-                  <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    Table
-                  </div>
-                  <ColumnPicker
-                    inline
-                    columns={visibility().availableColumns}
-                    isHidden={visibility().isColumnHidden}
-                    onToggle={visibility().onColumnToggle}
-                    onReset={visibility().onColumnReset}
-                  />
-                </div>
-              )}
-            </Show>
-          </ViewOptionsMenu>
-
-          <Show
-            when={
-              props.metricDisplayMode?.() === 'sparklines' &&
-              props.metricHistoryRange &&
-              props.setMetricHistoryRange
-            }
-          >
-            <MetricHistoryRangeSegmentedControl
-              label="Trend range"
-              range={props.metricHistoryRange!()}
-              onRangeChange={props.setMetricHistoryRange!}
-            />
+            )}
           </Show>
         </>
+      }
+      trailingControls={
+        <Show
+          when={
+            props.metricDisplayMode?.() === 'sparklines' &&
+            props.metricHistoryRange &&
+            props.setMetricHistoryRange
+          }
+        >
+          <MetricHistoryRangeSegmentedControl
+            label="Trend range"
+            range={props.metricHistoryRange!()}
+            onRangeChange={props.setMetricHistoryRange!}
+          />
+        </Show>
       }
       onClearAll={handleClearAll}
       showClearAll={showClearAll}

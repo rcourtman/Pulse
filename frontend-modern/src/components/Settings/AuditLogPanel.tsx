@@ -241,20 +241,25 @@ export default function AuditLogPanel() {
           }}
           filters={buildAuditFilters()}
           savedViewsKey="audit"
-          viewOptionsTrailing={
-            <FormSelect
-              label="Audit page size"
-              labelClass="sr-only"
-              fieldBaseClass="contents"
-              value={String(pageSize())}
-              onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-              selectBaseClass="min-h-9 px-2.5 py-1.5 text-xs border border-border rounded-md bg-surface text-base-content"
-            >
-              <option value="25">25 / page</option>
-              <option value="50">50 / page</option>
-              <option value="100">100 / page</option>
-              <option value="200">200 / page</option>
-            </FormSelect>
+          viewOptions={
+            <div>
+              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Pagination
+              </div>
+              <FormSelect
+                label="Audit page size"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
+                value={String(pageSize())}
+                onChange={(e) => setPageSize(Number(e.currentTarget.value))}
+                selectBaseClass="min-h-9 w-full px-2.5 py-1.5 text-xs border border-border rounded-md bg-surface text-base-content"
+              >
+                <option value="25">25 / page</option>
+                <option value="50">50 / page</option>
+                <option value="100">100 / page</option>
+                <option value="200">200 / page</option>
+              </FormSelect>
+            </div>
           }
           onClearAll={clearFilters}
           showClearAll={() => activeFilterCount() > 0}

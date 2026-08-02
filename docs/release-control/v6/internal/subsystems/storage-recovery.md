@@ -3035,7 +3035,10 @@ and `frontend-modern/src/utils/storageSources.ts` rather than re-declaring
 page-local title casing or alternate all-option labels. The storage toolbar may
 own sort/filter semantics, but native select label/id/chrome and dynamic value
 sync must come from the frontend-primitives-owned `FormSelect` rather than a
-storage-local raw `<select>` wrapper.
+storage-local raw `<select>` wrapper. Sort key and direction are durable
+presentation preferences, so `StoragePageControls` supplies them through the
+frontend-primitives-owned `FilterBar.viewOptions` content boundary instead of
+leaving them as permanent filter-rail controls.
 Recovery all-history, all-item-type, and all-platform defaults follow the same
 shared filter-option contract through
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so recovery history
