@@ -34,16 +34,21 @@ func (a *Agent) TypedContainerUpdate(ctx context.Context, runtime, containerID, 
 		localImageID := strings.TrimSpace(inspect.Image)
 		matchesLocalID := strings.EqualFold(localImageID, expectedImageDigest)
 		matchesRepoDigest := false
+		repoDigest := ""
 		if !matchesLocalID {
 			imageName := ""
 			if inspect.Config != nil {
 				imageName = inspect.Config.Image
 			}
-			repoDigest, _, _, _ := a.getImageRepoDigest(ctx, localImageID, imageName)
-			matchesRepoDigest = strings.EqualFold(strings.TrimSpace(repoDigest), expectedImageDigest)
+			repoDigest, _, _, _ = a.getImageRepoDigest(ctx, localImageID, imageName)
+			repoDigest = strings.TrimSpace(repoDigest)
+			matchesRepoDigest = strings.EqualFold(repoDigest, expectedImageDigest)
 		}
 		if !matchesLocalID && !matchesRepoDigest {
-			return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("container image digest no longer matches the planned update")
+			if repoDigest == "" {
+				repoDigest = "unavailable"
+			}
+			return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("container image digest no longer matches the planned update (expected %s, local image id %s, local repo digest %s)", expectedImageDigest, localImageID, repoDigest)
 		}
 	}
 
