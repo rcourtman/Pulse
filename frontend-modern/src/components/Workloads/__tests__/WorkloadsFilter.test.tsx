@@ -91,6 +91,11 @@ const pickFromMenu = (menuItem: string, optionLabel: string) => {
   });
 };
 
+const openViewPreferences = () => {
+  fireEvent.click(screen.getByRole('button', { name: 'View' }));
+  return screen.getByRole('dialog', { name: 'View preferences' });
+};
+
 describe('WorkloadsFilter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -144,10 +149,13 @@ describe('WorkloadsFilter', () => {
       expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
     });
 
-    it('renders Grouped and List view-option buttons', () => {
+    it('moves persistent layout controls behind one View button', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
-      expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'List' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Grouped' })).not.toBeInTheDocument();
+
+      const dialog = within(openViewPreferences());
+      expect(dialog.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
+      expect(dialog.getByRole('button', { name: 'List' })).toBeInTheDocument();
     });
 
     it('offers a guest/host memory percentage basis when the owning page enables it', () => {
@@ -161,9 +169,54 @@ describe('WorkloadsFilter', () => {
         />
       ));
 
-      const group = screen.getByRole('group', { name: 'Memory percentage basis' });
+      expect(
+        screen.queryByRole('group', { name: 'Memory percentage basis' }),
+      ).not.toBeInTheDocument();
+      const group = within(openViewPreferences()).getByRole('group', {
+        name: 'Memory percentage basis',
+      });
       fireEvent.click(within(group).getByRole('button', { name: 'Host' }));
       expect(setMemoryDisplayBasis).toHaveBeenCalledWith('host');
+    });
+
+    it('keeps metric presentation in View and hides the range for bars', () => {
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: () => 'bars',
+            setMetricDisplayMode: vi.fn(),
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+          })}
+        />
+      ));
+
+      expect(screen.queryByRole('button', { name: 'Bars' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Sparkline range' })).not.toBeInTheDocument();
+      expect(within(openViewPreferences()).getByRole('button', { name: 'Bars' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('keeps the frequently changed range inline while Trends is active', () => {
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            metricDisplayMode: () => 'sparklines',
+            setMetricDisplayMode: vi.fn(),
+            metricHistoryRange: () => '1h',
+            setMetricHistoryRange: vi.fn(),
+          })}
+        />
+      ));
+
+      expect(screen.getByRole('group', { name: 'Sparkline range' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Trends' })).not.toBeInTheDocument();
+      expect(within(openViewPreferences()).getByRole('button', { name: 'Trends' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
     });
 
     it('maps legacy container view modes onto the canonical "Containers" type chip', () => {
@@ -186,7 +239,7 @@ describe('WorkloadsFilter', () => {
       ));
       expect(screen.queryByRole('group', { name: 'Type' })).not.toBeInTheDocument();
       expect(inlineFilterGroup('Status')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
     });
   });
 
@@ -238,7 +291,7 @@ describe('WorkloadsFilter', () => {
     it('calls setGroupingMode("flat") when the List view-option is clicked', () => {
       const setGroupingMode = vi.fn();
       render(() => <WorkloadsFilter {...makeProps({ setGroupingMode })} />);
-      fireEvent.click(screen.getByRole('button', { name: 'List' }));
+      fireEvent.click(within(openViewPreferences()).getByRole('button', { name: 'List' }));
       expect(setGroupingMode).toHaveBeenCalledWith('flat');
     });
 
@@ -249,25 +302,25 @@ describe('WorkloadsFilter', () => {
           {...makeProps({ groupingMode: vi.fn(() => 'flat' as const), setGroupingMode })}
         />
       ));
-      fireEvent.click(screen.getByRole('button', { name: 'Grouped' }));
+      fireEvent.click(within(openViewPreferences()).getByRole('button', { name: 'Grouped' }));
       expect(setGroupingMode).toHaveBeenCalledWith('grouped');
     });
   });
 
-  describe('clear all', () => {
+  describe('clear filters', () => {
     it('does not render when all filters are at their defaults', () => {
       render(() => <WorkloadsFilter {...makeProps()} />);
-      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
     });
 
     it('renders when search is non-empty', () => {
       render(() => <WorkloadsFilter {...makeProps({ search: vi.fn(() => 'foo') })} />);
-      expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
     });
 
     it('renders when viewMode is not the default', () => {
       render(() => <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'vm' as const) })} />);
-      expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
     });
 
     it('does not count a suppressed platform-owned viewMode as an active filter', () => {
@@ -279,21 +332,21 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
     });
 
     it('renders when statusMode is not the default', () => {
       render(() => (
         <WorkloadsFilter {...makeProps({ statusMode: vi.fn(() => 'running' as const) })} />
       ));
-      expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
     });
 
     it('does not render when only groupingMode is "flat" (view option, not a filter)', () => {
       render(() => (
         <WorkloadsFilter {...makeProps({ groupingMode: vi.fn(() => 'flat' as const) })} />
       ));
-      expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
     });
 
     it('renders when a host filter is active', () => {
@@ -311,7 +364,7 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
     });
 
     it('renders when a container runtime filter is active', () => {
@@ -331,7 +384,7 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
     });
 
     it('resets all canonical filter state when clicked', () => {
@@ -393,7 +446,7 @@ describe('WorkloadsFilter', () => {
         />
       ));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
       expect(setSearch).toHaveBeenCalledWith('');
       expect(setSortKey).toHaveBeenCalledWith(DEFAULT_WORKLOADS_SORT_KEY);
@@ -426,7 +479,7 @@ describe('WorkloadsFilter', () => {
         />
       ));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
       expect(setSearch).toHaveBeenCalledWith('');
       expect(setSortKey).toHaveBeenCalledWith('name');
@@ -648,7 +701,10 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      expect(screen.getByRole('button', { name: 'Hide charts' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Hide charts' })).not.toBeInTheDocument();
+      expect(
+        within(openViewPreferences()).getByRole('button', { name: 'Hide charts' }),
+      ).toBeInTheDocument();
     });
 
     it('labels the Charts button as a show action when charts are collapsed', () => {
@@ -660,7 +716,9 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      expect(screen.getByRole('button', { name: 'Show charts' })).toBeInTheDocument();
+      expect(
+        within(openViewPreferences()).getByRole('button', { name: 'Show charts' }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -678,7 +736,8 @@ describe('WorkloadsFilter', () => {
           })}
         />
       ));
-      expect(screen.getByTestId('column-picker')).toBeInTheDocument();
+      expect(screen.queryByTestId('column-picker')).not.toBeInTheDocument();
+      expect(within(openViewPreferences()).getByTestId('column-picker')).toBeInTheDocument();
     });
 
     it('does not render ColumnPicker when columnVisibility is absent', () => {

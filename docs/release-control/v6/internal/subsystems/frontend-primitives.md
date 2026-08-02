@@ -34,11 +34,15 @@ finding-backed suppression removal API, refreshes both unified and Patrol
 history, and must not discard the saved note.
 
 Platform-owned workload controls extend the shared `WorkloadsFilter` view
-options rather than creating page-local toolbar shells. The Proxmox overview
-may expose a labelled `Guest` / `Host` memory-percentage basis control through
-the shared compact segmented-control primitive; the page owns and persists the
-preference, while the workload state, table, panel, and row contracts carry the
-selected basis and resolved parent-node data to the canonical memory bar.
+options rather than creating page-local toolbar shells. Persistent presentation
+choices compose the shared `ViewOptionsMenu` instead of occupying the primary
+filter rail: layout, metric style, chart visibility, memory basis, and columns
+remain discoverable behind one `View` trigger, while the trend range may stay
+inline only when trends are active because it is the frequent analytical
+control. The Proxmox page owns and persists the `Guest` / `Host` memory basis;
+the workload state, table, panel, and row contracts carry the selected basis
+and resolved parent-node data to the canonical memory bar, and the memory
+column header must expose the non-default Host basis after the control closes.
 
 
 Presentation helpers that mirror a server-side classification must name the
@@ -801,6 +805,13 @@ and status payloads. Those labels are summary context inside the same strip,
 not a replacement status card, CTA band, or page-local nested card.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
+   Filterable table surfaces that separate high-frequency narrowing from
+   durable presentation preferences must compose
+   `frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx`.
+   The shared menu owns trigger, panel, outside-click, Escape, focus-return,
+   remembered-preference explanation, and viewport-safe geometry; feature
+   surfaces own the controls placed inside it. They must not restore a row of
+   equally prominent preference toggles or a page-local popover shell.
    Standard command buttons and button-styled route actions belong to the
    shared `Button` primitive family. Feature pages may choose the action label,
    icon, route, click handler, and contextual layout, but secondary/primary/

@@ -21,6 +21,26 @@ interface MetricDisplayModeSegmentedControlProps extends Omit<
   onRangeChange?: (range: WorkloadTableMetricHistoryRange) => void;
 }
 
+interface MetricHistoryRangeSegmentedControlProps {
+  range: WorkloadTableMetricHistoryRange;
+  onRangeChange: (range: WorkloadTableMetricHistoryRange) => void;
+}
+
+export const MetricHistoryRangeSegmentedControl: Component<
+  MetricHistoryRangeSegmentedControlProps
+> = (props) => (
+  <FilterSegmentedControl
+    aria-label="Sparkline range"
+    value={props.range}
+    onChange={(value) => props.onRangeChange(value as WorkloadTableMetricHistoryRange)}
+    options={WORKLOAD_TABLE_HISTORY_RANGES.map((range) => ({
+      value: range,
+      title: `Show table sparklines for ${WORKLOAD_TABLE_HISTORY_RANGE_LABELS[range]}`,
+      label: WORKLOAD_TABLE_HISTORY_RANGE_LABELS[range],
+    }))}
+  />
+);
+
 export const MetricDisplayModeSegmentedControl: Component<
   MetricDisplayModeSegmentedControlProps
 > = (props) => {
@@ -59,15 +79,9 @@ export const MetricDisplayModeSegmentedControl: Component<
         ]}
       />
       <Show when={local.value === 'sparklines' && local.range && local.onRangeChange}>
-        <FilterSegmentedControl
-          aria-label="Sparkline range"
-          value={local.range!}
-          onChange={(value) => local.onRangeChange?.(value as WorkloadTableMetricHistoryRange)}
-          options={WORKLOAD_TABLE_HISTORY_RANGES.map((range) => ({
-            value: range,
-            title: `Show table sparklines for ${WORKLOAD_TABLE_HISTORY_RANGE_LABELS[range]}`,
-            label: WORKLOAD_TABLE_HISTORY_RANGE_LABELS[range],
-          }))}
+        <MetricHistoryRangeSegmentedControl
+          range={local.range!}
+          onRangeChange={local.onRangeChange!}
         />
       </Show>
     </div>

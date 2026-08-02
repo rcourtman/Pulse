@@ -12,12 +12,12 @@ import { clearFilter, isFilterSet, type FilterBarProps, type FilterDef } from '.
 const FilterBarClearAllButton: Component<{ onClick: () => void }> = (props) => (
   <FilterActionButton
     onClick={props.onClick}
-    aria-label="Clear all"
-    title="Reset filters"
+    aria-label="Clear filters"
+    title="Clear filters"
     class="text-blue-600 dark:text-blue-400"
   >
     <RotateCcwIcon class="h-3 w-3" />
-    Reset
+    Clear filters
   </FilterActionButton>
 );
 
@@ -147,20 +147,28 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
               <FilterBarRailDivider />
             </Show>
             <Show when={hasMenuFilters()}>
-              <AddFilterMenu filters={menuFilters()} />
+              <AddFilterMenu
+                filters={menuFilters()}
+                showLabel={props.showAddFilterLabel !== false}
+              />
             </Show>
             <Show when={props.savedViewsKey}>{(key) => <SavedViewsMenu storageKey={key()} />}</Show>
-            <Show when={(hasMenuFilters() || hasSavedViews()) && hasDesktopViewOptions()}>
+            <Show when={hasClearableState()}>
+              <FilterBarRailDivider />
+              <FilterBarClearAllButton onClick={clearAll} />
+            </Show>
+            <Show
+              when={
+                (hasMenuFilters() || hasSavedViews() || hasClearableState()) &&
+                hasDesktopViewOptions()
+              }
+            >
               <FilterBarRailDivider />
             </Show>
             <Show when={props.viewOptionsTrailing}>
               <div class="inline-flex flex-shrink-0 flex-wrap items-center gap-2">
                 {props.viewOptionsTrailing}
               </div>
-            </Show>
-            <Show when={hasClearableState()}>
-              <FilterBarRailDivider />
-              <FilterBarClearAllButton onClick={clearAll} />
             </Show>
           </div>
         </Show>
@@ -179,7 +187,10 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             <For each={activeMenuFilters()}>{(filter) => <FilterChip filter={filter} />}</For>
             <Show when={showMobileBody()}>
               <Show when={hasMenuFilters()}>
-                <AddFilterMenu filters={menuFilters()} />
+                <AddFilterMenu
+                  filters={menuFilters()}
+                  showLabel={props.showAddFilterLabel !== false}
+                />
               </Show>
               <Show when={props.savedViewsKey}>
                 {(key) => <SavedViewsMenu storageKey={key()} />}

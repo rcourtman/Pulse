@@ -2,6 +2,7 @@ export { FilterBar } from './FilterBar';
 export { FilterChip } from './FilterChip';
 export { AddFilterMenu } from './AddFilterMenu';
 export { SavedViewsMenu } from './SavedViewsMenu';
+export { ViewOptionsMenu } from './ViewOptionsMenu';
 export { useSavedViews } from './useSavedViews';
 export type { SavedView } from './useSavedViews';
 export { filterChipStatusDot } from './filterOptionPresentation';

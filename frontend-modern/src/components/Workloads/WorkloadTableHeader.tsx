@@ -7,6 +7,7 @@ import {
 } from '@/features/platformPage/columnAlignment';
 
 import { getGuestColumnStyle } from './guestRowModel';
+import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 import type { WorkloadsState, WorkloadSortKey } from './useWorkloadsState';
 
 type WorkloadTableHeaderProps = Pick<
@@ -16,10 +17,18 @@ type WorkloadTableHeaderProps = Pick<
   | 'sortDirection'
   | 'sortKey'
   | 'visibleColumns'
+  | 'workloadMemoryDisplayBasis'
   | 'workloadTableLayoutMode'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
 >;
+
+export const getWorkloadColumnHeaderLabel = (
+  columnId: string,
+  defaultLabel: string,
+  memoryDisplayBasis: WorkloadsMemoryDisplayBasis,
+): string =>
+  columnId === 'memory' && memoryDisplayBasis === 'host' ? `${defaultLabel} · Host` : defaultLabel;
 
 // Canonical alignment per column kind (see
 // frontend-modern/src/features/platformPage/columnAlignment.ts).
@@ -52,6 +61,8 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
             const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
             const isSortable = !!sortKeyForCol;
             const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;
+            const label = () =>
+              getWorkloadColumnHeaderLabel(col.id, col.label, props.workloadMemoryDisplayBasis());
 
             return (
               <TableHead
@@ -66,7 +77,13 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                   props.workloadTableVisibleColumnIds(),
                 )}
                 onClick={() => isSortable && props.handleSort(sortKeyForCol!)}
-                title={col.icon ? col.label : undefined}
+                title={
+                  col.id === 'memory' && props.workloadMemoryDisplayBasis() === 'host'
+                    ? 'Memory as a percentage of host capacity'
+                    : col.icon
+                      ? col.label
+                      : undefined
+                }
               >
                 <div class={`flex min-h-[14px] items-center gap-0.5 ${alignClasses().flexJustify}`}>
                   {col.icon ? (
@@ -74,10 +91,10 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                       <span class="flex items-center" aria-hidden="true">
                         {col.icon}
                       </span>
-                      <span class="sr-only">{col.label}</span>
+                      <span class="sr-only">{label()}</span>
                     </>
                   ) : (
-                    col.label
+                    label()
                   )}
                   {isSorted() && (props.sortDirection() === 'asc' ? ' ▲' : ' ▼')}
                 </div>

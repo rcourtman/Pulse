@@ -1236,12 +1236,21 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(workloadsWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(workloadsWorkloadTableSource).toContain('TableCard');
+      expect(workloadsWorkloadTableSource).toContain(
+        'workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}',
+      );
       expect(workloadsFilterSource).toContain('MetricDisplayModeSegmentedControl');
+      expect(workloadsFilterSource).toContain('ViewOptionsMenu');
+      expect(workloadsFilterSource).toContain('MetricHistoryRangeSegmentedControl');
+      expect(workloadsFilterSource).toContain('showAddFilterLabel={false}');
+      expect(workloadsFilterSource).not.toContain('label="Memory %"');
       expect(workloadsFilterSource).toContain('metricHistoryRange');
       expect(metricDisplayModeSegmentedControlSource).toContain(
         'WORKLOAD_TABLE_HISTORY_RANGES.map',
       );
       expect(metricDisplayModeSegmentedControlSource).toContain('aria-label="Sparkline range"');
+      expect(workloadTableHeaderSource).toContain('getWorkloadColumnHeaderLabel');
+      expect(workloadTableHeaderSource).toContain('`${defaultLabel} · Host`');
       expect(workloadsFilterSource).toContain('pinnedSelectionActive');
       expect(workloadsFilterSource).toContain('Clear selection');
       expect(workloadsFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
@@ -1493,7 +1502,7 @@ describe('Workloads performance contract', () => {
       expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');
       expect(workloadTableHeaderSource).toContain('aria-hidden="true"');
-      expect(workloadTableHeaderSource).toContain('<span class="sr-only">{col.label}</span>');
+      expect(workloadTableHeaderSource).toContain('<span class="sr-only">{label()}</span>');
       expect(workloadTableHeaderSource).not.toContain('style={{');
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('NodeGroupHeader');

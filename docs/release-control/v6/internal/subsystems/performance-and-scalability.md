@@ -1623,18 +1623,17 @@ Workloads table-mode controls must also keep their accessible group name aligned
 with the shared table presentation contract by using `Group by` for the
 grouped/list selector instead of reintroducing local `Group By` casing or
 platform-specific cluster wording. Dense workload toolbar variants must keep
-that same row wrap-capable so optional runtime, chart, column, and reset
-controls remain reachable on desktop instead of forcing a single no-wrap row
-that clips trailing actions. The workload shell now routes table display
-actions such as grouped/list mode and chart visibility through the shared
-`FilterBar.viewOptionsTrailing` slot, leaving filter chips as primary toolbar
-children so the display-action cluster wraps together with Columns and the
-"+ Filter" menu across narrow desktop widths. On platform-first embedded
-surfaces such as Proxmox, the visible filter rail follows the v5 pattern:
-full-width search, then unlabeled compact Type/Status, grouped/list,
-bars/trends, Columns, and Reset controls from the shared segmented/action
-primitives rather than page-local button styling. Workload chart visibility is a display preference, not
-an in-summary collapse affordance: the toolbar action must expose explicit
+the filter and presentation rails wrap-capable instead of forcing a single
+no-wrap row that clips trailing actions. The workload shell leaves Type,
+Status, dynamic scope, saved views, and contextual `Clear filters` actions on
+the primary filter rail. Durable presentation choices — grouped/list mode,
+bars/trends, chart visibility, Guest/Host memory basis, and Columns — compose
+the shared `ViewOptionsMenu` through `FilterBar.viewOptionsTrailing` instead of
+rendering as equally prominent filter toggles. The sparkline range remains
+inline only while trends are active because it is the frequently changed
+analytical window. On Proxmox, the non-default Host basis must remain visible
+in the workload memory column header after the View menu closes. Workload chart
+visibility remains a display preference: its menu action must expose explicit
 `Show charts` / `Hide charts` pressed state, and hiding charts must remove the
 summary section rather than leaving an empty collapsed summary band on screen.
 The Workloads-owned filter-config assembly now lives in

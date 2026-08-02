@@ -201,7 +201,7 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
       '/kubernetes/workloads?q=-cache&status=offline&cluster=cluster-1&namespace=prod',
     );
 
-    fireEvent.click(screen.getByLabelText('Clear all'));
+    fireEvent.click(screen.getByLabelText('Clear filters'));
 
     // A multi-write reset would leave earlier-cleared params resurrected by
     // later writes (each merges against the pre-navigation URL); the settled

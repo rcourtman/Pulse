@@ -54,6 +54,8 @@ export interface FilterBarProps {
   ariaLabel?: string;
   onClearAll?: () => void;
   showClearAll?: Accessor<boolean>;
+  /** Hide the redundant visible "Filter" label while preserving the select's accessible name. */
+  showAddFilterLabel?: boolean;
   /**
    * When set, render a "Saved views" menu next to the Filter selector that persists
    * named filter combinations (URL query strings) to localStorage under

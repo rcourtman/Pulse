@@ -14,6 +14,7 @@ import {
 
 interface AddFilterMenuProps {
   filters: FilterDef[];
+  showLabel?: boolean;
 }
 
 interface SelectableFilterOption {
@@ -107,7 +108,7 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
       id={selectId}
       label="Filter"
       fieldBaseClass={`${filterGroupClass} flex-shrink-0`}
-      labelClass={filterLabelClass}
+      labelClass={props.showLabel === false ? 'sr-only' : filterLabelClass}
       selectBaseClass={filterSelectClass}
       selectClass="min-w-[9rem] disabled:cursor-not-allowed disabled:opacity-50"
       value=""

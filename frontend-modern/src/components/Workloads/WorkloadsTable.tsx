@@ -96,6 +96,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             sortDirection={props.sortDirection}
             sortKey={props.sortKey}
             visibleColumns={props.visibleColumns}
+            workloadMemoryDisplayBasis={props.workloadMemoryDisplayBasis}
             workloadTableLayoutMode={props.workloadTableLayoutMode}
             workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={props.workloadTableVisibleColumns}

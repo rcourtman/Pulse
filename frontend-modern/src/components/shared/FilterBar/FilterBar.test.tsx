@@ -101,7 +101,7 @@ describe('FilterBar', () => {
       within(screen.getByRole('group', { name: 'Type' })).getByRole('button', { name: 'VMs' }),
     ).toHaveAttribute('aria-pressed', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
 
@@ -147,6 +147,38 @@ describe('FilterBar', () => {
     ));
 
     fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
-    expect(screen.getAllByRole('button', { name: 'Clear all' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Clear filters' })).toHaveLength(1);
+  });
+
+  it('keeps clear filters with filter actions before the presentation controls', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(vi.fn(), 'vm')]}
+        isMobile={() => false}
+        viewOptionsTrailing={<button type="button">View</button>}
+      />
+    ));
+
+    const labels = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent?.trim())
+      .filter(Boolean);
+    expect(labels.indexOf('Clear filters')).toBeLessThan(labels.indexOf('View'));
+  });
+
+  it('can hide the redundant visual Filter label without changing the accessible name', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter()]}
+        isMobile={() => false}
+        showAddFilterLabel={false}
+      />
+    ));
+
+    const select = screen.getByRole('combobox', { name: 'Filter' });
+    const label = document.querySelector(`label[for="${select.id}"]`);
+    expect(label).toHaveClass('sr-only');
   });
 });
