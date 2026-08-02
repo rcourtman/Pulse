@@ -3938,6 +3938,10 @@ tips/history interaction runtime, and
 history-toggle copy plus history-menu button and row class policy. Future
 search-input-enhancement work should extend those owners instead of pushing
 history copy or menu presentation policy back into the shell.
+Search-history menus must remain full-width on narrow search surfaces while
+using a bounded desktop width aligned to the search field's leading edge; a
+full-page or full-toolbar search field must not turn the history popover into a
+screen-wide overlay that obscures unrelated controls.
 The shared search tips popover now follows that same owner split.
 `frontend-modern/src/components/shared/SearchTipsPopover.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useSearchTipsPopoverState.ts`

@@ -79,8 +79,32 @@ describe('SearchInput', () => {
     expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
+    expect(searchInputEnhancementsModelSource).toContain('w-full max-w-lg');
+    expect(searchInputEnhancementsModelSource).not.toContain('left-0 right-0 top-full');
     expect(searchInputEnhancementsModelSource).toContain('h-10 w-10');
     expect(searchInputEnhancementsModelSource).toContain('sm:h-7 sm:w-7');
+  });
+
+  it('caps the history menu on wide search surfaces without narrowing mobile layouts', () => {
+    const HistoryHarness = () => {
+      const [value, setValue] = createSignal('');
+
+      return (
+        <SearchInput
+          value={value}
+          onChange={setValue}
+          history={{ storageKey: 'pulse:test:search-history-width' }}
+        />
+      );
+    };
+
+    render(() => <HistoryHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show search history' }));
+
+    const historyMenu = screen.getByRole('listbox');
+    expect(historyMenu).toHaveClass('w-full', 'max-w-lg');
+    expect(historyMenu).not.toHaveClass('right-0');
   });
 
   it('captures typed characters by default when focus is outside the input', async () => {

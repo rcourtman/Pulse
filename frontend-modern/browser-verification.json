@@ -1,17 +1,13 @@
 {
   "version": 1,
-  "base_sha": "1ed7004d067f3bf451184da04754206b8ad3fe23",
-  "verified_at": "2026-08-02T20:11:54Z",
+  "base_sha": "b3dbc26d545b7526f62ed466884c4006f07cf8cb",
+  "verified_at": "2026-08-02T20:27:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts"
+    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx": "f5fcfb1db804ea313d3cf2c885423b67de2c707ea1f3cba3ce65c16f4085fb1f",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "438e37d0c1698584bb6dcb69ef01cd07c0d70b23a0f242e92ebff6771f1e98c9",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "2991ee70854100a4fbdd8f0e7adb066e9a3c2d7654e32e52c261a61048a3727c"
+    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts": "cd34929cd632fcf6eda163b34def13df0666d91f279e5df9e329ee8b0b05ee33"
   },
   "routes": [
     "/proxmox/overview"
@@ -22,37 +18,30 @@
       "height": 900
     },
     {
-      "width": 1024,
-      "height": 768
-    },
-    {
-      "width": 768,
-      "height": 800
-    },
-    {
       "width": 640,
       "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
     }
   ],
   "states": [
     "Desktop default filter toolbar",
-    "Desktop View preferences open",
-    "Desktop last available Node filter active",
-    "Tablet default filter toolbar",
-    "Tablet View preferences open",
-    "Tablet Columns disclosure open",
-    "Narrow filter controls collapsed",
-    "Narrow filter controls expanded",
-    "Narrow last available Node filter active",
-    "Narrow cleared filter state with Add filter restored"
+    "Desktop empty search-history menu",
+    "Desktop populated search-history menu",
+    "Desktop active search with history closed",
+    "Tablet-width empty search-history menu",
+    "Phone-width populated search-history menu",
+    "Restored empty search and cleared history"
   ],
   "interactions": [
-    "Opened View preferences at desktop and tablet widths and confirmed the panel remained inside the viewport",
-    "Opened Columns at the 768px breakpoint and confirmed its content remained reachable above the bottom navigation",
-    "Expanded narrow filter controls and selected Node pve1",
-    "Confirmed the exhausted Add filter control disappeared while the active chip, Saved, Clear filters, and View controls remained usable",
-    "Cleared the active Node filter and confirmed Add filter and its Node option returned",
-    "Repeated the last-filter activation and clear-and-restore flow at 1280px",
-    "Checked browser console warnings and errors"
+    "Opened the empty search-history menu and confirmed it remained bounded to 512px on the 1280px desktop viewport",
+    "Confirmed the same menu used the full available search width at 640px and 390px",
+    "Measured zero document-level horizontal overflow at all three verified widths",
+    "Entered edge, committed it with Enter, and confirmed the search filtered the workload table",
+    "Reopened history and confirmed the populated entry and clear-history action rendered within the bounded menu",
+    "Closed history and confirmed the active-search filter toolbar remained usable",
+    "Cleared history and the active search, then confirmed the overview returned to its clean default state"
   ]
 }

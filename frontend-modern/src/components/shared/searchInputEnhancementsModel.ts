@@ -1,5 +1,5 @@
 export const SEARCH_HISTORY_MENU_CLASS =
-  'absolute left-0 right-0 top-full z-50 mt-2 w-full overflow-hidden rounded-md border border-border bg-surface text-sm shadow-sm';
+  'absolute left-0 top-full z-50 mt-2 w-full max-w-lg overflow-hidden rounded-md border border-border bg-surface text-sm shadow-sm';
 export const SEARCH_HISTORY_EMPTY_STATE_CLASS = 'px-3 py-2 text-xs text-muted';
 export const SEARCH_HISTORY_ROW_CLASS =
   'flex items-center justify-between px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900';
