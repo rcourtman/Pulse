@@ -67,6 +67,12 @@ export interface FilterBarProps {
 
 export const isFilterSet = (filter: FilterDef): boolean => filter.value() !== filter.defaultValue;
 
+export const hasSelectableFilterOptions = (filter: FilterDef): boolean =>
+  !isFilterSet(filter) && filter.options().some((option) => option.value !== filter.defaultValue);
+
+export const hasAddableFilterOptions = (filters: FilterDef[]): boolean =>
+  filters.some(hasSelectableFilterOptions);
+
 export const clearFilter = (filter: FilterDef): void => {
   filter.setValue(filter.defaultValue);
 };

@@ -7,7 +7,13 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { AddFilterMenu } from './AddFilterMenu';
 import { FilterChip } from './FilterChip';
 import { SavedViewsMenu } from './SavedViewsMenu';
-import { clearFilter, isFilterSet, type FilterBarProps, type FilterDef } from './filterCatalog';
+import {
+  clearFilter,
+  hasAddableFilterOptions,
+  isFilterSet,
+  type FilterBarProps,
+  type FilterDef,
+} from './filterCatalog';
 
 const FilterBarClearAllButton: Component<{ onClick: () => void }> = (props) => (
   <FilterActionButton
@@ -59,6 +65,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   const activeMenuFilters = createMemo<FilterDef[]>(() => menuFilters().filter(isFilterSet));
   const activeCount = createMemo(() => props.filters.filter(isFilterSet).length);
   const hasMenuFilters = createMemo(() => menuFilters().length > 0);
+  const hasAddableMenuFilters = createMemo(() => hasAddableFilterOptions(menuFilters()));
 
   const clearAll = () => {
     if (props.onClearAll) {
@@ -87,7 +94,8 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   const showMobileBody = () => props.isMobile() && mobileExpanded();
   const showChipRow = () =>
     showDesktopChipRow() ||
-    (showMobileBody() && (activeMenuFilters().length > 0 || hasMenuFilters() || hasSavedViews()));
+    (showMobileBody() &&
+      (activeMenuFilters().length > 0 || hasAddableMenuFilters() || hasSavedViews()));
 
   const searchHistory = () => {
     const key = props.search.historyKey;
@@ -141,12 +149,12 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             <Show
               when={
                 inlineFilters().length > 0 &&
-                (hasMenuFilters() || hasSavedViews() || hasDesktopViewOptions())
+                (hasAddableMenuFilters() || hasSavedViews() || hasDesktopViewOptions())
               }
             >
               <FilterBarRailDivider />
             </Show>
-            <Show when={hasMenuFilters()}>
+            <Show when={hasAddableMenuFilters()}>
               <AddFilterMenu
                 filters={menuFilters()}
                 showLabel={props.showAddFilterLabel !== false}
@@ -159,7 +167,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             </Show>
             <Show
               when={
-                (hasMenuFilters() || hasSavedViews() || hasClearableState()) &&
+                (hasAddableMenuFilters() || hasSavedViews() || hasClearableState()) &&
                 hasDesktopViewOptions()
               }
             >
@@ -186,7 +194,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
           <div class="flex flex-wrap items-center gap-2">
             <For each={activeMenuFilters()}>{(filter) => <FilterChip filter={filter} />}</For>
             <Show when={showMobileBody()}>
-              <Show when={hasMenuFilters()}>
+              <Show when={hasAddableMenuFilters()}>
                 <AddFilterMenu
                   filters={menuFilters()}
                   showLabel={props.showAddFilterLabel !== false}

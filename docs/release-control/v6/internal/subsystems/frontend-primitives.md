@@ -779,7 +779,9 @@ a page that needs filter-value search must keep that search inside the active
 filter chip or an explicit page-owned advanced selector. Platform-owned filter
 selectors must also exclude facet options from other platform scopes, even when
 the underlying shared surface is mounted from the same Workloads or Storage
-component.
+component. When every menu-backed filter is already active or has no selectable
+non-default value, the shared FilterBar must omit the exhausted Add filter
+control instead of leaving a disabled `No filters` affordance in the toolbar.
 Alert configuration tables follow the same primitive boundary: the alerts
 owner supplies platform-specific threshold groups and filter catalog values,
 while the shared FilterBar owns the chip, reset, and "+ Filter" interaction

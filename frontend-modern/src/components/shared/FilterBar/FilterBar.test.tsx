@@ -85,6 +85,20 @@ describe('FilterBar', () => {
     expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
   });
 
+  it('hides the add-filter trigger when every menu filter is already active', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter(vi.fn(), 'pve1')]}
+        isMobile={() => false}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Remove Node filter' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+  });
+
   it('shows clear-all beside inline controls when only inline filters are active', () => {
     const onClearAll = vi.fn();
 

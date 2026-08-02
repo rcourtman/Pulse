@@ -8121,6 +8121,9 @@ describe('shared primitive guardrails', () => {
       'export const clearFilter = (filter: FilterDef): void =>',
     );
     expect(filterCatalogSource).toContain('filter.value() !== filter.defaultValue');
+    expect(filterCatalogSource).toContain('export const hasSelectableFilterOptions');
+    expect(filterCatalogSource).toContain('export const hasAddableFilterOptions');
+    expect(filterCatalogSource).toContain('filters.some(hasSelectableFilterOptions)');
 
     expect(filterBarSource).toContain("import { Card } from '@/components/shared/Card';");
     expect(filterBarSource).toContain(
@@ -8134,6 +8137,9 @@ describe('shared primitive guardrails', () => {
     );
     expect(filterBarSource).toContain("import { AddFilterMenu } from './AddFilterMenu';");
     expect(filterBarSource).toContain("import { FilterChip } from './FilterChip';");
+    expect(filterBarSource).toContain('hasAddableFilterOptions,');
+    expect(filterBarSource).toContain('const hasAddableMenuFilters = createMemo');
+    expect(filterBarSource).toContain('<Show when={hasAddableMenuFilters()}>');
     expect(filterBarSource).toContain('props.filters.filter(isFilterSet)');
     expect(filterBarSource).toContain('activeCount() > 0');
     expect(filterBarSource).not.toContain('import { PageControls }');
@@ -8183,6 +8189,9 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain('<optgroup label={GROUP_LABELS[group.key]}>');
     expect(addFilterMenuSource).toContain('{filter.filter.label}: {option.option.label}');
     expect(addFilterMenuSource).toContain('selected.filter.setValue(selected.option.value)');
+    expect(addFilterMenuSource).toContain('<Show when={!isDisabled()}>');
+    expect(addFilterMenuSource).toContain('<option value="">Add filter</option>');
+    expect(addFilterMenuSource).not.toContain('No filters');
     expect(addFilterMenuSource).not.toContain('Search filters');
     expect(addFilterMenuSource).not.toContain('Search values');
 

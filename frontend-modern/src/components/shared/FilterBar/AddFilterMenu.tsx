@@ -1,4 +1,4 @@
-import { Component, For, createMemo, createUniqueId } from 'solid-js';
+import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
 import { filterGroupClass, filterLabelClass } from '@/components/shared/FilterToolbar';
 import { FormSelect } from '@/components/shared/FormSelect';
 import {
@@ -100,36 +100,37 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
   };
 
   return (
-    <FormSelect
-      id={selectId}
-      label="Filter"
-      fieldBaseClass={`${filterGroupClass} flex-shrink-0`}
-      labelClass={props.showLabel === false ? 'sr-only' : filterLabelClass}
-      selectBaseClass="rounded-md border border-transparent bg-surface-hover px-2 py-1 text-xs font-medium text-muted outline-none ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content focus:border-blue-500"
-      selectClass="min-w-[7.5rem] disabled:cursor-not-allowed disabled:opacity-50"
-      value=""
-      onChange={handleChange}
-      disabled={isDisabled()}
-      aria-label="Filter"
-    >
-      <option value="">{isDisabled() ? 'No filters' : 'Add filter'}</option>
-      <For each={selectableGroups()}>
-        {(group) => (
-          <optgroup label={GROUP_LABELS[group.key]}>
-            <For each={group.filters}>
-              {(filter) => (
-                <For each={filter.options}>
-                  {(option) => (
-                    <option value={option.token}>
-                      {filter.filter.label}: {option.option.label}
-                    </option>
-                  )}
-                </For>
-              )}
-            </For>
-          </optgroup>
-        )}
-      </For>
-    </FormSelect>
+    <Show when={!isDisabled()}>
+      <FormSelect
+        id={selectId}
+        label="Filter"
+        fieldBaseClass={`${filterGroupClass} flex-shrink-0`}
+        labelClass={props.showLabel === false ? 'sr-only' : filterLabelClass}
+        selectBaseClass="rounded-md border border-transparent bg-surface-hover px-2 py-1 text-xs font-medium text-muted outline-none ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content focus:border-blue-500"
+        selectClass="min-w-[7.5rem]"
+        value=""
+        onChange={handleChange}
+        aria-label="Filter"
+      >
+        <option value="">Add filter</option>
+        <For each={selectableGroups()}>
+          {(group) => (
+            <optgroup label={GROUP_LABELS[group.key]}>
+              <For each={group.filters}>
+                {(filter) => (
+                  <For each={filter.options}>
+                    {(option) => (
+                      <option value={option.token}>
+                        {filter.filter.label}: {option.option.label}
+                      </option>
+                    )}
+                  </For>
+                )}
+              </For>
+            </optgroup>
+          )}
+        </For>
+      </FormSelect>
+    </Show>
   );
 };

@@ -1656,6 +1656,11 @@ both the PVE scope and the `proxmox-all` aggregate expose only `All`, `VMs`, and
 The Type and Status filters must remain one-click inline `FilterBar` controls
 because they are the high-frequency workload narrowing path; dynamic scope
 filters such as node, platform, namespace, and runtime stay menu-backed.
+Once every menu-backed filter is active or lacks a selectable non-default
+option, the shared `FilterBar` must remove the exhausted Add filter control;
+clearing an active filter must restore it from the same catalog-derived state.
+Consumers must not add page-local availability scans or disabled placeholder
+controls to reproduce that behavior.
 The dashboard threshold slider now follows that same pattern: the shell stays
 in `frontend-modern/src/components/Workloads/ThresholdSlider.tsx`, while
 metric-type text and fill presentation live in
