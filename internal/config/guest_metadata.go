@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -195,7 +196,43 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 		}
 	}
 
+	// A guest that migrated to another cluster node keeps its VMID but shows
+	// up under a new node-scoped ID, orphaning its metadata (#1669). VMIDs
+	// are unique within a Proxmox cluster, so an entry for the same instance
+	// and VMID on a different node belongs to this guest.
+	if movedID := s.findGuestIDOnOtherNode(guestID, instance, vmID); movedID != "" {
+		if result := migrate(movedID); result != nil {
+			return result
+		}
+	}
+
 	return nil
+}
+
+// findGuestIDOnOtherNode returns a stored metadata ID for the same instance
+// and VMID under a different node, or "" when none exists.
+func (s *GuestMetadataStore) findGuestIDOnOtherNode(guestID, instance string, vmID int) string {
+	prefix := instance + ":"
+	suffix := fmt.Sprintf(":%d", vmID)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for id := range s.metadata {
+		if id == guestID || len(id) <= len(prefix)+len(suffix) {
+			continue
+		}
+		if !strings.HasPrefix(id, prefix) || !strings.HasSuffix(id, suffix) {
+			continue
+		}
+		// The middle segment must be exactly one node name: an ID with more
+		// separators is a different key shape, not a node-scoped guest ID.
+		middle := id[len(prefix) : len(id)-len(suffix)]
+		if middle == "" || strings.Contains(middle, ":") {
+			continue
+		}
+		return id
+	}
+	return ""
 }
 
 // GetAll retrieves all guest metadata

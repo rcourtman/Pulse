@@ -710,3 +710,49 @@ func TestGuestMetadataStoreUpdateAllRollsBackFailedPersistence(t *testing.T) {
 		t.Fatalf("failed update remained in memory: %#v", meta)
 	}
 }
+
+// Issue #1669: a guest migrating to another cluster node keeps its VMID but
+// gets a new node-scoped ID, which orphaned its metadata (custom URL, tags,
+// notes). The store must follow the guest across nodes.
+func TestGuestMetadataStore_GetWithLegacyMigration_NodeMigration(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := NewGuestMetadataStore(tmpDir, nil)
+
+	store.metadata["pve1:node1:100"] = &GuestMetadata{
+		ID:        "pve1:node1:100",
+		CustomURL: "http://haos.example",
+		Tags:      []string{"prod"},
+	}
+
+	// The guest moved from node1 to node2.
+	result := store.GetWithLegacyMigration("pve1:node2:100", "pve1", "node2", 100)
+	if result == nil {
+		t.Fatal("expected metadata to follow the guest to its new node")
+	}
+	if result.CustomURL != "http://haos.example" {
+		t.Errorf("CustomURL = %q, want %q", result.CustomURL, "http://haos.example")
+	}
+	if result.ID != "pve1:node2:100" {
+		t.Errorf("migrated ID = %q, want %q", result.ID, "pve1:node2:100")
+	}
+	if store.Get("pve1:node1:100") != nil {
+		t.Error("expected old node-scoped entry to be removed after migration")
+	}
+}
+
+// A different VMID or a different instance must never be treated as the same
+// guest.
+func TestGuestMetadataStore_GetWithLegacyMigration_NodeMigrationDoesNotCrossGuests(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := NewGuestMetadataStore(tmpDir, nil)
+
+	store.metadata["pve1:node1:101"] = &GuestMetadata{ID: "pve1:node1:101", CustomURL: "http://other-guest"}
+	store.metadata["pve2:node1:100"] = &GuestMetadata{ID: "pve2:node1:100", CustomURL: "http://other-instance"}
+
+	if result := store.GetWithLegacyMigration("pve1:node2:100", "pve1", "node2", 100); result != nil {
+		t.Fatalf("expected no migration across guests, got %+v", result)
+	}
+	if store.Get("pve1:node1:101") == nil || store.Get("pve2:node1:100") == nil {
+		t.Error("unrelated entries must remain untouched")
+	}
+}
