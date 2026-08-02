@@ -116,6 +116,7 @@ Pulse is available in three self-hosted tiers plus hosted Cloud:
 - **[API Reference](API.md)** – Complete REST API documentation.
 - **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
 - **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
+- **[AI-Assisted Development](AI_TRANSPARENCY.md)** – How AI tools are used to build and maintain Pulse, and where their output is labelled.
 
 ## 📁 Previous Versions
 
