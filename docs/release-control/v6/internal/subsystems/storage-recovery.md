@@ -432,6 +432,16 @@ meaningful for the backup-health row, while dense integer count presentation
 belongs to `frontend-primitives`: backup count cells must compose
 `PlatformTableNumberValue` with `formatPlatformTableIntegerValue` instead of
 reintroducing local `toLocaleString()` formatting.
+The Proxmox Backups toolbar is durable recovery navigation, not transient
+component state. Search, active workspace, node, guest type, source, posture,
+and selected activity day use the canonical `PROXMOX_BACKUPS_QUERY_PARAMS`
+keys in `frontend-modern/src/routing/resourceLinks.ts` so reloads, shared links,
+and `proxmox-backups` saved views restore the same result set. Switching to
+`By date` clears the hidden coverage posture; switching to `Coverage` clears
+the hidden source and selected day in the same route write. Contextual
+`Clear filters` clears every narrowing parameter in one write while retaining
+the active workspace, so a reset cannot resurrect an earlier filter or move
+the operator to a different recovery workflow.
 PBS server/datastore utilization follows the same split: storage/recovery owns
 which datastore usage percentage is meaningful for backup-health risk, while
 frontend-primitives owns one-decimal percent presentation through

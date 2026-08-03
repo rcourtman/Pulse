@@ -3919,6 +3919,13 @@ to `StandalonePageSurface`, and supplies the `standalone-machines` saved-view
 scope to `AgentsMachinesTable`; it must not mix a local search signal with a
 route-owned status facet or issue consecutive route writes that can resurrect
 one cleared parameter.
+The Proxmox Backups surface follows the same saved-view boundary with
+`PROXMOX_BACKUPS_QUERY_PARAMS`: search, workspace, scope, per-workspace facet,
+and selected activity day are all route-owned before `savedViewsKey` is set.
+Its feature owner may clear incompatible hidden facets when the workspace
+changes and may preserve that workspace during a composite reset, but the
+shared `FilterBar` remains the sole owner of Saved, Clear, filter-menu, and
+popover chrome across desktop and narrow layouts.
 Because that popover combines view application, default selection, removal,
 and an inline naming form, it is a labelled non-modal dialog rather than an
 ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -196,6 +196,7 @@ const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, '', '/');
   apiFetchMock.mockReset();
   apiFetchJSONMock.mockReset();
 });
@@ -286,6 +287,75 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByRole('button', { name: /source details/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /job history/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /pbs artifacts/i })).not.toBeInTheDocument();
+  });
+
+  it('hydrates the complete saved-view filter state from the URL and clears it atomically', async () => {
+    mockBackupAPIs();
+    window.history.replaceState(
+      {},
+      '',
+      '/?view=date&q=pbs-docker&source=pbs&node=pve-a&type=ct&day=2026-05-25',
+    );
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await screen.findAllByText('pbs-docker');
+    expect(screen.getByRole('button', { name: /by date/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('pbs-docker');
+    expect(screen.getByRole('button', { name: /pbs snapshots/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /clear date filter/i })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
+
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('view')).toBe('date');
+      expect(params.get('q')).toBeNull();
+      expect(params.get('source')).toBeNull();
+      expect(params.get('node')).toBeNull();
+      expect(params.get('type')).toBeNull();
+      expect(params.get('day')).toBeNull();
+    });
+    expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('');
+  });
+
+  it('clears incompatible URL facets when switching backup views', async () => {
+    mockBackupAPIs();
+    window.history.replaceState({}, '', '/?view=date&source=pbs&day=2026-05-25');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await screen.findAllByText('pbs-docker');
+    await fireEvent.click(screen.getByRole('button', { name: /coverage/i }));
+
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('view')).toBe('coverage');
+      expect(params.get('source')).toBeNull();
+      expect(params.get('day')).toBeNull();
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: /^protected$/i }));
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('posture')).toBe('protected'),
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: /by date/i }));
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('view')).toBe('date');
+      expect(params.get('posture')).toBeNull();
+    });
   });
 
   it('switches to Coverage showing posture, and keeps per-source evidence in the row expansion', async () => {

@@ -1230,6 +1230,12 @@ AI-only summary payloads, or page-local heuristics.
     set. Those query parameters must only narrow the already-owned agent
     projection; they must not cause provider nodes or availability endpoints to
     enter the Machines membership bucket.
+    `PROXMOX_BACKUPS_QUERY_PARAMS` in the same shared route-helper module is
+    storage/recovery-owned filter and workspace state for the Proxmox Backups
+    surface. Its query, view, node, type, source, posture, and day keys may
+    narrow already-correlated backup rows, but they do not add unified-resource
+    membership, change canonical workload identity, or turn recovery evidence
+    into a provider-resource projection.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates, and visible
     workflow subtabs must stay evidence-gated by the same canonical row or

@@ -7,6 +7,7 @@ import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useProtectionPostures } from '@/hooks/useProtectionPostures';
+import { PROXMOX_BACKUPS_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { apiFetch } from '@/utils/apiClient';
 import {
   PlatformErrorState,
@@ -103,17 +104,65 @@ export const ProxmoxBackupsTable: Component<{
     (props.workloads ?? []).map((workload) => workload.id),
   );
 
-  // Structured scope filters (node, type) live in the URL so the view is
-  // shareable, survives reload, and can be captured by FilterBar saved views.
-  // Search, the view toggle, and status facets stay ephemeral signals.
+  // Saved views persist the current route query, so every filter and the active
+  // backup workspace must share one URL owner. View changes also clear the
+  // incompatible per-view facet in the same navigation so hidden Posture,
+  // Source, or day filters cannot survive behind the other workspace.
   const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = createSignal('');
-  const [selectedView, setSelectedView] = createSignal<BackupView | null>(null);
-  const [coverageFilter, setCoverageFilter] = createSignal<CoverageFilterValue>('all');
-  const [recoverableFilter, setRecoverableFilter] = createSignal<RecoverableFilterValue>('all');
+  const queryValue = (key: string): string => {
+    const value = searchParams[key];
+    return typeof value === 'string' ? value : '';
+  };
+  const search = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.query);
+  const setSearch = (value: string): void =>
+    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.query]: value || null }, { replace: true });
+  const selectedView = (): BackupView | null => {
+    const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.view);
+    return value === 'date' || value === 'coverage' ? value : null;
+  };
+  const coverageFilter = (): CoverageFilterValue => {
+    const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
+    return value === 'attention' ||
+      value === 'protected' ||
+      value === 'unprotected' ||
+      value === 'unknown'
+      ? value
+      : 'all';
+  };
+  const setCoverageFilter = (value: CoverageFilterValue): void =>
+    setSearchParams(
+      {
+        [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: value === 'all' ? null : value,
+      },
+      { replace: true },
+    );
+  const recoverableFilter = (): RecoverableFilterValue => {
+    const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.source);
+    return value === 'pbs' ||
+      value === 'archive' ||
+      value === 'snapshot' ||
+      value === 'verified' ||
+      value === 'unverified'
+      ? value
+      : 'all';
+  };
+  const setRecoverableFilter = (value: RecoverableFilterValue): void =>
+    setSearchParams(
+      {
+        [PROXMOX_BACKUPS_QUERY_PARAMS.source]: value === 'all' ? null : value,
+      },
+      { replace: true },
+    );
+  const selectedDateKey = (): string | null => {
+    const value = queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.day);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+  };
+  const setSelectedDateKey = (value: string | null): void =>
+    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.day]: value || null }, { replace: true });
 
-  const nodeFilter = (): string => (typeof searchParams.node === 'string' ? searchParams.node : '');
-  const setNodeFilter = (value: string): void => setSearchParams({ node: value || null });
+  const nodeFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.node);
+  const setNodeFilter = (value: string): void =>
+    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.node]: value || null }, { replace: true });
   const nodeMatches = (node: string | undefined): boolean => {
     const selected = nodeFilter();
     return !selected || node === selected;
@@ -121,8 +170,9 @@ export const ProxmoxBackupsTable: Component<{
 
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
   // comparing, since the recovery model keeps PBS-native ct internally.
-  const typeFilter = (): string => (typeof searchParams.type === 'string' ? searchParams.type : '');
-  const setTypeFilter = (value: string): void => setSearchParams({ type: value || null });
+  const typeFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.type);
+  const setTypeFilter = (value: string): void =>
+    setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.type]: value || null }, { replace: true });
   const canonicalGuestType = (raw: string | undefined): string => {
     const t = (raw ?? '').toLowerCase();
     if (t === 'vm' || t === 'qemu') return 'vm';
@@ -157,7 +207,6 @@ export const ProxmoxBackupsTable: Component<{
     'desc',
   );
   const [chartRange, setChartRange] = createSignal<BackupActivityRangeDays>(30);
-  const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [recoverableMetricMode, setRecoverableMetricMode] =
     createSignal<BackupActivityMetricMode>('count');
 
@@ -184,8 +233,7 @@ export const ProxmoxBackupsTable: Component<{
       else next.add(key);
       return next;
     });
-  const toggleDay = (key: string) =>
-    setSelectedDateKey((current) => (current === key ? null : key));
+  const toggleDay = (key: string) => setSelectedDateKey(selectedDateKey() === key ? null : key);
 
   const pbsArtifacts = createMemo<PBSBackup[]>(() => pbsBackups()?.backups ?? []);
   const snapshots = createMemo<GuestSnapshot[]>(() => backups()?.guestSnapshots ?? []);
@@ -311,7 +359,24 @@ export const ProxmoxBackupsTable: Component<{
       ? 'coverage'
       : 'date');
   const setView = (next: BackupView): void => {
-    setSelectedView(next);
+    if (next === 'date') {
+      setSearchParams(
+        {
+          [PROXMOX_BACKUPS_QUERY_PARAMS.view]: next,
+          [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: null,
+        },
+        { replace: true },
+      );
+      return;
+    }
+    setSearchParams(
+      {
+        [PROXMOX_BACKUPS_QUERY_PARAMS.view]: next,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.source]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.day]: null,
+      },
+      { replace: true },
+    );
   };
 
   // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest snapshot rows.
@@ -447,6 +512,27 @@ export const ProxmoxBackupsTable: Component<{
     }
     return filters;
   };
+  const hasActiveBackupsFilters = (): boolean =>
+    Boolean(
+      search().trim() ||
+      nodeFilter() ||
+      typeFilter() ||
+      coverageFilter() !== 'all' ||
+      recoverableFilter() !== 'all' ||
+      selectedDateKey(),
+    );
+  const resetBackupsFilters = (): void =>
+    setSearchParams(
+      {
+        [PROXMOX_BACKUPS_QUERY_PARAMS.query]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.node]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.type]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.source]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.posture]: null,
+        [PROXMOX_BACKUPS_QUERY_PARAMS.day]: null,
+      },
+      { replace: true },
+    );
 
   return (
     <Show
@@ -613,6 +699,8 @@ export const ProxmoxBackupsTable: Component<{
             }}
             filters={buildBackupsFilters()}
             savedViewsKey="proxmox-backups"
+            showClearAll={hasActiveBackupsFilters}
+            onClearAll={resetBackupsFilters}
             searchTrailing={
               <Show when={view() === 'date' && selectedDateKey() !== null}>
                 <button

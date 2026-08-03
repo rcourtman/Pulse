@@ -1,27 +1,21 @@
 {
   "version": 1,
-  "base_sha": "d755c61f6a6c90b12cb662930ee8aee465cb9c1a",
-  "verified_at": "2026-08-03T10:24:03Z",
+  "base_sha": "59eb6dd68f3f1f7ac58639c2b82099eb076c14bc",
+  "verified_at": "2026-08-03T10:53:05Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
     "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "e76b316e4335792819ddb3148f819618d342716da0f7e1cde5c3e3cb7eb52682",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "f3b12c4ad25647e28fa616893a9befe3fce7419b76cf142ea74bed3bdf15ffa6",
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "ead97d3c4f3554e6e5722ccef2e800562c54032130649b19538dc87229c7cde6",
-    "frontend-modern/src/routing/resourceLinks.ts": "66d0ba02bbe31d0e840b933f8f47e80b1f05aa778e5e34127f3385339edc381e"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "6c838d09098ea243c8368753ef0f00c80cf11b59c7cbcd5f62750bba75fbafb2",
+    "frontend-modern/src/routing/resourceLinks.ts": "c57c920355766f401923340b746614e02b6e6a40fbd871bfd3be47611d952e93"
   },
-  "routes": [
-    "/standalone/machines"
-  ],
+  "routes": ["/proxmox/backups"],
   "viewports": [
     {
       "width": 1280,
-      "height": 900
+      "height": 720
     },
     {
       "width": 390,
@@ -29,22 +23,21 @@
     }
   ],
   "states": [
-    "Desktop Machines toolbar with matching Saved and View triggers in the default state",
-    "Desktop Machines filtered by URL-backed search and Healthy status with one matching row",
-    "Saved view menu empty, named-view, default-view, and removed-view states",
-    "Phone-width Machines toolbar collapsed and expanded with an active filter count",
-    "Phone-width expanded action rail with Saved, Clear filters, and View kept together while the result count wraps separately",
-    "Phone-width Saved views and View preferences popovers, including the expanded Columns disclosure"
+    "Desktop Proxmox Backups default Coverage workspace with Posture filtering",
+    "Desktop By date workspace with URL-backed search and PBS snapshots source filtering",
+    "Desktop Saved views empty, named-view, restored-view, and removed-view states",
+    "Phone-width filter shell collapsed and expanded in Coverage and By date workspaces",
+    "Phone-width Saved views dialog bounded within the viewport with active filter state"
   ],
   "interactions": [
-    "Entered Apollo search text, selected Healthy, and confirmed the route became ?q=Apollo&status=online",
-    "Saved the filtered slice as Apollo healthy, applied it after clearing, set it as the default, and confirmed a fresh landing restored both URL parameters",
-    "Loaded an explicit ?q=Meridian deep link and confirmed the default saved view did not override it",
-    "Cleared the combined search and status state and confirmed one navigation returned the route to /standalone/machines without resurrecting q",
-    "Expanded the phone-width filter shell and confirmed Saved, Clear filters, and View remain on one line with no horizontal document overflow",
-    "Opened Saved, switched directly to View, expanded Columns, dismissed View by outside click, and verified the panels stayed viewport-bounded",
-    "Dismissed the Saved naming prompt and menu with Escape and confirmed focus returned first to the save action and then to the Saved trigger",
-    "Removed the temporary saved view and repeated the final desktop and phone-width layout, reset, overflow, and console checks",
-    "Read the browser console after the final responsive interaction pass and confirmed no warnings or errors"
+    "Switched from Coverage to By date and confirmed the incompatible posture parameter was removed in the same navigation",
+    "Entered backup-vault search text, selected PBS snapshots, and confirmed the route became ?view=date&q=backup-vault&source=pbs",
+    "Saved the filtered slice as Backup URL audit, cleared it, reapplied it, and confirmed the exact query string and visible controls were restored",
+    "Reloaded the explicit deep link and confirmed search and source state remained selected",
+    "Cleared the combined filter state and confirmed one navigation retained ?view=date while removing every narrowing parameter",
+    "Removed the temporary saved view and confirmed the Saved count returned to zero",
+    "Expanded the phone-width filter shell, selected Unknown posture, switched to By date, and confirmed hidden posture state did not survive",
+    "Opened and dismissed the phone-width Saved dialog with Escape and confirmed it stayed viewport-bounded without document overflow",
+    "Read both browser consoles after the final responsive pass and confirmed no warnings or errors"
   ]
 }

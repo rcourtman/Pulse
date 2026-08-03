@@ -24,6 +24,15 @@ export const STANDALONE_QUERY_PARAMS = {
 } as const;
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
+export const PROXMOX_BACKUPS_QUERY_PARAMS = {
+  query: 'q',
+  view: 'view',
+  node: 'node',
+  type: 'type',
+  source: 'source',
+  posture: 'posture',
+  day: 'day',
+} as const;
 export const DOCKER_PATH = '/docker';
 export const DOCKER_DEFAULT_TAB = 'overview';
 export const KUBERNETES_PATH = '/kubernetes';

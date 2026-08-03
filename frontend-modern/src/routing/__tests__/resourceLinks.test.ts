@@ -34,6 +34,7 @@ import {
   SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH,
   SETTINGS_PULSE_INTELLIGENCE_PATH,
   isExternalAgentSetupHash,
+  PROXMOX_BACKUPS_QUERY_PARAMS,
   PROXMOX_DEFAULT_TAB,
   PROXMOX_PATH,
   RECOVERY_QUERY_PARAMS,
@@ -161,6 +162,15 @@ describe('resource link routing contract', () => {
   it('builds canonical Proxmox platform tab paths', () => {
     expect(PROXMOX_PATH).toBe('/proxmox');
     expect(PROXMOX_DEFAULT_TAB).toBe('overview');
+    expect(PROXMOX_BACKUPS_QUERY_PARAMS).toEqual({
+      query: 'q',
+      view: 'view',
+      node: 'node',
+      type: 'type',
+      source: 'source',
+      posture: 'posture',
+      day: 'day',
+    });
     expect(buildProxmoxPath()).toBe('/proxmox/overview');
     expect(buildProxmoxPath('/storage/')).toBe('/proxmox/storage');
     expect(buildProxmoxPath('')).toBe('/proxmox');
