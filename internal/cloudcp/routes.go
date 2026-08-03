@@ -137,10 +137,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Stripe webhook (signature-authenticated)
 	hostedEntitlements := deps.HostedEntitlements
 	if hostedEntitlements == nil {
-		hostedEntitlements = entitlements.NewService(deps.Registry, deps.Config.BaseURL, deps.Config.TrialActivationPrivateKey)
-		if deps.Config.IsProviderHostedMSP() {
-			hostedEntitlements.SetProviderLicense(deps.Config.ProviderMSPLicenseKey)
-		}
+		hostedEntitlements = NewHostedEntitlementsService(deps.Config, deps.Registry)
 	}
 	provisioner := deps.Provisioner
 	if provisioner == nil {
@@ -310,4 +307,21 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
 	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPageWithEnvironment(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref(), portalEnv, portalSetupFacts))))
+}
+
+// NewHostedEntitlementsService builds the entitlement service with the
+// provider posture applied.
+//
+// Hosting and licensing are set separately and deliberately: hosting bounds
+// what capabilities a lease may claim, while the licence only decides whether
+// release-build client runtimes can verify it. Wiring one without the other is
+// how an unlicensed provider control plane came to mint leases claiming relay,
+// mobile and push.
+func NewHostedEntitlementsService(cfg *CPConfig, reg *registry.TenantRegistry) *entitlements.Service {
+	svc := entitlements.NewService(reg, cfg.BaseURL, cfg.TrialActivationPrivateKey)
+	if cfg.IsProviderHostedMSP() {
+		svc.SetProviderHosted(true)
+		svc.SetProviderLicense(cfg.ProviderMSPLicenseKey)
+	}
+	return svc
 }

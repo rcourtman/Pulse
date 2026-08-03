@@ -18,6 +18,8 @@ PULSE_PROVIDER_MSP_SKIP_PULL="${PULSE_PROVIDER_MSP_SKIP_PULL:-0}"
 PULSE_PROVIDER_MSP_RUN_INSTALL_PROOF="${PULSE_PROVIDER_MSP_RUN_INSTALL_PROOF:-auto}"
 PULSE_PROVIDER_MSP_ACCOUNT_NAME="${PULSE_PROVIDER_MSP_ACCOUNT_NAME:-}"
 PULSE_PROVIDER_MSP_OWNER_EMAIL="${PULSE_PROVIDER_MSP_OWNER_EMAIL:-}"
+PULSE_PROVIDER_MSP_LICENSE_URL="${PULSE_PROVIDER_MSP_LICENSE_URL:-https://license.pulserelay.pro}"
+PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE="${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE:-0}"
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -332,6 +334,90 @@ Set ${key} in ${env_path} by hand, or check this host can reach the registry."
     log "  ${resolved}"
     set_env_value "${key}" "${resolved}" "${env_path}"
   done
+}
+
+# ensure_eval_license self-issues a capped evaluation license when the operator
+# has not supplied one.
+#
+# An unlicensed control plane starts, but release-build client runtimes only
+# trust entitlement leases chained to a Pulse-signed license, so its client
+# workspaces would run without the capabilities being evaluated. Requesting one
+# by email put a human round-trip in front of the first screen; this asks the
+# license server directly with the public half of the key generated above.
+#
+# The private key never leaves this host. Failure is a warning, not a stop: the
+# portal, provisioning and client isolation all work regardless, and an
+# air-gapped operator can skip it outright.
+ensure_eval_license() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  [[ -f "${env_path}" ]] || die "missing ${env_path}"
+
+  if [[ -n "$(env_value CP_PROVIDER_MSP_LICENSE_FILE "${env_path}")" ]]; then
+    return 0
+  fi
+
+  local eval_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/provider-msp-eval-license.jwt"
+  if [[ -s "${eval_path}" ]]; then
+    log "reusing existing evaluation license ${eval_path}"
+    set_env_value CP_PROVIDER_MSP_LICENSE_FILE "./provider-msp-eval-license.jwt" "${env_path}"
+    return 0
+  fi
+
+  if truthy "${PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE}"; then
+    log "PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE set: staying unlicensed"
+    log "  the portal and client isolation work, but client workspaces will not"
+    log "  carry MSP capabilities until a license is installed"
+    return 0
+  fi
+
+  have curl || die "curl is required to request an evaluation license"
+
+  # Tolerate failure rather than abort: ensure_generated_secrets has already
+  # created the key, so this only trips on something unexpected, and an
+  # evaluation licence is never worth failing an otherwise good install.
+  #
+  # Tested with `if !` rather than `|| true` inside the substitution: the
+  # derive helper calls die, and `exit` in a subshell terminates it outright
+  # instead of yielding a status `||` could catch, so setup.sh would abort.
+  local public_key=""
+  if ! public_key="$(derive_lease_signing_public_key 2>/dev/null)"; then
+    public_key=""
+  fi
+  if [[ -z "${public_key}" ]]; then
+    log "warning: could not derive the lease signing public key; staying unlicensed"
+    return 0
+  fi
+
+  log "requesting a 2-client evaluation license from ${PULSE_PROVIDER_MSP_LICENSE_URL}"
+  local body response token
+  body="$(printf '{"entitlement_signing_public_key":"%s"}' "${public_key}")"
+  response="$(curl -fsS --max-time 20 \
+    -H 'Content-Type: application/json' \
+    -d "${body}" \
+    "${PULSE_PROVIDER_MSP_LICENSE_URL%/}/v1/provider-msp/eval-license" 2>/dev/null || true)"
+
+  if [[ -z "${response}" ]]; then
+    log "warning: could not reach the license server"
+    log "  continuing unlicensed. The portal and client isolation work, but client"
+    log "  workspaces will not carry MSP capabilities. Re-run setup.sh to retry,"
+    log "  or set CP_PROVIDER_MSP_LICENSE_FILE if you already hold a license."
+    return 0
+  fi
+
+  token="$(printf '%s' "${response}" | jq -r '.license // empty' 2>/dev/null || true)"
+  if [[ -z "${token}" ]]; then
+    log "warning: license server response contained no license; continuing unlicensed"
+    return 0
+  fi
+
+  printf '%s' "${token}" >"${eval_path}"
+  chmod 0600 "${eval_path}"
+  set_env_value CP_PROVIDER_MSP_LICENSE_FILE "./provider-msp-eval-license.jwt" "${env_path}"
+
+  local expires
+  expires="$(printf '%s' "${response}" | jq -r '.expires_at // empty' 2>/dev/null || true)"
+  log "evaluation license installed: 2 client workspaces${expires:+, expires ${expires}}"
+  log "  buy a plan and set CP_PROVIDER_MSP_LICENSE_FILE to lift the cap"
 }
 
 ensure_generated_secrets() {
@@ -667,6 +753,8 @@ main() {
   install_deploy_bundle
   ensure_env_file
   ensure_generated_secrets
+  # After the signing key exists, since the license binds its public half.
+  ensure_eval_license
   # After install_docker_ce, which provides the buildx used to read the
   # registry, and before validation, which requires the pins to be set.
   ensure_image_pins

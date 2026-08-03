@@ -3253,9 +3253,18 @@ authenticated bootstrap and does not add a commercial-posture, checkout, or
 organization probe.
 
 An MSP control plane without a licence file runs on the `msp_eval` plan
-version, not on the cheapest paid tier. `msp_eval` carries the same MSP
-capabilities and a workspace limit of two, and it is neither purchasable nor
-part of the published pricing ladder. The environment fallback previously
+version, not on the cheapest paid tier. `msp_eval` has a workspace limit of two
+and is neither purchasable nor part of the published pricing ladder.
+
+An earlier revision of this paragraph claimed `msp_eval` "carries the same MSP
+capabilities". That was wrong and is corrected here. A plan version selects the
+workspace cap; it does not by itself entitle a client workspace. Release-build
+client runtimes only trust entitlement leases chained to a Pulse-signed
+provider licence, so a control plane holding no licence at all issues leases
+those runtimes reject, and its client workspaces fall back to Community
+behaviour however the plan version reads. Evaluation therefore depends on the
+self-issued licence described in `deployment-installability`, not on the plan
+default alone. The environment fallback previously
 defaulted to `msp_starter`, which granted the full five-workspace Starter
 allowance to any unlicensed deployment and left no commercial boundary between
 evaluating and buying. `pkg/licensing.PlanVersionMSPEval` is the only spelling
@@ -3268,3 +3277,15 @@ The eval limit must stay strictly below every paid MSP tier. Paid workspace
 caps continue to come only from the signed licence file, never from the
 environment fallback, and `ProviderMSPPlanSourceEnvFallback` remains the
 recorded plan source whenever no licence is present.
+
+
+The capability ceiling for an entitlement lease follows HOSTING, not licensing.
+`entitlements.Service.SetProviderHosted` bounds a provider-operated control
+plane to `ProviderChainedLeaseCapabilities()` whether or not it holds a licence,
+because a provider deployment cannot serve relay, mobile, or push in any
+licensing state. Selecting that ceiling from licence presence, as an earlier
+revision did through `providerChained`, let an unlicensed provider control plane
+fall through to the Pulse-hosted branch and mint leases claiming those three
+Pulse-service-backed capabilities. `providerChained` retains its narrower
+meaning: a Pulse-signed licence is available to embed so release builds can
+verify the lease.

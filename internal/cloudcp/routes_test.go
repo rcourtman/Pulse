@@ -474,3 +474,46 @@ func TestRegisterRoutes_MSPControlPlaneDisablesPulseHostedBillingRoutes(t *testi
 		})
 	}
 }
+
+// The capability ceiling for provider deployments is set at wiring time, and
+// getting it wrong is silent: leases still issue, they just claim capabilities
+// a provider deployment cannot serve. Both wiring sites go through
+// NewHostedEntitlementsService so they cannot drift apart again.
+func TestNewHostedEntitlementsService_MarksProviderHosting(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	providerHosted := NewHostedEntitlementsService(&CPConfig{
+		DataDir:          dir,
+		BaseURL:          "https://msp.example.com",
+		ControlPlaneMode: ControlPlaneModeProviderHostedMSP,
+	}, reg)
+	if !providerHosted.ProviderHosted() {
+		t.Fatal("provider-hosted MSP control plane must bound leases to the provider ceiling")
+	}
+
+	// Unlicensed is still provider-hosted. Deriving the ceiling from licence
+	// presence is the defect this guards.
+	unlicensed := NewHostedEntitlementsService(&CPConfig{
+		DataDir:               dir,
+		BaseURL:               "https://msp.example.com",
+		ControlPlaneMode:      ControlPlaneModeProviderHostedMSP,
+		ProviderMSPLicenseKey: "",
+	}, reg)
+	if !unlicensed.ProviderHosted() {
+		t.Fatal("an unlicensed provider control plane is still provider-hosted")
+	}
+
+	pulseHosted := NewHostedEntitlementsService(&CPConfig{
+		DataDir:          dir,
+		BaseURL:          "https://cloud.example.com",
+		ControlPlaneMode: ControlPlaneModePulseHosted,
+	}, reg)
+	if pulseHosted.ProviderHosted() {
+		t.Fatal("Pulse-hosted control plane must not be marked provider-hosted")
+	}
+}

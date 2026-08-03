@@ -263,11 +263,19 @@ contact support to get set up or to join the MSP design-partner program.
 
 ### Evaluating without a licence
 
-Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and the control plane runs on
-`msp_eval`: the same product, capped at 2 client workspaces. Nothing to
-request and nobody to wait for. Stand the stack up, onboard two real clients,
-and confirm the isolation boundary holds on your own infrastructure before
-you spend anything.
+Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
+2-client evaluation licence for you. It sends only the public half of the
+signing key it generated on your host, exactly as the paid path does, and the
+private key never leaves the machine. Nothing to request and nobody to wait
+for. Stand the stack up, onboard two real clients, and confirm the isolation
+boundary holds on your own infrastructure before you spend anything.
+
+The evaluation licence lasts 60 days and re-running `setup.sh` reuses the one
+already on disk. On an air-gapped host set
+`PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE=1`; the portal, provisioning and client
+isolation all still work, but client workspaces will not carry MSP capabilities
+until a licence is installed, because release-build client runtimes only trust
+entitlement leases chained to a Pulse-signed licence.
 
 `setup.sh` also resolves the four image pins from their published tags when
 you leave them blank, writing the resolved digests back into `.env`. The

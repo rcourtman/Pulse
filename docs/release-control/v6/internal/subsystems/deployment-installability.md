@@ -2910,3 +2910,18 @@ unfillable `@sha256:<pin>` placeholders, and a blank
 `CP_PROVIDER_MSP_LICENSE_FILE`, so the default install path requires no
 credentials and no correspondence. All four images are publicly readable, so
 digest resolution must not assume registry authentication.
+
+When no licence path is set, `setup.sh` self-issues a capped evaluation licence
+from the Pulse licence server (`POST /v1/provider-msp/eval-license`) bound to
+the lease signing public key derived from the locally generated private key,
+which never leaves the host. Without this the evaluation is hollow: an
+unlicensed control plane starts, but release-build client runtimes reject its
+unchained entitlement leases and the client workspaces run without the
+capabilities being evaluated.
+
+Self-issue must degrade rather than block. A missing signing key, an
+unreachable licence server, or a response carrying no licence leaves the
+install unlicensed with an explicit warning, and `PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE`
+skips the request outright for air-gapped hosts. An existing evaluation licence
+on disk is reused rather than re-requested. The install must never abort
+because an evaluation licence could not be obtained.

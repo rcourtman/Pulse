@@ -13,7 +13,6 @@ import (
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
-	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -113,10 +112,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Build HTTP routes
 	mux := http.NewServeMux()
-	hostedEntitlements := entitlements.NewService(reg, cfg.BaseURL, cfg.TrialActivationPrivateKey)
-	if cfg.IsProviderHostedMSP() {
-		hostedEntitlements.SetProviderLicense(cfg.ProviderMSPLicenseKey)
-	}
+	hostedEntitlements := NewHostedEntitlementsService(cfg, reg)
 	provisioner := cpstripe.NewProvisioner(
 		reg,
 		cfg.TenantsDir(),

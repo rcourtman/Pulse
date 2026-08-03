@@ -198,6 +198,7 @@ func newProviderMSPProofRuntimeFromConfig(cfg *cloudcp.CPConfig) (*providerMSPPr
 
 	hostedEntitlements := entitlements.NewService(reg, cfg.BaseURL, cfg.TrialActivationPrivateKey)
 	if cfg.IsProviderHostedMSP() {
+		hostedEntitlements.SetProviderHosted(true)
 		hostedEntitlements.SetProviderLicense(cfg.ProviderMSPLicenseKey)
 	}
 	provisioner := cpstripe.NewProvisioner(

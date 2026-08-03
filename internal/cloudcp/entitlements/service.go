@@ -28,7 +28,13 @@ type Service struct {
 	baseURL                   string
 	trialActivationPrivateKey string
 	providerLicense           string
-	now                       func() time.Time
+	// providerHosted records that this control plane runs on a provider's own
+	// infrastructure, independently of whether a licence happens to be
+	// present. The capability ceiling follows hosting, not licensing: a
+	// provider deployment cannot back relay, mobile or push whether it is
+	// licensed or not, so it must never mint leases claiming them.
+	providerHosted bool
+	now            func() time.Time
 }
 
 type RefreshResult struct {
@@ -60,6 +66,21 @@ func (s *Service) SetProviderLicense(licenseKey string) {
 		return
 	}
 	s.providerLicense = strings.TrimSpace(licenseKey)
+}
+
+// SetProviderHosted marks this control plane as provider-operated, which bounds
+// the capabilities its leases may claim.
+//
+// This is separate from SetProviderLicense on purpose. Deriving the ceiling
+// from licence presence meant an unlicensed provider deployment fell through to
+// the Pulse-hosted branch and minted leases claiming relay, mobile and push,
+// which a provider deployment cannot serve and which previously produced
+// repeating relay registration failures in client runtimes.
+func (s *Service) SetProviderHosted(providerHosted bool) {
+	if s == nil {
+		return
+	}
+	s.providerHosted = providerHosted
 }
 
 func (s *Service) IssueTenantBillingState(tenant *registry.Tenant, requestedSubState pkglicensing.SubscriptionState, requestedPlanVersion, stripeCustomerID, stripeSubscriptionID, stripePriceID string) (*pkglicensing.BillingState, error) {
@@ -154,7 +175,12 @@ type tenantLeaseContext struct {
 	stripeAccount     *registry.StripeAccount
 	subscriptionState pkglicensing.SubscriptionState
 	planVersion       string
-	providerChained   bool
+	// providerChained records that a Pulse-signed provider licence is
+	// available to embed, which is what lets release builds verify the lease.
+	providerChained bool
+	// providerHosted records that this control plane runs on the provider's
+	// own infrastructure, which is what bounds the capability ceiling.
+	providerHosted bool
 }
 
 type trialEntitlementContext struct {
@@ -248,6 +274,7 @@ func (s *Service) resolveTenantLeaseContext(tenant *registry.Tenant, requestedSu
 		subscriptionState: requestedSubState,
 		planVersion:       pkglicensing.CanonicalizePlanVersion(requestedPlanVersion),
 		providerChained:   strings.TrimSpace(s.providerLicense) != "",
+		providerHosted:    s.providerHosted,
 	}
 	if ctx.planVersion == "" {
 		ctx.planVersion = pkglicensing.CanonicalizePlanVersion(tenant.PlanVersion)
@@ -369,7 +396,7 @@ func buildPaidEntitlementLeaseClaims(ctx *tenantLeaseContext, instanceHost strin
 	var capabilities []string
 	if pkglicensing.ShouldGrantPaidCapabilities(ctx.subscriptionState) {
 		switch {
-		case isMSPPlanVersion(ctx.planVersion) && ctx.providerChained:
+		case isMSPPlanVersion(ctx.planVersion) && ctx.providerHosted:
 			// Provider-hosted MSP client workspaces lease the chained
 			// ceiling: MSP tier plus white_label (branded per-client
 			// reports), minus Pulse-service-backed capabilities (relay,
@@ -459,4 +486,11 @@ func baseDomainFromURL(baseURL string) string {
 		}
 	}
 	return baseURL
+}
+
+// ProviderHosted reports whether this service bounds leases to the
+// provider-operated ceiling. Exposed so the control plane wiring can be
+// verified rather than assumed.
+func (s *Service) ProviderHosted() bool {
+	return s != nil && s.providerHosted
 }

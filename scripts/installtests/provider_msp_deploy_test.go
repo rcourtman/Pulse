@@ -352,7 +352,24 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"default_image_ref",
 		"resolve_image_digest",
 		"buildx imagetools inspect",
+		// Self-issue, and the three ways it must degrade instead of blocking.
+		"ensure_eval_license",
+		"/v1/provider-msp/eval-license",
+		"PULSE_PROVIDER_MSP_SKIP_EVAL_LICENSE",
+		"reusing existing evaluation license",
+		"could not reach the license server",
 	)
+
+	// The install must never abort because an evaluation licence could not be
+	// obtained. `|| true` inside the substitution does not achieve that: the
+	// derive helper calls die, and exit in a subshell is not a catchable
+	// status, so setup.sh would abort under set -e.
+	if strings.Contains(script, "$(derive_lease_signing_public_key 2>/dev/null || true)") {
+		t.Fatal("eval license key derivation uses `|| true` inside a command substitution, which cannot catch die/exit under set -e")
+	}
+	if !strings.Contains(script, "if ! public_key=\"$(derive_lease_signing_public_key 2>/dev/null)\"") {
+		t.Fatal("eval license key derivation must be guarded so a failure degrades to unlicensed rather than aborting setup")
+	}
 
 	// A blank licence path means evaluation. If it returns to the
 	// must-be-non-empty list, setup.sh refuses to start unlicensed again.

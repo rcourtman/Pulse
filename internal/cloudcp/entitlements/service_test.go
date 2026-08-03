@@ -563,3 +563,67 @@ func TestIssueTenantBillingStateCloudPlanOmitsProviderLicenseWhenUnset(t *testin
 		t.Fatalf("cloud lease should not carry white_label, got %v", claims.Capabilities)
 	}
 }
+
+// A provider deployment cannot serve relay, mobile or push whether or not it
+// holds a licence, so it must never mint leases claiming them. The ceiling used
+// to be selected by licence presence, which meant an UNLICENSED provider
+// control plane fell through to the Pulse-hosted branch and claimed exactly
+// those three, producing repeating relay registration failures in the client
+// runtime. Selecting on hosting closes that.
+func TestProviderHostedLeaseNeverClaimsPulseServiceCapabilitiesWhenUnlicensed(t *testing.T) {
+	svc, pub, reg := newTestService(t)
+	svc.SetProviderHosted(true)
+	// Deliberately no SetProviderLicense: this is the unlicensed provider.
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Unlicensed MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	tenant := &registry.Tenant{
+		ID:          "t-EVALCLIENT1",
+		AccountID:   accountID,
+		Email:       "owner@example-msp.com",
+		State:       registry.TenantStateActive,
+		PlanVersion: pkglicensing.PlanVersionMSPEval,
+	}
+	if err := reg.Create(tenant); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	now := time.Unix(1710000000, 0).UTC()
+	svc.SetNow(func() time.Time { return now })
+
+	state, err := svc.IssueTenantBillingState(tenant, pkglicensing.SubStateActive, pkglicensing.PlanVersionMSPEval, "", "", "")
+	if err != nil {
+		t.Fatalf("IssueTenantBillingState: %v", err)
+	}
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(state.EntitlementJWT, pub, "t-EVALCLIENT1.cloud.example.com", now)
+	if err != nil {
+		t.Fatalf("VerifyEntitlementLeaseToken: %v", err)
+	}
+
+	capabilities := map[string]bool{}
+	for _, capability := range claims.Capabilities {
+		capabilities[capability] = true
+	}
+	for _, forbidden := range []string{
+		pkglicensing.FeatureRelay,
+		pkglicensing.FeatureMobileApp,
+		pkglicensing.FeaturePushNotifications,
+	} {
+		if capabilities[forbidden] {
+			t.Fatalf("provider-hosted lease must not claim Pulse-service capability %q: %v", forbidden, claims.Capabilities)
+		}
+	}
+	if !capabilities[pkglicensing.FeatureMultiTenant] {
+		t.Fatalf("provider-hosted eval lease should still carry multi_tenant: %v", claims.Capabilities)
+	}
+}
