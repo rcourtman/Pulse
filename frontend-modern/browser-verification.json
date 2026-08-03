@@ -1,24 +1,19 @@
 {
   "version": 1,
-  "base_sha": "9d9f13e7b0a7298c34dadc13d58cb991379edc0f",
-  "verified_at": "2026-08-03T17:08:00Z",
+  "base_sha": "6bd382173bd802dbb0dbceb9c618ee01f645c55f",
+  "verified_at": "2026-08-03T17:22:38Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"],
-  "content_sha256": {
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "ca7464c040278ef3a313ac35805590e12d318ed18500bd76b145b6b2842bc273"
-  },
-  "routes": [
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/docker/images",
-    "/docker/storage",
-    "/docker/networks",
-    "/docker/swarm"
+  "changed_paths": [
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
   ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "53162c174225e4e72dfbe5a9e6033357f649e8db2e0e160af8c20984e65917a8",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "0a8974f2f174914aa91658fee2016ee5e3f332ee18b8e8b1a0be8155960f8a6e",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "21163d3e2e3894139a51d3bec2a971928efc1cdb38a172c4272a696b1d7131c8"
+  },
+  "routes": ["/kubernetes/overview", "/kubernetes/workloads"],
   "viewports": [
     {
       "width": 1280,
@@ -30,19 +25,19 @@
     }
   ],
   "states": [
-    "Desktop Docker Storage with the complete section rail and Storage marked as the active page",
-    "Phone-width Docker Storage after a live viewport resize with Overview, Images, Storage, and Networks visible",
-    "Phone-width Docker Networks and Swarm with each active destination reachable in the overflowing section rail",
-    "Desktop and phone-width Kubernetes Nodes, Workloads, Services, Storage, Configuration, and Events section rails",
-    "Phone-width Kubernetes filter bodies in both collapsed and expanded states on Nodes and Workloads"
+    "Desktop Kubernetes Overview with three clusters, nineteen degraded workloads, and the compact workload-attention control aligned in the inventory toolbar",
+    "Desktop Kubernetes Overview with routine workload degradation and no page-wide Kubernetes attention banner",
+    "Phone-width Kubernetes Overview with the filter body collapsed and workload attention retained as visible leading context",
+    "Phone-width Kubernetes Overview with the filter body expanded and workload attention composed into the canonical action rail",
+    "Kubernetes Workloads destination after following the compact Review action",
+    "Kubernetes empty-inventory state after the local runtime data reset"
   ],
   "interactions": [
-    "Narrowed Docker Storage from 1280 by 720 to 390 by 844 without reloading and confirmed the active Storage tab remained fully visible",
-    "Inspected the Docker Storage rail after resize and confirmed scrollLeft remained zero because the active tab was already within the visible bounds",
-    "Navigated across the Docker Images, Storage, Networks, and Swarm destinations and confirmed active-page styling and horizontal reachability",
-    "Navigated across the Kubernetes Nodes, Workloads, Services, Storage, Configuration, and Events destinations and confirmed the active section remained visible",
-    "Expanded the narrow Kubernetes Nodes and Workloads filter bodies and confirmed the tab rail and filter controls remained unclipped",
-    "Confirmed the 390-pixel document width did not acquire page-level horizontal overflow during the responsive passes",
-    "Inspected the final desktop and narrow screenshots for clipped, overlapping, or unnecessarily recentered section labels"
+    "Confirmed routine pending and under-replicated workload counts render beside Review rather than in the page-wide attention summary",
+    "Confirmed Review navigates directly to /kubernetes/workloads and marks Workloads as the active section",
+    "Collapsed and expanded the 390-pixel filter body and confirmed leading workload context remains available while lower-priority trailing controls follow the collapsed rail",
+    "Confirmed the workload status and Review action remain within the filter container with no page-level horizontal overflow",
+    "Confirmed unavailable-node and critical-signal cases remain covered by the prominent attention summary while zero-value metrics are omitted",
+    "Reloaded the final local build in Chrome and confirmed the Kubernetes empty-inventory fallback remained intact after the seeded runtime data reset"
   ]
 }

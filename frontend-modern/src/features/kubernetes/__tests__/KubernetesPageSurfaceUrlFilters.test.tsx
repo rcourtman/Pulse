@@ -68,6 +68,56 @@ beforeEach(() => {
 });
 
 describe('Kubernetes URL-backed shared toolbar filters', () => {
+  it('keeps routine workload attention compact and local to the workload toolbar', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'pending-pod',
+        type: 'pod',
+        kubernetes: {
+          clusterId: 'cluster-1',
+          clusterName: 'Cluster 1',
+          namespace: 'default',
+          podPhase: 'Pending',
+        },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/overview');
+
+    expect(screen.queryByRole('region', { name: 'Kubernetes attention' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('1 workload needs attention');
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute(
+      'href',
+      '/kubernetes/workloads',
+    );
+  });
+
+  it('reserves prominent attention for node availability', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'unavailable-node',
+        type: 'k8s-node',
+        kubernetes: {
+          clusterId: 'cluster-1',
+          clusterName: 'Cluster 1',
+          nodeName: 'unavailable-node',
+          ready: false,
+        },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/overview');
+
+    const summary = screen.getByRole('region', { name: 'Kubernetes attention' });
+    expect(summary).toHaveAttribute('data-platform-attention-summary', 'danger');
+    expect(summary).toHaveTextContent('1 resource needs review');
+    expect(summary).toHaveTextContent('1node');
+    expect(summary).not.toHaveTextContent('0workloads');
+    expect(summary).not.toHaveTextContent('0signals');
+  });
+
   it('applies the URL search filter, including -term exclusions, on the workloads tab', () => {
     setResources([
       makeResource({ id: 'checkout-api', type: 'k8s-deployment' }),

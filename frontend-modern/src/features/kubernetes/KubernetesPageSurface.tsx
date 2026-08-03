@@ -350,7 +350,11 @@ function createKubernetesInventoryScope(
   };
 }
 
-function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: Resource[] }) {
+function KubernetesWorkloads(props: {
+  model: KubernetesPageModel;
+  controllers: Resource[];
+  attentionCount?: number;
+}) {
   const hasWorkloadInventory = createMemo(
     () => props.model.workloads.length > 0 || props.model.autoscaling.length > 0,
   );
@@ -402,6 +406,23 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
           filters={scopeFilters()}
           savedViewsKey="kubernetes-workloads"
+          leadingControls={
+            <Show when={(props.attentionCount ?? 0) > 0}>
+              <div
+                class="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                role="status"
+              >
+                <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                <span class="whitespace-nowrap">
+                  {props.attentionCount} workload{props.attentionCount === 1 ? '' : 's'}{' '}
+                  {props.attentionCount === 1 ? 'needs' : 'need'} attention
+                </span>
+                <ButtonLink href={buildKubernetesPath('workloads')} variant="warning" size="xs">
+                  Review
+                </ButtonLink>
+              </div>
+            </Show>
+          }
           visible={visibleRows()}
           total={totalRows()}
           rowNoun="rows"
@@ -611,8 +632,9 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
 function KubernetesOverview(props: KubernetesOverviewProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const posture = createMemo(() => buildKubernetesOverviewPosture(props.model()));
-  const needsAttention = () => posture().attentionResources > 0 || posture().attentionSignals > 0;
   const workloadAttention = () => posture().podAttention + posture().deploymentAttention;
+  const needsProminentAttention = () =>
+    posture().nodeAttention > 0 || posture().criticalIncidents > 0;
   const headline = () => {
     const resources = posture().attentionResources;
     const signals = posture().attentionSignals;
@@ -627,20 +649,26 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
 
   return (
     <div class="space-y-4">
-      <Show when={needsAttention()}>
+      <Show when={needsProminentAttention()}>
         <PlatformAttentionSummary
           title="Kubernetes attention"
           headline={headline()}
-          description="Start with unavailable nodes, pending pods, or deployments below their desired replica count. Inventory remains available below."
+          description="Start with unavailable nodes or critical health signals. Workload inventory remains available below."
           tone={
             posture().criticalResources > 0 || posture().criticalIncidents > 0
               ? 'danger'
               : 'warning'
           }
           metrics={[
-            { label: 'nodes', value: posture().nodeAttention },
-            { label: 'workloads', value: workloadAttention() },
-            { label: 'signals', value: posture().attentionSignals },
+            ...(posture().nodeAttention > 0
+              ? [{ label: 'nodes', value: posture().nodeAttention }]
+              : []),
+            ...(workloadAttention() > 0
+              ? [{ label: 'workloads', value: workloadAttention() }]
+              : []),
+            ...(posture().attentionSignals > 0
+              ? [{ label: 'signals', value: posture().attentionSignals }]
+              : []),
           ]}
           actions={
             <>
@@ -683,6 +711,7 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
       <KubernetesWorkloads
         model={props.model()}
         controllers={getKubernetesControllerResources(props.model())}
+        attentionCount={workloadAttention()}
       />
       <Show when={props.model().incidents.length > 0}>
         <div id="kubernetes-health-signals">

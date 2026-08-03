@@ -275,6 +275,27 @@ describe('FilterBar', () => {
     expect(screen.getByText('12 items')).toBeInTheDocument();
   });
 
+  it('keeps frequent leading context visible while mobile filters are collapsed', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter()]}
+        isMobile={() => true}
+        leadingControls={<button type="button">Review attention</button>}
+        trailingControls={<span>12 items</span>}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Review attention' })).toBeInTheDocument();
+    expect(screen.queryByText('12 items')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    const actions = screen.getByRole('group', { name: 'Filter actions' });
+    expect(within(actions).getByRole('button', { name: 'Review attention' })).toBeInTheDocument();
+    expect(within(actions).getByText('12 items')).toBeInTheDocument();
+  });
+
   it('hides the redundant visual Filter label by default without changing the accessible name', () => {
     render(() => (
       <FilterBar

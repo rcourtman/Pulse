@@ -304,6 +304,15 @@ tabs. The thresholds platform IA is platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. Frontend primitives own
 the chip, reset, "+ Filter", and route-backed shell pattern; alerts must not
 replace that with page-local search/tab chrome or legacy neutral buckets.
+PlatformTableToolbar may accept compact consumer-owned context through its
+shared leading-control rail when the context is actionable for the inventory
+immediately below it. Consumers must use that extension point for local
+attention counts and review actions instead of introducing a parallel filter
+card or a routine page-wide posture banner; the toolbar continues to own
+responsive placement alongside saved views, View preferences, and row counts.
+Frequently used leading context remains visible when the mobile filter body is
+collapsed and moves into the canonical action rail when that body is expanded;
+lower-priority trailing orientation controls remain collapsed with the rail.
 Native multiline form fields are also a shared primitive boundary.
 `FormTextarea` owns label/id/help wiring, controlled value synchronization, and
 textarea chrome for alert, settings, and infrastructure runtime surfaces; those

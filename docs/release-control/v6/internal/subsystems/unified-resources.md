@@ -328,7 +328,11 @@ the primary native workload stack: Deployments, Pods, workload controllers,
 and autoscaling rows. That deliberate cluster-to-workload composition mirrors
 the Docker host-to-container Overview and shares the exact same URL-backed
 cluster, namespace, search, and status state as the Workloads workflow; it must
-not fork a second projection or filter model. Node, service, storage,
+not fork a second projection or filter model. Routine pending or
+under-replicated workload attention stays attached to that shared workload
+toolbar as a compact count and review action; page-wide Kubernetes attention
+is reserved for node availability or critical health signals. Zero-valued
+attention facets must not occupy the summary. Node, service, storage,
 configuration, policy, and event object rows remain in their workflow tabs.
 Any other future Overview that repeats a detailed table must retire the owning
 workflow, reduce the Overview content to aggregate signal, or establish an

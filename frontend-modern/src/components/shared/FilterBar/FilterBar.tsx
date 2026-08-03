@@ -146,6 +146,10 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
           </Show>
         </div>
 
+        <Show when={props.isMobile() && !mobileExpanded() && props.leadingControls}>
+          <div class="flex min-w-0 flex-wrap items-center gap-2 pt-1">{props.leadingControls}</div>
+        </Show>
+
         <Show when={showDesktopControlsRow()}>
           <div class="flex flex-wrap items-center gap-2">
             <For each={inlineFilters()}>

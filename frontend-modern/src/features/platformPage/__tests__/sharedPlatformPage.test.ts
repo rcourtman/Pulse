@@ -415,6 +415,31 @@ describe('PlatformTableToolbar', () => {
     expect(viewDialog).toHaveTextContent('Columns');
     expect(viewDialog).not.toContainElement(screen.getByText('2 of 3 rows'));
   });
+
+  it('composes consumer context into the canonical toolbar rail', () => {
+    const contextualAction = document.createElement('button');
+    contextualAction.type = 'button';
+    contextualAction.textContent = 'Review attention';
+
+    render(() =>
+      PlatformTableToolbar({
+        search: () => '',
+        onSearchChange: () => undefined,
+        searchPlaceholder: 'Search rows',
+        status: 'all',
+        onStatusChange: () => undefined,
+        statusOptions: [{ value: 'all', label: 'All' }],
+        visible: 3,
+        total: 3,
+        rowNoun: 'rows',
+        leadingControls: contextualAction,
+      }),
+    );
+
+    const action = screen.getByRole('button', { name: 'Review attention' });
+    expect(action.closest('.filter-bar')).not.toBeNull();
+    expect(action.closest('.filter-bar')).toContainElement(screen.getByText('3 rows'));
+  });
 });
 
 describe('formatPlatformTableTextValue', () => {

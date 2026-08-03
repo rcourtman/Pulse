@@ -1057,6 +1057,11 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   filters?: FilterDef[];
   savedViewsKey?: string;
   /**
+   * Compact consumer-owned context that belongs beside the table controls,
+   * such as an attention count with a focused review action.
+   */
+  leadingControls?: JSX.Element;
+  /**
    * Low-frequency table presentation controls. PlatformTableToolbar owns the
    * shared View popover so feature tables cannot accidentally render these as
    * permanent toolbar controls.
@@ -1113,6 +1118,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       filters={allFilters}
       showAddFilterLabel={false}
       savedViewsKey={props.savedViewsKey}
+      leadingControls={props.leadingControls}
       viewOptions={props.viewOptions}
       trailingControls={
         <PlatformResourceCounter
