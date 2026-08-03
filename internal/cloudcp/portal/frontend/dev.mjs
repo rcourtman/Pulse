@@ -9,7 +9,7 @@ import { createPortalBuildOptions, frontendRoot } from './build_config.mjs';
 const scenarioCookieName = 'pulse_portal_preview_scenario';
 const previewHost = process.env.PULSE_PORTAL_PREVIEW_HOST || '127.0.0.1';
 const previewPort = Number(process.env.PULSE_PORTAL_PREVIEW_PORT || '8765');
-const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'provider', 'onboarding', 'mixed'];
+const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty', 'provider', 'onboarding', 'mixed', 'demo'];
 const previewFaviconSVG = fs.readFileSync(path.join(frontendRoot, '..', '..', 'favicon.svg'), 'utf8');
 const previewFaviconHref = '/favicon.svg?v=' + createHash('sha256').update(previewFaviconSVG).digest('hex').slice(0, 16);
 
@@ -36,6 +36,31 @@ function standardSetupTemplates() {
   }];
 }
 
+// One settled, fully-onboarded client workspace for the 'demo' scenario. Alert
+// counts are always numbers here, including zero, because the presentation
+// layer treats a missing count as 'unknown' rather than 'quiet'.
+function demoWorkspace(id, displayName, createdAt, agentCount, alerts) {
+  return {
+    id: id,
+    display_name: displayName,
+    state: 'active',
+    healthy: true,
+    health_status: 'healthy',
+    setup_status: 'ready',
+    agent_count: agentCount,
+    agent_token_count: agentCount,
+    unused_agent_token_count: 0,
+    alert_route_count: 1,
+    disabled_alert_route_count: 0,
+    active_critical_alert_count: alerts.critical,
+    active_warning_alert_count: alerts.warning,
+    active_alerts_updated_at: iso('2026-08-03T07:40:00Z'),
+    report_schedule_count: 1,
+    disabled_report_schedule_count: 0,
+    created_at: iso(createdAt),
+  };
+}
+
 function buildScenarioTemplate(name) {
   const base = {
     authenticated: true,
@@ -53,6 +78,45 @@ function buildScenarioTemplate(name) {
     portal_api_base_path: '/api/portal',
     accounts: [],
   };
+
+  // Marketing capture scenario. The other scenarios exist to exercise edge
+  // cases and are named accordingly ("MSP Test Workspace A"), which is fine in
+  // a dev harness and wrong in anything public. This one is the settled fleet a
+  // provider would actually see on a normal morning, and it is the scenario the
+  // pulserelay.pro MSP walkthrough is recorded against. It is the only scenario
+  // that populates the alert counts, without which the Alerts column renders
+  // 'unknown' and the fleet rollup the MSP page advertises is invisible.
+  //
+  // Every name here is invented and every address is on a reserved example
+  // domain. Do not point this at real client data.
+  if (name === 'demo') {
+    return {
+      ...base,
+      email: 'owner@example.com',
+      accounts: [{
+        id: 'acct_demo',
+        name: 'Ridgeline Managed IT',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        setup_templates: standardSetupTemplates(),
+        workspaces: [
+          demoWorkspace('ws_hilltop', 'Hilltop Care', '2026-02-11T09:00:00Z', 4, { critical: 1, warning: 0 }),
+          demoWorkspace('ws_meridian', 'Meridian Dental', '2026-03-04T09:00:00Z', 2, { critical: 0, warning: 2 }),
+          demoWorkspace('ws_northbridge', 'Northbridge Legal', '2026-01-22T09:00:00Z', 3, { critical: 0, warning: 0 }),
+          demoWorkspace('ws_caldwell', 'Caldwell Engineering', '2026-04-16T09:00:00Z', 6, { critical: 0, warning: 0 }),
+          demoWorkspace('ws_fenwick', 'Fenwick Accountancy', '2026-05-09T09:00:00Z', 2, { critical: 0, warning: 0 }),
+          demoWorkspace('ws_brookvale', 'Brookvale Schools', '2026-06-02T09:00:00Z', 5, { critical: 0, warning: 0 }),
+        ],
+        members: [
+          { email: 'owner@example.com', role: 'owner', user_id: 'u_owner' },
+          { email: 'helpdesk@example.com', role: 'tech', user_id: 'u_helpdesk' },
+        ],
+      }],
+    };
+  }
 
   if (name === 'readonly') {
     return {
@@ -1330,6 +1394,7 @@ server.listen(previewPort, previewHost, function() {
   console.log('[portal-preview] empty      -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=empty');
   console.log('[portal-preview] provider   -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=provider');
   console.log('[portal-preview] mixed      -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=mixed');
+  console.log('[portal-preview] demo       -> http://' + previewHost + ':' + String(previewPort) + '/?scenario=demo');
 });
 
 async function shutdown(signal) {
