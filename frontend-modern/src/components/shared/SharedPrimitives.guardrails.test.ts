@@ -1293,7 +1293,12 @@ describe('shared primitive guardrails', () => {
 
   it('keeps product table scroll frames on the shared table shell', () => {
     expect(tableSource).toContain('wrapperClass');
-    expect(tableSource).toContain('w-full overflow-x-auto touch-scroll');
+    expect(tableSource).toContain(
+      'table-scroll-shell w-full min-w-0 max-w-full overflow-x-auto touch-scroll',
+    );
+    expect(frontendIndexCssSource).toContain('.table-scroll-shell');
+    expect(frontendIndexCssSource).toContain('contain: inline-size paint');
+    expect(frontendIndexCssSource).toContain('overscroll-behavior-x: contain');
     expect(tableSource).toContain('w-full border-collapse text-left whitespace-nowrap');
     expect(tableCardSource).toContain('TABLE_CARD_FRAME_CLASS');
     expect(tableCardSource).toContain('overflow-hidden');

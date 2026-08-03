@@ -1,16 +1,19 @@
 {
   "version": 1,
-  "base_sha": "d00249fd7ddcc6cee0f5f35911dd6c0127cf1f33",
-  "verified_at": "2026-08-03T18:47:21Z",
+  "base_sha": "32d373395cee894628757f49cde858a66093531f",
+  "verified_at": "2026-08-03T21:06:07Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+    "frontend-modern/src/components/shared/Table.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "87e314940a667c8ff49e2aaf63b45f8d3f6278c3c01747fcaf9f850295d3e413"
+    "frontend-modern/src/components/shared/Table.tsx": "d4c1fdc6bf387a2d37bb143e414c4b2dfc188769884d7738e109a6061852305d",
+    "frontend-modern/src/index.css": "061b892fa8260365adfdaa9f58d4b00d2e67b1b072ac109a75e958f14a36332a"
   },
   "routes": [
-    "/patrol"
+    "/standalone/machines",
+    "/docker/overview"
   ],
   "viewports": [
     {
@@ -23,15 +26,15 @@
     }
   ],
   "states": [
-    "Desktop Patrol attention workbench with all six counted lifecycle choices visible in the segmented control",
-    "Desktop Recent resolved selection with the resolved queue item loaded",
-    "Narrow Patrol attention workbench with the segmented control hidden and the labeled native select visible",
-    "Narrow Recent resolved selection with the resolved queue item loaded"
+    "Desktop Machines table fully loaded with its standard toolbar and all visible columns",
+    "Phone-width Machines table loaded at the left edge with the document contained to 390 pixels",
+    "Phone-width Machines table after a 300-pixel table-local horizontal scroll",
+    "Phone-width Docker Overview with both shared table shells contained to the viewport"
   ],
   "interactions": [
-    "Selected Recent resolved from the desktop segmented control and confirmed its pressed state and resolved queue result",
-    "Reloaded /patrol at 390 by 844 and confirmed the Attention state select and every counted option remained available without horizontal overflow",
-    "Selected Recent resolved from the narrow native select and confirmed its selected state and resolved queue result",
-    "Measured the desktop segmented group inside the viewport and the narrow document at exactly 390 pixels wide with the wide group display set to none"
+    "Applied a 300-pixel horizontal gesture outside the Machines table and confirmed document scrollX remained 0",
+    "Applied a 300-pixel horizontal gesture inside the Machines table and confirmed its scrollLeft changed while document scrollX remained 0",
+    "Repeated the outside-page and inside-table horizontal gestures on Docker Overview and confirmed only the targeted table shell scrolled",
+    "Resized Machines to 1280 by 720 and confirmed the table filled its container without document overflow or an unnecessary local scroll range"
   ]
 }

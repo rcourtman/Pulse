@@ -1004,10 +1004,12 @@ not a replacement status card, CTA band, or page-local nested card.
    the shared `Table` already fills the available width and that second
    minimum would override the phone-width floor, squeezing names and metrics
    into unreadable slivers.
-   Narrow viewports keep document-level overflow
-   contained by `Table` and scroll the table itself; feature tables must not
-   squeeze every declared column into the viewport, override the shared floor,
-   or add a second page-local scroll wrapper.
+   Narrow viewports keep document-level overflow contained by `Table` and
+   scroll the table itself. The shared scroll shell owns inline-size and paint
+   containment plus horizontal overscroll containment so a readable table
+   floor cannot widen or horizontally pan the application document. Feature
+   tables must not squeeze every declared column into the viewport, override
+   the shared floor, or add a second page-local scroll wrapper.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local

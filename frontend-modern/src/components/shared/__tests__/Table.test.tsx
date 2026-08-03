@@ -14,6 +14,8 @@ import {
 describe('TableBody', () => {
   it('keeps the shared table wrapper CSP-safe', () => {
     expect(tableSource).toContain('touch-scroll');
+    expect(tableSource).toContain('table-scroll-shell');
+    expect(tableSource).toContain('min-w-0 max-w-full');
     expect(tableSource).not.toContain('style={{');
     expect(tableSource).not.toContain('style={');
   });

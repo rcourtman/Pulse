@@ -185,6 +185,11 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  .table-scroll-shell {
+    contain: inline-size paint;
+    overscroll-behavior-x: contain;
+  }
+
   .app-scroll-shell {
     scrollbar-gutter: stable;
   }

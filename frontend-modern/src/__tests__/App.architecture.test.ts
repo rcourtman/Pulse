@@ -408,6 +408,9 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('--color-grouped-table-row-bg');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);');
+    expect(appStylesSource).toContain('.table-scroll-shell');
+    expect(appStylesSource).toContain('contain: inline-size paint');
+    expect(appStylesSource).toContain('overscroll-behavior-x: contain');
     expect(appStylesSource).toContain('.progress-fill-frame');
     expect(appStylesSource).toContain('.metric-fill-geometry');
     expect(appStylesSource).toContain('.animated-number');
