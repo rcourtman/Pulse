@@ -23,8 +23,10 @@
     "dev:foreground:lab": "PULSE_DEV_LAB_AGENTS=true ./scripts/hot-dev.sh",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prepare": "husky",
-    "mock:on": "sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=true/' .env || echo 'PULSE_MOCK_MODE=true' >> .env",
-    "mock:off": "sed -i 's/PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=false/' .env || echo 'PULSE_MOCK_MODE=false' >> .env"
+    "mock:on": "./scripts/toggle-mock.sh on",
+    "mock:off": "./scripts/toggle-mock.sh off",
+    "mock:status": "./scripts/toggle-mock.sh status",
+    "mock:edit": "./scripts/toggle-mock.sh edit"
   },
   "repository": {
     "type": "git",

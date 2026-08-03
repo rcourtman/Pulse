@@ -2341,6 +2341,18 @@ local dev path, including explicit status, log, stop, backend-restart, and
 verification wrappers, instead of requiring developers to remember
 lane-specific shell paths or continue discovering the runtime through a stale
 unmanaged `5173` process by accident.
+That same repo-root entry surface owns the mock-mode controls. The
+`mock:on`, `mock:off`, `mock:status`, and `mock:edit` wrappers in
+`package.json` must delegate to `scripts/toggle-mock.sh`, which is the single
+authority for the canonical `PULSE_MOCK_MODE` flag in `tmp/dev-config/.env`.
+They may not reimplement the flag write inline. An inline rewrite targets the
+repo-root `.env`, which `scripts/hot-dev.sh` does not consult when choosing
+the data directory, so the wrapper silently fails to switch modes while
+leaving the operator believing it worked. Inline `sed -i` rewrites are also
+GNU-only and fail on the default macOS BSD `sed`, and an appending fallback
+then accumulates contradictory duplicate flag lines on every invocation.
+Any mock control advertised by the `scripts/hot-dev.sh` startup banner must
+exist as a wrapper in `package.json`.
 That same canonical dev-entry boundary also includes the frontend workspace
 package and developer health helper. `frontend-modern/package.json` may not
 advertise raw `vite` as the default `dev` command, and `scripts/dev-check.sh`

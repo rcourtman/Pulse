@@ -289,6 +289,42 @@ test_set_mock_mode_does_not_recreate_legacy_sidecars() {
   assert_file_absent "set_mock_mode does not recreate runtime legacy mock sidecar" "${state}/runtime/mock.env"
 }
 
+test_package_json_mock_wrappers_delegate_to_toggle_mock() {
+  local script name value
+  for name in mock:on mock:off mock:status mock:edit; do
+    value="$(node -e '
+      const pkg = require(process.argv[1]);
+      process.stdout.write((pkg.scripts || {})[process.argv[2]] || "");
+    ' "${ROOT_DIR}/package.json" "${name}")"
+
+    assert_contains "package.json ${name} delegates to toggle-mock.sh" \
+      "${value}" "scripts/toggle-mock.sh"
+
+    # An inline flag rewrite targets the repo-root .env, which hot-dev.sh does
+    # not consult, and GNU `sed -i` fails outright on the default macOS BSD sed.
+    if [[ "${value}" == *"PULSE_MOCK_MODE="* || "${value}" == *"sed -i"* ]]; then
+      echo "[FAIL] package.json ${name} must not rewrite the mock flag inline" >&2
+      echo "Got: ${value}" >&2
+      ((failures++))
+    else
+      echo "[PASS] package.json ${name} does not rewrite the mock flag inline"
+    fi
+  done
+
+  # Anything the hot-dev startup banner tells operators to run must exist.
+  while read -r script; do
+    [[ -n "${script}" ]] || continue
+    value="$(node -e '
+      const pkg = require(process.argv[1]);
+      process.stdout.write((pkg.scripts || {})[process.argv[2]] === undefined ? "" : "present");
+    ' "${ROOT_DIR}/package.json" "${script}")"
+
+    assert_contains "hot-dev banner advertises existing npm script ${script}" \
+      "${value}" "present"
+  done < <(grep -oE 'npm run (mock:[a-z]+)' "${ROOT_DIR}/scripts/hot-dev.sh" \
+    | sed 's/^npm run //' | sort -u)
+}
+
 main() {
   test_detects_managed_hot_dev_runtime
   test_managed_hot_dev_start_uses_takeover
@@ -297,6 +333,7 @@ main() {
   test_ensure_mock_env_file_seeds_canonical_demo_defaults
   test_ensure_mock_env_file_migrates_legacy_sidecar
   test_set_mock_mode_does_not_recreate_legacy_sidecars
+  test_package_json_mock_wrappers_delegate_to_toggle_mock
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2
