@@ -1,25 +1,16 @@
 {
   "version": 1,
-  "base_sha": "caaf5ed232c293331f9c3aec4d19788bf220f18a",
-  "verified_at": "2026-08-03T18:33:55Z",
+  "base_sha": "d00249fd7ddcc6cee0f5f35911dd6c0127cf1f33",
+  "verified_at": "2026-08-03T18:47:21Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts",
-    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/pages/Alerts.tsx"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts": "670f68a047a3e9dd8fda676e7a46819d2fd98b99ae19d493161ffb0c626c177d",
-    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts": "19488bf7edf26d30c966b962254acfe588b26af86cc4d606dc32cf4d95360f54",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "9c6abbb54e00786351d3185e70ecf231df1f4caabf110d3a69010ed0c5584a17",
-    "frontend-modern/src/pages/Alerts.tsx": "0c411a83c86d2aa448fe21fb01264794832154abc45b456e2a549d336f03d703"
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "87e314940a667c8ff49e2aaf63b45f8d3f6278c3c01747fcaf9f850295d3e413"
   },
   "routes": [
-    "/alerts/schedule",
-    "/alerts/overview",
-    "/alerts/notifications",
-    "/docker/networks"
+    "/patrol"
   ],
   "viewports": [
     {
@@ -32,17 +23,15 @@
     }
   ],
   "states": [
-    "Phone-width Alerts Schedule route loaded directly with the active destination fully visible",
-    "Phone-width Alerts Overview selected after starting from the right edge of the rail",
-    "Phone-width Alerts Notifications selected and fully contained",
-    "Desktop Alerts Notifications surface with canonical sidebar navigation",
-    "Phone-width Docker Networks surface after the platform rail adopted the shared visibility owner"
+    "Desktop Patrol attention workbench with all six counted lifecycle choices visible in the segmented control",
+    "Desktop Recent resolved selection with the resolved queue item loaded",
+    "Narrow Patrol attention workbench with the segmented control hidden and the labeled native select visible",
+    "Narrow Recent resolved selection with the resolved queue item loaded"
   ],
   "interactions": [
-    "Loaded /alerts/schedule directly at 390 by 844 and confirmed the rail moved from scrollLeft 0 to 55 so Schedule was fully visible",
-    "Selected Overview and confirmed the active destination changed and the rail returned to scrollLeft 0",
-    "Selected Notifications and confirmed its active button remained fully inside the rail bounds",
-    "Resized to 1280 by 720 and confirmed Alerts retained its desktop sidebar navigation with no document overflow",
-    "Reloaded /docker/networks at 390 by 844 and confirmed the active Networks destination remained fully visible after the shared hook extraction"
+    "Selected Recent resolved from the desktop segmented control and confirmed its pressed state and resolved queue result",
+    "Reloaded /patrol at 390 by 844 and confirmed the Attention state select and every counted option remained available without horizontal overflow",
+    "Selected Recent resolved from the narrow native select and confirmed its selected state and resolved queue result",
+    "Measured the desktop segmented group inside the viewport and the narrow document at exactly 390 pixels wide with the wide group display set to none"
   ]
 }

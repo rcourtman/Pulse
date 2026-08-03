@@ -34,6 +34,7 @@ import {
 } from '@/api/patrolAttention';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink } from '@/components/shared/Button';
+import { LabeledFilterToggleGroup } from '@/components/shared/FilterToolbar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
@@ -95,6 +96,15 @@ export function PatrolAttentionWorkbench() {
         return undefined;
     }
   };
+  const attentionFilterOptions = createMemo(() =>
+    FILTERS.map((option) => {
+      const count = filterCount(option.id);
+      return {
+        value: option.id,
+        label: count === undefined ? option.label : `${option.label} ${count}`,
+      };
+    }),
+  );
 
   const loadCurrentFilter = () => patrolAttentionStore.load(patrolAttentionStore.filter());
   const scrollDetailIntoView = () => {
@@ -248,34 +258,15 @@ export function PatrolAttentionWorkbench() {
           </Button>
         </div>
 
-        <div
-          class="mt-4 flex gap-2 overflow-x-auto pb-1"
-          role="group"
-          aria-label="Attention filter"
-        >
-          <For each={FILTERS}>
-            {(option) => {
-              const selected = () => patrolAttentionStore.filter() === option.id;
-              const count = () => filterCount(option.id);
-              return (
-                <button
-                  type="button"
-                  class={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    selected()
-                      ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200'
-                      : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'
-                  }`}
-                  aria-pressed={selected()}
-                  onClick={() => changeFilter(option.id)}
-                >
-                  {option.label}
-                  <Show when={count() !== undefined}>
-                    <span class="tabular-nums text-[10px]">{count()}</span>
-                  </Show>
-                </button>
-              );
-            }}
-          </For>
+        <div class="mt-4">
+          <LabeledFilterToggleGroup
+            id="patrol-attention-state"
+            label="Attention state"
+            value={patrolAttentionStore.filter()}
+            onChange={(value) => changeFilter(value as AttentionFilter)}
+            options={attentionFilterOptions()}
+            selectClass="min-w-[11rem]"
+          />
         </div>
       </div>
 

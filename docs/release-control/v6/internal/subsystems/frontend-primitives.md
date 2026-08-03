@@ -1111,9 +1111,14 @@ not a replacement status card, CTA band, or page-local nested card.
    columns. Compact, stable, mutually-exclusive filters
    with two to five options should use `LabeledFilterToggleGroup` as a
    responsive control: toggle buttons at wide desktop widths and the native
-   select fallback below that. Dynamic, user/environment-sized, or six-plus
-   option filters remain `LabeledFilterSelect` surfaces so estate-sized lists
-   such as nodes never become button groups. Filters that change which other
+   select fallback below that. Dynamic and user/environment-sized option
+   filters remain `LabeledFilterSelect` surfaces so estate-sized lists such as
+   nodes never become button groups. A fixed six-state operational lifecycle
+   may use `LabeledFilterToggleGroup` when every choice is a frequent triage
+   action, the complete segmented group fits at its wide breakpoint, and the
+   native select fallback owns all narrower layouts; this bounded exception
+   must not be generalized to dynamic six-plus filters. Filters that change
+   which other
    filters exist, such as Workloads Type, must stay in a stable primary filter
    band ahead of the dependent estate/data filters so changing the parent
    filter does not move its own click target or the adjacent primary filters;

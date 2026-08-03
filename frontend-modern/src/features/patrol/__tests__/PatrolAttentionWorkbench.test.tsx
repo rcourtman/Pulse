@@ -211,6 +211,41 @@ describe('PatrolAttentionWorkbench', () => {
     expect(screen.queryByText(/auto-resolved/i)).not.toBeInTheDocument();
   });
 
+  it('keeps the fixed attention states available through one responsive shared control', async () => {
+    const attentionSummary = summary({
+      activeCount: 1,
+      openCount: 1,
+      acknowledgedCount: 2,
+      suppressedCount: 3,
+      uncertainCount: 4,
+      resolvedCount: 5,
+      calm: false,
+    });
+    apiMocks.getList.mockResolvedValue(listResponse([item()], attentionSummary));
+    renderWorkbench();
+
+    const activeButton = await screen.findByRole('button', { name: 'Active 1' });
+    const stateGroup = screen.getByRole('group', { name: 'Attention state' });
+    expect(stateGroup).toHaveClass('hidden', 'xl:inline-flex');
+    expect(activeButton).toHaveAttribute('aria-pressed', 'true');
+
+    const stateSelect = screen.getByRole('combobox', { name: 'Attention state' });
+    expect(stateSelect.parentElement).toHaveClass('xl:hidden');
+    expect(stateSelect).toHaveValue('active');
+    expect(within(stateSelect).getByRole('option', { name: 'Recent resolved 5' })).toHaveValue(
+      'resolved',
+    );
+
+    fireEvent.change(stateSelect, { target: { value: 'resolved' } });
+
+    await waitFor(() => expect(apiMocks.getList).toHaveBeenLastCalledWith('resolved'));
+    expect(stateSelect).toHaveValue('resolved');
+    expect(screen.getByRole('button', { name: 'Recent resolved 5' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   it('opens deepest typed evidence, protection, and timeline detail from one queue item', async () => {
     const active = item();
     apiMocks.getList.mockResolvedValue(

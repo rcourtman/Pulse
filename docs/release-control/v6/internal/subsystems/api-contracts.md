@@ -3691,6 +3691,10 @@ drift back to a single-scope gate: a registered phone carries only
 mobile alert sync on upgrade (v6.1.0-rc.4 regression).
 Lists use bounded pagination with a maximum of 200 records and one bounded
 protection-posture batch. The summary path does not read recovery history.
+The Patrol workbench may project the summary counts into its fixed lifecycle
+filter labels at either desktop or narrow widths, but changing presentation
+does not create a parallel count or filter vocabulary: every selection still
+uses the canonical `AttentionFilter` request and the returned list summary.
 
 Lifecycle read failure returns a typed unavailable response and never a
 synthetic zero or calm state. Protection lookup failure may return lifecycle

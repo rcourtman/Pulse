@@ -954,7 +954,11 @@ The primary Patrol workspace is now
 must not derive lifecycle state from legacy Patrol findings. Active, open,
 acknowledged, suppressed, stale/unknown, recent-resolved, calm, partial, and
 unavailable states all come from the same backend projection. Navigation and
-the queue consume the same active summary.
+the queue consume the same active summary. Those six fixed lifecycle views are
+frequent operator triage choices: wide layouts retain one-click segmented
+choices with the backend-projected count in every label, while narrower
+layouts use the shared labeled select fallback. The control must not become a
+horizontally scrolling rail that leaves a lifecycle view clipped or hidden.
 
 The default view owns only the ordered action queue. Legacy Patrol checks,
 investigations, and run history remain available under collapsed supporting
