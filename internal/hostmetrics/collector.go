@@ -412,13 +412,16 @@ func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskI
 		if isPartition(name) {
 			continue
 		}
-		// Skip virtual/pseudo block devices (loop, ram, dm-, md, zvols,
-		// zram, nbd, rbd, drbd, ...). ZFS-backed Proxmox hosts expose one
-		// zd<N> device per zvol, so without this a host with a few hundred
-		// guests reports a few hundred phantom disks on every collection
-		// cycle (issue #1671). The prefix list is shared with SMART
-		// collection and the server-side resource registry.
-		if fsfilters.IsVirtualBlockDevice(name) {
+		// Skip devices whose counters are not host physical disk activity
+		// (loop, ram, zram, dm- aggregates, and ZFS zvols). ZFS-backed
+		// Proxmox hosts expose one zd<N> device per zvol, so without this a
+		// host with a few hundred guests reports a few hundred phantom
+		// disks on every collection cycle (issue #1671).
+		//
+		// Deliberately NOT fsfilters.IsVirtualBlockDevice: that answers
+		// "can this report SMART" and would drop vd*/xvd*, which are the
+		// real disks of any agent running inside a VM.
+		if fsfilters.IsNonPhysicalDiskIODevice(name) {
 			continue
 		}
 		// Skip user-excluded devices (issue #1142)

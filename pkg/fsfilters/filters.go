@@ -269,6 +269,44 @@ var virtualBlockDevicePrefixes = []string{
 	"zram",
 }
 
+// nonPhysicalIODevicePrefixes are device-name prefixes whose kernel I/O
+// counters do not describe host physical disk activity, either because the
+// device is purely virtual (loop, ram, zram), because it is guest storage
+// layered on the real disks (ZFS zvols), or because it is a mapper
+// aggregate that restates the I/O of its own members (dm-).
+//
+// This list is deliberately NARROWER than virtualBlockDevicePrefixes, and
+// the two must not be conflated. That list answers "can this device report
+// SMART", which is a different question: a virtio (vd*) or Xen (xvd*) disk
+// cannot report SMART, but its I/O counters are the real disk activity of a
+// virtualised host, so excluding those from I/O collection blanks disk I/O
+// for every agent running inside a VM.
+var nonPhysicalIODevicePrefixes = []string{
+	"dm-",
+	"loop",
+	"ram",
+	"zd",
+	"zram",
+}
+
+// IsNonPhysicalDiskIODevice reports whether a block-device name should be
+// left out of host disk I/O collection because its counters do not
+// represent physical disk activity on this host. Use this for I/O
+// accounting. Use IsVirtualBlockDevice for SMART capability.
+func IsNonPhysicalDiskIODevice(name string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(name))
+	trimmed = strings.TrimPrefix(trimmed, "/dev/")
+	if trimmed == "" {
+		return false
+	}
+	for _, prefix := range nonPhysicalIODevicePrefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsVirtualBlockDevice reports whether a block-device name (with or
 // without the /dev/ prefix) looks like a virtual or pseudo device that
 // cannot provide SMART data or meaningful physical-disk metrics.

@@ -364,3 +364,33 @@ func TestIsVirtualBlockDevice(t *testing.T) {
 		})
 	}
 }
+
+// Regression guard: IsNonPhysicalDiskIODevice answers a different question
+// from IsVirtualBlockDevice. Conflating them once blanked host disk I/O for
+// every agent running inside a VM, because virtio and Xen disks cannot
+// report SMART but their I/O counters are real host disk activity.
+func TestIsNonPhysicalDiskIODevice(t *testing.T) {
+	excluded := []string{"loop0", "ram0", "zram0", "dm-0", "zd0", "zd16", "zd160", "/dev/zd0"}
+	for _, device := range excluded {
+		if !IsNonPhysicalDiskIODevice(device) {
+			t.Errorf("IsNonPhysicalDiskIODevice(%q) = false, want true", device)
+		}
+	}
+
+	kept := []string{"sda", "nvme0n1", "vda", "vdb", "xvda", "md0", "pmem0", "nbd0", "rbd0", "/dev/vda"}
+	for _, device := range kept {
+		if IsNonPhysicalDiskIODevice(device) {
+			t.Errorf("IsNonPhysicalDiskIODevice(%q) = true, want false", device)
+		}
+	}
+
+	// vd*/xvd* must stay excluded for SMART while staying included for I/O.
+	for _, device := range []string{"vda", "xvda"} {
+		if !IsVirtualBlockDevice(device) {
+			t.Errorf("IsVirtualBlockDevice(%q) = false, want true", device)
+		}
+		if IsNonPhysicalDiskIODevice(device) {
+			t.Errorf("IsNonPhysicalDiskIODevice(%q) = true, want false", device)
+		}
+	}
+}

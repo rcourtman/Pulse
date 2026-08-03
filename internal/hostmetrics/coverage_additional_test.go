@@ -189,30 +189,31 @@ func TestCollectDiskIOFiltersAndError(t *testing.T) {
 			"ram0":      {ReadBytes: 7},
 			"dm-0":      {ReadBytes: 8},
 			"sdb":       {ReadBytes: 9},
-			// Aggregate virtual devices whose counters restate the I/O of
-			// the physical members underneath them.
-			"md0": {ReadBytes: 10},
+			"md0":       {ReadBytes: 10},
 			// ZFS zvols. A Proxmox host with ZFS-backed guest storage
 			// exposes one of these per zvol (issue #1671).
 			"zd0":   {ReadBytes: 11},
 			"zd16":  {ReadBytes: 12},
 			"zd160": {ReadBytes: 13},
 			"zram0": {ReadBytes: 14},
-			"nbd0":  {ReadBytes: 15},
-			"rbd0":  {ReadBytes: 16},
+			// Real disks of a virtualised host. These cannot report SMART
+			// but their I/O counters are genuine host disk activity, so
+			// they must survive the filter.
+			"vda":  {ReadBytes: 15},
+			"xvda": {ReadBytes: 16},
 		}, nil
 	}
 
 	disks := collectDiskIO(context.Background(), []string{"sdb"})
-	if len(disks) != 2 {
-		t.Fatalf("expected 2 disk I/O entries after filtering, got %d: %+v", len(disks), disks)
+	if len(disks) != 5 {
+		t.Fatalf("expected 5 disk I/O entries after filtering, got %d: %+v", len(disks), disks)
 	}
 
 	gotDevices := make([]string, 0, len(disks))
 	for _, disk := range disks {
 		gotDevices = append(gotDevices, disk.Device)
 	}
-	wantDevices := []string{"nvme0n1", "sda"}
+	wantDevices := []string{"md0", "nvme0n1", "sda", "vda", "xvda"}
 	if !reflect.DeepEqual(gotDevices, wantDevices) {
 		t.Fatalf("unexpected disk I/O devices: got %v, want %v", gotDevices, wantDevices)
 	}
