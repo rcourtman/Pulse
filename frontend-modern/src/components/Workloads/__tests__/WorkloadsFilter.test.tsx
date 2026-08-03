@@ -224,6 +224,38 @@ describe('WorkloadsFilter', () => {
       );
     });
 
+    it('does not reserve an empty leading-action slot in the default mobile filter rail', () => {
+      isMobileMock.mockReturnValue(true);
+      render(() => (
+        <WorkloadsFilter
+          {...makeProps({
+            savedViewsKey: 'test-workloads',
+            pinnedSelectionActive: () => false,
+            onClearPinnedSelection: vi.fn(),
+            hostFilter: {
+              value: '',
+              options: [
+                { value: '', label: 'All nodes' },
+                { value: 'pve1', label: 'pve1' },
+              ],
+              onChange: vi.fn(),
+            },
+          })}
+        />
+      ));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+      const actions = screen.getByRole('group', { name: 'Filter actions' });
+      const actionCluster = actions.querySelector('[data-filter-action-cluster]');
+      expect(actionCluster).toContainElement(
+        within(actions).getByRole('combobox', { name: 'Filter' }),
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Clear pinned selection' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('maps legacy container view modes onto the canonical "Containers" type chip', () => {
       render(() => (
         <WorkloadsFilter {...makeProps({ viewMode: vi.fn(() => 'app-container' as const) })} />

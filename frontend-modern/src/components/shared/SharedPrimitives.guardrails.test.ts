@@ -8146,6 +8146,7 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).toContain('props.filters.filter(isFilterSet)');
     expect(filterBarSource).toContain('activeCount() > 0');
     expect(filterBarSource).toContain('data-filter-action-cluster');
+    expect(filterBarSource).toContain('showAddFilterInMobileActionRow');
     expect(filterBarSource).toContain('showLabel={props.showAddFilterLabel === true}');
     expect(filterBarSource).not.toContain('showLabel={props.showAddFilterLabel !== false}');
     expect(filterBarSource).toContain(

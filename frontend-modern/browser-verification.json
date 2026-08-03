@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "3afc8bda1590a29842bf8704aec605526a685fcb",
-  "verified_at": "2026-08-03T13:58:06Z",
+  "base_sha": "85b0530439992e461e3270278118ba5d018b3dcb",
+  "verified_at": "2026-08-03T14:30:18Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts"
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "e73b856bf2c0d3bd67cba862bd2ef295b5d3e41f2c2759d7f4dadf848fb33504",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "b3267ab57bcdf6ba7735168608772785a8445e54ccc2c6746c5ea9ff011f98c8"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "f6b3e7f839197e2662765cd69f17911fa86c8f97922dda3d93a87ca21e7c984b",
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "ebb84ed0fc935309efa62c04f3cc4e7d13eea38ff0d2b6473a892430617fa433"
   },
-  "routes": ["/alerts/thresholds/proxmox", "/proxmox/storage"],
+  "routes": ["/vmware/overview", "/proxmox/backups"],
   "viewports": [
     {
       "width": 1280,
@@ -23,19 +23,18 @@
     }
   ],
   "states": [
-    "Desktop Alert Thresholds filter bar at its default and custom-override-filtered states",
-    "Desktop Proxmox Physical Disks filter bar at its default, group-filtered, and empty-result states",
-    "Phone-width Alert Thresholds filter rail collapsed and expanded",
-    "Phone-width Proxmox Physical Disks filter rail collapsed and expanded"
+    "Desktop vSphere overview filter rail with its default actions and with a Node filter active",
+    "Phone-width vSphere overview filter rail collapsed, expanded with no active chips, expanded with a Node chip, and reset after Clear filters",
+    "Phone-width vSphere View preferences open above the mobile navigation",
+    "Desktop and phone-width Proxmox backup filter rails in their collapsed and expanded states"
   ],
   "interactions": [
-    "Confirmed the shared Add filter control hides its redundant visible uppercase Filter label by default while retaining the accessible Filter name",
-    "Measured the Add filter select at a stable 120 by 28 pixels on both desktop routes and both expanded phone-width rails",
-    "Applied Overrides: Custom only on Alert Thresholds and confirmed the select became an Overrides chip with one Clear filters action",
-    "Cleared the threshold filter and confirmed the default Add filter control returned",
-    "Applied Group: vault on Physical Disks and confirmed Add filter, Saved, Clear filters, View, the active chip, and the empty-result state remained aligned",
-    "Cleared the physical-disk filter and confirmed the full result table returned",
-    "Expanded both phone-width filter rails and confirmed Add filter and adjacent actions wrapped without clipping or horizontal overflow",
-    "Read the browser console after the final desktop and responsive pass and confirmed no warnings or errors"
+    "Expanded the phone-width vSphere filter rail and confirmed Add filter, Saved, and View share one action row while Trend range remains on its own row",
+    "Selected Node: esxi-01.lab.local and confirmed the active chip stays with Add filter while Clear filters, Saved and View, and Trend range wrap without clipping",
+    "Cleared the Node filter and confirmed the compact Add filter, Saved, and View action row returned",
+    "Opened View preferences at 390 by 844 and measured the panel fully inside the viewport with clear separation from the fixed mobile navigation",
+    "Closed View preferences with Escape and confirmed the panel disappeared, aria-expanded reset, and focus returned to View",
+    "Confirmed the vSphere desktop action rail remains aligned after the shared layout change",
+    "Confirmed Proxmox Backups remains aligned on desktop and phone-width layouts, including collapsed and expanded filter rails"
   ]
 }

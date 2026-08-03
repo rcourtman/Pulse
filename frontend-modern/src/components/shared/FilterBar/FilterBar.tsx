@@ -94,10 +94,18 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   const showInlineRow = () => props.isMobile() && mobileExpanded() && inlineFilters().length > 0;
   const showDesktopChipRow = () => !props.isMobile() && activeMenuFilters().length > 0;
   const showMobileBody = () => props.isMobile() && mobileExpanded();
+  const showMobileActionRow = () => showMobileBody() && (hasSavedViews() || hasAuxiliaryControls());
+  const showAddFilterInMobileActionRow = () =>
+    showMobileActionRow() &&
+    activeMenuFilters().length === 0 &&
+    hasAddableMenuFilters() &&
+    !hasClearableState() &&
+    !props.leadingControls;
   const showChipRow = () =>
     showDesktopChipRow() ||
-    (showMobileBody() && (activeMenuFilters().length > 0 || hasAddableMenuFilters()));
-  const showMobileActionRow = () => showMobileBody() && (hasSavedViews() || hasAuxiliaryControls());
+    (showMobileBody() &&
+      (activeMenuFilters().length > 0 ||
+        (hasAddableMenuFilters() && !showAddFilterInMobileActionRow())));
   const showClearAllInMobileActionRow = () =>
     showMobileActionRow() && hasClearableState() && !showChipRow();
 
@@ -222,6 +230,12 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             aria-label="Filter actions"
           >
             <div class="flex shrink-0 flex-nowrap items-center gap-2" data-filter-action-cluster>
+              <Show when={showAddFilterInMobileActionRow()}>
+                <AddFilterMenu
+                  filters={menuFilters()}
+                  showLabel={props.showAddFilterLabel === true}
+                />
+              </Show>
               <Show when={props.savedViewsKey}>
                 {(key) => <SavedViewsMenu storageKey={key()} />}
               </Show>

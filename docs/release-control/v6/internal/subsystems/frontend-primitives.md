@@ -3965,6 +3965,10 @@ instead of forcing View onto an isolated line. View takes the row's available
 trailing space and anchors its panel from the mobile action rail's trailing
 edge, then returns to trigger-relative trailing alignment on desktop; Saved
 keeps its leading-edge mobile anchor.
+When no menu-backed filter chip, contextual Clear action, or leading action is
+present, the compact Add filter control joins that same action cluster instead
+of occupying an otherwise empty row by itself. Once a menu-backed filter is
+active, Add filter remains with the active chips so scope editing stays grouped.
 The mobile action cluster is non-breaking as a unit; orientation readouts such
 as result counts and trend ranges wrap separately so they cannot strand View
 on a line by itself.

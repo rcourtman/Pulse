@@ -1641,7 +1641,10 @@ desktop and mobile layouts, including the mobile action-row placement shared
 with Saved views. Saved, contextual Clear, leading actions, and View stay in
 one non-breaking mobile action cluster; trailing analytical controls and result
 counts wrap independently so a narrow toolbar cannot strand View on a line by
-itself or force page-level horizontal overflow. The sparkline range remains
+itself or force page-level horizontal overflow. The compact Add filter control
+joins that cluster only in the default state where no active menu chip,
+contextual Clear action, or leading action needs its own filter row; active
+scope editing keeps Add filter beside the chips. The sparkline range remains
 inline only while trends are active because it is the frequently changed
 analytical window, and its compact control must include a visible `Trend range`
 label so the values are not an orphaned set of durations. Columns must expand

@@ -265,7 +265,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       showAddFilterLabel={false}
       savedViewsKey={props.savedViewsKey}
       leadingControls={
-        <Show when={props.pinnedSelectionActive?.() && props.onClearPinnedSelection}>
+        props.pinnedSelectionActive?.() && props.onClearPinnedSelection ? (
           <FilterActionButton
             aria-label="Clear pinned selection"
             title="Clear pinned selection"
@@ -274,7 +274,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
             <XIcon class="h-3 w-3" />
             Clear selection
           </FilterActionButton>
-        </Show>
+        ) : undefined
       }
       viewOptions={
         <>

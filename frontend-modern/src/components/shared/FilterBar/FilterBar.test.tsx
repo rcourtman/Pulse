@@ -192,6 +192,31 @@ describe('FilterBar', () => {
     expect(actionCluster).toContainElement(within(actions).getByRole('button', { name: 'View' }));
   });
 
+  it('keeps an otherwise orphaned Add filter with Saved and View on mobile', () => {
+    renderInRouter(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter()]}
+        isMobile={() => true}
+        savedViewsKey="test-surface"
+        viewOptions={<span>Density</span>}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+
+    const actions = screen.getByRole('group', { name: 'Filter actions' });
+    const actionCluster = actions.querySelector('[data-filter-action-cluster]');
+    expect(actionCluster).not.toBeNull();
+    expect(actionCluster).toContainElement(
+      within(actions).getByRole('combobox', { name: 'Filter' }),
+    );
+    expect(actionCluster).toContainElement(
+      within(actions).getByRole('button', { name: 'Saved views' }),
+    );
+    expect(actionCluster).toContainElement(within(actions).getByRole('button', { name: 'View' }));
+  });
+
   it('keeps clear filters with filter actions before the presentation controls', () => {
     render(() => (
       <FilterBar
