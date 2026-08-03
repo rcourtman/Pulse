@@ -1,0 +1,221 @@
+# 🔧 Troubleshooting Guide
+
+## ⚡ Quick Fixes
+
+### I forgot my password
+**Docker**:
+```bash
+docker exec pulse rm /data/.env
+docker restart pulse
+# Access UI again. Pulse will require a bootstrap token for setup.
+# Get it with:
+docker exec pulse /app/pulse bootstrap-token
+```
+**Systemd**:
+Delete `/etc/pulse/.env` and restart the service. Pulse will require a bootstrap token for setup:
+
+```bash
+sudo pulse bootstrap-token
+```
+**Proxmox LXC** (installed from the Proxmox shell):
+Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host:
+
+```bash
+pct exec <ctid> -- rm /etc/pulse/.env
+pct exec <ctid> -- systemctl restart pulse
+pct exec <ctid> -- pulse bootstrap-token
+```
+
+If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
+
+### Port change didn't take effect
+1. Check which service is running: `systemctl status pulse` (legacy installs may use `pulse-backend`).
+2. Verify environment override: `systemctl show pulse --property=Environment`.
+3. Docker: Ensure you updated the `-p` flag (e.g., `-p 8080:7655`).
+
+### "Connection Refused"
+- Check if Pulse is running.
+- Verify the port is open on your firewall.
+- **PBS**: Remember PBS uses port **8007** and requires **HTTPS**.
+
+---
+
+## 🔍 Common Issues
+
+### Authentication
+
+#### "Invalid username or password" after setup
+- **Docker Compose**: Did you escape the `$` signs in your hash? Use `$$2a$$...`.
+- **Truncated Hash**: Ensure your bcrypt hash is exactly 60 characters.
+
+#### Cannot login / 401 Unauthorized
+- Clear browser cookies.
+- Check if your IP is locked out (wait 15 mins).
+- If another admin can log in, use `POST /api/security/reset-lockout` to clear the lockout for your username or IP.
+
+#### Audit Log verification shows unsigned events
+- **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
+- **Root cause**: Audit signing is disabled (crypto manager unavailable), so events are stored without signatures.
+- **Fix**: Ensure `.encryption.key` is present and Pro/legacy Pro+/Cloud audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
+
+#### Audit Log is empty
+- **Symptom**: Audit Log shows zero events or "Console Logging Only."
+- **Root cause**: Community plan uses console logging only, or Pro/legacy Pro+/Cloud audit logging is not enabled.
+- **Fix**: Use Pro, legacy Pro+, or Cloud with audit logging enabled, then generate new audit events (logins, token creation, password changes).
+
+#### Audit Log verification fails for older events
+- **Symptom**: Older events fail verification while newer events pass.
+- **Root cause**: The audit signing key changed (for example, `.audit-signing.key` was regenerated), so signatures no longer match.
+- **Fix**: Restore the previous `.audit-signing.key` from backup to verify older events. If rotated intentionally, expect older events to fail verification.
+
+### Monitoring Data
+
+#### Agent fleet update or identity issue
+
+- Open an outdated-agent notice or
+  `/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
+  copy the platform-specific command for each reported host. This is a manual
+  handoff; Pulse does not remotely execute the command.
+- Administrators can call the read-only Agent Fleet Doctor endpoint,
+  `GET /api/agents/diagnostics`, to inspect liveness, version drift, profile
+  deployment drift, expected telemetry gaps, and identity-split evidence. It
+  does not change agent configuration or enqueue a repair.
+- A current Pulse server does not prove fleet convergence. Eligible v6 agents
+  update asynchronously; v5, PVE, disabled, and failed updates require manual
+  handling.
+
+#### Removed Pulse server but `pulse-agent` still logs connection failures
+
+Removing the Pulse server does not remove agent services installed on monitored
+hosts. On a systemd host, stop and disable the orphaned service to halt retries:
+
+```bash
+sudo systemctl disable --now pulse-agent.service
+```
+
+If the Pulse server is still reachable, use its generated uninstall command so
+the agent can deregister cleanly. Otherwise, stopping the service is the safe
+first step before platform-local cleanup.
+
+#### VMs show "-" for disk usage
+- Install **QEMU Guest Agent** in the VM.
+- Enable "QEMU Guest Agent" in Proxmox VM Options.
+- Restart the VM.
+- See [VM Disk Monitoring](VM_DISK_MONITORING.md).
+
+#### Temperature data missing
+- Install `lm-sensors` on the host.
+- Run `sensors-detect`.
+- Install the unified agent on the Proxmox host with `--enable-proxmox`.
+- See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
+
+#### Docker hosts appearing/disappearing
+- **Duplicate IDs**: Cloned VMs often share `/etc/machine-id`.
+- **Fix**: Run `rm /etc/machine-id && systemd-machine-id-setup` on the clone.
+- **Identity note**: The displayed IP is not the durable identity. Pulse uses
+  the machine ID or an explicit agent ID, so two clones with the same value can
+  collapse into one record even when their hostnames or IP addresses differ.
+
+### Notifications
+
+#### Emails not sending
+- Open **Alerts → Notifications** first. Pulse shows a delivery warning when
+  failed or dead-lettered notifications remain in the persistent queue; a
+  missing queue-health read is shown as unavailable rather than healthy.
+- Check SMTP settings in **Alerts → Notifications**.
+- Check logs: `docker logs pulse | grep email`.
+- Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
+
+#### Webhooks failing
+- Check the delivery warning in **Alerts → Notifications** and use **Send test**
+  after correcting the destination. Recoverable retries do not trigger the
+  warning; retained terminal failures do.
+- Verify the URL is reachable from the Pulse server.
+- If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
+- Check Pulse logs for HTTP status codes and response bodies.
+
+### TrueNAS
+
+#### "TrueNAS service unavailable"
+- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid URL and API key.
+- Check that the TrueNAS system is reachable from the Pulse server (default HTTPS port).
+- Verify the API key has read access. Test with:
+  ```bash
+  curl -sk -H "Authorization: Bearer <api-key>" https://<truenas-ip>/api/v2.0/system/info
+  ```
+
+#### TrueNAS pools/datasets not appearing
+- TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
+- Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+
+### Navigation (v6)
+
+#### Old bookmarks don't work
+- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) are not supported in v6.
+- Update bookmarks to canonical routes. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+
+### Relay / Mobile
+
+#### Relay showing "Disconnected"
+- Confirm a valid Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Billing**).
+- Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
+- Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
+
+---
+
+## 🛠️ Advanced Diagnostics
+
+### Correlate Logs with Requests
+Every API response has an `X-Request-ID` header. Use it to find the exact log entry:
+```bash
+# systemd / Proxmox LXC
+journalctl -u pulse --no-pager | grep "request_id=abc123"
+
+# Docker
+docker logs pulse 2>&1 | grep "request_id=abc123"
+```
+
+### Check Permissions (Proxmox)
+If Pulse can't see VMs or storage, check the user permissions on Proxmox:
+```bash
+pveum user permissions <user>@pam
+```
+At minimum, ensure the user/token has read access for inventory and metrics:
+
+- `Sys.Audit`
+- `Datastore.Audit`
+
+For VM guest agent features on PVE 9+, prefer:
+
+- `VM.GuestAgent.Audit` — required for disk usage and guest info
+- `VM.GuestAgent.FileRead` — required for accurate memory monitoring (excludes buff/cache)
+
+For PVE 8 only, use `VM.Monitor` instead of the `VM.GuestAgent.*` privileges.
+
+Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token. After upgrading to PVE 9, add the `VM.GuestAgent.*` privileges and remove legacy `VM.Monitor` from the custom role.
+
+**Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
+
+### Recovery Mode
+If you are completely locked out, you can trigger a recovery token from localhost:
+```bash
+curl -X POST http://localhost:7655/api/security/recovery \
+  -d '{"action":"generate_token","duration":30}'
+```
+Use the returned token in `X-Recovery-Token` when calling `/api/security/recovery` to enable or disable local-only auth bypass (`disable_auth` / `enable_auth`). Token generation is localhost-only.
+
+Example (enable recovery mode):
+```bash
+curl -X POST http://localhost:7655/api/security/recovery \
+  -H "X-Recovery-Token: <token>" \
+  -d '{"action":"disable_auth"}'
+```
+
+---
+
+## 🆘 Getting Help
+
+If you're still stuck:
+1. **Check Logs**: `journalctl -u pulse -n 100` or `docker logs --tail 100 pulse`.
+2. **Check Version**: `curl http://localhost:7655/api/version`.
+3. **Open Issue**: Report on [GitHub Issues](https://github.com/rcourtman/Pulse/issues) with your logs and version info.

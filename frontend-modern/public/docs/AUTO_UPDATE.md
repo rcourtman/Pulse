@@ -1,0 +1,169 @@
+# Pulse Server Automatic Updates
+
+Pulse supports one-click server updates for supported deployment types. This
+document describes the Pulse server runtime, not installed Pulse Agents.
+
+Eligible v6 agents update asynchronously through their own update client. A
+server update changes their target version but does not prove fleet convergence.
+For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
+`/settings/infrastructure?agentDoctor=1` or the installer in
+**Settings → Infrastructure → Install on a host**. See
+[Unified Agent](UNIFIED_AGENT.md#auto-update).
+
+## Supported Deployment Types
+
+| Deployment | Auto-Update | Method |
+|------------|-------------|--------|
+| **ProxmoxVE LXC** | ✅ Yes | In-app update button |
+| **Systemd Service** | ✅ Yes | In-app update button |
+| **Docker** | ❌ Manual | Pull new image |
+| **Source Build** | ❌ Manual | Git pull + rebuild |
+
+## Using One-Click Updates
+
+### When an Update is Available
+
+1. Navigate to **Settings → System → Updates**
+2. If an update is available, you'll see an **"Install Update"** button
+3. Click the button to open the confirmation dialog
+4. Review the update details:
+   - Current version → New version
+   - Estimated time
+   - Changelog highlights
+5. Click **"Install Update"** to begin
+
+### Update Process
+
+1. **Download**: New version is downloaded, its signature and checksum are verified
+2. **Validate**: The new binary is executed with `--version` to prove it runs on this host and reports the expected version, before anything is touched
+3. **Backup**: Current installation is backed up
+4. **Apply**: Files are updated
+5. **Restart**: Service restarts automatically
+6. **Verify**: Health check confirms success
+
+### Progress Tracking
+
+A real-time progress modal shows:
+- Current step
+- Download progress
+- Any warnings or errors
+- Automatic page reload on success
+
+## Configuration
+
+### Update Preferences
+
+In **Settings → System → Updates**:
+
+| Setting | Description |
+|---------|-------------|
+| **Update Channel** | Stable (recommended for production) or Pre-release (opt-in preview) |
+| **Auto-Check** | Enable or disable automatic updates |
+
+### Stored Settings (system.json)
+
+Auto-update preferences are stored in `system.json` and edited via the UI.
+
+```json
+{
+  "autoUpdateEnabled": false,
+  "updateChannel": "stable"
+}
+```
+
+**Note:** The update schedule itself lives in the systemd timer (daily at 02:00 plus up to 4 hours of random delay), not in `system.json`. The legacy `autoUpdateCheckInterval` and `autoUpdateTime` fields were never consumed by anything and are ignored if present in older files.
+
+**Channel policy note:** `stable` is the default and only recommended channel for paid or production environments. `rc` remains the internal channel key, but the user-facing meaning is an explicit pre-release preview path. In v6, unattended systemd auto-updates remain `stable`-only even if `updateChannel` is set to `rc`.
+
+## Manual Update Methods
+
+### Docker
+
+```bash
+# Pull latest image
+docker pull rcourtman/pulse:vX.Y.Z
+
+# Restart container
+docker compose down && docker compose up -d
+```
+
+This command uses the public Community image. Private Pro runtime installs must
+use the private image and credentials supplied by the private download/update
+path; replacing a Pro image with `rcourtman/pulse` changes the runtime edition.
+
+If you use the legacy `docker-compose` binary, replace `docker compose` with `docker-compose`.
+
+### ProxmoxVE LXC (Manual)
+
+```bash
+sudo /bin/update
+```
+
+`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+
+### Systemd Service (Manual)
+
+```bash
+sudo /bin/update
+```
+
+`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+
+### Source Build
+
+```bash
+cd /path/to/pulse
+git pull
+make build
+sudo systemctl restart pulse
+```
+
+## Rollback
+
+If an update causes issues:
+
+### Automatic Rollback
+Pulse creates a backup before updating. If the update fails:
+1. The previous version is automatically restored
+2. Service restarts with the old version
+3. Error details are logged
+
+### Manual Rollback
+Update backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory does not have enough free space, Pulse falls back to `/tmp/pulse-backup-<timestamp>`. Pulse keeps the most recent three in-app rollback snapshots and prunes older ones from retention.
+There is no rollback UI. To revert, stop Pulse, restore the backup contents to `/opt/pulse`, then restart.
+
+Example (systemd/LXC):
+```bash
+sudo systemctl stop pulse
+sudo cp -a /etc/pulse/backup-<timestamp>/pulse /opt/pulse/pulse
+sudo cp -a /etc/pulse/backup-<timestamp>/VERSION /opt/pulse/VERSION
+sudo rm -rf /opt/pulse/data /opt/pulse/config
+sudo cp -a /etc/pulse/backup-<timestamp>/data /opt/pulse/data
+sudo cp -a /etc/pulse/backup-<timestamp>/config /opt/pulse/config
+sudo cp -a /etc/pulse/backup-<timestamp>/.env /opt/pulse/.env
+sudo systemctl start pulse
+```
+
+## Update History
+
+History entries are stored in `update-history.jsonl` under the Pulse data directory (`/etc/pulse` or `/data`), and exposed via `GET /api/updates/history` (admin auth required).
+
+Systemd/LXC update runs write detailed logs to `/var/log/pulse/update-<timestamp>.log`.
+
+## Troubleshooting
+
+### Update button not showing
+1. Check if your deployment supports auto-update
+2. Verify an update is actually available
+3. Ensure you have the latest frontend loaded (hard refresh)
+
+### Update failed
+1. Check the error message in the progress modal
+2. Review logs: `journalctl -u pulse -n 100` or `/var/log/pulse/update-<timestamp>.log`
+3. Verify disk space is available for both the extracted release payload and a rollback snapshot of your current install
+4. Check network connectivity to GitHub
+
+### Service won't restart after update
+1. Check systemd status: `systemctl status pulse`
+2. View recent logs: `journalctl -u pulse -f`
+3. Manually restore from backup if needed

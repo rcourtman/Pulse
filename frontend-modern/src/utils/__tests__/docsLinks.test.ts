@@ -74,35 +74,33 @@ describe('docsLinks', () => {
   });
 
   it('keeps shipped docs content synced with repo docs', () => {
-    const docPairs = [
-      { source: path.join(repoRoot, 'docs', 'README.md'), target: 'README.md' },
-      {
-        source: path.join(repoRoot, 'docs', 'MIGRATION_UNIFIED_NAV.md'),
-        target: 'MIGRATION_UNIFIED_NAV.md',
-      },
-      { source: path.join(repoRoot, 'docs', 'PRIVACY.md'), target: 'PRIVACY.md' },
-      {
-        source: path.join(repoRoot, 'docs', 'AI_TRANSPARENCY.md'),
-        target: 'AI_TRANSPARENCY.md',
-      },
-      {
-        source: path.join(repoRoot, 'docs', 'AGENT_SUBSTRATE.md'),
-        target: 'AGENT_SUBSTRATE.md',
-      },
-      { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
-      { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },
-      { source: path.join(repoRoot, 'docs', 'i18n', 'README.md'), target: 'i18n/README.md' },
-      {
-        source: path.join(repoRoot, 'docs', 'i18n', 'de', 'README.md'),
-        target: 'i18n/de/README.md',
-      },
-      {
-        source: path.join(repoRoot, 'docs', 'i18n', 'es', 'README.md'),
-        target: 'i18n/es/README.md',
-      },
-      { source: path.join(repoRoot, 'SECURITY.md'), target: 'SECURITY.md' },
-      { source: path.join(repoRoot, 'TERMS.md'), target: 'TERMS.md' },
-    ];
+    // Derived from what is actually shipped rather than a hand-maintained
+    // list, so a doc copied into public/docs can never silently drift from
+    // its repo source and a new one cannot be added without a source.
+    const shippedDocsRoot = path.join(frontendRoot, 'public', 'docs');
+    // Shipped from the repository root rather than docs/.
+    const rootSourcedDocs = new Set(['SECURITY.md', 'TERMS.md']);
+
+    function collectShippedDocs(dir: string, prefix = ''): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          return collectShippedDocs(path.join(dir, entry.name), relative);
+        }
+        return entry.name.endsWith('.md') ? [relative] : [];
+      });
+    }
+
+    const docPairs = collectShippedDocs(shippedDocsRoot)
+      .sort()
+      .map((target) => ({
+        source: rootSourcedDocs.has(target)
+          ? path.join(repoRoot, target)
+          : path.join(repoRoot, 'docs', ...target.split('/')),
+        target,
+      }));
+
+    expect(docPairs.length).toBeGreaterThan(0);
 
     for (const { source, target } of docPairs) {
       const rootDoc = readFileSync(source, 'utf8');
