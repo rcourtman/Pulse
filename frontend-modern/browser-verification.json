@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "37dfdf95ad4d9136973133006b03e45a421884c1",
-  "verified_at": "2026-08-03T13:38:29Z",
+  "base_sha": "3afc8bda1590a29842bf8704aec605526a685fcb",
+  "verified_at": "2026-08-03T13:58:06Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx": "b9be43892868440a5cd08a29e730f9ed67cf8f7bc0997d1af1b600d6a1d42bf8",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "42d877508eaac7af7b90c97ceac3cc279554cff019981518ab77e940b24ec2bd"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "e73b856bf2c0d3bd67cba862bd2ef295b5d3e41f2c2759d7f4dadf848fb33504",
+    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "b3267ab57bcdf6ba7735168608772785a8445e54ccc2c6746c5ea9ff011f98c8"
   },
-  "routes": ["/docker/overview", "/kubernetes/workloads"],
+  "routes": ["/alerts/thresholds/proxmox", "/proxmox/storage"],
   "viewports": [
     {
       "width": 1280,
@@ -23,18 +23,19 @@
     }
   ],
   "states": [
-    "Desktop Docker container toolbar before and after applying its longest host filter",
-    "Desktop Kubernetes workload toolbar with dynamic cluster and namespace filters available",
-    "Phone-width Docker toolbar with the filter rail collapsed, expanded, and host-filtered",
-    "Phone-width Kubernetes workload toolbar with the filter rail expanded"
+    "Desktop Alert Thresholds filter bar at its default and custom-override-filtered states",
+    "Desktop Proxmox Physical Disks filter bar at its default, group-filtered, and empty-result states",
+    "Phone-width Alert Thresholds filter rail collapsed and expanded",
+    "Phone-width Proxmox Physical Disks filter rail collapsed and expanded"
   ],
   "interactions": [
-    "Measured Docker and Kubernetes Add filter controls at 120 by 28 pixels beside the 95 by 28 pixel Saved trigger instead of the previous 204-pixel content-expanded select",
-    "Confirmed platform toolbars no longer render the redundant visible uppercase Filter label while the select retains its accessible Filter name",
-    "Inspected the native filter option projection and confirmed the disabled Add filter placeholder is absent from its actionable option list",
-    "Applied the longest Docker host option, confirmed the compact control gave way to a host chip, Clear filters, and the filtered 14 of 70 result count without overflow",
-    "Cleared the Docker host filter and confirmed the chip and Clear action disappeared, the Add filter control returned, and the canonical route stayed unchanged",
-    "Expanded the Docker and Kubernetes phone-width filter rails and confirmed Add filter, Saved, View, Clear filters, chips, and result counts wrapped without clipping",
+    "Confirmed the shared Add filter control hides its redundant visible uppercase Filter label by default while retaining the accessible Filter name",
+    "Measured the Add filter select at a stable 120 by 28 pixels on both desktop routes and both expanded phone-width rails",
+    "Applied Overrides: Custom only on Alert Thresholds and confirmed the select became an Overrides chip with one Clear filters action",
+    "Cleared the threshold filter and confirmed the default Add filter control returned",
+    "Applied Group: vault on Physical Disks and confirmed Add filter, Saved, Clear filters, View, the active chip, and the empty-result state remained aligned",
+    "Cleared the physical-disk filter and confirmed the full result table returned",
+    "Expanded both phone-width filter rails and confirmed Add filter and adjacent actions wrapped without clipping or horizontal overflow",
     "Read the browser console after the final desktop and responsive pass and confirmed no warnings or errors"
   ]
 }

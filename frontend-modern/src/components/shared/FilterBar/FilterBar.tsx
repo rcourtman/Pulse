@@ -161,7 +161,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             <Show when={hasAddableMenuFilters()}>
               <AddFilterMenu
                 filters={menuFilters()}
-                showLabel={props.showAddFilterLabel !== false}
+                showLabel={props.showAddFilterLabel === true}
               />
             </Show>
             <Show when={props.savedViewsKey}>{(key) => <SavedViewsMenu storageKey={key()} />}</Show>
@@ -205,7 +205,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
               <Show when={hasAddableMenuFilters()}>
                 <AddFilterMenu
                   filters={menuFilters()}
-                  showLabel={props.showAddFilterLabel !== false}
+                  showLabel={props.showAddFilterLabel === true}
                 />
               </Show>
             </Show>

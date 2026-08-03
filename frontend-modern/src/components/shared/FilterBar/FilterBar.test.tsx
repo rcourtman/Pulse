@@ -250,13 +250,12 @@ describe('FilterBar', () => {
     expect(screen.getByText('12 items')).toBeInTheDocument();
   });
 
-  it('can hide the redundant visual Filter label without changing the accessible name', () => {
+  it('hides the redundant visual Filter label by default without changing the accessible name', () => {
     render(() => (
       <FilterBar
         search={search}
         filters={[inlineTypeFilter(), menuNodeFilter()]}
         isMobile={() => false}
-        showAddFilterLabel={false}
       />
     ));
 
@@ -267,5 +266,22 @@ describe('FilterBar', () => {
     expect(select).toHaveClass('w-[7.5rem]');
     expect(select).not.toHaveClass('min-w-[7.5rem]');
     expect(select.parentElement).not.toHaveClass('p-0.5');
+  });
+
+  it('requires an explicit opt-in to show the visual Filter label', () => {
+    render(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter()]}
+        isMobile={() => false}
+        showAddFilterLabel
+      />
+    ));
+
+    const select = screen.getByRole('combobox', { name: 'Filter' });
+    const label = document.querySelector(`label[for="${select.id}"]`);
+    expect(label).not.toHaveClass('sr-only');
+    expect(label).toHaveTextContent('Filter');
+    expect(select.parentElement).toHaveClass('p-0.5');
   });
 });
