@@ -51,6 +51,19 @@ describe('SavedViewsMenu', () => {
     expect(trigger).toHaveFocus();
   });
 
+  it('anchors from the leading edge on narrow rails and the trailing edge on desktop', () => {
+    renderMenu('responsive-anchor-contract');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Saved views' }));
+
+    expect(screen.getByRole('dialog', { name: 'Saved views' })).toHaveClass(
+      'left-0',
+      'right-auto',
+      'md:left-auto',
+      'md:right-0',
+    );
+  });
+
   it('resets draft state when the trigger dismisses the popover', async () => {
     renderMenu('dismiss-contract');
 

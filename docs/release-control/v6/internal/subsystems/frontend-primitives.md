@@ -3915,8 +3915,10 @@ ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus
 to the trigger (or from the naming form to the save action), the naming field
 has a persistent label, and destructive view controls remain visibly
 discoverable at narrow touch viewports instead of depending on hover. The
-panel remains end-anchored to its trigger so its management actions cannot run
-past the viewport edge on the expanded mobile filter rail.
+panel anchors from the trigger's leading edge on the expanded mobile filter
+rail, where the trigger wraps to the left edge, and returns to trailing-edge
+alignment on desktop so its management actions cannot run past either viewport
+edge.
 Saved Views and View are peer filter-bar popovers and must compose the shared
 `FilterPopoverTrigger`; the shared trigger owns their matching text emphasis,
 icon geometry, disclosure chevron, active state, and button alignment instead

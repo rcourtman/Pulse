@@ -1,34 +1,16 @@
 {
   "version": 1,
-  "base_sha": "62ca94d6ea372bcf7c79c5b09cddf0f3ac4d312a",
-  "verified_at": "2026-08-02T23:39:29Z",
+  "base_sha": "245177e531236e58b6d54685b1c8ce56b5f696cb",
+  "verified_at": "2026-08-02T23:58:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
-    "frontend-modern/src/components/Storage/StoragePageControls.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts",
-    "frontend-modern/src/components/shared/FilterBar/index.ts",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "feca5d8342d5e38d9b4299b55f21870f4b6dac611f91ac75399b1cf01516551f",
-    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "a9f1038440b0a47670862a65646c14e1367552fb92c4f8b73e95b6520be83ebd",
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "bec3d85c0285a5d4583faf42fc1f6922696750bfc6ebe6f7258064b86a145670",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "7f5406058751a3f35bfa4bbd95a1a0f5ed561da97b36d5d000d99e26a45b3b48",
-    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "c13a319f872e8a38cf1c450e782f32906be12861d650ec99c2193ab080b45739",
-    "frontend-modern/src/components/shared/FilterBar/filterCatalog.ts": "f67694f00a5b3fb278f5b618204da8f1e0b757abe7d82bfb0695087f6a52c56d",
-    "frontend-modern/src/components/shared/FilterBar/index.ts": "cc57c752d3a2bffbbe80801cdf6fa202ccd154eda2a3de41a0018876b158343e",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "c74dfdc8a08a02bab99c9b447115816ff1d6a37c60ded66f26bcdd6d18b09a3b",
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "3afc764d29f92bc746673a8a09cedebe3ac344e8b0215cb277024b51f6dcb4f0"
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx": "4fbca74c99f6aff54f1811fb759a70aa4415450cf8a04936b6e8e4c55131724f"
   },
   "routes": [
-    "/proxmox/storage",
-    "/proxmox/overview",
-    "/settings/security-audit"
+    "/docker/overview"
   ],
   "viewports": [
     {
@@ -41,24 +23,19 @@
     }
   ],
   "states": [
-    "Desktop Storage toolbar with Saved and View aligned and sort controls absent from the permanent rail",
-    "Desktop Storage View preferences open with the Order section fully contained inside the viewport",
-    "Phone-width Storage filter rail collapsed and expanded with View in the auxiliary row",
-    "Phone-width Storage View preferences open without horizontal page overflow",
-    "Desktop Proxmox workload toolbar with layout, metrics, memory basis, and columns hidden behind View",
-    "Proxmox Trends mode with Guest allocation and Host capacity memory bases",
-    "Proxmox Trend range visible outside View while trends are active",
-    "Phone-width Proxmox overview with host-relative memory trend sparklines rendered",
-    "Audit Log route in the live demo runtime showing its expected paid-runtime capability gate"
+    "Phone-width Docker toolbar with the filter rail collapsed",
+    "Phone-width Docker filter rail expanded with Add filter, Saved, View, and the resource count",
+    "Phone-width Saved views dialog open and fully contained between x=25.34 and x=281.34 in the 390px viewport",
+    "Phone-width Saved views inline naming form open",
+    "Desktop Docker toolbar with Filter, Saved, View, and the resource count aligned on the shared rail",
+    "Desktop Saved views dialog open and trailing-edge aligned to its trigger"
   ],
   "interactions": [
-    "Opened Storage View, selected Usage sort, and confirmed the canonical sort URL parameter",
-    "Pressed Escape from Storage View and confirmed the popover closed and focus returned to View",
-    "Expanded the phone-width Storage filter rail and confirmed the View popover remained inside the viewport",
-    "Opened Proxmox View, enabled Trends, and confirmed Trend range remained a frequent control outside the popover",
-    "Switched Proxmox memory basis from Guest allocation to Host capacity and confirmed host-memory trend sparklines continued rendering",
-    "Pressed Escape from Proxmox View and confirmed the popover closed and focus returned to View",
-    "Confirmed the Audit Log live route is capability-gated in this demo runtime; its View pagination composition is covered by focused component and shared-contract tests",
-    "Confirmed the verified routes had no horizontal page overflow at 390px and no browser console errors"
+    "Expanded the phone-width Filters rail and opened Saved views",
+    "Opened the inline Save current view form and pressed Escape, confirming focus returned to the save action",
+    "Pressed Escape again, confirming the dialog closed and focus returned to the Saved trigger",
+    "Reopened Saved views and clicked the search field outside it, confirming outside-click dismissal",
+    "Opened Saved views at desktop width and confirmed the dialog remained fully inside the viewport",
+    "Confirmed the verified route had no Saved-dialog clipping and no browser console errors"
   ]
 }

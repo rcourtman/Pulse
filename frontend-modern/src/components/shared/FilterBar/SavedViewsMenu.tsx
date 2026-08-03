@@ -124,7 +124,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
           role="dialog"
           aria-label="Saved views"
           widthClass="w-64 max-w-[calc(100vw-2rem)]"
-          class="left-auto right-0 top-[calc(100%+0.25rem)] z-50 p-0"
+          class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 p-0 md:left-auto md:right-0"
         >
           <Show
             when={savePromptOpen()}

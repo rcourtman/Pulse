@@ -8252,7 +8252,9 @@ describe('shared primitive guardrails', () => {
     expect(savedViewsMenuSource).toContain('queueMicrotask(() => nameInputRef?.focus())');
     expect(savedViewsMenuSource).toContain('queueMicrotask(() => triggerRef?.focus())');
     expect(savedViewsMenuSource).toContain('for={nameInputId}');
-    expect(savedViewsMenuSource).toContain('class="left-auto right-0');
+    expect(savedViewsMenuSource).toContain(
+      'class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 p-0 md:left-auto md:right-0"',
+    );
     expect(savedViewsMenuSource).toContain('opacity-100 transition-opacity');
     expect(savedViewsMenuSource).toContain('sm:opacity-0');
 
