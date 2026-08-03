@@ -1067,7 +1067,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
           rowNoun={props.rowNoun}
         />
       }
-      showClearAll={() => Boolean(props.hasActiveFilters && props.onResetFilters)}
+      showClearAll={() => Boolean(props.hasActiveFilters) || props.search().trim().length > 0}
       onClearAll={props.onResetFilters}
     />
   );

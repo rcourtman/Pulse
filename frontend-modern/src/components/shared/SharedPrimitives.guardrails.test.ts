@@ -8251,6 +8251,10 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('viewOptions={props.viewOptions}');
     expect(sharedPlatformPageSource).toContain('trailingControls={');
     expect(sharedPlatformPageSource).not.toContain('ViewOptionsMenu');
+    expect(sharedPlatformPageSource).toContain(
+      'showClearAll={() => Boolean(props.hasActiveFilters) || props.search().trim().length > 0}',
+    );
+    expect(sharedPlatformPageSource).toContain('onClearAll={props.onResetFilters}');
     expect(savedViewsMenuSource).toContain('class="relative shrink-0"');
     expect(savedViewsMenuSource).toContain('class="h-3.5 w-3.5"');
     expect(savedViewsMenuSource).toContain('aria-label="Saved views"');

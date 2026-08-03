@@ -1,17 +1,15 @@
 {
   "version": 1,
-  "base_sha": "2402858e3c80b29d898e551c82969566c6a649b8",
-  "verified_at": "2026-08-03T11:15:05Z",
+  "base_sha": "e3fdfc98b413db1b29b18cb65bb18bd10bdd3e18",
+  "verified_at": "2026-08-03T13:09:09Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx": "768d706dad29c92c8a205059e48f16bd4fc8f652ad093501759f7f50c72d849c",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "e190111f1b89a806b7bd07cf2b10a5ba4f8e5d204c0cebea871964252c5ccebd"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "b94fdef76a18a9ef95f393f11445b8da613593064e03260c9349f804d39fb2fb"
   },
-  "routes": ["/alerts/history"],
+  "routes": ["/truenas/overview", "/kubernetes/overview", "/vmware/networks"],
   "viewports": [
     {
       "width": 1280,
@@ -23,20 +21,18 @@
     }
   ],
   "states": [
-    "Desktop default, search-only, combined period/severity/search, and chart-bucket states",
-    "Desktop Saved views empty, named-view, restored-view, removed-view, and deep-linked states",
-    "Phone-width filter shell collapsed and expanded with search-only and combined filter state",
-    "Phone-width Saved views dialog bounded within the viewport with active filter state"
+    "Desktop TrueNAS alert toolbar with default, search-only, and combined search/status state",
+    "Phone-width TrueNAS alert toolbar with collapsed and expanded filter rails",
+    "Desktop Kubernetes overview with URL-owned combined search/status state",
+    "Desktop vSphere networks with table-local search state"
   ],
   "interactions": [
-    "Entered search text alone and confirmed Clear filters appeared, then cleared the URL and visible search state in one action",
-    "Selected Last 30d and Critical with search text, confirmed all three query parameters, and cleared them atomically back to defaults",
-    "Saved the combined slice as Alert reset audit, cleared it, reapplied it, and confirmed the exact query string and visible controls were restored",
-    "Reloaded the explicit deep link and confirmed search, period, and severity remained selected",
-    "Removed the temporary saved view and confirmed it no longer appeared",
-    "Selected an alert-frequency bucket, added a toolbar filter, and confirmed Clear filters removed both the route-owned filters and transient chart selection",
-    "Expanded the phone-width filter shell and confirmed Saved and Clear filters remained aligned without overflow",
-    "Opened and dismissed the phone-width Saved dialog with Escape and confirmed it stayed viewport-bounded",
-    "Read the browser console after the final responsive pass and confirmed no warnings or errors"
+    "Entered TrueNAS alert search text and confirmed contextual Clear filters appeared without requiring table-specific reset plumbing",
+    "Selected Warning with search active and confirmed one Clear filters action restored blank search and All status",
+    "Expanded the phone-width TrueNAS filter rail and confirmed Clear filters and the result count aligned without clipping or overflow",
+    "Cleared phone-width search state and confirmed the Clear action disappeared while the status default remained selected",
+    "Loaded Kubernetes overview with ?q=payments&status=degraded, confirmed both controls hydrated, and verified its feature-owned composite reset returned the exact default route",
+    "Entered and cleared vSphere network search text to confirm the shared fallback applies across another table-local platform consumer",
+    "Read the browser console after the final cross-platform pass and confirmed no warnings or errors"
   ]
 }

@@ -281,6 +281,64 @@ describe('filterPlatformResources', () => {
 });
 
 describe('PlatformTableToolbar', () => {
+  it('shows and clears search-only state without requiring a custom reset owner', () => {
+    const [search, setSearch] = createSignal('archive');
+
+    render(() =>
+      PlatformTableToolbar({
+        search,
+        onSearchChange: setSearch,
+        searchPlaceholder: 'Search alerts',
+        status: 'all',
+        onStatusChange: () => undefined,
+        statusOptions: [{ value: 'all', label: 'All' }],
+        visible: 1,
+        total: 2,
+        rowNoun: 'alerts',
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(search()).toBe('');
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  it('delegates active platform state to one custom reset when the route owns it', () => {
+    const [search, setSearch] = createSignal('payments');
+    const [status, setStatus] = createSignal('degraded');
+    let resetCount = 0;
+
+    render(() =>
+      PlatformTableToolbar({
+        search,
+        onSearchChange: setSearch,
+        searchPlaceholder: 'Search rows',
+        status: status(),
+        onStatusChange: setStatus,
+        statusOptions: [
+          { value: 'all', label: 'All' },
+          { value: 'degraded', label: 'Degraded' },
+        ],
+        visible: 1,
+        total: 3,
+        rowNoun: 'rows',
+        hasActiveFilters: true,
+        onResetFilters: () => {
+          resetCount += 1;
+          setSearch('');
+          setStatus('all');
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(resetCount).toBe(1);
+    expect(search()).toBe('');
+    expect(status()).toBe('all');
+  });
+
   it('owns the View popover while keeping the row counter permanently visible', () => {
     render(() =>
       PlatformTableToolbar({

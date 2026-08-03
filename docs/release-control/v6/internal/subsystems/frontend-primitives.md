@@ -3892,6 +3892,12 @@ inherit the same ownership through `PlatformTableToolbar`. Recovery is event-fir
 and does not use equal workspace subtabs for protected rollups versus event
 history; Storage subtabs (Pools / Physical Disks) sit above the bar as
 navigation, not filters.
+`PlatformTableToolbar` must always expose contextual Clear filters for a
+non-empty search, including simple table-local search/status state that does
+not need a feature-owned reset. Route-owned or multi-facet platform surfaces
+may supply one composite reset, which the toolbar delegates exactly once;
+otherwise the shared `FilterBar` fallback clears its search and inline status
+catalog without forcing every platform table to repeat reset plumbing.
 Primary filters with small, stable option sets should stay one-click controls
 inside that same `FilterDef[]` catalog by setting `inline: true`; `FilterBar`
 renders those as unlabeled compact segmented controls in the same second-row
