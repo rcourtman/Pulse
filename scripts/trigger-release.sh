@@ -315,11 +315,11 @@ if [ -n "$NOTES_FILE" ]; then
     --arg promoted_from_tag "$PROMOTED_FROM_TAG" \
     --arg ga_date "$GA_DATE" \
     --arg v5_eos_date "$V5_EOS_DATE" \
-    --argjson hotfix_exception "$HOTFIX_EXCEPTION" \
+    --arg hotfix_exception "$HOTFIX_EXCEPTION" \
     --arg hotfix_reason "$HOTFIX_REASON" \
-    --argjson unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION" \
+    --arg unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION" \
     --arg unsigned_windows_reason "$UNSIGNED_WINDOWS_REASON" \
-    --argjson draft_only false \
+    --arg draft_only "false" \
     --arg mobile_release_decision "$MOBILE_RELEASE_DECISION" \
     --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
     '{

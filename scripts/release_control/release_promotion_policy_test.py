@@ -596,6 +596,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--validate-notes-file \"$NOTES_FILE\"", helper)
         self.assertIn("--rawfile release_notes \"$NOTES_FILE\"", helper)
         self.assertIn("gh workflow run create-release.yml --ref \"$CURRENT_BRANCH\" --json", helper)
+        self.assertIn('--arg hotfix_exception "$HOTFIX_EXCEPTION"', helper)
+        self.assertIn(
+            '--arg unsigned_windows_exception "$UNSIGNED_WINDOWS_EXCEPTION"',
+            helper,
+        )
+        self.assertIn('--arg draft_only "false"', helper)
+        self.assertNotIn("--argjson", helper)
         self.assertNotIn('-f release_notes="$(cat "$NOTES_FILE")"', helper)
         self.assertIn("--validate-notes-file \"$NOTES_FILE\"", stable_patch_helper)
         self.assertIn("--rawfile release_notes \"$NOTES_FILE\"", stable_patch_helper)

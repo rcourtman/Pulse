@@ -1615,9 +1615,12 @@ installation and promotion metadata sections exactly once, rather than trusting
 raw packet text to already be publish-safe.
 Release-note transport is file-backed and fail-closed: operator helpers must
 send the Markdown through JSON input rather than multiline form-field
-substitution, the renderer must reject missing standalone title/section
-structure before any tag or draft mutation, and draft creation must compare
-GitHub's stored body with the exact rendered file before asset upload.
+substitution, and every `gh workflow run --json` input value must be encoded as
+a string because the GitHub CLI unmarshals that payload into a string map before
+GitHub applies the workflow's declared input types. The renderer must reject
+missing standalone title/section structure before any tag or draft mutation,
+and draft creation must compare GitHub's stored body with the exact rendered
+file before asset upload.
 `validate-release-assets.yml` must repeat the structural check before validating
 assets, preserve the authored body through validation-status edits, and compare
 the API response with the pre-edit body. A malformed edited body is quarantined
