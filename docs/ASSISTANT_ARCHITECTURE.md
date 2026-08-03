@@ -62,7 +62,7 @@ The codes are declared in `internal/agentcapabilities/errors.go` and include
 `action_execution_unavailable`, `action_actor_unavailable`, and `missing_id`.
 
 A call blocked by the state machine uses the same mechanism, returning the
-`fsm_blocked` code with the state and tool that were involved.
+`FSM_BLOCKED` code with the state and tool that were involved.
 
 The same codes are published in the capability manifest at
 `/api/agent/capabilities`, and a contract test fails the build if a handler
