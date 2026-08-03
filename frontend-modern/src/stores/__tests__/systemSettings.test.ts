@@ -87,7 +87,7 @@ describe('systemSettings store', () => {
   });
 
   it('keeps the telemetry disclosure on the shipped local privacy doc', () => {
-    expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY.md');
+    expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY');
   });
 
   it('keeps the telemetry disclosure in user-facing product language', () => {

@@ -84,7 +84,7 @@ describe('SecurityWarning', () => {
     expect(banner).not.toHaveClass('fixed');
     expect(screen.getByRole('link', { name: 'Learn More' })).toHaveAttribute(
       'href',
-      '/docs/SECURITY.md',
+      '/docs/SECURITY',
     );
   });
 

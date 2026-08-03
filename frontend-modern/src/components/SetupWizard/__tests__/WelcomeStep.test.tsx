@@ -77,7 +77,7 @@ describe('WelcomeStep', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Full details' })).toHaveAttribute(
       'href',
-      '/docs/PRIVACY.md',
+      '/docs/PRIVACY',
     );
     expect(screen.getByText('What this token does')).toBeInTheDocument();
     expect(

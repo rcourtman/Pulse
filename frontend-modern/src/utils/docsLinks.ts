@@ -1,7 +1,14 @@
+import { docRouteForPath } from '@/features/docs/docMarkdown';
+
 export const SHIPPED_DOCS_ROOT = '/docs';
 
+/**
+ * URL for a shipped document. This resolves to the in-app viewer route, which
+ * renders the markdown. The raw source stays served at `/docs/<name>.md` for
+ * anyone who wants the file itself.
+ */
 export function getShippedDocUrl(filename: string): string {
-  return `${SHIPPED_DOCS_ROOT}/${filename}`;
+  return docRouteForPath(filename);
 }
 
 export const README_DOC_URL = getShippedDocUrl('README.md');

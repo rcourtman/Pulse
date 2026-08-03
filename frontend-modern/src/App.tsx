@@ -76,7 +76,16 @@ import type { Resource } from '@/types/resource';
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
   // Keep the list small and explicit.
-  return pathname === '/pricing' || pathname === '/preview/setup-complete';
+  //
+  // Shipped documentation is included because the underlying markdown is
+  // already served unauthenticated at /docs/<name>.md. Gating the rendered
+  // view would make the readable form less reachable than its own source.
+  return (
+    pathname === '/pricing' ||
+    pathname === '/preview/setup-complete' ||
+    pathname === '/docs' ||
+    pathname.startsWith('/docs/')
+  );
 }
 
 function isWorkspaceEntryRoutePath(pathname: string): boolean {
@@ -101,6 +110,7 @@ const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
+const DocsPage = lazy(() => import('./pages/Docs'));
 const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
 const SetupCompletionPreviewPage = lazy(() =>
   import('./components/SetupWizard/SetupCompletionPreview').then((module) => ({
@@ -596,6 +606,8 @@ function App() {
       <Route path="/actions/*" component={ActionsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
+      <Route path="/docs" component={DocsPage} />
+      <Route path="/docs/*docPath" component={DocsPage} />
       <Route path="*all" component={NotFoundPage} />
     </Router>
   );

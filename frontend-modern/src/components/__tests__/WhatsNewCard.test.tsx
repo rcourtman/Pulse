@@ -73,7 +73,7 @@ describe('WhatsNewCard', () => {
     expect(screen.getByRole('button', { name: 'Disable telemetry' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Privacy details' })).toHaveAttribute(
       'href',
-      '/docs/PRIVACY.md',
+      '/docs/PRIVACY',
     );
   });
 

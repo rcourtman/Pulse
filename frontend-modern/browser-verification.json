@@ -1,23 +1,30 @@
 {
   "version": 1,
-  "base_sha": "6bd382173bd802dbb0dbceb9c618ee01f645c55f",
-  "verified_at": "2026-08-03T17:22:38Z",
+  "base_sha": "aac7acc6baf6d2f5544bbe2e682ad484631dd7b8",
+  "verified_at": "2026-08-03T17:57:38Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/features/docs/docMarkdown.ts",
+    "frontend-modern/src/pages/Docs.tsx",
+    "frontend-modern/src/utils/docsLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "53162c174225e4e72dfbe5a9e6033357f649e8db2e0e160af8c20984e65917a8",
-    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "0a8974f2f174914aa91658fee2016ee5e3f332ee18b8e8b1a0be8155960f8a6e",
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "21163d3e2e3894139a51d3bec2a971928efc1cdb38a172c4272a696b1d7131c8"
+    "frontend-modern/src/App.tsx": "5cc14f31f3c84a843210897de1c1bd5f43da2e03fdbcb2e9e72781dc28cfa810",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "2336e751c306d53f4702240be077f4a102de8598a8bf7bd75f4054940dce4cf2",
+    "frontend-modern/src/pages/Docs.tsx": "367abd0b3fdd1f7f35359b0e2edad5b9e388835bc95d2059d14fdafa49c9e892",
+    "frontend-modern/src/utils/docsLinks.ts": "a05d17c158823d9c9db07ae92c2b1ef7c81150805e2aff64593f9e6aa712e26e"
   },
-  "routes": ["/kubernetes/overview", "/kubernetes/workloads"],
+  "routes": [
+    "/docs/README",
+    "/docs/INSTALL",
+    "/docs/CONFIGURATION",
+    "/docs/ARCHITECTURE"
+  ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 900
     },
     {
       "width": 390,
@@ -25,19 +32,21 @@
     }
   ],
   "states": [
-    "Desktop Kubernetes Overview with three clusters, nineteen degraded workloads, and the compact workload-attention control aligned in the inventory toolbar",
-    "Desktop Kubernetes Overview with routine workload degradation and no page-wide Kubernetes attention banner",
-    "Phone-width Kubernetes Overview with the filter body collapsed and workload attention retained as visible leading context",
-    "Phone-width Kubernetes Overview with the filter body expanded and workload attention composed into the canonical action rail",
-    "Kubernetes Workloads destination after following the compact Review action",
-    "Kubernetes empty-inventory state after the local runtime data reset"
+    "Desktop documentation index rendered from markdown with headings, lists, bold text and links instead of raw source",
+    "Desktop Installation Guide with nine fenced code blocks, two tables, blockquote and inline code all rendered",
+    "Desktop Configuration Guide with the full three-column table legible at 1280 pixels",
+    "Not-shipped document state for a path with no corresponding asset, showing an explanation and a route back to the index",
+    "Phone-width Configuration Guide with the wide table scrolling inside its own container and no page-level horizontal scroll",
+    "Phone-width document header with the back link above the rendered body"
   ],
   "interactions": [
-    "Confirmed routine pending and under-replicated workload counts render beside Review rather than in the page-wide attention summary",
-    "Confirmed Review navigates directly to /kubernetes/workloads and marks Workloads as the active section",
-    "Collapsed and expanded the 390-pixel filter body and confirmed leading workload context remains available while lower-priority trailing controls follow the collapsed rail",
-    "Confirmed the workload status and Review action remain within the filter container with no page-level horizontal overflow",
-    "Confirmed unavailable-node and critical-signal cases remain covered by the prominent attention summary while zero-value metrics are omitted",
-    "Reloaded the final local build in Chrome and confirmed the Kubernetes empty-inventory fallback remained intact after the seeded runtime data reset"
+    "Loaded /docs/README and confirmed 52 intra-documentation links were rewritten to viewer routes, including nested i18n/de/README",
+    "Clicked the Installation Guide link and confirmed it navigated in-app to /docs/INSTALL, rendered the document, updated the tab title and revealed the All documentation back link",
+    "Confirmed ../SECURITY.md clamps to /docs/SECURITY rather than dangling above the shipped docs root",
+    "Requested /docs/ARCHITECTURE, which is not shipped, and confirmed the not-shipped state rather than an indefinite loading state or index.html rendered as markdown",
+    "Measured document scroll width against client width at 390 pixels and confirmed no page-level horizontal scrolling, with the table and pre blocks each scrolling inside their own container",
+    "Confirmed inline code no longer renders the typography plugin's literal backticks, which read as unrendered markdown",
+    "Queried the rendered article for script tags and inline event handlers after rendering a document containing both and confirmed neither survived sanitisation",
+    "Read the browser console after exercising every route and confirmed no errors"
   ]
 }

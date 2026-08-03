@@ -60,17 +60,20 @@ function getRuntimeSourceFiles(dir: string): string[] {
 }
 
 describe('docsLinks', () => {
+  // These now resolve to the in-app viewer route rather than the raw asset.
+  // The raw file is still served at the same path plus .md, which is what the
+  // viewer fetches, so the source remains reachable.
   it('returns canonical shipped doc URLs', () => {
     expect(SHIPPED_DOCS_ROOT).toBe('/docs');
-    expect(getShippedDocUrl('PRIVACY.md')).toBe('/docs/PRIVACY.md');
-    expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY.md');
-    expect(README_DOC_URL).toBe('/docs/README.md');
-    expect(MIGRATION_GUIDE_DOC_URL).toBe('/docs/MIGRATION_UNIFIED_NAV.md');
-    expect(CONFIGURATION_DOC_URL).toBe('/docs/CONFIGURATION.md');
-    expect(PROXY_AUTH_DOC_URL).toBe('/docs/PROXY_AUTH.md');
-    expect(SECURITY_DOC_URL).toBe('/docs/SECURITY.md');
-    expect(TERMS_DOC_URL).toBe('/docs/TERMS.md');
-    expect(API_TOKEN_SCOPES_DOC_URL).toBe('/docs/CONFIGURATION.md');
+    expect(getShippedDocUrl('PRIVACY.md')).toBe('/docs/PRIVACY');
+    expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY');
+    expect(README_DOC_URL).toBe('/docs/README');
+    expect(MIGRATION_GUIDE_DOC_URL).toBe('/docs/MIGRATION_UNIFIED_NAV');
+    expect(CONFIGURATION_DOC_URL).toBe('/docs/CONFIGURATION');
+    expect(PROXY_AUTH_DOC_URL).toBe('/docs/PROXY_AUTH');
+    expect(SECURITY_DOC_URL).toBe('/docs/SECURITY');
+    expect(TERMS_DOC_URL).toBe('/docs/TERMS');
+    expect(API_TOKEN_SCOPES_DOC_URL).toBe('/docs/CONFIGURATION');
   });
 
   it('keeps shipped docs content synced with repo docs', () => {

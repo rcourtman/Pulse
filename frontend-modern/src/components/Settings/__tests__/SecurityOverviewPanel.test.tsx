@@ -29,7 +29,7 @@ describe('SecurityOverviewPanel', () => {
       'href',
       '/settings/security/api',
     );
-    expect(screen.getByText('Open security guide')).toHaveAttribute('href', '/docs/SECURITY.md');
+    expect(screen.getByText('Open security guide')).toHaveAttribute('href', '/docs/SECURITY');
     expect(screen.getAllByText('Recommended')).toHaveLength(2);
   });
 
