@@ -131,6 +131,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.2.0-rc.4", want: "6.1.2"},
 		{version: "6.2.0-rc.5", want: "6.1.2"},
 		{version: "6.2.0-rc.6", want: "6.1.2"},
+		{version: "6.2.0-rc.7", want: "6.1.2"},
 	}
 
 	for _, test := range tests {
@@ -338,15 +339,16 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"is a corrective cut that supersedes `v6.2.0-rc.5`: it restores aggregate Proxmox workloads and the Alert thresholds page, repairs partial agent removals, preserves Windows custom-CA and Skip TLS installer commands, deduplicates direct PBS plus agent identity, and removes false Agent Doctor profile warnings",
+		"is a continuity and operator-workflow cut that supersedes `v6.2.0-rc.6`: it preserves Proxmox guest and renamed-host identity, corrects TrueNAS and host metrics, makes platform tables and filters responsive, ships the in-app documentation set, and hardens installer and private Pro release recovery",
+		"The preceding `v6.2.0-rc.6` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.6`.",
 		"The preceding `v6.2.0-rc.5` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.5`.",
 		"The preceding `v6.2.0-rc.4` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.4`.",
 		"The preceding `v6.2.0-rc.3` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.3`.",
 		"The preceding `v6.2.0-rc.2` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.2`.",
 		"The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.1`.",
 		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
-		"Pulse Mobile 1.0.0 iOS build 11 and Android versionCode 9 candidates, both using runtime version 2, remain distributed to the existing beta cohort.",
-		"RC6 has no new mobile-facing behavior beyond RC5, and no new companion upload or public store rollout is part of this cut.",
+		"Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9 candidates, both using runtime version 2, remain distributed to the existing beta cohort through TestFlight and Play open testing.",
+		"The current beta candidates cover the server contract used by this cut; no additional companion upload or public store rollout is part of RC7.",
 		"Authenticode signing through SignPath is the canonical Windows signing backend for the `v6.2.0` line.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)

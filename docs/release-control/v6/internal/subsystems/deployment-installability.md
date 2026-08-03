@@ -1167,21 +1167,21 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.6` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.0-rc.7` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.6` release
+fallback, and Helm chart release metadata to the same `6.2.0-rc.7` release
 version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. Stable
 install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The sixth
-`v6.2.0` candidate is a corrective cut that supersedes `v6.2.0-rc.5`: it
-restores aggregate Proxmox workloads and the Alert thresholds page, repairs
-partial agent removals, preserves Windows custom-CA and Skip TLS installer
-commands, deduplicates direct PBS plus agent identity, and removes false Agent
-Doctor profile warnings. The exact `main` SHA must pass the integrated release
-checks and immutable-candidate build before the single-build workflow crosses
-its public mutation boundary.
+continues to govern the stable line until this candidate is promoted. The
+seventh `v6.2.0` candidate is a continuity and operator-workflow cut that
+supersedes `v6.2.0-rc.6`: it preserves Proxmox guest and renamed-host identity,
+corrects TrueNAS and host metrics, makes platform tables and filters responsive,
+ships the in-app documentation set, and hardens installer and private Pro
+release recovery. The exact `main` SHA must pass the integrated release checks
+and immutable-candidate build before the single-build workflow crosses its
+public mutation boundary.
 Every release cut, including a prerelease, now gates that mutation boundary on
 the complete frontend unit suite, frontend type-checking, and a deterministic
 render smoke against the verified frontend bundle. The smoke must render
@@ -1192,12 +1192,18 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The `v6.2.0-rc.6` server cut is classified
+The `v6.2.0-rc.7` server cut is classified
 `existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
-build 11 and Android versionCode 9 candidates, both using runtime version 2,
-remain distributed to the existing beta cohort. RC6 has no new mobile-facing
-behavior beyond RC5, and no new companion upload or public store rollout is
-part of this cut.
+build 12 and Android versionCode 9 candidates, both using runtime version 2,
+remain distributed to the existing beta cohort through TestFlight and Play
+open testing. The current beta candidates cover the server contract used by
+this cut; no additional companion upload or public store rollout is part of
+RC7.
+The preceding `v6.2.0-rc.6` candidate used the same support-prerelease path
+with `rollback_version=v6.1.2` and pinned the same four install surfaces to
+`6.2.0-rc.6`. It is superseded by this cut and no longer governs the install
+pins; its packet stays in `docs/releases/` as the historical candidate record
+for the `v6.2.0` line.
 The preceding `v6.2.0-rc.5` candidate used the same support-prerelease path
 with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 `6.2.0-rc.5`. It is superseded by this cut and no longer governs the install
@@ -1372,8 +1378,8 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.6` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.6`
+For the active support prerelease `v6.2.0-rc.7` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.7`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release. Each new candidate on the
