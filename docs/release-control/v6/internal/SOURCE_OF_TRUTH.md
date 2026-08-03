@@ -96,6 +96,41 @@ by default when a smaller derived command answers the question. Prefer
 first, then escalate into the raw files only when the current slice needs that
 detail.
 
+### Execution Entry Point
+
+For Pulse v6 build and release execution work, start here rather than from the
+operator documentation index in `docs/README.md`. That index is written for
+people running Pulse, not for agents executing governed changes.
+
+Machine-derived audits, when you need one:
+
+- `python3 scripts/release_control/status_audit.py --check` for an evidence
+  health audit.
+- `python3 scripts/release_control/registry_audit.py --check` for a subsystem
+  registry audit.
+- `python3 scripts/release_control/contract_audit.py --check` for a subsystem
+  contract audit, including explicit cross-subsystem dependency checks and
+  exact registry-derived shared-boundary wording.
+- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean`
+  for subsystem ownership, proof routing, exact contract-focus lines, and
+  compact lane context for a change.
+
+Local pre-commit runs the v6 machine audits against staged control-file
+content, so partial staging cannot hide governance drift. It also blocks
+partial staging for hook-sensitive governance files under
+`docs/release-control/v6/`, `scripts/release_control/`, `internal/repoctl/`,
+`.husky/pre-commit`, and `.github/workflows/canonical-governance.yml`, because
+those checks still execute or structurally read the working-tree versions
+locally.
+
+For governed runtime changes, a staged subsystem contract only counts if its
+diff updates a substantive contract section such as `Purpose`,
+`Canonical Files`, `Shared Boundaries`, `Extension Points`, `Forbidden Paths`,
+`Completion Obligations`, or `Current State`, rather than metadata alone.
+
+All other documents are supporting references unless explicitly required for
+evidence.
+
 ## Scope
 
 `status.json.scope.control_plane_repo` is `pulse`.
