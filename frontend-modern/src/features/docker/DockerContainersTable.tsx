@@ -726,7 +726,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             hasActiveFilters={hasActiveFilters()}
             onResetFilters={resetFilters}
             viewOptions={
-              <Show when={isGroupable()}>
+              isGroupable() ? (
                 <div>
                   <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
                     Layout
@@ -736,7 +736,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                     onChange={setGroupingModePreference}
                   />
                 </div>
-              </Show>
+              ) : undefined
             }
           />
         </Show>

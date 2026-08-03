@@ -447,6 +447,27 @@ describe('Docker native tables', () => {
     expect(container.querySelector('[data-docker-host-group]')).toBeNull();
   });
 
+  it('omits the View menu when a single-host inventory has no layout choice', () => {
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+  });
+
   it('honors a persisted flat preference for multi-host fleets', () => {
     window.localStorage.setItem('dockerContainersGroupingMode', 'flat');
 

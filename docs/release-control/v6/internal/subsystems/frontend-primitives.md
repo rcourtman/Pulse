@@ -3902,7 +3902,9 @@ and chip popovers (`AddFilterMenu` and `FilterChip`). Low-frequency view options
 the shared `ViewOptionsMenu` through `FilterBar`'s `viewOptions` prop instead of
 remaining as permanent toolbar controls. `FilterBar` owns the View trigger and
 popover; feature consumers pass only panel content and must not import or render
-`ViewOptionsMenu` themselves. Contextual frequent actions may use
+`ViewOptionsMenu` themselves. Consumers with no currently applicable
+presentation choice must omit `viewOptions` rather than passing an empty
+conditional wrapper that leaves a dead View trigger. Contextual frequent actions may use
 `leadingControls`, while table counters, active trend ranges, and other
 persistent orientation readouts may use `trailingControls`. Platform tables
 inherit the same ownership through `PlatformTableToolbar`. Recovery is event-first

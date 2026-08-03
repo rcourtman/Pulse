@@ -1,30 +1,17 @@
 {
   "version": 1,
-  "base_sha": "aac7acc6baf6d2f5544bbe2e682ad484631dd7b8",
-  "verified_at": "2026-08-03T17:57:38Z",
+  "base_sha": "29b9b324d941638704da1ddcbeb731ac3f0f41b8",
+  "verified_at": "2026-08-03T18:02:34Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/features/docs/docMarkdown.ts",
-    "frontend-modern/src/pages/Docs.tsx",
-    "frontend-modern/src/utils/docsLinks.ts"
-  ],
+  "changed_paths": ["frontend-modern/src/features/docker/DockerContainersTable.tsx"],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "5cc14f31f3c84a843210897de1c1bd5f43da2e03fdbcb2e9e72781dc28cfa810",
-    "frontend-modern/src/features/docs/docMarkdown.ts": "2336e751c306d53f4702240be077f4a102de8598a8bf7bd75f4054940dce4cf2",
-    "frontend-modern/src/pages/Docs.tsx": "367abd0b3fdd1f7f35359b0e2edad5b9e388835bc95d2059d14fdafa49c9e892",
-    "frontend-modern/src/utils/docsLinks.ts": "a05d17c158823d9c9db07ae92c2b1ef7c81150805e2aff64593f9e6aa712e26e"
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "c715f6918affd65f228c7bd7e6007b6ce2b62a7a89edf560a89ef831807a5d2b"
   },
-  "routes": [
-    "/docs/README",
-    "/docs/INSTALL",
-    "/docs/CONFIGURATION",
-    "/docs/ARCHITECTURE"
-  ],
+  "routes": ["/docker/overview"],
   "viewports": [
     {
       "width": 1280,
-      "height": 900
+      "height": 720
     },
     {
       "width": 390,
@@ -32,21 +19,15 @@
     }
   ],
   "states": [
-    "Desktop documentation index rendered from markdown with headings, lists, bold text and links instead of raw source",
-    "Desktop Installation Guide with nine fenced code blocks, two tables, blockquote and inline code all rendered",
-    "Desktop Configuration Guide with the full three-column table legible at 1280 pixels",
-    "Not-shipped document state for a path with no corresponding asset, showing an explanation and a route back to the index",
-    "Phone-width Configuration Guide with the wide table scrolling inside its own container and no page-level horizontal scroll",
-    "Phone-width document header with the back link above the rendered body"
+    "Desktop Docker Overview with one runtime host and one container, where Saved and the row count remain in the toolbar without a dead View trigger",
+    "Phone-width Docker Overview with the Filters body collapsed and no inapplicable presentation control",
+    "Phone-width Docker Overview with the Filters body expanded, status choices visible, and Saved aligned with the container count"
   ],
   "interactions": [
-    "Loaded /docs/README and confirmed 52 intra-documentation links were rewritten to viewer routes, including nested i18n/de/README",
-    "Clicked the Installation Guide link and confirmed it navigated in-app to /docs/INSTALL, rendered the document, updated the tab title and revealed the All documentation back link",
-    "Confirmed ../SECURITY.md clamps to /docs/SECURITY rather than dangling above the shipped docs root",
-    "Requested /docs/ARCHITECTURE, which is not shipped, and confirmed the not-shipped state rather than an indefinite loading state or index.html rendered as markdown",
-    "Measured document scroll width against client width at 390 pixels and confirmed no page-level horizontal scrolling, with the table and pre blocks each scrolling inside their own container",
-    "Confirmed inline code no longer renders the typography plugin's literal backticks, which read as unrendered markdown",
-    "Queried the rendered article for script tags and inline event handlers after rendering a document containing both and confirmed neither survived sanitisation",
-    "Read the browser console after exercising every route and confirmed no errors"
+    "Reloaded the final Docker Overview build at 390 by 844 and confirmed the single-host inventory exposes no View button",
+    "Expanded Filters at phone width and confirmed Saved remains available while View remains absent",
+    "Measured the phone-width document at 390 client and scroll pixels and confirmed there is no page-level horizontal overflow",
+    "Reloaded at 1280 by 720 and confirmed the toolbar closes the former View gap without clipping or misaligning Saved and the row count",
+    "Confirmed the host and container tables remain readable and horizontally contained at both verified widths"
   ]
 }
