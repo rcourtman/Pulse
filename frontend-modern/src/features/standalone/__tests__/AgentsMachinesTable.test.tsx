@@ -193,6 +193,8 @@ describe('AgentsMachinesTable', () => {
     const viewDialog = await openMachineColumnPicker();
     expect(within(viewDialog).getByText('Table')).toBeInTheDocument();
     expect(within(viewDialog).getByLabelText('IP')).toBeInTheDocument();
+    expect(within(viewDialog).queryByLabelText('GPU')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sort by GPU' })).not.toBeInTheDocument();
   });
 
   it('surfaces machine-native monitoring columns for agent machines', async () => {

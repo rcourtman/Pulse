@@ -1197,11 +1197,19 @@ export const AgentsMachinesTable: Component<{
   const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+  const relevantMachineColumns = createMemo(() => {
+    const relevant = new Set(AGENT_MACHINE_COLUMNS.map((column) => column.id));
+    const hasGPUUtilization = visibleMachineResources().some(
+      (machine) => getAgentMachineGPUUtilizationPercent(machine) !== undefined,
+    );
+    if (!hasGPUUtilization) relevant.delete('gpu');
+    return relevant;
+  });
   const columnVisibility = useColumnVisibility(
     'pulse:standalone:machines:columns:v4',
     AGENT_MACHINE_COLUMNS,
     [],
-    undefined,
+    relevantMachineColumns,
     {},
     ['network', 'diskio', 'uptime', 'temp'],
   );

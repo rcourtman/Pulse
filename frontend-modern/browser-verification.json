@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "29b9b324d941638704da1ddcbeb731ac3f0f41b8",
-  "verified_at": "2026-08-03T18:02:34Z",
+  "base_sha": "c37a62b3ad0cb6fbe83b94c64b44fa5aa3cdbd0f",
+  "verified_at": "2026-08-03T18:08:37Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/docker/DockerContainersTable.tsx"],
+  "changed_paths": ["frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "c715f6918affd65f228c7bd7e6007b6ce2b62a7a89edf560a89ef831807a5d2b"
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "cbec1374a3173b9f876b4c994ee4f1de7435aaba737567719f3027746031809c"
   },
-  "routes": ["/docker/overview"],
+  "routes": ["/standalone/machines"],
   "viewports": [
     {
       "width": 1280,
@@ -19,15 +19,16 @@
     }
   ],
   "states": [
-    "Desktop Docker Overview with one runtime host and one container, where Saved and the row count remain in the toolbar without a dead View trigger",
-    "Phone-width Docker Overview with the Filters body collapsed and no inapplicable presentation control",
-    "Phone-width Docker Overview with the Filters body expanded, status choices visible, and Saved aligned with the container count"
+    "Desktop Machines table with five current machines and no GPU utilization evidence",
+    "Phone-width Machines table with the filter body collapsed and the primary Machine and CPU columns visible",
+    "Phone-width Machines filters expanded with Saved, View, and the machine count aligned",
+    "Phone-width View preferences with the nested Columns picker expanded"
   ],
   "interactions": [
-    "Reloaded the final Docker Overview build at 390 by 844 and confirmed the single-host inventory exposes no View button",
-    "Expanded Filters at phone width and confirmed Saved remains available while View remains absent",
-    "Measured the phone-width document at 390 client and scroll pixels and confirmed there is no page-level horizontal overflow",
-    "Reloaded at 1280 by 720 and confirmed the toolbar closes the former View gap without clipping or misaligning Saved and the row count",
-    "Confirmed the host and container tables remain readable and horizontally contained at both verified widths"
+    "Reloaded the final Machines build at 390 by 844 and confirmed no GPU table header is rendered without telemetry",
+    "Expanded Filters, opened View, and expanded Columns at phone width",
+    "Confirmed the GPU choice is absent while System, Agent, Net I/O, Disk I/O, Uptime, Temp, and Last seen remain available as applicable choices",
+    "Measured the phone-width body and viewport at 390 pixels and confirmed the wide table remains contained by its own horizontal scroll shell",
+    "Reloaded at 1280 by 720 and confirmed the former empty GPU column is gone and the remaining machine columns redistribute cleanly"
   ]
 }

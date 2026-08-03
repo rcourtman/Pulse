@@ -5666,7 +5666,9 @@ toggleable, sortable `metric-bar` column, but it must render through the shared
 `MetricBar` primitive and use the unified resource's existing metric key. The
 row model owns validation, maximum-per-host selection, and the per-device
 inspection title; the component must not invent vendor-specific probes or a
-parallel GPU table.
+parallel GPU table. The table and shared View column picker expose GPU only
+when at least one current machine has finite utilization evidence, so estates
+without GPU telemetry do not carry an empty default column or an inert toggle.
 
 The shared resource drawer keeps `GuestDrawerHistory` as the sole history
 renderer. Resources with typed GPU sensors may extend its normal groups with

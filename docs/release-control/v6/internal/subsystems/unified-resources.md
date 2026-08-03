@@ -1228,7 +1228,12 @@ AI-only summary payloads, or page-local heuristics.
     hostname, `agent` platform scope, or agent telemetry alone; those facts
     surface as facets on the owning provider page.
     `AgentsMachinesTable.tsx` may own row membership, resource-derived menu
-    eligibility, and remove-agent semantics for these projected rows, but the
+    eligibility, evidence-gated column relevance, and remove-agent semantics
+    for these projected rows. In particular, the GPU metric column and its
+    View choice are relevant only when at least one projected machine reports
+    finite GPU utilization; absent telemetry must not produce an empty default
+    column or a no-op column choice, while persisted visibility remains ready
+    for the column when evidence later appears. The
     compact row action trigger chrome stays under the frontend-primitives
     `ActionIconButton` boundary rather than becoming a unified-resource-local
     button shell.
