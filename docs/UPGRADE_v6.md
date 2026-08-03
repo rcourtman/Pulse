@@ -384,4 +384,3 @@ Multi-tenant mode is opt-in and additionally license-gated:
 - Enablement flag: `PULSE_MULTI_TENANT_ENABLED=true`
 - Capability gate: `multi_tenant`
 
-See any multi-tenant operational docs under `docs/architecture/` if you plan to run this mode.

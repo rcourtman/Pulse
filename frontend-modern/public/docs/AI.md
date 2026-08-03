@@ -29,7 +29,7 @@ Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
 - **Grounds answers in real tool work** — visible tool traces, read-after-write verification, and transcript hygiene prevent unsupported execution claims from being treated as facts
 - **Returns structured tool errors** — the model can recover from clear, machine-readable failures
 
-📖 **For a deep technical dive into the Assistant architecture, see [architecture/pulse-assistant-deep-dive.md](architecture/pulse-assistant-deep-dive.md).**
+📖 **For a deep technical dive into the Assistant architecture, see [Assistant architecture](ASSISTANT_ARCHITECTURE.md).**
 
 ### Not Just Another Alerting System
 
@@ -43,12 +43,12 @@ Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 
 All while running entirely on your infrastructure with BYOK for complete privacy.
 
-📖 **For a deep technical dive into the Patrol runtime, see [architecture/pulse-patrol-deep-dive.md](architecture/pulse-patrol-deep-dive.md).**
+📖 **For a deep technical dive into the Patrol runtime, see [Patrol architecture](PATROL_ARCHITECTURE.md).**
 
 🧪 **For independent live-fault qualification, safety gates, model comparison,
 and release-claim rules, see [AI_PATROL_QUALIFICATION.md](AI_PATROL_QUALIFICATION.md).**
 
-See [architecture/pulse-assistant.md](architecture/pulse-assistant.md) for the original safety architecture documentation.
+See [Assistant safety architecture](ASSISTANT_SAFETY.md) for the original safety architecture documentation.
 
 ### Assistant And MCP
 
@@ -696,11 +696,11 @@ Pulse tracks token usage and costs:
 
 ### Deep Dives (Recommended for Technical Audiences)
 
-- **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, grounded execution guardrails, structured errors
-- **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
+- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, grounded execution guardrails, structured errors
+- **[Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
 
 ### Reference Documentation
 
-- [Architecture: Pulse Assistant (Safety Gates)](architecture/pulse-assistant.md) — Detailed FSM states, tool protocol, and invariants
+- [Architecture: Pulse Assistant (Safety Gates)](ASSISTANT_SAFETY.md) — Detailed FSM states, tool protocol, and invariants
 - [API Reference](API.md) — Complete API endpoint documentation
 - [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Cloud features and licensing

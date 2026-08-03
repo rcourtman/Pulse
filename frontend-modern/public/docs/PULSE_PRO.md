@@ -2,8 +2,6 @@
 
 This document explains Pulse's user-facing plan structure, the locked self-hosted commercial model, and how those plans map to runtime feature gates.
 
-For the canonical, code-aligned entitlement table (including internal tier names), see:
-- `docs/architecture/ENTITLEMENT_MATRIX.md`
 
 ## Plan Mapping (User-Facing -> Code Tiers)
 
@@ -134,7 +132,7 @@ Legend:
 - Included: `Y` / `N`
 - `Y*`: Enterprise/custom only (`enterprise` tier or explicit entitlement)
 
-This matrix is derived from the canonical table in `docs/architecture/ENTITLEMENT_MATRIX.md` plus runtime history/limit semantics exposed through entitlements.
+This matrix reflects the entitlement keys enforced in code plus the runtime history and limit semantics exposed through entitlements.
 
 | Constant | Capability Key | Display Name | Community | Relay | Pro | Cloud | Primary Gating Mechanism / Notes |
 |---|---|---|:---:|:---:|:---:|:---:|---|
@@ -221,6 +219,6 @@ This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix
 
 ## Deep Dives
 
-- [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)
-- [Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)
+- [Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md)
+- [Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)
 - [Pulse Intelligence overview](AI.md)

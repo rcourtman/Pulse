@@ -492,8 +492,8 @@ Detailed storage usage per node and pool.
 
 ### Recovery (formerly Backups / Snapshots)
 Pulse v6 uses the recovery API to provide a platform-agnostic view of backup and snapshot artifacts.
-See `docs/architecture/RECOVERY_CONTRACT.md` for the provider-neutral contract
-(subjects, points, rollups, posture, and filter semantics).
+The endpoints below carry the provider-neutral contract covering subjects,
+points, rollups, posture, and filter semantics.
 
 - `GET /api/recovery/points`
   - Query params:

@@ -182,4 +182,4 @@ Token usage and estimated costs are tracked per provider:
 - [Pulse Intelligence Overview](AI.md) — Full Pulse Intelligence system documentation
 - [Plans and Entitlements](PULSE_PRO.md) — Feature availability by plan
 - [API Reference](API.md) — Complete API documentation
-- [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md) — Technical architecture details
+- [Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md) — Technical architecture details
