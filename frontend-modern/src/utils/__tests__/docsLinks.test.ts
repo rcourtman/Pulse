@@ -81,6 +81,10 @@ describe('docsLinks', () => {
         target: 'MIGRATION_UNIFIED_NAV.md',
       },
       { source: path.join(repoRoot, 'docs', 'PRIVACY.md'), target: 'PRIVACY.md' },
+      {
+        source: path.join(repoRoot, 'docs', 'AI_TRANSPARENCY.md'),
+        target: 'AI_TRANSPARENCY.md',
+      },
       { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
       { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },
       { source: path.join(repoRoot, 'docs', 'i18n', 'README.md'), target: 'i18n/README.md' },
