@@ -1,13 +1,26 @@
 {
   "version": 1,
-  "base_sha": "1501c1c2397af56ae17f4a7ade6ac25794be4d9c",
-  "verified_at": "2026-08-03T18:21:01Z",
+  "base_sha": "caaf5ed232c293331f9c3aec4d19788bf220f18a",
+  "verified_at": "2026-08-03T18:33:55Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Storage/StoragePageControls.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts",
+    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/pages/Alerts.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "ec80cff0e760d1e78caa0f9a41bba2df5144130c833c642b0d89b08bfc96989c"
+    "frontend-modern/src/components/shared/horizontalRailVisibilityModel.ts": "670f68a047a3e9dd8fda676e7a46819d2fd98b99ae19d493161ffb0c626c177d",
+    "frontend-modern/src/components/shared/useActiveHorizontalRailItemVisibility.ts": "19488bf7edf26d30c966b962254acfe588b26af86cc4d606dc32cf4d95360f54",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "9c6abbb54e00786351d3185e70ecf231df1f4caabf110d3a69010ed0c5584a17",
+    "frontend-modern/src/pages/Alerts.tsx": "0c411a83c86d2aa448fe21fb01264794832154abc45b456e2a549d336f03d703"
   },
-  "routes": ["/proxmox/storage"],
+  "routes": [
+    "/alerts/schedule",
+    "/alerts/overview",
+    "/alerts/notifications",
+    "/docker/networks"
+  ],
   "viewports": [
     {
       "width": 1280,
@@ -19,18 +32,17 @@
     }
   ],
   "states": [
-    "Phone-width Storage filters collapsed with no permanent Status rail",
-    "Phone-width Storage filters expanded with Add filter, Saved, and View aligned",
-    "Phone-width Warning status active as a removable FilterBar chip",
-    "Desktop Storage toolbar with status choices in Add filter",
-    "Desktop View preferences with Group by, Sort by, and sort direction"
+    "Phone-width Alerts Schedule route loaded directly with the active destination fully visible",
+    "Phone-width Alerts Overview selected after starting from the right edge of the rail",
+    "Phone-width Alerts Notifications selected and fully contained",
+    "Desktop Alerts Notifications surface with canonical sidebar navigation",
+    "Phone-width Docker Networks surface after the platform rail adopted the shared visibility owner"
   ],
   "interactions": [
-    "Reloaded the final Storage build at 390 by 844 and confirmed the seven-state segmented rail is absent",
-    "Expanded Filters and confirmed all six non-default status choices remain available from Add filter",
-    "Selected Status: Warning and confirmed it becomes a removable chip while the filter toolbar remains contained at 390 pixels",
-    "Measured the phone-width document and filter toolbar and confirmed neither exceeds the 390-pixel viewport",
-    "Reloaded at 1280 by 720 and confirmed Add filter, Saved, and View remain aligned without the former Status rail",
-    "Opened View and confirmed Group by, Sort by, and sort direction remain available"
+    "Loaded /alerts/schedule directly at 390 by 844 and confirmed the rail moved from scrollLeft 0 to 55 so Schedule was fully visible",
+    "Selected Overview and confirmed the active destination changed and the rail returned to scrollLeft 0",
+    "Selected Notifications and confirmed its active button remained fully inside the rail bounds",
+    "Resized to 1280 by 720 and confirmed Alerts retained its desktop sidebar navigation with no document overflow",
+    "Reloaded /docker/networks at 390 by 844 and confirmed the active Networks destination remained fully visible after the shared hook extraction"
   ]
 }

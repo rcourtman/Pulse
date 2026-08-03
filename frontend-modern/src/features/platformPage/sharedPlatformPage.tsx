@@ -1,17 +1,7 @@
 import { A } from '@solidjs/router';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
@@ -19,6 +9,7 @@ import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -41,72 +32,15 @@ export type PlatformTabSpec<TabId extends string> = {
   path: string;
 };
 
-const PLATFORM_SECTION_TAB_EDGE_PADDING = 8;
-
-export function getPlatformSectionTabScrollLeft(options: {
-  scrollLeft: number;
-  scrollWidth: number;
-  clientWidth: number;
-  tabOffsetLeft: number;
-  tabOffsetWidth: number;
-}): number {
-  const maxScrollLeft = Math.max(0, options.scrollWidth - options.clientWidth);
-  const visibleStart = options.scrollLeft;
-  const visibleEnd = visibleStart + options.clientWidth;
-  const tabStart = options.tabOffsetLeft;
-  const tabEnd = tabStart + options.tabOffsetWidth;
-
-  if (tabStart < visibleStart + PLATFORM_SECTION_TAB_EDGE_PADDING) {
-    return Math.max(0, tabStart - PLATFORM_SECTION_TAB_EDGE_PADDING);
-  }
-  if (tabEnd > visibleEnd - PLATFORM_SECTION_TAB_EDGE_PADDING) {
-    return Math.min(
-      maxScrollLeft,
-      tabEnd + PLATFORM_SECTION_TAB_EDGE_PADDING - options.clientWidth,
-    );
-  }
-  return Math.min(maxScrollLeft, Math.max(0, options.scrollLeft));
-}
-
 export function PlatformSectionTabs<TabId extends string>(props: {
   tabs: readonly PlatformTabSpec<TabId>[];
   active: TabId;
   ariaLabel: string;
 }) {
   let tabListRef: HTMLElement | undefined;
-
-  const keepActiveTabVisible = () => {
-    const activeTab = tabListRef?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!tabListRef || !activeTab) return;
-
-    tabListRef.scrollLeft = getPlatformSectionTabScrollLeft({
-      scrollLeft: tabListRef.scrollLeft,
-      scrollWidth: tabListRef.scrollWidth,
-      clientWidth: tabListRef.clientWidth,
-      tabOffsetLeft: activeTab.offsetLeft,
-      tabOffsetWidth: activeTab.offsetWidth,
-    });
-  };
-
-  createEffect(() => {
-    const activeTabId = props.active;
-    const timeoutId = window.setTimeout(() => {
-      if (props.active !== activeTabId) return;
-      keepActiveTabVisible();
-    });
-    onCleanup(() => window.clearTimeout(timeoutId));
-  });
-
-  onMount(() => {
-    window.addEventListener('resize', keepActiveTabVisible);
-    const resizeObserver =
-      typeof ResizeObserver === 'function' ? new ResizeObserver(keepActiveTabVisible) : undefined;
-    if (tabListRef) resizeObserver?.observe(tabListRef);
-
-    onCleanup(() => {
-      window.removeEventListener('resize', keepActiveTabVisible);
-      resizeObserver?.disconnect();
-    });
+  useActiveHorizontalRailItemVisibility({
+    active: () => props.active,
+    rail: () => tabListRef,
   });
 
   return (

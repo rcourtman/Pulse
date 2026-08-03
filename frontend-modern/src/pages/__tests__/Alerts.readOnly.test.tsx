@@ -123,6 +123,34 @@ describe('Alerts read-only presentation', () => {
     expect(alertsPageSource).not.toContain('style="-webkit-overflow-scrolling: touch;"');
   });
 
+  it('keeps the active mobile destination visible when the tab rail narrows', async () => {
+    locationState.pathname = '/alerts/schedule';
+
+    render(() => <Alerts />);
+
+    const navigation = document.querySelector<HTMLElement>('nav.touch-scroll');
+    expect(navigation).not.toBeNull();
+    const scheduleTab = Array.from(navigation?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Schedule',
+    );
+    expect(scheduleTab).toHaveAttribute('aria-current', 'page');
+    if (!navigation || !scheduleTab) throw new Error('Expected the active Schedule mobile tab');
+
+    Object.defineProperties(navigation, {
+      clientWidth: { configurable: true, value: 336 },
+      scrollWidth: { configurable: true, value: 391 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+    });
+    Object.defineProperties(scheduleTab, {
+      offsetLeft: { configurable: true, value: 315 },
+      offsetWidth: { configurable: true, value: 74 },
+    });
+
+    window.dispatchEvent(new Event('resize'));
+
+    await waitFor(() => expect(navigation?.scrollLeft).toBe(55));
+  });
+
   it('hides alerts management affordances in read-only sessions', async () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     activationStateMock.mockReturnValue('pending_review');

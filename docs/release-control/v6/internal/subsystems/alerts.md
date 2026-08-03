@@ -764,7 +764,11 @@ The alerts page also owns its mobile tab-shell presentation directly.
 `frontend-modern/src/pages/Alerts.tsx` may keep alert-specific active and
 disabled tab styling, but horizontal tab scrolling must route through the
 shared `touch-scroll` / `scrollbar-hide` class contract instead of writing
-inline overflow styles that break CSP on the public shell.
+inline overflow styles that break CSP on the public shell. The selected tab
+must expose canonical current-page state and compose the shared active
+horizontal-rail visibility owner, so direct navigation and viewport changes
+bring Thresholds, Notifications, or Schedule fully into view instead of
+leaving the active destination clipped beyond the mobile rail.
 Alert tab routing is part of that same presentation boundary.
 `frontend-modern/src/features/alerts/types.ts` owns the canonical mapping
 between visible alert tabs and URLs. The operator-facing Notifications tab

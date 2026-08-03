@@ -7,6 +7,7 @@ import { logger } from '@/utils/logger';
 import { t } from '@/i18n';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { useActiveHorizontalRailItemVisibility } from '@/components/shared/useActiveHorizontalRailItemVisibility';
 
 import { notificationStore } from '@/stores/notifications';
 import Calendar from 'lucide-solid/icons/calendar';
@@ -201,6 +202,11 @@ export function Alerts() {
   );
 
   const flatTabs = createMemo(() => tabGroups().flatMap((group) => group.items));
+  let mobileTabListRef: HTMLElement | undefined;
+  useActiveHorizontalRailItemVisibility({
+    active: activeTab,
+    rail: () => mobileTabListRef,
+  });
   // Sidebar always starts expanded for discoverability (consistent with Settings)
   // Users can collapse during session but it resets on page reload
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
@@ -332,11 +338,18 @@ export function Alerts() {
           <Show when={flatTabs().length > 0}>
             <div class="lg:hidden border-b border-border">
               <div class="p-1">
-                <div class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide">
+                <nav
+                  ref={(element) => {
+                    mobileTabListRef = element;
+                  }}
+                  aria-label={t('alerts.nav.ariaLabel')}
+                  class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide"
+                >
                   <For each={flatTabs()}>
                     {(tab) => (
                       <button
                         type="button"
+                        aria-current={activeTab() === tab.id ? 'page' : undefined}
                         class={getAlertsMobileTabClass({
                           isActive: activeTab() === tab.id,
                           isDisabled: false,
@@ -351,7 +364,7 @@ export function Alerts() {
                       </button>
                     )}
                   </For>
-                </div>
+                </nav>
               </div>
             </div>
           </Show>

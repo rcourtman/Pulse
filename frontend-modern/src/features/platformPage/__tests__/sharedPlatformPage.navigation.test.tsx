@@ -1,7 +1,8 @@
 import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PlatformSectionTabs, getPlatformSectionTabScrollLeft } from '../sharedPlatformPage';
+import { getHorizontalRailScrollLeft } from '@/components/shared/horizontalRailVisibilityModel';
+import { PlatformSectionTabs } from '../sharedPlatformPage';
 
 afterEach(() => {
   cleanup();
@@ -11,54 +12,54 @@ afterEach(() => {
 describe('PlatformSectionTabs', () => {
   it('does not recenter an active tab that is already visible', () => {
     expect(
-      getPlatformSectionTabScrollLeft({
+      getHorizontalRailScrollLeft({
         scrollLeft: 0,
         scrollWidth: 406,
         clientWidth: 346,
-        tabOffsetLeft: 135,
-        tabOffsetWidth: 75,
+        itemOffsetLeft: 135,
+        itemOffsetWidth: 75,
       }),
     ).toBe(0);
   });
 
   it('moves only far enough to reveal a tab clipped on either edge', () => {
     expect(
-      getPlatformSectionTabScrollLeft({
+      getHorizontalRailScrollLeft({
         scrollLeft: 180,
         scrollWidth: 500,
         clientWidth: 200,
-        tabOffsetLeft: 150,
-        tabOffsetWidth: 70,
+        itemOffsetLeft: 150,
+        itemOffsetWidth: 70,
       }),
     ).toBe(142);
     expect(
-      getPlatformSectionTabScrollLeft({
+      getHorizontalRailScrollLeft({
         scrollLeft: 0,
         scrollWidth: 500,
         clientWidth: 200,
-        tabOffsetLeft: 350,
-        tabOffsetWidth: 100,
+        itemOffsetLeft: 350,
+        itemOffsetWidth: 100,
       }),
     ).toBe(258);
   });
 
   it('clamps active-tab visibility scrolling to the rail bounds', () => {
     expect(
-      getPlatformSectionTabScrollLeft({
+      getHorizontalRailScrollLeft({
         scrollLeft: 40,
         scrollWidth: 500,
         clientWidth: 200,
-        tabOffsetLeft: 0,
-        tabOffsetWidth: 70,
+        itemOffsetLeft: 0,
+        itemOffsetWidth: 70,
       }),
     ).toBe(0);
     expect(
-      getPlatformSectionTabScrollLeft({
+      getHorizontalRailScrollLeft({
         scrollLeft: 250,
         scrollWidth: 500,
         clientWidth: 200,
-        tabOffsetLeft: 470,
-        tabOffsetWidth: 70,
+        itemOffsetLeft: 470,
+        itemOffsetWidth: 70,
       }),
     ).toBe(300);
   });

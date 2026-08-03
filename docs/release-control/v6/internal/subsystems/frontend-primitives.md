@@ -3698,6 +3698,13 @@ workflow tab shell, hidden-single-tab behavior, active-link styling, link
 targeting, active-page aria state, and minimal active-tab visibility scrolling
 after route or viewport-size changes; platform page surfaces own only tab specs,
 the active tab choice, and aria-label copy.
+The visibility behavior is a shared horizontal-rail boundary:
+`horizontalRailVisibilityModel.ts` owns the bounded minimal-scroll calculation,
+and `useActiveHorizontalRailItemVisibility.ts` owns route-state, resize, and
+rail-resize synchronization. Platform section tabs, Alerts mobile navigation,
+and future horizontally scrolling destination rails must compose that owner so
+the selected destination cannot remain clipped after direct navigation or a
+viewport change.
 Platform feature surfaces must not rebuild local nav tab bars with
 `aria-current` and border-tab styling.
 Filter bars are registry-backed too. `FilterBar` owns resource-list filtering

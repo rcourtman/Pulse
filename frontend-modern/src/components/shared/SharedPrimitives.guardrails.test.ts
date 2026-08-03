@@ -45,6 +45,7 @@ import historyChartOverlaySource from '@/components/shared/HistoryChartOverlay.t
 import historyChartSource from '@/components/shared/HistoryChart.tsx?raw';
 import historyChartModelSource from '@/components/shared/historyChartModel.ts?raw';
 import historyChartTooltipSource from '@/components/shared/HistoryChartTooltip.tsx?raw';
+import horizontalRailVisibilityModelSource from '@/components/shared/horizontalRailVisibilityModel.ts?raw';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
@@ -77,6 +78,7 @@ import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
+import activeHorizontalRailVisibilitySource from '@/components/shared/useActiveHorizontalRailItemVisibility.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
@@ -7228,12 +7230,19 @@ describe('shared primitive guardrails', () => {
     );
 
     expect(sharedPlatformPageSource).toContain('export function PlatformSectionTabs');
-    expect(sharedPlatformPageSource).toContain('export function getPlatformSectionTabScrollLeft');
+    expect(sharedPlatformPageSource).toContain('useActiveHorizontalRailItemVisibility({');
     expect(sharedPlatformPageSource).toContain('props.tabs.length > 1');
     expect(sharedPlatformPageSource).toContain('href={tab.path}');
     expect(sharedPlatformPageSource).toContain('border-b-2');
-    expect(sharedPlatformPageSource).toContain("window.addEventListener('resize'");
-    expect(sharedPlatformPageSource).toContain('new ResizeObserver(keepActiveTabVisible)');
+    expect(horizontalRailVisibilityModelSource).toContain(
+      'export function getHorizontalRailScrollLeft',
+    );
+    expect(activeHorizontalRailVisibilitySource).toContain(
+      "window.addEventListener('resize', keepActiveItemVisible)",
+    );
+    expect(activeHorizontalRailVisibilitySource).toContain(
+      'new ResizeObserver(keepActiveItemVisible)',
+    );
     expect(sharedPlatformPageSource).toContain(
       "aria-current={props.active === tab.id ? 'page' : undefined}",
     );
