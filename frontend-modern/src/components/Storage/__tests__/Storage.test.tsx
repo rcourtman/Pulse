@@ -106,14 +106,6 @@ const queryStorageChip = (label: string): HTMLButtonElement | null => {
   return null;
 };
 
-const expectStorageInlineFilter = (filterLabel: string, optionLabel: string) => {
-  const group = screen.getByRole('group', { name: filterLabel });
-  expect(within(group).getByRole('button', { name: optionLabel })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-};
-
 const openStorageViewOptions = () => {
   expect(screen.queryByLabelText('Sort by')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View' }));
@@ -658,9 +650,9 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
-    // Menu filter state surfaces as chips on the FilterBar; Status stays visible
-    // as a frequent inline control. Layout and sort are durable presentation
-    // choices owned by the shared View popover.
+    // Menu filter state surfaces as chips on the FilterBar. The seven-state
+    // Status catalog remains in Add filter, while grouping and sort stay in
+    // the shared View popover.
     expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
     const viewOptions = openStorageViewOptions();
     expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
@@ -673,7 +665,8 @@ describe('Storage', () => {
       'status',
     );
     expect(queryStorageChip('Source')).toHaveTextContent('Source:PVE');
-    expectStorageInlineFilter('Status', 'Warning');
+    expect(screen.queryByRole('group', { name: 'Status' })).not.toBeInTheDocument();
+    expect(queryStorageChip('Status')).toHaveTextContent('Status:Warning');
 
     setStorageViewOption(viewOptions, 'Group by', 'type');
 
@@ -1392,7 +1385,9 @@ describe('Storage', () => {
     expect(
       screen.getByPlaceholderText('Search vSphere datastores by name, host, or capacity group'),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
+    const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+    expect(within(addFilter).getByRole('option', { name: 'Status: Warning' })).toBeInTheDocument();
+    expect(within(addFilter).queryByRole('option', { name: /^Source:/ })).not.toBeInTheDocument();
 
     fireEvent.input(
       screen.getByPlaceholderText('Search vSphere datastores by name, host, or capacity group'),

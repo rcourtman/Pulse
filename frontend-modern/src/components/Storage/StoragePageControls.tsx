@@ -194,7 +194,6 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         id: 'storage-status',
         label: 'Status',
         group: 'status',
-        inline: true,
         value: () => props.statusFilter(),
         setValue: (value: string) => props.setStatusFilter(value as StorageStatusFilterValue),
         defaultValue: DEFAULT_STORAGE_STATUS_FILTER as StorageStatusFilterValue,

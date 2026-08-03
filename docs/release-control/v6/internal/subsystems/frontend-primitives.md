@@ -3932,6 +3932,10 @@ dynamic scope filters in the menu/chip path. Feature surfaces must not fork
 local filter rows or bury high-frequency Type, Status, or other true filter
 facets behind an extra menu just to regain one-click behavior; persistent
 presentation preferences such as grouped versus flat layout belong in View.
+Detailed multi-state catalogs are not primary one-click controls merely because
+they filter by status. A catalog large enough to create a horizontally clipped
+rail on narrow viewports, including Storage's seven-state status catalog, must
+stay in the Add filter menu and surface a non-default selection as a chip.
 Legacy `PageControls` and labelled select/toggle primitives are not the
 resource-list filter shape. If a future surface needs a new filtering
 affordance, it should extend the FilterBar catalog model or add a new

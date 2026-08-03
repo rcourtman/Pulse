@@ -1634,9 +1634,11 @@ recovery scope, or a storage/recovery-owned secret source.
     dense-table storage controls on every embedded storage tab without
     forking the toolbar. The source scope flows through
     `forcedSourceFilter` as a typed page input; the source filter remains
-    available in the toolbar only when not forced. Status remains a frequent
-    inline filter; grouping and sort are durable presentation preferences in
-    the shared View popover.
+    available in the toolbar only when not forced. The seven-state Storage
+    status catalog stays in the shared Add filter menu instead of occupying a
+    permanent segmented rail; a non-default status surfaces through the
+    canonical FilterBar chip. Grouping and sort remain durable presentation
+    preferences in the shared View popover.
     Storage filter option semantics stay storage-owned, but FilterBar chip
     presentation is frontend-primitives-owned: storage status leading dots must
     use `filterChipStatusDot` rather than storage-local span factories.

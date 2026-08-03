@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "base_sha": "c37a62b3ad0cb6fbe83b94c64b44fa5aa3cdbd0f",
-  "verified_at": "2026-08-03T18:08:37Z",
+  "base_sha": "1501c1c2397af56ae17f4a7ade6ac25794be4d9c",
+  "verified_at": "2026-08-03T18:21:01Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"],
+  "changed_paths": ["frontend-modern/src/components/Storage/StoragePageControls.tsx"],
   "content_sha256": {
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "cbec1374a3173b9f876b4c994ee4f1de7435aaba737567719f3027746031809c"
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "ec80cff0e760d1e78caa0f9a41bba2df5144130c833c642b0d89b08bfc96989c"
   },
-  "routes": ["/standalone/machines"],
+  "routes": ["/proxmox/storage"],
   "viewports": [
     {
       "width": 1280,
@@ -19,16 +19,18 @@
     }
   ],
   "states": [
-    "Desktop Machines table with five current machines and no GPU utilization evidence",
-    "Phone-width Machines table with the filter body collapsed and the primary Machine and CPU columns visible",
-    "Phone-width Machines filters expanded with Saved, View, and the machine count aligned",
-    "Phone-width View preferences with the nested Columns picker expanded"
+    "Phone-width Storage filters collapsed with no permanent Status rail",
+    "Phone-width Storage filters expanded with Add filter, Saved, and View aligned",
+    "Phone-width Warning status active as a removable FilterBar chip",
+    "Desktop Storage toolbar with status choices in Add filter",
+    "Desktop View preferences with Group by, Sort by, and sort direction"
   ],
   "interactions": [
-    "Reloaded the final Machines build at 390 by 844 and confirmed no GPU table header is rendered without telemetry",
-    "Expanded Filters, opened View, and expanded Columns at phone width",
-    "Confirmed the GPU choice is absent while System, Agent, Net I/O, Disk I/O, Uptime, Temp, and Last seen remain available as applicable choices",
-    "Measured the phone-width body and viewport at 390 pixels and confirmed the wide table remains contained by its own horizontal scroll shell",
-    "Reloaded at 1280 by 720 and confirmed the former empty GPU column is gone and the remaining machine columns redistribute cleanly"
+    "Reloaded the final Storage build at 390 by 844 and confirmed the seven-state segmented rail is absent",
+    "Expanded Filters and confirmed all six non-default status choices remain available from Add filter",
+    "Selected Status: Warning and confirmed it becomes a removable chip while the filter toolbar remains contained at 390 pixels",
+    "Measured the phone-width document and filter toolbar and confirmed neither exceeds the 390-pixel viewport",
+    "Reloaded at 1280 by 720 and confirmed Add filter, Saved, and View remain aligned without the former Status rail",
+    "Opened View and confirmed Group by, Sort by, and sort direction remain available"
   ]
 }
