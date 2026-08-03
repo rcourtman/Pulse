@@ -540,11 +540,16 @@ func TestLoadConfig_ProviderHostedMSPDoesNotRequireStripe(t *testing.T) {
 	if cfg.UsesStripeBilling() {
 		t.Fatal("UsesStripeBilling = true, want false")
 	}
-	if cfg.ProviderMSPPlanVersion != "msp_starter" {
-		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_starter", cfg.ProviderMSPPlanVersion)
+	// No licence file means evaluation, not the cheapest paid tier.
+	if cfg.ProviderMSPPlanVersion != pkglicensing.PlanVersionMSPEval {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want %q", cfg.ProviderMSPPlanVersion, pkglicensing.PlanVersionMSPEval)
 	}
 	if cfg.ProviderMSPPlanSource != ProviderMSPPlanSourceEnvFallback {
 		t.Fatalf("ProviderMSPPlanSource = %q, want %q", cfg.ProviderMSPPlanSource, ProviderMSPPlanSourceEnvFallback)
+	}
+	limit, known := pkglicensing.WorkspaceLimitForPlan(cfg.ProviderMSPPlanVersion)
+	if !known || limit != 2 {
+		t.Fatalf("unlicensed workspace limit = %d (known=%v), want 2", limit, known)
 	}
 }
 
@@ -567,8 +572,11 @@ func TestLoadConfig_PulseHostedMSPUsesStripeFreeMSPStack(t *testing.T) {
 	if cfg.UsesStripeBilling() {
 		t.Fatal("UsesStripeBilling = true, want false")
 	}
-	if cfg.ProviderMSPPlanVersion != "msp_starter" {
-		t.Fatalf("ProviderMSPPlanVersion = %q, want msp_starter", cfg.ProviderMSPPlanVersion)
+	// Unlicensed is unlicensed in either hosting mode. A real Pulse-hosted
+	// customer resolves their plan from the licence file, covered by
+	// TestLoadConfig_PulseHostedMSPUsesSignedLicenseFilePlan below.
+	if cfg.ProviderMSPPlanVersion != pkglicensing.PlanVersionMSPEval {
+		t.Fatalf("ProviderMSPPlanVersion = %q, want %q", cfg.ProviderMSPPlanVersion, pkglicensing.PlanVersionMSPEval)
 	}
 }
 

@@ -21,13 +21,17 @@ import (
 type ControlPlaneMode string
 
 const (
-	ControlPlaneModePulseHosted         ControlPlaneMode = "pulse_hosted"
-	ControlPlaneModePulseHostedMSP      ControlPlaneMode = "pulse_hosted_msp"
-	ControlPlaneModeProviderHostedMSP   ControlPlaneMode = "provider_hosted_msp"
-	defaultProviderHostedMSPPlanVersion                  = "msp_starter"
-	ProviderMSPPlanSourceLicenseFile                     = "license_file"
-	ProviderMSPPlanSourceEnvFallback                     = "environment_fallback"
-	maxProviderMSPLicenseFileBytes                       = 64 * 1024
+	ControlPlaneModePulseHosted       ControlPlaneMode = "pulse_hosted"
+	ControlPlaneModePulseHostedMSP    ControlPlaneMode = "pulse_hosted_msp"
+	ControlPlaneModeProviderHostedMSP ControlPlaneMode = "provider_hosted_msp"
+	// No licence file means evaluation, not the cheapest paid tier. This used
+	// to default to msp_starter, which meant an unlicensed control plane ran
+	// on the full 5-client Starter allowance and there was nothing left to
+	// buy. See pkglicensing.PlanVersionMSPEval.
+	defaultProviderHostedMSPPlanVersion = pkglicensing.PlanVersionMSPEval
+	ProviderMSPPlanSourceLicenseFile    = "license_file"
+	ProviderMSPPlanSourceEnvFallback    = "environment_fallback"
+	maxProviderMSPLicenseFileBytes      = 64 * 1024
 
 	// cpauthDefaultSessionTTL mirrors cpauth.SessionTTL for Pulse-hosted
 	// control planes; providerHostedSessionTTL is the default for

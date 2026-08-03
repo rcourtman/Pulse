@@ -3251,3 +3251,20 @@ consume that filtered response for the header and document title, while
 `frontend-modern/src/useAppRuntimeState.ts` keeps the fetch inside the existing
 authenticated bootstrap and does not add a commercial-posture, checkout, or
 organization probe.
+
+An MSP control plane without a licence file runs on the `msp_eval` plan
+version, not on the cheapest paid tier. `msp_eval` carries the same MSP
+capabilities and a workspace limit of two, and it is neither purchasable nor
+part of the published pricing ladder. The environment fallback previously
+defaulted to `msp_starter`, which granted the full five-workspace Starter
+allowance to any unlicensed deployment and left no commercial boundary between
+evaluating and buying. `pkg/licensing.PlanVersionMSPEval` is the only spelling
+of this plan; `CanonicalizePlanVersion` must continue to fold `msp-eval` onto
+it, because an unrecognized plan version falls through the passthrough default
+and then fails closed at `UnknownPlanDefaultWorkspaceLimit`, which surfaces as
+a provider preflight failure rather than a smaller cap.
+
+The eval limit must stay strictly below every paid MSP tier. Paid workspace
+caps continue to come only from the signed licence file, never from the
+environment fallback, and `ProviderMSPPlanSourceEnvFallback` remains the
+recorded plan source whenever no licence is present.

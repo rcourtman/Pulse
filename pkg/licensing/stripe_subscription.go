@@ -90,6 +90,8 @@ func CanonicalizePlanVersion(raw string) string {
 		return "cloud_starter"
 	case "msp", "msp-hosted-v1", "msp_hosted_v1", "msp-starter", "msp_starter":
 		return "msp_starter"
+	case "msp-eval", "msp_eval":
+		return PlanVersionMSPEval
 	case "power", "cloud-power", "cloud_power":
 		return "cloud_power"
 	case "max", "cloud-max", "cloud_max":

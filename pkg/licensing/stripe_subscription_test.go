@@ -203,3 +203,18 @@ func TestCanonicalizePlanVersion(t *testing.T) {
 		})
 	}
 }
+
+// msp_eval is not a Stripe-purchasable plan, but it flows through the same
+// canonicalizer as every paid plan version, so an unrecognized spelling would
+// fall through to the passthrough default and then fail closed at a
+// 1-workspace limit in provider preflight.
+func TestCanonicalizePlanVersion_MSPEval(t *testing.T) {
+	for _, raw := range []string{"msp_eval", "msp-eval", " MSP-Eval "} {
+		if got := CanonicalizePlanVersion(raw); got != PlanVersionMSPEval {
+			t.Fatalf("CanonicalizePlanVersion(%q) = %q, want %q", raw, got, PlanVersionMSPEval)
+		}
+	}
+	if got := CanonicalizePlanVersion("msp_starter"); got != "msp_starter" {
+		t.Fatalf("msp_starter must not be captured by the eval case, got %q", got)
+	}
+}

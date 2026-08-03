@@ -2892,3 +2892,21 @@ OpenShift-native Routes and DeploymentConfigs remain outside this slice.
 contains a Docker socket mount or fixed `runAsUser`, `runAsGroup`, or `fsGroup`
 values. `scripts/installtests/build_release_assets_test.go` pins the packaged
 values, templates, RBAC, render assertions, and operator documentation.
+
+The provider MSP bundle must be installable without a prior exchange with
+Pulse. `deploy/provider-msp/setup.sh` treats a blank
+`CP_PROVIDER_MSP_LICENSE_FILE` as evaluation and proceeds, reporting the
+two-workspace cap and printing the lease signing public key for a later licence
+request. A non-empty licence path that does not resolve to a file remains a
+hard failure, because that is a misconfiguration rather than a choice.
+
+`setup.sh` resolves any blank or placeholder image variable
+(`TRAEFIK_IMAGE`, `DOCKER_SOCKET_PROXY_IMAGE`, `CONTROL_PLANE_IMAGE`,
+`CP_PULSE_IMAGE`) to an immutable digest from its published tag using
+`docker buildx imagetools inspect`, and writes the resolved digest back to
+`.env`. Operator-supplied values are left untouched. The shipped
+`.env.example` must therefore carry blank image variables rather than
+unfillable `@sha256:<pin>` placeholders, and a blank
+`CP_PROVIDER_MSP_LICENSE_FILE`, so the default install path requires no
+credentials and no correspondence. All four images are publicly readable, so
+digest resolution must not assume registry authentication.

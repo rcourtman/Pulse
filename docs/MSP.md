@@ -261,6 +261,22 @@ are carried on the licence key. MSP plans are sized by client workspace count
 when the limit is reached. MSP and Enterprise keys are issued through sales —
 contact support to get set up or to join the MSP design-partner program.
 
+### Evaluating without a licence
+
+Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and the control plane runs on
+`msp_eval`: the same product, capped at 2 client workspaces. Nothing to
+request and nobody to wait for. Stand the stack up, onboard two real clients,
+and confirm the isolation boundary holds on your own infrastructure before
+you spend anything.
+
+`setup.sh` also resolves the four image pins from their published tags when
+you leave them blank, writing the resolved digests back into `.env`. The
+images are public, so this needs no credentials.
+
+Set the licence file when you buy; paid client caps come from the licence.
+
+### Licensing a provider deployment
+
 In the provider-hosted model the licence is a signed file
 (`CP_PROVIDER_MSP_LICENSE_FILE`) that also binds your control plane's
 entitlement lease signing key:

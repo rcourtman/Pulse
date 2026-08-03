@@ -190,10 +190,21 @@ var CloudPlanWorkspaceLimits = map[string]int{
 	"cloud_founding": 1,
 
 	// MSP tiers — client caps from pricing spec
+	"msp_eval":    2,  // MSP evaluation: up to 2 clients, unlicensed, not sold
 	"msp_starter": 5,  // MSP Starter: up to 5 clients
 	"msp_growth":  15, // MSP Growth: up to 15 clients
 	"msp_scale":   40, // MSP Scale: up to 40 clients
 }
+
+// PlanVersionMSPEval is the plan a provider-hosted control plane runs on when
+// it has no licence file. It exists so a provider can stand the stack up and
+// onboard real clients before talking to anyone, which is the only way to
+// evaluate an isolation guarantee honestly.
+//
+// Deliberately capped BELOW the cheapest paid tier. The capabilities are the
+// same, so what is being evaluated is the real product; the client cap is what
+// converts. Not a purchasable plan and not part of the public pricing ladder.
+const PlanVersionMSPEval = "msp_eval"
 
 // UnknownPlanDefaultWorkspaceLimit is the safe-default workspace limit applied
 // when a plan version is not recognized. Fail-closed: unknown plans get the

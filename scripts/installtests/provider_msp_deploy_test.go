@@ -74,7 +74,9 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR=/var/lib/pulse-provider-msp/spacecheck/root",
 		"PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR=/var/lib/docker/.pulse-provider-msp-spacecheck",
 		"CP_TRUSTED_PROXY_CIDRS=172.30.0.0/24",
-		"CP_PROVIDER_MSP_LICENSE_FILE=./provider-msp-license.jwt",
+		// Ships blank on purpose: blank is evaluation. The exact blank form is
+		// asserted in TestProviderMSPSetupScriptSupportsUnlicensedEvaluation.
+		"CP_PROVIDER_MSP_LICENSE_FILE=",
 		"CP_ENTITLEMENT_SIGNING_PRIVATE_KEY=",
 		"sudo -E ./setup.sh",
 		"docker compose run --rm control-plane provider-msp bootstrap",
@@ -325,6 +327,54 @@ func assertNotContainsAny(t *testing.T, text string, forbidden ...string) {
 	for _, needle := range forbidden {
 		if strings.Contains(text, needle) {
 			t.Fatalf("forbidden %q found in:\n%s", needle, text)
+		}
+	}
+}
+
+// The unlicensed path is both a commercial boundary and the whole conversion
+// path, so it is pinned here rather than left to whoever next edits setup.sh.
+//
+// Before this, setup.sh required a licence file and four hand-supplied image
+// digests shipped as unfillable "<pin>" placeholders. That put two human
+// round-trips in front of a provider's first screen, for no technical reason:
+// all four images are public, and the control plane already ran unlicensed on
+// the environment fallback.
+func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	script := string(scriptBytes)
+
+	assertContainsAll(t, script,
+		"evaluation mode, 2 client workspaces",
+		"ensure_image_pins",
+		"default_image_ref",
+		"resolve_image_digest",
+		"buildx imagetools inspect",
+	)
+
+	// A blank licence path means evaluation. If it returns to the
+	// must-be-non-empty list, setup.sh refuses to start unlicensed again.
+	if strings.Contains(script, "CP_TRUSTED_PROXY_CIDRS CP_PROVIDER_MSP_LICENSE_FILE") {
+		t.Fatal("CP_PROVIDER_MSP_LICENSE_FILE is back in the required non-empty list; blank must mean evaluation")
+	}
+
+	envBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", ".env.example"))
+	if err != nil {
+		t.Fatalf("read provider MSP env example: %v", err)
+	}
+	env := string(envBytes)
+
+	if strings.Contains(env, "<pin>") {
+		t.Fatal(".env.example still ships <pin> image placeholders; setup.sh resolves blank pins from published tags instead")
+	}
+	if !strings.Contains(env, "\nCP_PROVIDER_MSP_LICENSE_FILE=\n") {
+		t.Fatal(".env.example must ship a blank CP_PROVIDER_MSP_LICENSE_FILE so the shipped default is evaluation")
+	}
+	for _, key := range []string{"TRAEFIK_IMAGE", "DOCKER_SOCKET_PROXY_IMAGE", "CONTROL_PLANE_IMAGE", "CP_PULSE_IMAGE"} {
+		if !strings.Contains(env, "\n"+key+"=\n") {
+			t.Fatalf(".env.example must ship %s blank so setup.sh resolves its digest", key)
 		}
 	}
 }

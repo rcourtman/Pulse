@@ -281,6 +281,59 @@ set_env_value() {
   rm -f "${tmp}"
 }
 
+# default_image_ref maps each image variable to the tag its digest is resolved
+# from when the operator has not pinned one by hand.
+default_image_ref() {
+  case "$1" in
+    TRAEFIK_IMAGE) echo "traefik:v3" ;;
+    DOCKER_SOCKET_PROXY_IMAGE) echo "tecnativa/docker-socket-proxy:latest" ;;
+    CONTROL_PLANE_IMAGE) echo "ghcr.io/rcourtman/pulse-control-plane:latest" ;;
+    CP_PULSE_IMAGE) echo "ghcr.io/rcourtman/pulse:latest" ;;
+    *) return 1 ;;
+  esac
+}
+
+# resolve_image_digest turns a tag into an immutable digest ref. Uses buildx
+# imagetools, which the Docker install above provides, and which reads the
+# registry without pulling the image.
+resolve_image_digest() {
+  local ref="$1" digest
+  digest="$(docker buildx imagetools inspect "${ref}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+  [[ "${digest}" == sha256:* ]] || return 1
+  printf '%s@%s\n' "${ref%:*}" "${digest}"
+}
+
+# ensure_image_pins fills in any image variable the operator left blank or on
+# the shipped <pin> placeholder.
+#
+# The bundle used to ship four unfillable "@sha256:<pin>" placeholders that
+# setup.sh then refused to run without, so the only way to obtain them was to
+# ask us. All four images are publicly readable, so there was never anything
+# to hand out; it just meant nobody could start without a conversation first.
+#
+# Still resolved to an immutable digest, not left on a floating tag, so a
+# rebuild of the tag cannot silently change what a provider is running.
+ensure_image_pins() {
+  local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
+  [[ -f "${env_path}" ]] || die "missing ${env_path}"
+
+  local key current ref resolved
+  for key in TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_PULSE_IMAGE; do
+    current="$(env_value "${key}" "${env_path}")"
+    if [[ -n "${current}" && "${current}" != *"<pin>"* ]]; then
+      continue
+    fi
+    ref="$(default_image_ref "${key}")" || die "no default image ref for ${key}"
+    log "resolving ${key} digest from ${ref}"
+    if ! resolved="$(resolve_image_digest "${ref}")"; then
+      die "could not resolve a digest for ${ref}
+Set ${key} in ${env_path} by hand, or check this host can reach the registry."
+    fi
+    log "  ${resolved}"
+    set_env_value "${key}" "${resolved}" "${env_path}"
+  done
+}
+
 ensure_generated_secrets() {
   local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   [[ -f "${env_path}" ]] || die "missing ${env_path}"
@@ -377,7 +430,6 @@ Edit it now and set required values:
   - PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR
   - PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR
   - CP_TRUSTED_PROXY_CIDRS
-  - CP_PROVIDER_MSP_LICENSE_FILE
 
 setup.sh will generate CP_ADMIN_KEY and CP_ENTITLEMENT_SIGNING_PRIVATE_KEY if they
 are still blank.
@@ -404,7 +456,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_PROVIDER_MSP_LICENSE_FILE CP_ENTITLEMENT_SIGNING_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
+  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_ENTITLEMENT_SIGNING_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
     v="$(env_value "${k}" "${env_path}")"
     if [[ -z "${v}" ]]; then
       missing+=("${k}")
@@ -485,14 +537,31 @@ validate_env_file() {
     die "RESEND_API_KEY is required when CP_REQUIRE_EMAIL_PROVIDER=true"
   fi
 
+  # An empty CP_PROVIDER_MSP_LICENSE_FILE is evaluation mode, not a mistake.
+  #
+  # This used to be mandatory, which meant nobody could start the stack, create
+  # a client workspace, or see the portal until they had emailed for a licence
+  # and waited for a human to mint one. That put a round-trip with us in front
+  # of the first screen, and an isolation guarantee is the one claim a provider
+  # cannot evaluate from a screenshot.
+  #
+  # Unlicensed runs on msp_eval (2 client workspaces). Set the licence file
+  # when you buy; the paid caps come from the licence, never from here.
   local license_file
   license_file="$(env_value CP_PROVIDER_MSP_LICENSE_FILE "${env_path}")"
+  if [[ -z "${license_file}" ]]; then
+    log "no CP_PROVIDER_MSP_LICENSE_FILE set: evaluation mode, 2 client workspaces"
+    log "to buy, request a licence bound to this lease signing public key:"
+    log "  $(derive_lease_signing_public_key)"
+    return 0
+  fi
   if [[ "${license_file}" != /* ]]; then
     license_file="${PULSE_PROVIDER_MSP_INSTALL_DIR}/${license_file}"
   fi
   if [[ ! -f "${license_file}" ]]; then
-    die "CP_PROVIDER_MSP_LICENSE_FILE does not exist: ${license_file}
-Request your provider MSP license with this lease signing public key
+    die "CP_PROVIDER_MSP_LICENSE_FILE is set but does not exist: ${license_file}
+Leave it blank to run in evaluation mode (2 client workspaces), or request your
+provider MSP license with this lease signing public key
 (./setup.sh --print-lease-signing-public-key):
   $(derive_lease_signing_public_key)
 The license must bind this key or the control plane will refuse to start."
@@ -598,6 +667,9 @@ main() {
   install_deploy_bundle
   ensure_env_file
   ensure_generated_secrets
+  # After install_docker_ce, which provides the buildx used to read the
+  # registry, and before validation, which requires the pins to be set.
+  ensure_image_pins
   validate_env_file
   create_data_dirs
   ensure_docker_network

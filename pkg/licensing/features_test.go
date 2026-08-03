@@ -881,3 +881,27 @@ func TestBusinessTierContractShape(t *testing.T) {
 		t.Fatalf("GetTierDisplayName(TierBusiness) = %q, want Business", got)
 	}
 }
+
+// The unlicensed evaluation cap is a commercial boundary, not a default that
+// happens to be small. If it ever reaches the cheapest paid tier there is
+// nothing left to sell, which is exactly the state this replaced: the
+// unlicensed control plane used to run on the full 5-client Starter allowance.
+func TestMSPEvalCapStaysBelowCheapestPaidTier(t *testing.T) {
+	evalLimit, known := WorkspaceLimitForPlan(PlanVersionMSPEval)
+	if !known {
+		t.Fatalf("WorkspaceLimitForPlan(%q) unknown; an unrecognized plan fails closed to %d and breaks provider preflight", PlanVersionMSPEval, UnknownPlanDefaultWorkspaceLimit)
+	}
+	if evalLimit != 2 {
+		t.Fatalf("eval workspace limit = %d, want 2", evalLimit)
+	}
+
+	for _, paid := range []string{"msp_starter", "msp_growth", "msp_scale"} {
+		paidLimit, paidKnown := WorkspaceLimitForPlan(paid)
+		if !paidKnown {
+			t.Fatalf("paid plan %q has no workspace limit", paid)
+		}
+		if evalLimit >= paidLimit {
+			t.Fatalf("eval limit %d is not below paid plan %q limit %d", evalLimit, paid, paidLimit)
+		}
+	}
+}
