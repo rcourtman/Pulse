@@ -5,6 +5,7 @@ import { FilterButtonGroup } from './FilterButtonGroup';
 import filterButtonGroupSource from './FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from './filterButtonGroupModel.ts?raw';
 import filterButtonGroupStateSource from './useFilterButtonGroupState.ts?raw';
+import { getFilterButtonGroupCompactLabel } from './filterButtonGroupModel';
 
 describe('FilterButtonGroup', () => {
   afterEach(() => {
@@ -33,6 +34,14 @@ describe('FilterButtonGroup', () => {
     expect(filterButtonGroupModelSource).toContain('segmented:');
     expect(filterButtonGroupModelSource).toContain('compact:');
     expect(filterButtonGroupModelSource).toContain('inline-flex items-center gap-1');
+  });
+
+  it('keeps all-scope options meaningful in compact layouts', () => {
+    expect(getFilterButtonGroupCompactLabel({ label: 'All time' })).toBe('All');
+    expect(getFilterButtonGroupCompactLabel({ label: 'Last 24h' })).toBe('24h');
+    expect(getFilterButtonGroupCompactLabel({ label: 'All time', compactLabel: 'Any time' })).toBe(
+      'Any time',
+    );
   });
 
   it('renders the active option as pressed and routes selection changes', () => {

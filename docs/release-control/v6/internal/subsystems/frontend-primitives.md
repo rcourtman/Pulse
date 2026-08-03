@@ -3370,6 +3370,9 @@ owns variant resolution plus disabled selection/change runtime, and
 variant class catalog, compact-label policy, and segmented button class
 selection. Future filter-button-group work should extend those owners instead
 of pushing label truncation or segmented variant policy back into the shell.
+Compact labels that begin with `All` must preserve that scope word rather than
+collapsing to a trailing noun such as `time`; feature-owned `compactLabel`
+overrides remain authoritative when a domain needs different concise copy.
 Pressed/unpressed selector pills follow the same primitive rule.
 `frontend-modern/src/components/shared/SelectablePillButton.tsx` owns the
 pressed button shell and `aria-pressed` wiring, while

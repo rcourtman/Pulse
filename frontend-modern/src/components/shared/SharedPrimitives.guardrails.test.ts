@@ -470,6 +470,7 @@ describe('shared primitive guardrails', () => {
     expect(filterButtonGroupModelSource).toContain('touch-scroll');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
+    expect(filterButtonGroupModelSource).toContain("option.label.startsWith('All ')");
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
     expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(4);
     expect(generalSettingsPanelSource).toContain('getLocalePreferenceOptions');

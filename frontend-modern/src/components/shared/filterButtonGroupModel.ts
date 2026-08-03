@@ -130,5 +130,6 @@ export function getFilterButtonGroupCompactLabel(
   option: Pick<FilterOption<string | number>, 'label' | 'compactLabel'>,
 ): string {
   if (option.compactLabel) return option.compactLabel;
+  if (option.label.startsWith('All ')) return 'All';
   return option.label.split(' ').pop() ?? option.label;
 }

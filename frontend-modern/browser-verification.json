@@ -1,21 +1,16 @@
 {
   "version": 1,
-  "base_sha": "c35ab1ad1cbb5bbf651d8c961eb78cd60a116943",
-  "verified_at": "2026-08-03T08:37:35Z",
+  "base_sha": "419385ccfa9aed0ddf59587b1bdce9f62871f2c3",
+  "verified_at": "2026-08-03T09:19:12Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx"
+    "frontend-modern/src/components/shared/filterButtonGroupModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "c214d9b68db6b68ae6ad0c1528de31bfdf1af9c29e0bb57bce7cb181386d38aa"
+    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "affe61eeb2db0bc247b124c9ddff77b55dbc5b4ec477ea121ed6bb9368fc6548"
   },
   "routes": [
-    "/alerts/thresholds/proxmox",
-    "/alerts/thresholds/docker",
-    "/alerts/thresholds/kubernetes",
-    "/alerts/thresholds/truenas",
-    "/alerts/thresholds/vmware",
-    "/alerts/thresholds/systems"
+    "/alerts/history"
   ],
   "viewports": [
     {
@@ -28,19 +23,15 @@
     }
   ],
   "states": [
-    "Desktop Proxmox threshold tab active with platform icon and Virtualization Hosts table rendered",
-    "Desktop Docker threshold tab active with ignored container prefixes and container update alert sections",
-    "Desktop Kubernetes threshold tab active with the Clusters section rendered",
-    "Desktop TrueNAS threshold tab active with the Systems and Pools sections rendered",
-    "Desktop vSphere threshold tab active with the Hosts section rendered",
-    "Desktop Machines threshold tab active with the Machines table rendered",
-    "Phone-width horizontally scrollable platform tab strip with icons and the active underline indicator"
+    "Desktop Alert History period selector with full Last 24h, Last 7d, Last 30d, and All time labels",
+    "Phone-width Alert History with the filter shell collapsed",
+    "Phone-width expanded period and severity filters with the compact period labels 24h, 7d, 30d, and All"
   ],
   "interactions": [
-    "Clicked each of the six platform subtabs in turn and confirmed the icon, label, and active underline moved with the selection",
-    "Confirmed each subtab swapped the threshold body to that platform's sections rather than leaving the previous platform rendered",
-    "Confirmed the per-tab platform icons still render after the map callback stopped destructuring its argument",
-    "Tapped the Docker subtab at 390 pixels and confirmed the active indicator and Docker content applied on the narrow layout",
-    "Read the browser console after exercising every tab and confirmed no errors or Solid reactivity warnings"
+    "Expanded the phone-width filter shell and confirmed All time renders as the meaningful compact label All instead of time",
+    "Selected All time and confirmed its full accessible label, visible compact label, pressed state, and unclipped width",
+    "Restored Last 7d and confirmed the selected state moved back correctly",
+    "Confirmed the phone-width document has no horizontal overflow and the desktop selector retains its full labels",
+    "Read the browser console after the responsive interaction pass and confirmed no warnings or errors"
   ]
 }
