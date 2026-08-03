@@ -2205,3 +2205,48 @@ start_pulse
 		t.Fatalf("start_pulse did not report a successful start:\n%s", out)
 	}
 }
+
+// Reported on #1663: reinstalling after `rm -rf /etc/pulse` reached
+// setup_auto_updates before setup_directories had recreated the config
+// directory, so the system.json write failed with "No such file or
+// directory" while the run still reported that auto-updates were enabled.
+func TestRootInstallScriptAutoUpdateSetupCreatesMissingConfigDir(t *testing.T) {
+	parent := t.TempDir()
+	configDir := filepath.Join(parent, "pulse")
+
+	script := `
+		set -euo pipefail
+		print_info() { :; }
+		print_warn() { echo "WARN: $*"; }
+		print_success() { :; }
+		selected_update_channel() { printf 'stable\n'; }
+		install_auto_update_assets() { return 0; }
+		safe_systemctl() { return 0; }
+		chown() { return 0; }
+		CONFIG_DIR="$CONFIG_DIR_UNDER_TEST"
+		SERVICE_NAME="pulse"
+		UPDATE_TIMER_PATH="/tmp/pulse-update.timer"
+		ENABLE_AUTO_UPDATES=true
+` + extractRootInstallShellFunction(t, "setup_auto_updates") + `
+		setup_auto_updates
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "CONFIG_DIR_UNDER_TEST="+configDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), "No such file or directory") {
+		t.Fatalf("expected config dir to be created before the system.json write, got:\n%s", out)
+	}
+
+	systemJSON := filepath.Join(configDir, "system.json")
+	contents, readErr := os.ReadFile(systemJSON)
+	if readErr != nil {
+		t.Fatalf("expected %s to be written, got: %v\n%s", systemJSON, readErr, out)
+	}
+	if !strings.Contains(string(contents), `"autoUpdateEnabled":true`) {
+		t.Fatalf("expected auto-updates to be enabled in system.json, got: %s", contents)
+	}
+}
