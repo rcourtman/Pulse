@@ -8185,7 +8185,8 @@ describe('shared primitive guardrails', () => {
     expect(addFilterMenuSource).toContain('option.value !== filter.defaultValue');
     expect(addFilterMenuSource).toContain('GROUP_ORDER');
     expect(addFilterMenuSource).toContain('filterGroupClass');
-    expect(addFilterMenuSource).toContain('min-w-[7.5rem]');
+    expect(addFilterMenuSource).toContain('selectClass="w-[7.5rem]"');
+    expect(addFilterMenuSource).not.toContain('min-w-[7.5rem]');
     expect(addFilterMenuSource).toContain('bg-surface-hover');
     expect(addFilterMenuSource).toContain('ring-border-subtle');
     expect(addFilterMenuSource).toContain('aria-label="Filter"');
@@ -8249,6 +8250,7 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).toContain('aria-label="Filter actions"');
     expect(sharedPlatformPageSource).toContain('viewOptions?: JSX.Element;');
     expect(sharedPlatformPageSource).toContain('viewOptions={props.viewOptions}');
+    expect(sharedPlatformPageSource).toContain('showAddFilterLabel={false}');
     expect(sharedPlatformPageSource).toContain('trailingControls={');
     expect(sharedPlatformPageSource).not.toContain('ViewOptionsMenu');
     expect(sharedPlatformPageSource).toContain(

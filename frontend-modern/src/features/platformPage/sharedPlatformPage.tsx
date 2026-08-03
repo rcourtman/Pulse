@@ -1058,6 +1058,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
         tips: props.searchTips,
       }}
       filters={allFilters}
+      showAddFilterLabel={false}
       savedViewsKey={props.savedViewsKey}
       viewOptions={props.viewOptions}
       trailingControls={

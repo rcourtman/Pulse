@@ -3898,6 +3898,11 @@ not need a feature-owned reset. Route-owned or multi-facet platform surfaces
 may supply one composite reset, which the toolbar delegates exactly once;
 otherwise the shared `FilterBar` fallback clears its search and inline status
 catalog without forcing every platform table to repeat reset plumbing.
+Platform table toolbars also use the compact Add filter variant: the visible
+uppercase field label and labelled-field shell stay hidden while the native
+select retains its accessible `Filter` name. Provider surfaces must inherit
+that treatment from `PlatformTableToolbar` instead of choosing different
+label and width chrome page by page.
 Primary filters with small, stable option sets should stay one-click controls
 inside that same `FilterDef[]` catalog by setting `inline: true`; `FilterBar`
 renders those as unlabeled compact segmented controls in the same second-row
@@ -3965,10 +3970,10 @@ The Add filter select and adjacent action/popover triggers share the canonical
 `filterToolbarControlClass` height. When the Add filter label is visually
 hidden, its `FormSelect` must also omit the labelled group's outer padded/ring
 shell so the native select does not become a double-framed, oversized control;
-its extra width remains intentional space for dynamic filter-value labels. The
-visible `Add filter` value is a disabled, hidden placeholder, not an actionable
-option repeated at the top of the opened native list; only real filter values
-belong in that choice list.
+the select uses one stable compact width instead of expanding to its longest
+hidden option. The visible `Add filter` value is a disabled, hidden
+placeholder, not an actionable option repeated at the top of the opened native
+list; only real filter values belong in that choice list.
 Counts or orientation strips presented as part of a filtered resource table
 must derive from that table's canonical filtered collection as well. They must
 not continue showing page-wide inventory totals after FilterBar state, saved

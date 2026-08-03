@@ -281,6 +281,42 @@ describe('filterPlatformResources', () => {
 });
 
 describe('PlatformTableToolbar', () => {
+  it('keeps the Add filter control compact without losing its accessible label', () => {
+    const [node, setNode] = createSignal('all');
+
+    render(() =>
+      PlatformTableToolbar({
+        search: () => '',
+        onSearchChange: () => undefined,
+        searchPlaceholder: 'Search rows',
+        status: 'all',
+        onStatusChange: () => undefined,
+        statusOptions: [{ value: 'all', label: 'All' }],
+        filters: [
+          {
+            id: 'node',
+            label: 'Node',
+            options: () => [
+              { value: 'all', label: 'All' },
+              { value: 'pve1', label: 'pve1' },
+            ],
+            value: node,
+            setValue: setNode,
+            defaultValue: 'all',
+          },
+        ],
+        visible: 2,
+        total: 3,
+        rowNoun: 'rows',
+      }),
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Filter' });
+    const label = document.querySelector(`label[for="${select.id}"]`);
+    expect(label).toHaveClass('sr-only');
+    expect(select.parentElement).not.toHaveClass('p-0.5');
+  });
+
   it('shows and clears search-only state without requiring a custom reset owner', () => {
     const [search, setSearch] = createSignal('archive');
 

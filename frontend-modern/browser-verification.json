@@ -1,15 +1,17 @@
 {
   "version": 1,
-  "base_sha": "e3fdfc98b413db1b29b18cb65bb18bd10bdd3e18",
-  "verified_at": "2026-08-03T13:09:09Z",
+  "base_sha": "37dfdf95ad4d9136973133006b03e45a421884c1",
+  "verified_at": "2026-08-03T13:38:29Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx",
     "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "b94fdef76a18a9ef95f393f11445b8da613593064e03260c9349f804d39fb2fb"
+    "frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx": "b9be43892868440a5cd08a29e730f9ed67cf8f7bc0997d1af1b600d6a1d42bf8",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "42d877508eaac7af7b90c97ceac3cc279554cff019981518ab77e940b24ec2bd"
   },
-  "routes": ["/truenas/overview", "/kubernetes/overview", "/vmware/networks"],
+  "routes": ["/docker/overview", "/kubernetes/workloads"],
   "viewports": [
     {
       "width": 1280,
@@ -21,18 +23,18 @@
     }
   ],
   "states": [
-    "Desktop TrueNAS alert toolbar with default, search-only, and combined search/status state",
-    "Phone-width TrueNAS alert toolbar with collapsed and expanded filter rails",
-    "Desktop Kubernetes overview with URL-owned combined search/status state",
-    "Desktop vSphere networks with table-local search state"
+    "Desktop Docker container toolbar before and after applying its longest host filter",
+    "Desktop Kubernetes workload toolbar with dynamic cluster and namespace filters available",
+    "Phone-width Docker toolbar with the filter rail collapsed, expanded, and host-filtered",
+    "Phone-width Kubernetes workload toolbar with the filter rail expanded"
   ],
   "interactions": [
-    "Entered TrueNAS alert search text and confirmed contextual Clear filters appeared without requiring table-specific reset plumbing",
-    "Selected Warning with search active and confirmed one Clear filters action restored blank search and All status",
-    "Expanded the phone-width TrueNAS filter rail and confirmed Clear filters and the result count aligned without clipping or overflow",
-    "Cleared phone-width search state and confirmed the Clear action disappeared while the status default remained selected",
-    "Loaded Kubernetes overview with ?q=payments&status=degraded, confirmed both controls hydrated, and verified its feature-owned composite reset returned the exact default route",
-    "Entered and cleared vSphere network search text to confirm the shared fallback applies across another table-local platform consumer",
-    "Read the browser console after the final cross-platform pass and confirmed no warnings or errors"
+    "Measured Docker and Kubernetes Add filter controls at 120 by 28 pixels beside the 95 by 28 pixel Saved trigger instead of the previous 204-pixel content-expanded select",
+    "Confirmed platform toolbars no longer render the redundant visible uppercase Filter label while the select retains its accessible Filter name",
+    "Inspected the native filter option projection and confirmed the disabled Add filter placeholder is absent from its actionable option list",
+    "Applied the longest Docker host option, confirmed the compact control gave way to a host chip, Clear filters, and the filtered 14 of 70 result count without overflow",
+    "Cleared the Docker host filter and confirmed the chip and Clear action disappeared, the Add filter control returned, and the canonical route stayed unchanged",
+    "Expanded the Docker and Kubernetes phone-width filter rails and confirmed Add filter, Saved, View, Clear filters, chips, and result counts wrapped without clipping",
+    "Read the browser console after the final desktop and responsive pass and confirmed no warnings or errors"
   ]
 }

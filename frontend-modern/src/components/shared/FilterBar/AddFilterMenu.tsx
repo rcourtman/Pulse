@@ -113,7 +113,7 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
         fieldBaseClass={fieldBaseClass()}
         labelClass={props.showLabel === false ? 'sr-only' : filterLabelClass}
         selectBaseClass={`${filterToolbarControlClass} border border-transparent bg-surface-hover px-2 text-muted outline-none ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content focus:border-blue-500`}
-        selectClass="min-w-[7.5rem]"
+        selectClass="w-[7.5rem]"
         value=""
         onChange={handleChange}
         aria-label="Filter"
