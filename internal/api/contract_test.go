@@ -17526,25 +17526,24 @@ func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
 		t.Fatalf("read docs/AGENT_SUBSTRATE.md: %v", err)
 	}
 	doc := string(source)
+	normalized := strings.Join(strings.Fields(doc), " ")
 	for _, required := range []string{
-		"Settings -> API Access -> Agent integrations",
-		"client-ready `pulse-mcp` config snippets",
-		"manifest-owned MCP adapter setup contract",
+		"Settings, then API Access, then Agent integrations",
+		"lists the declared capabilities by category",
 		"surface contract and affordance badges",
-		"server name, command",
-		"supported client config families",
-		"OpenCode's native `opencode.json` / `mcp` shape",
-		"common `mcpServers` shape for Claude-style clients",
-		"from the same adapter contract",
-		"shows both",
+		"method, path, scope, and stable error codes",
+		"client-ready `pulse-mcp` configuration snippets",
 		"OpenCode's native `opencode.json` shape",
-		"common `mcpServers`",
-		"`pulse-mcp` also has a published distribution path",
-		"`install-mcp.sh` and `install-mcp.ps1`",
-		"release installers",
-		"frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
+		"`mcpServers` shape used by Claude-style clients",
+		"API tokens are minted on the same tab",
+		"`cmd/pulse-mcp`",
+		"projects each manifest capability into one MCP tool",
+		"`--emit-notifications`",
+		"The one-line installers `install-mcp.sh` and `install-mcp.ps1`",
+		"verify its checksum",
+		"`cmd/agent-probe`",
 	} {
-		if !strings.Contains(doc, required) {
+		if !strings.Contains(normalized, required) {
 			t.Errorf("docs/AGENT_SUBSTRATE.md must reflect current MCP onboarding; missing %q", required)
 		}
 	}
@@ -17555,8 +17554,12 @@ func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
 		"A distribution path for `pulse-mcp`. Today an integrator must",
 		"clone the repo and `go build`",
 		"generates the reusable `pulse-mcp` server block",
+		"Suitable as the basis for release notes",
+		"reminder to yourself",
+		"## Provable claims",
+		"frontend-modern/src/",
 	} {
-		if strings.Contains(doc, forbidden) {
+		if strings.Contains(normalized, forbidden) {
 			t.Errorf("docs/AGENT_SUBSTRATE.md must not preserve stale pre-onboarding gap copy; found %q", forbidden)
 		}
 	}
