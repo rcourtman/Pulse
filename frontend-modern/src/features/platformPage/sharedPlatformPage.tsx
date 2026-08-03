@@ -7,6 +7,8 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
+  onMount,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -39,6 +41,33 @@ export type PlatformTabSpec<TabId extends string> = {
   path: string;
 };
 
+const PLATFORM_SECTION_TAB_EDGE_PADDING = 8;
+
+export function getPlatformSectionTabScrollLeft(options: {
+  scrollLeft: number;
+  scrollWidth: number;
+  clientWidth: number;
+  tabOffsetLeft: number;
+  tabOffsetWidth: number;
+}): number {
+  const maxScrollLeft = Math.max(0, options.scrollWidth - options.clientWidth);
+  const visibleStart = options.scrollLeft;
+  const visibleEnd = visibleStart + options.clientWidth;
+  const tabStart = options.tabOffsetLeft;
+  const tabEnd = tabStart + options.tabOffsetWidth;
+
+  if (tabStart < visibleStart + PLATFORM_SECTION_TAB_EDGE_PADDING) {
+    return Math.max(0, tabStart - PLATFORM_SECTION_TAB_EDGE_PADDING);
+  }
+  if (tabEnd > visibleEnd - PLATFORM_SECTION_TAB_EDGE_PADDING) {
+    return Math.min(
+      maxScrollLeft,
+      tabEnd + PLATFORM_SECTION_TAB_EDGE_PADDING - options.clientWidth,
+    );
+  }
+  return Math.min(maxScrollLeft, Math.max(0, options.scrollLeft));
+}
+
 export function PlatformSectionTabs<TabId extends string>(props: {
   tabs: readonly PlatformTabSpec<TabId>[];
   active: TabId;
@@ -46,17 +75,37 @@ export function PlatformSectionTabs<TabId extends string>(props: {
 }) {
   let tabListRef: HTMLElement | undefined;
 
+  const keepActiveTabVisible = () => {
+    const activeTab = tabListRef?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!tabListRef || !activeTab) return;
+
+    tabListRef.scrollLeft = getPlatformSectionTabScrollLeft({
+      scrollLeft: tabListRef.scrollLeft,
+      scrollWidth: tabListRef.scrollWidth,
+      clientWidth: tabListRef.clientWidth,
+      tabOffsetLeft: activeTab.offsetLeft,
+      tabOffsetWidth: activeTab.offsetWidth,
+    });
+  };
+
   createEffect(() => {
     const activeTabId = props.active;
-    window.setTimeout(() => {
+    const timeoutId = window.setTimeout(() => {
       if (props.active !== activeTabId) return;
-      const activeTab = tabListRef?.querySelector<HTMLElement>('[aria-current="page"]');
-      if (!tabListRef || !activeTab) return;
+      keepActiveTabVisible();
+    });
+    onCleanup(() => window.clearTimeout(timeoutId));
+  });
 
-      tabListRef.scrollLeft = Math.max(
-        0,
-        activeTab.offsetLeft - (tabListRef.clientWidth - activeTab.offsetWidth) / 2,
-      );
+  onMount(() => {
+    window.addEventListener('resize', keepActiveTabVisible);
+    const resizeObserver =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(keepActiveTabVisible) : undefined;
+    if (tabListRef) resizeObserver?.observe(tabListRef);
+
+    onCleanup(() => {
+      window.removeEventListener('resize', keepActiveTabVisible);
+      resizeObserver?.disconnect();
     });
   });
 

@@ -7228,9 +7228,12 @@ describe('shared primitive guardrails', () => {
     );
 
     expect(sharedPlatformPageSource).toContain('export function PlatformSectionTabs');
+    expect(sharedPlatformPageSource).toContain('export function getPlatformSectionTabScrollLeft');
     expect(sharedPlatformPageSource).toContain('props.tabs.length > 1');
     expect(sharedPlatformPageSource).toContain('href={tab.path}');
     expect(sharedPlatformPageSource).toContain('border-b-2');
+    expect(sharedPlatformPageSource).toContain("window.addEventListener('resize'");
+    expect(sharedPlatformPageSource).toContain('new ResizeObserver(keepActiveTabVisible)');
     expect(sharedPlatformPageSource).toContain(
       "aria-current={props.active === tab.id ? 'page' : undefined}",
     );

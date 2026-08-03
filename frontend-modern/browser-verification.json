@@ -1,13 +1,24 @@
 {
   "version": 1,
-  "base_sha": "4e67a93d4966ca98892ef31c0c0219959442c58b",
-  "verified_at": "2026-08-03T16:42:17Z",
+  "base_sha": "9d9f13e7b0a7298c34dadc13d58cb991379edc0f",
+  "verified_at": "2026-08-03T17:08:00Z",
   "result": "passed",
   "changed_paths": ["frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"],
   "content_sha256": {
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "baa823e127fd74bc8d9abd6d0c05c82d4822a182ba374927e3e04e980b02406a"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "ca7464c040278ef3a313ac35805590e12d318ed18500bd76b145b6b2842bc273"
   },
-  "routes": ["/kubernetes/overview", "/docker/overview"],
+  "routes": [
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm"
+  ],
   "viewports": [
     {
       "width": 1280,
@@ -19,23 +30,19 @@
     }
   ],
   "states": [
-    "Desktop Kubernetes overview with cluster and deployment tables plus the default workload filter rail",
-    "Phone-width Kubernetes overview with the filter rail collapsed and expanded",
-    "Phone-width Kubernetes cluster and deployment tables at their leading columns and horizontally scrolled metric columns",
-    "Desktop Docker overview with host and container tables plus the default container filter rail",
-    "Phone-width Docker overview with the filter rail collapsed and expanded",
-    "Phone-width Docker host table at its leading columns and horizontally scrolled memory and disk columns"
+    "Desktop Docker Storage with the complete section rail and Storage marked as the active page",
+    "Phone-width Docker Storage after a live viewport resize with Overview, Images, Storage, and Networks visible",
+    "Phone-width Docker Networks and Swarm with each active destination reachable in the overflowing section rail",
+    "Desktop and phone-width Kubernetes Nodes, Workloads, Services, Storage, Configuration, and Events section rails",
+    "Phone-width Kubernetes filter bodies in both collapsed and expanded states on Nodes and Workloads"
   ],
   "interactions": [
-    "Measured the Kubernetes cluster table at 390 by 844 and confirmed its computed minimum width is 768 pixels, its leading name cell is 192 pixels, and full cluster names remain readable",
-    "Scrolled the Kubernetes cluster table horizontally and confirmed Nodes, CPU, and Memory remain reachable inside the table-owned scroll shell",
-    "Expanded the Kubernetes workload filter rail after table scrolling and confirmed Add filter, Saved, and the row count remain aligned without clipping",
-    "Confirmed the Kubernetes desktop cluster and deployment tables retain their complete column layout",
-    "Confirmed Docker host names and container names remain readable at phone width",
-    "Scrolled the Docker host table horizontally and confirmed Memory and Disk metrics remain reachable",
-    "Measured both Docker table wrappers and confirmed 768-pixel tables scroll inside 344-pixel wrappers while the 390-pixel document has no horizontal overflow",
-    "Expanded the Docker container filter rail and confirmed Add filter, Saved, View, and the container count wrap without clipping",
-    "Confirmed the Docker desktop host and container tables retain their complete column layout",
-    "Read browser warnings and errors after the final responsive pass and confirmed none were present"
+    "Narrowed Docker Storage from 1280 by 720 to 390 by 844 without reloading and confirmed the active Storage tab remained fully visible",
+    "Inspected the Docker Storage rail after resize and confirmed scrollLeft remained zero because the active tab was already within the visible bounds",
+    "Navigated across the Docker Images, Storage, Networks, and Swarm destinations and confirmed active-page styling and horizontal reachability",
+    "Navigated across the Kubernetes Nodes, Workloads, Services, Storage, Configuration, and Events destinations and confirmed the active section remained visible",
+    "Expanded the narrow Kubernetes Nodes and Workloads filter bodies and confirmed the tab rail and filter controls remained unclipped",
+    "Confirmed the 390-pixel document width did not acquire page-level horizontal overflow during the responsive passes",
+    "Inspected the final desktop and narrow screenshots for clipped, overlapping, or unnecessarily recentered section labels"
   ]
 }
