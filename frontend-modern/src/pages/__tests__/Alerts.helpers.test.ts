@@ -466,6 +466,10 @@ describe('tab path helpers', () => {
     expect(alertHistoryFiltersCardSource).toContain('export function AlertHistoryFiltersCard');
     expect(alertHistoryFiltersCardSource).toContain('getAlertHistorySearchPlaceholder');
     expect(alertHistoryFiltersCardSource).toContain('filterChipStatusDot');
+    expect(alertHistoryFiltersCardSource).toContain('onClearAll={props.state.clearFilters}');
+    expect(alertHistoryFiltersCardSource).toContain(
+      'showClearAll={() => props.state.activeFilterCount() > 0}',
+    );
     expect(alertHistoryFiltersCardSource).not.toContain('severityDot');
     expect(alertHistoryFiltersCardSource).not.toContain('h-2 w-2 rounded-full ${className}');
     expect(alertResourceIncidentsPanelSource).toContain(
@@ -526,6 +530,7 @@ describe('tab path helpers', () => {
     );
     expect(alertHistoryStateSource).toContain('export function useAlertHistoryState');
     expect(alertHistoryStateSource).toContain('export type AlertHistoryState');
+    expect(alertHistoryStateSource).toContain('const clearFilters = (): void =>');
     expect(alertHistoryStateSource).toContain('AlertsAPI.getHistory');
     expect(alertHistoryStateSource).toContain('AlertsAPI.clearHistory');
     expect(alertHistoryStateSource).toContain('useAlertResourceIncidentsState');

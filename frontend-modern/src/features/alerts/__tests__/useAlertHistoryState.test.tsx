@@ -146,4 +146,34 @@ describe('useAlertHistoryState', () => {
     expect(AlertsAPI.clearHistory).toHaveBeenCalledTimes(1);
     expect(result.alertHistory()).toEqual([]);
   });
+
+  it('clears search, period, and severity in one route write', async () => {
+    const [activeAlerts] = createSignal({});
+    vi.mocked(AlertsAPI.getHistory).mockResolvedValue([] as any);
+    setMockLocation('?q=backup+failed&period=30d&severity=critical');
+
+    const { result } = renderHook(() =>
+      useAlertHistoryState({
+        activeAlerts,
+        getResource: () => undefined,
+        allResources: () => [],
+      }),
+    );
+
+    await waitFor(() => expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(1));
+    expect(result.activeFilterCount()).toBe(3);
+    expect(result.searchTerm()).toBe('backup failed');
+    expect(result.timeFilter()).toBe('30d');
+    expect(result.severityFilter()).toBe('critical');
+
+    navigateSpy.mockClear();
+    result.clearFilters();
+
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).toHaveBeenCalledWith('/alerts/history', { replace: true });
+    expect(result.activeFilterCount()).toBe(0);
+    expect(result.searchTerm()).toBe('');
+    expect(result.timeFilter()).toBe('7d');
+    expect(result.severityFilter()).toBe('all');
+  });
 });

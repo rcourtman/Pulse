@@ -42,6 +42,11 @@ export interface UseAlertHistoryStateProps {
 
 const DEFAULT_TIME_FILTER: AlertHistoryRange = '7d';
 const DEFAULT_SEVERITY_FILTER: AlertSeverityFilter = 'all';
+const ALERT_HISTORY_QUERY_PARAMS = {
+  query: 'q',
+  period: 'period',
+  severity: 'severity',
+} as const;
 
 const parsePeriod = (raw: string | null | undefined): AlertHistoryRange =>
   raw === '24h' || raw === '7d' || raw === '30d' || raw === 'all' ? raw : DEFAULT_TIME_FILTER;
@@ -54,10 +59,11 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const navigate = useNavigate();
 
   const timeFilter: Accessor<AlertHistoryRange> = () =>
-    parsePeriod(new URLSearchParams(location.search).get('period'));
+    parsePeriod(new URLSearchParams(location.search).get(ALERT_HISTORY_QUERY_PARAMS.period));
   const severityFilter: Accessor<AlertSeverityFilter> = () =>
-    parseSeverity(new URLSearchParams(location.search).get('severity'));
-  const searchTerm: Accessor<string> = () => new URLSearchParams(location.search).get('q') ?? '';
+    parseSeverity(new URLSearchParams(location.search).get(ALERT_HISTORY_QUERY_PARAMS.severity));
+  const searchTerm: Accessor<string> = () =>
+    new URLSearchParams(location.search).get(ALERT_HISTORY_QUERY_PARAMS.query) ?? '';
 
   const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {
     const params = new URLSearchParams(location.search);
@@ -69,9 +75,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const setTimeFilter = (value: AlertHistoryRange): void => {
     updateSearchParam((params) => {
       if (value === DEFAULT_TIME_FILTER) {
-        params.delete('period');
+        params.delete(ALERT_HISTORY_QUERY_PARAMS.period);
       } else {
-        params.set('period', value);
+        params.set(ALERT_HISTORY_QUERY_PARAMS.period, value);
       }
     });
   };
@@ -79,9 +85,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const setSeverityFilter = (value: AlertSeverityFilter): void => {
     updateSearchParam((params) => {
       if (value === DEFAULT_SEVERITY_FILTER) {
-        params.delete('severity');
+        params.delete(ALERT_HISTORY_QUERY_PARAMS.severity);
       } else {
-        params.set('severity', value);
+        params.set(ALERT_HISTORY_QUERY_PARAMS.severity, value);
       }
     });
   };
@@ -89,9 +95,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
   const setSearchTerm = (value: string): void => {
     updateSearchParam((params) => {
       if (value === '') {
-        params.delete('q');
+        params.delete(ALERT_HISTORY_QUERY_PARAMS.query);
       } else {
-        params.set('q', value);
+        params.set(ALERT_HISTORY_QUERY_PARAMS.query, value);
       }
     });
   };
@@ -119,10 +125,20 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
 
   const activeFilterCount = createMemo(() => {
     let count = 0;
+    if (searchTerm().trim()) count++;
     if (timeFilter() !== '7d') count++;
     if (severityFilter() !== 'all') count++;
     return count;
   });
+
+  const clearFilters = (): void => {
+    updateSearchParam((params) => {
+      params.delete(ALERT_HISTORY_QUERY_PARAMS.query);
+      params.delete(ALERT_HISTORY_QUERY_PARAMS.period);
+      params.delete(ALERT_HISTORY_QUERY_PARAMS.severity);
+    });
+    setSelectedBarIndex(null);
+  };
 
   const userLocale =
     Intl.DateTimeFormat().resolvedOptions().locale ||
@@ -176,20 +192,20 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
       const params = new URLSearchParams(window.location.search);
       let mutated = false;
 
-      if (!params.has('period')) {
+      if (!params.has(ALERT_HISTORY_QUERY_PARAMS.period)) {
         const legacy = window.localStorage.getItem('alertHistoryTimeFilter');
         const parsed = parsePeriod(legacy);
         if (parsed !== DEFAULT_TIME_FILTER && legacy === parsed) {
-          params.set('period', parsed);
+          params.set(ALERT_HISTORY_QUERY_PARAMS.period, parsed);
           mutated = true;
         }
       }
 
-      if (!params.has('severity')) {
+      if (!params.has(ALERT_HISTORY_QUERY_PARAMS.severity)) {
         const legacy = window.localStorage.getItem('alertHistorySeverityFilter');
         const parsed = parseSeverity(legacy);
         if (parsed !== DEFAULT_SEVERITY_FILTER && legacy === parsed) {
-          params.set('severity', parsed);
+          params.set(ALERT_HISTORY_QUERY_PARAMS.severity, parsed);
           mutated = true;
         }
       }
@@ -303,6 +319,7 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     resourceIncidentEventFilters: resourceIncidentsState.resourceIncidentEventFilters,
     setResourceIncidentEventFilters: resourceIncidentsState.setResourceIncidentEventFilters,
     activeFilterCount,
+    clearFilters,
     incidentTimelines,
     incidentLoading,
     incidentErrors,

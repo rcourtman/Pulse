@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "base_sha": "59eb6dd68f3f1f7ac58639c2b82099eb076c14bc",
-  "verified_at": "2026-08-03T10:53:05Z",
+  "base_sha": "2402858e3c80b29d898e551c82969566c6a649b8",
+  "verified_at": "2026-08-03T11:15:05Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
-    "frontend-modern/src/routing/resourceLinks.ts"
+    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "6c838d09098ea243c8368753ef0f00c80cf11b59c7cbcd5f62750bba75fbafb2",
-    "frontend-modern/src/routing/resourceLinks.ts": "c57c920355766f401923340b746614e02b6e6a40fbd871bfd3be47611d952e93"
+    "frontend-modern/src/features/alerts/AlertHistoryFiltersCard.tsx": "768d706dad29c92c8a205059e48f16bd4fc8f652ad093501759f7f50c72d849c",
+    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "e190111f1b89a806b7bd07cf2b10a5ba4f8e5d204c0cebea871964252c5ccebd"
   },
-  "routes": ["/proxmox/backups"],
+  "routes": ["/alerts/history"],
   "viewports": [
     {
       "width": 1280,
@@ -23,21 +23,20 @@
     }
   ],
   "states": [
-    "Desktop Proxmox Backups default Coverage workspace with Posture filtering",
-    "Desktop By date workspace with URL-backed search and PBS snapshots source filtering",
-    "Desktop Saved views empty, named-view, restored-view, and removed-view states",
-    "Phone-width filter shell collapsed and expanded in Coverage and By date workspaces",
+    "Desktop default, search-only, combined period/severity/search, and chart-bucket states",
+    "Desktop Saved views empty, named-view, restored-view, removed-view, and deep-linked states",
+    "Phone-width filter shell collapsed and expanded with search-only and combined filter state",
     "Phone-width Saved views dialog bounded within the viewport with active filter state"
   ],
   "interactions": [
-    "Switched from Coverage to By date and confirmed the incompatible posture parameter was removed in the same navigation",
-    "Entered backup-vault search text, selected PBS snapshots, and confirmed the route became ?view=date&q=backup-vault&source=pbs",
-    "Saved the filtered slice as Backup URL audit, cleared it, reapplied it, and confirmed the exact query string and visible controls were restored",
-    "Reloaded the explicit deep link and confirmed search and source state remained selected",
-    "Cleared the combined filter state and confirmed one navigation retained ?view=date while removing every narrowing parameter",
-    "Removed the temporary saved view and confirmed the Saved count returned to zero",
-    "Expanded the phone-width filter shell, selected Unknown posture, switched to By date, and confirmed hidden posture state did not survive",
-    "Opened and dismissed the phone-width Saved dialog with Escape and confirmed it stayed viewport-bounded without document overflow",
-    "Read both browser consoles after the final responsive pass and confirmed no warnings or errors"
+    "Entered search text alone and confirmed Clear filters appeared, then cleared the URL and visible search state in one action",
+    "Selected Last 30d and Critical with search text, confirmed all three query parameters, and cleared them atomically back to defaults",
+    "Saved the combined slice as Alert reset audit, cleared it, reapplied it, and confirmed the exact query string and visible controls were restored",
+    "Reloaded the explicit deep link and confirmed search, period, and severity remained selected",
+    "Removed the temporary saved view and confirmed it no longer appeared",
+    "Selected an alert-frequency bucket, added a toolbar filter, and confirmed Clear filters removed both the route-owned filters and transient chart selection",
+    "Expanded the phone-width filter shell and confirmed Saved and Clear filters remained aligned without overflow",
+    "Opened and dismissed the phone-width Saved dialog with Escape and confirmed it stayed viewport-bounded",
+    "Read the browser console after the final responsive pass and confirmed no warnings or errors"
   ]
 }

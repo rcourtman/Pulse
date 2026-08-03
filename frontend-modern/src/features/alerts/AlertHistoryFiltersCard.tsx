@@ -69,6 +69,8 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
         clearOnEscape: true,
       }}
       filters={buildFilters()}
+      onClearAll={props.state.clearFilters}
+      showClearAll={() => props.state.activeFilterCount() > 0}
     />
   );
 }

@@ -1223,6 +1223,14 @@ Future alert-history control-flow work should extend the feature hook, new
 grouping or trend semantics should extend the history model, and render-heavy
 history surfaces should extend those section owners instead of putting fetch,
 resource-incident state, or table rendering back into the shell.
+Alert History toolbar state is one route-owned unit. Search, period, and
+severity are read and written by `useAlertHistoryState.ts`; its active-filter
+count includes search, and `AlertHistoryFiltersCard.tsx` delegates contextual
+Clear filters to one composite hook mutation instead of letting `FilterBar`
+issue sequential route writes. That reset removes all three query parameters
+in one navigation and clears any transient chart-bucket selection, so a
+search-only result set remains visibly resettable and an older URL write
+cannot resurrect another filter.
 That same history surface now also owns the canonical resource-incident
 handoff. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
 must treat the selected incident resource as a unified-resource consumer,

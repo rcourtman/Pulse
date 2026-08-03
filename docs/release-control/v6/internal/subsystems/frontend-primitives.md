@@ -3926,6 +3926,12 @@ Its feature owner may clear incompatible hidden facets when the workspace
 changes and may preserve that workspace during a composite reset, but the
 shared `FilterBar` remains the sole owner of Saved, Clear, filter-menu, and
 popover chrome across desktop and narrow layouts.
+Alert History follows the same rule for its route-owned search, period, and
+severity state. Its feature hook owns one composite reset and exposes a
+search-aware active-state accessor to `FilterBar`; the shared shell owns where
+the contextual Clear filters action appears, while the alerts feature must not
+fall back to sequential per-control URL writes or hide that action for a
+search-only result set.
 Because that popover combines view application, default selection, removal,
 and an inline naming form, it is a labelled non-modal dialog rather than an
 ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus
