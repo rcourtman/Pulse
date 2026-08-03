@@ -48,6 +48,14 @@ describe('resolveDocLink', () => {
     expect(resolveDocLink('README', '../../TERMS.md')).toBe('/docs/TERMS');
   });
 
+  // Documents shipped from the repository root, such as CONTRIBUTING.md, link
+  // as docs/X.md because that is the path from the root. They ship flat into
+  // the docs root, so the prefix has to collapse rather than nest.
+  it('collapses the docs/ prefix used by root-level documents', () => {
+    expect(resolveDocLink('CONTRIBUTING', 'docs/AI_TRANSPARENCY.md')).toBe('/docs/AI_TRANSPARENCY');
+    expect(resolveDocLink('CONTRIBUTING', 'SECURITY.md')).toBe('/docs/SECURITY');
+  });
+
   it('preserves fragments', () => {
     expect(resolveDocLink('README', 'CONFIGURATION.md#api-tokens')).toBe(
       '/docs/CONFIGURATION#api-tokens',

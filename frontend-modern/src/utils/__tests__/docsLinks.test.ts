@@ -82,7 +82,12 @@ describe('docsLinks', () => {
     // its repo source and a new one cannot be added without a source.
     const shippedDocsRoot = path.join(frontendRoot, 'public', 'docs');
     // Shipped from the repository root rather than docs/.
-    const rootSourcedDocs = new Set(['SECURITY.md', 'TERMS.md']);
+    const rootSourcedDocs = new Set([
+      'SECURITY.md',
+      'TERMS.md',
+      'ARCHITECTURE.md',
+      'CONTRIBUTING.md',
+    ]);
 
     function collectShippedDocs(dir: string, prefix = ''): string[] {
       return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
