@@ -1,160 +1,122 @@
-# Pulse agent substrate
+# Pulse agent integrations
 
-A short, plain-English summary of what landed across the agent-paradigm
-arc on `pulse/v6-release`. Suitable as the basis for release notes, a
-GitHub announcement, or just a reminder to yourself in three weeks of
-what shape this work took.
+Pulse exposes a set of HTTP endpoints so an external agent can read your
+infrastructure and act on it with the same context Pulse Patrol and the Pulse
+Assistant have. Claude Desktop, Claude Code, OpenCode, other MCP clients, and
+plain HTTP consumers can all drive it.
 
-## What it is
+This page explains what those endpoints offer and what ships to help you
+connect to them. To generate a ready-made client configuration for your own
+instance, open Settings, then API Access, then Agent integrations.
 
-Pulse v6 ships an agent-paradigm substrate so external agents (Claude
-Desktop, Claude Code, OpenCode, other MCP clients, plain HTTP consumers) can
-drive Pulse with the same context an in-process Patrol or Assistant
-has. The substrate has four axes:
+## What the endpoints offer
 
-**Discovery.** A canonical manifest at `/api/agent/capabilities`
-lists every agent-consumable capability with its name, description,
-HTTP method and path, required auth scope, response shape, stable
-error codes, and the deduplicated `requiredScopes` summary for the
-current full surface. It also carries the Pulse Intelligence Core,
-Patrol, Assistant, and MCP surface contract, including which
-affordances each supported operator surface exposes. The manifest is
-unauthenticated so an agent without a token can introspect Pulse before
-asking for one.
+**Discovery.** A manifest at `/api/agent/capabilities` lists every
+agent-consumable capability with its name, description, HTTP method and path,
+required auth scope, response shape, stable error codes, and a deduplicated
+`requiredScopes` summary for the whole surface. It also carries the Pulse
+Intelligence Core, Patrol, Assistant, and MCP surface contract, including
+which affordances each supported operator surface exposes. The manifest needs
+no token, so an agent can introspect Pulse before you issue it credentials.
 
-**Depth.** `/api/agent/resource-context/{id}` returns the situated
-picture of one resource in a single read: identity, operator-set
-state, active findings, pending approvals, recent actions including
-refused dispatches and verification probe outcomes. Stable token
-prefixes (`plan_drift:`, `resource_remediation_locked:`) reach the
-wire verbatim so agents branch on codes, not human text.
+**Depth.** `/api/agent/resource-context/{id}` returns the situated picture of
+one resource in a single read. That covers identity, operator-set state,
+active findings, pending approvals, and recent actions including refused
+dispatches and verification probe outcomes. Stable token prefixes such as
+`plan_drift:` and `resource_remediation_locked:` reach the wire verbatim, so
+an agent can branch on codes rather than on human-readable text.
 
-**Breadth.** `/api/agent/fleet-context` returns a thin per-resource
-rollup across the whole org: identity, operator flags, per-severity
-finding counts, pending-approval count. One read for "where do I
-focus?", with the per-resource bundle for follow-up depth.
+**Breadth.** `/api/agent/fleet-context` returns a thin per-resource rollup
+across the whole organisation, covering identity, operator flags, per-severity
+finding counts, and pending-approval count. It answers "where do I focus" in
+one read, with the per-resource endpoint available for follow-up depth.
 
-**Write.** Two write surfaces. The operator-state intent loop
-(`/api/resources/{id}/operator-state`) lets an agent record
-per-resource commitments (intentionally offline, never
-auto-remediate, maintenance window, criticality). The action
-governance loop (`/api/actions/plan`, `/api/actions/{id}/decision`,
-`/api/actions/{id}/execute`) lets an agent plan, approve, and
-execute capability invocations against a resource through the
-canonical audit store. The server populates attribution so client
-values cannot spoof who-did-it. Validation failures emit the
-`operator_state_invalid` and `invalid_action_request` stable
-codes; lifecycle conflicts on the action loop emit
-`action_not_pending`, `action_not_approved`,
-`action_already_executing`, `action_execution_final`, and
-`action_dry_run_only` so agents branch on the conflict rather
-than retrying blindly.
+**Write.** There are two write surfaces. The operator-state intent loop
+(`/api/resources/{id}/operator-state`) records per-resource commitments such
+as intentionally offline, never auto-remediate, maintenance window, and
+criticality. The action governance loop (`/api/actions/plan`,
+`/api/actions/{id}/decision`, `/api/actions/{id}/execute`) plans, approves,
+and executes capability invocations against a resource through the canonical
+audit store. Pulse populates attribution itself, so a client cannot spoof who
+did something. Validation failures emit the `operator_state_invalid` and
+`invalid_action_request` codes. Lifecycle conflicts on the action loop emit
+`action_not_pending`, `action_not_approved`, `action_already_executing`,
+`action_execution_final`, and `action_dry_run_only`, so an agent can branch on
+the specific conflict instead of retrying blindly.
 
-**Push.** `/api/agent/events` is an SSE stream that fires
-`finding.created`, `approval.pending`, and `action.completed` events
-as state changes. Each event is a small fixed-shape payload with
-enough context for an agent to decide whether to follow up. Refused
-dispatches preserve their stable error tokens; successful dispatches
-carry a verification block so agents close the certainty loop without
-polling the audit endpoint.
+**Push.** `/api/agent/events` is an SSE stream that fires `finding.created`,
+`approval.pending`, and `action.completed` as state changes. Each event is a
+small fixed-shape payload carrying enough context for an agent to decide
+whether to follow up. Refused dispatches keep their stable error tokens, and
+successful dispatches carry a verification block, so an agent can confirm an
+outcome without polling the audit endpoint.
 
-## What ships consuming it
+## What ships to help you connect
 
-Three first-party consumers are built on the same manifest:
+- **Settings, then API Access, then Agent integrations** is the in-app
+  surface. It reads `/api/agent/capabilities` from your running instance,
+  lists the declared capabilities by category, shows the surface contract and
+  affordance badges, and shows each capability's method, path, scope, and
+  stable error codes. It also generates client-ready `pulse-mcp` configuration
+  snippets with your instance's URL already filled in, covering OpenCode's
+  native `opencode.json` shape and the `mcpServers` shape used by
+  Claude-style clients. API tokens are minted on the same tab, so one place
+  covers both what agents can do and which token unlocks it.
 
-- **Settings -> API Access -> Agent integrations** is the in-app
-  operator surface. It fetches `/api/agent/capabilities` from the
-  running instance, lists the declared capabilities by category, shows
-  the manifest-owned surface contract and affordance badges, shows each
-  capability's method, path, scope, and stable error codes, and
-  generates client-ready `pulse-mcp` config snippets from the
-  manifest-owned MCP adapter setup contract: server name, command,
-  base URL flag, token environment variable, and the supported client config families.
-  The panel fills in the current Pulse URL for OpenCode's native `opencode.json` / `mcp` shape
-  and the common `mcpServers` shape for Claude-style clients.
-  Tokens are still minted in API Access, so the same settings tab covers
-  "what agents can do" and "which token unlocks it."
+- **`cmd/pulse-mcp`** is the MCP server adapter. Wire it into any MCP client
+  that can launch a local server. It projects each manifest capability into
+  one MCP tool with an auto-derived input schema, so capabilities added to
+  Pulse extend the MCP surface without an adapter change. Run it with
+  `--emit-notifications` to translate Pulse's SSE events into JSON-RPC
+  notifications on the stdio channel, which lets an autonomous MCP-bound agent
+  react to push events without holding a separate HTTP connection. The
+  one-line installers `install-mcp.sh` and `install-mcp.ps1` fetch the
+  matching binary from the latest Pulse release and verify its checksum.
+  Building from source stays available.
 
-- **`cmd/agent-probe`** is a small Go binary that walks the
-  discovery, triage, depth, push flow against a running Pulse
-  instance. Useful as a smoke test or worked example for someone
-  building their own integration.
+- **`cmd/agent-probe`** is a small Go binary that walks the discovery,
+  triage, depth, and push flow against a running instance. Use it as a smoke
+  test, or as a worked example if you are building your own HTTP integration.
 
-- **`cmd/pulse-mcp`** is the MCP server adapter. Wire it into any
-  MCP client that can launch a local server; the README at
-  `cmd/pulse-mcp/README.md` includes generated setup plus OpenCode,
-  Claude Desktop, and Claude Code examples from the same adapter contract,
-  and the in-app Agent integrations panel shows both
-  OpenCode's native `opencode.json` shape and the common `mcpServers`
-  block. The adapter projects each manifest capability into one MCP
-  tool with auto-derived input schema; adding capabilities to Pulse
-  extends the MCP surface without changes in the adapter. Run with
-  `--emit-notifications` to also translate Pulse's SSE events (`finding.created`,
-  `approval.pending`, `action.completed`) into JSON-RPC
-  notifications on the stdio channel so autonomous MCP-bound agents
-  can react to push events without holding a separate HTTP
-  connection.
+## Guarantees
 
-`pulse-mcp` also has a published distribution path: the one-line
-installers (`install-mcp.sh` and `install-mcp.ps1`) download the
-matching binary from the latest Pulse GitHub Release and verify the
-release checksum. Building from source remains available for local
-development.
+- **The manifest matches the implementation.** Every error code an
+  agent-surface handler can emit is declared in the manifest, and every code
+  the manifest declares is one a handler can emit. Drift in either direction
+  fails the build, so the manifest can be trusted as the contract.
 
-## What it does not do yet
+- **Discovery needs no token.** `/api/agent/capabilities` serves without
+  credentials by design. The capabilities it describes keep their own auth
+  scopes, so introspection does not grant access to anything.
 
-- Real-world consumer feedback. The substrate ships with the in-app
-  Agent integrations panel, two reference adapters (HTTP and MCP),
-  release installers, and end-to-end contract tests, but no external
-  integration has been load-bearing on it yet. The next meaningful
-  work item is whatever friction first usage surfaces, not more
-  substrate plumbing.
+- **Error codes come in two layers.** Capability-specific codes such as
+  `resource_not_found`, `operator_state_not_set`, and
+  `operator_state_invalid` are declared per capability in the manifest.
+  Cross-cutting codes such as `invalid_org`, `org_suspended`, and
+  `access_denied` come from the auth and multi-tenant middleware and apply to
+  every authenticated endpoint.
 
-- macOS notarization and package-manager polish. The installer
-  verifies release checksums, but the first launch of the unsigned
-  macOS binary can still show a Gatekeeper warning. Homebrew or other
-  package-manager distribution can sit on top of the release binary
-  path when usage signal warrants the maintenance.
+- **The surfaces compose.** Discovery, triage, depth, and the operator-state
+  write loop are exercised together through the real HTTP boundary on every
+  build, rather than only in isolation.
 
-## Provable claims
+## Known rough edges
 
-- **Manifest is honest.** A contract pin
-  (`TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations`)
-  parses every `writeJSONError` call from agent-surface handlers and
-  every `ErrorCodes` declaration from the manifest, asserting
-  symmetry both directions. Drift either way fails the test.
+- **Unsigned macOS binary.** The installer verifies release checksums, but the
+  first launch of the macOS `pulse-mcp` binary can still show a Gatekeeper
+  warning because the binary is not notarised. Homebrew and other
+  package-manager distribution may follow.
 
-- **The substrate composes.** Two paired end-to-end tests in
-  `internal/api/agent_substrate_e2e_test.go` boot the full router
-  stack and walk discovery, triage, depth, and the operator-state
-  write loop through the actual HTTP boundary. They are the
-  substantive proof that the four axes work as one.
-
-- **Discovery is unauthenticated.** Pinned by
-  `TestContract_AgentCapabilitiesManifestIsPublic` after a slice 47
-  fix added the path to `publicPaths`. Slice 40 had it 401'ing
-  despite the docs.
-
-- **Stable error envelope is two-layer.** Capability-specific codes
-  (`resource_not_found`, `operator_state_not_set`,
-  `operator_state_invalid`) are declared per-capability in the
-  manifest. Cross-cutting codes (`invalid_org`, `org_suspended`,
-  `access_denied`) come from the auth and multi-tenant middleware
-  and apply to every authenticated endpoint. Documented in
-  `api-contracts.md`; a contract test enforces no drift.
+- **Limited field usage.** These endpoints ship with the in-app panel, two
+  reference adapters, release installers, and end-to-end contract tests, but
+  no external integration has been load-bearing on them yet. If something is
+  awkward in practice, open an issue, because that feedback is what shapes
+  what comes next.
 
 ## Where to read more
 
-- Full contract: `docs/release-control/v6/internal/subsystems/api-contracts.md`,
-  agent-surface paragraphs in the `## Current State` section.
-- Implementation: `internal/api/agent_*.go` and
-  `internal/api/resources_operator_state.go`.
-- In-app setup surface:
-  `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`.
-- MCP adapter: `cmd/pulse-mcp/` (with README).
-- MCP installers: `scripts/install-mcp.sh` and
-  `scripts/install-mcp.ps1`.
-- HTTP worked example: `cmd/agent-probe/`.
-- Subsystem dependencies: relevant paragraphs in `agent-lifecycle.md`,
-  `performance-and-scalability.md`, and `storage-recovery.md` under
-  `docs/release-control/v6/internal/subsystems/`.
+- [Configuration](CONFIGURATION.md) for API tokens and their scopes.
+- [API reference](API.md) for the wider Pulse HTTP surface.
+- [AI features](AI.md) for how Patrol and the Assistant use the same context.
+- `cmd/pulse-mcp/README.md` in the repository for adapter setup examples
+  covering OpenCode, Claude Desktop, and Claude Code.
