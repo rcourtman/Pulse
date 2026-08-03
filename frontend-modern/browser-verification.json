@@ -1,17 +1,19 @@
 {
   "version": 1,
-  "base_sha": "de5a1b20df6e825dfc590dee334b8877569a74a2",
-  "verified_at": "2026-08-03T22:40:33Z",
+  "base_sha": "3a24d9694f3bb4062170149d02e0eb8241cf398b",
+  "verified_at": "2026-08-03T23:30:46Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx"
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "c4042eb72e027b97761f5cd02ba7021e0d7b3669e05e9db9f52af46ecb5bdbbf",
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "f4fe3a202d92efaedf61409a4602340f82411ff01252cc399cff758eff23857f"
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "f34d05f6731bacafb07613ac982ba621865e0f3e1db7baae42cff7ac994917d8",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "6be3cc7e2958f3bd8ead420dac8467b11941b1037721e881a4f1e85e1f5c8cd1"
   },
-  "routes": ["/standalone/machines", "/docker/overview"],
+  "routes": [
+    "/proxmox"
+  ],
   "viewports": [
     {
       "width": 1440,
@@ -23,15 +25,19 @@
     }
   ],
   "states": [
-    "Desktop Docker Overview fully loaded with the scoped Docker hosts title and View all machines action",
-    "Desktop Machines inventory after following the View all machines action, showing all five current machines",
-    "Phone-width Docker Overview fully loaded with the scoped title and action aligned without clipping",
-    "Phone-width Machines inventory after following the View all machines action"
+    "Proxmox Overview grouped workload table against the live 7655 backend with 34 guests across delly, minipc and pi",
+    "Avail column populated for probed guests and blank for unprobed guests such as iventoy, ollama and tails-anon",
+    "Backup column with all 34 rows in the fresh state rendering a bare green shield with no drawn age and no pill chrome",
+    "View preferences popover open with the Columns section expanded and the new Avail toggle listed",
+    "Avail column hidden through the new toggle and then restored to the original hidden set"
   ],
   "interactions": [
-    "Followed View all machines from Docker Overview at desktop width and confirmed navigation to /standalone/machines with all five rows",
-    "Repeated the View all machines handoff at phone width and confirmed the complete machine table rendered",
-    "Inspected the Docker hosts title, action placement, table containment, mobile navigation, and footer at both widths",
-    "Confirmed the browser console reported no warnings or errors during either responsive journey"
+    "Signed in at 1440x900 and read the Proxmox Overview table through DOM assertions on the availability cells and the backup status badges",
+    "Confirmed availability cells render bare latency such as 3ms, 1ms and 5ms with no trailing freshness suffix",
+    "Confirmed all 34 fresh backup badges render empty text, carry the green shield colour, and have no rounded-full pill chrome, while their aria-label still reports the backup age",
+    "Opened View then Columns, clicked the Avail checkbox off, and confirmed the availability header and every availability cell were removed and the preference persisted to workloadsHiddenColumns",
+    "Clicked Avail back on and confirmed workloadsHiddenColumns returned to its original value of aiContext, os, ip",
+    "Resized to 390x844 and confirmed both columns render unchanged with no horizontal document overflow",
+    "Read console messages filtered to errors and found none across both viewports"
   ]
 }

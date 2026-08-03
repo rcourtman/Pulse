@@ -1337,7 +1337,7 @@ describe('context column for PVE workloads', () => {
 });
 
 describe('backup column', () => {
-  it('shows compact age text for supported guests with a backup', () => {
+  it('keeps a fresh backup age accessible without drawing it in the row', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-26T12:00:00Z'));
 
@@ -1350,10 +1350,30 @@ describe('backup column', () => {
       visibleColumnIds: ['name', 'backup'],
     });
 
-    expect(screen.getByText('5h')).toBeTruthy();
+    // A healthy backup is carried by the shield colour alone. The age stays in
+    // the aria-label and the tooltip so nothing is lost.
+    expect(screen.queryByText('5h')).toBeNull();
     expect(
       container.querySelector('[aria-label="Backup status: fresh, last backup 5 hours ago"]'),
     ).toBeTruthy();
+  });
+
+  it('draws the compact age for supported guests whose backup is stale', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'));
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-24T12:00:00Z'),
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+
+    const badge = container.querySelector('[aria-label^="Backup status: stale"]');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent?.trim()).toMatch(/\d/);
   });
 
   it('shows None for supported guests without a backup', () => {

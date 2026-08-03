@@ -183,6 +183,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     width: '56px',
     minWidth: '48px',
     maxWidth: '64px',
+    toggleable: true,
     kind: 'badge',
   },
   {

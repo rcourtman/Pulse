@@ -86,18 +86,24 @@ function getBackupAgeBadgeLabel(
 }
 
 function getBackupAgeBadgeClass(status: BackupInfo['status']): string {
-  const base =
-    'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
+  const layout =
+    'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
+  // A healthy backup only needs its shield. The colour already carries the
+  // verdict and the threshold already decides what counts as acceptable, so the
+  // exact age is decoration on the rows nobody has to act on; it stays in the
+  // tooltip and the aria-label. Age and pill chrome are reserved for the states
+  // that need attention.
+  const pill = `${layout} rounded-full border`;
 
   switch (status) {
     case 'fresh':
-      return `${base} border-green-200 bg-green-50 text-green-700 dark:border-green-900/70 dark:bg-green-950/40 dark:text-green-300`;
+      return `${layout} text-green-600 dark:text-green-400`;
     case 'stale':
-      return `${base} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
+      return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'critical':
-      return `${base} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
+      return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
     case 'never':
-      return `${base} border-border bg-surface-alt text-muted`;
+      return `${pill} border-border bg-surface-alt text-muted`;
   }
 }
 
@@ -326,7 +332,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
         aria-label={ariaLabel()}
       >
         <svg
-          class="h-3 w-3 flex-shrink-0"
+          class="h-3.5 w-3.5 flex-shrink-0"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -346,7 +352,9 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
             <path d="M10 10l4 4M14 10l-4 4" />
           </Show>
         </svg>
-        <span>{badgeLabel()}</span>
+        <Show when={info().status !== 'fresh'}>
+          <span>{badgeLabel()}</span>
+        </Show>
       </span>
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
@@ -421,8 +429,12 @@ function AvailabilityProbeCell(props: { presentation: AvailabilityProbePresentat
         : result === 'not checked'
           ? 'pending'
           : result;
+    // 'fresh' is Pulse vouching for its own probe pipeline, not a fact about the
+    // guest. It is true on nearly every row, so printing it turns the column into
+    // repeated noise. Surface freshness only when it is a reason to distrust the
+    // result.
     const freshness = p().freshnessLabel === 'freshness unknown' ? 'unknown' : p().freshnessLabel;
-    return `${compactResult} · ${freshness}`;
+    return freshness === 'fresh' ? compactResult : `${compactResult} · ${freshness}`;
   });
 
   return (
