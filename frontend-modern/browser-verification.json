@@ -1,17 +1,20 @@
 {
   "version": 1,
-  "base_sha": "1b2e9866a843386916fe58a9f73be1700ca6f7d6",
-  "verified_at": "2026-08-03T07:52:17Z",
+  "base_sha": "c35ab1ad1cbb5bbf651d8c961eb78cd60a116943",
+  "verified_at": "2026-08-03T08:37:35Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/components/Alerts/ThresholdsTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "3c2eb5f190d916a16ff9f03e247939726e36957f0ebd5f8b8f0647fb57d99be1"
+    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "c214d9b68db6b68ae6ad0c1528de31bfdf1af9c29e0bb57bce7cb181386d38aa"
   },
   "routes": [
     "/alerts/thresholds/proxmox",
     "/alerts/thresholds/docker",
+    "/alerts/thresholds/kubernetes",
+    "/alerts/thresholds/truenas",
+    "/alerts/thresholds/vmware",
     "/alerts/thresholds/systems"
   ],
   "viewports": [
@@ -25,18 +28,19 @@
     }
   ],
   "states": [
-    "Desktop Proxmox threshold page with the route-backed platform rail above the resource FilterBar",
-    "Desktop Docker threshold page with Docker selected and only Overrides available from Add filter",
-    "Phone-width Docker threshold page with Filters collapsed and the platform rail still visible",
-    "Phone-width Systems threshold page after the platform rail scrolled Machines into view",
-    "Phone-width Systems resource filters expanded with only the Overrides choices present"
+    "Desktop Proxmox threshold tab active with platform icon and Virtualization Hosts table rendered",
+    "Desktop Docker threshold tab active with ignored container prefixes and container update alert sections",
+    "Desktop Kubernetes threshold tab active with the Clusters section rendered",
+    "Desktop TrueNAS threshold tab active with the Systems and Pools sections rendered",
+    "Desktop vSphere threshold tab active with the Hosts section rendered",
+    "Desktop Machines threshold tab active with the Machines table rendered",
+    "Phone-width horizontally scrollable platform tab strip with icons and the active underline indicator"
   ],
   "interactions": [
-    "Selected Docker from the threshold platform rail and confirmed navigation to the canonical Docker threshold route",
-    "Applied Overrides: Custom only, cleared filters, and confirmed Docker remained selected with no route change",
-    "Reloaded at phone width with Filters collapsed and confirmed platform navigation remained available",
-    "Selected Machines from the horizontally scrollable phone-width platform rail and confirmed navigation to Systems",
-    "Expanded and collapsed phone-width Filters and confirmed the platform choices were never duplicated as filter options",
-    "Confirmed the phone-width document had no horizontal overflow and the final verified routes produced no browser warning or error console entries"
+    "Clicked each of the six platform subtabs in turn and confirmed the icon, label, and active underline moved with the selection",
+    "Confirmed each subtab swapped the threshold body to that platform's sections rather than leaving the previous platform rendered",
+    "Confirmed the per-tab platform icons still render after the map callback stopped destructuring its argument",
+    "Tapped the Docker subtab at 390 pixels and confirmed the active indicator and Docker content applied on the narrow layout",
+    "Read the browser console after exercising every tab and confirmed no errors or Solid reactivity warnings"
   ]
 }

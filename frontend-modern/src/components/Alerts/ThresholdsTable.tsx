@@ -26,19 +26,20 @@ const thresholdPlatformDefinitions = [
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const state = useThresholdsTableState(props);
   const { isMobile } = useBreakpoint();
-  const platformTabs: SubtabOption[] = thresholdPlatformDefinitions.map(
-    ({ value, label, icon: Icon }) => ({
-      value,
+  const platformTabs: SubtabOption[] = thresholdPlatformDefinitions.map((definition) => {
+    const Icon = definition.icon;
+    return {
+      value: definition.value,
       label: (
         <span class="inline-flex items-center gap-2">
           <span aria-hidden="true">
             <Icon class="h-4 w-4" />
           </span>
-          <span>{label}</span>
+          <span>{definition.label}</span>
         </span>
       ),
-    }),
-  );
+    };
+  });
 
   const filters = (): FilterDef[] => [
     {
