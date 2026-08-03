@@ -1,21 +1,18 @@
 {
   "version": 1,
-  "base_sha": "b2e5ad606176c0e08185e7da95b33a4ae4e39318",
-  "verified_at": "2026-08-03T00:21:48Z",
+  "base_sha": "1b2e9866a843386916fe58a9f73be1700ca6f7d6",
+  "verified_at": "2026-08-03T07:52:17Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/StoragePageControls.tsx",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx"
+    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "f3ea9419ff3b7de9f21deba51add5485e15751ec58842eee532fcf30e9d28782",
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "97c31217224436d7326b34629ad26d7e8fbafa9c50033a2faaf9877af49e3d9d",
-    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "a4af7c1e398bab745109d332dff808f273b85067e80cf5c53c11abf6f1fe2f98"
+    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "3c2eb5f190d916a16ff9f03e247939726e36957f0ebd5f8b8f0647fb57d99be1"
   },
   "routes": [
-    "/proxmox/storage",
-    "/docker/overview"
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/systems"
   ],
   "viewports": [
     {
@@ -28,20 +25,18 @@
     }
   ],
   "states": [
-    "Desktop Proxmox Storage toolbar with Status as the only permanent segmented filter and Saved, Clear filters, and View aligned on the shared rail",
-    "Desktop Storage View preferences with Layout/Group by and Order controls fully visible",
-    "Phone-width Storage filter rail expanded with Saved, Clear filters, and View together in the labelled Filter actions row",
-    "Phone-width Storage View preferences fully contained within the viewport",
-    "Phone-width Docker filter rail expanded with Saved, View, and the container count in the shared action row",
-    "Phone-width Docker View preferences fully contained despite the trailing container count"
+    "Desktop Proxmox threshold page with the route-backed platform rail above the resource FilterBar",
+    "Desktop Docker threshold page with Docker selected and only Overrides available from Add filter",
+    "Phone-width Docker threshold page with Filters collapsed and the platform rail still visible",
+    "Phone-width Systems threshold page after the platform rail scrolled Machines into view",
+    "Phone-width Systems resource filters expanded with only the Overrides choices present"
   ],
   "interactions": [
-    "Changed Storage Group by from Flat to By node and confirmed grouped host rows plus the canonical group=node URL parameter",
-    "Reloaded Storage and confirmed the By node selection and grouped result persisted from URL state",
-    "Pressed Escape and confirmed the View dialog closed with focus restored to its trigger",
-    "Reopened View and clicked the Storage tab outside it, confirming outside-click dismissal",
-    "Expanded the phone-width Storage filter rail and confirmed Group by no longer consumes an inline filter row",
-    "Opened View on phone-width Storage and Docker routes and confirmed the action-rail-relative panel stayed inside both viewport edges",
-    "Confirmed the verified routes produced no browser warning or error console entries"
+    "Selected Docker from the threshold platform rail and confirmed navigation to the canonical Docker threshold route",
+    "Applied Overrides: Custom only, cleared filters, and confirmed Docker remained selected with no route change",
+    "Reloaded at phone width with Filters collapsed and confirmed platform navigation remained available",
+    "Selected Machines from the horizontally scrollable phone-width platform rail and confirmed navigation to Systems",
+    "Expanded and collapsed phone-width Filters and confirmed the platform choices were never duplicated as filter options",
+    "Confirmed the phone-width document had no horizontal overflow and the final verified routes produced no browser warning or error console entries"
   ]
 }

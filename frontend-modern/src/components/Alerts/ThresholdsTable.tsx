@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { BulkEditDialog } from './BulkEditDialog';
 import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';
@@ -13,28 +14,33 @@ import type { ThresholdsTableProps } from '@/features/alerts/thresholds/types';
 import type { ThresholdsActiveTab } from '@/features/alerts/thresholds/tableTypes';
 import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';
 
+const thresholdPlatformDefinitions = [
+  { value: 'proxmox', label: 'Proxmox', icon: getPlatformIcon('proxmox') },
+  { value: 'docker', label: 'Docker', icon: getPlatformIcon('docker') },
+  { value: 'kubernetes', label: 'Kubernetes', icon: getPlatformIcon('kubernetes') },
+  { value: 'truenas', label: 'TrueNAS', icon: getPlatformIcon('truenas') },
+  { value: 'vmware', label: 'vSphere', icon: getPlatformIcon('vmware') },
+  { value: 'systems', label: 'Machines', icon: getPlatformIcon('systems') },
+] as const;
+
 export function ThresholdsTable(props: ThresholdsTableProps) {
   const state = useThresholdsTableState(props);
   const { isMobile } = useBreakpoint();
+  const platformTabs: SubtabOption[] = thresholdPlatformDefinitions.map(
+    ({ value, label, icon: Icon }) => ({
+      value,
+      label: (
+        <span class="inline-flex items-center gap-2">
+          <span aria-hidden="true">
+            <Icon class="h-4 w-4" />
+          </span>
+          <span>{label}</span>
+        </span>
+      ),
+    }),
+  );
 
   const filters = (): FilterDef[] => [
-    {
-      id: 'alerts-platform',
-      label: 'Platform',
-      group: 'scope',
-      inline: true,
-      value: state.activeTab,
-      setValue: (value) => state.handleTabClick(value as ThresholdsActiveTab),
-      defaultValue: 'proxmox',
-      options: () => [
-        { value: 'proxmox', label: 'Proxmox', icon: getPlatformIcon('proxmox') },
-        { value: 'docker', label: 'Docker', icon: getPlatformIcon('docker') },
-        { value: 'kubernetes', label: 'Kubernetes', icon: getPlatformIcon('kubernetes') },
-        { value: 'truenas', label: 'TrueNAS', icon: getPlatformIcon('truenas') },
-        { value: 'vmware', label: 'vSphere', icon: getPlatformIcon('vmware') },
-        { value: 'systems', label: 'Machines', icon: getPlatformIcon('systems') },
-      ],
-    },
     {
       id: 'alerts-overrides',
       label: 'Overrides',
@@ -52,6 +58,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
   return (
     <div class="space-y-4">
+      <Subtabs
+        value={state.activeTab()}
+        onChange={(value) => state.handleTabClick(value as ThresholdsActiveTab)}
+        tabs={platformTabs}
+        ariaLabel="Threshold platform"
+      />
+
       <FilterBar
         role="group"
         ariaLabel="Alert threshold filters"
@@ -65,14 +78,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         }}
         filters={filters()}
         showClearAll={() =>
-          state.searchTerm().trim().length > 0 ||
-          state.overrideFilter() !== 'all' ||
-          state.activeTab() !== 'proxmox'
+          state.searchTerm().trim().length > 0 || state.overrideFilter() !== 'all'
         }
         onClearAll={() => {
           state.setSearchTerm('');
           state.setOverrideFilter('all');
-          state.handleTabClick('proxmox');
         }}
       />
 

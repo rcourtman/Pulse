@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, fireEvent, screen, cleanup, waitFor } from '@solidjs/testing-library';
+import { render, fireEvent, screen, cleanup, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
 import { ThresholdsTable } from '../ThresholdsTable';
@@ -361,6 +361,18 @@ describe('ThresholdsTable basics', () => {
 });
 
 describe('ThresholdsTable navigation and redirection', () => {
+  it('renders route-backed platform choices as persistent navigation', () => {
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+
+    const platformTabs = screen.getByRole('tablist', { name: 'Threshold platform' });
+    expect(within(platformTabs).getAllByRole('tab')).toHaveLength(6);
+    expect(within(platformTabs).getByRole('tab', { name: 'Docker' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.queryByText('Platform')).not.toBeInTheDocument();
+  });
+
   it('redirects from base path to Proxmox', () => {
     setPathname('/alerts/thresholds');
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
@@ -405,23 +417,29 @@ describe('ThresholdsTable navigation and redirection', () => {
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
-    const proxmoxTab = screen
-      .getAllByRole('button')
-      .find((el) => el.textContent?.includes('Proxmox'));
-    if (proxmoxTab) fireEvent.click(proxmoxTab);
+    const platformTabs = screen.getByRole('tablist', { name: 'Threshold platform' });
+    fireEvent.click(within(platformTabs).getByRole('tab', { name: 'Proxmox' }));
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox');
 
-    const machinesTab = screen
-      .getAllByRole('button')
-      .find((el) => el.textContent?.includes('Machines'));
-    if (machinesTab) fireEvent.click(machinesTab);
+    fireEvent.click(within(platformTabs).getByRole('tab', { name: 'Machines' }));
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/systems');
 
-    const vmwareTab = screen
-      .getAllByRole('button')
-      .find((el) => el.textContent?.includes('vSphere'));
-    if (vmwareTab) fireEvent.click(vmwareTab);
+    fireEvent.click(within(platformTabs).getByRole('tab', { name: 'vSphere' }));
     expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/vmware');
+  });
+
+  it('clears resource filters without changing the active platform', () => {
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+
+    const search = screen.getByPlaceholderText(/Search resources/i);
+    fireEvent.input(search, { target: { value: 'api' } });
+    mockNavigate.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(search).toHaveValue('');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByRole('tab', { name: 'Docker' })).toHaveAttribute('aria-selected', 'true');
   });
 });
 

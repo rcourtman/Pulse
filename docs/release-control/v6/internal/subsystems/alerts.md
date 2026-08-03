@@ -430,9 +430,12 @@ perform notification work. Canonical lifecycle and stateful cooldown refires
 consume resolved state through the shared lock-order-aware helper, preserve the
 original alert `StartTime`, and keep the five-minute refire/history semantics.
 The browser thresholds surface is also platform-shaped: Proxmox, Docker,
-Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. It must use the shared
-FilterBar chip and "+ Filter" pattern for resource filtering, and alert tables
-must use the canonical platform table column-kind alignment helpers from
+Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. Route-backed platform
+choices must use the shared `Subtabs` navigation above the shared `FilterBar`;
+they are not resource-filter facets and must remain visible when the mobile
+filter shell is collapsed. Resource filtering must use the shared FilterBar
+chip and "+ Filter" pattern, and alert tables must use the canonical platform
+table column-kind alignment helpers from
 `frontend-modern/src/features/platformPage/` rather than hard-coded table
 alignment classes.
 Alert filter option semantics stay alert-owned, but FilterBar chip
@@ -1021,6 +1024,10 @@ links like `/alerts/thresholds/infrastructure`,
 `/alerts/thresholds/containers`, and `/alerts/thresholds/mail-gateway` must
 redirect to the matching platform-shaped route. Legacy
 `/alerts/thresholds/agents` links must continue to resolve to Systems.
+`frontend-modern/src/components/Alerts/ThresholdsTable.tsx` must expose those
+peer platform routes through the shared `Subtabs` primitive rather than an
+inline FilterBar group. Clearing search or override filters must preserve the
+active platform route.
 Within the Proxmox tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
