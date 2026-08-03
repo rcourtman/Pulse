@@ -48,8 +48,9 @@ import {
   buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
 } from '@/components/Settings/infrastructureWorkspaceModel';
-import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { DOCKER_QUERY_PARAMS, buildStandalonePath } from '@/routing/resourceLinks';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import type { Resource } from '@/types/resource';
 
 const DOCKER_RESOURCE_QUERY =
@@ -349,6 +350,7 @@ function DockerOverview(props: {
   const scopedHosts = createMemo(() =>
     props.hosts.filter((host) => hostMatchesFilter(host, props.hostFilter)),
   );
+  const hasMachineInventory = createMemo(() => props.hosts.some(isPulseAgentPlatformResource));
 
   return (
     <div class="space-y-4">
@@ -358,6 +360,13 @@ function DockerOverview(props: {
         emptyIcon={dockerIcon()}
         emptyTitle="No Docker or Podman hosts"
         emptyDescription="Container hosts appear here once a Pulse agent registers them."
+        actions={
+          <Show when={hasMachineInventory()}>
+            <ButtonLink href={buildStandalonePath()} variant="secondary" size="sm">
+              View all machines
+            </ButtonLink>
+          </Show>
+        }
         showToolbar={false}
       />
       <DockerContainersTable

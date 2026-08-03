@@ -1,24 +1,21 @@
 {
   "version": 1,
-  "base_sha": "32d373395cee894628757f49cde858a66093531f",
-  "verified_at": "2026-08-03T21:06:07Z",
+  "base_sha": "de5a1b20df6e825dfc590dee334b8877569a74a2",
+  "verified_at": "2026-08-03T22:40:33Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Table.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Table.tsx": "d4c1fdc6bf387a2d37bb143e414c4b2dfc188769884d7738e109a6061852305d",
-    "frontend-modern/src/index.css": "061b892fa8260365adfdaa9f58d4b00d2e67b1b072ac109a75e958f14a36332a"
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "c4042eb72e027b97761f5cd02ba7021e0d7b3669e05e9db9f52af46ecb5bdbbf",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "f4fe3a202d92efaedf61409a4602340f82411ff01252cc399cff758eff23857f"
   },
-  "routes": [
-    "/standalone/machines",
-    "/docker/overview"
-  ],
+  "routes": ["/standalone/machines", "/docker/overview"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 1440,
+      "height": 900
     },
     {
       "width": 390,
@@ -26,15 +23,15 @@
     }
   ],
   "states": [
-    "Desktop Machines table fully loaded with its standard toolbar and all visible columns",
-    "Phone-width Machines table loaded at the left edge with the document contained to 390 pixels",
-    "Phone-width Machines table after a 300-pixel table-local horizontal scroll",
-    "Phone-width Docker Overview with both shared table shells contained to the viewport"
+    "Desktop Docker Overview fully loaded with the scoped Docker hosts title and View all machines action",
+    "Desktop Machines inventory after following the View all machines action, showing all five current machines",
+    "Phone-width Docker Overview fully loaded with the scoped title and action aligned without clipping",
+    "Phone-width Machines inventory after following the View all machines action"
   ],
   "interactions": [
-    "Applied a 300-pixel horizontal gesture outside the Machines table and confirmed document scrollX remained 0",
-    "Applied a 300-pixel horizontal gesture inside the Machines table and confirmed its scrollLeft changed while document scrollX remained 0",
-    "Repeated the outside-page and inside-table horizontal gestures on Docker Overview and confirmed only the targeted table shell scrolled",
-    "Resized Machines to 1280 by 720 and confirmed the table filled its container without document overflow or an unnecessary local scroll range"
+    "Followed View all machines from Docker Overview at desktop width and confirmed navigation to /standalone/machines with all five rows",
+    "Repeated the View all machines handoff at phone width and confirmed the complete machine table rendered",
+    "Inspected the Docker hosts title, action placement, table containment, mobile navigation, and footer at both widths",
+    "Confirmed the browser console reported no warnings or errors during either responsive journey"
   ]
 }

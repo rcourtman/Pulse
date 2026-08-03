@@ -1853,6 +1853,11 @@ default` instead of fusing provider and badge text such as
     first/default positions only when the current estate has standalone Pulse
     Agent machines or agentless availability endpoints and no
     provider/runtime platform evidence.
+    Provider/runtime pages must make narrower inventory scope explicit rather
+    than presenting it as the complete machine estate: the Docker overview
+    labels its runtime-specific table `Docker hosts`, and when those rows are
+    backed by canonical Pulse Agent machines it exposes a `View all machines`
+    action through `buildStandalonePath()`.
     Patrol workflow components under
     `frontend-modern/src/features/patrol/` may compose shared `Button` and
     `ButtonLink` chrome for issue actions, but the workflow state, route

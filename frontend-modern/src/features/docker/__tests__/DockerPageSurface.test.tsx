@@ -9,13 +9,19 @@ const mocks = vi.hoisted(() => ({
   searchParams: {} as Record<string, string>,
   useUnifiedResources: vi.fn(),
   DockerHostsTable: vi.fn(
-    (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
+    (props: {
+      resources: Resource[];
+      showToolbar?: boolean;
+      emptyTitle: string;
+      actions?: unknown;
+    }) => (
       <div
         data-testid="docker-hosts-table"
         data-resource-count={props.resources.length}
         data-show-toolbar={String(props.showToolbar)}
       >
         {props.emptyTitle}
+        {props.actions as never}
       </div>
     ),
   ),
@@ -273,6 +279,10 @@ describe('DockerPageSurface', () => {
     );
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-show-toolbar', 'false');
+    expect(screen.getByRole('link', { name: 'View all machines' })).toHaveAttribute(
+      'href',
+      '/standalone/machines',
+    );
     expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-tabs', 'overview');
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-resource-count',
@@ -331,6 +341,24 @@ describe('DockerPageSurface', () => {
       'data-resource-count',
       '1',
     );
+  });
+
+  it('does not link to Machines for provider-owned guest Docker inventory', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          sourceType: 'api',
+          platformScopes: ['proxmox-pve', 'docker'],
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.queryByRole('link', { name: 'View all machines' })).not.toBeInTheDocument();
   });
 
   it('routes stale agent notices to the agent install commands', () => {

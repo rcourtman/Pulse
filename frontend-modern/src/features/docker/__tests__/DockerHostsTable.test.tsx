@@ -138,6 +138,7 @@ describe('DockerHostsTable', () => {
       />
     ));
 
+    expect(screen.getByText('Docker hosts')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Version' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'System' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Swarm role' })).not.toBeInTheDocument();

@@ -162,7 +162,8 @@ export const DockerHostsTable: Component<{
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
-  title?: string;
+  title?: JSX.Element;
+  actions?: JSX.Element;
   showToolbar?: boolean;
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
@@ -228,7 +229,8 @@ export const DockerHostsTable: Component<{
           }
         >
           <PlatformTableShell
-            title={props.title ?? 'Hosts'}
+            title={props.title ?? 'Docker hosts'}
+            actions={props.actions}
             tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
             header={
               <>
