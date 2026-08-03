@@ -1,17 +1,13 @@
 {
   "version": 1,
-  "base_sha": "85b0530439992e461e3270278118ba5d018b3dcb",
-  "verified_at": "2026-08-03T14:30:18Z",
+  "base_sha": "4e67a93d4966ca98892ef31c0c0219959442c58b",
+  "verified_at": "2026-08-03T16:42:17Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "f6b3e7f839197e2662765cd69f17911fa86c8f97922dda3d93a87ca21e7c984b",
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "ebb84ed0fc935309efa62c04f3cc4e7d13eea38ff0d2b6473a892430617fa433"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "baa823e127fd74bc8d9abd6d0c05c82d4822a182ba374927e3e04e980b02406a"
   },
-  "routes": ["/vmware/overview", "/proxmox/backups"],
+  "routes": ["/kubernetes/overview", "/docker/overview"],
   "viewports": [
     {
       "width": 1280,
@@ -23,18 +19,23 @@
     }
   ],
   "states": [
-    "Desktop vSphere overview filter rail with its default actions and with a Node filter active",
-    "Phone-width vSphere overview filter rail collapsed, expanded with no active chips, expanded with a Node chip, and reset after Clear filters",
-    "Phone-width vSphere View preferences open above the mobile navigation",
-    "Desktop and phone-width Proxmox backup filter rails in their collapsed and expanded states"
+    "Desktop Kubernetes overview with cluster and deployment tables plus the default workload filter rail",
+    "Phone-width Kubernetes overview with the filter rail collapsed and expanded",
+    "Phone-width Kubernetes cluster and deployment tables at their leading columns and horizontally scrolled metric columns",
+    "Desktop Docker overview with host and container tables plus the default container filter rail",
+    "Phone-width Docker overview with the filter rail collapsed and expanded",
+    "Phone-width Docker host table at its leading columns and horizontally scrolled memory and disk columns"
   ],
   "interactions": [
-    "Expanded the phone-width vSphere filter rail and confirmed Add filter, Saved, and View share one action row while Trend range remains on its own row",
-    "Selected Node: esxi-01.lab.local and confirmed the active chip stays with Add filter while Clear filters, Saved and View, and Trend range wrap without clipping",
-    "Cleared the Node filter and confirmed the compact Add filter, Saved, and View action row returned",
-    "Opened View preferences at 390 by 844 and measured the panel fully inside the viewport with clear separation from the fixed mobile navigation",
-    "Closed View preferences with Escape and confirmed the panel disappeared, aria-expanded reset, and focus returned to View",
-    "Confirmed the vSphere desktop action rail remains aligned after the shared layout change",
-    "Confirmed Proxmox Backups remains aligned on desktop and phone-width layouts, including collapsed and expanded filter rails"
+    "Measured the Kubernetes cluster table at 390 by 844 and confirmed its computed minimum width is 768 pixels, its leading name cell is 192 pixels, and full cluster names remain readable",
+    "Scrolled the Kubernetes cluster table horizontally and confirmed Nodes, CPU, and Memory remain reachable inside the table-owned scroll shell",
+    "Expanded the Kubernetes workload filter rail after table scrolling and confirmed Add filter, Saved, and the row count remain aligned without clipping",
+    "Confirmed the Kubernetes desktop cluster and deployment tables retain their complete column layout",
+    "Confirmed Docker host names and container names remain readable at phone width",
+    "Scrolled the Docker host table horizontally and confirmed Memory and Disk metrics remain reachable",
+    "Measured both Docker table wrappers and confirmed 768-pixel tables scroll inside 344-pixel wrappers while the 390-pixel document has no horizontal overflow",
+    "Expanded the Docker container filter rail and confirmed Add filter, Saved, View, and the container count wrap without clipping",
+    "Confirmed the Docker desktop host and container tables retain their complete column layout",
+    "Read browser warnings and errors after the final responsive pass and confirmed none were present"
   ]
 }

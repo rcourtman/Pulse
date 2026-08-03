@@ -344,6 +344,10 @@ table frame is frontend-primitives-owned. Docker / Podman, Kubernetes, Proxmox,
 Standalone, TrueNAS, and vSphere platform tables own source-specific row fields,
 filter semantics, drawer handoffs, and resource projections, while
 `PlatformTableShell` owns the shared table card, header row, and body frame.
+That shell also owns the responsive minimum-width composition: source tables
+may declare their desktop breakpoint floors, while the shared shell removes
+the redundant `min-w-full` minimum that would otherwise squeeze phone-width
+names and metrics below the canonical readable-column floor.
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.

@@ -990,7 +990,11 @@ not a replacement status card, CTA band, or page-local nested card.
    Dense platform tables must also preserve readable columns at phone widths.
    `PlatformTableShell` owns the responsive minimum-width policy, preserves any
    explicit base floor declared by the feature table, and otherwise applies
-   the shared platform minimum before breakpoint-specific widths take over.
+   the shared platform minimum before breakpoint-specific widths take over. Its
+   class composition removes a consumer's redundant `min-w-full` token because
+   the shared `Table` already fills the available width and that second
+   minimum would override the phone-width floor, squeezing names and metrics
+   into unreadable slivers.
    Narrow viewports keep document-level overflow
    contained by `Table` and scroll the table itself; feature tables must not
    squeeze every declared column into the viewport, override the shared floor,
@@ -3502,10 +3506,13 @@ label and destination intent; they must not own CTA button chrome.
 Platform table frames are one of those registry-backed templates.
 `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` owns
 `PlatformTableShell`, including the canonical table card, header row, and body
-divide styling. Platform table frames now have no local-frame exceptions in
-`shared-template-registry.json`: new and existing platform tables must compose
-`PlatformTableShell` instead of recreating the `TableCard`, header row, or body
-divide frame locally. Platform table consumers must preserve the owner split:
+divide styling. It also owns the final responsive table-class composition, so
+feature tables may supply breakpoint floors but cannot accidentally override
+the shared phone-width floor with `min-w-full`. Platform table frames now have
+no local-frame exceptions in `shared-template-registry.json`: new and existing
+platform tables must compose `PlatformTableShell` instead of recreating the
+`TableCard`, header row, or body divide frame locally. Platform table consumers
+must preserve the owner split:
 frontend-primitives owns the repeated `PlatformTableShell` frame and guardrail
 registry, while platform and unified-resource consumers own the source-specific
 row fields, drawers, and resource semantics.

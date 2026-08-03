@@ -26,6 +26,7 @@ import {
   filterPlatformResources,
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
+  getPlatformTableClass,
   getPlatformResourceCountNoun,
   getPlatformTableResponsiveMinWidthClass,
   getPlatformTableWeightedColumnWidthStyle,
@@ -60,6 +61,16 @@ describe('getPlatformTableResponsiveMinWidthClass', () => {
         'min-w-[850px] table-fixed text-xs md:min-w-[1320px]',
       ),
     ).toBe('');
+  });
+
+  it('removes the conflicting full-width minimum when composing table classes', () => {
+    expect(getPlatformTableClass()).toBe('min-w-[48rem]');
+    expect(getPlatformTableClass('min-w-full table-fixed text-xs md:min-w-[1120px]')).toBe(
+      'min-w-[48rem] table-fixed text-xs md:min-w-[1120px]',
+    );
+    expect(getPlatformTableClass('min-w-full min-w-[850px] table-fixed md:min-w-[1320px]')).toBe(
+      'min-w-[850px] table-fixed md:min-w-[1320px]',
+    );
   });
 });
 

@@ -132,6 +132,15 @@ export function getPlatformTableResponsiveMinWidthClass(tableClass?: string): st
   return hasExplicitBaseFloor ? '' : PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS;
 }
 
+export function getPlatformTableClass(tableClass?: string): string {
+  const featureClasses = (tableClass ?? '')
+    .split(/\s+/)
+    .filter((className) => className.length > 0 && className !== 'min-w-full')
+    .join(' ');
+
+  return `${getPlatformTableResponsiveMinWidthClass(tableClass)} ${featureClasses}`.trim();
+}
+
 export type PlatformTableShellProps = {
   title?: JSX.Element;
   actions?: JSX.Element;
@@ -147,12 +156,7 @@ export function PlatformTableShell(props: PlatformTableShellProps) {
   return (
     <TableCard class={props.cardClass ?? PLATFORM_TABLE_CARD_CLASS}>
       <TableCardHeader title={props.title} actions={props.actions} />
-      <Table
-        class={`${getPlatformTableResponsiveMinWidthClass(props.tableClass)} ${
-          props.tableClass ?? ''
-        }`.trim()}
-        wrapperClass={props.tableWrapperClass}
-      >
+      <Table class={getPlatformTableClass(props.tableClass)} wrapperClass={props.tableWrapperClass}>
         {props.colgroup}
         <TableHeader>
           <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>{props.header}</TableRow>
