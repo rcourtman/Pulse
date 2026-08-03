@@ -120,6 +120,10 @@ const openStorageViewOptions = () => {
   return screen.getByRole('dialog', { name: 'View preferences' });
 };
 
+const setStorageViewOption = (dialog: HTMLElement, label: string, value: string) => {
+  fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
+};
+
 const getStorageChipOptions = async (label: string): Promise<string[]> => {
   const chip = queryStorageChip(label);
   if (!chip) throw new Error(`No chip found for filter "${label}"`);
@@ -613,7 +617,7 @@ describe('Storage', () => {
       expect(orderedRowIds.slice(0, 2)).toEqual(['storage-1', 'storage-2']);
     });
 
-    setStorageFilter('Group by', 'By status');
+    setStorageViewOption(viewOptions, 'Group by', 'status');
 
     // Group headers now show just the key name (without prefix)
     expect(screen.getAllByText('degraded').length).toBeGreaterThan(0);
@@ -654,9 +658,9 @@ describe('Storage', () => {
       'aria-selected',
       'true',
     );
-    // Menu filter state surfaces as chips on the FilterBar; primary filters
-    // stay visible as inline controls. Sort is a durable presentation choice
-    // owned by the shared View popover.
+    // Menu filter state surfaces as chips on the FilterBar; Status stays visible
+    // as a frequent inline control. Layout and sort are durable presentation
+    // choices owned by the shared View popover.
     expect(queryStorageChip('Node')).toHaveTextContent('Node:pve2');
     const viewOptions = openStorageViewOptions();
     expect((within(viewOptions).getByLabelText('Sort by') as HTMLSelectElement).value).toBe(
@@ -665,11 +669,13 @@ describe('Storage', () => {
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('tab', { name: 'Storage' }));
-    expectStorageInlineFilter('Group by', 'By status');
+    expect((within(viewOptions).getByLabelText('Group by') as HTMLSelectElement).value).toBe(
+      'status',
+    );
     expect(queryStorageChip('Source')).toHaveTextContent('Source:PVE');
     expectStorageInlineFilter('Status', 'Warning');
 
-    setStorageFilter('Group by', 'By type');
+    setStorageViewOption(viewOptions, 'Group by', 'type');
 
     await waitFor(() => {
       const [nextPath] = navigateSpy.mock.calls.at(-1) as [string];

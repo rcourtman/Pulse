@@ -1637,7 +1637,8 @@ bars/trends, chart visibility, Guest/Host memory basis, and Columns — pass
 their panel content through `FilterBar.viewOptions` instead of importing or
 wrapping `ViewOptionsMenu` in the workload feature or rendering as equally
 prominent filter toggles. The shared FilterBar owns View composition across
-desktop and mobile layouts. The sparkline range remains
+desktop and mobile layouts, including the mobile action-row placement shared
+with Saved views. The sparkline range remains
 inline only while trends are active because it is the frequently changed
 analytical window, and its compact control must include a visible `Trend range`
 label so the values are not an orphaned set of durations. Columns must expand

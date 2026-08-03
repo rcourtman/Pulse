@@ -167,6 +167,25 @@ describe('FilterBar', () => {
     expect(screen.getAllByRole('button', { name: 'Clear filters' })).toHaveLength(1);
   });
 
+  it('keeps Saved, clear filters, and View together in the mobile action rail', () => {
+    renderInRouter(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(vi.fn(), 'vm')]}
+        isMobile={() => true}
+        savedViewsKey="test-surface"
+        viewOptions={<span>Density</span>}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+
+    const actions = screen.getByRole('group', { name: 'Filter actions' });
+    expect(within(actions).getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'View' })).toBeInTheDocument();
+  });
+
   it('keeps clear filters with filter actions before the presentation controls', () => {
     render(() => (
       <FilterBar

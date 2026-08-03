@@ -3922,7 +3922,13 @@ edge.
 Saved Views and View are peer filter-bar popovers and must compose the shared
 `FilterPopoverTrigger`; the shared trigger owns their matching text emphasis,
 icon geometry, disclosure chevron, active state, and button alignment instead
-of allowing each popup wrapper to restyle that contract independently.
+of allowing each popup wrapper to restyle that contract independently. The
+expanded mobile rail keeps Saved and View together in one action row; when no
+menu-backed filter row is present, contextual Clear filters joins that row
+instead of forcing View onto an isolated line. View takes the row's available
+trailing space and anchors its panel from the mobile action rail's trailing
+edge, then returns to trigger-relative trailing alignment on desktop; Saved
+keeps its leading-edge mobile anchor.
 The Add filter select and adjacent action/popover triggers share the canonical
 `filterToolbarControlClass` height. When the Add filter label is visually
 hidden, its `FormSelect` must also omit the labelled group's outer padded/ring

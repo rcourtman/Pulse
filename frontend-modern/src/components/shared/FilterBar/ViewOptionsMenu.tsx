@@ -49,7 +49,7 @@ export const ViewOptionsMenu: Component<ViewOptionsMenuProps> = (props) => {
   });
 
   return (
-    <div ref={containerRef} class="relative shrink-0">
+    <div ref={containerRef} class="static ml-auto shrink-0 sm:relative sm:ml-0">
       <FilterPopoverTrigger
         ref={triggerRef}
         open={open()}
@@ -69,7 +69,7 @@ export const ViewOptionsMenu: Component<ViewOptionsMenuProps> = (props) => {
           role="dialog"
           aria-label={props.label ?? 'View preferences'}
           widthClass="w-80 max-w-[calc(100vw-2rem)]"
-          class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 max-h-[min(38rem,calc(100vh-8rem))] overflow-y-auto p-3 md:left-auto md:right-0"
+          class="left-auto right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(38rem,calc(100vh-8rem))] overflow-y-auto p-3"
         >
           <div class="mb-3 border-b border-border-subtle pb-2">
             <div class="text-xs font-medium text-base-content">

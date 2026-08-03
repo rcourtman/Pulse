@@ -174,21 +174,6 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
     }
 
     if (isPoolsView()) {
-      filters.push({
-        id: 'storage-group-by',
-        label: 'Group by',
-        group: 'properties',
-        inline: true,
-        value: () => props.storageFilterGroupBy(),
-        setValue: (value: string) => props.setGroupBy(value as StorageGroupKey),
-        defaultValue: DEFAULT_STORAGE_GROUP_KEY,
-        options: () =>
-          STORAGE_GROUP_BY_OPTIONS.map((option) => ({
-            value: option.value,
-            label: option.label,
-          })),
-      });
-
       if (!props.suppressSourceFilter) {
         filters.push({
           id: 'storage-source',
@@ -314,51 +299,75 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           searchTrailing={props.searchTrailing}
           filters={buildFilters()}
           viewOptions={
-            <div>
-              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Order
-              </div>
-              <div class={STORAGE_FILTER_SORT_WRAP_CLASS}>
-                <FormSelect
-                  label="Sort by"
-                  labelClass="sr-only"
-                  fieldBaseClass="contents"
-                  selectBaseClass={STORAGE_FILTER_SORT_SELECT_CLASS}
-                  value={props.sortKey()}
-                  onChange={(event) => handleSortKeyChange(event.currentTarget.value)}
-                  disabled={sortDisabled()}
-                  aria-label="Sort by"
-                >
-                  {DEFAULT_STORAGE_SORT_OPTIONS.map((option) => (
-                    <option value={option.value}>{option.label}</option>
-                  ))}
-                </FormSelect>
-                <button
-                  type="button"
-                  title={getStorageSortDirectionTitle(props.sortDirection())}
-                  onClick={() =>
-                    props.setSortDirection(getNextStorageSortDirection(props.sortDirection()))
-                  }
-                  disabled={sortDisabled()}
-                  aria-label="Sort direction"
-                  class={STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS}
-                >
-                  <svg
-                    class={`${STORAGE_FILTER_SORT_ICON_CLASS} ${getStorageSortDirectionIconClass(
-                      props.sortDirection(),
-                    )}`}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
+            <div class="space-y-3">
+              <Show when={isPoolsView()}>
+                <div>
+                  <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    Layout
+                  </div>
+                  <FormSelect
+                    label="Group by"
+                    labelClass="sr-only"
+                    fieldBaseClass="contents"
+                    selectBaseClass={`${STORAGE_FILTER_SORT_SELECT_CLASS} w-full`}
+                    value={props.storageFilterGroupBy()}
+                    onChange={(event) =>
+                      props.setGroupBy(event.currentTarget.value as StorageGroupKey)
+                    }
+                    aria-label="Group by"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M8 9l4-4 4 4m0 6l-4 4-4-4"
-                    />
-                  </svg>
-                </button>
+                    {STORAGE_GROUP_BY_OPTIONS.map((option) => (
+                      <option value={option.value}>{option.label}</option>
+                    ))}
+                  </FormSelect>
+                </div>
+              </Show>
+              <div>
+                <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Order
+                </div>
+                <div class={STORAGE_FILTER_SORT_WRAP_CLASS}>
+                  <FormSelect
+                    label="Sort by"
+                    labelClass="sr-only"
+                    fieldBaseClass="contents"
+                    selectBaseClass={STORAGE_FILTER_SORT_SELECT_CLASS}
+                    value={props.sortKey()}
+                    onChange={(event) => handleSortKeyChange(event.currentTarget.value)}
+                    disabled={sortDisabled()}
+                    aria-label="Sort by"
+                  >
+                    {DEFAULT_STORAGE_SORT_OPTIONS.map((option) => (
+                      <option value={option.value}>{option.label}</option>
+                    ))}
+                  </FormSelect>
+                  <button
+                    type="button"
+                    title={getStorageSortDirectionTitle(props.sortDirection())}
+                    onClick={() =>
+                      props.setSortDirection(getNextStorageSortDirection(props.sortDirection()))
+                    }
+                    disabled={sortDisabled()}
+                    aria-label="Sort direction"
+                    class={STORAGE_FILTER_SORT_DIRECTION_BUTTON_CLASS}
+                  >
+                    <svg
+                      class={`${STORAGE_FILTER_SORT_ICON_CLASS} ${getStorageSortDirectionIconClass(
+                        props.sortDirection(),
+                      )}`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M8 9l4-4 4 4m0 6l-4 4-4-4"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           }

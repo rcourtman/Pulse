@@ -1,15 +1,20 @@
 {
   "version": 1,
-  "base_sha": "245177e531236e58b6d54685b1c8ce56b5f696cb",
-  "verified_at": "2026-08-02T23:58:38Z",
+  "base_sha": "b2e5ad606176c0e08185e7da95b33a4ae4e39318",
+  "verified_at": "2026-08-03T00:21:48Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx"
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx": "4fbca74c99f6aff54f1811fb759a70aa4415450cf8a04936b6e8e4c55131724f"
+    "frontend-modern/src/components/Storage/StoragePageControls.tsx": "f3ea9419ff3b7de9f21deba51add5485e15751ec58842eee532fcf30e9d28782",
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "97c31217224436d7326b34629ad26d7e8fbafa9c50033a2faaf9877af49e3d9d",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "a4af7c1e398bab745109d332dff808f273b85067e80cf5c53c11abf6f1fe2f98"
   },
   "routes": [
+    "/proxmox/storage",
     "/docker/overview"
   ],
   "viewports": [
@@ -23,19 +28,20 @@
     }
   ],
   "states": [
-    "Phone-width Docker toolbar with the filter rail collapsed",
-    "Phone-width Docker filter rail expanded with Add filter, Saved, View, and the resource count",
-    "Phone-width Saved views dialog open and fully contained between x=25.34 and x=281.34 in the 390px viewport",
-    "Phone-width Saved views inline naming form open",
-    "Desktop Docker toolbar with Filter, Saved, View, and the resource count aligned on the shared rail",
-    "Desktop Saved views dialog open and trailing-edge aligned to its trigger"
+    "Desktop Proxmox Storage toolbar with Status as the only permanent segmented filter and Saved, Clear filters, and View aligned on the shared rail",
+    "Desktop Storage View preferences with Layout/Group by and Order controls fully visible",
+    "Phone-width Storage filter rail expanded with Saved, Clear filters, and View together in the labelled Filter actions row",
+    "Phone-width Storage View preferences fully contained within the viewport",
+    "Phone-width Docker filter rail expanded with Saved, View, and the container count in the shared action row",
+    "Phone-width Docker View preferences fully contained despite the trailing container count"
   ],
   "interactions": [
-    "Expanded the phone-width Filters rail and opened Saved views",
-    "Opened the inline Save current view form and pressed Escape, confirming focus returned to the save action",
-    "Pressed Escape again, confirming the dialog closed and focus returned to the Saved trigger",
-    "Reopened Saved views and clicked the search field outside it, confirming outside-click dismissal",
-    "Opened Saved views at desktop width and confirmed the dialog remained fully inside the viewport",
-    "Confirmed the verified route had no Saved-dialog clipping and no browser console errors"
+    "Changed Storage Group by from Flat to By node and confirmed grouped host rows plus the canonical group=node URL parameter",
+    "Reloaded Storage and confirmed the By node selection and grouped result persisted from URL state",
+    "Pressed Escape and confirmed the View dialog closed with focus restored to its trigger",
+    "Reopened View and clicked the Storage tab outside it, confirming outside-click dismissal",
+    "Expanded the phone-width Storage filter rail and confirmed Group by no longer consumes an inline filter row",
+    "Opened View on phone-width Storage and Docker routes and confirmed the action-rail-relative panel stayed inside both viewport edges",
+    "Confirmed the verified routes produced no browser warning or error console entries"
   ]
 }

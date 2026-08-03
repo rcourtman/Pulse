@@ -8229,6 +8229,8 @@ describe('shared primitive guardrails', () => {
     expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
     expect(filterToolbarSource).toContain("filterToolbarControlClass = 'h-7");
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
+    expect(viewOptionsMenuSource).toContain('class="static ml-auto shrink-0 sm:relative sm:ml-0"');
+    expect(viewOptionsMenuSource).toContain('class="left-auto right-0');
     expect(savedViewsMenuSource).toContain('<FilterPopoverTrigger');
     expect(filterCatalogSource).toContain('leadingControls?: JSX.Element;');
     expect(filterCatalogSource).toContain('viewOptions?: JSX.Element;');
@@ -8236,6 +8238,7 @@ describe('shared primitive guardrails', () => {
     expect(filterCatalogSource).not.toContain('viewOptionsTrailing');
     expect(filterBarSource).toContain("import { ViewOptionsMenu } from './ViewOptionsMenu';");
     expect(filterBarSource).toContain('<ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>');
+    expect(filterBarSource).toContain('aria-label="Filter actions"');
     expect(sharedPlatformPageSource).toContain('viewOptions?: JSX.Element;');
     expect(sharedPlatformPageSource).toContain('viewOptions={props.viewOptions}');
     expect(sharedPlatformPageSource).toContain('trailingControls={');
@@ -8297,11 +8300,10 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).not.toContain('useWorkloadsFilterState');
     expect(workloadsFilterSource).not.toContain('const statusDot = (className: string)');
 
-    // StoragePageControls — Subtabs sit above the FilterBar; sort key/sort
-    // direction live in the FilterBar-owned View popover (not chips).
-    // Per-view catalog filters (inline Group by and Status plus menu-backed
-    // Source on Pools; Role/Group on Physical Disks) flow through the FilterBar
-    // catalog. The legacy
+    // StoragePageControls — Subtabs sit above the FilterBar; grouping, sort key,
+    // and sort direction live in the FilterBar-owned View popover (not chips).
+    // Per-view catalog filters (inline Status plus menu-backed Source on Pools;
+    // Role/Group on Physical Disks) flow through the FilterBar catalog. The legacy
     // 3-layer indirection (StoragePageControls → StorageControls →
     // StorageFilter) collapses to one component.
     expect(storagePageControlsSource).toContain("from '@/components/shared/FilterBar';");
@@ -8315,12 +8317,13 @@ describe('shared primitive guardrails', () => {
       "ariaLabel={props.filterAriaLabel ?? 'Storage filters'}",
     );
     expect(storagePageControlsSource).toContain("id: 'storage-node'");
-    expect(storagePageControlsSource).toContain("id: 'storage-group-by'");
+    expect(storagePageControlsSource).not.toContain("id: 'storage-group-by'");
     expect(storagePageControlsSource).toContain("id: 'storage-source'");
     expect(storagePageControlsSource).toContain("id: 'storage-status'");
     expect(storagePageControlsSource).toContain("id: 'storage-disk-role'");
     expect(storagePageControlsSource).toContain("id: 'storage-disk-group'");
     expect(storagePageControlsSource).toContain('viewOptions={');
+    expect(storagePageControlsSource).toContain('Layout');
     expect(storagePageControlsSource).toContain('Order');
     expect(storagePageControlsSource).not.toContain('viewOptionsTrailing');
     expect(auditLogPanelSource).toContain('viewOptions={');
@@ -8328,6 +8331,7 @@ describe('shared primitive guardrails', () => {
     expect(auditLogPanelSource).not.toContain('viewOptionsTrailing');
     expect(proxmoxBackupsTableSource).toContain('trailingControls={');
     expect(storagePageControlsSource).toContain('aria-label="Sort by"');
+    expect(storagePageControlsSource).toContain('aria-label="Group by"');
     expect(storagePageControlsSource).toContain('aria-label="Sort direction"');
     expect(storagePageControlsSource).toContain('onClearAll={handleClearAll}');
     expect(storagePageControlsSource).toContain('showClearAll={showClearAll}');

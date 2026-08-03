@@ -96,8 +96,10 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   const showMobileBody = () => props.isMobile() && mobileExpanded();
   const showChipRow = () =>
     showDesktopChipRow() ||
-    (showMobileBody() &&
-      (activeMenuFilters().length > 0 || hasAddableMenuFilters() || hasSavedViews()));
+    (showMobileBody() && (activeMenuFilters().length > 0 || hasAddableMenuFilters()));
+  const showMobileActionRow = () => showMobileBody() && (hasSavedViews() || hasAuxiliaryControls());
+  const showClearAllInMobileActionRow = () =>
+    showMobileActionRow() && hasClearableState() && !showChipRow();
 
   const searchHistory = () => {
     const key = props.search.historyKey;
@@ -190,7 +192,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
         <Show when={showInlineRow()}>
           <div class="flex flex-wrap items-center gap-2">
             <For each={inlineFilters()}>{(filter) => <InlineFilterControl filter={filter} />}</For>
-            <Show when={hasClearableState() && !showChipRow()}>
+            <Show when={hasClearableState() && !showChipRow() && !showClearAllInMobileActionRow()}>
               <FilterBarClearAllButton onClick={clearAll} />
             </Show>
           </div>
@@ -206,9 +208,6 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
                   showLabel={props.showAddFilterLabel !== false}
                 />
               </Show>
-              <Show when={props.savedViewsKey}>
-                {(key) => <SavedViewsMenu storageKey={key()} />}
-              </Show>
             </Show>
             <Show when={hasClearableState() && showMobileBody()}>
               <FilterBarClearAllButton onClick={clearAll} />
@@ -216,8 +215,16 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
           </div>
         </Show>
 
-        <Show when={showMobileBody() && hasAuxiliaryControls()}>
-          <div class="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-2">
+        <Show when={showMobileActionRow()}>
+          <div
+            class="relative flex flex-wrap items-center gap-2 border-t border-border-subtle pt-2"
+            role="group"
+            aria-label="Filter actions"
+          >
+            <Show when={props.savedViewsKey}>{(key) => <SavedViewsMenu storageKey={key()} />}</Show>
+            <Show when={showClearAllInMobileActionRow()}>
+              <FilterBarClearAllButton onClick={clearAll} />
+            </Show>
             {props.leadingControls}
             <Show when={props.viewOptions}>
               <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
