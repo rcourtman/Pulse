@@ -2313,6 +2313,11 @@ destination builders: callers must append `buildStorageRouteSearch()` or
 `buildRecoveryRouteSearch()` to the current platform-owned pathname such as
 `/proxmox/storage`, `/proxmox/backups`, or `/truenas/protection`. They must not
 emit `/storage` or `/recovery` as hidden compatibility paths.
+Adjacent route-query constants for other platform surfaces, including
+`STANDALONE_QUERY_PARAMS`, must remain namespaced and must not be reused as
+storage source, node, resource, workspace, rollup, or day state. Adding a
+shareable filter query to another surface must not broaden or reinterpret the
+storage and recovery serializer contract.
 
 Storage and Recovery can now be embedded by a platform page in table-only mode
 with a forced platform source/filter. Proxmox uses that embedding for

@@ -221,15 +221,23 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             role="group"
             aria-label="Filter actions"
           >
-            <Show when={props.savedViewsKey}>{(key) => <SavedViewsMenu storageKey={key()} />}</Show>
-            <Show when={showClearAllInMobileActionRow()}>
-              <FilterBarClearAllButton onClick={clearAll} />
+            <div class="flex shrink-0 flex-nowrap items-center gap-2" data-filter-action-cluster>
+              <Show when={props.savedViewsKey}>
+                {(key) => <SavedViewsMenu storageKey={key()} />}
+              </Show>
+              <Show when={showClearAllInMobileActionRow()}>
+                <FilterBarClearAllButton onClick={clearAll} />
+              </Show>
+              {props.leadingControls}
+              <Show when={props.viewOptions}>
+                <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
+              </Show>
+            </div>
+            <Show when={props.trailingControls}>
+              <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                {props.trailingControls}
+              </div>
             </Show>
-            {props.leadingControls}
-            <Show when={props.viewOptions}>
-              <ViewOptionsMenu>{props.viewOptions}</ViewOptionsMenu>
-            </Show>
-            {props.trailingControls}
           </div>
         </Show>
       </div>

@@ -40,6 +40,7 @@ import {
   SETTINGS_API_ACCESS_PATH,
   STANDALONE_DEFAULT_TAB,
   STANDALONE_PATH,
+  STANDALONE_QUERY_PARAMS,
   TRUENAS_PATH,
   VMWARE_PATH,
   buildPatrolControlPath,
@@ -168,6 +169,7 @@ describe('resource link routing contract', () => {
   it('builds canonical Machines, container runtime, Kubernetes, TrueNAS, and vSphere tab paths', () => {
     expect(STANDALONE_PATH).toBe('/standalone');
     expect(STANDALONE_DEFAULT_TAB).toBe('machines');
+    expect(STANDALONE_QUERY_PARAMS).toEqual({ query: 'q', status: 'status' });
     expect(buildStandalonePath()).toBe('/standalone/machines');
     expect(buildStandalonePath('')).toBe('/standalone');
 

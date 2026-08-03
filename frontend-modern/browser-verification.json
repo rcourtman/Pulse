@@ -1,16 +1,22 @@
 {
   "version": 1,
-  "base_sha": "419385ccfa9aed0ddf59587b1bdce9f62871f2c3",
-  "verified_at": "2026-08-03T09:19:12Z",
+  "base_sha": "d755c61f6a6c90b12cb662930ee8aee465cb9c1a",
+  "verified_at": "2026-08-03T10:24:03Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "affe61eeb2db0bc247b124c9ddff77b55dbc5b4ec477ea121ed6bb9368fc6548"
+    "frontend-modern/src/components/shared/FilterBar/FilterBar.tsx": "e76b316e4335792819ddb3148f819618d342716da0f7e1cde5c3e3cb7eb52682",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "f3b12c4ad25647e28fa616893a9befe3fce7419b76cf142ea74bed3bdf15ffa6",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "ead97d3c4f3554e6e5722ccef2e800562c54032130649b19538dc87229c7cde6",
+    "frontend-modern/src/routing/resourceLinks.ts": "66d0ba02bbe31d0e840b933f8f47e80b1f05aa778e5e34127f3385339edc381e"
   },
   "routes": [
-    "/alerts/history"
+    "/standalone/machines"
   ],
   "viewports": [
     {
@@ -23,15 +29,22 @@
     }
   ],
   "states": [
-    "Desktop Alert History period selector with full Last 24h, Last 7d, Last 30d, and All time labels",
-    "Phone-width Alert History with the filter shell collapsed",
-    "Phone-width expanded period and severity filters with the compact period labels 24h, 7d, 30d, and All"
+    "Desktop Machines toolbar with matching Saved and View triggers in the default state",
+    "Desktop Machines filtered by URL-backed search and Healthy status with one matching row",
+    "Saved view menu empty, named-view, default-view, and removed-view states",
+    "Phone-width Machines toolbar collapsed and expanded with an active filter count",
+    "Phone-width expanded action rail with Saved, Clear filters, and View kept together while the result count wraps separately",
+    "Phone-width Saved views and View preferences popovers, including the expanded Columns disclosure"
   ],
   "interactions": [
-    "Expanded the phone-width filter shell and confirmed All time renders as the meaningful compact label All instead of time",
-    "Selected All time and confirmed its full accessible label, visible compact label, pressed state, and unclipped width",
-    "Restored Last 7d and confirmed the selected state moved back correctly",
-    "Confirmed the phone-width document has no horizontal overflow and the desktop selector retains its full labels",
-    "Read the browser console after the responsive interaction pass and confirmed no warnings or errors"
+    "Entered Apollo search text, selected Healthy, and confirmed the route became ?q=Apollo&status=online",
+    "Saved the filtered slice as Apollo healthy, applied it after clearing, set it as the default, and confirmed a fresh landing restored both URL parameters",
+    "Loaded an explicit ?q=Meridian deep link and confirmed the default saved view did not override it",
+    "Cleared the combined search and status state and confirmed one navigation returned the route to /standalone/machines without resurrecting q",
+    "Expanded the phone-width filter shell and confirmed Saved, Clear filters, and View remain on one line with no horizontal document overflow",
+    "Opened Saved, switched directly to View, expanded Columns, dismissed View by outside click, and verified the panels stayed viewport-bounded",
+    "Dismissed the Saved naming prompt and menu with Escape and confirmed focus returned first to the save action and then to the Saved trigger",
+    "Removed the temporary saved view and repeated the final desktop and phone-width layout, reset, overflow, and console checks",
+    "Read the browser console after the final responsive interaction pass and confirmed no warnings or errors"
   ]
 }

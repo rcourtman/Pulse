@@ -1222,6 +1222,14 @@ AI-only summary payloads, or page-local heuristics.
     compact row action trigger chrome stays under the frontend-primitives
     `ActionIconButton` boundary rather than becoming a unified-resource-local
     button shell.
+    Machines list search and online-state narrowing are frontend route state,
+    not new unified-resource membership fields. `StandalonePageSurface.tsx`
+    owns the `STANDALONE_QUERY_PARAMS` query/status projection and one composite
+    reset, while `AgentsMachinesTable.tsx` consumes those controlled values so
+    saved links and saved views cannot diverge from the canonical projected row
+    set. Those query parameters must only narrow the already-owned agent
+    projection; they must not cause provider nodes or availability endpoints to
+    enter the Machines membership bucket.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates, and visible
     workflow subtabs must stay evidence-gated by the same canonical row or

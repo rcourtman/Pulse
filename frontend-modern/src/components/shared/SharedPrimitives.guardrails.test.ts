@@ -8145,6 +8145,13 @@ describe('shared primitive guardrails', () => {
     expect(filterBarSource).toContain('<Show when={hasAddableMenuFilters()}>');
     expect(filterBarSource).toContain('props.filters.filter(isFilterSet)');
     expect(filterBarSource).toContain('activeCount() > 0');
+    expect(filterBarSource).toContain('data-filter-action-cluster');
+    expect(filterBarSource).toContain(
+      'class="flex shrink-0 flex-nowrap items-center gap-2" data-filter-action-cluster',
+    );
+    expect(filterBarSource).toContain(
+      'class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2"',
+    );
     expect(filterBarSource).not.toContain('import { PageControls }');
     expect(filterBarSource).not.toContain('LabeledFilterSelect');
     expect(filterBarSource).not.toContain('LabeledFilterToggleGroup');

@@ -181,9 +181,15 @@ describe('FilterBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
 
     const actions = screen.getByRole('group', { name: 'Filter actions' });
-    expect(within(actions).getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
-    expect(within(actions).getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
-    expect(within(actions).getByRole('button', { name: 'View' })).toBeInTheDocument();
+    const actionCluster = actions.querySelector('[data-filter-action-cluster]');
+    expect(actionCluster).not.toBeNull();
+    expect(actionCluster).toContainElement(
+      within(actions).getByRole('button', { name: 'Saved views' }),
+    );
+    expect(actionCluster).toContainElement(
+      within(actions).getByRole('button', { name: 'Clear filters' }),
+    );
+    expect(actionCluster).toContainElement(within(actions).getByRole('button', { name: 'View' }));
   });
 
   it('keeps clear filters with filter actions before the presentation controls', () => {

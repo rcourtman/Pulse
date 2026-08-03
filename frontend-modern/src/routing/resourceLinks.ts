@@ -18,6 +18,10 @@ export const WORKLOADS_QUERY_PARAMS = {
 
 export const STANDALONE_PATH = '/standalone';
 export const STANDALONE_DEFAULT_TAB = 'machines';
+export const STANDALONE_QUERY_PARAMS = {
+  query: 'q',
+  status: 'status',
+} as const;
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
 export const DOCKER_PATH = '/docker';

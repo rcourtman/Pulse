@@ -146,6 +146,32 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
+  it('delegates controlled filter resets once to the route owner', () => {
+    const onExternalSearchChange = vi.fn();
+    const onExternalStatusChange = vi.fn();
+    const onResetFilters = vi.fn();
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[resource({ id: 'tower', name: 'Tower' })]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+        externalSearch={() => 'Tower'}
+        onExternalSearchChange={onExternalSearchChange}
+        externalStatus={() => 'online'}
+        onExternalStatusChange={onExternalStatusChange}
+        onResetFilters={onResetFilters}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(onResetFilters).toHaveBeenCalledTimes(1);
+    expect(onExternalSearchChange).not.toHaveBeenCalled();
+    expect(onExternalStatusChange).not.toHaveBeenCalled();
+  });
+
   it('keeps the column picker inside the shared View preferences popover', async () => {
     render(() => (
       <AgentsMachinesTable

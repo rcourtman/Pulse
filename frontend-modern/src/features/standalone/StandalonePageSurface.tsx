@@ -25,7 +25,11 @@ import {
   type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import { STANDALONE_PATH, buildStandalonePath } from '@/routing/resourceLinks';
+import {
+  STANDALONE_PATH,
+  STANDALONE_QUERY_PARAMS,
+  buildStandalonePath,
+} from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import { formatRelativeTime } from '@/utils/format';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
@@ -134,11 +138,30 @@ export function StandalonePageSurface() {
 
   const model = createMemo(() => buildStandalonePageModel(resources()));
   const activeTab = createMemo(() => resolveStandaloneTab(location.pathname));
+  const machineSearchFilter = createMemo(() => {
+    const value = searchParams[STANDALONE_QUERY_PARAMS.query];
+    return typeof value === 'string' ? value : '';
+  });
+  const setMachineSearchFilter = (value: string) => {
+    setSearchParams({ [STANDALONE_QUERY_PARAMS.query]: value || null }, { replace: true });
+  };
   const machineStatusFilter = createMemo(() =>
-    normalizePlatformResourceStatusFilter(searchParams.status),
+    normalizePlatformResourceStatusFilter(searchParams[STANDALONE_QUERY_PARAMS.status]),
   );
   const setMachineStatusFilter = (status: PlatformResourceStatusFilter) => {
-    setSearchParams({ status: status === 'all' ? null : status }, { replace: true });
+    setSearchParams(
+      { [STANDALONE_QUERY_PARAMS.status]: status === 'all' ? null : status },
+      { replace: true },
+    );
+  };
+  const resetMachineFilters = () => {
+    setSearchParams(
+      {
+        [STANDALONE_QUERY_PARAMS.query]: null,
+        [STANDALONE_QUERY_PARAMS.status]: null,
+      },
+      { replace: true },
+    );
   };
   const availabilityPosture = createMemo(() =>
     buildStandalonePostureSummary(model().availabilityChecks),
@@ -328,8 +351,12 @@ export function StandalonePageSurface() {
                     emptyTitle="No machines"
                     emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
                     targetAgentVersion={agentUpdateTargetVersion()}
+                    externalSearch={machineSearchFilter}
+                    onExternalSearchChange={setMachineSearchFilter}
                     externalStatus={machineStatusFilter}
                     onExternalStatusChange={setMachineStatusFilter}
+                    onResetFilters={resetMachineFilters}
+                    savedViewsKey="standalone-machines"
                   />
                 </Show>
               </div>

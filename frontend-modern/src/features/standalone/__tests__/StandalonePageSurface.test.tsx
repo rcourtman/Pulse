@@ -14,8 +14,12 @@ const mocks = vi.hoisted(() => ({
   AgentsMachinesTable: vi.fn(
     (props: {
       resources: Resource[];
+      externalSearch?: () => string;
+      onExternalSearchChange?: (value: string) => void;
       externalStatus?: () => string;
       onExternalStatusChange?: (value: string) => void;
+      onResetFilters?: () => void;
+      savedViewsKey?: string;
     }) => <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />,
   ),
   AvailabilityChecksTable: vi.fn((props: { resources: Resource[] }) => (
@@ -145,14 +149,26 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
-  it('normalizes legacy machine status links into route-owned filter state', () => {
-    mocks.searchParams = { status: 'running' };
+  it('keeps machine search and normalized status in route-owned saved-view state', () => {
+    mocks.searchParams = { q: 'ubuntu', status: 'running' };
     render(() => <StandalonePageSurface />);
 
     const props = mocks.AgentsMachinesTable.mock.calls.at(-1)?.[0];
+    expect(props?.externalSearch?.()).toBe('ubuntu');
     expect(props?.externalStatus?.()).toBe('online');
+
+    props?.onExternalSearchChange?.('macos');
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ q: 'macos' }, { replace: true });
+
     props?.onExternalStatusChange?.('offline');
     expect(mocks.setSearchParams).toHaveBeenCalledWith({ status: 'offline' }, { replace: true });
+
+    props?.onResetFilters?.();
+    expect(mocks.setSearchParams).toHaveBeenCalledWith(
+      { q: null, status: null },
+      { replace: true },
+    );
+    expect(props?.savedViewsKey).toBe('standalone-machines');
   });
 
   it('keeps overview focused on Pulse Agent machines only', () => {

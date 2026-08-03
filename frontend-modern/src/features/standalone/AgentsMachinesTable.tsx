@@ -1165,8 +1165,12 @@ export const AgentsMachinesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   targetAgentVersion?: string | null;
+  externalSearch?: () => string;
+  onExternalSearchChange?: (value: string) => void;
   externalStatus?: () => PlatformResourceStatusFilter;
   onExternalStatusChange?: (value: PlatformResourceStatusFilter) => void;
+  onResetFilters?: () => void;
+  savedViewsKey?: string;
 }> = (props) => {
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
@@ -1178,9 +1182,18 @@ export const AgentsMachinesTable: Component<{
     resources: visibleMachineResources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterAgentMachineResources,
+    externalSearch: props.externalSearch,
+    onExternalSearchChange: props.onExternalSearchChange,
     externalStatus: props.externalStatus,
     onExternalStatusChange: props.onExternalStatusChange,
   });
+  const resetFilters = () => {
+    if (props.onResetFilters) {
+      props.onResetFilters();
+      return;
+    }
+    tableState.resetFilters();
+  };
   const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
@@ -1389,11 +1402,12 @@ export const AgentsMachinesTable: Component<{
           status={tableState.status()}
           onStatusChange={tableState.setStatus}
           statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          savedViewsKey={props.savedViewsKey}
           visible={tableState.visible()}
           total={tableState.total()}
           rowNoun="machines"
           hasActiveFilters={tableState.hasActiveFilters()}
-          onResetFilters={tableState.resetFilters}
+          onResetFilters={resetFilters}
           viewOptions={
             <div>
               <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
@@ -1417,7 +1431,7 @@ export const AgentsMachinesTable: Component<{
               icon={props.emptyIcon}
               title="No machines match current filters"
               description="Adjust the search or status filter to see more Pulse Agent machines."
-              actions={<PlatformTableResetFiltersButton onReset={tableState.resetFilters} />}
+              actions={<PlatformTableResetFiltersButton onReset={resetFilters} />}
             />
           }
         >

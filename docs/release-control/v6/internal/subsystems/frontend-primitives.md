@@ -3912,6 +3912,13 @@ navigation (`pulse:filterbar:saved-views:<key>`); `SavedViewsMenu` owns
 the dropdown chrome. A "view" is the page's URL query string at save
 time, so saved views double as shareable links: copying the bar URL
 after applying a view gives someone else the exact filtered state.
+Every filter captured by a saved view must therefore be URL-owned before the
+Saved trigger is exposed. The Machines surface uses the canonical
+`STANDALONE_QUERY_PARAMS` query and status keys, delegates one composite reset
+to `StandalonePageSurface`, and supplies the `standalone-machines` saved-view
+scope to `AgentsMachinesTable`; it must not mix a local search signal with a
+route-owned status facet or issue consecutive route writes that can resurrect
+one cleared parameter.
 Because that popover combines view application, default selection, removal,
 and an inline naming form, it is a labelled non-modal dialog rather than an
 ARIA menu. Its trigger exposes the dialog relationship, Escape returns focus
@@ -3932,6 +3939,9 @@ instead of forcing View onto an isolated line. View takes the row's available
 trailing space and anchors its panel from the mobile action rail's trailing
 edge, then returns to trigger-relative trailing alignment on desktop; Saved
 keeps its leading-edge mobile anchor.
+The mobile action cluster is non-breaking as a unit; orientation readouts such
+as result counts and trend ranges wrap separately so they cannot strand View
+on a line by itself.
 The Add filter select and adjacent action/popover triggers share the canonical
 `filterToolbarControlClass` height. When the Add filter label is visually
 hidden, its `FormSelect` must also omit the labelled group's outer padded/ring
