@@ -4411,6 +4411,18 @@ setup_auto_updates() {
     local update_timer_unit
     update_timer_unit="$(basename "$update_timer_path")"
 
+    # A reinstall over a removed /etc/pulse reaches setup_auto_updates before
+    # setup_directories has recreated the config directory, and the
+    # system.json write below would fail with "No such file or directory"
+    # while the run still reported that auto-updates were enabled. Do this
+    # before installing assets or enabling the timer so a failure here leaves
+    # nothing half-configured.
+    if ! mkdir -p "$config_dir"; then
+        print_warn "Could not create $config_dir. Continuing without automatic updates."
+        ENABLE_AUTO_UPDATES=false
+        return 0
+    fi
+
     if ! install_auto_update_assets; then
         print_warn "Continuing without automatic updates. Re-run install.sh with --enable-auto-updates once the issue above is resolved."
         ENABLE_AUTO_UPDATES=false
@@ -4419,16 +4431,6 @@ setup_auto_updates() {
 
     # Enable timer but don't start it yet
     safe_systemctl enable "$update_timer_unit" || true
-
-    # A reinstall over a removed /etc/pulse reaches this point before
-    # setup_directories has recreated the config directory, and the
-    # system.json write below would fail with "No such file or directory"
-    # while the run still reported that auto-updates were enabled.
-    if ! mkdir -p "$config_dir"; then
-        print_warn "Could not create $config_dir. Continuing without automatic updates."
-        ENABLE_AUTO_UPDATES=false
-        return 0
-    fi
 
     # Update system.json to enable auto-updates
     if [[ -f "$config_dir/system.json" ]]; then

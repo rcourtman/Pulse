@@ -2250,3 +2250,25 @@ func TestRootInstallScriptAutoUpdateSetupCreatesMissingConfigDir(t *testing.T) {
 		t.Fatalf("expected auto-updates to be enabled in system.json, got: %s", contents)
 	}
 }
+
+// The config-directory guard must run before any state is mutated. An
+// earlier version sat after `safe_systemctl enable`, so a failure to create
+// the directory left the update timer enabled while the installer reported
+// automatic updates as disabled and never wrote system.json.
+func TestRootInstallScriptAutoUpdateConfigDirGuardRunsBeforeStateChanges(t *testing.T) {
+	body := extractRootInstallShellFunction(t, "setup_auto_updates")
+
+	mkdirIdx := strings.Index(body, `mkdir -p "$config_dir"`)
+	if mkdirIdx < 0 {
+		t.Fatal("expected setup_auto_updates to create the config directory")
+	}
+	for _, mutation := range []string{"install_auto_update_assets", "safe_systemctl enable"} {
+		idx := strings.Index(body, mutation)
+		if idx < 0 {
+			t.Fatalf("expected setup_auto_updates to reference %s", mutation)
+		}
+		if idx < mkdirIdx {
+			t.Fatalf("%s runs before the config-directory guard, so a guard failure would leave partial state", mutation)
+		}
+	}
+}
