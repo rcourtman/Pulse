@@ -269,19 +269,25 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
+              <Table class="min-w-0 table-fixed text-xs">
                 <TableHeader>
                   <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                     <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
                       {drawerPresentation.serviceColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[13%] sm:table-cell`}
+                    >
                       {drawerPresentation.stackColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[22%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[22%]`}
+                    >
                       {drawerPresentation.imageColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[10%]`}
+                    >
                       {drawerPresentation.modeColumnLabel}
                     </TableHead>
                     <TableHead
@@ -294,10 +300,14 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                     >
                       {drawerPresentation.runningColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[12%] sm:table-cell`}
+                    >
                       {drawerPresentation.updateColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} swarm-service-detail-column md:w-[9%]`}
+                    >
                       {drawerPresentation.portsColumnLabel}
                     </TableHead>
                   </TableRow>
@@ -331,21 +341,21 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="block truncate" title={stack()}>
                               {stack()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} swarm-service-detail-column text-base-content`}
                           >
                             <span class="block truncate" title={image()}>
                               {image()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} swarm-service-detail-column text-base-content`}
                           >
                             {mode()}
                           </TableCell>
@@ -360,14 +370,14 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                             <PlatformTableNumberValue value={running()} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="block truncate" title={update()}>
                               {update()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} swarm-service-detail-column text-base-content`}
                           >
                             <span class="block truncate font-mono text-[11px]" title={ports()}>
                               {ports()}

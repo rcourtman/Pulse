@@ -136,7 +136,11 @@ vi.mock('lucide-solid/icons/x', () => ({
   default: (props: any) => <svg data-testid="x-icon" class={props.class} />,
 }));
 
-import { ResourceTable, type Resource } from './ResourceTable';
+import {
+  ResourceTable,
+  getAlertResourceTableDesktopMinWidth,
+  type Resource,
+} from './ResourceTable';
 
 // --- Helpers ---
 function makeResource(overrides: Partial<Resource> = {}): Resource {
@@ -148,6 +152,17 @@ function makeResource(overrides: Partial<Resource> = {}): Resource {
     ...overrides,
   };
 }
+
+describe('getAlertResourceTableDesktopMinWidth', () => {
+  it('keeps progressively denser editors in the card layout until their container can support them', () => {
+    expect(getAlertResourceTableDesktopMinWidth(4)).toBe(544);
+    expect(getAlertResourceTableDesktopMinWidth(6)).toBe(768);
+    expect(getAlertResourceTableDesktopMinWidth(8)).toBe(1024);
+    expect(getAlertResourceTableDesktopMinWidth(10)).toBe(1216);
+    expect(getAlertResourceTableDesktopMinWidth(13)).toBe(1728);
+    expect(getAlertResourceTableDesktopMinWidth(20)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
 
 interface DefaultProps {
   title: string;

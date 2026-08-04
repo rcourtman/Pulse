@@ -24,6 +24,7 @@ import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformResponsiveTableLabel,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -242,22 +243,24 @@ export const K8sDeploymentsDrawer: Component<{
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="min-w-full table-fixed text-xs md:min-w-[820px]">
+              <Table class="min-w-0 table-fixed text-xs">
                 <TableHeader>
                   <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                     <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[26%]`}>
                       {drawerPresentation.deploymentColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:w-[16%] sm:table-cell`}
+                    >
                       {drawerPresentation.namespaceColumnLabel}
                     </TableHead>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} k8s-deployment-detail-column md:w-[10%]`}
                     >
                       {drawerPresentation.desiredColumnLabel}
                     </TableHead>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} k8s-deployment-detail-column md:w-[10%]`}
                     >
                       {drawerPresentation.updatedColumnLabel}
                     </TableHead>
@@ -303,19 +306,19 @@ export const K8sDeploymentsDrawer: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="block truncate" title={ns()}>
                               {ns()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} k8s-deployment-detail-column text-base-content tabular-nums`}
                           >
                             {desired()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} k8s-deployment-detail-column text-base-content tabular-nums`}
                           >
                             {updated()}
                           </TableCell>
@@ -323,6 +326,7 @@ export const K8sDeploymentsDrawer: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             {ready()}
+                            <span class="k8s-deployment-ready-total">/{desired()}</span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
@@ -332,10 +336,14 @@ export const K8sDeploymentsDrawer: Component<{
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <button
                               type="button"
+                              aria-label={drawerPresentation.viewPodsLabel}
                               onClick={() => openPods(dep.kubernetes?.namespace)}
                               class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                             >
-                              {drawerPresentation.viewPodsLabel}
+                              <PlatformResponsiveTableLabel
+                                compact="Pods"
+                                full={drawerPresentation.viewPodsLabel}
+                              />
                             </button>
                           </TableCell>
                         </TableRow>

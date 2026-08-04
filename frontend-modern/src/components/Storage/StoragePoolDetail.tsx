@@ -187,15 +187,19 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                       <div class="text-xs font-medium text-base-content">
                         Datasets ({zfsSummary()!.datasets.length})
                       </div>
-                      <div class="overflow-x-auto rounded border border-border">
-                        <table class="w-full min-w-[34rem] text-left text-xs">
+                      <div class="table-scroll-shell overflow-x-auto rounded border border-border">
+                        <table class="w-full min-w-0 table-fixed text-left text-xs">
                           <thead class="bg-surface-alt text-muted">
                             <tr>
                               <th class="px-2 py-1.5 font-medium">Dataset</th>
                               <th class="px-2 py-1.5 font-medium">Used</th>
                               <th class="px-2 py-1.5 font-medium">Available</th>
-                              <th class="px-2 py-1.5 font-medium">Referenced</th>
-                              <th class="px-2 py-1.5 font-medium">Mountpoint</th>
+                              <th class="storage-dataset-referenced-column px-2 py-1.5 font-medium">
+                                Referenced
+                              </th>
+                              <th class="hidden px-2 py-1.5 font-medium sm:table-cell">
+                                Mountpoint
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -214,11 +218,11 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                                   <td class="whitespace-nowrap px-2 py-1.5 font-mono">
                                     {dataset.availableLabel}
                                   </td>
-                                  <td class="whitespace-nowrap px-2 py-1.5 font-mono">
+                                  <td class="storage-dataset-referenced-column whitespace-nowrap px-2 py-1.5 font-mono">
                                     {dataset.referencedLabel}
                                   </td>
                                   <td
-                                    class="max-w-48 truncate px-2 py-1.5 text-muted"
+                                    class="hidden max-w-48 truncate px-2 py-1.5 text-muted sm:table-cell"
                                     title={dataset.mountpoint}
                                   >
                                     {dataset.mountpoint ||

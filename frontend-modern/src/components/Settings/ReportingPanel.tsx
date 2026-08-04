@@ -349,26 +349,23 @@ export function ReportingPanel() {
                   </div>
                 }
               >
-                <div class="overflow-x-auto rounded-md border border-base-300">
-                  <table class="w-full min-w-[980px] table-fixed text-left text-sm">
-                    <colgroup>
-                      <col class="w-[18%]" />
-                      <col class="w-[16%]" />
-                      <col class="w-[14%]" />
-                      <col class="w-[14%]" />
-                      <col class="w-[16%]" />
-                      <col class="w-[8%]" />
-                      <col class="w-[14%]" />
-                    </colgroup>
+                <div class="table-scroll-shell overflow-x-auto rounded-md border border-base-300">
+                  <table class="w-full min-w-0 table-fixed text-left text-sm">
                     <thead class="border-b border-base-300 bg-base-200/50 text-xs uppercase text-muted">
                       <tr>
-                        <th class="px-3 py-2 font-semibold">Name</th>
-                        <th class="px-3 py-2 font-semibold">Cadence</th>
-                        <th class="px-3 py-2 font-semibold">Scope</th>
-                        <th class="px-3 py-2 font-semibold">Delivery</th>
-                        <th class="px-3 py-2 font-semibold">Last run</th>
-                        <th class="px-3 py-2 font-semibold">Enabled</th>
-                        <th class="px-3 py-2 text-right font-semibold">Actions</th>
+                        <th class="w-[18%] px-3 py-2 font-semibold">Name</th>
+                        <th class="w-[16%] px-3 py-2 font-semibold">Cadence</th>
+                        <th class="report-schedule-detail-column w-[14%] px-3 py-2 font-semibold">
+                          Scope
+                        </th>
+                        <th class="report-schedule-detail-column w-[14%] px-3 py-2 font-semibold">
+                          Delivery
+                        </th>
+                        <th class="hidden w-[16%] px-3 py-2 font-semibold sm:table-cell">
+                          Last run
+                        </th>
+                        <th class="w-[8%] px-3 py-2 font-semibold">Enabled</th>
+                        <th class="w-[14%] px-3 py-2 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-base-300">
@@ -388,19 +385,19 @@ export function ReportingPanel() {
                               {reportScheduleCadenceLabel(schedule)}
                             </td>
                             <td
-                              class="truncate px-3 py-2 text-muted"
+                              class="report-schedule-detail-column truncate px-3 py-2 text-muted"
                               title={reportScheduleScopeLabel(schedule)}
                             >
                               {reportScheduleScopeLabel(schedule)}
                             </td>
                             <td
-                              class="truncate px-3 py-2 text-muted"
+                              class="report-schedule-detail-column truncate px-3 py-2 text-muted"
                               title={reportScheduleDeliveryLabel(schedule)}
                             >
                               {reportScheduleDeliveryLabel(schedule)}
                             </td>
                             <td
-                              class="truncate px-3 py-2 text-muted"
+                              class="hidden truncate px-3 py-2 text-muted sm:table-cell"
                               title={schedule.last_error || ''}
                             >
                               <div class="truncate">{reportScheduleLastRunLabel(schedule)}</div>

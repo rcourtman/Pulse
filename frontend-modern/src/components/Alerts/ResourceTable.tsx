@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 import X from 'lucide-solid/icons/x';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { Alert } from '@/types/api';
@@ -8,6 +8,7 @@ import {
   getAlertBulkEditOpenLabel,
 } from '@/utils/alertBulkEditPresentation';
 import { ActionIconButton } from '@/components/shared/Button';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { useAlertResourceTableState } from './useAlertResourceTableState';
 import type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
 import { AlertResourceTableDesktop } from './AlertResourceTableDesktop';
@@ -70,8 +71,18 @@ export interface ResourceTableProps {
 
 export type OfflineState = 'off' | 'warning' | 'critical';
 
+export const getAlertResourceTableDesktopMinWidth = (totalColumns: number): number => {
+  if (totalColumns <= 4) return 544;
+  if (totalColumns <= 6) return 768;
+  if (totalColumns <= 8) return 1024;
+  if (totalColumns <= 10) return 1216;
+  if (totalColumns <= 14) return 1728;
+  return Number.POSITIVE_INFINITY;
+};
+
 export function ResourceTable(props: ResourceTableProps) {
   const { isMobile } = useBreakpoint();
+  const observedWidth = useObservedElementWidth();
   const {
     activeMetricInput,
     setActiveMetricInput,
@@ -91,11 +102,23 @@ export function ResourceTable(props: ResourceTableProps) {
     globalDefaults: props.globalDefaults,
     factoryDefaults: props.factoryDefaults,
   });
+  const totalColumnCount = createMemo(
+    () =>
+      props.columns.length +
+      3 +
+      (props.showOfflineAlertsColumn ? 1 : 0) +
+      (props.onBulkEdit ? 1 : 0),
+  );
+  const useCardLayout = createMemo(() => {
+    if (isMobile()) return true;
+    const width = observedWidth.width();
+    return width !== null && width < getAlertResourceTableDesktopMinWidth(totalColumnCount());
+  });
 
   return (
-    <>
+    <div ref={observedWidth.setElement} class="min-w-0">
       <Show
-        when={!isMobile()}
+        when={!useCardLayout()}
         fallback={
           <AlertResourceTableMobile
             table={props}
@@ -151,6 +174,6 @@ export function ResourceTable(props: ResourceTableProps) {
           </div>
         </div>
       </Show>
-    </>
+    </div>
   );
 }

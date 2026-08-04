@@ -13,7 +13,7 @@ interface AlertHistoryTableGroupRowProps {
   group: AlertHistoryGroup;
 }
 
-function getGroupSummaryLabel(group: AlertHistoryGroup) {
+export function getGroupSummaryLabel(group: AlertHistoryGroup) {
   const alertCount = group.alerts.filter((alert) => alert.source === 'alert').length;
   const aiCount = group.alerts.filter((alert) => alert.source === 'ai').length;
   const parts = [];

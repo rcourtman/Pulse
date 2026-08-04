@@ -18,6 +18,7 @@ import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformResponsiveTableLabel,
   formatPlatformTableIntegerValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -148,23 +149,25 @@ export const K8sNamespacesDrawer: Component<{
             }
           >
             <Card padding="none" tone="card" class="overflow-hidden">
-              <Table class="min-w-full table-fixed text-xs md:min-w-[760px]">
+              <Table class="min-w-0 table-fixed text-xs">
                 <TableHeader>
                   <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                     <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
                       {drawerPresentation.namespaceColumnLabel}
                     </TableHead>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[18%]`}
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[18%]`}
                     >
                       {drawerPresentation.podsColumnLabel}
                     </TableHead>
                     <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[22%]`}
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[22%]`}
                     >
                       {drawerPresentation.deploymentsColumnLabel}
                     </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[38%]`}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-30 md:w-[38%]`}
+                    >
                       {drawerPresentation.actionsColumnLabel}
                     </TableHead>
                   </TableRow>
@@ -225,18 +228,26 @@ export const K8sNamespacesDrawer: Component<{
                             <div class="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
+                                aria-label={drawerPresentation.openPodsLabel}
                                 onClick={() => openPods(row.namespace)}
                                 class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                               >
-                                {drawerPresentation.openPodsLabel}
+                                <PlatformResponsiveTableLabel
+                                  compact="Pods"
+                                  full={drawerPresentation.openPodsLabel}
+                                />
                               </button>
                               <Show when={props.onOpenDeployments}>
                                 <button
                                   type="button"
+                                  aria-label={drawerPresentation.viewDeploymentsLabel}
                                   onClick={() => props.onOpenDeployments?.(row.namespace)}
                                   class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-sm hover:bg-surface-hover"
                                 >
-                                  {drawerPresentation.viewDeploymentsLabel}
+                                  <PlatformResponsiveTableLabel
+                                    compact="Deployments"
+                                    full={drawerPresentation.viewDeploymentsLabel}
+                                  />
                                 </button>
                               </Show>
                             </div>

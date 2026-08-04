@@ -112,22 +112,15 @@ export const UpdateHistorySection: Component = () => {
               <p class="text-sm text-muted">No updates have been applied through Pulse yet.</p>
             }
           >
-            <div class="overflow-x-auto rounded-md border border-border">
-              <table class="w-full min-w-[560px] table-fixed text-left text-sm">
-                <colgroup>
-                  <col class="w-[26%]" />
-                  <col class="w-[20%]" />
-                  <col class="w-[24%]" />
-                  <col class="w-[15%]" />
-                  <col class="w-[15%]" />
-                </colgroup>
+            <div class="table-scroll-shell overflow-x-auto rounded-md border border-border">
+              <table class="w-full min-w-0 table-fixed text-left text-sm">
                 <thead class="border-b border-border bg-surface-alt text-xs uppercase text-muted">
                   <tr>
-                    <th class="px-3 py-2 font-semibold">When</th>
-                    <th class="px-3 py-2 font-semibold">Action</th>
-                    <th class="px-3 py-2 font-semibold">Version</th>
-                    <th class="px-3 py-2 font-semibold">Result</th>
-                    <th class="px-3 py-2 text-right font-semibold"></th>
+                    <th class="w-[26%] px-3 py-2 font-semibold">When</th>
+                    <th class="hidden w-[20%] px-3 py-2 font-semibold sm:table-cell">Action</th>
+                    <th class="w-[24%] px-3 py-2 font-semibold">Version</th>
+                    <th class="w-[15%] px-3 py-2 font-semibold">Result</th>
+                    <th class="w-[15%] px-3 py-2 text-right font-semibold"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -137,7 +130,9 @@ export const UpdateHistorySection: Component = () => {
                         <td class="truncate px-3 py-2 text-muted" title={entry.timestamp}>
                           {formatTimestamp(entry.timestamp)}
                         </td>
-                        <td class="truncate px-3 py-2 text-base-content">{actionLabel(entry)}</td>
+                        <td class="hidden truncate px-3 py-2 text-base-content sm:table-cell">
+                          {actionLabel(entry)}
+                        </td>
                         <td
                           class="truncate px-3 py-2 text-muted"
                           title={`${formatVersionLabel(entry.version_from)} to ${formatVersionLabel(entry.version_to)}`}

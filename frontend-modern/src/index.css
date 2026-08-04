@@ -237,6 +237,69 @@
     }
   }
 
+  /*
+    Alert history has a persistent navigation rail, so its useful table width
+    can be much narrower than the viewport. Time and duration add helpful
+    context once the table owns 800px, while type and node remain reserved for
+    the 1024px full-detail layout handled by the canonical md table priority.
+  */
+  .table-scroll-shell :is(th, td).alert-history-context-column {
+    display: none;
+  }
+
+  /*
+    These secondary fields are useful in a roomy drawer or settings pane, but
+    they must not displace identity, health, readiness, or row actions. Their
+    shared 800px reveal point is based on the table shell rather than viewport.
+  */
+  .table-scroll-shell :is(th, td).agent-doctor-target-column {
+    display: none;
+  }
+
+  .table-scroll-shell :is(th, td).k8s-deployment-detail-column {
+    display: none;
+  }
+
+  .table-scroll-shell :is(th, td).swarm-service-detail-column {
+    display: none;
+  }
+
+  .table-scroll-shell :is(th, td).report-schedule-detail-column,
+  .table-scroll-shell :is(th, td).storage-dataset-referenced-column {
+    display: none;
+  }
+
+  .k8s-deployment-ready-total {
+    display: inline;
+  }
+
+  @container (min-width: 50rem) {
+    .table-scroll-shell :is(th, td).alert-history-context-column {
+      display: table-cell;
+    }
+
+    .table-scroll-shell :is(th, td).agent-doctor-target-column {
+      display: table-cell;
+    }
+
+    .table-scroll-shell :is(th, td).k8s-deployment-detail-column {
+      display: table-cell;
+    }
+
+    .table-scroll-shell :is(th, td).swarm-service-detail-column {
+      display: table-cell;
+    }
+
+    .table-scroll-shell :is(th, td).report-schedule-detail-column,
+    .table-scroll-shell :is(th, td).storage-dataset-referenced-column {
+      display: table-cell;
+    }
+
+    .k8s-deployment-ready-total {
+      display: none;
+    }
+  }
+
   .app-scroll-shell {
     scrollbar-gutter: stable;
   }

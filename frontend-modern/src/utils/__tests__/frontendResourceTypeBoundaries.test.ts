@@ -332,6 +332,7 @@ import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowled
 import alertHistoryAdministrationCardSource from '@/features/alerts/AlertHistoryAdministrationCard.tsx?raw';
 import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 import alertHistoryFrequencyCardSource from '@/features/alerts/AlertHistoryFrequencyCard.tsx?raw';
+import alertHistoryItemActionsSource from '@/features/alerts/AlertHistoryItemActions.tsx?raw';
 import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTableAlertRow.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
@@ -2838,7 +2839,8 @@ describe('frontend resource type boundaries', () => {
     expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryStatusPresentation');
     expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryResourceTypeBadgeClass');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
-    expect(alertHistoryTableAlertRowSource).toContain('InvestigateAlertButton');
+    expect(alertHistoryTableAlertRowSource).toContain('AlertHistoryItemActions');
+    expect(alertHistoryItemActionsSource).toContain('InvestigateAlertButton');
     expect(alertHistoryAdministrationCardSource).toContain('getAlertAdministrationSectionTitle');
     expect(alertHistoryAdministrationCardSource).toContain(
       'getAlertAdministrationSectionDescription',

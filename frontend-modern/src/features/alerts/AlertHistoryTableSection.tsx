@@ -9,6 +9,7 @@ import {
 } from '@/utils/alertOverviewPresentation';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 
+import { AlertHistoryMobileList } from './AlertHistoryMobileList';
 import { AlertHistoryTableAlertRow } from './AlertHistoryTableAlertRow';
 import { AlertHistoryTableGroupRow } from './AlertHistoryTableGroupRow';
 import type { AlertHistoryState } from './useAlertHistoryState';
@@ -31,72 +32,77 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
             </div>
           }
         >
-          <TableCard class="mb-2">
-            <Table class="w-full min-w-[800px] text-[11px] sm:text-sm">
-              <TableHeader>
-                <TableRow class="border-b border-border bg-surface-hover text-muted">
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Timestamp
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('name')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Resource
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    {getTypeColumnLabel()}
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Severity
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Message
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Duration
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Status
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Node
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <For each={props.state.groupedAlerts()}>
-                  {(group) => (
-                    <>
-                      <AlertHistoryTableGroupRow group={group} />
+          <>
+            <AlertHistoryMobileList state={props.state} />
+            <TableCard class="mb-2 hidden md:block">
+              <Table class="table-fixed w-full min-w-0 text-[11px] sm:text-sm">
+                <TableHeader>
+                  <TableRow class="border-b border-border bg-surface-hover text-muted">
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} alert-history-context-column text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Timestamp
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('name')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Resource
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('badge')} hidden text-[10px] font-medium uppercase tracking-wider sm:text-xs md:table-cell`}
+                    >
+                      {getTypeColumnLabel()}
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Severity
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Message
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} alert-history-context-column text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Duration
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Status
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden text-[10px] font-medium uppercase tracking-wider sm:text-xs md:table-cell`}
+                    >
+                      Node
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
+                    >
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <For each={props.state.groupedAlerts()}>
+                    {(group) => (
+                      <>
+                        <AlertHistoryTableGroupRow group={group} />
 
-                      <For each={group.alerts}>
-                        {(alert) => <AlertHistoryTableAlertRow alert={alert} state={props.state} />}
-                      </For>
-                    </>
-                  )}
-                </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+                        <For each={group.alerts}>
+                          {(alert) => (
+                            <AlertHistoryTableAlertRow alert={alert} state={props.state} />
+                          )}
+                        </For>
+                      </>
+                    )}
+                  </For>
+                </TableBody>
+              </Table>
+            </TableCard>
+          </>
         </Show>
       }
     >

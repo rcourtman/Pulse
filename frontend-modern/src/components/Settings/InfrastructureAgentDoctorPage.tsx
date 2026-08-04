@@ -11,6 +11,7 @@ import {
 } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { copyToClipboard } from '@/utils/clipboard';
+import { formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
 import {
   getUnifiedAgentClipboardCopyErrorMessage,
@@ -334,26 +335,27 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
         </Show>
 
         <div class="rounded-md border border-border bg-surface">
-          <Table class="w-full min-w-[760px] table-fixed text-sm">
+          <Table class="w-full min-w-0 table-fixed text-sm">
             <TableHeader class="bg-surface-alt/60">
               <TableRow>
                 <TableHead class="w-[26%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Agent
                 </TableHead>
-                <TableHead class="w-[15%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="hidden w-[15%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:table-cell">
                   System
                 </TableHead>
                 <TableHead class="w-[15%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Status
                 </TableHead>
-                <TableHead class="w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="hidden w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:table-cell">
                   Reported
                 </TableHead>
-                <TableHead class="w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="agent-doctor-target-column w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Target
                 </TableHead>
                 <TableHead class="w-[20%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
-                  Last seen
+                  <span class="platform-table-label-compact">Seen</span>
+                  <span class="platform-table-label-full">Last seen</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -362,6 +364,11 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                 {(target) => {
                   const status = () => STATUS_PRESENTATION[target.status];
                   const lastSeen = () => formatLastSeen(target.lastSeen);
+                  const lastSeenRelative = () =>
+                    formatRelativeTime(target.lastSeen ?? undefined, {
+                      compact: true,
+                      emptyText: '—',
+                    });
                   const command = () =>
                     target.connection && target.commandPlatform
                       ? operations.getAgentConnectionUpgradeCommand(
@@ -405,7 +412,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell class="px-3 py-1.5">
+                        <TableCell class="hidden px-3 py-1.5 sm:table-cell">
                           <span class="truncate text-xs text-muted">{target.contextLabel}</span>
                         </TableCell>
                         <TableCell class="px-3 py-1.5">
@@ -415,14 +422,15 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                             {status().label}
                           </span>
                         </TableCell>
-                        <TableCell class="px-3 py-1.5 text-xs text-base-content">
+                        <TableCell class="hidden px-3 py-1.5 text-xs text-base-content sm:table-cell">
                           {target.currentVersion || '—'}
                         </TableCell>
-                        <TableCell class="px-3 py-1.5 text-xs text-base-content">
+                        <TableCell class="agent-doctor-target-column px-3 py-1.5 text-xs text-base-content">
                           {target.expectedVersion || '—'}
                         </TableCell>
-                        <TableCell class="px-3 py-1.5 text-xs text-muted">
-                          {lastSeen() || '—'}
+                        <TableCell class="px-3 py-1.5 text-xs text-muted" title={lastSeen() || ''}>
+                          <span class="platform-table-label-compact">{lastSeenRelative()}</span>
+                          <span class="platform-table-label-full">{lastSeen() || '—'}</span>
                         </TableCell>
                       </TableRow>
 
