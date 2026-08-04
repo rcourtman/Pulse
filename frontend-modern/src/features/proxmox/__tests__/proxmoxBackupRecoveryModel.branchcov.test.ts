@@ -108,6 +108,8 @@ describe('getWorkloadRecoveryPostureLabel uncovered switch cases', () => {
     ['attention', 'Needs attention'],
     ['unprotected', 'Unprotected'],
     ['unknown', 'Unknown'],
+    ['checking', 'Checking'],
+    ['not-evaluated', 'Not evaluated'],
   ])('renders posture %s as %j', (posture, expected) => {
     expect(getWorkloadRecoveryPostureLabel(posture)).toBe(expected);
   });

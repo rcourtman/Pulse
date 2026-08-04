@@ -289,6 +289,60 @@ func TestBuildProtectionPostureFromPointsUsesLatestProviderObservation(t *testin
 	}
 }
 
+func TestBuildProtectionPostureDoesNotTreatSuccessfulTaskAsAvailableBackup(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC)
+	completedAt := now.Add(-time.Hour)
+	point := RecoveryPoint{
+		ID:                "pve-task:vm-100-2026-08-04",
+		Provider:          ProviderProxmoxPVE,
+		Kind:              KindOther,
+		Mode:              ModeLocal,
+		Outcome:           OutcomeSuccess,
+		CompletedAt:       &completedAt,
+		SubjectResourceID: "resource:vm-100",
+		ProviderScope:     "pve-main",
+	}
+	envelope, err := NewRecoveryPointEvidence(point, "pve-backup-task-inventory", now)
+	if err != nil {
+		t.Fatalf("NewRecoveryPointEvidence() error = %v", err)
+	}
+	point.Evidence = envelope
+	observation, err := NewProtectionProviderObservation(
+		ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"pve-main",
+		OutcomeSuccess,
+		ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now,
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+
+	got := BuildProtectionPostureFromPointsAt(
+		"resource:vm-100",
+		[]RecoveryPoint{point},
+		[]ProtectionProviderObservation{observation},
+		DefaultProtectionPosturePolicy,
+		now,
+	)
+	if got.State != ProtectionStateUnprotected {
+		t.Fatalf("state = %q, want unprotected; posture=%#v", got.State, got)
+	}
+	if got.LastSuccessfulPointAt != nil {
+		t.Fatalf("last successful point = %v, want nil for task-only evidence", got.LastSuccessfulPointAt)
+	}
+	if !strings.Contains(got.Explanation, "no qualifying subject-linked backup") {
+		t.Fatalf("explanation = %q, want no qualifying backup", got.Explanation)
+	}
+}
+
 func TestNewProtectionProviderObservationRequiresTypedLimitation(t *testing.T) {
 	t.Parallel()
 

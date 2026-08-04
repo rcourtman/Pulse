@@ -3981,6 +3981,12 @@ Its feature owner may clear incompatible hidden facets when the workspace
 changes and may preserve that workspace during a composite reset, but the
 shared `FilterBar` remains the sole owner of Saved, Clear, filter-menu, and
 popover chrome across desktop and narrow layouts.
+That surface also keeps asynchronous posture presentation explicit: an
+unresolved canonical posture request uses a neutral `Checking` row state and
+coverage segment, while host and orphan recovery rows without a canonical
+workload identity use neutral `Not evaluated`. Neither presentation state may
+reuse the server-owned `Unknown` label, enter the posture filter contract, or
+be styled as a protection success or failure.
 Alert History follows the same rule for its route-owned search, period, and
 severity state. Its feature hook owns one composite reset and exposes a
 search-aware active-state accessor to `FilterBar`; the shared shell owns where

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
@@ -98,15 +100,12 @@ func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) 
 		}
 	}
 
-	guestNames := make(map[string]struct{}, len(graph.State.VMs)+len(graph.State.Containers))
-	for _, guest := range graph.State.VMs {
-		if guest.Name != "" {
-			guestNames[guest.Name] = struct{}{}
-		}
-	}
-	for _, guest := range graph.State.Containers {
-		if guest.Name != "" {
-			guestNames[guest.Name] = struct{}{}
+	resources, _ := graph.UnifiedResourceSnapshot()
+	guestResourceIDs := make(map[string]struct{}, len(graph.State.VMs)+len(graph.State.Containers))
+	for _, resource := range resources {
+		if resource.Type == unifiedresources.ResourceTypeVM ||
+			resource.Type == unifiedresources.ResourceTypeSystemContainer {
+			guestResourceIDs[resource.ID] = struct{}{}
 		}
 	}
 
@@ -137,8 +136,8 @@ func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) 
 					foundKubernetes = true
 				}
 			}
-		case recovery.ProviderProxmoxPVE:
-			if _, ok := guestNames[point.SubjectRef.Name]; ok {
+		case recovery.ProviderProxmoxPVE, recovery.ProviderProxmoxPBS:
+			if _, ok := guestResourceIDs[point.SubjectResourceID]; ok {
 				foundProxmox = true
 			}
 		case recovery.ProviderTrueNAS:
@@ -156,6 +155,77 @@ func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) 
 	}
 	if !foundTrueNAS {
 		t.Fatal("expected recovery points to derive TrueNAS subjects from canonical mock graph")
+	}
+}
+
+func TestFixtureGraphRecoveryPointsUseCanonicalProxmoxBackupInventories(t *testing.T) {
+	previous := IsMockEnabled()
+	mustSetEnabled(t, true)
+	t.Cleanup(func() { mustSetEnabled(t, previous) })
+
+	graph := CurrentFixtureGraph()
+	resources, _ := graph.UnifiedResourceSnapshot()
+	guestInfo, _ := mockProxmoxRecoverySubjects(graph.State, resources)
+	guestResourceIDs := make(map[string]struct{})
+	for _, resource := range resources {
+		if resource.Type == unifiedresources.ResourceTypeVM ||
+			resource.Type == unifiedresources.ResourceTypeSystemContainer {
+			guestResourceIDs[resource.ID] = struct{}{}
+		}
+	}
+	if _, err := proxmoxmapper.FromPVEStorageBackupsWithEvidence(
+		graph.State.PVEBackups.StorageBackups,
+		guestInfo,
+		mockRecoveryIngestedAt(graph.State),
+	); err != nil {
+		t.Fatalf("map canonical PVE fixture inventory: %v", err)
+	}
+	points := graph.RecoveryPoints()
+	pointIDs := make(map[string]recovery.RecoveryPoint, len(points))
+	for _, point := range points {
+		pointIDs[point.ID] = point
+	}
+
+	assertLinked := func(id string) {
+		t.Helper()
+		point, ok := pointIDs[id]
+		if !ok {
+			t.Fatalf("expected canonical recovery point %q", id)
+		}
+		if strings.TrimSpace(point.SubjectResourceID) == "" {
+			t.Fatalf("recovery point %q has no canonical subject resource ID", id)
+		}
+		if _, ok := guestResourceIDs[point.SubjectResourceID]; !ok {
+			t.Fatalf(
+				"recovery point %q subject %q is not owned by the current unified graph",
+				id,
+				point.SubjectResourceID,
+			)
+		}
+		if strings.TrimSpace(point.ProviderScope) == "" || point.Evidence == nil {
+			t.Fatalf("recovery point %q is missing provider-scoped evidence", id)
+		}
+	}
+
+	for _, backup := range graph.State.PVEBackups.StorageBackups {
+		if backup.VMID > 0 && (backup.Type == "qemu" || backup.Type == "vm" || backup.Type == "lxc" || backup.Type == "ct") {
+			assertLinked("pve-backup:" + strings.TrimSpace(backup.ID))
+		}
+	}
+	for _, snapshot := range graph.State.PVEBackups.GuestSnapshots {
+		if snapshot.VMID > 0 {
+			assertLinked("pve-snapshot:" + strings.TrimSpace(snapshot.ID))
+		}
+	}
+	for _, task := range graph.State.PVEBackups.BackupTasks {
+		if task.VMID > 0 {
+			assertLinked("pve-task:" + strings.TrimSpace(task.ID))
+		}
+	}
+	for _, backup := range graph.State.PBSBackups {
+		if strings.TrimSpace(backup.VMID) != "" && strings.TrimSpace(backup.VMID) != "0" {
+			assertLinked("pbs-backup:" + strings.TrimSpace(backup.ID))
+		}
 	}
 }
 

@@ -181,6 +181,45 @@ func TestFromPVEStorageBackups_Single(t *testing.T) {
 	}
 }
 
+func TestFromPVEStorageBackupsWithEvidenceAttachesCanonicalProviderScope(t *testing.T) {
+	t.Parallel()
+
+	ingestedAt := time.Date(2026, 8, 4, 8, 5, 0, 0, time.UTC)
+	points, err := FromPVEStorageBackupsWithEvidence(
+		[]models.StorageBackup{{
+			ID:       "backup-1",
+			VMID:     100,
+			Node:     "pve1",
+			Instance: "pve-cluster",
+			Storage:  "local",
+			Type:     "qemu",
+			Time:     time.Date(2026, 8, 4, 8, 0, 0, 0, time.UTC),
+		}},
+		nil,
+		ingestedAt,
+	)
+	if err != nil {
+		t.Fatalf("FromPVEStorageBackupsWithEvidence() error = %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("points = %d, want 1", len(points))
+	}
+	point := points[0]
+	if point.ProviderScope != "pve-cluster" {
+		t.Fatalf("ProviderScope = %q, want pve-cluster", point.ProviderScope)
+	}
+	if point.Evidence == nil || point.Evidence.Source.Collector != "pve-backup-inventory" {
+		t.Fatalf("Evidence = %#v, want PVE backup inventory evidence", point.Evidence)
+	}
+	if point.SubjectResourceID != unifiedresources.ProxmoxGuestCanonicalID(
+		unifiedresources.ResourceTypeVM,
+		"pve-cluster",
+		100,
+	) {
+		t.Fatalf("SubjectResourceID = %q, want canonical guest ID", point.SubjectResourceID)
+	}
+}
+
 func TestFromPVEBackupTasks_Empty(t *testing.T) {
 	result := FromPVEBackupTasks(nil, nil)
 	if result != nil {
@@ -217,6 +256,9 @@ func TestFromPVEBackupTasks_Success(t *testing.T) {
 	p := result[0]
 	if p.Outcome != recovery.OutcomeSuccess {
 		t.Errorf("Outcome = %v, want %v", p.Outcome, recovery.OutcomeSuccess)
+	}
+	if p.Kind != recovery.KindOther {
+		t.Errorf("Kind = %v, want task evidence kind %v", p.Kind, recovery.KindOther)
 	}
 }
 

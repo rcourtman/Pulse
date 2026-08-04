@@ -153,11 +153,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
 	hadSuccessfulNode := false          // Track if at least one node responded successfully
+	successfulNodeQueries := 0          // Number of nodes whose storage list was enumerated
 	storagesWithBackup := 0             // Number of storages that should contain backups
 	contentSuccess := 0                 // Number of successful storage content fetches
 	contentFailures := 0                // Number of failed storage content fetches
 	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
 	hadPermissionError := false         // Track if any permission errors occurred this cycle
+	permissionFailureCount := 0         // Number of node/storage reads rejected by authorization
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
@@ -204,6 +206,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 
 		if err != nil {
+			if isPVEBackupPermissionError(err) {
+				hadPermissionError = true
+				permissionFailureCount++
+			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
@@ -214,6 +220,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 
 		hadSuccessfulNode = true
+		successfulNodeQueries++
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
@@ -231,12 +238,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_content", instanceName, err).WithNode(node.Node)
-				errStr := strings.ToLower(err.Error())
-
 				// Check if this is a permission error
-				if strings.Contains(errStr, "403") || strings.Contains(errStr, "401") ||
-					strings.Contains(errStr, "permission") || strings.Contains(errStr, "forbidden") {
+				if isPVEBackupPermissionError(err) {
 					hadPermissionError = true
+					permissionFailureCount++
 					warning := pveBackupPermissionWarning(m.getInstanceConfig(instanceName))
 					m.mu.Lock()
 					m.backupPermissionWarnings[instanceName] = warning
@@ -391,8 +396,33 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			Msg("Preserving previous PBS guest confirmation evidence due to partial failures")
 	}
 
+	protectionObservedAt := time.Now().UTC()
+	protectionObservation, protectionObservationErr := buildPVEProtectionProviderObservation(
+		instanceName,
+		pveProtectionCollectionStats{
+			NodeCount:              len(nodes),
+			SuccessfulNodeQueries:  successfulNodeQueries,
+			BackupStorageCount:     storagesWithBackup,
+			ContentSuccesses:       contentSuccess,
+			ContentFailures:        contentFailures,
+			PermissionFailureCount: permissionFailureCount,
+		},
+		protectionObservedAt,
+	)
+	if protectionObservationErr != nil {
+		log.Warn().
+			Err(protectionObservationErr).
+			Str("instance", instanceName).
+			Msg("Failed to build PVE protection provider observation")
+	}
+
 	// Decide whether to keep existing backups when every query failed
 	if shouldPreserveBackups(len(nodes), hadSuccessfulNode, storagesWithBackup, contentSuccess) {
+		if protectionObservationErr == nil {
+			m.ingestProtectionProviderObservationsAsync(
+				[]recovery.ProtectionProviderObservation{protectionObservation},
+			)
+		}
 		if len(nodes) > 0 && !hadSuccessfulNode {
 			log.Warn().
 				Str("instance", instanceName).
@@ -415,14 +445,36 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
-	m.ingestAndReconcileRecoveryPointsAsync(
-		proxmoxrecoverymapper.FromPVEStorageBackups(allBackups, guestInfo),
-		recoveryReconcileScope{
-			provider: string(recovery.ProviderProxmoxPVE),
-			idPrefix: "pve-backup:",
-			instance: instanceName,
-		},
+	points, evidenceErr := proxmoxrecoverymapper.FromPVEStorageBackupsWithEvidence(
+		allBackups,
+		guestInfo,
+		protectionObservedAt,
 	)
+	if evidenceErr != nil {
+		log.Warn().
+			Err(evidenceErr).
+			Str("instance", instanceName).
+			Msg("Failed to attach PVE recovery evidence; preserving existing points")
+		if protectionObservationErr == nil {
+			m.ingestProtectionProviderObservationsAsync(
+				[]recovery.ProtectionProviderObservation{protectionObservation},
+			)
+		}
+	} else {
+		observations := []recovery.ProtectionProviderObservation{}
+		if protectionObservationErr == nil {
+			observations = append(observations, protectionObservation)
+		}
+		m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
+			points,
+			observations,
+			recoveryReconcileScope{
+				provider: string(recovery.ProviderProxmoxPVE),
+				idPrefix: "pve-backup:",
+				instance: instanceName,
+			},
+		)
+	}
 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
@@ -1190,14 +1242,26 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
-	m.ingestAndReconcileRecoveryPointsAsync(
-		proxmoxrecoverymapper.FromPVEGuestSnapshots(allSnapshots, guestInfo),
-		recoveryReconcileScope{
-			provider: string(recovery.ProviderProxmoxPVE),
-			idPrefix: "pve-snapshot:",
-			instance: instanceName,
-		},
+	points, evidenceErr := proxmoxrecoverymapper.FromPVEGuestSnapshotsWithEvidence(
+		allSnapshots,
+		guestInfo,
+		time.Now().UTC(),
 	)
+	if evidenceErr != nil {
+		log.Warn().
+			Err(evidenceErr).
+			Str("instance", instanceName).
+			Msg("Failed to attach PVE snapshot recovery evidence; preserving existing points")
+	} else {
+		m.ingestAndReconcileRecoveryPointsAsync(
+			points,
+			recoveryReconcileScope{
+				provider: string(recovery.ProviderProxmoxPVE),
+				idPrefix: "pve-snapshot:",
+				instance: instanceName,
+			},
+		)
+	}
 
 	if m.alertManager != nil {
 		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups)
@@ -2111,7 +2175,19 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
-	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEBackupTasks(backupTasks, guestInfo))
+	points, evidenceErr := proxmoxrecoverymapper.FromPVEBackupTasksWithEvidence(
+		backupTasks,
+		guestInfo,
+		time.Now().UTC(),
+	)
+	if evidenceErr != nil {
+		log.Warn().
+			Err(evidenceErr).
+			Str("instance", instanceName).
+			Msg("Failed to attach PVE backup-task recovery evidence; preserving existing points")
+		return
+	}
+	m.ingestRecoveryPointsAsync(points)
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one

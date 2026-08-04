@@ -253,6 +253,7 @@ export const ProxmoxBackupsTable: Component<{
       tasks: tasks(),
       nowMs: nowMs(),
       protectionPostures: protectionPostures.postureByResourceID(),
+      protectionPosturesResolved: protectionPostures.resolvedOnce(),
     }),
   );
 
@@ -350,6 +351,8 @@ export const ProxmoxBackupsTable: Component<{
       attention: live.filter((row) => row.posture === 'attention').length,
       unprotected: live.filter((row) => row.posture === 'unprotected').length,
       unknown: live.filter((row) => row.posture === 'unknown').length,
+      checking: live.filter((row) => row.posture === 'checking').length,
+      notEvaluated: live.filter((row) => row.posture === 'not-evaluated').length,
     };
   });
   const view = (): BackupView =>
@@ -614,6 +617,20 @@ export const ProxmoxBackupsTable: Component<{
                 label: 'unknown',
                 toneClass: 'bg-slate-400',
                 muted: liveHealthSummary().unknown === 0,
+              },
+              {
+                key: 'checking',
+                value: liveHealthSummary().checking,
+                label: 'checking',
+                toneClass: 'bg-blue-400',
+                muted: liveHealthSummary().checking === 0,
+              },
+              {
+                key: 'not-evaluated',
+                value: liveHealthSummary().notEvaluated,
+                label: 'not evaluated',
+                toneClass: 'bg-slate-300 dark:bg-slate-600',
+                muted: liveHealthSummary().notEvaluated === 0,
               },
             ]}
           />

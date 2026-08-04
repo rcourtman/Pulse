@@ -10,22 +10,29 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	truenasmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func (g FixtureGraph) RecoveryPoints() []recovery.RecoveryPoint {
-	return generateMockRecoveryPoints(g.State, g.PlatformFixtures)
+	resources, _ := g.UnifiedResourceSnapshot()
+	return generateMockRecoveryPoints(g.State, g.PlatformFixtures, resources)
 }
 
-func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures PlatformFixtures) []recovery.RecoveryPoint {
+func generateMockRecoveryPoints(
+	snapshot models.StateSnapshot,
+	fixtures PlatformFixtures,
+	resources []unifiedresources.Resource,
+) []recovery.RecoveryPoint {
 	// Anchor timestamps to midnight UTC so results are stable across requests
 	// (pagination, sorting) while still staying within the "last 30 days" window.
 	anchor := time.Now().UTC().Truncate(24 * time.Hour)
 
 	clusters := recoveryKubernetesClusters(snapshot)
 
-	points := make([]recovery.RecoveryPoint, 0, 64)
+	points := make([]recovery.RecoveryPoint, 0, 192)
 
 	boolPtr := func(v bool) *bool { return &v }
 	int64Ptr := func(v int64) *int64 { return &v }
@@ -226,121 +233,14 @@ func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures Platform
 		}
 	}
 
-	// Proxmox: a few guest subjects with multiple backup points each.
-	// This keeps the Backups page platform-agnostic while still showing familiar PVE/PBS-like artifacts.
-	proxmoxSubjects := recoveryProxmoxSubjects(snapshot)
-	for si, s := range proxmoxSubjects {
-		for i := 0; i < 5; i++ {
-			ageDays := 2 + (si*8+i*6)%27
-			started := anchor.AddDate(0, 0, -ageDays).Add(time.Duration((6+si*4+i*3)%23) * time.Hour).Add(time.Duration((i%7)*5) * time.Minute)
-
-			outcome := recovery.OutcomeSuccess
-			status := "ok"
-			errText := ""
-			switch i % 5 {
-			case 0, 1, 2:
-				outcome = recovery.OutcomeSuccess
-				status = "ok"
-			case 3:
-				outcome = recovery.OutcomeWarning
-				status = "warning"
-			default:
-				outcome = recovery.OutcomeFailed
-				status = "error"
-				errText = "backup failed: I/O error"
-			}
-
-			// Keep the newest one sometimes running.
-			var completedAt *time.Time
-			if i == 0 && si%2 == 0 {
-				outcome = recovery.OutcomeRunning
-				status = "running"
-				completedAt = nil
-			} else {
-				t := started.Add(time.Duration(7+(i%8)) * time.Minute)
-				completedAt = &t
-			}
-
-			guestType := "proxmox-guest"
-			if s.typ == "vm" {
-				guestType = "proxmox-vm"
-			} else if s.typ == "lxc" {
-				guestType = "proxmox-lxc"
-			}
-
-			sourceID := rpStableID("proxmox", "guest", s.instance, s.node, rpItoa(s.vmid))
-			backupID := rpStableID("proxmox", "backup", s.instance, s.node, rpItoa(s.vmid), rpTimeKey(completedAt, &started))
-
-			mode := recovery.ModeLocal
-			if s.isPBS {
-				mode = recovery.ModeRemote
-			}
-
-			var verified *bool
-			if s.isPBS && completedAt != nil {
-				verified = boolPtr(i%3 == 0)
-			}
-			var immutable *bool
-			if completedAt != nil {
-				if i%4 == 0 {
-					immutable = boolPtr(true)
-				} else if i%4 == 1 {
-					immutable = boolPtr(false)
-				}
-			}
-			var encrypted *bool
-			if s.isPBS {
-				if i%4 == 0 {
-					encrypted = boolPtr(true)
-				} else if i%4 == 1 {
-					encrypted = boolPtr(false)
-				}
-			}
-
-			var sizeBytes *int64
-			if completedAt != nil && i%2 == 0 {
-				sizeBytes = int64Ptr(15_000_000_000 + int64(si)*4_000_000_000 + int64(i)*1_500_000_000)
-			}
-
-			points = append(points, recovery.RecoveryPoint{
-				ID:          "pve-backup:" + backupID,
-				Provider:    recovery.ProviderProxmoxPVE,
-				Kind:        recovery.KindBackup,
-				Mode:        mode,
-				Outcome:     outcome,
-				StartedAt:   rpPtrTime(started),
-				CompletedAt: completedAt,
-				SizeBytes:   sizeBytes,
-				Verified:    verified,
-				Encrypted:   encrypted,
-				Immutable:   immutable,
-				SubjectRef: &recovery.ExternalRef{
-					Type:      guestType,
-					Namespace: s.instance,
-					Name:      s.name,
-					ID:        sourceID,
-					Class:     s.node,
-				},
-				RepositoryRef: &recovery.ExternalRef{
-					Type:      "proxmox-storage",
-					Namespace: s.instance,
-					Name:      s.storage,
-					Class:     s.node,
-				},
-				Details: map[string]any{
-					"type":      s.typ,
-					"instance":  s.instance,
-					"node":      s.node,
-					"vmid":      s.vmid,
-					"storage":   s.storage,
-					"isPBS":     s.isPBS,
-					"status":    status,
-					"lastError": errText,
-					"notes":     "scheduled",
-				},
-			})
-		}
-	}
+	// Proxmox recovery is projected from the same canonical fixture inventories
+	// consumed by the Backups page. Independent sample points drifted away from
+	// live workload IDs and made every server-owned posture look unknown.
+	points = append(points, mockProxmoxRecoveryPoints(
+		snapshot,
+		resources,
+		mockRecoveryIngestedAt(snapshot),
+	)...)
 
 	// TrueNAS: reuse the provider-native recovery artifact model so demo-mode
 	// recovery mirrors the same contract as live TrueNAS reads.
@@ -379,12 +279,198 @@ func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures Platform
 		return a.ID > b.ID
 	})
 
-	// Hard cap within requested range, while keeping at least 30 points.
-	if len(points) > 80 {
-		points = points[:80]
+	return points
+}
+
+func mockProxmoxRecoveryPoints(
+	snapshot models.StateSnapshot,
+	resources []unifiedresources.Resource,
+	ingestedAt time.Time,
+) []recovery.RecoveryPoint {
+	guestInfo, candidates := mockProxmoxRecoverySubjects(snapshot, resources)
+	out := make([]recovery.RecoveryPoint, 0,
+		len(snapshot.PVEBackups.StorageBackups)+
+			len(snapshot.PVEBackups.GuestSnapshots)+
+			len(snapshot.PVEBackups.BackupTasks)+
+			len(snapshot.PBSBackups),
+	)
+
+	appendMapped := func(points []recovery.RecoveryPoint, err error) {
+		if err == nil {
+			out = append(out, points...)
+		}
+	}
+	appendMapped(proxmoxmapper.FromPVEStorageBackupsWithEvidence(
+		snapshot.PVEBackups.StorageBackups,
+		guestInfo,
+		ingestedAt,
+	))
+	appendMapped(proxmoxmapper.FromPVEGuestSnapshotsWithEvidence(
+		snapshot.PVEBackups.GuestSnapshots,
+		guestInfo,
+		ingestedAt,
+	))
+	appendMapped(proxmoxmapper.FromPVEBackupTasksWithEvidence(
+		snapshot.PVEBackups.BackupTasks,
+		guestInfo,
+		ingestedAt,
+	))
+	appendMapped(proxmoxmapper.FromPBSBackupsWithEvidence(
+		snapshot.PBSBackups,
+		candidates,
+		ingestedAt,
+	))
+	return out
+}
+
+func mockRecoveryIngestedAt(snapshot models.StateSnapshot) time.Time {
+	var latest time.Time
+	consider := func(candidate time.Time) {
+		if candidate.After(latest) {
+			latest = candidate.UTC()
+		}
+	}
+	for _, backup := range snapshot.PVEBackups.StorageBackups {
+		consider(backup.Time)
+	}
+	for _, point := range snapshot.PVEBackups.GuestSnapshots {
+		consider(point.Time)
+	}
+	for _, task := range snapshot.PVEBackups.BackupTasks {
+		consider(task.StartTime)
+		consider(task.EndTime)
+	}
+	for _, backup := range snapshot.PBSBackups {
+		consider(backup.BackupTime)
+	}
+	if latest.IsZero() {
+		return time.Now().UTC()
+	}
+	return latest.Add(time.Second)
+}
+
+func mockProxmoxRecoverySubjects(
+	snapshot models.StateSnapshot,
+	resources []unifiedresources.Resource,
+) (
+	map[string]proxmoxmapper.GuestInfo,
+	map[string][]proxmoxmapper.GuestCandidate,
+) {
+	guestInfo := make(map[string]proxmoxmapper.GuestInfo, len(snapshot.VMs)+len(snapshot.Containers))
+	candidates := make(map[string][]proxmoxmapper.GuestCandidate, len(snapshot.VMs)+len(snapshot.Containers))
+	type guestCoordinate struct {
+		node string
+		vmid int
+	}
+	byCoordinate := make(map[guestCoordinate][]proxmoxmapper.GuestInfo)
+	seenResourceIDs := make(map[string]struct{}, len(snapshot.VMs)+len(snapshot.Containers))
+
+	appendGuest := func(
+		resourceID string,
+		resourceType unifiedresources.ResourceType,
+		backupType, instance, node, name, sourceID string,
+		vmid int,
+	) {
+		instance = strings.TrimSpace(instance)
+		node = strings.TrimSpace(node)
+		if instance == "" || node == "" || vmid <= 0 {
+			return
+		}
+		resourceID = strings.TrimSpace(resourceID)
+		if resourceID == "" {
+			resourceID = unifiedresources.ProxmoxGuestCanonicalID(resourceType, instance, vmid)
+		}
+		if sourceID = strings.TrimSpace(sourceID); sourceID == "" {
+			sourceID = fmt.Sprintf("%s:%s:%d", instance, node, vmid)
+		}
+		info := proxmoxmapper.GuestInfo{
+			ResourceID:   resourceID,
+			SourceID:     sourceID,
+			ResourceType: resourceType,
+			Name:         strings.TrimSpace(name),
+		}
+		guestInfo[fmt.Sprintf("%s|%s|%d", instance, node, vmid)] = info
+		coordinate := guestCoordinate{node: node, vmid: vmid}
+		byCoordinate[coordinate] = append(byCoordinate[coordinate], info)
+		if _, seen := seenResourceIDs[resourceID]; seen {
+			return
+		}
+		seenResourceIDs[resourceID] = struct{}{}
+		key := backupType + ":" + rpItoa(vmid)
+		candidates[key] = append(candidates[key], proxmoxmapper.GuestCandidate{
+			ResourceID:    resourceID,
+			SourceID:      sourceID,
+			ResourceType:  resourceType,
+			DisplayName:   strings.TrimSpace(name),
+			InstanceName:  instance,
+			NodeName:      node,
+			VMID:          vmid,
+			BackupTypeKey: backupType,
+		})
 	}
 
-	return points
+	for _, resource := range resources {
+		if resource.Proxmox == nil || resource.Proxmox.Template {
+			continue
+		}
+		backupType := ""
+		switch resource.Type {
+		case unifiedresources.ResourceTypeVM:
+			backupType = "vm"
+		case unifiedresources.ResourceTypeSystemContainer:
+			backupType = "ct"
+		default:
+			continue
+		}
+		appendGuest(
+			resource.ID,
+			resource.Type,
+			backupType,
+			resource.Proxmox.Instance,
+			resource.Proxmox.NodeName,
+			resource.Name,
+			resource.Proxmox.SourceID,
+			resource.Proxmox.VMID,
+		)
+	}
+
+	// Preserve a defensive fallback for a malformed fixture graph, but prefer
+	// the registry-owned IDs above. They include identity successions and merge
+	// decisions that cannot be reconstructed safely from a backup record.
+	for _, vm := range snapshot.VMs {
+		coordinate := guestCoordinate{node: strings.TrimSpace(vm.Node), vmid: vm.VMID}
+		if !vm.Template && len(byCoordinate[coordinate]) == 0 {
+			appendGuest("", unifiedresources.ResourceTypeVM, "vm", vm.Instance, vm.Node, vm.Name, vm.ID, vm.VMID)
+		}
+	}
+	for _, container := range snapshot.Containers {
+		coordinate := guestCoordinate{node: strings.TrimSpace(container.Node), vmid: container.VMID}
+		if !container.Template && len(byCoordinate[coordinate]) == 0 {
+			appendGuest("", unifiedresources.ResourceTypeSystemContainer, "ct", container.Instance, container.Node, container.Name, container.ID, container.VMID)
+		}
+	}
+
+	bindProviderAlias := func(instance, node string, vmid int) {
+		instance = strings.TrimSpace(instance)
+		node = strings.TrimSpace(node)
+		if instance == "" || node == "" || vmid <= 0 {
+			return
+		}
+		matches := byCoordinate[guestCoordinate{node: node, vmid: vmid}]
+		if len(matches) == 1 {
+			guestInfo[fmt.Sprintf("%s|%s|%d", instance, node, vmid)] = matches[0]
+		}
+	}
+	for _, backup := range snapshot.PVEBackups.StorageBackups {
+		bindProviderAlias(backup.Instance, backup.Node, backup.VMID)
+	}
+	for _, point := range snapshot.PVEBackups.GuestSnapshots {
+		bindProviderAlias(point.Instance, point.Node, point.VMID)
+	}
+	for _, task := range snapshot.PVEBackups.BackupTasks {
+		bindProviderAlias(task.Instance, task.Node, task.VMID)
+	}
+	return guestInfo, candidates
 }
 
 func rebaseTrueNASRecoverySnapshot(snapshot truenas.FixtureSnapshot, targetLatest time.Time) truenas.FixtureSnapshot {
@@ -456,16 +542,6 @@ type mockRecoveryPVCSubject struct {
 	namespace   string
 	pvc         string
 	class       string
-}
-
-type mockProxmoxRecoverySubject struct {
-	instance string
-	node     string
-	vmid     int
-	typ      string
-	name     string
-	storage  string
-	isPBS    bool
 }
 
 func recoveryKubernetesClusters(snapshot models.StateSnapshot) []mockRecoveryCluster {
@@ -557,64 +633,6 @@ func mockRecoveryPVCUID(clusterName, namespace, pvc string) string {
 		fmt.Sprintf("%s/%s", namespace, pvc),
 		pvc,
 	)
-}
-
-func recoveryProxmoxSubjects(snapshot models.StateSnapshot) []mockProxmoxRecoverySubject {
-	subjects := make([]mockProxmoxRecoverySubject, 0, 3)
-	seen := map[string]struct{}{}
-
-	remoteStorage := "pbs-1"
-	if len(snapshot.PBSInstances) > 0 {
-		if candidate := strings.TrimSpace(snapshot.PBSInstances[0].Name); candidate != "" {
-			remoteStorage = candidate
-		}
-	}
-	localStorage := "local-zfs"
-
-	appendSubject := func(instance, node string, vmid int, typ, name string, preferPBS bool) {
-		if len(subjects) >= 3 {
-			return
-		}
-		key := strings.TrimSpace(typ) + ":" + strings.TrimSpace(instance) + ":" + strings.TrimSpace(node) + ":" + rpItoa(vmid)
-		if _, ok := seen[key]; ok {
-			return
-		}
-		seen[key] = struct{}{}
-
-		storage := localStorage
-		isPBS := false
-		if preferPBS {
-			storage = remoteStorage
-			isPBS = true
-		}
-
-		subjects = append(subjects, mockProxmoxRecoverySubject{
-			instance: strings.TrimSpace(instance),
-			node:     strings.TrimSpace(node),
-			vmid:     vmid,
-			typ:      strings.TrimSpace(typ),
-			name:     strings.TrimSpace(name),
-			storage:  storage,
-			isPBS:    isPBS,
-		})
-	}
-
-	for index, vm := range snapshot.VMs {
-		appendSubject(vm.Instance, vm.Node, vm.VMID, "vm", firstNonEmptyTrimmed(vm.Name, vm.ID), index%2 == 0)
-	}
-	for index, container := range snapshot.Containers {
-		appendSubject(container.Instance, container.Node, container.VMID, "lxc", firstNonEmptyTrimmed(container.Name, container.ID), index%2 == 0)
-	}
-
-	if len(subjects) > 0 {
-		return subjects
-	}
-
-	return []mockProxmoxRecoverySubject{
-		{instance: "pve-1", node: "pve-a", vmid: 101, typ: "vm", name: "web-01", storage: "pbs-1", isPBS: true},
-		{instance: "pve-1", node: "pve-a", vmid: 102, typ: "vm", name: "db-01", storage: "local-zfs", isPBS: false},
-		{instance: "pve-2", node: "pve-b", vmid: 201, typ: "lxc", name: "cache-01", storage: "pbs-1", isPBS: true},
-	}
 }
 
 func firstNonEmptyTrimmed(values ...string) string {

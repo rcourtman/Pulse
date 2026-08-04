@@ -13,6 +13,7 @@
     "api-contracts",
     "cloud-paid",
     "frontend-primitives",
+    "monitoring",
     "unified-resources"
   ]
 }
@@ -131,6 +132,7 @@ freshness.
 29. `internal/recovery/store/store_posture.go`
 30. `frontend-modern/src/hooks/useProtectionPostures.ts`
 31. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+32. `internal/mock/recovery_points.go`
 
 ## Shared Boundaries
 
@@ -2737,8 +2739,24 @@ resource-table batches, state-filtered attention lists, policy, evaluation
 time, provider limitations, and evidence references. The Proxmox coverage
 surface requests canonical resource IDs in batches of at most 200 and never
 derives posture from raw PVE/PBS artifacts. Raw backup files, snapshots, tasks,
-and provider state remain expandable recovery evidence. Missing or failed
-posture reads render unknown rather than falling back to browser inference.
+and provider state remain expandable recovery evidence. PVE task records use
+the non-artifact `other` recovery kind: they may contribute attempt and outcome
+context, but an `OK` task must not count as an available backup or mint
+protected posture when provider inventory exposes no restore artifact. While the first
+posture batch is unresolved, canonical workload rows render `Checking` rather
+than fabricating a completed unknown result. Missing or failed posture reads
+render unknown rather than falling back to browser inference. Host archives
+and orphaned artifacts that have no current canonical workload identity render
+`Not evaluated`, remain outside the four server posture states, and retain
+their forensic recovery detail.
+
+Runtime mock recovery points must project the same graph-owned PVE backup
+files, PVE guest snapshots, PVE tasks, and PBS backups returned by the
+source-native backup APIs. They attach the canonical Proxmox guest resource ID,
+provider scope, and point evidence through the production mappers. A separate
+three-subject sample generator or a hard cap that drops graph-owned backup
+subjects is forbidden because it makes preview posture diverge from the table
+inventory.
 
 The adjacent shared authentication boundary must remain live when storage or
 recovery browser reads authenticated with local credentials overlap agent

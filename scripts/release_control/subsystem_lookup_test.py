@@ -3973,6 +3973,7 @@ class SubsystemLookupTest(unittest.TestCase):
                     "internal/mock/demo_scenarios_test.go",
                     "internal/mock/generator_test.go",
                     "internal/mock/platform_fixtures_test.go",
+                    "internal/mock/recovery_points_test.go",
                     "tests/integration/tests/43-platform-mock-runtime.spec.ts",
                 ],
             )

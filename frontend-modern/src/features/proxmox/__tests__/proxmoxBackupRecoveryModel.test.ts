@@ -196,6 +196,23 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageSummary.unprotected).toBe(1);
   });
 
+  it('distinguishes an in-flight posture read from a completed unknown evaluation', () => {
+    const resource = workload({ id: 'vm-202', proxmox: { vmid: 202, node: 'delly' } });
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [resource],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPosturesResolved: false,
+    });
+
+    expect(model.coverageRows[0].posture).toBe('checking');
+    expect(getWorkloadRecoveryPostureLabel(model.coverageRows[0].posture)).toBe('Checking');
+    expect(model.coverageSummary.unknown).toBe(0);
+  });
+
   it('does not treat a linked Pulse agent facet as recovery evidence or authority', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [
@@ -291,6 +308,8 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(model.coverageRows[0].workload.type).toBe('host');
     expect(model.coverageRows[0].workload.vmid).toBe('mail-gateway');
     expect(model.coverageRows[0].workload.label).toBe('Host mail-gateway');
+    expect(model.coverageRows[0].posture).toBe('not-evaluated');
+    expect(getWorkloadRecoveryPostureLabel(model.coverageRows[0].posture)).toBe('Not evaluated');
     expect(model.coverageRows[0].pbsCount).toBe(1);
     expect(model.coverageRows[0].archiveCount).toBe(1);
     expect(model.recoverableArtifacts.map((artifact) => artifact.workload.label)).toEqual(

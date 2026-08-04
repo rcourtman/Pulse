@@ -14,6 +14,7 @@ import {
 import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
 // ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
 // must render inside a Router context.
@@ -199,9 +200,60 @@ afterEach(() => {
   window.history.replaceState({}, '', '/');
   apiFetchMock.mockReset();
   apiFetchJSONMock.mockReset();
+  resetCreateNonSuspendingQueryCacheForTest();
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it('shows Checking until the canonical posture request resolves', async () => {
+    mockBackupAPIs();
+    let resolvePosture: ((value: unknown) => void) | undefined;
+    apiFetchJSONMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePosture = resolve;
+      }),
+    );
+    window.history.replaceState({}, '', '/?view=coverage');
+
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+
+    await screen.findAllByText('pbs-docker');
+    expect(screen.getAllByText('Checking').length).toBeGreaterThan(0);
+
+    resolvePosture?.({
+      data: [
+        {
+          subjectResourceId: 'ct-112',
+          state: 'protected',
+          freshness: 'current',
+          verification: 'verified',
+          coverage: 'complete',
+          providerStates: [],
+          repositoryResourceIds: [],
+          evidenceIds: ['evidence-1'],
+          explanation: 'A current verified backup is available.',
+          evaluatedAt: '2026-05-25T02:05:00Z',
+        },
+      ],
+      policy: {
+        freshnessWindowSeconds: 604800,
+        verificationWindowSeconds: 604800,
+        requireVerification: true,
+      },
+      meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByTitle('A current verified backup is available.')
+          .some((element) => element.textContent === 'Protected'),
+      ).toBe(true),
+    );
+    expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+  });
+
   it('defaults to coverage when protection needs attention and keeps the dated feed one click away', async () => {
     mockBackupAPIs('attention');
 

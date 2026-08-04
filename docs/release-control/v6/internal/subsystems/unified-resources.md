@@ -2235,9 +2235,11 @@ metadata.
 storage/recovery owns protection truth. Live VM/LXC rows carry the exact
 canonical `Resource.id` into one bounded posture batch; the table must not parse
 its presentation key, VMID, name, node, or instance to mint a replacement
-resource identity. Orphaned backup artifacts have no canonical live resource
-ID and therefore render unknown posture while retaining their forensic backup
-detail. Unified resources own row identity only; they do not derive backup
+resource identity. Host and orphaned backup artifacts have no canonical live
+workload resource ID and therefore render `Not evaluated` while retaining
+their forensic backup detail. That presentation state is not a fifth server
+posture and must not be counted as unknown provider evidence. Unified resources
+own row identity only; they do not derive backup
 freshness, provider completeness, verification, or protection state.
 
 ### APT Product Trust browser projection

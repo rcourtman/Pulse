@@ -10,7 +10,10 @@ import {
 
 export type RecoverableSourceKind = ProxmoxBackupSourceKind;
 
-export type WorkloadRecoveryPosture = ProtectionState;
+// `checking` and `not-evaluated` are presentation states, not server posture
+// states. They prevent an in-flight request or a non-canonical host/orphan row
+// from being mislabeled as a completed `unknown` evaluation.
+export type WorkloadRecoveryPosture = ProtectionState | 'checking' | 'not-evaluated';
 
 export interface WorkloadReference {
   key: string;
@@ -99,6 +102,7 @@ interface BuildModelInput {
   tasks: readonly BackupTask[];
   nowMs: number;
   protectionPostures?: ReadonlyMap<string, ProtectionPosture>;
+  protectionPosturesResolved?: boolean;
 }
 
 interface WorkloadCandidate extends WorkloadReference {
@@ -401,7 +405,9 @@ function protectionPostureRank(posture: WorkloadRecoveryPosture): number {
   if (posture === 'attention') return 0;
   if (posture === 'unprotected') return 1;
   if (posture === 'unknown') return 2;
-  return 3;
+  if (posture === 'checking') return 3;
+  if (posture === 'protected') return 4;
+  return 5;
 }
 
 export function getWorkloadRecoveryPostureLabel(posture: WorkloadRecoveryPosture): string {
@@ -414,6 +420,10 @@ export function getWorkloadRecoveryPostureLabel(posture: WorkloadRecoveryPosture
       return 'Unprotected';
     case 'unknown':
       return 'Unknown';
+    case 'checking':
+      return 'Checking';
+    case 'not-evaluated':
+      return 'Not evaluated';
   }
 }
 
@@ -570,7 +580,13 @@ export function buildProxmoxBackupRecoveryModel(
     const protectionPosture = row.workload.resourceId
       ? input.protectionPostures?.get(row.workload.resourceId)
       : undefined;
-    const posture = protectionPosture?.state ?? 'unknown';
+    const posture: WorkloadRecoveryPosture = protectionPosture?.state
+      ? protectionPosture.state
+      : !row.workload.resourceId
+        ? 'not-evaluated'
+        : input.protectionPosturesResolved === false
+          ? 'checking'
+          : 'unknown';
     return {
       ...row,
       posture,

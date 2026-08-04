@@ -5210,6 +5210,7 @@
         "internal/mock/fixture_graph.go",
         "internal/mock/generator.go",
         "internal/mock/platform_fixtures.go",
+        "internal/mock/recovery_points.go",
         "internal/models/converters.go",
         "internal/models/deepcopy.go",
         "internal/models/metrics_types.go",
@@ -5554,7 +5555,8 @@
               "internal/mock/demo_scenarios.go",
               "internal/mock/fixture_graph.go",
               "internal/mock/generator.go",
-              "internal/mock/platform_fixtures.go"
+              "internal/mock/platform_fixtures.go",
+              "internal/mock/recovery_points.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -5564,16 +5566,18 @@
               "internal/mock/demo_scenarios_test.go",
               "internal/mock/generator_test.go",
               "internal/mock/platform_fixtures_test.go",
+              "internal/mock/recovery_points_test.go",
               "tests/integration/tests/43-platform-mock-runtime.spec.ts"
             ]
           },
           {
             "id": "pbs-protection-evidence-runtime",
-            "label": "PBS protection evidence collection proof",
+            "label": "Proxmox protection evidence collection proof",
             "match_prefixes": [],
             "match_files": [
               "internal/monitoring/monitor_backups.go",
               "internal/monitoring/pbs_protection_observation.go",
+              "internal/monitoring/pve_protection_observation.go",
               "internal/monitoring/recovery_ingest.go"
             ],
             "allow_same_subsystem_tests": false,
@@ -5583,6 +5587,7 @@
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
+              "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
               "internal/recovery/posture_test.go"
@@ -5656,6 +5661,7 @@
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_pve_cluster_refresh_test.go",
               "internal/monitoring/monitor_pve_guest_lxc_test.go",
+              "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
               "internal/monitoring/truenas_poller_test.go",
               "internal/unifiedresources/code_standards_test.go"
@@ -7350,6 +7356,7 @@
               "frontend-modern/src/features/kubernetes/__tests__/KubernetesStorageTable.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",

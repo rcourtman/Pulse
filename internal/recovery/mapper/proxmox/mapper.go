@@ -331,6 +331,22 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 	return out
 }
 
+// FromPVEStorageBackupsWithEvidence maps a complete PVE storage enumeration
+// and attaches the point-level evidence consumed by canonical protection
+// posture. Collection completeness and permission state remain separate
+// ProtectionProviderObservation facts owned by the polling caller.
+func FromPVEStorageBackupsWithEvidence(
+	backups []models.StorageBackup,
+	guestInfoByKey map[string]GuestInfo,
+	ingestedAt time.Time,
+) ([]recovery.RecoveryPoint, error) {
+	return withRecoveryPointEvidence(
+		FromPVEStorageBackups(backups, guestInfoByKey),
+		"pve-backup-inventory",
+		ingestedAt,
+	)
+}
+
 func FromPVEBackupTasks(tasks []models.BackupTask, guestInfoByKey map[string]GuestInfo) []recovery.RecoveryPoint {
 	if len(tasks) == 0 {
 		return nil
@@ -381,9 +397,12 @@ func FromPVEBackupTasks(tasks []models.BackupTask, guestInfoByKey map[string]Gue
 		outcome := outcomeFromTaskStatus(task.Status)
 
 		out = append(out, recovery.RecoveryPoint{
-			ID:                "pve-task:" + strings.TrimSpace(task.ID),
-			Provider:          recovery.ProviderProxmoxPVE,
-			Kind:              recovery.KindBackup,
+			ID:       "pve-task:" + strings.TrimSpace(task.ID),
+			Provider: recovery.ProviderProxmoxPVE,
+			// A task is execution evidence, not proof that a restore artifact is
+			// still available in provider inventory. Keep it queryable without
+			// letting an OK task mint protected posture on its own.
+			Kind:              recovery.KindOther,
 			Mode:              recovery.ModeLocal,
 			Outcome:           outcome,
 			StartedAt:         &started,
@@ -405,6 +424,30 @@ func FromPVEBackupTasks(tasks []models.BackupTask, guestInfoByKey map[string]Gue
 	}
 
 	return out
+}
+
+func FromPVEBackupTasksWithEvidence(
+	tasks []models.BackupTask,
+	guestInfoByKey map[string]GuestInfo,
+	ingestedAt time.Time,
+) ([]recovery.RecoveryPoint, error) {
+	return withRecoveryPointEvidence(
+		FromPVEBackupTasks(tasks, guestInfoByKey),
+		"pve-backup-task-inventory",
+		ingestedAt,
+	)
+}
+
+func FromPVEGuestSnapshotsWithEvidence(
+	snapshots []models.GuestSnapshot,
+	guestInfoByKey map[string]GuestInfo,
+	ingestedAt time.Time,
+) ([]recovery.RecoveryPoint, error) {
+	return withRecoveryPointEvidence(
+		FromPVEGuestSnapshots(snapshots, guestInfoByKey),
+		"pve-snapshot-inventory",
+		ingestedAt,
+	)
 }
 
 func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]GuestCandidate) []recovery.RecoveryPoint {
@@ -542,22 +585,40 @@ func FromPBSBackupsWithEvidence(
 	candidatesByKey map[string][]GuestCandidate,
 	ingestedAt time.Time,
 ) ([]recovery.RecoveryPoint, error) {
-	points := FromPBSBackups(backups, candidatesByKey)
+	return withRecoveryPointEvidence(
+		FromPBSBackups(backups, candidatesByKey),
+		"pbs-backup-inventory",
+		ingestedAt,
+	)
+}
+
+func withRecoveryPointEvidence(
+	points []recovery.RecoveryPoint,
+	collector string,
+	ingestedAt time.Time,
+) ([]recovery.RecoveryPoint, error) {
 	if len(points) == 0 {
 		return []recovery.RecoveryPoint{}, nil
 	}
 	if ingestedAt.IsZero() {
-		return nil, fmt.Errorf("PBS recovery evidence ingestion time is required")
+		return nil, fmt.Errorf("recovery evidence ingestion time is required")
 	}
 	for i := range points {
 		points[i].ProviderScope = recovery.ProviderScopeForPoint(points[i])
+		if strings.TrimSpace(points[i].SubjectResourceID) == "" &&
+			strings.TrimSpace(recovery.SubjectKeyForPoint(points[i])) == "" {
+			// Provider-native host/config archives have no canonical workload
+			// subject. Keep them as recovery artifacts without fabricating a
+			// posture identity or failing the subject-linked batch.
+			continue
+		}
 		evidence, err := recovery.NewRecoveryPointEvidence(
 			points[i],
-			"pbs-backup-inventory",
+			collector,
 			ingestedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("map PBS backup %q evidence: %w", points[i].ID, err)
+			return nil, fmt.Errorf("map recovery point %q evidence: %w", points[i].ID, err)
 		}
 		points[i].Evidence = evidence
 	}

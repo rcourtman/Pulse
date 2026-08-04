@@ -407,6 +407,7 @@ changes.
 35. `internal/mock/fixture_graph.go`
 35a. `internal/mock/action_fixtures.go`
 35b. `internal/mock/availability_fixtures.go`
+35c. `internal/mock/recovery_points.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
@@ -432,6 +433,7 @@ changes.
 55. `internal/monitoring/resource_stale_thresholds.go`
 56. `internal/monitoring/recovery_ingest.go`
 56a. `internal/monitoring/pbs_protection_observation.go`
+56b. `internal/monitoring/pve_protection_observation.go`
 57. `internal/monitoring/multi_tenant_monitor.go`
 58. `internal/monitoring/proxmox_action_observer.go`
 59. `internal/monitoring/agent_fleet_doctor.go`
@@ -2501,7 +2503,18 @@ the same destination-scoped TLS and explicit plaintext policy as the host and
 Docker reporters. Observer acknowledgements never change the canonical
 monitoring configuration returned by the primary.
 
-### PBS protection evidence collection
+### Proxmox protection evidence collection
+
+PVE backup-file enumeration follows the same explicit evidence boundary as
+direct PBS collection. Every completed PVE cycle emits subject-linked recovery
+points with provider scope and point evidence plus one typed observation for
+the polled PVE instance. Full node and backup-storage enumeration records
+complete history with sufficient permissions. Partial node or content success
+records partial history, and total failure records unavailable history. A
+partial or total authorization failure records partial or denied access
+without deleting retained artifacts. The observation is persisted before
+reconciliation, so cached backup files cannot continue presenting current
+protection after collection becomes incomplete or unauthorized.
 
 Direct PBS backup enumeration emits two separate storage/recovery inputs:
 subject-linked recovery points and one typed provider observation for the
@@ -2519,7 +2532,7 @@ for direct canonical identity and inferred only for an auditable unique
 provider-scoped guest match. Monitoring persists the collection observation
 before point reconciliation so completeness and permission failure cannot be
 lost behind a successful cached-artifact path. Shared protection semantics stay
-in `internal/recovery/`; PBS monitoring owns only this explicit evidence-quality
+in `internal/recovery/`; Proxmox monitoring owns only this explicit evidence-quality
 adapter.
 
 ### Alert-intent evidence adapters and UDP outcomes

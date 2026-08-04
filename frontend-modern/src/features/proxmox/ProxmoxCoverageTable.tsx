@@ -44,6 +44,7 @@ const coveragePostureVariant = (
   if (posture === 'protected') return 'success';
   if (posture === 'unprotected') return 'danger';
   if (posture === 'attention') return 'warning';
+  if (posture === 'checking') return 'info';
   return 'muted';
 };
 
@@ -73,6 +74,15 @@ const providerLabel = (provider: string): string => {
 const evidenceQualityLabel = (value: string): string => {
   if (!value) return 'Unknown';
   return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const postureExplanation = (row: WorkloadCoverageRow): string => {
+  if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
+  if (row.posture === 'checking') return 'Pulse is checking provider protection evidence.';
+  if (row.posture === 'not-evaluated') {
+    return 'This backup target has no current canonical workload identity, so Pulse does not evaluate workload protection for it.';
+  }
+  return 'Pulse does not have enough provider evidence to determine protection.';
 };
 
 // "Workload coverage" table: one row per workload answering "does this have a
@@ -322,14 +332,11 @@ export function ProxmoxCoverageTable(props: {
                             <StatusDot
                               size="sm"
                               variant={coveragePostureVariant(row.posture)}
-                              title={
-                                row.protectionPosture?.explanation ??
-                                'Pulse does not have enough provider evidence to determine protection.'
-                              }
+                              title={postureExplanation(row)}
                               ariaHidden
                             />
                             <span
-                              title={row.protectionPosture?.explanation}
+                              title={postureExplanation(row)}
                               class={`truncate text-[11px] font-medium ${statusWordToneClass(
                                 coveragePostureVariant(row.posture),
                               )}`}
@@ -458,8 +465,7 @@ export function ProxmoxCoverageTable(props: {
                             <span class="font-medium">
                               {getWorkloadRecoveryPostureLabel(row.posture)}:
                             </span>{' '}
-                            {row.protectionPosture?.explanation ??
-                              'Pulse cannot determine this workload’s protection because no complete provider evidence is linked to it.'}
+                            {postureExplanation(row)}
                           </div>
                           <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
                             <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
