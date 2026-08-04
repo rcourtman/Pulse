@@ -1556,6 +1556,20 @@ generic fixture synthesis, but that authored layer must stay graph-native and
 runtime-stable so infrastructure, workloads, storage, and recovery all present
 the same human-readable platform story instead of a lab of random names,
 legacy `mock-cluster` labels, or surface-specific mock overrides.
+The authored Proxmox recovery story must also be evidence-backed rather than
+painted onto random backup dates. Each curated VM and system-container profile
+declares a protection story, and `applyDemoBackupScenario` replaces generic
+guest backup artifacts with deterministic PVE backup, PBS backup, snapshot,
+and task histories anchored to that profile's `BackupAge`. The default graph
+must include representative current protected workloads, stale and
+newer-failure attention workloads, snapshot-only and task-only unprotected
+workloads, and a workload with no linked evidence that remains unknown.
+`LastBackup`, recovery-point inventory, canonical protection posture, summary
+counts, and filters must agree. A successful task without an independently
+enumerated backup artifact must never mint protected posture. The
+`TestCuratedDemoProtectionStoriesProduceRepresentativePostures` proof in
+`internal/mock/demo_scenarios_test.go` evaluates those fixtures through the
+production posture engine.
 Mock fixture defaults in `internal/mock/generator.go` (the `DefaultConfig`
 constant) are also part of that mock-runtime contract. They target a
 mature small-to-mid homelab / SMB environment so platform-first pages

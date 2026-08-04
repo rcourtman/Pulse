@@ -3,6 +3,7 @@ package mock
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,10 +13,32 @@ import (
 )
 
 type demoWorkloadProfile struct {
-	Name       string
-	Tags       []string
-	BackupAge  time.Duration
-	ForceState string
+	Name            string
+	Tags            []string
+	BackupAge       time.Duration
+	ProtectionStory demoProtectionStory
+	ForceState      string
+}
+
+type demoProtectionStory string
+
+const (
+	demoProtectionProtected       demoProtectionStory = "protected"
+	demoProtectionAttentionStale  demoProtectionStory = "attention-stale"
+	demoProtectionAttentionFailed demoProtectionStory = "attention-failed"
+	demoProtectionSnapshotOnly    demoProtectionStory = "snapshot-only"
+	demoProtectionTaskOnly        demoProtectionStory = "task-only"
+	demoProtectionUnknown         demoProtectionStory = "unknown"
+)
+
+type demoBackupGuest struct {
+	Profile  demoWorkloadProfile
+	Node     string
+	Instance string
+	Type     string
+	PBSKind  string
+	VMID     int
+	DiskSize int64
 }
 
 type demoDockerHostProfile struct {
@@ -84,33 +107,33 @@ const (
 )
 
 var demoVMProfiles = []demoWorkloadProfile{
-	{Name: "checkout-web-01", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 6 * time.Hour},
-	{Name: "checkout-web-02", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 7 * time.Hour},
-	{Name: "orders-api-01", Tags: []string{"production", "api", "critical"}, BackupAge: 3 * time.Hour},
-	{Name: "orders-api-02", Tags: []string{"production", "api", "critical"}, BackupAge: 4 * time.Hour},
-	{Name: "postgres-primary-01", Tags: []string{"production", "database", "critical"}, BackupAge: 90 * time.Minute},
-	{Name: "postgres-replica-01", Tags: []string{"production", "database", "replica"}, BackupAge: 2 * time.Hour, ForceState: "stopped"},
-	{Name: "redis-cache-01", Tags: []string{"production", "cache", "latency-sensitive"}, BackupAge: 12 * time.Hour},
-	{Name: "observability-core-01", Tags: []string{"monitoring", "platform", "production"}, BackupAge: 10 * time.Hour},
-	{Name: "ci-runner-01", Tags: []string{"ci", "platform", "shared-services"}, BackupAge: 18 * time.Hour},
-	{Name: "analytics-batch-01", Tags: []string{"analytics", "batch", "internal"}, BackupAge: 26 * time.Hour},
-	{Name: "erp-app-01", Tags: []string{"business", "api", "internal"}, BackupAge: 8 * time.Hour},
-	{Name: "docs-portal-01", Tags: []string{"web", "internal", "docs"}, BackupAge: 14 * time.Hour},
+	{Name: "checkout-web-01", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 6 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "checkout-web-02", Tags: []string{"production", "web", "customer-facing"}, BackupAge: 36 * time.Hour, ProtectionStory: demoProtectionAttentionFailed},
+	{Name: "orders-api-01", Tags: []string{"production", "api", "critical"}, BackupAge: 3 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "orders-api-02", Tags: []string{"production", "api", "critical"}, BackupAge: 12 * 24 * time.Hour, ProtectionStory: demoProtectionAttentionStale},
+	{Name: "postgres-primary-01", Tags: []string{"production", "database", "critical"}, BackupAge: 90 * time.Minute, ProtectionStory: demoProtectionProtected},
+	{Name: "postgres-replica-01", Tags: []string{"production", "database", "replica"}, BackupAge: 2 * time.Hour, ProtectionStory: demoProtectionProtected, ForceState: "stopped"},
+	{Name: "redis-cache-01", Tags: []string{"production", "cache", "latency-sensitive"}, BackupAge: 12 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "observability-core-01", Tags: []string{"monitoring", "platform", "production"}, BackupAge: 10 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "ci-runner-01", Tags: []string{"ci", "platform", "shared-services"}, BackupAge: 10 * 24 * time.Hour, ProtectionStory: demoProtectionAttentionStale},
+	{Name: "analytics-batch-01", Tags: []string{"analytics", "batch", "internal"}, BackupAge: 14 * 24 * time.Hour, ProtectionStory: demoProtectionAttentionStale},
+	{Name: "erp-app-01", Tags: []string{"business", "api", "internal"}, BackupAge: 8 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "docs-portal-01", Tags: []string{"web", "internal", "docs"}, ProtectionStory: demoProtectionSnapshotOnly},
 }
 
 var demoContainerProfiles = []demoWorkloadProfile{
-	{Name: "edge-proxy-01", Tags: []string{"production", "ingress", "edge"}, BackupAge: 6 * time.Hour},
-	{Name: "auth-service-01", Tags: []string{"production", "api", "security"}, BackupAge: 4 * time.Hour},
-	{Name: "billing-worker-01", Tags: []string{"production", "queue", "worker"}, BackupAge: 8 * time.Hour},
-	{Name: "reporting-api-01", Tags: []string{"internal", "api", "reporting"}, BackupAge: 10 * time.Hour},
-	{Name: "minio-gateway-01", Tags: []string{"storage", "internal", "gateway"}, BackupAge: 12 * time.Hour},
-	{Name: "wireguard-edge-01", Tags: []string{"edge", "security", "vpn"}, BackupAge: 8 * time.Hour},
-	{Name: "docs-wiki-01", Tags: []string{"internal", "web", "docs"}, BackupAge: 14 * time.Hour},
-	{Name: "smtp-relay-01", Tags: []string{"mail", "queue", "platform"}, BackupAge: 16 * time.Hour},
-	{Name: "grafana-agent-01", Tags: []string{"monitoring", "agent", "platform"}, BackupAge: 11 * time.Hour},
-	{Name: "artifact-cache-01", Tags: []string{"ci", "cache", "platform"}, BackupAge: 19 * time.Hour},
-	{Name: "backup-orchestrator-01", Tags: []string{"backup", "platform", "worker"}, BackupAge: 45 * time.Minute},
-	{Name: "dev-portal-01", Tags: []string{"development", "web", "internal"}, BackupAge: 20 * time.Hour, ForceState: "stopped"},
+	{Name: "edge-proxy-01", Tags: []string{"production", "ingress", "edge"}, BackupAge: 6 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "auth-service-01", Tags: []string{"production", "api", "security"}, BackupAge: 4 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "billing-worker-01", Tags: []string{"production", "queue", "worker"}, BackupAge: 8 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "reporting-api-01", Tags: []string{"internal", "api", "reporting"}, BackupAge: 10 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "minio-gateway-01", Tags: []string{"storage", "internal", "gateway"}, BackupAge: 9 * 24 * time.Hour, ProtectionStory: demoProtectionAttentionStale},
+	{Name: "wireguard-edge-01", Tags: []string{"edge", "security", "vpn"}, BackupAge: 8 * time.Hour, ProtectionStory: demoProtectionProtected},
+	{Name: "docs-wiki-01", Tags: []string{"internal", "web", "docs"}, ProtectionStory: demoProtectionSnapshotOnly},
+	{Name: "smtp-relay-01", Tags: []string{"mail", "queue", "platform"}, ProtectionStory: demoProtectionTaskOnly},
+	{Name: "grafana-agent-01", Tags: []string{"monitoring", "agent", "platform"}, BackupAge: 15 * 24 * time.Hour, ProtectionStory: demoProtectionAttentionStale},
+	{Name: "artifact-cache-01", Tags: []string{"ci", "cache", "platform"}, BackupAge: 21 * 24 * time.Hour, ProtectionStory: demoProtectionAttentionStale},
+	{Name: "backup-orchestrator-01", Tags: []string{"backup", "platform", "worker"}, ProtectionStory: demoProtectionUnknown},
+	{Name: "dev-portal-01", Tags: []string{"development", "web", "internal"}, ProtectionStory: demoProtectionTaskOnly, ForceState: "stopped"},
 }
 
 var demoDockerHostProfiles = []demoDockerHostProfile{
@@ -260,13 +283,13 @@ func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
 
 	applyDemoPlatformScenario(&graph.PlatformFixtures)
 	applyDemoNodeScenario(&graph.State)
-	vmNames := applyDemoWorkloadScenario(graph.State.VMs, demoVMProfiles, now)
-	containerNames := applyDemoContainerScenario(graph.State.Containers, demoContainerProfiles, now)
+	vmProfiles := applyDemoWorkloadScenario(graph.State.VMs, demoVMProfiles, now)
+	containerProfiles := applyDemoContainerScenario(graph.State.Containers, demoContainerProfiles, now)
 	applyDemoDockerScenario(&graph.State, now)
 	applyDemoKubernetesScenario(&graph.State, now)
 	applyDemoHostScenario(&graph.State, now)
 	applyDemoStorageScenario(&graph.State, now)
-	applyDemoBackupScenario(&graph.State, vmNames, containerNames, now)
+	applyDemoBackupScenario(&graph.State, vmProfiles, containerProfiles, now)
 	syncDemoConnectionHealth(&graph.State)
 }
 
@@ -435,8 +458,8 @@ func applyDemoNodeScenario(state *models.StateSnapshot) {
 	}
 }
 
-func applyDemoWorkloadScenario(workloads []models.VM, profiles []demoWorkloadProfile, now time.Time) map[int]string {
-	guestNames := make(map[int]string, len(workloads))
+func applyDemoWorkloadScenario(workloads []models.VM, profiles []demoWorkloadProfile, now time.Time) map[int]demoWorkloadProfile {
+	guestProfiles := make(map[int]demoWorkloadProfile, len(workloads))
 	sort.Slice(workloads, func(i, j int) bool {
 		if workloads[i].VMID == workloads[j].VMID {
 			return workloads[i].ID < workloads[j].ID
@@ -469,16 +492,14 @@ func applyDemoWorkloadScenario(workloads []models.VM, profiles []demoWorkloadPro
 			workloads[i].IPAddresses = nil
 			workloads[i].NetworkInterfaces = nil
 		}
-		if !now.IsZero() && profile.BackupAge > 0 {
-			workloads[i].LastBackup = now.Add(-profile.BackupAge)
-		}
-		guestNames[workloads[i].VMID] = workloads[i].Name
+		workloads[i].LastBackup = demoProfileLastBackup(profile, now)
+		guestProfiles[workloads[i].VMID] = profile
 	}
-	return guestNames
+	return guestProfiles
 }
 
-func applyDemoContainerScenario(workloads []models.Container, profiles []demoWorkloadProfile, now time.Time) map[int]string {
-	guestNames := make(map[int]string, len(workloads))
+func applyDemoContainerScenario(workloads []models.Container, profiles []demoWorkloadProfile, now time.Time) map[int]demoWorkloadProfile {
+	guestProfiles := make(map[int]demoWorkloadProfile, len(workloads))
 	sort.Slice(workloads, func(i, j int) bool {
 		if workloads[i].VMID == workloads[j].VMID {
 			return workloads[i].ID < workloads[j].ID
@@ -511,12 +532,20 @@ func applyDemoContainerScenario(workloads []models.Container, profiles []demoWor
 			workloads[i].IPAddresses = nil
 			workloads[i].NetworkInterfaces = nil
 		}
-		if !now.IsZero() && profile.BackupAge > 0 {
-			workloads[i].LastBackup = now.Add(-profile.BackupAge)
-		}
-		guestNames[workloads[i].VMID] = workloads[i].Name
+		workloads[i].LastBackup = demoProfileLastBackup(profile, now)
+		guestProfiles[workloads[i].VMID] = profile
 	}
-	return guestNames
+	return guestProfiles
+}
+
+func demoProfileLastBackup(profile demoWorkloadProfile, now time.Time) time.Time {
+	switch profile.ProtectionStory {
+	case demoProtectionProtected, demoProtectionAttentionStale, demoProtectionAttentionFailed:
+		if !now.IsZero() && profile.BackupAge > 0 {
+			return now.UTC().Add(-profile.BackupAge)
+		}
+	}
+	return time.Time{}
 }
 
 func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
@@ -1085,85 +1114,302 @@ func demoRecentSeenAt(now time.Time, parts ...string) time.Time {
 
 func applyDemoBackupScenario(
 	state *models.StateSnapshot,
-	vmNames map[int]string,
-	containerNames map[int]string,
+	vmProfiles map[int]demoWorkloadProfile,
+	containerProfiles map[int]demoWorkloadProfile,
 	now time.Time,
 ) {
 	if state == nil {
 		return
 	}
-
-	nameForBackup := func(backupType string, vmid int) string {
-		switch strings.ToLower(strings.TrimSpace(backupType)) {
-		case "qemu", "vm":
-			return vmNames[vmid]
-		case "lxc", "ct":
-			return containerNames[vmid]
-		default:
-			return ""
-		}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
 	}
 
-	for i := range state.PVEBackups.StorageBackups {
-		backup := &state.PVEBackups.StorageBackups[i]
-		if guestName := nameForBackup(backup.Type, backup.VMID); guestName != "" {
-			backup.Notes = fmt.Sprintf("Backup of %s", guestName)
+	guests := make([]demoBackupGuest, 0, len(state.VMs)+len(state.Containers))
+	curatedKeys := make(map[string]struct{}, len(state.VMs)+len(state.Containers))
+	for _, vm := range state.VMs {
+		profile, ok := vmProfiles[vm.VMID]
+		if !ok {
+			continue
+		}
+		guests = append(guests, demoBackupGuest{
+			Profile:  profile,
+			Node:     vm.Node,
+			Instance: vm.Instance,
+			Type:     "qemu",
+			PBSKind:  "vm",
+			VMID:     vm.VMID,
+			DiskSize: vm.Disk.Total,
+		})
+		curatedKeys[demoBackupGuestKey("qemu", vm.VMID)] = struct{}{}
+	}
+	for _, container := range state.Containers {
+		profile, ok := containerProfiles[container.VMID]
+		if !ok {
+			continue
+		}
+		guests = append(guests, demoBackupGuest{
+			Profile:  profile,
+			Node:     container.Node,
+			Instance: container.Instance,
+			Type:     "lxc",
+			PBSKind:  "ct",
+			VMID:     container.VMID,
+			DiskSize: container.Disk.Total,
+		})
+		curatedKeys[demoBackupGuestKey("lxc", container.VMID)] = struct{}{}
+	}
+
+	storageBackups := make([]models.StorageBackup, 0, len(state.PVEBackups.StorageBackups)+len(guests)*3)
+	for _, backup := range state.PVEBackups.StorageBackups {
+		if _, curated := curatedKeys[demoBackupGuestKey(backup.Type, backup.VMID)]; curated {
+			continue
 		}
 		if backup.Storage == "local" {
 			backup.Storage = "backup-vault"
 		}
+		storageBackups = append(storageBackups, backup)
 	}
 
-	for i := range state.PBSBackups {
-		backup := &state.PBSBackups[i]
-		if backup.Instance == "pbs-main" {
-			backup.Instance = "backup-vault"
-		} else if backup.Instance == "pbs-secondary" {
-			backup.Instance = "dr-vault"
+	pbsBackups := make([]models.PBSBackup, 0, len(state.PBSBackups)+len(guests)*2)
+	for _, backup := range state.PBSBackups {
+		vmid := atoiSafe(backup.VMID)
+		if _, curated := curatedKeys[demoBackupGuestKey(backup.BackupType, vmid)]; curated {
+			continue
 		}
-		if backup.Datastore == "backup-store" {
-			backup.Datastore = "primary-vault"
-		} else if backup.Datastore == "offsite-backup" {
-			backup.Datastore = "offsite-vault"
-		} else if backup.Datastore == "replica-store" {
-			backup.Datastore = "replica-vault"
-		}
-		if guestName := nameForBackup(backup.BackupType, atoiSafe(backup.VMID)); guestName != "" {
-			backup.Comment = fmt.Sprintf("Protected recovery point for %s", guestName)
-		}
+		backup.Instance = scenarioPBSInstanceAlias(backup.Instance)
+		backup.Datastore = scenarioPBSDatastoreAlias(backup.Datastore)
+		pbsBackups = append(pbsBackups, backup)
 	}
 
-	for i := range state.PVEBackups.GuestSnapshots {
-		snapshot := &state.PVEBackups.GuestSnapshots[i]
-		if guestName := nameForBackup(snapshot.Type, snapshot.VMID); guestName != "" {
-			snapshot.Description = fmt.Sprintf("%s snapshot", guestName)
+	guestSnapshots := make([]models.GuestSnapshot, 0, len(state.PVEBackups.GuestSnapshots)+len(guests))
+	for _, snapshot := range state.PVEBackups.GuestSnapshots {
+		if _, curated := curatedKeys[demoBackupGuestKey(snapshot.Type, snapshot.VMID)]; curated {
+			continue
 		}
+		guestSnapshots = append(guestSnapshots, snapshot)
 	}
+
+	backupTasks := make([]models.BackupTask, 0, len(state.PVEBackups.BackupTasks)+len(guests))
+	for _, task := range state.PVEBackups.BackupTasks {
+		if _, curated := curatedKeys[demoBackupGuestKey(task.Type, task.VMID)]; curated {
+			continue
+		}
+		backupTasks = append(backupTasks, task)
+	}
+
+	for _, guest := range guests {
+		guestBackups, guestPBSBackups, snapshots, tasks := demoProtectionArtifacts(guest, now)
+		storageBackups = append(storageBackups, guestBackups...)
+		pbsBackups = append(pbsBackups, guestPBSBackups...)
+		guestSnapshots = append(guestSnapshots, snapshots...)
+		backupTasks = append(backupTasks, tasks...)
+	}
+
+	sort.SliceStable(storageBackups, func(i, j int) bool {
+		if storageBackups[i].Time.Equal(storageBackups[j].Time) {
+			return storageBackups[i].ID < storageBackups[j].ID
+		}
+		return storageBackups[i].Time.After(storageBackups[j].Time)
+	})
+	sort.SliceStable(pbsBackups, func(i, j int) bool {
+		if pbsBackups[i].BackupTime.Equal(pbsBackups[j].BackupTime) {
+			return pbsBackups[i].ID < pbsBackups[j].ID
+		}
+		return pbsBackups[i].BackupTime.After(pbsBackups[j].BackupTime)
+	})
+	sort.SliceStable(guestSnapshots, func(i, j int) bool {
+		if guestSnapshots[i].Time.Equal(guestSnapshots[j].Time) {
+			return guestSnapshots[i].ID < guestSnapshots[j].ID
+		}
+		return guestSnapshots[i].Time.After(guestSnapshots[j].Time)
+	})
+	sort.SliceStable(backupTasks, func(i, j int) bool {
+		if backupTasks[i].StartTime.Equal(backupTasks[j].StartTime) {
+			return backupTasks[i].ID < backupTasks[j].ID
+		}
+		return backupTasks[i].StartTime.After(backupTasks[j].StartTime)
+	})
+
+	state.PVEBackups.StorageBackups = storageBackups
+	state.PVEBackups.GuestSnapshots = guestSnapshots
+	state.PVEBackups.BackupTasks = backupTasks
+	state.PBSBackups = pbsBackups
 
 	for i := range state.ReplicationJobs {
 		job := &state.ReplicationJobs[i]
-		if guestName := vmNames[job.GuestID]; guestName != "" {
-			job.GuestName = guestName
+		if profile, ok := vmProfiles[job.GuestID]; ok {
+			job.GuestName = profile.Name
 		}
 		job.SourceStorage = scenarioStorageAliasForNode(job.SourceStorage, job.SourceNode)
 		job.TargetStorage = scenarioStorageAliasForNode(job.TargetStorage, job.TargetNode)
-	}
-
-	for i := range state.VMs {
-		if state.VMs[i].LastBackup.IsZero() {
-			state.VMs[i].LastBackup = now.Add(-12 * time.Hour)
-		}
-	}
-	for i := range state.Containers {
-		if state.Containers[i].LastBackup.IsZero() {
-			state.Containers[i].LastBackup = now.Add(-18 * time.Hour)
-		}
 	}
 
 	state.PMGBackups = extractPMGBackups(state.PVEBackups.StorageBackups)
 	state.Backups.PVE = state.PVEBackups
 	state.Backups.PBS = append([]models.PBSBackup(nil), state.PBSBackups...)
 	state.Backups.PMG = append([]models.PMGBackup(nil), state.PMGBackups...)
+}
+
+func demoBackupGuestKey(guestType string, vmid int) string {
+	switch strings.ToLower(strings.TrimSpace(guestType)) {
+	case "qemu", "vm":
+		return fmt.Sprintf("vm:%d", vmid)
+	case "lxc", "ct":
+		return fmt.Sprintf("ct:%d", vmid)
+	default:
+		return ""
+	}
+}
+
+func scenarioPBSInstanceAlias(value string) string {
+	switch strings.TrimSpace(value) {
+	case "pbs-main":
+		return "backup-vault"
+	case "pbs-secondary":
+		return "dr-vault"
+	default:
+		return value
+	}
+}
+
+func scenarioPBSDatastoreAlias(value string) string {
+	switch strings.TrimSpace(value) {
+	case "backup-store":
+		return "primary-vault"
+	case "offsite-backup":
+		return "offsite-vault"
+	case "replica-store":
+		return "replica-vault"
+	default:
+		return value
+	}
+}
+
+func demoProtectionArtifacts(
+	guest demoBackupGuest,
+	now time.Time,
+) ([]models.StorageBackup, []models.PBSBackup, []models.GuestSnapshot, []models.BackupTask) {
+	profile := guest.Profile
+	backupSize := guest.DiskSize / 8
+	if backupSize <= 0 {
+		backupSize = 1 << 30
+	}
+	snapshotSize := guest.DiskSize / 12
+	if snapshotSize <= 0 {
+		snapshotSize = 512 << 20
+	}
+
+	addTask := func(status string, completedAt time.Time, errorMessage string) models.BackupTask {
+		startedAt := completedAt.Add(-12 * time.Minute)
+		return models.BackupTask{
+			ID:         fmt.Sprintf("demo-task-%s-%d-%s", guest.PBSKind, guest.VMID, strings.ToLower(status)),
+			Node:       guest.Node,
+			Instance:   guest.Instance,
+			Type:       guest.Type,
+			VMID:       guest.VMID,
+			Status:     status,
+			StartTime:  startedAt,
+			EndTime:    completedAt,
+			ObservedAt: completedAt,
+			Size:       backupSize,
+			Error:      errorMessage,
+		}
+	}
+	addSnapshot := func(index int, age time.Duration) models.GuestSnapshot {
+		snapshotAt := now.Add(-age)
+		return models.GuestSnapshot{
+			ID:          fmt.Sprintf("demo-snapshot-%s-%d-%d", guest.PBSKind, guest.VMID, index),
+			Name:        "pre-maintenance",
+			Node:        guest.Node,
+			Instance:    guest.Instance,
+			Type:        guest.Type,
+			VMID:        guest.VMID,
+			Time:        snapshotAt,
+			Description: fmt.Sprintf("%s local rollback snapshot", profile.Name),
+			VMState:     guest.Type == "qemu",
+			SizeBytes:   snapshotSize,
+		}
+	}
+
+	switch profile.ProtectionStory {
+	case demoProtectionUnknown:
+		return nil, nil, nil, nil
+	case demoProtectionTaskOnly:
+		taskAt := now.Add(-18 * time.Hour)
+		return nil, nil, nil, []models.BackupTask{addTask("OK", taskAt, "")}
+	case demoProtectionSnapshotOnly:
+		snapshotAge := 20 * time.Hour
+		taskAt := now.Add(-18 * time.Hour)
+		return nil, nil, []models.GuestSnapshot{addSnapshot(0, snapshotAge)}, []models.BackupTask{addTask("OK", taskAt, "")}
+	}
+
+	baseAge := profile.BackupAge
+	if baseAge <= 0 {
+		baseAge = 12 * time.Hour
+	}
+	backupAges := []time.Duration{baseAge, baseAge + 24*time.Hour, baseAge + 4*24*time.Hour}
+	storageBackups := make([]models.StorageBackup, 0, len(backupAges))
+	for index, age := range backupAges {
+		backupAt := now.Add(-age)
+		format := "vma.zst"
+		if guest.Type == "lxc" {
+			format = "tar.zst"
+		}
+		storageBackups = append(storageBackups, models.StorageBackup{
+			ID:           fmt.Sprintf("demo-backup-%s-%d-%d", guest.PBSKind, guest.VMID, index),
+			Storage:      "backup-vault",
+			Node:         guest.Node,
+			Instance:     guest.Instance,
+			Type:         guest.Type,
+			VMID:         guest.VMID,
+			Time:         backupAt,
+			CTime:        backupAt.Unix(),
+			Size:         backupSize,
+			Format:       format,
+			Notes:        fmt.Sprintf("Backup of %s", profile.Name),
+			Protected:    index == len(backupAges)-1,
+			Volid:        fmt.Sprintf("backup-vault:backup/vzdump-%s-%d-%s.%s", guest.Type, guest.VMID, backupAt.Format("2006_01_02-15_04_05"), format),
+			IsPBS:        false,
+			Verified:     false,
+			Verification: "",
+		})
+	}
+
+	pbsBackups := make([]models.PBSBackup, 0, 2)
+	if guest.VMID%2 == 0 {
+		for index, age := range backupAges[:2] {
+			backupAt := now.Add(-age)
+			pbsBackups = append(pbsBackups, models.PBSBackup{
+				ID:              fmt.Sprintf("demo-pbs-%s-%d-%d", guest.PBSKind, guest.VMID, index),
+				Instance:        "backup-vault",
+				Datastore:       "primary-vault",
+				Namespace:       "root",
+				BackupType:      guest.PBSKind,
+				VMID:            strconv.Itoa(guest.VMID),
+				BackupTime:      backupAt,
+				Size:            backupSize,
+				Protected:       index == 1,
+				Verified:        true,
+				VerificationRaw: "verified",
+				Comment:         fmt.Sprintf("Protected recovery point for %s", profile.Name),
+				Files:           []string{fmt.Sprintf("%s-%d-%d.pxar", guest.PBSKind, guest.VMID, index)},
+				Owner:           "automation@pbs",
+			})
+		}
+	}
+
+	tasks := []models.BackupTask{addTask("OK", now.Add(-baseAge), "")}
+	if profile.ProtectionStory == demoProtectionAttentionFailed {
+		tasks = append(tasks, addTask("failed", now.Add(-3*time.Hour), "backup write failed: repository connection timed out"))
+	}
+	snapshotAge := time.Duration(
+		18+mockStableChoice(102, guest.PBSKind, strconv.Itoa(guest.VMID), "snapshot-age"),
+	) * time.Hour
+	snapshots := []models.GuestSnapshot{addSnapshot(0, snapshotAge)}
+	return storageBackups, pbsBackups, snapshots, tasks
 }
 
 func namedWorkloadProfile(profiles []demoWorkloadProfile, index int) demoWorkloadProfile {

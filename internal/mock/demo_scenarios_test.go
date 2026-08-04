@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
@@ -86,6 +89,135 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 	}
 	if leak := firstLegacyMockClusterLeak(graph); leak != "" {
 		t.Fatalf("expected demo scenario to replace legacy mock-cluster labels, found %s", leak)
+	}
+}
+
+func TestCuratedDemoProtectionStoriesProduceRepresentativePostures(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.RandomMetrics = false
+
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	graph := buildFixtureGraph(cfg, now)
+	resources, _ := graph.UnifiedResourceSnapshot()
+	resourceIDsByName := make(map[string]string)
+	for _, resource := range resources {
+		if resource.Type != unifiedresources.ResourceTypeVM &&
+			resource.Type != unifiedresources.ResourceTypeSystemContainer {
+			continue
+		}
+		resourceIDsByName[resource.Name] = resource.ID
+	}
+
+	points := graph.RecoveryPoints()
+	pointsByResourceID := make(map[string][]recovery.RecoveryPoint)
+	observationsByKey := make(map[string]recovery.ProtectionProviderObservation)
+	for _, point := range points {
+		resourceID := strings.TrimSpace(point.SubjectResourceID)
+		if resourceID == "" {
+			continue
+		}
+		pointsByResourceID[resourceID] = append(pointsByResourceID[resourceID], point)
+		scope := recovery.ProviderScopeForPoint(point)
+		key := string(point.Provider) + "\x00" + scope
+		if _, exists := observationsByKey[key]; exists {
+			continue
+		}
+		observation, err := recovery.NewProtectionProviderObservation(
+			point.Provider,
+			"mock-complete-recovery-fixture",
+			scope,
+			recovery.OutcomeUnknown,
+			recovery.ProtectionHistoryComplete,
+			operationaltrust.EvidencePermissionsSufficient,
+			point.Provider == recovery.ProviderProxmoxPBS,
+			now,
+			now,
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("build provider observation for %s: %v", key, err)
+		}
+		observationsByKey[key] = observation
+	}
+	observations := make([]recovery.ProtectionProviderObservation, 0, len(observationsByKey))
+	for _, observation := range observationsByKey {
+		observations = append(observations, observation)
+	}
+
+	assertPosture := func(name string, want recovery.ProtectionState) {
+		t.Helper()
+		resourceID := resourceIDsByName[name]
+		if resourceID == "" {
+			t.Fatalf("expected curated workload %q in unified resource graph", name)
+		}
+		posture := recovery.BuildProtectionPostureFromPointsAt(
+			resourceID,
+			pointsByResourceID[resourceID],
+			observations,
+			recovery.DefaultProtectionPosturePolicy,
+			now,
+		)
+		if posture.State != want {
+			t.Fatalf("posture for %q = %q, want %q: %s", name, posture.State, want, posture.Explanation)
+		}
+	}
+
+	assertPosture("checkout-web-01", recovery.ProtectionStateProtected)
+	assertPosture("checkout-web-02", recovery.ProtectionStateAttention)
+	assertPosture("orders-api-02", recovery.ProtectionStateAttention)
+	assertPosture("docs-portal-01", recovery.ProtectionStateUnprotected)
+	assertPosture("smtp-relay-01", recovery.ProtectionStateUnprotected)
+
+	unknownResourceID := resourceIDsByName["backup-orchestrator-01"]
+	if unknownResourceID == "" {
+		t.Fatal("expected curated unknown workload in unified resource graph")
+	}
+	if got := len(pointsByResourceID[unknownResourceID]); got != 0 {
+		t.Fatalf("unknown workload has %d recovery points, want none", got)
+	}
+}
+
+func TestFixtureGraphUpdateMetricsKeepsProtectionCadenceAnchoredToRefresh(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.RandomMetrics = true
+
+	start := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	later := start.Add(45 * time.Minute)
+	graph := buildFixtureGraph(cfg, start)
+	graph.UpdateMetrics(cfg, later)
+
+	var protectedVM *models.VM
+	for i := range graph.State.VMs {
+		if graph.State.VMs[i].Name == "checkout-web-01" {
+			protectedVM = &graph.State.VMs[i]
+			break
+		}
+	}
+	if protectedVM == nil {
+		t.Fatal("expected curated protected VM after metric refresh")
+	}
+	wantBackupAt := later.Add(-6 * time.Hour)
+	if !protectedVM.LastBackup.Equal(wantBackupAt) {
+		t.Fatalf("protected VM LastBackup = %s, want %s", protectedVM.LastBackup, wantBackupAt)
+	}
+
+	var newestBackup time.Time
+	for _, backup := range graph.State.PVEBackups.StorageBackups {
+		if backup.VMID != protectedVM.VMID || backup.Type != "qemu" {
+			continue
+		}
+		if backup.Time.After(newestBackup) {
+			newestBackup = backup.Time
+		}
+	}
+	if !newestBackup.Equal(wantBackupAt) {
+		t.Fatalf("protected VM newest backup = %s, want %s", newestBackup, wantBackupAt)
+	}
+
+	for _, container := range graph.State.Containers {
+		if container.Name == "backup-orchestrator-01" && !container.LastBackup.IsZero() {
+			t.Fatalf("unknown workload LastBackup = %s, want zero", container.LastBackup)
+		}
 	}
 }
 
