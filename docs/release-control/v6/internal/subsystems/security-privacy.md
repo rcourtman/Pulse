@@ -544,8 +544,9 @@ tokens, and path-normalization variants.
    HTTP(S) URLs, with plain HTTP limited to loopback development origins.
 7a. Keep v5 RBAC file import transactional and fail closed, retain source files
     on validation or persistence failure, keep SSO and settings on one
-    canonical manager, and prove that moving a legacy identity alias cannot
-    union conflicting grants.
+    canonical manager, require the enterprise authorizer to resolve that live
+    manager rather than capturing a startup-local store, and prove that moving
+    a legacy identity alias cannot union conflicting grants.
 8. Keep the Resource Privacy/Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits, and it must remain route-backed rather than promoted in the normal Settings sidebar while it is informational only.
 9. Keep operator-facing Resource Privacy/Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, handoff context, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. Assistant handoffs may surface canonical policy handling guidance and current resource-state summaries for product-originated resources, but that guidance and state are model-only context and must not become disclosure authority. Product-originated Assistant handoff text must also be policy-cleaned before prompt injection, including operator briefings and finding/action context, so raw governed resource identity cannot leak through local-model briefing prose while non-local transport still receives the final provider-bound sanitizer. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
    Native Pulse Assistant provider seams and native tool-adapter names in the
@@ -1459,8 +1460,12 @@ RBAC persistence follows the same single-owner and fail-closed posture.
 `internal/api/access_tenant_provider.go` owns per-organization manager
 selection, while `pkg/auth/sqlite_manager.go` is the canonical v6 store and
 `internal/api/router.go` binds its default-organization instance to the global
-SSO and authorization boundary. `pkg/server/server.go` must not initialize a
-parallel file-backed manager. Legacy `rbac_roles.json` and
+SSO and authorization boundary. The enterprise runtime registers authorization
+behavior only: `pulse-enterprise/internal/rbac/rbac.go` must resolve the current
+global manager for each authorization check and must not construct, register,
+or retain a parallel file-backed manager before the router installs SQLite.
+`pkg/server/server.go` must not initialize a parallel file-backed manager.
+Legacy `rbac_roles.json` and
 `rbac_assignments.json` files are migration inputs only: the complete role and
 assignment graph must validate and commit transactionally before either source
 is archived. Corrupt JSON, missing role references, inheritance cycles, and
@@ -1468,7 +1473,10 @@ conflicts with newer v6 state must preserve the source files and make RBAC
 unavailable with an explicit error rather than silently yielding empty data.
 The canonical identity table must retain known local and stable SSO principals
 when their role set is empty or a custom role is deleted, without retaining a
-permission grant to the deleted role.
+permission grant to the deleted role. Enterprise regression coverage in
+`pulse-enterprise/internal/rbac/rbac_test.go` must preserve the real startup
+order and prove that an OIDC principal assigned after initialization is
+authorized from the canonical manager.
 That same rule also applies to hosted entitlement lease secrets in
 `internal/config/billing_state.go`: `billing.json` may not keep
 `entitlement_jwt` or `entitlement_refresh_token` as plaintext-at-rest billing
