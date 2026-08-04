@@ -529,7 +529,7 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    expect(await screen.findByText('Growth (24h)')).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: 'Growth (24h)' })).toBeInTheDocument();
     const storageContentSurface = screen.getByTestId('storage-content-surface');
     expect(await within(storageContentSurface).findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
     expect(within(storageContentSurface).getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
@@ -575,6 +575,8 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
+    expect(screen.getByRole('table')).toHaveAttribute('data-storage-table', 'pools');
+    expect(screen.getByRole('table')).toHaveAttribute('data-storage-layout', 'compact');
     expect(screen.getByRole('columnheader', { name: 'Storage' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Protection' })).toBeInTheDocument();

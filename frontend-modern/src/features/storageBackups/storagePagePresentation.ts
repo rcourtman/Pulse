@@ -5,13 +5,55 @@ export type StorageViewOption = {
   label: string;
 };
 
+export type StoragePoolTableColumnId =
+  'name' | 'state' | 'type' | 'host' | 'protection' | 'usage' | 'growth';
+
 export type StoragePoolTableColumn = {
+  id: StoragePoolTableColumnId;
   label: string;
   compactLabel: string;
   sortKey: StorageSortKey;
   className: string;
   colClassName: string;
 };
+
+export type StoragePoolTableLayoutMode = 'compact' | 'operational' | 'full';
+
+export const getStoragePoolTableLayoutModeForContainer = (
+  containerWidth: number,
+): StoragePoolTableLayoutMode => {
+  if (containerWidth >= 1_040) return 'full';
+  if (containerWidth >= 560) return 'operational';
+  return 'compact';
+};
+
+const STORAGE_POOL_VISIBLE_COLUMNS: Record<
+  StoragePoolTableLayoutMode,
+  readonly StoragePoolTableColumnId[]
+> = {
+  compact: ['name', 'state', 'usage'],
+  operational: ['name', 'state', 'host', 'protection', 'usage'],
+  full: ['name', 'state', 'type', 'host', 'protection', 'usage', 'growth'],
+};
+
+const STORAGE_POOL_COLUMN_WIDTHS: Record<
+  StoragePoolTableLayoutMode,
+  Partial<Record<StoragePoolTableColumnId, number>>
+> = {
+  compact: { name: 39, state: 28, usage: 33 },
+  operational: { name: 29, state: 20, host: 15, protection: 15, usage: 21 },
+  full: { name: 20, state: 14, type: 10, host: 12, protection: 13, usage: 20, growth: 11 },
+};
+
+export const isStoragePoolColumnVisible = (
+  layout: StoragePoolTableLayoutMode,
+  columnId: StoragePoolTableColumnId,
+): boolean => STORAGE_POOL_VISIBLE_COLUMNS[layout].includes(columnId);
+
+export const getStoragePoolColumnWidthPercent = (
+  layout: StoragePoolTableLayoutMode,
+  columnId: StoragePoolTableColumnId,
+): number => STORAGE_POOL_COLUMN_WIDTHS[layout][columnId] ?? 0;
 
 const STORAGE_POOL_TABLE_HEADER_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
@@ -25,53 +67,60 @@ export const getStoragePoolTableColumns = (
   growthColumnLabel: string,
 ): readonly StoragePoolTableColumn[] => [
   {
+    id: 'name',
     label: 'Storage',
     compactLabel: 'Storage',
     sortKey: 'name',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[39%] sm:w-[29%] md:w-[24%] xl:w-[20%]`,
-    colClassName: 'w-[39%] sm:w-[29%] md:w-[24%] xl:w-[20%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
   {
+    id: 'state',
     label: 'State',
     compactLabel: 'State',
     sortKey: 'state',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[28%] sm:w-[20%] md:w-[18%] xl:w-[14%]`,
-    colClassName: 'w-[28%] sm:w-[20%] md:w-[18%] xl:w-[14%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
   {
+    id: 'type',
     label: 'Type',
     compactLabel: 'Type',
     sortKey: 'type',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden xl:table-cell xl:w-[10%]`,
-    colClassName: 'hidden xl:table-column xl:w-[10%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
   {
+    id: 'host',
     label: 'Host',
     compactLabel: 'Host',
     sortKey: 'host',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden sm:table-cell sm:w-[15%] md:w-[14%] xl:w-[12%]`,
-    colClassName: 'hidden sm:table-column sm:w-[15%] md:w-[14%] xl:w-[12%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
   {
+    id: 'protection',
     label: 'Protection',
     compactLabel: 'Prot',
     sortKey: 'protection',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden sm:table-cell sm:w-[15%] md:w-[15%] xl:w-[13%]`,
-    colClassName: 'hidden sm:table-column sm:w-[15%] md:w-[15%] xl:w-[13%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
   {
+    id: 'usage',
     label: 'Usage',
     compactLabel: 'Used',
     sortKey: 'usage',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[33%] sm:w-[21%] md:w-[29%] xl:w-[20%]`,
-    colClassName: 'w-[33%] sm:w-[21%] md:w-[29%] xl:w-[20%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
   {
+    id: 'growth',
     label: growthColumnLabel,
     compactLabel: growthColumnLabel.replace(/^Growth\s*\((.+)\)$/i, '$1'),
     sortKey: 'growth',
-    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden xl:table-cell xl:w-[11%]`,
-    colClassName: 'hidden xl:table-column xl:w-[11%]',
+    className: STORAGE_POOL_TABLE_HEADER_CLASS,
+    colClassName: '',
   },
 ];
 export const STORAGE_CONTENT_CARD_BODY_CLASS = 'p-2';

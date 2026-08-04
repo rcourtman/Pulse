@@ -25,6 +25,11 @@ import {
 } from '@/features/storageBackups/storagePoolRowPresentation';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
+import {
+  isStoragePoolColumnVisible,
+  type StoragePoolTableColumnId,
+  type StoragePoolTableLayoutMode,
+} from '@/features/storageBackups/storagePagePresentation';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
@@ -35,6 +40,7 @@ import {
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 
 interface StoragePoolRowProps {
+  layoutMode: StoragePoolTableLayoutMode;
   record: StorageRecord;
   growthDelta?: StorageCapacityDeltaPresentation | null;
   summarySeriesId: string;
@@ -54,6 +60,8 @@ interface StoragePoolRowProps {
 }
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
+  const columnClass = (baseClass: string, columnId: StoragePoolTableColumnId) =>
+    `${baseClass} ${isStoragePoolColumnVisible(props.layoutMode, columnId) ? 'table-cell' : 'hidden'}`.trim();
   const row = createMemo(() => buildStoragePoolRowModel(props.record, props.growthDelta ?? null));
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
@@ -78,7 +86,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         data-summary-row-active={props.summaryHighlighted && !props.expanded ? 'true' : 'false'}
         {...props.alertDataAttrs}
       >
-        <td class={STORAGE_POOL_ROW_NAME_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_NAME_CELL_CLASS, 'name')}
+          data-storage-column="name"
+        >
           <div class="flex min-w-0 items-center gap-1.5">
             <SummaryRowActionButton
               kind="disclosure"
@@ -94,7 +105,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </div>
         </td>
 
-        <td class={STORAGE_POOL_ROW_ISSUE_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_ISSUE_CELL_CLASS, 'state')}
+          data-storage-column="state"
+        >
           <Show
             when={row().stateLabel !== '—'}
             fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
@@ -108,19 +122,28 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </Show>
         </td>
 
-        <td class={STORAGE_POOL_ROW_TYPE_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_TYPE_CELL_CLASS, 'type')}
+          data-storage-column="type"
+        >
           <span class={STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} title={row().topologyLabel}>
             {row().topologyLabel}
           </span>
         </td>
 
-        <td class={STORAGE_POOL_ROW_HOST_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_HOST_CELL_CLASS, 'host')}
+          data-storage-column="host"
+        >
           <span class={STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} title={row().hostLabel}>
             {row().hostLabel}
           </span>
         </td>
 
-        <td class={STORAGE_POOL_ROW_PROTECTION_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_PROTECTION_CELL_CLASS, 'protection')}
+          data-storage-column="protection"
+        >
           <Show
             when={row().compactProtection !== '—'}
             fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
@@ -134,7 +157,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </Show>
         </td>
 
-        <td class={STORAGE_POOL_ROW_USAGE_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_USAGE_CELL_CLASS, 'usage')}
+          data-storage-column="usage"
+        >
           <Show
             when={row().totalBytes > 0}
             fallback={<span class={STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS}>n/a</span>}
@@ -152,7 +178,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </Show>
         </td>
 
-        <td class={STORAGE_POOL_ROW_GROWTH_CELL_CLASS}>
+        <td
+          class={columnClass(STORAGE_POOL_ROW_GROWTH_CELL_CLASS, 'growth')}
+          data-storage-column="growth"
+        >
           <span
             class={`${STORAGE_POOL_ROW_GROWTH_TEXT_CLASS} ${row().capacityDeltaToneClass}`}
             title={row().capacityDeltaTitle}

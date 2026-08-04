@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createMemo } from 'solid-js';
 import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
@@ -72,6 +72,7 @@ import {
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS,
   PHYSICAL_DISK_TABLE_ROW_STYLE,
+  getPhysicalDiskColumnWidthPercent,
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
@@ -80,7 +81,11 @@ import {
   getPhysicalDiskLifeTextClass,
   getPhysicalDiskParentLabel,
   getPhysicalDiskRoleLabel,
+  getPhysicalDiskTableLayoutModeForContainer,
+  isPhysicalDiskColumnVisible,
+  type PhysicalDiskTableColumnId,
 } from '@/features/storageBackups/diskPresentation';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { getStorageSourceOption } from '@/utils/storageSources';
@@ -103,6 +108,19 @@ interface DiskListProps {
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
+  const tableWidth = useObservedElementWidth();
+  const layoutMode = createMemo(() =>
+    getPhysicalDiskTableLayoutModeForContainer(tableWidth.width() ?? 0),
+  );
+  const columnClass = (
+    baseClass: string,
+    columnId: PhysicalDiskTableColumnId,
+    visibleClass: 'table-column' | 'table-cell',
+  ) =>
+    `${baseClass} ${isPhysicalDiskColumnVisible(layoutMode(), columnId) ? visibleClass : 'hidden'}`.trim();
+  const columnStyle = (columnId: PhysicalDiskTableColumnId) => ({
+    width: `${getPhysicalDiskColumnWidthPercent(layoutMode(), columnId)}%`,
+  });
   const { getDiskTemperatureThresholds } = useAlertsActivation();
   const model = useDiskListModel({
     disks: () => props.disks,
@@ -183,41 +201,119 @@ export const DiskList: Component<DiskListProps> = (props) => {
       </Show>
 
       <Show when={model.filteredDisks().length > 0}>
-        <Table class={PHYSICAL_DISK_TABLE_CLASS}>
+        <Table
+          class={PHYSICAL_DISK_TABLE_CLASS}
+          wrapperRef={tableWidth.setElement}
+          data-storage-table="physical-disks"
+          data-storage-layout={layoutMode()}
+        >
           <colgroup>
-            <col class={PHYSICAL_DISK_COL_DISK_CLASS} />
-            <col class={PHYSICAL_DISK_COL_DEVICE_CLASS} />
-            <col class={PHYSICAL_DISK_COL_HOST_CLASS} />
-            <col class={PHYSICAL_DISK_COL_ROLE_CLASS} />
-            <col class={PHYSICAL_DISK_COL_PARENT_CLASS} />
-            <col class={PHYSICAL_DISK_COL_HEALTH_CLASS} />
-            <col class={PHYSICAL_DISK_COL_LIFE_CLASS} />
-            <col class={PHYSICAL_DISK_COL_TEMP_CLASS} />
-            <col class={PHYSICAL_DISK_COL_SIZE_CLASS} />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_DISK_CLASS, 'disk', 'table-column')}
+              style={columnStyle('disk')}
+              data-storage-column="disk"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_DEVICE_CLASS, 'device', 'table-column')}
+              style={columnStyle('device')}
+              data-storage-column="device"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_HOST_CLASS, 'host', 'table-column')}
+              style={columnStyle('host')}
+              data-storage-column="host"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_ROLE_CLASS, 'role', 'table-column')}
+              style={columnStyle('role')}
+              data-storage-column="role"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_PARENT_CLASS, 'parent', 'table-column')}
+              style={columnStyle('parent')}
+              data-storage-column="parent"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_HEALTH_CLASS, 'health', 'table-column')}
+              style={columnStyle('health')}
+              data-storage-column="health"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_LIFE_CLASS, 'life', 'table-column')}
+              style={columnStyle('life')}
+              data-storage-column="life"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_TEMP_CLASS, 'temp', 'table-column')}
+              style={columnStyle('temp')}
+              data-storage-column="temp"
+            />
+            <col
+              class={columnClass(PHYSICAL_DISK_COL_SIZE_CLASS, 'size', 'table-column')}
+              style={columnStyle('size')}
+              data-storage-column="size"
+            />
           </colgroup>
           <TableHeader>
             <TableRow class={PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS}>
-              <TableHead class={PHYSICAL_DISK_HEADER_DISK_CLASS}>Disk</TableHead>
-              <TableHead class={PHYSICAL_DISK_HEADER_DEVICE_CLASS}>Device</TableHead>
-              <TableHead class={PHYSICAL_DISK_HEADER_HOST_CLASS}>Host</TableHead>
-              <TableHead class={PHYSICAL_DISK_HEADER_ROLE_CLASS}>Role</TableHead>
               <TableHead
-                class={PHYSICAL_DISK_HEADER_PARENT_CLASS}
+                class={columnClass(PHYSICAL_DISK_HEADER_DISK_CLASS, 'disk', 'table-cell')}
+                data-storage-column="disk"
+              >
+                Disk
+              </TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_DEVICE_CLASS, 'device', 'table-cell')}
+                data-storage-column="device"
+              >
+                Device
+              </TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_HOST_CLASS, 'host', 'table-cell')}
+                data-storage-column="host"
+              >
+                Host
+              </TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_ROLE_CLASS, 'role', 'table-cell')}
+                data-storage-column="role"
+              >
+                Role
+              </TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_PARENT_CLASS, 'parent', 'table-cell')}
+                data-storage-column="parent"
                 aria-label="Belongs To"
                 title="Belongs To"
               >
                 Belongs
               </TableHead>
-              <TableHead class={PHYSICAL_DISK_HEADER_HEALTH_CLASS}>Health</TableHead>
               <TableHead
-                class={PHYSICAL_DISK_HEADER_LIFE_CLASS}
+                class={columnClass(PHYSICAL_DISK_HEADER_HEALTH_CLASS, 'health', 'table-cell')}
+                data-storage-column="health"
+              >
+                Health
+              </TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_LIFE_CLASS, 'life', 'table-cell')}
+                data-storage-column="life"
                 aria-label="SSD life remaining"
                 title="SSD life remaining"
               >
                 Life
               </TableHead>
-              <TableHead class={PHYSICAL_DISK_HEADER_TEMP_CLASS}>Temp</TableHead>
-              <TableHead class={PHYSICAL_DISK_HEADER_SIZE_CLASS}>Size</TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_TEMP_CLASS, 'temp', 'table-cell')}
+                data-storage-column="temp"
+              >
+                Temp
+              </TableHead>
+              <TableHead
+                class={columnClass(PHYSICAL_DISK_HEADER_SIZE_CLASS, 'size', 'table-cell')}
+                data-storage-column="size"
+              >
+                Size
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
@@ -254,7 +350,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                       onClick={() => model.toggleSelectedDisk(disk)}
                       {...interactiveRowHandlers}
                     >
-                      <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_DISK_CLASS, 'disk', 'table-cell')}
+                        data-storage-column="disk"
+                      >
                         <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>
                           <SummaryRowActionButton
                             kind="disclosure"
@@ -273,7 +372,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </div>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_DEVICE_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_DEVICE_CLASS, 'device', 'table-cell')}
+                        data-storage-column="device"
+                      >
                         <Show
                           when={data.devPath}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
@@ -284,7 +386,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </Show>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_HOST_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_HOST_CLASS, 'host', 'table-cell')}
+                        data-storage-column="host"
+                      >
                         <Show
                           when={hostLabel}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
@@ -295,7 +400,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </Show>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_ROLE_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_ROLE_CLASS, 'role', 'table-cell')}
+                        data-storage-column="role"
+                      >
                         <Show
                           when={getPhysicalDiskRoleLabel(data)}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
@@ -309,7 +417,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </Show>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_PARENT_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_PARENT_CLASS, 'parent', 'table-cell')}
+                        data-storage-column="parent"
+                      >
                         <Show
                           when={getPhysicalDiskParentLabel(data)}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
@@ -323,7 +434,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </Show>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_HEALTH_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_HEALTH_CLASS, 'health', 'table-cell')}
+                        data-storage-column="health"
+                      >
                         <div class={PHYSICAL_DISK_HEALTH_WRAP_CLASS}>
                           <span class={`${PHYSICAL_DISK_HEALTH_LABEL_CLASS} ${status.tone}`}>
                             {status.label}
@@ -336,7 +450,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </div>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_LIFE_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_LIFE_CLASS, 'life', 'table-cell')}
+                        data-storage-column="life"
+                      >
                         <Show
                           when={getPhysicalDiskLifeLabel(data)}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
@@ -349,7 +466,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </Show>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_TEMP_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_TEMP_CLASS, 'temp', 'table-cell')}
+                        data-storage-column="temp"
+                      >
                         <Show
                           when={data.temperature > 0}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
@@ -366,7 +486,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </Show>
                       </TableCell>
 
-                      <TableCell class={PHYSICAL_DISK_CELL_SIZE_CLASS}>
+                      <TableCell
+                        class={columnClass(PHYSICAL_DISK_CELL_SIZE_CLASS, 'size', 'table-cell')}
+                        data-storage-column="size"
+                      >
                         <Show
                           when={data.size > 0}
                           fallback={

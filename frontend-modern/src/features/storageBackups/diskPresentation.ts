@@ -107,23 +107,78 @@ export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
 export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '32px' } as const;
 export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =
   'border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner';
-export const PHYSICAL_DISK_COL_DISK_CLASS = 'w-[47%] sm:w-[31%] md:w-[24%] xl:w-[19%]';
-export const PHYSICAL_DISK_COL_DEVICE_CLASS = 'hidden md:table-column md:w-[11%] xl:w-[9%]';
-export const PHYSICAL_DISK_COL_HOST_CLASS =
-  'hidden sm:table-column sm:w-[20%] md:w-[12%] xl:w-[10%]';
-export const PHYSICAL_DISK_COL_ROLE_CLASS = 'hidden xl:table-column xl:w-[8%]';
-export const PHYSICAL_DISK_COL_PARENT_CLASS = 'hidden xl:table-column xl:w-[12%]';
-export const PHYSICAL_DISK_COL_HEALTH_CLASS = 'w-[29%] sm:w-[27%] md:w-[19%] xl:w-[17%]';
-export const PHYSICAL_DISK_COL_LIFE_CLASS = 'hidden md:table-column md:w-[7%] xl:w-[6%]';
-export const PHYSICAL_DISK_COL_TEMP_CLASS = 'hidden md:table-column md:w-[8%] xl:w-[7%]';
-export const PHYSICAL_DISK_COL_SIZE_CLASS = 'w-[24%] sm:w-[22%] md:w-[19%] xl:w-[12%]';
-const PHYSICAL_DISK_CELL_DEVICE_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[11%] xl:w-[9%]';
-const PHYSICAL_DISK_CELL_HOST_RESPONSIVE_CLASS =
-  'hidden sm:table-cell sm:w-[20%] md:w-[12%] xl:w-[10%]';
-const PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[8%]';
-const PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[12%]';
-const PHYSICAL_DISK_CELL_LIFE_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[7%] xl:w-[6%]';
-const PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[8%] xl:w-[7%]';
+export type PhysicalDiskTableLayoutMode = 'compact' | 'basic' | 'operational' | 'expanded' | 'full';
+
+export const getPhysicalDiskTableLayoutModeForContainer = (
+  containerWidth: number,
+): PhysicalDiskTableLayoutMode => {
+  if (containerWidth >= 1_120) return 'full';
+  if (containerWidth >= 900) return 'expanded';
+  if (containerWidth >= 650) return 'operational';
+  if (containerWidth >= 520) return 'basic';
+  return 'compact';
+};
+
+export type PhysicalDiskTableColumnId =
+  'disk' | 'device' | 'host' | 'role' | 'parent' | 'health' | 'life' | 'temp' | 'size';
+
+const PHYSICAL_DISK_VISIBLE_COLUMNS: Record<
+  PhysicalDiskTableLayoutMode,
+  readonly PhysicalDiskTableColumnId[]
+> = {
+  compact: ['disk', 'health', 'size'],
+  basic: ['disk', 'host', 'health', 'temp', 'size'],
+  operational: ['disk', 'host', 'parent', 'health', 'life', 'temp', 'size'],
+  expanded: ['disk', 'host', 'role', 'parent', 'health', 'life', 'temp', 'size'],
+  full: ['disk', 'device', 'host', 'role', 'parent', 'health', 'life', 'temp', 'size'],
+};
+
+const PHYSICAL_DISK_COLUMN_WIDTHS: Record<
+  PhysicalDiskTableLayoutMode,
+  Partial<Record<PhysicalDiskTableColumnId, number>>
+> = {
+  compact: { disk: 47, health: 29, size: 24 },
+  basic: { disk: 33, host: 17, health: 22, temp: 12, size: 16 },
+  operational: { disk: 25, host: 12, parent: 15, health: 17, life: 9, temp: 9, size: 13 },
+  expanded: { disk: 22, host: 10, role: 9, parent: 14, health: 15, life: 8, temp: 8, size: 14 },
+  full: {
+    disk: 19,
+    device: 9,
+    host: 10,
+    role: 8,
+    parent: 12,
+    health: 17,
+    life: 6,
+    temp: 7,
+    size: 12,
+  },
+};
+
+export const isPhysicalDiskColumnVisible = (
+  layout: PhysicalDiskTableLayoutMode,
+  columnId: PhysicalDiskTableColumnId,
+): boolean => PHYSICAL_DISK_VISIBLE_COLUMNS[layout].includes(columnId);
+
+export const getPhysicalDiskColumnWidthPercent = (
+  layout: PhysicalDiskTableLayoutMode,
+  columnId: PhysicalDiskTableColumnId,
+): number => PHYSICAL_DISK_COLUMN_WIDTHS[layout][columnId] ?? 0;
+
+export const PHYSICAL_DISK_COL_DISK_CLASS = '';
+export const PHYSICAL_DISK_COL_DEVICE_CLASS = '';
+export const PHYSICAL_DISK_COL_HOST_CLASS = '';
+export const PHYSICAL_DISK_COL_ROLE_CLASS = '';
+export const PHYSICAL_DISK_COL_PARENT_CLASS = '';
+export const PHYSICAL_DISK_COL_HEALTH_CLASS = '';
+export const PHYSICAL_DISK_COL_LIFE_CLASS = '';
+export const PHYSICAL_DISK_COL_TEMP_CLASS = '';
+export const PHYSICAL_DISK_COL_SIZE_CLASS = '';
+const PHYSICAL_DISK_CELL_DEVICE_RESPONSIVE_CLASS = '';
+const PHYSICAL_DISK_CELL_HOST_RESPONSIVE_CLASS = '';
+const PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS = '';
+const PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS = '';
+const PHYSICAL_DISK_CELL_LIFE_RESPONSIVE_CLASS = '';
+const PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS = '';
 export const PHYSICAL_DISK_HEADER_DISK_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_DISK_CLASS}`;
 export const PHYSICAL_DISK_HEADER_DEVICE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_CELL_DEVICE_RESPONSIVE_CLASS}`;
 // Headers for responsively-hidden columns must use `table-cell` (not

@@ -105,7 +105,13 @@ describe('DiskList', () => {
     });
 
     expect(screen.getByRole('columnheader', { name: 'Disk' })).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveAttribute('data-storage-table', 'physical-disks');
+    expect(screen.getByRole('table')).toHaveAttribute('data-storage-layout', 'compact');
     expect(screen.getByRole('columnheader', { name: 'Device' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Device' })).toHaveAttribute(
+      'data-storage-column',
+      'device',
+    );
     expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'SSD life remaining' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();

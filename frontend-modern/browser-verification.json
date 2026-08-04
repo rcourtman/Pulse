@@ -1,29 +1,54 @@
 {
   "version": 1,
-  "base_sha": "2bfab3610e499abafdb416ff4eb1b57a26f01bca",
-  "verified_at": "2026-08-04T09:22:02Z",
+  "base_sha": "e4bc063eb0a070484a0e22c9d6da20fb318df3d5",
+  "verified_at": "2026-08-04T09:43:18Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Workloads/workloadSelectors.ts"],
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts",
+    "frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "f7d8e836a655443cbbc64e8f831e98047b1fe713db2a908fb84f1a3585ceb0e6"
+    "frontend-modern/src/components/Storage/DiskList.tsx": "496706e7748774b05f04a8299d3f375d2acd51c421d2c6837d383ca1984c55db",
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "624de18ccae7fa7b082dac65169608145cad96a3bfe3c488ca722eb94e479e5a",
+    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "30a7f26a69e36191a55034e220a848707cdc305b9b51e4b30edbd45552b0d500",
+    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "3d0403057a70aeea76ac0aa153a4ed41557978547bf8267386f3e51e49f44253",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "8a0d6d574aa51147f673c299455310e69b709b648a68f127897b51715dd9c92e",
+    "frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts": "3f84b93a3ef161ccde6195d9970cbfcdcdb4083819d72ae01d5d9e3164528bb3"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": ["/proxmox/storage", "/proxmox/storage?tab=disks&source=proxmox-all"],
   "viewports": [
+    { "width": 375, "height": 900 },
+    { "width": 480, "height": 900 },
+    { "width": 640, "height": 900 },
+    { "width": 768, "height": 900 },
+    { "width": 800, "height": 900 },
+    { "width": 900, "height": 900 },
+    { "width": 1024, "height": 900 },
+    { "width": 1280, "height": 900 },
     { "width": 1440, "height": 900 },
-    { "width": 390, "height": 844 }
+    { "width": 1536, "height": 900 },
+    { "width": 1680, "height": 900 },
+    { "width": 1920, "height": 900 },
+    { "width": 2560, "height": 900 }
   ],
   "states": [
-    "Proxmox Overview against the live backend with 42 grouped workload rows and 36 attached availability checks, none of them currently failing",
-    "Attention status filter applied, returning the canonical no-guests-match empty state because no guest is degraded",
-    "Filters cleared back to All with the full workload inventory restored",
-    "Narrow 390px layout with the unfiltered workload table"
+    "Storage pool table in compact, operational, and full container-width layouts",
+    "Physical Disks table in compact, basic, operational, expanded, and full container-width layouts",
+    "Pulse Assistant open at 1280, 1536, and 1920 pixel viewports, reducing the real table container independently of the viewport",
+    "Expanded storage-pool capacity and configuration detail at desktop, Assistant-constrained, and 375 pixel widths",
+    "Expanded physical-disk SMART and live-I/O detail at desktop, operational, and 375 pixel widths",
+    "Filtered pool and disk inventories, sorted pool inventory, and restored default filters and ordering"
   ],
   "interactions": [
-    "Read the live resource payload and confirmed 36 availability checks are correlated as attached with zero currently unavailable, so the new degraded bucket introduces no false positives on a healthy fleet",
-    "Applied the Attention status filter and confirmed it still resolves to the empty state rather than pulling in healthy guests",
-    "Cleared filters and confirmed all 42 workload rows returned",
-    "Resized to 390x844 and confirmed the unfiltered table renders with no horizontal document overflow",
-    "Read console messages filtered to errors across both viewports and found none",
-    "The failing-probe path itself is proven by unit test rather than in the browser because no attached check is currently failing on this instance; the new cases in workloadSelectors.test.ts were confirmed red with the degradation branch disabled and green with it restored"
+    "Switched repeatedly between Storage and Physical Disks using the real tab controls",
+    "Opened and closed Pulse Assistant and confirmed ResizeObserver-driven column stages update without reload or horizontal overflow",
+    "Expanded and collapsed pool and physical-disk rows and inspected their inline detail layouts",
+    "Sorted by Usage through the table header, inspected View preferences, and restored Priority ordering",
+    "Applied the pbs search at compact width, verified filtered results, and cleared the filter through the UI",
+    "Measured table client width, scroll width, visible headers, and document overflow across all listed viewports; every tested default and constrained state had zero table and document overflow"
   ]
 }

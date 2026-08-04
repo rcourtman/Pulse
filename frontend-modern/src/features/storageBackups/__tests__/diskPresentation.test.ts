@@ -19,6 +19,7 @@ import {
   PHYSICAL_DISK_TABLE_CLASS,
   PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   getPhysicalDiskEmptyStatePresentation,
+  getPhysicalDiskColumnWidthPercent,
   getPhysicalDiskCollectionMessages,
   getPhysicalDiskFieldStatusMessage,
   getPhysicalDiskHealthStatus,
@@ -33,9 +34,11 @@ import {
   getPhysicalDiskRoleFilterValue,
   getPhysicalDiskSourceKey,
   getPhysicalDiskSourceBadgePresentation,
+  getPhysicalDiskTableLayoutModeForContainer,
   hasUnraidPhysicalDiskFaultSignal,
   hasPhysicalDiskSmartWarning,
   isPhysicalDiskWearoutReported,
+  isPhysicalDiskColumnVisible,
   isUnraidPhysicalDisk,
   matchesPhysicalDiskSearch,
   normalizePhysicalDiskFacetFilter,
@@ -111,8 +114,8 @@ describe('diskPresentation', () => {
     expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full table-fixed text-xs');
     expect(PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS).toContain('hover:bg-surface-hover');
     expect(PHYSICAL_DISK_HEADER_DISK_CLASS).toContain('uppercase');
-    expect(PHYSICAL_DISK_HEADER_DEVICE_CLASS).toContain('md:table-cell');
-    expect(PHYSICAL_DISK_HEADER_LIFE_CLASS).toContain('md:table-cell');
+    expect(PHYSICAL_DISK_HEADER_DEVICE_CLASS).toContain('uppercase');
+    expect(PHYSICAL_DISK_HEADER_LIFE_CLASS).toContain('uppercase');
     expect(PHYSICAL_DISK_NAME_TEXT_CLASS).toContain('font-semibold');
     expect(PHYSICAL_DISK_SOURCE_BADGE_CLASS).toContain('justify-center');
 
@@ -129,6 +132,23 @@ describe('diskPresentation', () => {
       summary: 'Disk health has degraded to a critical state.',
       tone: 'text-red-700 dark:text-red-300',
     });
+  });
+
+  it('selects operator-priority disk layouts from the rendered table width', () => {
+    expect(getPhysicalDiskTableLayoutModeForContainer(519)).toBe('compact');
+    expect(getPhysicalDiskTableLayoutModeForContainer(520)).toBe('basic');
+    expect(getPhysicalDiskTableLayoutModeForContainer(649)).toBe('basic');
+    expect(getPhysicalDiskTableLayoutModeForContainer(650)).toBe('operational');
+    expect(getPhysicalDiskTableLayoutModeForContainer(899)).toBe('operational');
+    expect(getPhysicalDiskTableLayoutModeForContainer(900)).toBe('expanded');
+    expect(getPhysicalDiskTableLayoutModeForContainer(1_119)).toBe('expanded');
+    expect(getPhysicalDiskTableLayoutModeForContainer(1_120)).toBe('full');
+    expect(isPhysicalDiskColumnVisible('operational', 'parent')).toBe(true);
+    expect(isPhysicalDiskColumnVisible('operational', 'device')).toBe(false);
+    expect(isPhysicalDiskColumnVisible('expanded', 'role')).toBe(true);
+    expect(isPhysicalDiskColumnVisible('expanded', 'device')).toBe(false);
+    expect(getPhysicalDiskColumnWidthPercent('operational', 'life')).toBe(9);
+    expect(getPhysicalDiskColumnWidthPercent('compact', 'device')).toBe(0);
   });
 
   it('detects SMART warnings from counters', () => {

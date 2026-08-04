@@ -1,10 +1,12 @@
-import { Component, For, Index, Show } from 'solid-js';
+import { Component, For, Index, Show, createMemo } from 'solid-js';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import {
+  getStoragePoolColumnWidthPercent,
   getStoragePoolTableColumns,
+  getStoragePoolTableLayoutModeForContainer,
   getStorageEmptyStateMessage,
   getStorageLoadingMessage,
   STORAGE_POOLS_BODY_CLASS,
@@ -12,7 +14,9 @@ import {
   STORAGE_POOLS_HEADER_ROW_CLASS,
   STORAGE_POOLS_LOADING_STATE_CLASS,
   STORAGE_POOLS_TABLE_CLASS,
+  isStoragePoolColumnVisible,
 } from '@/features/storageBackups/storagePagePresentation';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
@@ -79,6 +83,16 @@ const getStorageColumnSortButtonLabel = (
 };
 
 export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
+  const tableWidth = useObservedElementWidth();
+  const layoutMode = createMemo(() =>
+    getStoragePoolTableLayoutModeForContainer(tableWidth.width() ?? 0),
+  );
+  const columnClass = (
+    baseClass: string,
+    columnId: Parameters<typeof isStoragePoolColumnVisible>[1],
+    visibleClass: 'table-column' | 'table-cell',
+  ) =>
+    `${baseClass} ${isStoragePoolColumnVisible(layoutMode(), columnId) ? visibleClass : 'hidden'}`.trim();
   const model = useStoragePoolsTableModel({
     groupedRecords: () => props.groupedRecords,
     groupBy: () => props.groupBy,
@@ -107,10 +121,23 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
             <div class={STORAGE_POOLS_EMPTY_STATE_CLASS}>{getStorageEmptyStateMessage()}</div>
           }
         >
-          <Table class={STORAGE_POOLS_TABLE_CLASS}>
+          <Table
+            class={STORAGE_POOLS_TABLE_CLASS}
+            wrapperRef={tableWidth.setElement}
+            data-storage-table="pools"
+            data-storage-layout={layoutMode()}
+          >
             <colgroup>
               <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
-                {(column) => <col class={column.colClassName} />}
+                {(column) => (
+                  <col
+                    class={columnClass(column.colClassName, column.id, 'table-column')}
+                    style={{
+                      width: `${getStoragePoolColumnWidthPercent(layoutMode(), column.id)}%`,
+                    }}
+                    data-storage-column={column.id}
+                  />
+                )}
               </For>
             </colgroup>
             <TableHeader>
@@ -118,7 +145,8 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
                   {(column) => (
                     <TableHead
-                      class={column.className}
+                      class={columnClass(column.className, column.id, 'table-cell')}
+                      data-storage-column={column.id}
                       aria-label={column.label}
                       aria-sort={
                         props.sortKey === column.sortKey
@@ -144,8 +172,12 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                           props.sortDirection,
                         )}
                       >
-                        <span class="hidden min-w-0 truncate xl:inline">{column.label}</span>
-                        <span class="min-w-0 truncate xl:hidden">{column.compactLabel}</span>
+                        <Show
+                          when={layoutMode() === 'full'}
+                          fallback={<span class="min-w-0 truncate">{column.compactLabel}</span>}
+                        >
+                          <span class="min-w-0 truncate">{column.label}</span>
+                        </Show>
                         <Show
                           when={props.sortKey === column.sortKey}
                           fallback={
@@ -210,6 +242,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
 
                           return (
                             <StoragePoolRow
+                              layoutMode={layoutMode()}
                               record={record()}
                               growthDelta={
                                 props.storageGrowthBySeriesId.get(
