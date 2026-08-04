@@ -117,6 +117,112 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     }
   };
 
+  const renderTokenScopes = (token: APITokenRecord) => {
+    const rawScopes = effectiveScopes(token);
+    const scopeBadges = rawScopes.includes('*')
+      ? [{ value: '*', label: 'Full' }]
+      : rawScopes.map((scope) => ({
+          value: scope,
+          label: API_SCOPE_LABELS[scope] ?? scope,
+        }));
+
+    return (
+      <div class="flex flex-wrap gap-1.5">
+        <For each={scopeBadges}>
+          {(scope) => {
+            const isWildcard = scope.value === '*';
+            return (
+              <span
+                class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  isWildcard
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                    : 'bg-surface-alt text-base-content'
+                }`}
+                title={scope.value}
+              >
+                {scope.label}
+              </span>
+            );
+          }}
+        </For>
+      </div>
+    );
+  };
+
+  const renderTokenUsage = (token: APITokenRecord) => {
+    const dockerUsageEntry = dockerTokenUsage().get(token.id);
+    const agentUsageEntry = agentTokenUsage().get(token.id);
+    const usageSegments: string[] = [];
+    const usageTitleSegments: string[] = [];
+    if (dockerUsageEntry) {
+      usageSegments.push(getAPITokenDockerPodmanUsageSummary(dockerUsageEntry));
+      usageTitleSegments.push(getAPITokenDockerPodmanUsageTitle(dockerUsageEntry));
+    }
+    if (agentUsageEntry) {
+      usageSegments.push(
+        agentUsageEntry.count === 1
+          ? `${agentUsageEntry.items[0]?.label ?? 'Agent'}`
+          : `${agentUsageEntry.count} agents`,
+      );
+      usageTitleSegments.push(
+        `Agents: ${agentUsageEntry.items.map((agent) => agent.label).join(', ')}`,
+      );
+    }
+    const usageSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
+
+    return (
+      <div
+        class="flex flex-wrap items-center gap-2"
+        title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
+      >
+        <span class="text-muted">{usageSummary}</span>
+        <Show when={agentUsageEntry && agentUsageEntry.count > 1}>
+          <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+            <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                fill-rule="evenodd"
+                d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Agents sharing this token ({agentUsageEntry!.count})
+          </span>
+        </Show>
+      </div>
+    );
+  };
+
+  const renderTokenActions = (token: APITokenRecord, compact = false) => (
+    <div
+      class={
+        compact
+          ? 'flex w-full items-center gap-2 border-t border-border pt-3'
+          : 'flex items-center justify-end gap-1'
+      }
+    >
+      <button
+        type="button"
+        onClick={() => openScopeEditor(token)}
+        disabled={!canManage()}
+        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200 ${
+          compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
+        }`}
+      >
+        Edit scopes
+      </button>
+      <button
+        type="button"
+        onClick={() => setTokenToRevoke(token)}
+        disabled={!canManage()}
+        class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300 ${
+          compact ? 'flex-1 border border-red-200 dark:border-red-900' : 'sm:min-h-9'
+        }`}
+      >
+        Revoke
+      </button>
+    </div>
+  );
+
   return (
     <div class="space-y-5">
       <Card padding="none" class="border border-border shadow-sm">
@@ -318,7 +424,61 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             </button>
           </div>
 
+          <div
+            data-testid="api-token-compact-list"
+            class="grid gap-px bg-border xl:grid-cols-2 min-[1600px]:hidden"
+          >
+            <For each={sortedTokens()}>
+              {(token) => (
+                <article
+                  aria-label={`API token ${token.name || 'Untitled'}`}
+                  class="space-y-3 bg-surface p-4 sm:p-5"
+                  data-api-token-card={token.id}
+                >
+                  <div class="flex min-w-0 items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <h5 class="break-words text-sm font-semibold text-base-content">
+                        {token.name || 'Untitled'}
+                      </h5>
+                      <div class="mt-1 font-mono text-xs text-muted">{tokenHint(token)}</div>
+                    </div>
+                    <div class="shrink-0 text-right">
+                      <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-muted">
+                        Last used
+                      </div>
+                      <div class="mt-1 text-xs text-base-content">
+                        {token.lastUsedAt
+                          ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                          : 'Never'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <dl class="grid gap-3 text-xs sm:grid-cols-2">
+                    <div class="space-y-1 sm:col-span-2">
+                      <dt class="font-semibold uppercase tracking-wide text-muted">Scopes</dt>
+                      <dd>{renderTokenScopes(token)}</dd>
+                    </div>
+                    <div class="space-y-1">
+                      <dt class="font-semibold uppercase tracking-wide text-muted">Usage</dt>
+                      <dd>{renderTokenUsage(token)}</dd>
+                    </div>
+                    <div class="space-y-1">
+                      <dt class="font-semibold uppercase tracking-wide text-muted">Created</dt>
+                      <dd class="text-base-content">
+                        {formatRelativeTime(new Date(token.createdAt).getTime())}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {renderTokenActions(token, true)}
+                </article>
+              )}
+            </For>
+          </div>
+
           <PulseDataGrid
+            class="hidden min-[1600px]:block"
             data={sortedTokens()}
             columns={[
               {
@@ -338,83 +498,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               {
                 key: 'scopes',
                 label: 'Scopes',
-                render: (token) => {
-                  const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
-                  const scopeBadges = rawScopes.includes('*')
-                    ? [{ value: '*', label: 'Full' }]
-                    : rawScopes.map((scope) => ({
-                        value: scope,
-                        label: API_SCOPE_LABELS[scope] ?? scope,
-                      }));
-                  return (
-                    <div class="flex flex-wrap gap-1.5">
-                      <For each={scopeBadges}>
-                        {(scope) => {
-                          const isWildcard = scope.value === '*';
-                          return (
-                            <span
-                              class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                isWildcard
-                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                                  : 'bg-surface-alt text-base-content'
-                              }`}
-                              title={scope.value}
-                            >
-                              {scope.label}
-                            </span>
-                          );
-                        }}
-                      </For>
-                    </div>
-                  );
-                },
+                render: renderTokenScopes,
               },
               {
                 key: 'usage',
                 label: 'Usage',
-                render: (token) => {
-                  const dockerUsageEntry = dockerTokenUsage().get(token.id);
-                  const agentUsageEntry = agentTokenUsage().get(token.id);
-                  const usageSegments: string[] = [];
-                  const usageTitleSegments: string[] = [];
-                  if (dockerUsageEntry) {
-                    usageSegments.push(getAPITokenDockerPodmanUsageSummary(dockerUsageEntry));
-                    usageTitleSegments.push(getAPITokenDockerPodmanUsageTitle(dockerUsageEntry));
-                  }
-                  if (agentUsageEntry) {
-                    usageSegments.push(
-                      agentUsageEntry.count === 1
-                        ? `${agentUsageEntry.items[0]?.label ?? 'Agent'}`
-                        : `${agentUsageEntry.count} agents`,
-                    );
-                    usageTitleSegments.push(
-                      `Agents: ${agentUsageEntry.items.map((agent) => agent.label).join(', ')}`,
-                    );
-                  }
-                  const usageSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
-                  return (
-                    <div
-                      class="flex flex-wrap items-center gap-2"
-                      title={
-                        usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined
-                      }
-                    >
-                      <span class="text-muted">{usageSummary}</span>
-                      <Show when={agentUsageEntry && agentUsageEntry.count > 1}>
-                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                          <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                            <path
-                              fill-rule="evenodd"
-                              d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
-                              clip-rule="evenodd"
-                            />
-                          </svg>
-                          Agents sharing this token ({agentUsageEntry!.count})
-                        </span>
-                      </Show>
-                    </div>
-                  );
-                },
+                render: renderTokenUsage,
               },
               {
                 key: 'createdAt',
@@ -440,30 +529,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 key: 'action',
                 label: 'Actions',
                 align: 'right',
-                render: (token) => (
-                  <div class="flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => openScopeEditor(token)}
-                      disabled={!canManage()}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200"
-                    >
-                      Edit scopes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTokenToRevoke(token)}
-                      disabled={!canManage()}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
-                    >
-                      Revoke
-                    </button>
-                  </div>
-                ),
+                render: renderTokenActions,
               },
             ]}
             keyExtractor={(token) => token.id}
-            desktopMinWidth="1000px"
+            desktopMinWidth="960px"
             frame="flush"
           />
         </Card>

@@ -132,6 +132,22 @@ const renderAPIAccessPanel = () =>
     </Router>
   ));
 
+const getTokenTableRow = (name: string): HTMLTableRowElement => {
+  const row = screen
+    .getAllByText(name)
+    .map((element) => element.closest('tr'))
+    .find(
+      (candidate): candidate is HTMLTableRowElement => candidate instanceof HTMLTableRowElement,
+    );
+  if (!row) throw new Error(`Could not find desktop token row for ${name}`);
+  return row;
+};
+
+const findTokenTableRow = async (name: string): Promise<HTMLTableRowElement> => {
+  await screen.findAllByText(name);
+  return getTokenTableRow(name);
+};
+
 describe('APITokenManager security surface', () => {
   // The API Access tab is the canonical security surface for
   // operator-controlled machine access. Pulse Intelligence owns
@@ -269,7 +285,7 @@ describe('APITokenManager', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByText('Container automation')).toHaveLength(2);
+      expect(screen.getAllByText('Container automation')).toHaveLength(3);
       expect(screen.getByText(/Token generated:/)).toBeInTheDocument();
       expect(
         screen.getAllByText('Docker / Podman lifecycle management').length,
@@ -496,18 +512,12 @@ describe('APITokenManager', () => {
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
-    const runtimeName = await screen.findByText('Runtime token');
-    const row = runtimeName.closest('tr');
-    expect(row).toBeTruthy();
-    expect(
-      within(row as HTMLTableRowElement).getByText('Docker Edge • Edge Agent'),
-    ).toBeInTheDocument();
-    expect(
-      within(row as HTMLTableRowElement).queryByText(/container runtime/i),
-    ).not.toBeInTheDocument();
-    expect(within(row as HTMLTableRowElement).getByText('Agent reporting')).toBeInTheDocument();
+    const row = await findTokenTableRow('Runtime token');
+    expect(within(row).getByText('Docker Edge • Edge Agent')).toBeInTheDocument();
+    expect(within(row).queryByText(/container runtime/i)).not.toBeInTheDocument();
+    expect(within(row).getByText('Agent reporting')).toBeInTheDocument();
 
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole('button', { name: 'Revoke' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Revoke' }));
 
     // Confirm modal opens — click "Revoke token" to actually trigger the delete.
     const confirmBtn = await screen.findByRole('button', { name: 'Revoke token' });
@@ -530,8 +540,37 @@ describe('APITokenManager', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Runtime token')).not.toBeInTheDocument();
-      expect(screen.getByText('Unused token')).toBeInTheDocument();
+      expect(screen.getAllByText('Unused token')).toHaveLength(2);
     });
+  });
+
+  it('presents the complete token inventory as manageable compact cards below 1600px', async () => {
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'token-compact',
+        name: 'Phone-managed token',
+        scopes: [DOCKER_REPORT_SCOPE, AGENT_REPORT_SCOPE],
+      }),
+    ]);
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    const compactList = await screen.findByTestId('api-token-compact-list');
+    expect(compactList).toHaveClass('min-[1600px]:hidden');
+    const card = compactList.querySelector('[data-api-token-card="token-compact"]');
+    expect(card).not.toBeNull();
+    const compactCard = within(card as HTMLElement);
+    expect(compactCard.getByRole('heading', { name: 'Phone-managed token' })).toBeInTheDocument();
+    expect(compactCard.getByText('Scopes')).toBeInTheDocument();
+    expect(compactCard.getByText('Docker / Podman reporting')).toBeInTheDocument();
+    expect(compactCard.getByText('Agent reporting')).toBeInTheDocument();
+    expect(compactCard.getByText('Usage')).toBeInTheDocument();
+    expect(compactCard.getByText('Created')).toBeInTheDocument();
+    expect(compactCard.getByText('Last used')).toBeInTheDocument();
+    expect(compactCard.getByRole('button', { name: 'Edit scopes' })).toBeInTheDocument();
+    expect(compactCard.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
+    expect(apiTokenManagerSource).toContain('class="hidden min-[1600px]:block"');
+    expect(apiTokenManagerSource).toContain('desktopMinWidth="960px"');
   });
 
   it('edits a token scope set in place without rotating or revoking it', async () => {
@@ -553,12 +592,8 @@ describe('APITokenManager', () => {
 
     render(() => <APITokenManager onTokensChanged={onTokensChanged} canManage />);
 
-    const tokenName = await screen.findByText('Editable token');
-    const row = tokenName.closest('tr');
-    expect(row).toBeTruthy();
-    fireEvent.click(
-      within(row as HTMLTableRowElement).getByRole('button', { name: 'Edit scopes' }),
-    );
+    const row = await findTokenTableRow('Editable token');
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
     expect(within(dialog).getByText(/take effect on its next request/i)).toBeInTheDocument();
@@ -588,13 +623,9 @@ describe('APITokenManager', () => {
         screen.queryByRole('dialog', { name: 'Edit API token scopes' }),
       ).not.toBeInTheDocument();
     });
-    const updatedRow = screen.getByText('Editable token').closest('tr');
-    expect(
-      within(updatedRow as HTMLTableRowElement).getByText('Monitoring & alerts (read)'),
-    ).toBeInTheDocument();
-    expect(
-      within(updatedRow as HTMLTableRowElement).queryByText('Docker / Podman reporting'),
-    ).not.toBeInTheDocument();
+    const updatedRow = getTokenTableRow('Editable token');
+    expect(within(updatedRow).getByText('Monitoring & alerts (read)')).toBeInTheDocument();
+    expect(within(updatedRow).queryByText('Docker / Podman reporting')).not.toBeInTheDocument();
   });
 
   it('requires at least one changed scope and keeps failed edits open', async () => {
@@ -609,11 +640,8 @@ describe('APITokenManager', () => {
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
-    const tokenName = await screen.findByText('Protected token');
-    const row = tokenName.closest('tr');
-    fireEvent.click(
-      within(row as HTMLTableRowElement).getByRole('button', { name: 'Edit scopes' }),
-    );
+    const row = await findTokenTableRow('Protected token');
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit scopes' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
     const save = within(dialog).getByRole('button', { name: 'Save scopes' });
@@ -676,14 +704,10 @@ describe('APITokenManager', () => {
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
-    const runtimeName = await screen.findByText('Runtime token');
-    const row = runtimeName.closest('tr');
-    expect(row).toBeTruthy();
-    expect(within(row as HTMLTableRowElement).getByText('PBS Main')).toBeInTheDocument();
+    const row = await findTokenTableRow('Runtime token');
+    expect(within(row).getByText('PBS Main')).toBeInTheDocument();
     expect(
-      within(row as HTMLTableRowElement).queryByText(
-        'backup server resource; status online; sources pbs',
-      ),
+      within(row).queryByText('backup server resource; status online; sources pbs'),
     ).not.toBeInTheDocument();
   });
 

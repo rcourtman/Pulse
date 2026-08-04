@@ -1,32 +1,35 @@
 {
   "version": 1,
-  "base_sha": "cd03c8b44d6552bd41a7ab232fdd68850baa630d",
-  "verified_at": "2026-08-04T18:16:29Z",
+  "base_sha": "ba8da5ab2927b327a915b0793800e4ed1c631221",
+  "verified_at": "2026-08-04T18:37:57Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx"
+    "frontend-modern/src/components/Settings/APITokenManager.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx": "8cfdbdf7d74f429e39b4c1e2ab196d857c59bc83c5785bb1777ed25e73c1312b"
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "2e11671670ee8cc23c2ada2f10ba1f5195e066f2873cd52520020756bcf2e02b"
   },
   "routes": [
-    "/docker/swarm"
+    "/settings/security/api"
   ],
   "viewports": [
-    { "width": 320, "height": 700 },
     { "width": 375, "height": 812 },
     { "width": 768, "height": 900 },
-    { "width": 1280, "height": 900 }
+    { "width": 1280, "height": 900 },
+    { "width": 1536, "height": 960 },
+    { "width": 1600, "height": 960 }
   ],
   "states": [
-    "Rendered all six Swarm inventory tables with mock data at 320px and 375px without document or table overflow",
-    "Rendered Swarm Nodes with the compact Node, Role, Avail, and Mem headings below the first container reveal breakpoint",
-    "Rendered Swarm Nodes with full Availability and Memory headings at tablet width",
-    "Rendered all eight Swarm Nodes diagnostic columns with full headings at wide desktop width"
+    "Rendered five token inventory cards with name, hint, scopes, usage, created time, last-used time, and management actions at phone width",
+    "Rendered the single-column token card inventory at tablet width without document or component overflow",
+    "Rendered the token inventory as a two-column card grid at 1280px and 1536px without horizontal scrolling",
+    "Rendered the complete seven-column token table at 1600px with equal table-shell client and scroll widths",
+    "Rendered the Edit API token scopes and Revoke API token confirmation dialogs at phone width"
   ],
   "interactions": [
-    "Cycled the Availability sortable heading through ascending, descending, and default order and confirmed the aria-sort state and indicator updated each time",
-    "Inspected final phone pixels for Swarm Tasks, Nodes, Secrets, and Configs and confirmed identity, operational state, and capacity remain readable",
-    "Measured the Swarm Nodes table after hot reload at every recorded viewport and confirmed its client width equals its scroll width"
+    "Opened Edit scopes from a specific compact token card, verified the dialog stayed within the 375px viewport, and cancelled without mutation",
+    "Opened Revoke from the same compact token card, verified the confirmation stayed within the 375px viewport, and cancelled without revoking the token",
+    "Inspected final phone pixels and confirmed every compact-card field and both management actions remain visible without horizontal scrolling",
+    "Measured the compact list and wide table at every recorded breakpoint and confirmed each active presentation has equal client and scroll widths"
   ]
 }
