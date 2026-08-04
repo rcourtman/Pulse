@@ -1072,7 +1072,7 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
     case 'lastSeen':
       return 'hidden lg:table-cell lg:w-[6%]';
     case 'ip':
-      return 'hidden xl:table-cell xl:w-[8%]';
+      return 'agent-machine-address-column hidden xl:table-cell xl:w-[8%]';
     case 'raid':
       return 'hidden xl:table-cell xl:w-[6%]';
     case 'arch':
@@ -1537,7 +1537,11 @@ export const AgentsMachinesTable: Component<{
                         hostname(),
                         primaryIp(),
                         lastSeenLabel(),
-                        !columnVisibility.isColumnVisible('ip'),
+                        // The dedicated IP column is container-responsive. Keep the
+                        // primary address in the identity subtitle as well so a user
+                        // enabling that column never makes the address disappear in a
+                        // narrower table pane.
+                        true,
                         !columnVisibility.isColumnVisible('lastSeen'),
                       );
                     const ipValues = () => {

@@ -273,6 +273,16 @@
     display: none;
   }
 
+  /*
+    A primary address is one of the first machine identifiers operators reach
+    for. When they explicitly enable it, reveal the column at a common wide
+    desktop pane instead of holding it until the generic extra-wide threshold.
+    The compact identity subtitle remains available below this point.
+  */
+  .table-scroll-shell :is(th, td).hidden.xl\:table-cell.agent-machine-address-column {
+    display: none;
+  }
+
   .k8s-deployment-ready-total {
     display: inline;
   }
@@ -305,6 +315,12 @@
 
     .k8s-deployment-ready-total {
       display: none;
+    }
+  }
+
+  @container (min-width: 80rem) {
+    .table-scroll-shell :is(th, td).hidden.xl\:table-cell.agent-machine-address-column {
+      display: table-cell;
     }
   }
 

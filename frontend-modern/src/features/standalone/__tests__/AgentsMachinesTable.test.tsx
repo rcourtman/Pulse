@@ -290,7 +290,9 @@ describe('AgentsMachinesTable', () => {
     await fireEvent.click(screen.getByLabelText('RAID'));
 
     expect(screen.getByRole('button', { name: 'Sort by IP' })).toBeInTheDocument();
-    expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThan(0);
+    // The primary IP remains in the compact identity subtitle as a fallback
+    // while the dedicated user-selected column is container-hidden.
+    expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('1 clean')).toBeInTheDocument();
     const memoryBar = screen.getByTestId('agent-machine-memory-bar');
     expect(memoryBar).toHaveAttribute('data-cache', '10');

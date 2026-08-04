@@ -1,72 +1,43 @@
 {
   "version": 1,
-  "base_sha": "aed20ba7bcb299c404b8ffafca6ee79641c34c00",
-  "verified_at": "2026-08-04T17:11:18Z",
+  "base_sha": "207779529bf9dcbf3168529b03b19d270a332171",
+  "verified_at": "2026-08-04T17:30:39Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/AICostDashboard.tsx",
-    "frontend-modern/src/components/shared/WebInterfaceUrlField.tsx",
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
     "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/AICostDashboard.tsx": "661472f1e4d209cb24d4e3694ec36f7b661c996bb367b1d2da51435ca4485ef1",
-    "frontend-modern/src/components/shared/WebInterfaceUrlField.tsx": "c37017f1ccfee314984fada4724146bfe016c09ca9743fcc45c67e10284f5d15",
-    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "24c312008f491ac4f434a05485702467bd1dc8c55237eb57c70524b35366ecad",
-    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "ce87a80fa27d9318101d6c9fb425e6c4546f58f354efb93f5fb8365d6aa88501",
-    "frontend-modern/src/index.css": "fb58633b35b0649ac9ba533148938ec576f5947a3a1e3781177e848e3cf9dde7"
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "36495918506ee371af8dbaa8cba57556573deb24bb8687f7eae3ef8f1d2ebc02",
+    "frontend-modern/src/index.css": "f54fadadbe33afa3c74c8c272c5d82a099c9176bba0e4df93b9d2f6e53026a39"
   },
   "routes": [
+    "/standalone/machines",
     "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/replication",
-    "/proxmox/backups?view=coverage",
-    "/proxmox/ceph",
-    "/proxmox/mail",
-    "/docker/overview",
-    "/docker/images",
-    "/docker/storage",
-    "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/truenas/overview",
-    "/vmware/overview",
-    "/standalone",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/alerts/notifications",
-    "/alerts/schedule",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure",
-    "/settings/pulse-intelligence/provider"
+    "/proxmox/storage?tab=disks&source=proxmox-all",
+    "/settings/system-updates",
+    "/settings/support/reporting",
+    "/settings/infrastructure/agent-doctor",
+    "/settings/monitoring/availability"
   ],
   "viewports": [
     { "width": 375, "height": 900 },
-    { "width": 540, "height": 900 },
-    { "width": 640, "height": 900 },
     { "width": 768, "height": 900 },
     { "width": 1024, "height": 900 },
     { "width": 1440, "height": 900 }
   ],
   "states": [
-    "Rendered mock-data table matrices for every Proxmox, Docker, Kubernetes, TrueNAS, and vSphere workflow at phone, tablet, laptop, and desktop widths",
-    "Rendered Machines, Alerts overview and history, every platform threshold table, notifications, schedules, Actions, and Patrol at six widths",
-    "Verified settings source-manager card/table transitions and feature-gated empty settings routes",
-    "Verified AI provider cost history with Provider, Model, and spend prioritized before token detail according to the actual content-pane width",
-    "Verified Docker Swarm host-only fallback and full manager inventory with services, tasks, nodes, secrets, and configs",
-    "Verified expanded Proxmox Mail Gateway cluster-node detail and the conditional top-domain table priority rules",
-    "Verified expanded Docker host details and wrapped missing-web-interface guidance inside the inline table drawer"
+    "Rendered the Machines table with its default columns and with the user-selected IP column at phone and wide desktop sizes",
+    "Verified that a selected primary IP remains in the compact machine identity subtitle while the dedicated column is container-hidden",
+    "Verified that the selected sortable IP column appears once the actual machine table pane reaches 80rem at a 1440px viewport",
+    "Rendered Proxmox overview workload and node drawers, workload history, and physical-disk history details at 375px",
+    "Rendered update, reporting, agent-doctor, and availability settings surfaces at phone, tablet, and desktop widths"
   ],
   "interactions": [
-    "Compared rendered table and page client widths against scroll widths across more than 230 route-and-viewport states",
-    "Expanded mail-gateway-eu and confirmed the nested Node, Queue, and Oldest table fits at 375 pixels before progressively revealing Role, Uptime, and Load",
-    "Expanded the Ops Services 01 Swarm host drawer and checked descendant overflow and helper-copy wrapping at 375 pixels",
-    "Regenerated the small mock Docker estate and confirmed real Swarm service, task, node, secret, and config rows render",
-    "Compared visible Swarm columns at 375, 540, 640, 768, 1024, and 1440 pixels with zero page or table overflow",
-    "Compared AI cost columns at 375, 540, 640, 768, 1024, and 1440 pixels, including the narrower settings content pane at 1024 pixels",
-    "Inspected mobile pixels for AI cost history, the full Swarm workflow, and expanded Mail Gateway details after the final changes"
+    "Opened Filters, View preferences, and Columns on Machines; enabled IP, resized from 375px to 1440px, then reset the saved preference",
+    "Confirmed the Machines table and page have equal client and scroll widths at 375px and 1440px after the IP-column change",
+    "Pinned IP in the Proxmox workload column picker at 375px and confirmed the requested column appears with deliberate table-only scrolling before reset",
+    "Expanded a Proxmox workload, switched to its History tab, expanded a Proxmox node, and expanded a physical disk without page overflow",
+    "Inspected final mobile pixels for the compact Machines table and the expanded Proxmox node drawer"
   ]
 }
