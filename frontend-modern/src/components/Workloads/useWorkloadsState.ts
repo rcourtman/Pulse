@@ -66,6 +66,7 @@ export interface WorkloadsSurfaceProps {
   vms: VM[];
   containers: Container[];
   nodes: Node[];
+  layoutWidth?: Accessor<number | null | undefined>;
   useWorkloads?: boolean;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
@@ -271,6 +272,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
+    workloadTableMinimumWidth,
     workloadMetricDisplayMode,
     workloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
@@ -286,6 +288,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     columnVisibilityStorageScope: props.columnVisibilityStorageScope,
     additionalDefaultHiddenColumnIds: props.additionalDefaultHiddenColumnIds,
     columnLabelOverrides: props.columnLabelOverrides,
+    layoutWidth: props.layoutWidth,
     setShowFilters,
     showFilters,
     viewMode: effectiveViewMode,
@@ -585,6 +588,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
+    workloadTableMinimumWidth,
     workloadNodeOptions,
     workloads,
     workloadInventoryIssues,

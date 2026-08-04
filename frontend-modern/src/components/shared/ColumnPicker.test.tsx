@@ -95,6 +95,24 @@ describe('ColumnPicker', () => {
     expect(screen.getByText('2 hidden')).toBeInTheDocument();
   });
 
+  it('keeps reset available for explicit overrides even when no column is hidden', async () => {
+    const onReset = vi.fn();
+    render(() => (
+      <ColumnPicker
+        columns={[{ id: 'subject', label: 'Subject' }]}
+        isHidden={() => false}
+        onToggle={vi.fn()}
+        onReset={onReset}
+        showReset
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /columns/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset' }));
+
+    expect(onReset).toHaveBeenCalledOnce();
+  });
+
   it('closes when the user clicks outside the open picker', async () => {
     render(() => (
       <ColumnPicker

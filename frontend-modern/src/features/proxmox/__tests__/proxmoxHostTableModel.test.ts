@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getProxmoxHostColumnWidthStyle,
   getProxmoxHostTableMinWidthClass,
+  getProxmoxHostTableLayoutModeForContainer,
   getProxmoxHostVisibleColumnsForLayout,
 } from '../proxmoxHostTableModel';
 
@@ -12,30 +13,44 @@ describe('proxmoxHostTableModel', () => {
     const ids = columns.map((column) => column.id);
 
     expect(ids).toEqual(['node', 'cpu', 'memory', 'disk']);
-    expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-full');
+    expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-[36rem]');
     expect(getProxmoxHostColumnWidthStyle('node', 'mobile', ids)).toEqual({ width: '40%' });
     expect(getProxmoxHostColumnWidthStyle('cpu', 'mobile', ids)).toEqual({ width: '20%' });
     expect(getProxmoxHostColumnWidthStyle('memory', 'mobile', ids)).toEqual({ width: '20%' });
     expect(getProxmoxHostColumnWidthStyle('disk', 'mobile', ids)).toEqual({ width: '20%' });
   });
 
-  it('adds temperature and guest counts before slower-changing metadata on tablet', () => {
+  it('adds operational context before inventory metadata on tablet', () => {
     expect(getProxmoxHostVisibleColumnsForLayout('tablet').map((column) => column.id)).toEqual([
       'node',
       'cpu',
       'memory',
       'disk',
       'temp',
-      'vms',
-      'cts',
+      'uptime',
+      'cluster',
     ]);
-    expect(getProxmoxHostTableMinWidthClass('tablet')).toBe('min-w-full');
+    expect(getProxmoxHostTableMinWidthClass('tablet')).toBe('min-w-[50rem]');
   });
 
-  it('keeps the full host inventory table on compact and wide layouts', () => {
+  it('adds guest counts on compact and reserves version for wide layouts', () => {
     const compactIds = getProxmoxHostVisibleColumnsForLayout('compact').map((column) => column.id);
 
     expect(compactIds).toEqual([
+      'node',
+      'cpu',
+      'memory',
+      'disk',
+      'temp',
+      'uptime',
+      'vms',
+      'cts',
+      'cluster',
+    ]);
+    expect(getProxmoxHostColumnWidthStyle('cluster', 'compact', compactIds)).toEqual({
+      width: '10%',
+    });
+    expect(getProxmoxHostVisibleColumnsForLayout('wide').map((column) => column.id)).toEqual([
       'node',
       'version',
       'cpu',
@@ -47,16 +62,22 @@ describe('proxmoxHostTableModel', () => {
       'cts',
       'cluster',
     ]);
-    expect(getProxmoxHostColumnWidthStyle('cluster', 'compact', compactIds)).toEqual({
-      width: '10.7527%',
-    });
+  });
+
+  it('chooses host columns from available container width', () => {
+    expect(getProxmoxHostTableLayoutModeForContainer(799)).toBe('mobile');
+    expect(getProxmoxHostTableLayoutModeForContainer(800)).toBe('tablet');
+    expect(getProxmoxHostTableLayoutModeForContainer(1039)).toBe('tablet');
+    expect(getProxmoxHostTableLayoutModeForContainer(1040)).toBe('compact');
+    expect(getProxmoxHostTableLayoutModeForContainer(1319)).toBe('compact');
+    expect(getProxmoxHostTableLayoutModeForContainer(1320)).toBe('wide');
   });
 
   it('fits the container on compact and reserves the fixed floor only on wide', () => {
-    // The compact band (900-1440px) covers most laptops. Forcing a 1240px floor
+    // The compact band covers most laptops. Forcing a 1240px floor
     // there pushed the rightmost column behind a horizontal scroll, so compact
     // now fits its container; only wide keeps the fixed-width floor.
-    expect(getProxmoxHostTableMinWidthClass('compact')).toBe('min-w-full');
+    expect(getProxmoxHostTableMinWidthClass('compact')).toBe('min-w-[64rem]');
     expect(getProxmoxHostTableMinWidthClass('wide')).toBe('min-w-[1240px]');
   });
 });

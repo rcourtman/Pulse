@@ -26,11 +26,11 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
   memory: 'mobile',
   disk: 'mobile',
   temp: 'tablet',
-  vms: 'tablet',
-  cts: 'tablet',
-  version: 'compact',
-  uptime: 'compact',
-  cluster: 'compact',
+  uptime: 'tablet',
+  cluster: 'tablet',
+  vms: 'compact',
+  cts: 'compact',
+  version: 'wide',
 };
 
 // CPU, memory, and disk render the same kind of usage bar, so they share
@@ -40,16 +40,16 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
 // columns (version pill, uptime, temp gauge, vms/cts badges, cluster
 // pill) take only what they need.
 const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
-  node: 17,
-  version: 6,
-  uptime: 6,
+  node: 18,
+  version: 7,
+  uptime: 7,
   cpu: 13,
   memory: 13,
   disk: 13,
-  temp: 5,
+  temp: 6,
   vms: 5,
   cts: 5,
-  cluster: 10,
+  cluster: 13,
 };
 
 const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -63,15 +63,34 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
     disk: 20,
   },
   tablet: {
-    node: 28,
-    cpu: 18,
-    memory: 18,
-    disk: 18,
-    temp: 6,
-    vms: 6,
-    cts: 6,
+    node: 22,
+    cpu: 15,
+    memory: 15,
+    disk: 15,
+    temp: 8,
+    uptime: 11,
+    cluster: 14,
   },
-  compact: HOST_COLUMN_DESKTOP_WIDTHS,
+  compact: {
+    node: 20,
+    cpu: 15,
+    memory: 15,
+    disk: 15,
+    temp: 7,
+    uptime: 8,
+    vms: 5,
+    cts: 5,
+    cluster: 10,
+  },
+};
+
+export const getProxmoxHostTableLayoutModeForContainer = (
+  width: number,
+): WorkloadTableLayoutMode => {
+  if (!Number.isFinite(width) || width < 800) return 'mobile';
+  if (width < 1040) return 'tablet';
+  if (width < 1320) return 'compact';
+  return 'wide';
 };
 
 // Column order follows the canonical recommended ordering documented in
@@ -112,12 +131,15 @@ export const getProxmoxHostColumnWidthStyle = (
   return getPlatformTableWeightedColumnWidthStyle(columnId, weights, visibleColumnIds);
 };
 
-// Only the `wide` layout (>= 1440px viewport) reserves a fixed 1240px floor so
-// the metric bars hit their canonical 140px width. The `compact` band spans
-// 900-1440px, which covers most laptops; forcing 1240px there pushed the
-// rightmost column (Cluster) behind a horizontal scroll that is easy to miss.
-// Because the table is `table-fixed` with percentage column widths, `min-w-full`
-// fits the container exactly and the bars scale down gracefully instead.
+// Each layout has an explicit readable floor. The shared platform shell
+// otherwise applies its generic 48rem minimum even to the four-column mobile
+// layout, causing needless overflow around tablet widths. Wider modes retain
+// progressively larger floors so metric bars and labels never collapse.
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
-): 'min-w-full' | 'min-w-[1240px]' => (layoutMode === 'wide' ? 'min-w-[1240px]' : 'min-w-full');
+): 'min-w-[36rem]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
+  if (layoutMode === 'mobile') return 'min-w-[36rem]';
+  if (layoutMode === 'tablet') return 'min-w-[50rem]';
+  if (layoutMode === 'compact') return 'min-w-[64rem]';
+  return 'min-w-[1240px]';
+};

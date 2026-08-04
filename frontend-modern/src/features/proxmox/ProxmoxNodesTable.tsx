@@ -55,6 +55,7 @@ import {
 } from './proxmoxPageModel';
 import {
   getProxmoxHostColumnWidthStyle,
+  getProxmoxHostTableLayoutModeForContainer,
   getProxmoxHostTableMinWidthClass,
   getProxmoxHostVisibleColumnsForLayout,
   type ProxmoxHostTableColumn,
@@ -186,6 +187,7 @@ export const ProxmoxNodesTable: Component<{
   guests: Resource[];
   metricDisplayMode?: Accessor<WorkloadsMetricDisplayMode>;
   metricHistoryRange?: Accessor<WorkloadTableMetricHistoryRange>;
+  layoutWidth?: Accessor<number | null | undefined>;
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
@@ -195,7 +197,12 @@ export const ProxmoxNodesTable: Component<{
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = alertsActivation.detectionEnabled;
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
-  const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
+  const layoutMode = createMemo(() => {
+    const measuredWidth = props.layoutWidth?.();
+    return typeof measuredWidth === 'number' && measuredWidth > 0
+      ? getProxmoxHostTableLayoutModeForContainer(measuredWidth)
+      : getWorkloadTableLayoutMode(breakpoint.width());
+  });
   const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';

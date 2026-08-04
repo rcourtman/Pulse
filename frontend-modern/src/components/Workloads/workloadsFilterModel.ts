@@ -50,6 +50,7 @@ export interface WorkloadsFilterProps {
     isColumnHidden: (id: string) => boolean;
     onColumnToggle: (id: string) => void;
     onColumnReset?: () => void;
+    showReset?: boolean;
   };
   hostFilter?: WorkloadsToolbarFilterConfig;
   platformFilter?: WorkloadsToolbarFilterConfig;

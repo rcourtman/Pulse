@@ -29,6 +29,7 @@ import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOut
 import { PlatformOutdatedSensorSetupNotice } from '@/features/platformPage/PlatformOutdatedSensorSetupNotice';
 import { collectOutdatedSensorSetupNodes } from '@/features/platformPage/sensorSetup';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   PlatformErrorState,
@@ -272,10 +273,12 @@ interface ProxmoxOverviewProps {
 
 function ProxmoxOverview(props: ProxmoxOverviewProps) {
   const currentModel = createMemo(() => props.model?.() ?? EMPTY_PROXMOX_PAGE_MODEL);
+  const overviewWidth = useObservedElementWidth();
   const workloadsState = useWorkloadsState({
     vms: [],
     containers: [],
     nodes: [],
+    layoutWidth: overviewWidth.width,
     useWorkloads: true,
     forcedPlatform: PROXMOX_PLATFORM_FILTER,
     excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES,
@@ -309,7 +312,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
   );
 
   return (
-    <div class="space-y-4">
+    <div ref={overviewWidth.setElement} class="pulse-wide-data-surface space-y-4">
       <Show when={showSharedFilterToolbar()}>
         <div data-summary-clear-ignore>
           <WorkloadsFilter
@@ -355,6 +358,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         guests={currentModel().guests}
         metricDisplayMode={props.metricDisplayMode}
         metricHistoryRange={props.metricHistoryRange}
+        layoutWidth={overviewWidth.width}
         emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
         emptyTitle="No Proxmox VE nodes"
         emptyDescription="Proxmox VE nodes appear here once a PVE host reports inventory."

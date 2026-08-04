@@ -354,6 +354,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
                   isHidden={visibility().isColumnHidden}
                   onToggle={visibility().onColumnToggle}
                   onReset={visibility().onColumnReset}
+                  showReset={visibility().showReset}
                 />
               </div>
             )}

@@ -22,6 +22,9 @@ export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
 // a user explicitly pins (see forcedColumnIds); the breakpoint default must
 // fit, so wide waits until the shell can actually hold the full set.
 export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1536;
+export const WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH = 720;
+export const WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH = 900;
+export const WORKLOAD_TABLE_CONTAINER_WIDE_WIDTH = 1440;
 
 const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
   mobile: 0,
@@ -548,6 +551,13 @@ export const getWorkloadTableLayoutMode = (width: number): WorkloadTableLayoutMo
   return 'wide';
 };
 
+export const getWorkloadTableLayoutModeForContainer = (width: number): WorkloadTableLayoutMode => {
+  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH) return 'mobile';
+  if (width < WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH) return 'tablet';
+  if (width < WORKLOAD_TABLE_CONTAINER_WIDE_WIDTH) return 'compact';
+  return 'wide';
+};
+
 export const getWorkloadVisibleColumnsForLayout = (
   columns: ColumnDef[],
   layoutMode: WorkloadTableLayoutMode,
@@ -557,6 +567,31 @@ export const getWorkloadVisibleColumnsForLayout = (
     const minimumLayout = WORKLOAD_COLUMN_MIN_LAYOUT[column.id] ?? 'wide';
     return WORKLOAD_TABLE_LAYOUT_ORDER[minimumLayout] <= layoutRank;
   });
+};
+
+const parsePixelWidth = (value: string | undefined): number => {
+  const match = value?.trim().match(/^(\d+(?:\.\d+)?)px$/);
+  return match ? Number(match[1]) : 0;
+};
+
+export const getWorkloadTableReadableMinWidth = (
+  columns: readonly ColumnDef[],
+  layoutMode: WorkloadTableLayoutMode,
+  forcedColumnIds: ReadonlySet<string>,
+): number | null => {
+  const layoutRank = WORKLOAD_TABLE_LAYOUT_ORDER[layoutMode];
+  const hasForcedOverflowColumn = columns.some((column) => {
+    if (!forcedColumnIds.has(column.id)) return false;
+    const minimumLayout = WORKLOAD_COLUMN_MIN_LAYOUT[column.id] ?? 'wide';
+    return WORKLOAD_TABLE_LAYOUT_ORDER[minimumLayout] > layoutRank;
+  });
+  if (!hasForcedOverflowColumn) return null;
+
+  const width = columns.reduce(
+    (total, column) => total + parsePixelWidth(column.minWidth ?? column.width),
+    0,
+  );
+  return width > 0 ? Math.ceil(width) : null;
 };
 
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {

@@ -257,7 +257,7 @@ describe('platform overview layout guardrails', () => {
 
   it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {
     for (const source of overviewSurfaceSources) {
-      expect(source).toMatch(/<div[^>]*class="space-y-4"/);
+      expect(source).toMatch(/<div[^>]*class="[^"]*\bspace-y-4\b[^"]*"/);
       expect(source).toContain('<PlatformSectionTabs');
       expect(source).toContain('<PlatformTableLoadingState');
       expect(source).toContain('PlatformTableEmptyState');

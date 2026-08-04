@@ -101,6 +101,13 @@ describe('App platform navigation admission', () => {
 });
 
 describe('App architecture', () => {
+  it('limits the wider shell treatment to marked data surfaces', () => {
+    expect(appStylesSource).toContain(
+      '.pulse-shell:has(.pulse-wide-data-surface):not(.pulse-shell--full-width)',
+    );
+    expect(appStylesSource).toContain('--pulse-shell-max-width: min(97vw, 1920px)');
+  });
+
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
     expect(appSource).toContain(
       "import { AppLayout, sessionHasSettingsAccess } from '@/AppLayout';",

@@ -69,12 +69,13 @@ describe('useWorkloadsControlsState', () => {
         expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
         expect(menu.isColumnHidden('netIo')).toBe(false);
         expect(state.columnVisibility.hiddenColumns()).not.toContain('netIo');
+        expect(state.workloadsFilterColumnVisibility().showReset).toBe(true);
 
-        // Second toggle unpins it; the column returns to its layout default
-        // rather than becoming user-hidden on wide viewports too.
+        // Second toggle hides it everywhere, so the same explicit choice has
+        // the same meaning regardless of the current responsive stage.
         menu.onColumnToggle('netIo');
         expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
-        expect(state.columnVisibility.hiddenColumns()).not.toContain('netIo');
+        expect(state.columnVisibility.hiddenColumns()).toContain('netIo');
 
         // Layout-visible columns keep the plain hide/show semantics.
         menu.onColumnToggle('backup');
@@ -87,6 +88,36 @@ describe('useWorkloadsControlsState', () => {
         expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
         menu.onColumnReset();
         expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+        expect(state.workloadsFilterColumnVisibility().showReset).toBe(false);
+      } finally {
+        dispose();
+      }
+    });
+  });
+
+  it('keeps a user-shown column pinned when its measured container narrows', () => {
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const [layoutWidth, setLayoutWidth] = createSignal(1500);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+          layoutWidth,
+        });
+        const menu = state.workloadsFilterColumnVisibility();
+
+        expect(state.workloadTableLayoutMode()).toBe('wide');
+        menu.onColumnToggle('netIo');
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+        menu.onColumnToggle('netIo');
+        expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
+
+        setLayoutWidth(1000);
+        expect(state.workloadTableLayoutMode()).toBe('compact');
+        expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
+        expect(state.workloadTableMinimumWidth()).toBeGreaterThan(1000);
       } finally {
         dispose();
       }

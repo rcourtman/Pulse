@@ -7,6 +7,7 @@ export interface ColumnPickerProps {
   isHidden: (id: string) => boolean;
   onToggle: (id: string) => void;
   onReset?: () => void;
+  showReset?: boolean;
   inline?: boolean;
 }
 
@@ -32,7 +33,9 @@ export function useColumnPickerState(props: ColumnPickerProps) {
   });
 
   const hiddenCount = createMemo(() => getHiddenColumnCount(props.columns, props.isHidden));
-  const showReset = createMemo(() => shouldShowColumnPickerReset(props.onReset, hiddenCount()));
+  const showReset = createMemo(
+    () => Boolean(props.showReset) || shouldShowColumnPickerReset(props.onReset, hiddenCount()),
+  );
 
   return {
     handleColumnToggle: (id: string) => props.onToggle(id),
