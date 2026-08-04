@@ -20,6 +20,7 @@ import {
 } from '@/utils/securityScorePresentation';
 
 interface SecurityStatusInfo {
+  detailLevel?: 'public' | 'authenticated' | 'privileged';
   hasAuthentication: boolean;
   ssoEnabled?: boolean;
   hasProxyAuth?: boolean;
@@ -43,9 +44,18 @@ interface SecurityOverviewPanelProps {
 }
 
 export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (props) => {
+  // The status endpoint truncates by authority: only a privileged response
+  // carries the settings-derived posture fields (exportProtected, hasHTTPS,
+  // hasAuditLogging, ...). Scoring a truncated response reads every absent
+  // field as "No" and shows false negatives to non-admin roles (#1675).
+  const hasPostureAuthority = createMemo(() => {
+    const status = props.securityStatus();
+    if (!status) return false;
+    return status.detailLevel === undefined || status.detailLevel === 'privileged';
+  });
   const postureStatus = createMemo<SecurityPostureStatus | null>(() => {
     const status = props.securityStatus();
-    if (!status) return null;
+    if (!status || !hasPostureAuthority()) return null;
     return {
       ...status,
       apiTokenConfigured: status.apiTokenConfigured === true,
@@ -129,6 +139,17 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
             </div>
           </div>
         </SettingsLoadingSkeleton>
+      </Show>
+
+      <Show
+        when={!props.securityStatusLoading() && props.securityStatus() && !hasPostureAuthority()}
+      >
+        <CalloutCard
+          tone="info"
+          title="Security posture needs an admin session"
+          description="The security score and hardening checks read the instance configuration, which this account cannot access. Sign in as an administrator to review them."
+          icon={<Info class="h-5 w-5" />}
+        />
       </Show>
 
       <Show when={!props.securityStatusLoading() && postureStatus()}>

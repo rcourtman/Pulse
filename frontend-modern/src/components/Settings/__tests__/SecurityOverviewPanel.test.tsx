@@ -57,4 +57,48 @@ describe('SecurityOverviewPanel', () => {
     expect(screen.getByText('Enable HTTPS for public access')).toBeInTheDocument();
     expect(screen.getAllByText('Act now')).toHaveLength(3);
   });
+
+  // A truncated status response omits the settings-derived posture fields, so
+  // scoring it would show false negatives to non-admin roles (#1675).
+  it('hides the posture score behind an explanation for non-privileged viewers', () => {
+    render(() => (
+      <SecurityOverviewPanel
+        securityStatus={() => ({
+          detailLevel: 'authenticated',
+          hasAuthentication: true,
+          requiresAuth: true,
+        })}
+        securityStatusLoading={() => false}
+      />
+    ));
+
+    expect(screen.getByText('Security posture needs an admin session')).toBeInTheDocument();
+    expect(screen.queryByText('Security Posture')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hardening priorities')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recommended hardening steps')).not.toBeInTheDocument();
+    expect(screen.queryByText('Act now')).not.toBeInTheDocument();
+  });
+
+  it('shows the posture score for privileged viewers', () => {
+    render(() => (
+      <SecurityOverviewPanel
+        securityStatus={() => ({
+          detailLevel: 'privileged',
+          hasAuthentication: true,
+          apiTokenConfigured: true,
+          exportProtected: true,
+          unprotectedExportAllowed: false,
+          hasHTTPS: true,
+          hasAuditLogging: true,
+          requiresAuth: true,
+          publicAccess: false,
+          isPrivateNetwork: true,
+        })}
+        securityStatusLoading={() => false}
+      />
+    ));
+
+    expect(screen.queryByText('Security posture needs an admin session')).not.toBeInTheDocument();
+    expect(screen.getByText('Security Posture')).toBeInTheDocument();
+  });
 });

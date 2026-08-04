@@ -1,54 +1,36 @@
 {
   "version": 1,
-  "base_sha": "e4bc063eb0a070484a0e22c9d6da20fb318df3d5",
-  "verified_at": "2026-08-04T09:43:18Z",
+  "base_sha": "1807ab294cc53d397fb8b9e7ab1b8a3d3bca8137",
+  "verified_at": "2026-08-04T09:47:19Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Storage/DiskList.tsx",
-    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
-    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx",
-    "frontend-modern/src/features/storageBackups/diskPresentation.ts",
-    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts",
-    "frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts"
+    "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Storage/DiskList.tsx": "496706e7748774b05f04a8299d3f375d2acd51c421d2c6837d383ca1984c55db",
-    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "624de18ccae7fa7b082dac65169608145cad96a3bfe3c488ca722eb94e479e5a",
-    "frontend-modern/src/components/Storage/StoragePoolsTable.tsx": "30a7f26a69e36191a55034e220a848707cdc305b9b51e4b30edbd45552b0d500",
-    "frontend-modern/src/features/storageBackups/diskPresentation.ts": "3d0403057a70aeea76ac0aa153a4ed41557978547bf8267386f3e51e49f44253",
-    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "8a0d6d574aa51147f673c299455310e69b709b648a68f127897b51715dd9c92e",
-    "frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts": "3f84b93a3ef161ccde6195d9970cbfcdcdb4083819d72ae01d5d9e3164528bb3"
+    "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx": "05d38e5a9b7235804dd388b893f58b79818fbae50c90244edc077c6cbcb6c8b4"
   },
-  "routes": ["/proxmox/storage", "/proxmox/storage?tab=disks&source=proxmox-all"],
+  "routes": [
+    "/settings/security-overview"
+  ],
   "viewports": [
-    { "width": 375, "height": 900 },
-    { "width": 480, "height": 900 },
-    { "width": 640, "height": 900 },
-    { "width": 768, "height": 900 },
-    { "width": 800, "height": 900 },
-    { "width": 900, "height": 900 },
-    { "width": 1024, "height": 900 },
-    { "width": 1280, "height": 900 },
-    { "width": 1440, "height": 900 },
-    { "width": 1536, "height": 900 },
-    { "width": 1680, "height": 900 },
-    { "width": 1920, "height": 900 },
-    { "width": 2560, "height": 900 }
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
   ],
   "states": [
-    "Storage pool table in compact, operational, and full container-width layouts",
-    "Physical Disks table in compact, basic, operational, expanded, and full container-width layouts",
-    "Pulse Assistant open at 1280, 1536, and 1920 pixel viewports, reducing the real table container independently of the viewport",
-    "Expanded storage-pool capacity and configuration detail at desktop, Assistant-constrained, and 375 pixel widths",
-    "Expanded physical-disk SMART and live-I/O detail at desktop, operational, and 375 pixel widths",
-    "Filtered pool and disk inventories, sorted pool inventory, and restored default filters and ordering"
+    "Security Overview against the live dev backend as the local admin, a privileged /api/security/status caller, showing the real posture score of 60% Moderate with all seven posture cards populated from actual payload values",
+    "Recommended hardening steps callout rendered below the posture summary for the privileged session",
+    "Narrow 390x844 layout with the posture header and stacked posture cards rendering without horizontal document overflow"
   ],
   "interactions": [
-    "Switched repeatedly between Storage and Physical Disks using the real tab controls",
-    "Opened and closed Pulse Assistant and confirmed ResizeObserver-driven column stages update without reload or horizontal overflow",
-    "Expanded and collapsed pool and physical-disk rows and inspected their inline detail layouts",
-    "Sorted by Usage through the table header, inspected View preferences, and restored Priority ordering",
-    "Applied the pbs search at compact width, verified filtered results, and cleared the filter through the UI",
-    "Measured table client width, scroll width, visible headers, and document overflow across all listed viewports; every tested default and constrained state had zero table and document overflow"
+    "Fetched /api/security/status from the page session and confirmed detailLevel is privileged with hasHTTPS false, exportProtected true, hasAuditLogging false, apiTokenConfigured true, each matching the rendered card states, so privileged rendering is unchanged by the new gate",
+    "Confirmed the new admin-session callout is absent for the privileged session and the posture summary still renders",
+    "Read console messages filtered to errors on both viewports and found none",
+    "The truncated authenticated-level branch, which now renders the admin-session explanation instead of false negatives, cannot be reached on this instance because a non-admin RBAC session requires Pro SSO role mappings; that branch is proven by the new unit tests in SecurityOverviewPanel.test.tsx which assert the callout appears and the posture score and hardening sections stay hidden"
   ]
 }
