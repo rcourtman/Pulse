@@ -1,4 +1,4 @@
-import { For, Show, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -16,6 +16,14 @@ import {
 import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
 import type { StatusIndicatorVariant } from '@/utils/status';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
+
+import {
+  getBackupServerColumns,
+  getBackupServerColumnWidthStyle,
+  getBackupServerLayoutForContainer,
+  type BackupServerColumnId,
+} from './proxmoxBackupsTablePresentation';
 
 // "Backup servers" answers the two questions the coverage table can't: is my
 // PBS reachable, and is its datastore about to fill? Datastore fill is the
@@ -143,169 +151,233 @@ export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
   backups?: readonly PBSBackup[];
   emptyIcon?: JSX.Element;
+  layoutWidth?: Accessor<number | null | undefined>;
 }) {
   const rows = () => buildBackupServerRows(props.servers, props.backups ?? []);
+  const observedWidth = useObservedElementWidth();
+  const layoutMode = createMemo(() => {
+    const width = props.layoutWidth?.() ?? observedWidth.width();
+    return typeof width === 'number' && width > 0
+      ? getBackupServerLayoutForContainer(width)
+      : 'full';
+  });
+  const visibleColumns = createMemo(() => getBackupServerColumns(layoutMode()));
+  const columnVisible = (column: BackupServerColumnId) =>
+    visibleColumns().some((candidate) => candidate.id === column);
 
   return (
     <Show when={rows().length > 0}>
-      <PlatformTableShell
-        tableClass="min-w-[1020px] table-fixed text-xs"
-        colgroup={
-          <colgroup>
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '6%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '7%' }} />
-          </colgroup>
-        }
-        header={
-          <>
-            <TableHead class={getPlatformTableHeadClassForKind('name')}>Backup server</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>CPU</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Memory</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Uptime</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>Datastore</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Used</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Backups</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Dedup</TableHead>
-          </>
-        }
-        body={
-          <>
-            <For each={rows()}>
-              {(row) => {
-                const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
-                return (
-                  <TableRow class="hover:bg-surface-hover">
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-medium`}
-                    >
-                      {row.serverName}
-                    </TableCell>
-                    <TableCell class={getPlatformTableCellClassForKind('text')}>
-                      <div class="flex items-center gap-2">
-                        <StatusDot
-                          size="sm"
-                          variant={row.online ? 'success' : 'danger'}
-                          title={row.connectionLabel}
-                          ariaHidden
-                        />
-                        <span class="truncate text-[11px] text-base-content">
-                          {row.connectionLabel}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('text')} text-muted truncate text-[11px]`}
-                    >
-                      {row.version || '—'}
-                    </TableCell>
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                    >
-                      <Show
-                        when={row.online && row.cpuPercent !== undefined}
-                        fallback={<span class="text-muted">—</span>}
+      <div
+        ref={observedWidth.setElement}
+        data-proxmox-backups-table="servers"
+        data-proxmox-backups-layout={layoutMode()}
+      >
+        <PlatformTableShell
+          tableClass="min-w-[0px] table-fixed text-xs"
+          colgroup={
+            <colgroup>
+              <For each={visibleColumns()}>
+                {(column) => (
+                  <col
+                    style={getBackupServerColumnWidthStyle(column.id, layoutMode())}
+                    data-proxmox-backups-column={column.id}
+                  />
+                )}
+              </For>
+            </colgroup>
+          }
+          header={
+            <>
+              <TableHead class={getPlatformTableHeadClassForKind('name')}>Backup server</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+              <Show when={columnVisible('version')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
+              </Show>
+              <Show when={columnVisible('cpu')}>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>CPU</TableHead>
+              </Show>
+              <Show when={columnVisible('memory')}>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Memory
+                </TableHead>
+              </Show>
+              <Show when={columnVisible('uptime')}>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Uptime
+                </TableHead>
+              </Show>
+              <Show when={columnVisible('datastore')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Datastore</TableHead>
+              </Show>
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Used</TableHead>
+              <Show when={columnVisible('backups')}>
+                <TableHead
+                  class={getPlatformTableHeadClassForKind('numeric-value')}
+                  aria-label="Backups"
+                  title="Backups"
+                >
+                  {layoutMode() === 'full' ? 'Backups' : 'Count'}
+                </TableHead>
+              </Show>
+              <Show when={columnVisible('dedup')}>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Dedup
+                </TableHead>
+              </Show>
+            </>
+          }
+          body={
+            <>
+              <For each={rows()}>
+                {(row) => {
+                  const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
+                  return (
+                    <TableRow class="hover:bg-surface-hover">
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('name')} text-base-content truncate font-medium`}
                       >
-                        <PlatformTablePercentValue value={row.cpuPercent} />
-                      </Show>
-                    </TableCell>
-                    <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
-                      <Show
-                        when={row.online && row.memoryPercent !== undefined}
-                        fallback={<span class="text-muted">—</span>}
-                      >
-                        <span
-                          class="text-base-content"
-                          title={
-                            row.memoryTotal
-                              ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
-                              : undefined
-                          }
-                        >
-                          <PlatformTablePercentValue value={row.memoryPercent} />
-                        </span>
-                        <Show when={row.memoryTotal}>
-                          <span class="ml-1 text-[10px] text-muted tabular-nums">
-                            {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
-                          </span>
+                        <div class="min-w-0 truncate">{row.serverName}</div>
+                        <Show when={layoutMode() === 'compact' && row.datastore}>
+                          {(datastore) => (
+                            <div class="min-w-0 truncate font-mono text-[10px] font-normal text-muted">
+                              {datastore().name}
+                            </div>
+                          )}
                         </Show>
+                      </TableCell>
+                      <TableCell class={getPlatformTableCellClassForKind('text')}>
+                        <div class="flex items-center gap-2">
+                          <StatusDot
+                            size="sm"
+                            variant={row.online ? 'success' : 'danger'}
+                            title={row.connectionLabel}
+                            ariaHidden
+                          />
+                          <span class="truncate text-[11px] text-base-content">
+                            {row.connectionLabel}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <Show when={columnVisible('version')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-muted truncate text-[11px]`}
+                        >
+                          {row.version || '—'}
+                        </TableCell>
                       </Show>
-                    </TableCell>
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                    >
-                      <Show
-                        when={row.online && (row.uptimeSeconds ?? 0) > 0}
-                        fallback={<span class="text-muted">—</span>}
-                      >
-                        {formatPlatformTableUptimeValue(row.uptimeSeconds)}
+                      <Show when={columnVisible('cpu')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                        >
+                          <Show
+                            when={row.online && row.cpuPercent !== undefined}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            <PlatformTablePercentValue value={row.cpuPercent} />
+                          </Show>
+                        </TableCell>
                       </Show>
-                    </TableCell>
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
-                    >
-                      {row.datastore?.name ?? '—'}
-                    </TableCell>
-                    <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
-                      <Show
-                        when={row.datastore}
-                        fallback={<span class="text-muted">No datastore data</span>}
-                      >
-                        {(datastore) => (
-                          <div class="flex items-center justify-end gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={usageVariant(pct())}
-                              title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
-                              ariaHidden
+                      <Show when={columnVisible('memory')}>
+                        <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
+                          <Show
+                            when={row.online && row.memoryPercent !== undefined}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            <span
+                              class="text-base-content"
+                              title={
+                                row.memoryTotal
+                                  ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
+                                  : undefined
+                              }
+                            >
+                              <PlatformTablePercentValue value={row.memoryPercent} />
+                            </span>
+                            <Show when={row.memoryTotal && layoutMode() === 'full'}>
+                              <span class="ml-1 text-[10px] text-muted tabular-nums">
+                                {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
+                              </span>
+                            </Show>
+                          </Show>
+                        </TableCell>
+                      </Show>
+                      <Show when={columnVisible('uptime')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                        >
+                          <Show
+                            when={row.online && (row.uptimeSeconds ?? 0) > 0}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            {formatPlatformTableUptimeValue(row.uptimeSeconds)}
+                          </Show>
+                        </TableCell>
+                      </Show>
+                      <Show when={columnVisible('datastore')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
+                        >
+                          {row.datastore?.name ?? '—'}
+                        </TableCell>
+                      </Show>
+                      <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
+                        <Show
+                          when={row.datastore}
+                          fallback={<span class="text-muted">No datastore data</span>}
+                        >
+                          {(datastore) => (
+                            <div class="flex items-center justify-end gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={usageVariant(pct())}
+                                title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
+                                ariaHidden
+                              />
+                              <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
+                                <PlatformTablePercentValue value={pct()} />
+                              </span>
+                              <Show when={layoutMode() !== 'compact'}>
+                                <span class="truncate text-[10px] text-muted tabular-nums">
+                                  {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
+                                  {formatPlatformTableBytesValue(datastore().total)}
+                                </span>
+                              </Show>
+                            </div>
+                          )}
+                        </Show>
+                      </TableCell>
+                      <Show when={columnVisible('backups')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                        >
+                          <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
+                            <PlatformTableNumberValue
+                              value={row.backupCount}
+                              format={formatPlatformTableIntegerValue}
                             />
-                            <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
-                              <PlatformTablePercentValue value={pct()} />
-                            </span>
-                            <span class="text-[10px] text-muted tabular-nums">
-                              {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
-                              {formatPlatformTableBytesValue(datastore().total)}
-                            </span>
-                          </div>
-                        )}
+                          </Show>
+                        </TableCell>
                       </Show>
-                    </TableCell>
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                    >
-                      <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
-                        <PlatformTableNumberValue
-                          value={row.backupCount}
-                          format={formatPlatformTableIntegerValue}
-                        />
+                      <Show when={columnVisible('dedup')}>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums text-[11px]`}
+                        >
+                          <Show
+                            when={row.datastore?.deduplicationFactor}
+                            fallback={<span class="text-muted">—</span>}
+                          >
+                            {(factor) => <>{factor().toFixed(1)}×</>}
+                          </Show>
+                        </TableCell>
                       </Show>
-                    </TableCell>
-                    <TableCell
-                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums text-[11px]`}
-                    >
-                      <Show
-                        when={row.datastore?.deduplicationFactor}
-                        fallback={<span class="text-muted">—</span>}
-                      >
-                        {(factor) => <>{factor().toFixed(1)}×</>}
-                      </Show>
-                    </TableCell>
-                  </TableRow>
-                );
-              }}
-            </For>
-          </>
-        }
-      />
+                    </TableRow>
+                  );
+                }}
+              </For>
+            </>
+          }
+        />
+      </div>
     </Show>
   );
 }

@@ -1,36 +1,79 @@
 {
   "version": 1,
-  "base_sha": "e86ca7da057a613a59d5cea24b8230d9a3c914df",
-  "verified_at": "2026-08-04T10:06:40Z",
+  "base_sha": "3699dca8267b4a7522b8b193ee9749c0cf20dfd8",
+  "verified_at": "2026-08-04T10:26:06Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
-    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
-    "frontend-modern/src/utils/availabilityProbePresentation.ts",
-    "frontend-modern/src/utils/status.ts"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "44d3b0d6ba5fa8a940dac638040aa193b8d471dd9e2d4714a6591aa9ad2ddbc7",
-    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "a31b6f298a8fe56c9be698ba6361cf9f8151fda4ddc5171155bc5ca53aaf1bc6",
-    "frontend-modern/src/utils/availabilityProbePresentation.ts": "e51d19778743b991c81fea2d1e595b17c73e1cee35b40396e0583ce96b91371a",
-    "frontend-modern/src/utils/status.ts": "45b965582f025894b47bfa9d9fae43f6ef2308f71f481474138b84c548f97f50"
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "f181a1003f6f40dc33413c32a31223cc562997284e0314a0224f28b126f70eac",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "8531a197f43d429501c2daadb80229624611f637db5f3b489d944c708b52cb77",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "a619652c69da5e0d6a8ca21cde9c3e0e18449a241a53b6ebcd87b9f1ea83d474",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "e7c323af3e58d6dc027e6f5dfc56be95efbd37d8e2eb7f3dad6c91645f7b90dc"
   },
-  "routes": ["/proxmox/overview"],
+  "routes": [
+    "/proxmox/backups?view=coverage",
+    "/proxmox/backups?view=date"
+  ],
   "viewports": [
-    { "width": 1440, "height": 900 },
-    { "width": 390, "height": 844 }
+    {
+      "width": 375,
+      "height": 900
+    },
+    {
+      "width": 480,
+      "height": 900
+    },
+    {
+      "width": 640,
+      "height": 900
+    },
+    {
+      "width": 800,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 1536,
+      "height": 900
+    },
+    {
+      "width": 1920,
+      "height": 900
+    },
+    {
+      "width": 2560,
+      "height": 900
+    }
   ],
   "states": [
-    "Proxmox Overview against the live backend with 34 guest rows, 24 running and 10 stopped, and 36 attached availability checks none of which are currently failing",
-    "Every guest row status dot resolved through the new health indicator, reporting only Running or Stopped with no probe-degraded rows",
-    "Narrow 390px layout with the same 34 rows and the same dot resolution"
+    "Coverage and By date views across compact, basic, operational, expanded, and full container-aware table layouts",
+    "Compact 375px view showing operator-priority columns with workload identity details folded into the primary cell and no horizontal page or table overflow",
+    "Intermediate 480px, 640px, 800px, and 1024px layouts progressively adding node, source, resource, capacity, and task context only when the measured table container can support it",
+    "Wide 1280px, 1536px, 1920px, and 2560px layouts restoring the full operational detail set with readable, unclipped headings",
+    "Assistant open at 1280px, 1536px, and 1920px viewport widths, verifying layouts respond to the reduced content container rather than the browser viewport",
+    "Expanded coverage evidence for a protected workload and the independently measured orphaned-backup nested table at reduced container widths",
+    "Server summary, protection coverage, dated recoverable backups, expanded evidence, and provider detail grids all with scrollWidth equal to clientWidth and zero document overflow"
   ],
   "interactions": [
-    "Reloaded /proxmox after the change and read every guest row status dot by aria-label, counting 24 Running and 10 Stopped against a live payload of exactly 24 running and 10 stopped guests",
-    "Confirmed zero rows resolved to the new not-responding state, so consolidating the dot onto the health indicator introduces no false positives on a fleet whose probes all pass",
-    "Resized to 390x844 and confirmed the same 34 dots and labels with no horizontal document overflow",
-    "Read console messages filtered to errors at both viewports and found none",
-    "The degraded path is proven by unit test rather than in the browser because no attached check is currently failing on this instance; the new getGuestHealthIndicator cases were confirmed red with the degradation branch disabled and green with it restored",
-    "Verification ran in the shared checkout against this exact staged file content; the commit was assembled in an isolated worktree because another agent held the shared index and had receipt edits in flight"
+    "Switched repeatedly between Coverage and By date views while resizing through the full viewport matrix",
+    "Searched for bazarr and confirmed the filtered 1 of 35 workload result",
+    "Sorted the coverage table by Workload and exercised the Unknown posture filter before restoring All",
+    "Expanded and collapsed the bazarr coverage row to inspect backup evidence, provider detail grids, wrapped explanations, and compact task accessibility text",
+    "Expanded the orphaned-backups group and verified its nested table chooses a layout from its own narrower container",
+    "Filtered the dated feed to PVE file source and confirmed two of 862 backups, then restored all sources",
+    "Selected Tue 4 Aug in the date navigator and confirmed 42 of 862 backups in the dated group, then cleared the date filter",
+    "Opened and closed the Assistant while checking responsive column selection, header clipping, shell overflow, and document overflow"
   ]
 }

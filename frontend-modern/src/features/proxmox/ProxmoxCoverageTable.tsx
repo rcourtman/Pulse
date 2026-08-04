@@ -1,4 +1,4 @@
-import { For, Show, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -12,6 +12,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { StatusIndicatorVariant } from '@/utils/status';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
 import {
   getWorkloadRecoveryPostureLabel,
@@ -28,6 +29,14 @@ import {
   SortableHead,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
+import {
+  getCoverageColumns,
+  getCoverageColumnWidthStyle,
+  getCoverageLayoutForContainer,
+  isCompactBackupIdentityLayout,
+  isCoverageEvidenceColumnVisible,
+  type CoverageColumnId,
+} from './proxmoxBackupsTablePresentation';
 
 const coveragePostureVariant = (
   posture: WorkloadCoverageRow['posture'],
@@ -92,22 +101,23 @@ export function ProxmoxCoverageTable(props: {
   showArchiveColumn: boolean;
   showSnapshotColumn: boolean;
   showTaskColumn: boolean;
+  layoutWidth?: Accessor<number | null | undefined>;
 }) {
-  // Weighted column set; the conditional source/task columns drop out when
-  // empty fleet-wide, and table-fixed re-normalizes the rest.
-  const visibleColumns = () => [
-    { id: 'workload', weight: 18 },
-    { id: 'type', weight: 6 },
-    { id: 'targetId', weight: 7 },
-    { id: 'node', weight: 9 },
-    { id: 'posture', weight: 11 },
-    { id: 'latest', weight: 10 },
-    ...(props.showPbsColumn ? [{ id: 'pbs', weight: 11 }] : []),
-    ...(props.showArchiveColumn ? [{ id: 'archive', weight: 10 }] : []),
-    ...(props.showSnapshotColumn ? [{ id: 'snapshot', weight: 11 }] : []),
-    ...(props.showTaskColumn ? [{ id: 'task', weight: 8 }] : []),
-  ];
-  const totalColumnWeight = () => visibleColumns().reduce((sum, c) => sum + c.weight, 0);
+  const observedWidth = useObservedElementWidth();
+  const layoutMode = createMemo(() => {
+    const width = props.layoutWidth?.() ?? observedWidth.width();
+    return typeof width === 'number' && width > 0 ? getCoverageLayoutForContainer(width) : 'full';
+  });
+  const visibleColumns = createMemo(() =>
+    getCoverageColumns(layoutMode(), {
+      pbs: props.showPbsColumn,
+      archive: props.showArchiveColumn,
+      snapshot: props.showSnapshotColumn,
+      task: props.showTaskColumn,
+    }),
+  );
+  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
+  const columnVisible = (column: CoverageColumnId) => visibleColumnIds().includes(column);
   const columnCount = () => visibleColumns().length;
   const pbsSource = getProxmoxBackupSourcePresentation('pbs');
   const archiveSource = getProxmoxBackupSourcePresentation('archive');
@@ -130,388 +140,482 @@ export function ProxmoxCoverageTable(props: {
         />
       }
     >
-      <PlatformTableShell
-        tableClass="min-w-[1080px] table-fixed text-xs"
-        colgroup={
-          <colgroup>
-            <For each={visibleColumns()}>
-              {(column) => (
-                <col style={{ width: `${(column.weight / totalColumnWeight()) * 100}%` }} />
-              )}
-            </For>
-          </colgroup>
-        }
-        header={
-          <>
-            <SortableHead
-              label="Workload"
-              sortKey="workload"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="left"
-              headClass={getPlatformTableHeadClassForKind('name')}
-            />
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>
-              {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
-            </TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
-            <SortableHead
-              label="Posture"
-              sortKey="posture"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="left"
-              headClass={getPlatformTableHeadClassForKind('text')}
-            />
-            <SortableHead
-              label="Restore"
-              sortKey="latest"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="right"
-              headClass={getPlatformTableHeadClassForKind('numeric-value')}
-            />
-            <Show when={props.showPbsColumn}>
+      <div
+        ref={observedWidth.setElement}
+        data-proxmox-backups-table="coverage"
+        data-proxmox-backups-layout={layoutMode()}
+      >
+        <PlatformTableShell
+          tableClass="min-w-[0px] table-fixed text-xs"
+          colgroup={
+            <colgroup>
+              <For each={visibleColumns()}>
+                {(column) => (
+                  <col
+                    style={getCoverageColumnWidthStyle(column.id, layoutMode(), visibleColumnIds())}
+                    data-proxmox-backups-column={column.id}
+                  />
+                )}
+              </For>
+            </colgroup>
+          }
+          header={
+            <>
               <SortableHead
-                label="PBS snapshot"
-                sortKey="pbs"
+                label="Workload"
+                sortKey="workload"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('name')}
+              />
+              <Show when={columnVisible('type')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
+              </Show>
+              <Show when={columnVisible('targetId')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                  {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
+                </TableHead>
+              </Show>
+              <Show when={columnVisible('node')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
+              </Show>
+              <SortableHead
+                label="Posture"
+                sortKey="posture"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
                 onSort={props.onSort}
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
-            </Show>
-            <Show when={props.showArchiveColumn}>
               <SortableHead
-                label="PVE file"
-                sortKey="archive"
+                label={layoutMode() === 'compact' ? 'Age' : 'Restore'}
+                sortKey="latest"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
                 onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
+                align="right"
+                headClass={getPlatformTableHeadClassForKind('numeric-value')}
               />
-            </Show>
-            <Show when={props.showSnapshotColumn}>
-              <SortableHead
-                label="Guest snapshot"
-                sortKey="snapshot"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-            </Show>
-            <Show when={props.showTaskColumn}>
-              <SortableHead
-                label="Task"
-                sortKey="task"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-            </Show>
-          </>
-        }
-        body={
-          <>
-            <For each={props.rows}>
-              {(row) => {
-                const isExpanded = () => props.expandedKeys.has(row.key);
-                const evidence = () =>
-                  [...row.artifacts]
-                    .sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0))
-                    .slice(0, 8);
-                const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
-                return (
-                  <>
-                    <TableRow class="hover:bg-surface-hover">
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
-                      >
-                        <div class="flex min-w-0 items-center gap-2">
-                          <PlatformResourceDetailToggleButton
-                            expanded={isExpanded()}
-                            resourceLabel={row.workload.label}
-                            controlsId={detailRowId()}
-                            onToggle={() => props.onToggleExpand(row.key)}
-                          />
-                          <span class="min-w-0 truncate font-semibold">
-                            {row.workload.name || row.workload.label}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <ProxmoxBackupWorkloadTypeBadge
-                          type={row.workload.type}
-                          label={row.workload.typeLabel}
-                        />
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
-                      >
-                        {row.workload.vmid || '—'}
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                      >
-                        <Show when={row.workload.node} fallback={<span class="text-muted">—</span>}>
-                          {(node) => (
-                            <span class="inline-block max-w-full truncate" title={node()}>
-                              {node()}
-                            </span>
-                          )}
-                        </Show>
-                      </TableCell>
-                      <TableCell class={getPlatformTableCellClassForKind('text')}>
-                        <div class="flex items-center gap-2">
-                          <StatusDot
-                            size="sm"
-                            variant={coveragePostureVariant(row.posture)}
-                            title={
-                              row.protectionPosture?.explanation ??
-                              'Pulse does not have enough provider evidence to determine protection.'
-                            }
-                            ariaHidden
-                          />
-                          <span
-                            title={row.protectionPosture?.explanation}
-                            class={`truncate text-[11px] font-medium ${statusWordToneClass(
-                              coveragePostureVariant(row.posture),
-                            )}`}
-                          >
-                            {getWorkloadRecoveryPostureLabel(row.posture)}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                      >
-                        <Show
-                          when={row.latestRecovery}
-                          fallback={<span class="text-muted">No restore point</span>}
-                        >
-                          {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
-                        </Show>
-                      </TableCell>
-                      <Show when={props.showPbsColumn}>
+              <Show when={columnVisible('pbs')}>
+                <SortableHead
+                  label={layoutMode() === 'expanded' ? 'PBS' : 'PBS snapshot'}
+                  sortKey="pbs"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <Show when={columnVisible('archive')}>
+                <SortableHead
+                  label="PVE file"
+                  sortKey="archive"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <Show when={columnVisible('snapshot')}>
+                <SortableHead
+                  label={layoutMode() === 'expanded' ? 'Snapshot' : 'Guest snapshot'}
+                  sortKey="snapshot"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <Show when={columnVisible('task')}>
+                <SortableHead
+                  label={layoutMode() === 'compact' ? 'Job' : 'Task'}
+                  sortKey="task"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+            </>
+          }
+          body={
+            <>
+              <For each={props.rows}>
+                {(row) => {
+                  const isExpanded = () => props.expandedKeys.has(row.key);
+                  const evidence = () =>
+                    [...row.artifacts]
+                      .sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0))
+                      .slice(0, 8);
+                  const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
+                  return (
+                    <>
+                      <TableRow class="hover:bg-surface-hover">
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                         >
-                          <Show
-                            when={row.latestPBS}
-                            fallback={
-                              <span class="text-muted">{pbsSource.coverageFallbackLabel}</span>
-                            }
-                          >
-                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
-                          </Show>
-                        </TableCell>
-                      </Show>
-                      <Show when={props.showArchiveColumn}>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <Show
-                            when={row.latestArchive}
-                            fallback={
-                              <span class="text-muted">{archiveSource.coverageFallbackLabel}</span>
-                            }
-                          >
-                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
-                          </Show>
-                        </TableCell>
-                      </Show>
-                      <Show when={props.showSnapshotColumn}>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <Show
-                            when={row.latestSnapshot}
-                            fallback={
-                              <span class="text-muted">{snapshotSource.coverageFallbackLabel}</span>
-                            }
-                          >
-                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
-                          </Show>
-                        </TableCell>
-                      </Show>
-                      <Show when={props.showTaskColumn}>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <Show
-                            when={row.latestTask}
-                            fallback={<span class="text-muted">No recent task</span>}
-                          >
-                            {(task) => (
-                              <div class="flex items-center gap-2">
-                                <StatusDot
-                                  size="sm"
-                                  variant={
-                                    task().label === 'Failed'
-                                      ? 'danger'
-                                      : task().label === 'OK'
-                                        ? 'success'
-                                        : 'warning'
-                                  }
-                                  title={task().label}
-                                  ariaHidden
-                                />
-                                <span
-                                  class={`truncate ${statusWordToneClass(
-                                    taskWordVariant(task().label),
-                                  )}`}
-                                >
-                                  {task().label}
-                                </span>
+                          <div class="flex min-w-0 items-center gap-2">
+                            <PlatformResourceDetailToggleButton
+                              expanded={isExpanded()}
+                              resourceLabel={row.workload.label}
+                              controlsId={detailRowId()}
+                              onToggle={() => props.onToggleExpand(row.key)}
+                            />
+                            <div class="min-w-0">
+                              <div class="truncate font-semibold">
+                                {row.workload.name || row.workload.label}
                               </div>
-                            )}
-                          </Show>
-                        </TableCell>
-                      </Show>
-                    </TableRow>
-                    <Show when={isExpanded()}>
-                      <InlineDetailTableRow
-                        cellId={detailRowId()}
-                        class="bg-surface-alt/40"
-                        cellClass="px-3 py-2"
-                        contentClass=""
-                        colspan={columnCount()}
-                        data-inline-detail-for={row.key}
-                      >
-                        <div class="mb-2 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content">
-                          <span class="font-medium">
-                            {getWorkloadRecoveryPostureLabel(row.posture)}:
-                          </span>{' '}
-                          {row.protectionPosture?.explanation ??
-                            'Pulse cannot determine this workload’s protection because no complete provider evidence is linked to it.'}
-                        </div>
-                        <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
-                          <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
-                            <div class="bg-surface-alt px-2 py-1 text-[11px] font-medium text-base-content">
-                              Provider evidence
-                            </div>
-                            <div class="divide-y divide-border-subtle">
-                              <For each={row.protectionPosture?.providerStates ?? []}>
-                                {(provider) => (
-                                  <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1.5 text-[11px] sm:grid-cols-4">
-                                    <span class="font-medium text-base-content">
-                                      {providerLabel(provider.provider)}
-                                    </span>
-                                    <span class="text-muted">
-                                      Job {evidenceQualityLabel(provider.jobState)}
-                                    </span>
-                                    <span class="text-muted">
-                                      History {evidenceQualityLabel(provider.historyCompleteness)}
-                                    </span>
-                                    <span class="text-muted">
-                                      Access {evidenceQualityLabel(provider.permissions)}
-                                    </span>
-                                  </div>
-                                )}
-                              </For>
-                            </div>
-                          </div>
-                        </Show>
-                        <Show
-                          when={evidence().length > 0}
-                          fallback={
-                            <div class="text-xs text-muted">
-                              No restore evidence has been discovered for this workload.
-                            </div>
-                          }
-                        >
-                          <div class="overflow-hidden">
-                            <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
-                              <span class="font-medium text-base-content">Restore evidence</span>
-                              <Show when={row.artifacts.length > evidence().length}>
-                                <span class="text-muted">
-                                  Showing {evidence().length} of {row.artifacts.length}
-                                </span>
+                              <Show when={isCompactBackupIdentityLayout(layoutMode())}>
+                                <div class="truncate text-[10px] font-normal text-muted">
+                                  {row.workload.typeLabel}
+                                  <Show when={row.workload.vmid}> {row.workload.vmid}</Show>
+                                  <Show when={layoutMode() === 'compact' && row.workload.node}>
+                                    {(node) => <> · {node()}</>}
+                                  </Show>
+                                </div>
                               </Show>
                             </div>
-                            <table class="w-full text-[11px]">
-                              <thead>
-                                <tr class="bg-surface-alt text-muted">
-                                  <th class="px-2 py-0.5 text-left font-medium">Source</th>
-                                  <th class="px-2 py-0.5 text-left font-medium">Location</th>
-                                  <th class="px-2 py-0.5 text-right font-medium">
-                                    {PROXMOX_BACKUP_COLUMN_LABELS.created}
-                                  </th>
-                                  <th class="px-2 py-0.5 text-right font-medium">Size</th>
-                                  <th class="px-2 py-0.5 text-left font-medium">State</th>
-                                  <th class="px-2 py-0.5 text-left font-medium">
-                                    {PROXMOX_BACKUP_COLUMN_LABELS.details}
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody class="divide-y divide-border-subtle">
-                                <For each={evidence()}>
-                                  {(artifact) => (
-                                    <tr class="hover:bg-surface-hover">
-                                      <td class="px-2 py-1">
-                                        <ArtifactSourceBadge artifact={artifact} />
-                                      </td>
-                                      <td class="px-2 py-1 text-base-content">
-                                        <span
-                                          class="inline-block max-w-[18rem] truncate"
-                                          title={artifact.location}
-                                        >
-                                          {artifact.location}
-                                        </span>
-                                      </td>
-                                      <td class="px-2 py-1 text-right text-base-content">
-                                        <ProxmoxBackupAgeText artifact={artifact} />
-                                      </td>
-                                      <td class="px-2 py-1 text-right tabular-nums text-base-content">
-                                        <Show
-                                          when={artifact.size && artifact.size > 0}
-                                          fallback={<span class="text-muted">No size</span>}
-                                        >
-                                          {formatPlatformTableBytesValue(artifact.size)}
-                                        </Show>
-                                      </td>
-                                      <td class="px-2 py-1">
-                                        <ArtifactStateBadge
-                                          artifact={artifact}
-                                          label={artifactStateLabel(artifact)}
-                                        />
-                                      </td>
-                                      <td class="px-2 py-1 text-base-content">
-                                        <span
-                                          class="inline-block max-w-[24rem] truncate"
-                                          title={artifact.detail}
-                                        >
-                                          {artifact.detail || '—'}
-                                        </span>
-                                      </td>
-                                    </tr>
+                          </div>
+                        </TableCell>
+                        <Show when={columnVisible('type')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <ProxmoxBackupWorkloadTypeBadge
+                              type={row.workload.type}
+                              label={row.workload.typeLabel}
+                            />
+                          </TableCell>
+                        </Show>
+                        <Show when={columnVisible('targetId')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
+                          >
+                            {row.workload.vmid || '—'}
+                          </TableCell>
+                        </Show>
+                        <Show when={columnVisible('node')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show
+                              when={row.workload.node}
+                              fallback={<span class="text-muted">—</span>}
+                            >
+                              {(node) => (
+                                <span class="inline-block max-w-full truncate" title={node()}>
+                                  {node()}
+                                </span>
+                              )}
+                            </Show>
+                          </TableCell>
+                        </Show>
+                        <TableCell class={getPlatformTableCellClassForKind('text')}>
+                          <div class="flex items-center gap-2">
+                            <StatusDot
+                              size="sm"
+                              variant={coveragePostureVariant(row.posture)}
+                              title={
+                                row.protectionPosture?.explanation ??
+                                'Pulse does not have enough provider evidence to determine protection.'
+                              }
+                              ariaHidden
+                            />
+                            <span
+                              title={row.protectionPosture?.explanation}
+                              class={`truncate text-[11px] font-medium ${statusWordToneClass(
+                                coveragePostureVariant(row.posture),
+                              )}`}
+                            >
+                              {getWorkloadRecoveryPostureLabel(row.posture)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                        >
+                          <Show
+                            when={row.latestRecovery}
+                            fallback={<span class="text-muted">No restore point</span>}
+                          >
+                            {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                          </Show>
+                        </TableCell>
+                        <Show when={columnVisible('pbs')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show
+                              when={row.latestPBS}
+                              fallback={
+                                <span class="text-muted">{pbsSource.coverageFallbackLabel}</span>
+                              }
+                            >
+                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                            </Show>
+                          </TableCell>
+                        </Show>
+                        <Show when={columnVisible('archive')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show
+                              when={row.latestArchive}
+                              fallback={
+                                <span class="text-muted">
+                                  {archiveSource.coverageFallbackLabel}
+                                </span>
+                              }
+                            >
+                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                            </Show>
+                          </TableCell>
+                        </Show>
+                        <Show when={columnVisible('snapshot')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show
+                              when={row.latestSnapshot}
+                              fallback={
+                                <span class="text-muted">
+                                  {snapshotSource.coverageFallbackLabel}
+                                </span>
+                              }
+                            >
+                              {(artifact) => <ProxmoxBackupAgeText artifact={artifact()} />}
+                            </Show>
+                          </TableCell>
+                        </Show>
+                        <Show when={columnVisible('task')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <Show
+                              when={row.latestTask}
+                              fallback={
+                                <Show
+                                  when={layoutMode() !== 'compact'}
+                                  fallback={<span class="block text-center text-muted">—</span>}
+                                >
+                                  <span class="text-muted">No recent task</span>
+                                </Show>
+                              }
+                            >
+                              {(task) => (
+                                <Show
+                                  when={layoutMode() !== 'compact'}
+                                  fallback={
+                                    <div class="flex justify-center">
+                                      <StatusDot
+                                        size="sm"
+                                        variant={taskWordVariant(task().label)}
+                                        title={`Latest task: ${task().label}`}
+                                        ariaHidden
+                                      />
+                                      <span class="sr-only">Latest task: {task().label}</span>
+                                    </div>
+                                  }
+                                >
+                                  <div class="flex items-center gap-2">
+                                    <StatusDot
+                                      size="sm"
+                                      variant={taskWordVariant(task().label)}
+                                      title={task().label}
+                                      ariaHidden
+                                    />
+                                    <span
+                                      class={`truncate ${statusWordToneClass(
+                                        taskWordVariant(task().label),
+                                      )}`}
+                                    >
+                                      {task().label}
+                                    </span>
+                                  </div>
+                                </Show>
+                              )}
+                            </Show>
+                          </TableCell>
+                        </Show>
+                      </TableRow>
+                      <Show when={isExpanded()}>
+                        <InlineDetailTableRow
+                          cellId={detailRowId()}
+                          class="bg-surface-alt/40"
+                          cellClass="px-3 py-2 whitespace-normal"
+                          contentClass="min-w-0 whitespace-normal"
+                          colspan={columnCount()}
+                          data-inline-detail-for={row.key}
+                        >
+                          <div class="mb-2 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content">
+                            <span class="font-medium">
+                              {getWorkloadRecoveryPostureLabel(row.posture)}:
+                            </span>{' '}
+                            {row.protectionPosture?.explanation ??
+                              'Pulse cannot determine this workload’s protection because no complete provider evidence is linked to it.'}
+                          </div>
+                          <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
+                            <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
+                              <div class="bg-surface-alt px-2 py-1 text-[11px] font-medium text-base-content">
+                                Provider evidence
+                              </div>
+                              <div class="divide-y divide-border-subtle">
+                                <For each={row.protectionPosture?.providerStates ?? []}>
+                                  {(provider) => (
+                                    <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1.5 text-[11px] sm:grid-cols-4">
+                                      <span class="font-medium text-base-content">
+                                        {providerLabel(provider.provider)}
+                                      </span>
+                                      <span class="text-muted">
+                                        Job {evidenceQualityLabel(provider.jobState)}
+                                      </span>
+                                      <span class="text-muted">
+                                        History {evidenceQualityLabel(provider.historyCompleteness)}
+                                      </span>
+                                      <span class="text-muted">
+                                        Access {evidenceQualityLabel(provider.permissions)}
+                                      </span>
+                                    </div>
                                   )}
                                 </For>
-                              </tbody>
-                            </table>
-                          </div>
-                        </Show>
-                      </InlineDetailTableRow>
-                    </Show>
-                  </>
-                );
-              }}
-            </For>
-          </>
-        }
-      />
+                              </div>
+                            </div>
+                          </Show>
+                          <Show
+                            when={evidence().length > 0}
+                            fallback={
+                              <div class="text-xs text-muted">
+                                No restore evidence has been discovered for this workload.
+                              </div>
+                            }
+                          >
+                            <div class="overflow-hidden">
+                              <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                                <span class="font-medium text-base-content">Restore evidence</span>
+                                <Show when={row.artifacts.length > evidence().length}>
+                                  <span class="text-muted">
+                                    Showing {evidence().length} of {row.artifacts.length}
+                                  </span>
+                                </Show>
+                              </div>
+                              <table class="w-full text-[11px]">
+                                <thead>
+                                  <tr class="bg-surface-alt text-muted">
+                                    <th class="px-2 py-0.5 text-left font-medium">Source</th>
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(
+                                        layoutMode(),
+                                        'location',
+                                      )}
+                                    >
+                                      <th class="px-2 py-0.5 text-left font-medium">Location</th>
+                                    </Show>
+                                    <th class="px-2 py-0.5 text-right font-medium">
+                                      {PROXMOX_BACKUP_COLUMN_LABELS.created}
+                                    </th>
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
+                                    >
+                                      <th class="px-2 py-0.5 text-right font-medium">Size</th>
+                                    </Show>
+                                    <th class="px-2 py-0.5 text-left font-medium">State</th>
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(
+                                        layoutMode(),
+                                        'details',
+                                      )}
+                                    >
+                                      <th class="px-2 py-0.5 text-left font-medium">
+                                        {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                      </th>
+                                    </Show>
+                                  </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border-subtle">
+                                  <For each={evidence()}>
+                                    {(artifact) => (
+                                      <tr class="hover:bg-surface-hover">
+                                        <td class="px-2 py-1">
+                                          <ArtifactSourceBadge artifact={artifact} />
+                                        </td>
+                                        <Show
+                                          when={isCoverageEvidenceColumnVisible(
+                                            layoutMode(),
+                                            'location',
+                                          )}
+                                        >
+                                          <td class="px-2 py-1 text-base-content">
+                                            <span
+                                              class="inline-block max-w-[18rem] truncate"
+                                              title={artifact.location}
+                                            >
+                                              {artifact.location}
+                                            </span>
+                                          </td>
+                                        </Show>
+                                        <td class="px-2 py-1 text-right text-base-content">
+                                          <ProxmoxBackupAgeText artifact={artifact} />
+                                        </td>
+                                        <Show
+                                          when={isCoverageEvidenceColumnVisible(
+                                            layoutMode(),
+                                            'size',
+                                          )}
+                                        >
+                                          <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                            <Show
+                                              when={artifact.size && artifact.size > 0}
+                                              fallback={<span class="text-muted">No size</span>}
+                                            >
+                                              {formatPlatformTableBytesValue(artifact.size)}
+                                            </Show>
+                                          </td>
+                                        </Show>
+                                        <td class="px-2 py-1">
+                                          <ArtifactStateBadge
+                                            artifact={artifact}
+                                            label={artifactStateLabel(artifact)}
+                                          />
+                                        </td>
+                                        <Show
+                                          when={isCoverageEvidenceColumnVisible(
+                                            layoutMode(),
+                                            'details',
+                                          )}
+                                        >
+                                          <td class="px-2 py-1 text-base-content">
+                                            <span
+                                              class="inline-block max-w-[24rem] truncate"
+                                              title={artifact.detail}
+                                            >
+                                              {artifact.detail || '—'}
+                                            </span>
+                                          </td>
+                                        </Show>
+                                      </tr>
+                                    )}
+                                  </For>
+                                </tbody>
+                              </table>
+                            </div>
+                          </Show>
+                        </InlineDetailTableRow>
+                      </Show>
+                    </>
+                  );
+                }}
+              </For>
+            </>
+          }
+        />
+      </div>
     </Show>
   );
 }

@@ -70,6 +70,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         showArchiveColumn={false}
         showSnapshotColumn={true}
         showTaskColumn={false}
+        layoutWidth={() => 1_200}
       />
     ));
 
@@ -92,6 +93,34 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).not.toContain('Node pve1');
   });
 
+  it('keeps the operator answer visible and folds identity context into compact rows', () => {
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[row]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showPbsColumn={true}
+        showArchiveColumn={true}
+        showSnapshotColumn={true}
+        showTaskColumn={true}
+        layoutWidth={() => 330}
+      />
+    ));
+
+    expect(headerTexts()).toEqual(['Workload', 'Posture', 'Age', 'Job']);
+    expect(document.body.textContent).toContain('VM 100 · pve1');
+    expect(document.body.textContent).not.toContain('PBS snapshot');
+    expect(document.body.textContent).not.toContain('PVE file');
+    expect(document.body.textContent).not.toContain('Guest snapshot');
+  });
+
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {
     const { unmount } = render(() => (
       <ProxmoxCoverageTable
@@ -109,6 +138,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         showArchiveColumn={false}
         showSnapshotColumn={false}
         showTaskColumn={false}
+        layoutWidth={() => 1_200}
       />
     ));
 
@@ -134,6 +164,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         showArchiveColumn={false}
         showSnapshotColumn={false}
         showTaskColumn={false}
+        layoutWidth={() => 1_200}
       />
     ));
 

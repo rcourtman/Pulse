@@ -1,4 +1,4 @@
-import { For, Show, type Accessor, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -12,6 +12,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
 import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
@@ -25,11 +26,16 @@ import {
   SortableHead,
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
+import {
+  getRecoverableColumns,
+  getRecoverableColumnWidthStyle,
+  getRecoverableLayoutForContainer,
+  isCompactBackupIdentityLayout,
+  type RecoverableColumnId,
+} from './proxmoxBackupsTablePresentation';
 
 // Flat recoverable-artifact table. Parent state owns filtering, sorting, and
 // date/source facets; optional day grouping is presentation only.
-
-const COLUMN_COUNT = 9;
 
 interface DayGroup {
   key: string;
@@ -69,7 +75,18 @@ export function ProxmoxRecoverableTable(props: {
   onSort: (key: RecoverableSortKey) => void;
   sizeMaxBytes: number;
   groupByDay?: boolean;
+  layoutWidth?: Accessor<number | null | undefined>;
 }) {
+  const observedWidth = useObservedElementWidth();
+  const layoutMode = createMemo(() => {
+    const width = props.layoutWidth?.() ?? observedWidth.width();
+    return typeof width === 'number' && width > 0
+      ? getRecoverableLayoutForContainer(width)
+      : 'full';
+  });
+  const visibleColumns = createMemo(() => getRecoverableColumns(layoutMode()));
+  const columnVisible = (column: RecoverableColumnId) =>
+    visibleColumns().some((candidate) => candidate.id === column);
   const showDayGroups = () => props.groupByDay && props.sortKey() === 'created';
 
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
@@ -79,55 +96,71 @@ export function ProxmoxRecoverableTable(props: {
           <div class="truncate font-semibold">
             {artifact.workload.name || artifact.workload.label}
           </div>
+          <Show when={isCompactBackupIdentityLayout(layoutMode())}>
+            <div class="truncate text-[10px] text-muted">
+              {artifact.workload.typeLabel}
+              <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
+            </div>
+          </Show>
         </div>
       </TableCell>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <ProxmoxBackupWorkloadTypeBadge
-          type={artifact.workload.type}
-          label={artifact.workload.typeLabel}
-        />
-      </TableCell>
-      <TableCell
-        class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
-      >
-        {artifact.workload.vmid || '—'}
-      </TableCell>
+      <Show when={columnVisible('type')}>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          <ProxmoxBackupWorkloadTypeBadge
+            type={artifact.workload.type}
+            label={artifact.workload.typeLabel}
+          />
+        </TableCell>
+      </Show>
+      <Show when={columnVisible('targetId')}>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
+        >
+          {artifact.workload.vmid || '—'}
+        </TableCell>
+      </Show>
       <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
         <ArtifactSourceBadge artifact={artifact} />
       </TableCell>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <span class="inline-block max-w-[16rem] truncate" title={artifact.location}>
-          {artifact.location}
-        </span>
-      </TableCell>
+      <Show when={columnVisible('location')}>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          <span class="inline-block max-w-[16rem] truncate" title={artifact.location}>
+            {artifact.location}
+          </span>
+        </TableCell>
+      </Show>
       <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
         <ProxmoxBackupAgeText artifact={artifact} />
       </TableCell>
-      <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
-        <Show
-          when={artifact.size && artifact.size > 0}
-          fallback={<span class="text-muted">No size</span>}
-        >
-          <RowMetricBar
-            valuePct={
-              props.sizeMaxBytes > 0 && artifact.size
-                ? (artifact.size / props.sizeMaxBytes) * 100
-                : 0
-            }
-            fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-            label={formatPlatformTableBytesValue(artifact.size)}
-            tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
-          />
-        </Show>
-      </TableCell>
+      <Show when={columnVisible('size')}>
+        <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
+          <Show
+            when={artifact.size && artifact.size > 0}
+            fallback={<span class="text-muted">No size</span>}
+          >
+            <RowMetricBar
+              valuePct={
+                props.sizeMaxBytes > 0 && artifact.size
+                  ? (artifact.size / props.sizeMaxBytes) * 100
+                  : 0
+              }
+              fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+              label={formatPlatformTableBytesValue(artifact.size)}
+              tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
+            />
+          </Show>
+        </TableCell>
+      </Show>
       <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
         <ArtifactStateBadge artifact={artifact} label={artifactStateLabel(artifact)} />
       </TableCell>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <span class="inline-block max-w-[20rem] truncate" title={artifact.detail}>
-          {artifact.detail || '—'}
-        </span>
-      </TableCell>
+      <Show when={columnVisible('details')}>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          <span class="inline-block max-w-[20rem] truncate" title={artifact.detail}>
+            {artifact.detail || '—'}
+          </span>
+        </TableCell>
+      </Show>
     </TableRow>
   );
 
@@ -150,102 +183,130 @@ export function ProxmoxRecoverableTable(props: {
         />
       }
     >
-      <PlatformTableShell
-        tableClass="min-w-[1080px] table-fixed text-xs"
-        header={
-          <>
-            <SortableHead
-              label="Workload"
-              sortKey="workload"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="left"
-              headClass={getPlatformTableHeadClassForKind('name')}
-            />
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>
-              {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
-            </TableHead>
-            <SortableHead
-              label="Source"
-              sortKey="source"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="left"
-              headClass={getPlatformTableHeadClassForKind('text')}
-            />
-            <SortableHead
-              label="Location"
-              sortKey="location"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="left"
-              headClass={getPlatformTableHeadClassForKind('text')}
-            />
-            <SortableHead
-              label={PROXMOX_BACKUP_COLUMN_LABELS.created}
-              sortKey="created"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="right"
-              headClass={getPlatformTableHeadClassForKind('numeric-value')}
-            />
-            <SortableHead
-              label="Size"
-              sortKey="size"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="center"
-              headClass={getPlatformTableHeadClassForKind('metric-bar')}
-            />
-            <SortableHead
-              label="State"
-              sortKey="state"
-              currentSort={props.sortKey}
-              direction={props.sortDirection}
-              onSort={props.onSort}
-              align="left"
-              headClass={getPlatformTableHeadClassForKind('text')}
-            />
-            <TableHead class={getPlatformTableHeadClassForKind('text')}>
-              {PROXMOX_BACKUP_COLUMN_LABELS.details}
-            </TableHead>
-          </>
-        }
-        body={
-          <>
-            <Show
-              when={showDayGroups()}
-              fallback={<For each={props.artifacts}>{(artifact) => renderRow(artifact)}</For>}
-            >
-              <For each={groupByDay(props.artifacts)}>
-                {(group) => (
-                  <>
-                    <TableRow>
-                      {/* Cell-level background is reliable across table layout engines. */}
-                      <TableCell
-                        colspan={COLUMN_COUNT}
-                        class="border-t border-border bg-surface-alt px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-base-content"
-                      >
-                        {group.label}{' '}
-                        <span class="ml-2 normal-case tracking-normal text-muted">
-                          {group.items.length} {group.items.length === 1 ? 'backup' : 'backups'}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                    <For each={group.items}>{(artifact) => renderRow(artifact)}</For>
-                  </>
+      <div
+        ref={observedWidth.setElement}
+        data-proxmox-backups-table="recoverable"
+        data-proxmox-backups-layout={layoutMode()}
+      >
+        <PlatformTableShell
+          tableClass="min-w-[0px] table-fixed text-xs"
+          colgroup={
+            <colgroup>
+              <For each={visibleColumns()}>
+                {(column) => (
+                  <col
+                    style={getRecoverableColumnWidthStyle(column.id, layoutMode())}
+                    data-proxmox-backups-column={column.id}
+                  />
                 )}
               </For>
-            </Show>
-          </>
-        }
-      />
+            </colgroup>
+          }
+          header={
+            <>
+              <SortableHead
+                label="Workload"
+                sortKey="workload"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('name')}
+              />
+              <Show when={columnVisible('type')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
+              </Show>
+              <Show when={columnVisible('targetId')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                  {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
+                </TableHead>
+              </Show>
+              <SortableHead
+                label={layoutMode() === 'compact' ? 'Via' : 'Source'}
+                sortKey="source"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+              <Show when={columnVisible('location')}>
+                <SortableHead
+                  label="Location"
+                  sortKey="location"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="left"
+                  headClass={getPlatformTableHeadClassForKind('text')}
+                />
+              </Show>
+              <SortableHead
+                label={layoutMode() === 'compact' ? 'Age' : PROXMOX_BACKUP_COLUMN_LABELS.created}
+                sortKey="created"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="right"
+                headClass={getPlatformTableHeadClassForKind('numeric-value')}
+              />
+              <Show when={columnVisible('size')}>
+                <SortableHead
+                  label="Size"
+                  sortKey="size"
+                  currentSort={props.sortKey}
+                  direction={props.sortDirection}
+                  onSort={props.onSort}
+                  align="center"
+                  headClass={getPlatformTableHeadClassForKind('metric-bar')}
+                />
+              </Show>
+              <SortableHead
+                label="State"
+                sortKey="state"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+              <Show when={columnVisible('details')}>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                  {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                </TableHead>
+              </Show>
+            </>
+          }
+          body={
+            <>
+              <Show
+                when={showDayGroups()}
+                fallback={<For each={props.artifacts}>{(artifact) => renderRow(artifact)}</For>}
+              >
+                <For each={groupByDay(props.artifacts)}>
+                  {(group) => (
+                    <>
+                      <TableRow>
+                        {/* Cell-level background is reliable across table layout engines. */}
+                        <TableCell
+                          colspan={visibleColumns().length}
+                          class="border-t border-border bg-surface-alt px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-base-content"
+                        >
+                          {group.label}{' '}
+                          <span class="ml-2 normal-case tracking-normal text-muted">
+                            {group.items.length} {group.items.length === 1 ? 'backup' : 'backups'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      <For each={group.items}>{(artifact) => renderRow(artifact)}</For>
+                    </>
+                  )}
+                </For>
+              </Show>
+            </>
+          }
+        />
+      </div>
     </Show>
   );
 }
