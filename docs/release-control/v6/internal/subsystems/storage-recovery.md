@@ -733,6 +733,11 @@ recovery scope, or a storage/recovery-owned secret source.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   Commercial migration startup behavior in
+   `internal/api/licensing_handlers.go` and `internal/api/licensing_bridge.go`
+   remains adjacent cloud-paid/API state. Synthetic mock-license suppression
+   must not become a storage entitlement, recovery-readiness signal, backup
+   artifact rule, or provider credential path.
    Report branding validation and reporting request assembly in
    `internal/api/system_settings.go` and
    `internal/api/metrics_reporting_handlers.go` remain adjacent

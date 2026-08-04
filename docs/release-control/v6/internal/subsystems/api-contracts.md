@@ -209,6 +209,10 @@ Browser API types and presentation helpers must treat `exchange_stale_key` plus
 `retrieve_current_key` and `exchange_connectivity_required` plus
 `allow_license_egress` as explicit migration states rather than inferring them
 from HTTP status alone.
+Ordinary non-release mock mode uses isolated synthetic persistence, so startup
+must not send a persisted mock JWT to the configured commercial exchange or
+publish a stale `commercial_migration` failure from that synthetic key. Explicit
+license-panel activation remains the opt-in path for deliberate migration tests.
 
 Customer license invalidation is also a shared API/cloud-paid contract.
 Customer Pulse may call `POST /v1/grants/status` only with its encrypted

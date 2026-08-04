@@ -162,6 +162,91 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	handlers.StopAllBackgroundLoops()
 }
 
+func TestGetTenantComponents_MockModeSkipsPersistedLegacyAutoExchangeAndClearsNotice(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	var exchangeCalled atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/licenses/exchange" {
+			exchangeCalled.Add(1)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	cp, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+
+	legacyJWT, err := licensetestsupport.GenerateLicenseForTesting("mock@example.com", pkglicensing.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate test license: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	if err := persistence.Save(legacyJWT); err != nil {
+		t.Fatalf("save legacy JWT: %v", err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
+		Capabilities:      []string{},
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       "expired",
+		SubscriptionState: pkglicensing.SubStateExpired,
+		CommercialMigration: &pkglicensing.CommercialMigrationStatus{
+			Source:            pkglicensing.CommercialMigrationSourceV5License,
+			State:             pkglicensing.CommercialMigrationStateFailed,
+			Reason:            pkglicensing.CommercialMigrationReasonExchangeInvalid,
+			RecommendedAction: pkglicensing.CommercialMigrationActionEnterSupportedV5,
+		},
+	}); err != nil {
+		t.Fatalf("save stale commercial migration state: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if svc.IsActivated() {
+		t.Fatal("mock mode must not auto-activate a persisted legacy fixture")
+	}
+	if exchangeCalled.Load() != 0 {
+		t.Fatalf("mock mode sent persisted fixture to license exchange %d times", exchangeCalled.Load())
+	}
+
+	persistedLegacy, err := persistence.Load()
+	if err != nil {
+		t.Fatalf("load preserved mock legacy JWT: %v", err)
+	}
+	if persistedLegacy != legacyJWT {
+		t.Fatal("mock mode must preserve the fixture for explicit migration testing")
+	}
+
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("load cleared billing state: %v", err)
+	}
+	if state == nil {
+		t.Fatal("expected billing state to remain present")
+	}
+	if state.CommercialMigration != nil {
+		t.Fatalf("stale mock commercial migration state was not cleared: %+v", state.CommercialMigration)
+	}
+
+	handlers.StopAllBackgroundLoops()
+}
+
 func TestSetCommercialMigrationState_AutoMigrateEscalatesSustainedTransportFailure(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)

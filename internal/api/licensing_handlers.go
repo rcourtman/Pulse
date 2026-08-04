@@ -574,9 +574,21 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		}
 	}
 
+	// Mock mode uses an isolated synthetic data directory. Old test JWTs can
+	// legitimately remain there across dev sessions, but they must never be
+	// submitted to the configured commercial license server or surface as a
+	// verified paid-license migration failure. Explicit activation from the
+	// license panel remains available when a developer wants to exercise it.
+	mockFixturesEnabled := isDemoModeFromLicensing()
+	if persistence != nil && mockFixturesEnabled && !service.IsActivated() {
+		if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
+			log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear stale commercial migration state in mock mode")
+		}
+	}
+
 	// Strict v6 automatically exchanges persisted legacy JWT licenses into the
 	// activation/grant model on startup when no activation state exists yet.
-	if persistence != nil && !isLicenseValidationDevModeFromLicensing() && !service.IsActivated() {
+	if persistence != nil && !mockFixturesEnabled && !isLicenseValidationDevModeFromLicensing() && !service.IsActivated() {
 		legacyJWT, loadErr := persistence.Load()
 		if loadErr != nil {
 			if !os.IsNotExist(loadErr) {

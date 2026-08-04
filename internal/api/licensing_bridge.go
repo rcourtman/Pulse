@@ -149,6 +149,10 @@ func isLicenseValidationDevModeFromLicensing() bool {
 	return pkglicensing.IsLicenseValidationDevMode()
 }
 
+func isDemoModeFromLicensing() bool {
+	return pkglicensing.IsDemoMode()
+}
+
 func newLicenseEvaluatorForBillingStoreFromLicensing(store billingStoreModel, orgID string, cacheTTL time.Duration, expectedInstanceHost string) *licenseEvaluator {
 	return pkglicensing.NewEvaluator(
 		pkglicensing.NewDatabaseSource(store, orgID, cacheTTL).WithExpectedInstanceHost(expectedInstanceHost),

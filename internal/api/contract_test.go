@@ -8112,6 +8112,30 @@ func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T)
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MockModeCannotMasqueradeAsPaidLegacyMigration(t *testing.T) {
+	handlersSource, err := os.ReadFile("licensing_handlers.go")
+	if err != nil {
+		t.Fatalf("read licensing handlers: %v", err)
+	}
+	bridgeSource, err := os.ReadFile("licensing_bridge.go")
+	if err != nil {
+		t.Fatalf("read licensing bridge: %v", err)
+	}
+
+	for _, required := range []string{
+		"mockFixturesEnabled := isDemoModeFromLicensing()",
+		"!mockFixturesEnabled && !isLicenseValidationDevModeFromLicensing()",
+		"setCommercialMigrationState(orgID, nil)",
+	} {
+		if !strings.Contains(string(handlersSource), required) {
+			t.Fatalf("licensing startup missing mock migration boundary %q", required)
+		}
+	}
+	if !strings.Contains(string(bridgeSource), "return pkglicensing.IsDemoMode()") {
+		t.Fatal("licensing bridge must use the build-tagged demo-mode authority")
+	}
+}
+
 func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 	baseDir := t.TempDir()
 	store := config.NewFileBillingStore(baseDir)

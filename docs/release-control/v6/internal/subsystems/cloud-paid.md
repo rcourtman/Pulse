@@ -299,6 +299,11 @@ avoids a cloud-control-plane report data path across clients.
    pending must self-retry in the background with backoff for the life of
    the process so a transient license-server or DNS failure at first boot
    never strands a paying upgrader on Community until a manual restart.
+   Ordinary non-release mock mode uses isolated synthetic persistence and must
+   neither submit a persisted mock JWT to the configured commercial license
+   server nor retain a resulting `commercial_migration` notice across mock
+   restarts. Explicit license-panel activation remains available for deliberate
+   migration exercises, while non-mock startup migration behavior is unchanged.
    Signature-valid v5 JWTs that are expired beyond the v5 grace window but
    correspond to a newer retrievable server-side key or live entitlement must
    classify as terminal stale-key recovery (`exchange_stale_key` with

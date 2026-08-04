@@ -749,6 +749,9 @@ func TestServiceStatus_DevModeMultiTenantBypassDoesNotChangeCustomerFacingStatus
 
 func TestServiceStatus_MockModeDoesNotAdvertiseSyntheticCapabilities(t *testing.T) {
 	t.Setenv("PULSE_MOCK_MODE", "true")
+	if !IsDemoMode() {
+		t.Fatal("IsDemoMode()=false, want true in a non-release mock build")
+	}
 
 	svc := NewService()
 	status := svc.Status()

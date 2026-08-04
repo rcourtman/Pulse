@@ -234,6 +234,12 @@ func IsLicenseValidationDevMode() bool {
 	return isLicenseValidationDevMode()
 }
 
+// IsDemoMode reports whether synthetic demo fixtures are enabled for this
+// build. Release builds always return false even if PULSE_MOCK_MODE is set.
+func IsDemoMode() bool {
+	return isDemoMode()
+}
+
 // ActivateWithKey activates a license using an activation key from the license server.
 // It creates an installation, receives a relay grant, parses it, and sets the
 // resulting license as active. The activation state is persisted for background refresh.
