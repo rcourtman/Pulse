@@ -10,6 +10,7 @@ import unittest
 import json
 
 import record_rc_to_ga_blocked as blocked_record
+from live_runtime_proof import evaluate_live_runtime
 from release_promotion_policy_support import (
     REQUIRED_STAGED_GOVERNANCE_INPUTS,
     promotion_metadata_envelope,
@@ -157,6 +158,28 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("public RC tag", content)
         self.assertIn("license.pulserelay.pro/pulse-pro:6.0.0", content)
         self.assertIn("moving branch", content)
+        self.assertIn("`implemented`", content)
+        self.assertIn("`release-validated`", content)
+        self.assertIn("`live-verified`", content)
+        self.assertIn("scripts/release_control/live_runtime_proof.py", content)
+        self.assertIn("an operator statement cannot substitute for the receipt", content)
+
+    def test_live_runtime_claim_rejects_unknown_successful_posture(self) -> None:
+        observed, failures = evaluate_live_runtime(
+            expected_version="6.2.0-rc.8",
+            observed_version="6.2.0-rc.8",
+            postures=[
+                {
+                    "subjectResourceId": "vm-100",
+                    "state": "unknown",
+                    "lastSuccessfulPointAt": "2026-08-04T10:00:00Z",
+                }
+            ],
+            minimum_postures=1,
+            minimum_successful_postures=1,
+        )
+        self.assertEqual(observed["unknownWithSuccessfulPointCount"], 1)
+        self.assertTrue(any("remain unknown" in failure for failure in failures))
 
     def test_v6_ga_owner_risk_exception_is_bounded_and_packet_aligned(self) -> None:
         policy = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")

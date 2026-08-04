@@ -41,6 +41,62 @@ Cloud, and self-hosted production users.
    line; release automation must resolve branch requirements from that file
    instead of assuming `main`.
 
+## Runtime Verification Claim Levels
+
+Release status language is an evidence contract. Use these three levels and do
+not promote a claim beyond the evidence that exists:
+
+1. `implemented`
+   - The source change and targeted regression proof exist.
+   - This does not mean a release artifact contains the change or that a live
+     installation is running it.
+2. `release-validated`
+   - The immutable release artifact containing the change passed its governed
+     build, artifact, install, and release-pipeline checks.
+   - Publication, a successful installer, and a displayed version number do
+     not by themselves prove the affected behavior on real hardware.
+3. `live-verified`
+   - The exact release is running on the named target and a fresh,
+     machine-readable assertion against the affected live API passed.
+   - A saved receipt must be independently verified for the expected target,
+     exact version, assertion, and allowed age before anyone describes the
+     issue as fixed on hardware, fixed in production, or live verified.
+
+For the Proxmox protection-posture persistence regression, the canonical
+collector and verifier are `scripts/release_control/live_runtime_proof.py`.
+The collector must query `/api/version` and every page of
+`/api/recovery/postures`, require a non-empty successful-posture cohort, and
+fail while any workload with `lastSuccessfulPointAt` remains `unknown`. It must
+record the target origin, TLS-verification state, exact expected and observed
+versions, packaged-versus-development runtime state, UTC collection time,
+posture counts, failing resource IDs, and raw response SHA-256 values in a
+sealed JSON receipt. Authentication values must be read from named environment
+variables rather than command-line values or receipt content.
+
+Example post-install proof:
+
+```bash
+export PULSE_LIVE_PROOF_AUTHORIZATION='Bearer <monitoring-read-token>'
+python3 scripts/release_control/live_runtime_proof.py collect \
+  --base-url https://pulse.example.net \
+  --expected-version 6.2.0-rc.8 \
+  --authorization-env PULSE_LIVE_PROOF_AUTHORIZATION \
+  --minimum-postures 1 \
+  --minimum-successful-postures 1 \
+  --output /secure/release-evidence/pulse-6.2.0-rc.8-live.json
+python3 scripts/release_control/live_runtime_proof.py verify \
+  --receipt /secure/release-evidence/pulse-6.2.0-rc.8-live.json \
+  --expected-origin https://pulse.example.net \
+  --expected-version 6.2.0-rc.8 \
+  --max-age-seconds 3600
+```
+
+The receipt contains operational target identity and may contain resource IDs,
+so retain it in the restricted release-evidence location rather than a public
+release body. Missing, stale, failed, edited, wrong-target, wrong-version, or
+TLS-unverified receipts leave the claim at `implemented` or
+`release-validated`; an operator statement cannot substitute for the receipt.
+
 ## Prerelease Rules
 
 1. Every candidate intended for broad customer use must ship to `rc` before it
