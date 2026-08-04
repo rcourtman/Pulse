@@ -13,7 +13,7 @@ describe('proxmoxHostTableModel', () => {
     const ids = columns.map((column) => column.id);
 
     expect(ids).toEqual(['node', 'cpu', 'memory', 'disk']);
-    expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-[36rem]');
+    expect(getProxmoxHostTableMinWidthClass('mobile')).toBe('min-w-[0px]');
     expect(getProxmoxHostColumnWidthStyle('node', 'mobile', ids)).toEqual({ width: '40%' });
     expect(getProxmoxHostColumnWidthStyle('cpu', 'mobile', ids)).toEqual({ width: '20%' });
     expect(getProxmoxHostColumnWidthStyle('memory', 'mobile', ids)).toEqual({ width: '20%' });

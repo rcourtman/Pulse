@@ -365,7 +365,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="disks"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="hidden sm:table-cell md:w-[8%]"
                 >
                   Disks
                 </PlatformSortableTableHead>
@@ -428,7 +428,7 @@ export const TrueNASStorageTopologyTable: Component<{
                             <CapacityCell row={row} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
                           >
                             <PlatformTableNumberValue
                               value={row.kind === 'pool' ? row.counts.disks : undefined}

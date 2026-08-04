@@ -88,7 +88,7 @@ function PoolUsageBar(props: { percent: number }) {
   return (
     <ProgressBar
       value={clamped}
-      class="h-4 w-32"
+      class="h-4 w-full min-w-[3.5rem] max-w-32"
       fillClass={capacityToneFor(clamped)}
       label={
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
@@ -159,17 +159,21 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={pools().length > 0}
             fallback={<p class="text-xs text-muted">No pools reported.</p>}
           >
-            <Table class="text-xs">
+            <Table class="min-w-0 table-fixed text-xs">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={getPlatformTableHeadClassForKind('name')}>Pool</TableHead>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                     Objects
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                  >
                     Stored
                   </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell`}
+                  >
                     Avail
                   </TableHead>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -195,12 +199,12 @@ export const ProxmoxCephClusterDrawer: Component<{
                         />
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums sm:table-cell`}
                       >
                         {formatBytes(pool.storedBytes)}
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-muted tabular-nums sm:table-cell`}
                       >
                         {formatBytes(pool.availableBytes)}
                       </TableCell>
@@ -228,7 +232,7 @@ export const ProxmoxCephClusterDrawer: Component<{
             when={services().length > 0}
             fallback={<p class="text-xs text-muted">No services reported.</p>}
           >
-            <Table class="text-xs">
+            <Table class="min-w-0 table-fixed text-xs">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={getPlatformTableHeadClassForKind('name')}>Service</TableHead>

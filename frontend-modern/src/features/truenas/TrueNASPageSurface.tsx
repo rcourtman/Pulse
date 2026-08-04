@@ -91,7 +91,7 @@ export function TrueNASPageSurface() {
   );
 
   return (
-    <div data-testid="truenas-page" class="space-y-3">
+    <div data-testid="truenas-page" class="pulse-wide-data-surface space-y-3">
       <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="TrueNAS sections" />
 
       <Show

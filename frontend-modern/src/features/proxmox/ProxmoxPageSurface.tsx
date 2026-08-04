@@ -158,7 +158,7 @@ export function ProxmoxPageSurface() {
     );
 
   return (
-    <div data-testid="proxmox-page" class="space-y-3">
+    <div data-testid="proxmox-page" class="pulse-wide-data-surface space-y-3">
       <PlatformSectionTabs tabs={visibleTabs()} active={activeTab()} ariaLabel="Proxmox sections" />
 
       <Show

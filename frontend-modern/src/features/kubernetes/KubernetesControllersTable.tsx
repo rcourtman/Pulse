@@ -287,7 +287,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="hidden lg:table-cell md:w-[14%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -295,7 +295,7 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="target"
-                  class="md:w-[12%]"
+                  class="hidden sm:table-cell md:w-[12%]"
                 >
                   Target
                 </PlatformSortableTableHead>
@@ -303,7 +303,7 @@ export const KubernetesControllersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="current"
-                  class="md:w-[8%]"
+                  class="hidden sm:table-cell md:w-[8%]"
                 >
                   Current
                 </PlatformSortableTableHead>
@@ -334,7 +334,7 @@ export const KubernetesControllersTable: Component<{
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden md:table-cell md:w-[9%]"
+                  class="hidden lg:table-cell md:w-[9%]"
                 >
                   Detail
                 </PlatformSortableTableHead>
@@ -390,21 +390,21 @@ export const KubernetesControllersTable: Component<{
                             {kind()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={target()}>
                               {target()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
                           >
                             <PlatformTableNumberValue value={currentValue(resource)} />
                           </TableCell>
@@ -426,7 +426,7 @@ export const KubernetesControllersTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
                             <span class="inline-block max-w-[14rem] truncate" title={detail()}>
                               {detail()}

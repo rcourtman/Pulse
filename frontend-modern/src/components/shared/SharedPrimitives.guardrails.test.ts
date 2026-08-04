@@ -1297,7 +1297,8 @@ describe('shared primitive guardrails', () => {
       'table-scroll-shell w-full min-w-0 max-w-full overflow-x-auto touch-scroll',
     );
     expect(frontendIndexCssSource).toContain('.table-scroll-shell');
-    expect(frontendIndexCssSource).toContain('contain: inline-size paint');
+    expect(frontendIndexCssSource).toContain('container-type: inline-size');
+    expect(frontendIndexCssSource).toContain('contain: paint');
     expect(frontendIndexCssSource).toContain('overscroll-behavior-x: contain');
     expect(tableSource).toContain('w-full border-collapse text-left whitespace-nowrap');
     expect(tableCardSource).toContain('TABLE_CARD_FRAME_CLASS');
@@ -5218,7 +5219,7 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
     expect(sharedPlatformPageSource).toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
     expect(sharedPlatformPageSource).toContain(
-      "export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[48rem]'",
+      "export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[0px]'",
     );
     expect(sharedPlatformPageSource).toContain('export function getPlatformTableClass');
     expect(sharedPlatformPageSource).toContain("className !== 'min-w-full'");

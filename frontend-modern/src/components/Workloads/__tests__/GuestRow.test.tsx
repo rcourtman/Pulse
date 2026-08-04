@@ -1038,14 +1038,14 @@ describe('GUEST_COLUMNS', () => {
 
   it('derives mobile overrides from the canonical guest column model', () => {
     expect(getGuestColumnStyle('name', true)).toEqual({
-      width: '46.3158%',
-      'max-width': '46.3158%',
+      width: '40%',
+      'max-width': '40%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '17.8947%',
-      'max-width': '17.8947%',
+      width: '17%',
+      'max-width': '17%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '46.3158%' });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '40%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 

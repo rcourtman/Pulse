@@ -1,23 +1,99 @@
 {
   "version": 1,
-  "base_sha": "3699dca8267b4a7522b8b193ee9749c0cf20dfd8",
-  "verified_at": "2026-08-04T10:26:06Z",
+  "base_sha": "95745e77ca161831a4c5a90397b5723c2fc80e98",
+  "verified_at": "2026-08-04T11:37:59Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "f181a1003f6f40dc33413c32a31223cc562997284e0314a0224f28b126f70eac",
-    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "8531a197f43d429501c2daadb80229624611f637db5f3b489d944c708b52cb77",
-    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "a619652c69da5e0d6a8ca21cde9c3e0e18449a241a53b6ebcd87b9f1ea83d474",
-    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "e7c323af3e58d6dc027e6f5dfc56be95efbd37d8e2eb7f3dad6c91645f7b90dc"
+    "frontend-modern/src/components/Workloads/WorkloadTableHeader.tsx": "ef811962a39ef0c8c70060241b585f9612cf162c53071524a2d78359c679ada4",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "cfcbda5651a54698af4575f32dda894580108ccfc08d6b87e7b7e8e6b8d4d5ae",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "336410d2ffe6a72da7f2040156053f67c5503b2d37c0ac7230a7c28afc8a08f0",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "702d5b2813bca96ecbe632044d3f9dbeab5cb6fea6d634e4a4f9c194e3f10106",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "6179a35aa842b4600d16eb581bde4747a1971c9c9d71f2a18de885df2f474b64",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "e3b4aed8ca3650bdf8bd980c033decc3d6bb9ebfc428620b92bf03808d8dc700",
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx": "54bb033261f4853f31e0b9767be2f9a31886fd1dd2c49c5413fec0f3a840a22d",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "35ec8051643c759d1b72058d04426e246b341401b8b96ca32147e404f444aee6",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx": "0d5d74c0055ba0365de433f90f2c7cf604b2998cdd59e5cd4fb11e8dde1208b7",
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "35723e8090b81d94ec68c29c1baa86e8b1ecf4e903338323136929fb6cbc77b5",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "53421e71c4046f18dbefa4978dc6c74bf2c852e9d26a4f3ab8c9e003df236dc1",
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "d1e17e02001cd1f88f6e98549115a8c37574a4288e61e5d3d708634d756d0c0d",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "6bf47f03195639b2900f16d45539e633a77709860f17150ef400966d161c9f6d",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "54a3c7a1127aa6d5e4822dd2c19ee9242789914a6ee1580bcbd6808fe482d265",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "4539a00569a64c06356c4b0a7decb608842e23c09259e5a12c0b1b40bcde1c5c",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "45a609aeea1ee0800a643b900a57d8d88af3be027e5a7f62c2708d1436b274a3",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "0c273f41bcd0fbe269d5ec3e876bb5ffaff97542a7fd6327cea2b7785913cde6",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "c06ed9b86054a5cef7f4b30d3054619dbb291442d6810fc8761637fc6db59773",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "2ebcc5503c890bfea2f21eaed6c18e0ebb69625701f3884a7c17e62faaea504d",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "46c506bbf9ca102e3018188e8b0e234d67ff188893d0ea16d95252508579c5ef",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "0b846223ff043bc2639f4d2e9fcc70438c02041165b739afebcdb9573c77ccbd",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx": "10a944844841d4188804aaf2a217067b4d0aae21357e7bd3264785f67b3d0308",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "45e71dc9be04a780c175f5c9ff757038f0d5c5df1c538605ec65fc8179cff84f",
+    "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx": "76e1acfc2f56dd6e94b142625056bdda2c4ed0c4ce6feec833773e62906dc80e",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx": "95e30af160d2e621acf0a1c09f43be788bb8d314c5b4d68790a3594a687e40c0",
+    "frontend-modern/src/index.css": "4498659bf01b186a9030fe96a58a3c9a0d3f5a901e374f6d9048faf6d2b02b62"
   },
   "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage?tab=pools&source=proxmox-all",
+    "/proxmox/storage?tab=disks&source=proxmox-all",
+    "/proxmox/replication",
     "/proxmox/backups?view=coverage",
-    "/proxmox/backups?view=date"
+    "/proxmox/backups?view=date",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/datastores",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability"
   ],
   "viewports": [
     {
@@ -25,15 +101,7 @@
       "height": 900
     },
     {
-      "width": 480,
-      "height": 900
-    },
-    {
-      "width": 640,
-      "height": 900
-    },
-    {
-      "width": 800,
+      "width": 768,
       "height": 900
     },
     {
@@ -41,39 +109,31 @@
       "height": 900
     },
     {
-      "width": 1280,
-      "height": 900
-    },
-    {
-      "width": 1536,
+      "width": 1440,
       "height": 900
     },
     {
       "width": 1920,
       "height": 900
-    },
-    {
-      "width": 2560,
-      "height": 900
     }
   ],
   "states": [
-    "Coverage and By date views across compact, basic, operational, expanded, and full container-aware table layouts",
-    "Compact 375px view showing operator-priority columns with workload identity details folded into the primary cell and no horizontal page or table overflow",
-    "Intermediate 480px, 640px, 800px, and 1024px layouts progressively adding node, source, resource, capacity, and task context only when the measured table container can support it",
-    "Wide 1280px, 1536px, 1920px, and 2560px layouts restoring the full operational detail set with readable, unclipped headings",
-    "Assistant open at 1280px, 1536px, and 1920px viewport widths, verifying layouts respond to the reduced content container rather than the browser viewport",
-    "Expanded coverage evidence for a protected workload and the independently measured orphaned-backup nested table at reduced container widths",
-    "Server summary, protection coverage, dated recoverable backups, expanded evidence, and provider detail grids all with scrollWidth equal to clientWidth and zero document overflow"
+    "All 34 primary platform routes loaded with the 213-resource mock inventory across Proxmox, Docker, Kubernetes, TrueNAS, VMware, and standalone machines",
+    "Every platform page root used the same wide data surface geometry at 1024px and 1920px so platform switching did not move content laterally",
+    "All primary tables at 375px and 1024px had scrollWidth equal to clientWidth with zero document overflow",
+    "Compact, intermediate, expanded, and full table layouts progressively exposed operator-priority columns from each table's measured container width",
+    "Proxmox overview compact tables showed Node, CPU, Mem, and Disk for hosts and Name, Up, CPU, Mem, and Disk for workloads",
+    "Proxmox storage pools and disks, replication, backup coverage and date views, Ceph, and mail tables retained the most useful operational fields at each width",
+    "Expanded Ceph cluster detail used independent responsive layouts for its narrower nested pool and service tables",
+    "Docker image and network, Kubernetes controller, autoscaling and event, TrueNAS system and topology, and VMware datastore and network tables restored supporting detail only when space allowed",
+    "The Docker Swarm mock empty state and all non-table platform views remained aligned and free of page overflow"
   ],
   "interactions": [
-    "Switched repeatedly between Coverage and By date views while resizing through the full viewport matrix",
-    "Searched for bazarr and confirmed the filtered 1 of 35 workload result",
-    "Sorted the coverage table by Workload and exercised the Unknown posture filter before restoring All",
-    "Expanded and collapsed the bazarr coverage row to inspect backup evidence, provider detail grids, wrapped explanations, and compact task accessibility text",
-    "Expanded the orphaned-backups group and verified its nested table chooses a layout from its own narrower container",
-    "Filtered the dated feed to PVE file source and confirmed two of 862 backups, then restored all sources",
-    "Selected Tue 4 Aug in the date navigator and confirmed 42 of 862 backups in the dated group, then cleared the date filter",
-    "Opened and closed the Assistant while checking responsive column selection, header clipping, shell overflow, and document overflow"
+    "Switched repeatedly between all six platform roots and confirmed identical content-shell left edges and widths",
+    "Navigated every primary platform route and switched Proxmox storage pools and disks plus backup coverage and date query views",
+    "Resized pages through 375px, 768px, 1024px, 1440px, and 1920px while inspecting visible headers, table bounds, and document bounds",
+    "Expanded Proxmox Ceph cluster detail and verified nested tables responded to their own containers instead of the browser viewport",
+    "Compared compact operator-priority columns with intermediate and full layouts across each platform's native tables",
+    "Visually reviewed representative screenshots for Proxmox overview, Docker images, Kubernetes workloads, TrueNAS overview, VMware overview and networks, including narrow and wide layouts"
   ]
 }

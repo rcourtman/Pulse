@@ -109,7 +109,7 @@ export const KubernetesEventsTable: Component<{
                   Event
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[15%]`}
                 >
                   Scope
                 </TableHead>
@@ -119,7 +119,9 @@ export const KubernetesEventsTable: Component<{
                 <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
                   Reason
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[15%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]`}
+                >
                   Object
                 </TableHead>
                 <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}>
@@ -130,7 +132,9 @@ export const KubernetesEventsTable: Component<{
                 >
                   Observed
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[10%]`}
+                >
                   Message
                 </TableHead>
               </>
@@ -180,7 +184,7 @@ export const KubernetesEventsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={scope()}>
                               {scope()}
@@ -202,7 +206,7 @@ export const KubernetesEventsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span
                               class="inline-block max-w-[13rem] truncate"
@@ -227,7 +231,7 @@ export const KubernetesEventsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="inline-block max-w-[16rem] truncate" title={message()}>
                               {message()}

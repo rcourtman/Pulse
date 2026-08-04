@@ -27,8 +27,14 @@ export const getWorkloadColumnHeaderLabel = (
   columnId: string,
   defaultLabel: string,
   memoryDisplayBasis: WorkloadsMemoryDisplayBasis,
-): string =>
-  columnId === 'memory' && memoryDisplayBasis === 'host' ? `${defaultLabel} · Host` : defaultLabel;
+  compact = false,
+): string => {
+  if (compact && columnId === 'availability') return 'Up';
+  if (compact && columnId === 'memory') return 'Mem';
+  return columnId === 'memory' && memoryDisplayBasis === 'host'
+    ? `${defaultLabel} · Host`
+    : defaultLabel;
+};
 
 // Canonical alignment per column kind (see
 // frontend-modern/src/features/platformPage/columnAlignment.ts).
@@ -62,7 +68,12 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
             const isSortable = !!sortKeyForCol;
             const isSorted = () => sortKeyForCol && props.sortKey() === sortKeyForCol;
             const label = () =>
-              getWorkloadColumnHeaderLabel(col.id, col.label, props.workloadMemoryDisplayBasis());
+              getWorkloadColumnHeaderLabel(
+                col.id,
+                col.label,
+                props.workloadMemoryDisplayBasis(),
+                props.isMobile(),
+              );
 
             return (
               <TableHead

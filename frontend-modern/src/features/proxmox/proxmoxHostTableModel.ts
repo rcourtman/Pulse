@@ -131,14 +131,14 @@ export const getProxmoxHostColumnWidthStyle = (
   return getPlatformTableWeightedColumnWidthStyle(columnId, weights, visibleColumnIds);
 };
 
-// Each layout has an explicit readable floor. The shared platform shell
-// otherwise applies its generic 48rem minimum even to the four-column mobile
-// layout, causing needless overflow around tablet widths. Wider modes retain
-// progressively larger floors so metric bars and labels never collapse.
+// The compact identity-plus-metrics layout is deliberately percentage based,
+// so it can use the actual phone-width container without a hidden horizontal
+// rail. Wider modes retain progressively larger floors so their extra context
+// does not collapse into unreadable labels.
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
-): 'min-w-[36rem]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
-  if (layoutMode === 'mobile') return 'min-w-[36rem]';
+): 'min-w-[0px]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
+  if (layoutMode === 'mobile') return 'min-w-[0px]';
   if (layoutMode === 'tablet') return 'min-w-[50rem]';
   if (layoutMode === 'compact') return 'min-w-[64rem]';
   return 'min-w-[1240px]';

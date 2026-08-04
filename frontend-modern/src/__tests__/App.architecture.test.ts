@@ -13,6 +13,14 @@ import type { Resource } from '@/types/resource';
 const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
 const headerAuditSource = readFileSync(join(process.cwd(), 'scripts/header-audit.mjs'), 'utf8');
 const integrationTestsDir = join(process.cwd(), '..', 'tests', 'integration', 'tests');
+const platformSurfaceSources = [
+  'features/proxmox/ProxmoxPageSurface.tsx',
+  'features/docker/DockerPageSurface.tsx',
+  'features/kubernetes/KubernetesPageSurface.tsx',
+  'features/truenas/TrueNASPageSurface.tsx',
+  'features/vmware/VmwarePageSurface.tsx',
+  'features/standalone/StandalonePageSurface.tsx',
+].map((path) => readFileSync(join(process.cwd(), 'src', path), 'utf8'));
 
 function readIntegrationTestSources(dir: string): Array<{ path: string; source: string }> {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -106,6 +114,12 @@ describe('App architecture', () => {
       '.pulse-shell:has(.pulse-wide-data-surface):not(.pulse-shell--full-width)',
     );
     expect(appStylesSource).toContain('--pulse-shell-max-width: min(97vw, 1920px)');
+  });
+
+  it('keeps every infrastructure platform on the same wide shell contract', () => {
+    platformSurfaceSources.forEach((source) => {
+      expect(source).toMatch(/data-testid="[^"]+-page" class="pulse-wide-data-surface /);
+    });
   });
 
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
@@ -416,7 +430,10 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(226, 232, 240, 0.72);');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);');
     expect(appStylesSource).toContain('.table-scroll-shell');
-    expect(appStylesSource).toContain('contain: inline-size paint');
+    expect(appStylesSource).toContain('container-type: inline-size');
+    expect(appStylesSource).toContain('@container (min-width: 64rem)');
+    expect(appStylesSource).toContain('.hidden.md\\:table-cell');
+    expect(appStylesSource).toContain('contain: paint');
     expect(appStylesSource).toContain('overscroll-behavior-x: contain');
     expect(appStylesSource).toContain('.progress-fill-frame');
     expect(appStylesSource).toContain('.metric-fill-geometry');

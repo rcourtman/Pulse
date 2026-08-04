@@ -18,12 +18,14 @@ import {
   formatPlatformTableBytesValue,
   formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
+  getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
@@ -220,6 +222,22 @@ export const ProxmoxCephTable: Component<{
 
   const total = createMemo(() => props.resources.length);
   const visible = createMemo(() => filtered().length);
+  const observedWidth = useObservedElementWidth();
+  const layout = createMemo(() =>
+    getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
+  );
+  const showBasic = createMemo(() => layout() !== 'compact');
+  const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
+  const showDetail = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const showFsid = createMemo(() => layout() === 'full');
+  const visibleColumnCount = createMemo(
+    () =>
+      4 +
+      Number(showBasic()) * 2 +
+      Number(showOperational()) * 2 +
+      Number(showDetail()) +
+      Number(showFsid()),
+  );
 
   return (
     <Show
@@ -232,7 +250,7 @@ export const ProxmoxCephTable: Component<{
         />
       }
     >
-      <div class="space-y-3">
+      <div ref={observedWidth.setElement} class="space-y-3" data-proxmox-ceph-layout={layout()}>
         <PlatformTableToolbar
           search={search}
           onSearchChange={setSearch}
@@ -256,27 +274,41 @@ export const ProxmoxCephTable: Component<{
           }
         >
           <PlatformTableShell
-            tableClass="min-w-[1100px] text-xs"
+            tableClass="min-w-[0px] table-fixed text-xs"
             header={
               <>
                 <TableHead class={getPlatformTableHeadClassForKind('name')}>Cluster</TableHead>
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>Health</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Quorum
-                </TableHead>
+                <Show when={showFsid()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
+                </Show>
+                <Show when={showBasic()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Quorum
+                  </TableHead>
+                </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                   OSDs
                 </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>PGs</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Pools
-                </TableHead>
+                <Show when={showOperational()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    PGs
+                  </TableHead>
+                </Show>
+                <Show when={showBasic()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Pools
+                  </TableHead>
+                </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                   Capacity
                 </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
+                <Show when={showOperational()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
+                </Show>
+                <Show when={showDetail()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
+                </Show>
               </>
             }
             body={
@@ -335,58 +367,70 @@ export const ProxmoxCephTable: Component<{
                               </div>
                             </Show>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                          >
-                            <span class="inline-block max-w-[10rem] truncate" title={fsid}>
-                              {fsid}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {quorumLabel(cluster.ceph)}
-                          </TableCell>
+                          <Show when={showFsid()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                            >
+                              <span class="inline-block max-w-[10rem] truncate" title={fsid}>
+                                {fsid}
+                              </span>
+                            </TableCell>
+                          </Show>
+                          <Show when={showBasic()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              {quorumLabel(cluster.ceph)}
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {osdLabel(cluster)}
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                          >
-                            <Show
-                              when={(cluster.ceph?.numPGs ?? 0) > 0}
-                              fallback={<span class="text-muted">—</span>}
+                          <Show when={showOperational()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                             >
-                              {cluster.ceph?.numPGs}
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {poolsLabel(cluster)}
-                          </TableCell>
+                              <Show
+                                when={(cluster.ceph?.numPGs ?? 0) > 0}
+                                fallback={<span class="text-muted">—</span>}
+                              >
+                                {cluster.ceph?.numPGs}
+                              </Show>
+                            </TableCell>
+                          </Show>
+                          <Show when={showBasic()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              {poolsLabel(cluster)}
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {capacityLabel(cluster)}
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                          >
-                            {summarizeServices(cluster.ceph?.services)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {healthMessageCell(cluster)}
-                          </TableCell>
+                          <Show when={showOperational()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                            >
+                              {summarizeServices(cluster.ceph?.services)}
+                            </TableCell>
+                          </Show>
+                          <Show when={showDetail()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
+                              {healthMessageCell(cluster)}
+                            </TableCell>
+                          </Show>
                         </TableRow>
                         <Show when={isOpen()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={10}
+                            colspan={visibleColumnCount()}
                             contentClass="px-4 py-4"
                             data-inline-detail-for={cluster.id}
                           >

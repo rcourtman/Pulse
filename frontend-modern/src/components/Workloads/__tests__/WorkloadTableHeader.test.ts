@@ -14,4 +14,9 @@ describe('getWorkloadColumnHeaderLabel', () => {
   it('does not relabel unrelated columns', () => {
     expect(getWorkloadColumnHeaderLabel('cpu', 'CPU', 'host')).toBe('CPU');
   });
+
+  it('uses compact labels for narrow operational columns', () => {
+    expect(getWorkloadColumnHeaderLabel('availability', 'Avail', 'guest', true)).toBe('Up');
+    expect(getWorkloadColumnHeaderLabel('memory', 'Mem', 'host', true)).toBe('Mem');
+  });
 });

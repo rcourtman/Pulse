@@ -87,7 +87,7 @@ export function KubernetesPageSurface() {
   );
 
   return (
-    <div data-testid="kubernetes-page" class="space-y-3">
+    <div data-testid="kubernetes-page" class="pulse-wide-data-surface space-y-3">
       <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="Kubernetes sections" />
 
       <Show

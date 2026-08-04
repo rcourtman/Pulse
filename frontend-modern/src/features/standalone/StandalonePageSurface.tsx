@@ -210,7 +210,7 @@ export function StandalonePageSurface() {
   });
 
   return (
-    <div data-testid="standalone-page" class="space-y-4">
+    <div data-testid="standalone-page" class="pulse-wide-data-surface space-y-4">
       <PlatformSectionTabs
         tabs={STANDALONE_TAB_SPECS}
         active={activeTab()}

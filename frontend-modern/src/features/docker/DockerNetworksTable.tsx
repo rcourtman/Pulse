@@ -9,9 +9,11 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
+  getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -359,6 +361,16 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
     filter: filterNetworks,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-network-drawer' });
+  const observedWidth = useObservedElementWidth();
+  const layout = createMemo(() =>
+    getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [480, 720, 960, 1200]),
+  );
+  const showSubnet = createMemo(() => !['compact', 'basic'].includes(layout()));
+  const showDriver = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const showHost = createMemo(() => layout() === 'full');
+  const visibleColumnCount = createMemo(
+    () => 3 + Number(showSubnet()) + Number(showDriver()) + Number(showHost()),
+  );
 
   return (
     <Show
@@ -371,7 +383,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
         />
       }
     >
-      <div class="space-y-3">
+      <div ref={observedWidth.setElement} class="space-y-3" data-docker-networks-layout={layout()}>
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
             search={tableState.search}
@@ -398,33 +410,23 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
         >
           <PlatformTableShell
             title={props.title ?? 'Networks'}
-            tableClass="min-w-[850px] table-fixed text-xs md:min-w-[1320px]"
+            tableClass="min-w-[0px] table-fixed text-xs"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[220px]`}>
-                  Network
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[360px]`}>
+                <TableHead class={getPlatformTableHeadClassForKind('name')}>Network</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>
                   Attached workloads
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[150px]`}>
-                  Attention
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[300px]`}
-                >
-                  Subnets
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
-                >
-                  Driver
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
-                >
-                  Host
-                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Attention</TableHead>
+                <Show when={showSubnet()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Subnets</TableHead>
+                </Show>
+                <Show when={showDriver()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Driver</TableHead>
+                </Show>
+                <Show when={showHost()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Host</TableHead>
+                </Show>
               </>
             }
             body={
@@ -484,28 +486,34 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                               </span>
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="inline-block max-w-[18rem] truncate" title={subnets()}>
-                              {subnets()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            {dockerTextValue(resource.docker?.driver)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            {dockerHostName(resource)}
-                          </TableCell>
+                          <Show when={showSubnet()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
+                              <span class="inline-block max-w-[18rem] truncate" title={subnets()}>
+                                {subnets()}
+                              </span>
+                            </TableCell>
+                          </Show>
+                          <Show when={showDriver()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
+                              {dockerTextValue(resource.docker?.driver)}
+                            </TableCell>
+                          </Show>
+                          <Show when={showHost()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            >
+                              {dockerHostName(resource)}
+                            </TableCell>
+                          </Show>
                         </TableRow>
                         <Show when={isExpanded()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={6}
+                            colspan={visibleColumnCount()}
                             contentClass="grid gap-4 px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)]"
                             data-docker-network-detail-row={resource.id}
                           >

@@ -245,7 +245,7 @@ export const TrueNASSystemsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="hidden md:table-cell md:w-[6%]"
+                  class="hidden sm:table-cell md:w-[6%]"
                 >
                   Temp
                 </PlatformSortableTableHead>
@@ -431,7 +431,7 @@ export const TrueNASSystemsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
                           >
                             <PlatformTableTemperatureValue value={system.temperature} />
                           </TableCell>

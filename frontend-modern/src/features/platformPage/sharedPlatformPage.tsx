@@ -104,11 +104,29 @@ export function PlatformTableLoadingState(props: { title: string; description: s
 }
 
 export type PlatformTableCellAlign = 'left' | 'right' | 'center';
+export type PlatformTableContainerLayout =
+  'compact' | 'basic' | 'operational' | 'expanded' | 'full';
+
+export const getPlatformTableContainerLayout = (
+  width: number,
+  breakpoints: readonly [number, number, number, number],
+): PlatformTableContainerLayout => {
+  if (!Number.isFinite(width) || width < breakpoints[0]) return 'compact';
+  if (width < breakpoints[1]) return 'basic';
+  if (width < breakpoints[2]) return 'operational';
+  if (width < breakpoints[3]) return 'expanded';
+  return 'full';
+};
 
 export const PLATFORM_TABLE_CARD_CLASS = 'rounded-md';
 export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
-export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[48rem]';
+// Responsive platform tables already decide which columns remain useful at
+// each breakpoint. A shared 48rem floor defeated that work by forcing a
+// horizontal rail even when the visible columns could fit the real container.
+// Dense tables that genuinely need a larger canvas must opt into an explicit
+// base min-width; the default should use the space it actually receives.
+export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[0px]';
 
 export function getPlatformTableResponsiveMinWidthClass(tableClass?: string): string {
   const hasExplicitBaseFloor = /(?:^|\s)min-w-\[[^\]]+\]/.test(tableClass ?? '');
@@ -118,7 +136,17 @@ export function getPlatformTableResponsiveMinWidthClass(tableClass?: string): st
 export function getPlatformTableClass(tableClass?: string): string {
   const featureClasses = (tableClass ?? '')
     .split(/\s+/)
-    .filter((className) => className.length > 0 && className !== 'min-w-full')
+    .filter(
+      (className) =>
+        className.length > 0 &&
+        className !== 'min-w-full' &&
+        // Viewport-responsive floors are especially harmful inside the app's
+        // resizable content pane: they can activate while the actual table
+        // container is much narrower. Keep explicit base floors for the few
+        // genuinely dense tables, but let ordinary responsive tables fill
+        // their real container and rely on their existing column priorities.
+        !/^(?:sm:|md:|lg:|xl:|2xl:)min-w-\[[^\]]+\]$/.test(className),
+    )
     .join(' ');
 
   return `${getPlatformTableResponsiveMinWidthClass(tableClass)} ${featureClasses}`.trim();

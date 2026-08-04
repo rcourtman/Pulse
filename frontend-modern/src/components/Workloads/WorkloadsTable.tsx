@@ -9,7 +9,7 @@ import type { WorkloadsState } from './useWorkloadsState';
 import { WorkloadPanel } from './WorkloadPanel';
 import { WorkloadTableHeader } from './WorkloadTableHeader';
 
-export const WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-[36rem]';
+export const WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-[0px]';
 
 type WorkloadsTableProps = Pick<
   WorkloadsState,

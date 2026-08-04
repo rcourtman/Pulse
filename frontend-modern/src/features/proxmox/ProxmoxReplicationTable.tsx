@@ -11,12 +11,14 @@ import {
   PlatformTableDurationValue,
   PlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
+  getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 
 // Replication is a Proxmox-specific concept (zfs send/receive scheduled
@@ -183,6 +185,14 @@ export const ProxmoxReplicationTable: Component<{
 
   const total = createMemo(() => (props.jobs ?? []).length);
   const visible = createMemo(() => filtered().length);
+  const observedWidth = useObservedElementWidth();
+  const layout = createMemo(() =>
+    getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
+  );
+  const showJob = createMemo(() => layout() !== 'compact');
+  const showNext = createMemo(() => layout() !== 'compact');
+  const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
+  const showError = createMemo(() => ['expanded', 'full'].includes(layout()));
 
   return (
     <Show
@@ -214,7 +224,11 @@ export const ProxmoxReplicationTable: Component<{
             />
           }
         >
-          <div class="space-y-3">
+          <div
+            ref={observedWidth.setElement}
+            class="space-y-3"
+            data-proxmox-replication-layout={layout()}
+          >
             <PlatformTableToolbar
               search={search}
               onSearchChange={setSearch}
@@ -238,29 +252,41 @@ export const ProxmoxReplicationTable: Component<{
               }
             >
               <PlatformTableShell
-                tableClass="min-w-[1200px] text-xs"
+                tableClass="min-w-[0px] table-fixed text-xs"
                 header={
                   <>
                     <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
+                    <Show when={showJob()}>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
+                    </Show>
                     <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
                     <TableHead class={getPlatformTableHeadClassForKind('text')}>
                       Source → Target
                     </TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Schedule</TableHead>
+                    <Show when={showOperational()}>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                        Schedule
+                      </TableHead>
+                    </Show>
                     <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                       Last sync
                     </TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                      Next sync
-                    </TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                      Duration
-                    </TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                      Fail count
-                    </TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                    <Show when={showNext()}>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Next sync
+                      </TableHead>
+                    </Show>
+                    <Show when={showOperational()}>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Duration
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Fails
+                      </TableHead>
+                    </Show>
+                    <Show when={showError()}>
+                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                    </Show>
                   </>
                 }
                 body={
@@ -287,11 +313,13 @@ export const ProxmoxReplicationTable: Component<{
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                            >
-                              <span title={job.id}>{job.jobId || job.id}</span>
-                            </TableCell>
+                            <Show when={showJob()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                              >
+                                <span title={job.id}>{job.jobId || job.id}</span>
+                              </TableCell>
+                            </Show>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                             >
@@ -306,56 +334,64 @@ export const ProxmoxReplicationTable: Component<{
                                 <span>{targetNode}</span>
                               </span>
                             </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                            >
-                              {job.schedule || '—'}
-                            </TableCell>
+                            <Show when={showOperational()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                              >
+                                {job.schedule || '—'}
+                              </TableCell>
+                            </Show>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
                               <PlatformTableRelativeTimeValue value={syncTimeValue(job)} />
                             </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
-                              <span class={NEXT_SYNC_TONE_CLASS[next.tone]}>{next.text}</span>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
-                              <PlatformTableDurationValue
-                                seconds={job.lastSyncDurationSeconds}
-                                fallbackText={job.lastSyncDurationHuman}
-                              />
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
-                            >
-                              <Show
-                                when={(job.failCount ?? 0) > 0}
-                                fallback={<span class="text-muted">0</span>}
+                            <Show when={showNext()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
-                                <span class="text-red-600 dark:text-red-300 font-semibold">
-                                  {job.failCount}
-                                </span>
-                              </Show>
-                            </TableCell>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                            >
-                              <Show
-                                when={!!job.error?.trim()}
-                                fallback={<span class="text-muted">—</span>}
+                                <span class={NEXT_SYNC_TONE_CLASS[next.tone]}>{next.text}</span>
+                              </TableCell>
+                            </Show>
+                            <Show when={showOperational()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
-                                <span
-                                  class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
-                                  title={job.error ?? ''}
+                                <PlatformTableDurationValue
+                                  seconds={job.lastSyncDurationSeconds}
+                                  fallbackText={job.lastSyncDurationHuman}
+                                />
+                              </TableCell>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                              >
+                                <Show
+                                  when={(job.failCount ?? 0) > 0}
+                                  fallback={<span class="text-muted">0</span>}
                                 >
-                                  {job.error}
-                                </span>
-                              </Show>
-                            </TableCell>
+                                  <span class="text-red-600 dark:text-red-300 font-semibold">
+                                    {job.failCount}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                            </Show>
+                            <Show when={showError()}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                              >
+                                <Show
+                                  when={!!job.error?.trim()}
+                                  fallback={<span class="text-muted">—</span>}
+                                >
+                                  <span
+                                    class="inline-block max-w-[18rem] truncate text-red-600 dark:text-red-300"
+                                    title={job.error ?? ''}
+                                  >
+                                    {job.error}
+                                  </span>
+                                </Show>
+                              </TableCell>
+                            </Show>
                           </TableRow>
                         );
                       }}

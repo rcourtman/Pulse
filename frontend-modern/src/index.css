@@ -186,8 +186,55 @@
   }
 
   .table-scroll-shell {
-    contain: inline-size paint;
+    container-type: inline-size;
+    contain: paint;
     overscroll-behavior-x: contain;
+  }
+
+  /*
+    Platform tables live inside a resizable application pane, so viewport
+    breakpoints do not describe the space the table actually owns. Reinterpret
+    the existing responsive table-cell priorities against the scroll shell's
+    inline size. This keeps the most useful base columns visible first, then
+    progressively restores context and diagnostic columns without either
+    squeezing ten columns into a tablet pane or reaching for a scrollbar.
+  */
+  .table-scroll-shell :is(th, td).hidden.sm\:table-cell,
+  .table-scroll-shell :is(th, td).hidden.md\:table-cell,
+  .table-scroll-shell :is(th, td).hidden.lg\:table-cell,
+  .table-scroll-shell :is(th, td).hidden.xl\:table-cell,
+  .table-scroll-shell :is(th, td).hidden.\32xl\:table-cell {
+    display: none;
+  }
+
+  @container (min-width: 34rem) {
+    .table-scroll-shell :is(th, td).hidden.sm\:table-cell {
+      display: table-cell;
+    }
+  }
+
+  @container (min-width: 64rem) {
+    .table-scroll-shell :is(th, td).hidden.md\:table-cell {
+      display: table-cell;
+    }
+  }
+
+  @container (min-width: 76rem) {
+    .table-scroll-shell :is(th, td).hidden.lg\:table-cell {
+      display: table-cell;
+    }
+  }
+
+  @container (min-width: 88rem) {
+    .table-scroll-shell :is(th, td).hidden.xl\:table-cell {
+      display: table-cell;
+    }
+  }
+
+  @container (min-width: 104rem) {
+    .table-scroll-shell :is(th, td).hidden.\32xl\:table-cell {
+      display: table-cell;
+    }
   }
 
   .app-scroll-shell {

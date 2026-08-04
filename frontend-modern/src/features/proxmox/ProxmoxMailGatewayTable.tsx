@@ -1,4 +1,4 @@
-import { For, Show, createSignal, type Component } from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -13,11 +13,13 @@ import {
   formatPlatformTableIntegerValue,
   formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
+  getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
   PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
@@ -41,6 +43,22 @@ export const ProxmoxMailGatewayTable: Component<{
   });
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const toggleSelected = (id: string) => setSelectedId((current) => (current === id ? null : id));
+  const observedWidth = useObservedElementWidth();
+  const layout = createMemo(() =>
+    getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
+  );
+  const showBasic = createMemo(() => layout() !== 'compact');
+  const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
+  const showVirus = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const showVersion = createMemo(() => layout() === 'full');
+  const visibleColumnCount = createMemo(
+    () =>
+      4 +
+      Number(showBasic()) * 2 +
+      Number(showOperational()) * 2 +
+      Number(showVirus()) +
+      Number(showVersion()),
+  );
 
   return (
     <Show
@@ -49,7 +67,7 @@ export const ProxmoxMailGatewayTable: Component<{
         <PlatformTableEmptyState title={props.emptyTitle} description={props.emptyDescription} />
       }
     >
-      <div class="space-y-3">
+      <div ref={observedWidth.setElement} class="space-y-3" data-proxmox-mail-layout={layout()}>
         <PlatformTableToolbar
           search={tableState.search}
           onSearchChange={tableState.setSearch}
@@ -72,29 +90,39 @@ export const ProxmoxMailGatewayTable: Component<{
           }
         >
           <PlatformTableShell
-            tableClass="min-w-[1080px] text-xs"
+            tableClass="min-w-[0px] table-fixed text-xs"
             header={
               <>
                 <TableHead class={getPlatformTableHeadClassForKind('name')}>Instance</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Nodes
-                </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Uptime
-                </TableHead>
+                <Show when={showVersion()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
+                </Show>
+                <Show when={showBasic()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Nodes
+                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Uptime
+                  </TableHead>
+                </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                   Mail in
                 </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Spam
-                </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Virus
-                </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                  Quarantine
-                </TableHead>
+                <Show when={showOperational()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Spam
+                  </TableHead>
+                </Show>
+                <Show when={showVirus()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Virus
+                  </TableHead>
+                </Show>
+                <Show when={showOperational()}>
+                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    Quarantine
+                  </TableHead>
+                </Show>
                 <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                   Queue
                 </TableHead>
@@ -142,26 +170,30 @@ export const ProxmoxMailGatewayTable: Component<{
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
-                          >
-                            {version()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <PlatformTableNumberValue
-                              value={pmg()?.nodeCount}
-                              format={formatPlatformTableIntegerValue}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {formatPlatformTableUptimeValue(
-                              instance.uptime ?? pmg()?.uptimeSeconds,
-                            )}
-                          </TableCell>
+                          <Show when={showVersion()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                            >
+                              {version()}
+                            </TableCell>
+                          </Show>
+                          <Show when={showBasic()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              <PlatformTableNumberValue
+                                value={pmg()?.nodeCount}
+                                format={formatPlatformTableIntegerValue}
+                              />
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              {formatPlatformTableUptimeValue(
+                                instance.uptime ?? pmg()?.uptimeSeconds,
+                              )}
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
@@ -170,30 +202,36 @@ export const ProxmoxMailGatewayTable: Component<{
                               format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <PlatformTableNumberValue
-                              value={pmg()?.spamIn}
-                              format={formatPlatformTableIntegerValue}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <PlatformTableNumberValue
-                              value={pmg()?.virusIn}
-                              format={formatPlatformTableIntegerValue}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <PlatformTableNumberValue
-                              value={pmg()?.quarantine}
-                              format={formatPlatformTableIntegerValue}
-                            />
-                          </TableCell>
+                          <Show when={showOperational()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              <PlatformTableNumberValue
+                                value={pmg()?.spamIn}
+                                format={formatPlatformTableIntegerValue}
+                              />
+                            </TableCell>
+                          </Show>
+                          <Show when={showVirus()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              <PlatformTableNumberValue
+                                value={pmg()?.virusIn}
+                                format={formatPlatformTableIntegerValue}
+                              />
+                            </TableCell>
+                          </Show>
+                          <Show when={showOperational()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              <PlatformTableNumberValue
+                                value={pmg()?.quarantine}
+                                format={formatPlatformTableIntegerValue}
+                              />
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
@@ -214,7 +252,7 @@ export const ProxmoxMailGatewayTable: Component<{
                         <Show when={isOpen()}>
                           <InlineDetailTableRow
                             cellId={detailRowId()}
-                            colspan={10}
+                            colspan={visibleColumnCount()}
                             contentClass="px-4 py-4"
                             data-inline-detail-for={instance.id}
                           >

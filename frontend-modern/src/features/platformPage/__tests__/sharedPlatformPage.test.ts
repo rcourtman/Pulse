@@ -27,6 +27,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
   getPlatformTableClass,
+  getPlatformTableContainerLayout,
   getPlatformResourceCountNoun,
   getPlatformTableResponsiveMinWidthClass,
   getPlatformTableWeightedColumnWidthStyle,
@@ -51,11 +52,11 @@ describe('getPlatformResourceCountNoun', () => {
 });
 
 describe('getPlatformTableResponsiveMinWidthClass', () => {
-  it('keeps dense platform columns readable on narrow viewports', () => {
-    expect(getPlatformTableResponsiveMinWidthClass()).toBe('min-w-[48rem]');
+  it('lets responsive columns fit their real container unless a table opts into a floor', () => {
+    expect(getPlatformTableResponsiveMinWidthClass()).toBe('min-w-[0px]');
     expect(
       getPlatformTableResponsiveMinWidthClass('min-w-full table-fixed text-xs md:min-w-[1120px]'),
-    ).toBe('min-w-[48rem]');
+    ).toBe('min-w-[0px]');
     expect(
       getPlatformTableResponsiveMinWidthClass(
         'min-w-[850px] table-fixed text-xs md:min-w-[1320px]',
@@ -64,13 +65,25 @@ describe('getPlatformTableResponsiveMinWidthClass', () => {
   });
 
   it('removes the conflicting full-width minimum when composing table classes', () => {
-    expect(getPlatformTableClass()).toBe('min-w-[48rem]');
+    expect(getPlatformTableClass()).toBe('min-w-[0px]');
     expect(getPlatformTableClass('min-w-full table-fixed text-xs md:min-w-[1120px]')).toBe(
-      'min-w-[48rem] table-fixed text-xs md:min-w-[1120px]',
+      'min-w-[0px] table-fixed text-xs',
     );
     expect(getPlatformTableClass('min-w-full min-w-[850px] table-fixed md:min-w-[1320px]')).toBe(
-      'min-w-[850px] table-fixed md:min-w-[1320px]',
+      'min-w-[850px] table-fixed',
     );
+  });
+});
+
+describe('getPlatformTableContainerLayout', () => {
+  const breakpoints = [480, 720, 960, 1200] as const;
+
+  it('selects columns from the real table container width', () => {
+    expect(getPlatformTableContainerLayout(375, breakpoints)).toBe('compact');
+    expect(getPlatformTableContainerLayout(480, breakpoints)).toBe('basic');
+    expect(getPlatformTableContainerLayout(720, breakpoints)).toBe('operational');
+    expect(getPlatformTableContainerLayout(960, breakpoints)).toBe('expanded');
+    expect(getPlatformTableContainerLayout(1200, breakpoints)).toBe('full');
   });
 });
 

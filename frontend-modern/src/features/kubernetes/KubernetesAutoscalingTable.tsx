@@ -173,7 +173,7 @@ export const KubernetesAutoscalingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden md:table-cell md:w-[16%]"
+                  class="hidden lg:table-cell md:w-[16%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -185,7 +185,11 @@ export const KubernetesAutoscalingTable: Component<{
                 >
                   Scale target
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[10%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden sm:table-cell md:w-[10%]"
+                >
                   Bounds
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -204,13 +208,17 @@ export const KubernetesAutoscalingTable: Component<{
                 >
                   Desired
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[11%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden sm:table-cell md:w-[11%]"
+                >
                   Metrics
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden md:table-cell md:w-[7%]"
+                  class="hidden lg:table-cell md:w-[7%]"
                 >
                   Labels
                 </PlatformSortableTableHead>
@@ -260,7 +268,7 @@ export const KubernetesAutoscalingTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={scope()}>
                               {scope()}
@@ -274,7 +282,7 @@ export const KubernetesAutoscalingTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             {bounds(resource)}
                           </TableCell>
@@ -293,7 +301,7 @@ export const KubernetesAutoscalingTable: Component<{
                             />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span
                               class="inline-block max-w-[10rem] truncate"
@@ -303,7 +311,7 @@ export const KubernetesAutoscalingTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
                             <span class="inline-block max-w-[8rem] truncate" title={labels().title}>
                               {labels().label}

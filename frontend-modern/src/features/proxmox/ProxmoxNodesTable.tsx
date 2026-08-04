@@ -257,7 +257,7 @@ export const ProxmoxNodesTable: Component<{
           <For each={visibleColumns()}>
             {(column) => (
               <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
-                {column.label}
+                {layoutMode() === 'mobile' && column.id === 'memory' ? 'Mem' : column.label}
               </PlatformSortableTableHead>
             )}
           </For>

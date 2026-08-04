@@ -438,9 +438,10 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Record<string, number>
 > = {
   mobile: {
-    name: 44,
+    name: 40,
+    availability: 8,
     cpu: 17,
-    memory: 17,
+    memory: 18,
     disk: 17,
   },
   tablet: {

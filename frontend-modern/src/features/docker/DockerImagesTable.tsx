@@ -153,7 +153,7 @@ export const DockerImagesTable: Component<
                   kind="text"
                   sort={sort}
                   sortKey="usedBy"
-                  class="md:w-[24%]"
+                  class="hidden sm:table-cell md:w-[24%]"
                 >
                   Used by
                 </PlatformSortableTableHead>
@@ -214,7 +214,7 @@ export const DockerImagesTable: Component<
                             {dockerHostName(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span
                               class="inline-block max-w-[20rem] truncate"

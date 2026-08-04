@@ -99,7 +99,7 @@ export function DockerPageSurface() {
   };
 
   return (
-    <div data-testid="docker-page" class="space-y-3">
+    <div data-testid="docker-page" class="pulse-wide-data-surface space-y-3">
       <PlatformSectionTabs
         tabs={tabs()}
         active={activeTab()}
