@@ -437,6 +437,7 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 
 	t.Run("PersistedV5LicenseAutoExchanges", func(t *testing.T) {
 		t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+		t.Setenv("PULSE_MOCK_MODE", "false")
 
 		legacyLicense, err := pkglicensing.GenerateLicenseForTesting(
 			"legacy-lifetime@example.com",
@@ -547,6 +548,8 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 	})
 
 	t.Run("PersistedV5RecurringLicenseAutoExchanges", func(t *testing.T) {
+		t.Setenv("PULSE_MOCK_MODE", "false")
+
 		tests := []struct {
 			name         string
 			email        string
