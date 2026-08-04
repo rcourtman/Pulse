@@ -1367,6 +1367,10 @@ describe('Docker native tables', () => {
       />
     ));
 
+    expect(screen.getByText('Avail')).toHaveClass('platform-table-label-compact');
+    expect(screen.getByText('Availability')).toHaveClass('platform-table-label-full');
+    expect(screen.getByText('Mem')).toHaveClass('platform-table-label-compact');
+    expect(screen.getByText('Memory')).toHaveClass('platform-table-label-full');
     expect(screen.getByText('Reachability')).toBeInTheDocument();
     expect(screen.getByText('worker-1')).toBeInTheDocument();
     expect(screen.getByText('manager')).toBeInTheDocument();

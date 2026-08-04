@@ -1,37 +1,32 @@
 {
   "version": 1,
-  "base_sha": "8d0b53245fdcfc1b90060289b5a92de3cd011810",
-  "verified_at": "2026-08-04T17:59:01Z",
+  "base_sha": "cd03c8b44d6552bd41a7ab232fdd68850baa630d",
+  "verified_at": "2026-08-04T18:16:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
-    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx"
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "0686cbc5576f24f2d1ec7fa6a73040c4409598d2cb8864977103fcecc15be6bb",
-    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx": "fcd177f88a6969aa3aa1c0549f789c69afca077168193dfad0455c034b95dd0d"
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx": "8cfdbdf7d74f429e39b4c1e2ab196d857c59bc83c5785bb1777ed25e73c1312b"
   },
   "routes": [
-    "/kubernetes/workloads",
-    "/kubernetes/overview",
-    "/proxmox/ceph",
-    "/proxmox/storage"
+    "/docker/swarm"
   ],
   "viewports": [
-    { "width": 375, "height": 900 },
+    { "width": 320, "height": 700 },
+    { "width": 375, "height": 812 },
     { "width": 768, "height": 900 },
-    { "width": 1440, "height": 1000 }
+    { "width": 1280, "height": 900 }
   ],
   "states": [
-    "Rendered the Kubernetes deployments inventory and an expanded deployment drawer at phone width",
-    "Rendered the expanded Kubernetes cluster drawer on its Overview, Namespaces, and Deployments tabs at phone width",
-    "Rendered an expanded Ceph cluster with Pools and Services tables at phone, tablet, and desktop widths",
-    "Rendered an expanded Proxmox ZFS storage pool with trend, configuration, and pool details at phone, tablet, and desktop widths"
+    "Rendered all six Swarm inventory tables with mock data at 320px and 375px without document or table overflow",
+    "Rendered Swarm Nodes with the compact Node, Role, Avail, and Mem headings below the first container reveal breakpoint",
+    "Rendered Swarm Nodes with full Availability and Memory headings at tablet width",
+    "Rendered all eight Swarm Nodes diagnostic columns with full headings at wide desktop width"
   ],
   "interactions": [
-    "Expanded checkout-api and verified that the deployment table retained its primary readiness and age information without document or table overflow",
-    "Expanded Production EU, switched between Namespaces and Deployments, and verified all four resource-detail tabs remain fully visible in the 298px drawer tablist",
-    "Confirmed the Kubernetes namespace and deployment drawer tables each fit their 296px containers and that deployment readiness reads current/desired",
-    "Expanded Mock Cluster Ceph and west-c-service-pool, inspected final mobile pixels, and confirmed equal client and scroll widths at 375px, 768px, and 1440px"
+    "Cycled the Availability sortable heading through ascending, descending, and default order and confirmed the aria-sort state and indicator updated each time",
+    "Inspected final phone pixels for Swarm Tasks, Nodes, Secrets, and Configs and confirmed identity, operational state, and capacity remain readable",
+    "Measured the Swarm Nodes table after hot reload at every recorded viewport and confirmed its client width equals its scroll width"
   ]
 }

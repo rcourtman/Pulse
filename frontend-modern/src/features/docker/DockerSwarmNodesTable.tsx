@@ -3,6 +3,7 @@ import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -159,7 +160,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   sortKey="availability"
                   class="md:w-[12%]"
                 >
-                  Availability
+                  <PlatformResponsiveTableLabel compact="Avail" full="Availability" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -191,7 +192,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   sortKey="memory"
                   class="md:w-[10%]"
                 >
-                  Memory
+                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
