@@ -1,5 +1,16 @@
-import { For, Match, Switch, createSignal, type Component } from 'solid-js';
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createSignal,
+  onCleanup,
+  type Component,
+} from 'solid-js';
+import { Portal } from 'solid-js/web';
 import Loader2Icon from 'lucide-solid/icons/loader-2';
+import MoreHorizontalIcon from 'lucide-solid/icons/more-horizontal';
 import PlayIcon from 'lucide-solid/icons/play';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SquareIcon from 'lucide-solid/icons/square';
@@ -26,6 +37,7 @@ export type DockerContainerLifecycleControlsProps = {
   resource: Resource;
   class?: string;
   surface?: DockerContainerLifecycleSurface;
+  collapsed?: boolean;
   onActionSettled?: (context: DockerContainerLifecycleSettledContext) => void | Promise<void>;
 };
 
@@ -67,6 +79,38 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
   const [reviewAction, setReviewAction] = createSignal<DockerContainerLifecycleAction | null>(null);
   const [reviewDetail, setReviewDetail] = createSignal<ActionDetailResponse | null>(null);
   const [lastError, setLastError] = createSignal('');
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const [menuPosition, setMenuPosition] = createSignal({ left: 0, top: 0 });
+  let menuTriggerRef: HTMLButtonElement | undefined;
+
+  const updateMenuPosition = () => {
+    if (!menuTriggerRef || typeof window === 'undefined') return;
+    const rect = menuTriggerRef.getBoundingClientRect();
+    const menuWidth = 208;
+    const estimatedMenuHeight = 132;
+    setMenuPosition({
+      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+      top: Math.max(8, Math.min(window.innerHeight - estimatedMenuHeight - 8, rect.bottom + 4)),
+    });
+  };
+
+  createEffect(() => {
+    if (!menuOpen() || typeof window === 'undefined') return;
+    updateMenuPosition();
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-docker-lifecycle-menu-root]')) return;
+      setMenuOpen(false);
+    };
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    onCleanup(() => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+    });
+  });
 
   const prepareLifecycleReview = async (action: DockerContainerLifecycleAction) => {
     const disabledReason = getDockerContainerLifecycleDisabledReason(props.resource, action);
@@ -114,40 +158,121 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
       class={`inline-flex items-center justify-end gap-1 ${props.class ?? ''}`.trim()}
       data-prevent-toggle
       data-docker-container-actions-surface={props.surface ?? 'docker-page'}
+      data-docker-lifecycle-menu-root
     >
-      <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
-        {(spec) => {
-          const disabled = () =>
-            Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action)) ||
-            (planningAction() !== null && planningAction() !== spec.action);
-          const Icon = iconForAction(spec.action);
-          return (
-            <button
-              type="button"
-              class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : disabled() ? disabledButtonClass : enabledButtonClass}`}
-              disabled={disabled()}
-              title={titleForAction(spec.action, spec.label)}
-              aria-label={titleForAction(spec.action, spec.label)}
-              data-docker-container-action={spec.action}
+      <Show
+        when={props.collapsed}
+        fallback={
+          <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
+            {(spec) => {
+              const disabled = () =>
+                Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action)) ||
+                (planningAction() !== null && planningAction() !== spec.action);
+              const Icon = iconForAction(spec.action);
+              return (
+                <button
+                  type="button"
+                  class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : disabled() ? disabledButtonClass : enabledButtonClass}`}
+                  disabled={disabled()}
+                  title={titleForAction(spec.action, spec.label)}
+                  aria-label={titleForAction(spec.action, spec.label)}
+                  data-docker-container-action={spec.action}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void prepareLifecycleReview(spec.action);
+                  }}
+                >
+                  <Switch>
+                    <Match when={planningAction() === spec.action}>
+                      <Loader2Icon class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    </Match>
+                    <Match when={true}>
+                      <Icon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </Match>
+                  </Switch>
+                </button>
+              );
+            }}
+          </For>
+        }
+      >
+        <button
+          ref={menuTriggerRef}
+          type="button"
+          class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border ${enabledButtonClass}`}
+          title={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
+          aria-label={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen() ? 'true' : 'false'}
+          onMouseDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Escape') setMenuOpen(false);
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            updateMenuPosition();
+            setMenuOpen((open) => !open);
+          }}
+        >
+          <MoreHorizontalIcon class="h-4 w-4" aria-hidden="true" />
+        </button>
+
+        <Show when={menuOpen()}>
+          <Portal mount={document.body}>
+            <div
+              data-prevent-toggle
+              data-docker-lifecycle-menu-root
+              role="menu"
+              class="fixed z-[9999] w-52 rounded-md border border-border bg-surface p-1 text-left shadow-lg"
+              style={{ left: `${menuPosition().left}px`, top: `${menuPosition().top}px` }}
               onMouseDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
                 event.stopPropagation();
-                void prepareLifecycleReview(spec.action);
+                if (event.key === 'Escape') setMenuOpen(false);
               }}
             >
-              <Switch>
-                <Match when={planningAction() === spec.action}>
-                  <Loader2Icon class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                </Match>
-                <Match when={true}>
-                  <Icon class="h-3.5 w-3.5" aria-hidden="true" />
-                </Match>
-              </Switch>
-            </button>
-          );
-        }}
-      </For>
+              <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
+                {(spec) => {
+                  const disabled = () =>
+                    Boolean(
+                      getDockerContainerLifecycleDisabledReason(props.resource, spec.action),
+                    ) ||
+                    (planningAction() !== null && planningAction() !== spec.action);
+                  const Icon = iconForAction(spec.action);
+                  return (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      class="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={disabled()}
+                      title={titleForAction(spec.action, spec.label)}
+                      aria-label={titleForAction(spec.action, spec.label)}
+                      data-docker-container-action={spec.action}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMenuOpen(false);
+                        void prepareLifecycleReview(spec.action);
+                      }}
+                    >
+                      <Show
+                        when={planningAction() === spec.action}
+                        fallback={<Icon class="h-3.5 w-3.5" aria-hidden="true" />}
+                      >
+                        <Loader2Icon class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      </Show>
+                      <span>{spec.label}</span>
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Portal>
+        </Show>
+      </Show>
       <ActionReviewDialog
         detail={reviewDetail()}
         onClose={() => setReviewDetail(null)}

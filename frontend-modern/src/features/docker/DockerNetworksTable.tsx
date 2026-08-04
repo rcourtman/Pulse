@@ -4,6 +4,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -415,7 +416,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
               <>
                 <TableHead class={getPlatformTableHeadClassForKind('name')}>Network</TableHead>
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                  Attached workloads
+                  <PlatformResponsiveTableLabel compact="Attached" full="Attached workloads" />
                 </TableHead>
                 <TableHead class={getPlatformTableHeadClassForKind('text')}>Attention</TableHead>
                 <Show when={showSubnet()}>

@@ -28,6 +28,7 @@ import {
   getPlatformTableFiniteMetric,
   getPlatformTableClass,
   getPlatformTableContainerLayout,
+  getPlatformTableHeadClassForKind,
   getPlatformResourceCountNoun,
   getPlatformTableResponsiveMinWidthClass,
   getPlatformTableWeightedColumnWidthStyle,
@@ -84,6 +85,13 @@ describe('getPlatformTableContainerLayout', () => {
     expect(getPlatformTableContainerLayout(720, breakpoints)).toBe('operational');
     expect(getPlatformTableContainerLayout(960, breakpoints)).toBe('expanded');
     expect(getPlatformTableContainerLayout(1200, breakpoints)).toBe('full');
+  });
+});
+
+describe('getPlatformTableHeadClassForKind', () => {
+  it('marks semantic identity columns for compact container prioritization', () => {
+    expect(getPlatformTableHeadClassForKind('name')).toContain('platform-table-name-column');
+    expect(getPlatformTableHeadClassForKind('text')).not.toContain('platform-table-name-column');
   });
 });
 

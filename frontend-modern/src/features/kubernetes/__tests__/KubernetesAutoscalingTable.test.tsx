@@ -57,7 +57,7 @@ describe('KubernetesAutoscalingTable', () => {
     ));
 
     expect(screen.getByText('Autoscaler')).toBeInTheDocument();
-    expect(screen.getByText('Scale target')).toBeInTheDocument();
+    expect(screen.getByText('Target')).toBeInTheDocument();
     expect(screen.getByText('Bounds')).toBeInTheDocument();
     expect(screen.getByText('Metrics')).toBeInTheDocument();
     expect(screen.getByText('checkout-api-hpa')).toBeInTheDocument();

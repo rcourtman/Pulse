@@ -5,6 +5,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -283,10 +284,10 @@ export const KubernetesConfigTable: Component<{
                   sortKey="lifecycle"
                   class="md:w-[16%]"
                 >
-                  Lifecycle / trust
+                  <PlatformResponsiveTableLabel compact="Status" full="Lifecycle / trust" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[14%]">
-                  Data shape
+                  <PlatformResponsiveTableLabel compact="Data" full="Data shape" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

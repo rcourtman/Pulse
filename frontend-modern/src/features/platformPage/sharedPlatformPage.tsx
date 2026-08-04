@@ -196,10 +196,21 @@ export const getPlatformTableCellClass = (align?: PlatformTableCellAlign): strin
 // added once in columnAlignment.ts and propagated automatically). See
 // PlatformTableColumnKind for the kind list and rationale.
 export const getPlatformTableHeadClassForKind = (kind: PlatformTableColumnKind): string =>
-  getPlatformTableHeadClass(getPlatformColumnAlign(kind));
+  `${getPlatformTableHeadClass(getPlatformColumnAlign(kind))} ${
+    kind === 'name' ? 'platform-table-name-column' : ''
+  }`.trim();
 
 export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind): string =>
   getPlatformTableCellClass(getPlatformColumnAlign(kind));
+
+export function PlatformResponsiveTableLabel(props: { compact: string; full: string }) {
+  return (
+    <>
+      <span class="platform-table-label-compact">{props.compact}</span>
+      <span class="platform-table-label-full">{props.full}</span>
+    </>
+  );
+}
 
 // --- User-controlled column sorting ----------------------------------------
 //

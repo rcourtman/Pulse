@@ -18,8 +18,12 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
+import {
+  getWorkloadTableLayoutMode,
+  getWorkloadTableLayoutModeForContainer,
+} from '@/components/Workloads/guestRowModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
@@ -29,6 +33,7 @@ import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -268,7 +273,13 @@ const DOCKER_CONTAINER_SEARCH_TIPS = {
 export const DockerContainersTable: Component<DockerContainersTableProps> = (props) => {
   const alertsActivation = useAlertsActivation();
   const breakpoint = useBreakpoint();
-  const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
+  const observedWidth = useObservedElementWidth();
+  const layoutMode = createMemo(() => {
+    const measuredWidth = observedWidth.width();
+    return measuredWidth === null
+      ? getWorkloadTableLayoutMode(breakpoint.width())
+      : getWorkloadTableLayoutModeForContainer(measuredWidth);
+  });
   // Search and status live in the URL, like the host scope below, so the
   // whole filter state is shareable and captured by saved views. That is what
   // makes exclusions persistent: search `-name`, save it as the default view,
@@ -628,6 +639,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
               <DockerContainerLifecycleControls
                 resource={resource}
+                collapsed={layoutMode() !== 'wide'}
                 onActionSettled={props.onLifecycleActionSettled}
               />
             </TableCell>
@@ -708,7 +720,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         />
       }
     >
-      <div class="space-y-3">
+      <div ref={observedWidth.setElement} class="space-y-3">
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
             search={tableState.search}
@@ -778,9 +790,25 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                       sort={sort}
                       sortKey={getDockerContainerSortKey(column.id)}
                     >
-                      <Show when={column.id === 'memory'} fallback={<>{column.label}</>}>
-                        <span class="md:hidden">Mem</span>
-                        <span class="hidden md:inline">Memory</span>
+                      <Show
+                        when={column.id !== 'actions'}
+                        fallback={<span class="sr-only">{column.label}</span>}
+                      >
+                        <Show
+                          when={column.compactLabel}
+                          fallback={
+                            <Show when={column.id === 'memory'} fallback={<>{column.label}</>}>
+                              <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
+                            </Show>
+                          }
+                        >
+                          {(compactLabel) => (
+                            <PlatformResponsiveTableLabel
+                              compact={compactLabel()}
+                              full={column.label}
+                            />
+                          )}
+                        </Show>
                       </Show>
                     </PlatformSortableTableHead>
                   )}

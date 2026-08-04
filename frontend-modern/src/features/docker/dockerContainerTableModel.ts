@@ -22,6 +22,7 @@ export type DockerContainerTableColumnId =
 export type DockerContainerTableColumn = {
   id: DockerContainerTableColumnId;
   label: string;
+  compactLabel?: string;
   kind: PlatformTableColumnKind;
 };
 
@@ -77,7 +78,7 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
 const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'container', label: 'Container', kind: 'name' },
   { id: 'host', label: 'Host', kind: 'text' },
-  { id: 'runtime', label: 'Runtime', kind: 'text' },
+  { id: 'runtime', label: 'Engine', kind: 'text' },
   { id: 'image', label: 'Image', kind: 'text' },
   { id: 'state', label: 'State', kind: 'text' },
   { id: 'cpu', label: 'CPU', kind: 'metric-bar' },
@@ -86,7 +87,7 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'ports', label: 'Ports', kind: 'text' },
   { id: 'networks', label: 'Networks', kind: 'text' },
   { id: 'mounts', label: 'Mounts', kind: 'text' },
-  { id: 'updates', label: 'Updates', kind: 'badge' },
+  { id: 'updates', label: 'Updates', compactLabel: 'Update', kind: 'badge' },
   { id: 'actions', label: 'Actions', kind: 'badge' },
 ];
 
@@ -111,34 +112,34 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   Partial<Record<DockerContainerTableColumnId, number>>
 > = {
   mobile: {
-    container: 32,
+    container: 30,
     state: 14,
     cpu: 18,
-    memory: 22,
-    updates: 14,
+    memory: 21,
+    updates: 17,
     actions: 14,
   },
   tablet: {
-    container: 28,
-    host: 16,
+    container: 27,
+    host: 15,
     state: 10,
     cpu: 15,
-    memory: 18,
-    restarts: 6,
-    updates: 7,
-    actions: 8,
+    memory: 19,
+    restarts: 9,
+    updates: 9,
+    actions: 6,
   },
   compact: {
     container: 18,
     host: 10,
     runtime: 8,
-    image: 20,
+    image: 18,
     state: 7,
     cpu: 11,
     memory: 12,
-    restarts: 7,
+    restarts: 9,
     ports: 12,
-    updates: 8,
+    updates: 9,
     actions: 8,
   },
 };

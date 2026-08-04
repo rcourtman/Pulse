@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -171,7 +172,7 @@ export const DockerImagesTable: Component<
                   sortKey="update"
                   class="md:w-[16%]"
                 >
-                  Update check
+                  <PlatformResponsiveTableLabel compact="Update" full="Update check" />
                 </PlatformSortableTableHead>
               </>
             }

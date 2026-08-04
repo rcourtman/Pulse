@@ -19,6 +19,7 @@ import {
   formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformResponsiveTableLabel,
   PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -238,7 +239,7 @@ export const ProxmoxCephClusterDrawer: Component<{
                   <TableHead class={getPlatformTableHeadClassForKind('name')}>Service</TableHead>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Running
+                    <PlatformResponsiveTableLabel compact="Up" full="Running" />
                   </TableHead>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                     Total

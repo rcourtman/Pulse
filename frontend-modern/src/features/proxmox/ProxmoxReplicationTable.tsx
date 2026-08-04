@@ -260,8 +260,11 @@ export const ProxmoxReplicationTable: Component<{
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
                     </Show>
                     <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
-                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                      Source → Target
+                    <TableHead
+                      class={getPlatformTableHeadClassForKind('text')}
+                      title="Source → target"
+                    >
+                      Route
                     </TableHead>
                     <Show when={showOperational()}>
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>

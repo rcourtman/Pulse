@@ -209,7 +209,7 @@ export const VsphereHostsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class="md:w-[16%]"
+                  class="md:w-[15%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -265,7 +265,7 @@ export const VsphereHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="datastores"
-                  class="hidden md:table-cell md:w-[7%]"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Datastores
                 </PlatformSortableTableHead>

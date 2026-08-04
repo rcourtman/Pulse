@@ -5,6 +5,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -250,10 +251,10 @@ export const KubernetesPolicyTable: Component<{
                   Scope
                 </TableHead>
                 <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[15%]`}>
-                  Policy shape
+                  <PlatformResponsiveTableLabel compact="Policy" full="Policy shape" />
                 </TableHead>
                 <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
-                  Spec / limits
+                  <PlatformResponsiveTableLabel compact="Limits" full="Spec / limits" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}

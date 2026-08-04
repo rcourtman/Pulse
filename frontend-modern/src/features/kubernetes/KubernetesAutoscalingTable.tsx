@@ -5,6 +5,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
@@ -181,9 +182,9 @@ export const KubernetesAutoscalingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="target"
-                  class="md:w-[18%]"
+                  class="platform-table-mobile-w-30 md:w-[18%]"
                 >
-                  Scale target
+                  Target
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
@@ -196,17 +197,17 @@ export const KubernetesAutoscalingTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="current"
-                  class="md:w-[9%]"
+                  class="platform-table-mobile-w-15 md:w-[9%]"
                 >
-                  Current
+                  <PlatformResponsiveTableLabel compact="Now" full="Current" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="md:w-[9%]"
+                  class="platform-table-mobile-w-15 md:w-[9%]"
                 >
-                  Desired
+                  <PlatformResponsiveTableLabel compact="Goal" full="Desired" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

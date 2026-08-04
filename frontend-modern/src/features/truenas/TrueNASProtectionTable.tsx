@@ -13,6 +13,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   PlatformErrorState,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableDateTimeValue,
   PlatformTableEmptyState,
@@ -500,7 +501,7 @@ export const TrueNASProtectionTable: Component<{
                       sortKey="completed"
                       class="md:w-[12%]"
                     >
-                      Completed
+                      <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
                     </PlatformSortableTableHead>
                     <PlatformSortableTableHead
                       kind="numeric-value"

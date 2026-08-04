@@ -157,8 +157,8 @@ describe('TrueNASStorageTopologyTable user sorting', () => {
   it('sorts Usage / Size descending first with missing values last in each subtree', () => {
     const { container } = renderTable();
 
-    fireEvent.click(headerFor('Usage / Size'));
-    expect(headerFor('Usage / Size')).toHaveAttribute('aria-sort', 'descending');
+    fireEvent.click(headerFor('Usage'));
+    expect(headerFor('Usage')).toHaveAttribute('aria-sort', 'descending');
     // Pools order on their own usage (zulu 70 > alpha 50); alpha's datasets
     // order 80 > 10 with the metric-less bravo sinking to the bottom of its
     // sibling group.

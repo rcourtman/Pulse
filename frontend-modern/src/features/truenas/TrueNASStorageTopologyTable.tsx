@@ -8,6 +8,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableTemperatureValue,
@@ -359,7 +360,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   sortKey="usage"
                   class="md:w-[28%]"
                 >
-                  Usage / Size
+                  <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"

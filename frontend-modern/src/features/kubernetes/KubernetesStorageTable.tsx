@@ -5,6 +5,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -297,7 +298,7 @@ export const KubernetesStorageTable: Component<{
                   sortKey="phase"
                   class="md:w-[14%]"
                 >
-                  Binding / phase
+                  <PlatformResponsiveTableLabel compact="State" full="Binding / phase" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

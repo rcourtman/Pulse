@@ -6,6 +6,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -185,7 +186,7 @@ export const KubernetesServicesTable: Component<{
                   sortKey="clusterIp"
                   class="md:w-[13%]"
                 >
-                  Cluster IP
+                  <PlatformResponsiveTableLabel compact="IP" full="Cluster IP" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

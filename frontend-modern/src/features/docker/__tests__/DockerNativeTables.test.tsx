@@ -248,7 +248,7 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('Container')).toBeInTheDocument();
-    expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Engine')).toBeInTheDocument();
     expect(screen.getByText('CPU')).toBeInTheDocument();
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
@@ -281,7 +281,7 @@ describe('Docker native tables', () => {
     );
   });
 
-  it('hides the Runtime column when every container reports the same runtime', () => {
+  it('hides the Engine column when every container reports the same runtime', () => {
     renderInRouter(() => (
       <DockerContainersTable
         resources={[
@@ -319,7 +319,7 @@ describe('Docker native tables', () => {
       />
     ));
 
-    expect(screen.queryByText('Runtime')).not.toBeInTheDocument();
+    expect(screen.queryByText('Engine')).not.toBeInTheDocument();
     expect(screen.queryByText('docker 27.5.1')).not.toBeInTheDocument();
   });
 
@@ -868,7 +868,12 @@ describe('Docker native tables', () => {
       />
     ));
 
-    const restartButton = screen.getByRole('button', {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Container actions for edge-web',
+      }),
+    );
+    const restartButton = screen.getByRole('menuitem', {
       name: 'Review restart for edge-web',
     });
     fireEvent.click(restartButton);
@@ -916,8 +921,13 @@ describe('Docker native tables', () => {
       />
     ));
 
-    expect(
+    fireEvent.click(
       screen.getByRole('button', {
+        name: 'Container actions for edge-web',
+      }),
+    );
+    expect(
+      screen.getByRole('menuitem', {
         name: 'Restart unavailable: Docker inventory is stale; refresh inventory before running lifecycle actions.',
       }),
     ).toBeDisabled();

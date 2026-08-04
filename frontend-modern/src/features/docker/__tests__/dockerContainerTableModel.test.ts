@@ -14,10 +14,10 @@ describe('dockerContainerTableModel', () => {
     expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates', 'actions']);
     expect(getDockerContainerTableMinWidthClass()).toBe('min-w-full');
     expect(getDockerContainerColumnWidthStyle('container', 'mobile', ids)).toEqual({
-      width: '28.0702%',
+      width: '26.3158%',
     });
     expect(getDockerContainerColumnWidthStyle('memory', 'mobile', ids)).toEqual({
-      width: '19.2982%',
+      width: '18.4211%',
     });
   });
 

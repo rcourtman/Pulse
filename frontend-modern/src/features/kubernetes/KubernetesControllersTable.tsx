@@ -5,6 +5,7 @@ import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
@@ -280,7 +281,12 @@ export const KubernetesControllersTable: Component<{
                 >
                   Controller
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[9%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="kind"
+                  class="platform-table-mobile-w-25 md:w-[9%]"
+                >
                   Kind
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -311,9 +317,9 @@ export const KubernetesControllersTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="ready"
-                  class="md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
-                  Ready/Done
+                  <PlatformResponsiveTableLabel compact="Ready" full="Ready/Done" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -327,9 +333,9 @@ export const KubernetesControllersTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="exceptions"
-                  class="md:w-[11%]"
+                  class="platform-table-mobile-w-20 md:w-[11%]"
                 >
-                  Exceptions
+                  <PlatformResponsiveTableLabel compact="Issues" full="Exceptions" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

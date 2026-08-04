@@ -5,6 +5,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -227,7 +228,7 @@ export const KubernetesNetworkingTable: Component<{
                   sortKey="typeClass"
                   class="md:w-[12%]"
                 >
-                  Type / class
+                  <PlatformResponsiveTableLabel compact="Class" full="Type / class" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
