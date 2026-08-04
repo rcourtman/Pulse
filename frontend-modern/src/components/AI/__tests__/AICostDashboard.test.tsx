@@ -226,6 +226,23 @@ describe('AICostDashboard', () => {
     expect(screen.getByText('10,000')).toBeInTheDocument(); // output tokens
   });
 
+  it('prioritizes identity and spend before token detail in narrow containers', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Anthropic')).toBeInTheDocument();
+    });
+
+    const providerHeader = screen.getByRole('columnheader', { name: 'Provider' });
+    const inputHeader = screen.getByRole('columnheader', { name: 'Input' });
+    const outputHeader = screen.getByRole('columnheader', { name: 'Output' });
+    const totalHeader = screen.getByRole('columnheader', { name: 'Total' });
+
+    expect(providerHeader.closest('table')).toHaveClass('min-w-0', 'table-fixed');
+    expect(inputHeader).toHaveClass('ai-cost-detail-column');
+    expect(outputHeader).toHaveClass('ai-cost-detail-column');
+    expect(totalHeader).toHaveClass('hidden', 'sm:table-cell');
+  });
+
   // ---- range buttons ----
 
   it('switches range to 7 days when clicking 7d button', async () => {

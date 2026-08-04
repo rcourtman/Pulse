@@ -223,7 +223,7 @@ describe('WebInterfaceUrlField', () => {
       await screen.findByText(
         "Add a URL to quickly access this workload's web interface from Pulse.",
       ),
-    ).toBeInTheDocument();
+    ).toHaveClass('whitespace-normal');
   });
 
   it('uses the canonical discovery fallback copy for missing suggested urls', async () => {

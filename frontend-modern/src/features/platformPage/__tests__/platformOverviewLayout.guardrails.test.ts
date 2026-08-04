@@ -250,6 +250,25 @@ describe('platform overview layout guardrails', () => {
     }
   });
 
+  it('keeps Mail Gateway drawer tables prioritized for narrow inline details', () => {
+    expect(proxmoxMailGatewayDrawerSource).toContain('min-w-0 table-fixed text-xs');
+    expect(proxmoxMailGatewayDrawerSource).toMatch(
+      /hidden sm:table-cell[^>]*>\s*Role\s*<\/TableHead>/,
+    );
+    expect(proxmoxMailGatewayDrawerSource).toMatch(
+      /hidden sm:table-cell[^>]*>\s*Uptime\s*<\/TableHead>/,
+    );
+    expect(proxmoxMailGatewayDrawerSource).toMatch(
+      /hidden sm:table-cell[^>]*>\s*Load\s*<\/TableHead>/,
+    );
+    expect(proxmoxMailGatewayDrawerSource).toMatch(
+      /hidden sm:table-cell[^>]*>\s*Virus\s*<\/TableHead>/,
+    );
+    expect(proxmoxMailGatewayDrawerSource).toMatch(
+      /hidden sm:table-cell[^>]*>\s*Bytes\s*<\/TableHead>/,
+    );
+  });
+
   it('keeps Docker host optional Swarm column wide enough for its header', () => {
     expect(dockerHostsTableSource).toContain('Swarm role');
     expect(dockerHostsTableSource).toContain('md:w-[10%]');

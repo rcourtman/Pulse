@@ -507,11 +507,11 @@ export const AICostDashboard: Component = () => {
                 </Show>
               </div>
 
-              <div class="flex items-center justify-between gap-3">
+              <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="text-xs text-muted">
                   History retention: {data().retention_days} days
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="grid grid-cols-3 gap-2 sm:flex sm:items-center">
                   <button
                     type="button"
                     disabled={loading()}
@@ -539,28 +539,34 @@ export const AICostDashboard: Component = () => {
                 </div>
               </div>
 
-              <Table class="min-w-full text-sm">
+              <Table class="min-w-0 table-fixed text-sm">
                 <TableHeader class="text-xs text-muted uppercase tracking-wide">
                   <TableRow class="border-b border-border">
-                    <TableHead class="text-left py-2 pr-4">Provider</TableHead>
-                    <TableHead class="text-left py-2 pr-4">Model</TableHead>
-                    <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
-                    <TableHead class="text-right py-2 px-2">Input</TableHead>
-                    <TableHead class="text-right py-2 px-2">Output</TableHead>
-                    <TableHead class="text-right py-2 px-2">Total</TableHead>
+                    <TableHead class="py-2 pr-2 text-left">Provider</TableHead>
+                    <TableHead class="py-2 pr-2 text-left">Model</TableHead>
+                    <TableHead class="px-1 py-2 text-right whitespace-nowrap">Est. USD</TableHead>
+                    <TableHead class="ai-cost-detail-column px-2 py-2 text-right">Input</TableHead>
+                    <TableHead class="ai-cost-detail-column px-2 py-2 text-right">Output</TableHead>
+                    <TableHead class="hidden px-2 py-2 text-right sm:table-cell">Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   <For each={visibleProviderModels()}>
                     {(pm) => (
                       <TableRow class="border-b border-border-subtle">
-                        <TableCell class="py-2 pr-4 font-medium text-base-content">
+                        <TableCell
+                          class="truncate py-2 pr-2 font-medium text-base-content"
+                          title={getAIProviderDisplayName(pm.provider) || pm.provider}
+                        >
                           {getAIProviderDisplayName(pm.provider) || pm.provider}
                         </TableCell>
-                        <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
+                        <TableCell
+                          class="truncate py-2 pr-2 font-mono text-xs text-base-content"
+                          title={pm.model}
+                        >
                           {pm.model}
                         </TableCell>
-                        <TableCell class="py-2 px-2 text-right text-base-content">
+                        <TableCell class="px-1 py-2 text-right text-base-content whitespace-nowrap">
                           <Show
                             when={pm.pricing_known}
                             fallback={
@@ -572,13 +578,13 @@ export const AICostDashboard: Component = () => {
                             {formatUSD(pm.estimated_usd ?? 0)}
                           </Show>
                         </TableCell>
-                        <TableCell class="py-2 px-2 text-right text-base-content">
+                        <TableCell class="ai-cost-detail-column px-2 py-2 text-right text-base-content">
                           {formatNumber(pm.input_tokens)}
                         </TableCell>
-                        <TableCell class="py-2 px-2 text-right text-base-content">
+                        <TableCell class="ai-cost-detail-column px-2 py-2 text-right text-base-content">
                           {formatNumber(pm.output_tokens)}
                         </TableCell>
-                        <TableCell class="py-2 px-2 text-right text-base-content">
+                        <TableCell class="hidden px-2 py-2 text-right text-base-content sm:table-cell">
                           {formatNumber(pm.total_tokens)}
                         </TableCell>
                       </TableRow>

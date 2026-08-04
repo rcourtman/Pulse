@@ -2476,7 +2476,11 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				Scope:            "node",
 			}
 
-			if i%2 == 0 {
+			// The smallest useful mock estates often have one Podman host and
+			// one Docker host. Make the first Docker host a manager regardless
+			// of its absolute index so those estates still exercise the Swarm
+			// services, tasks, nodes, secrets, and configs surfaces.
+			if !swarmLeaderAssigned || i%2 == 0 {
 				swarmInfo.NodeRole = "manager"
 			}
 			// Cluster-scoped Swarm objects (services, tasks, secrets,

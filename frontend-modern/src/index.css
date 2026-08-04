@@ -264,6 +264,10 @@
     display: none;
   }
 
+  .table-scroll-shell :is(th, td).ai-cost-detail-column {
+    display: none;
+  }
+
   .table-scroll-shell :is(th, td).report-schedule-detail-column,
   .table-scroll-shell :is(th, td).storage-dataset-referenced-column {
     display: none;
@@ -287,6 +291,10 @@
     }
 
     .table-scroll-shell :is(th, td).swarm-service-detail-column {
+      display: table-cell;
+    }
+
+    .table-scroll-shell :is(th, td).ai-cost-detail-column {
       display: table-cell;
     }
 

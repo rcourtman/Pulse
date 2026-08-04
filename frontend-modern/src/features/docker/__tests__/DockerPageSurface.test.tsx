@@ -486,6 +486,36 @@ describe('DockerPageSurface', () => {
     );
   });
 
+  it('keeps the Swarm route useful when only host membership is available', () => {
+    mocks.pathname = '/docker/swarm';
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          docker: {
+            runtime: 'docker',
+            swarm: {
+              nodeId: 'node-1',
+              nodeRole: 'manager',
+              localState: 'active',
+            },
+          } as NonNullable<Resource['docker']>,
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-section-tabs')).toHaveAttribute('data-active', 'swarm');
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.getByTestId('platform-table-empty-state')).toHaveAttribute(
+      'data-title',
+      'No Swarm manager inventory',
+    );
+  });
+
   it('falls back to Overview when the Swarm route is requested without Swarm evidence', () => {
     mocks.pathname = '/docker/swarm';
 

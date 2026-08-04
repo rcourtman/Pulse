@@ -30,6 +30,7 @@ import {
   getDockerPageTabSpecs,
   hasDockerEngineStorageUsage,
   hasDockerStorageInventory,
+  hasDockerSwarmEvidence,
   hasDockerSwarmInventory,
   resolveDockerPageTabId,
   type DockerPageModel,
@@ -269,6 +270,15 @@ function DockerStorage(props: { model: DockerPageModel }) {
 
 function DockerSwarm(props: { model: DockerPageModel }) {
   const hasSwarmInventory = createMemo(() => hasDockerSwarmInventory(props.model));
+  const swarmHosts = createMemo(() => props.model.hosts.filter(hasDockerSwarmEvidence));
+  const hasManagerInventory = createMemo(
+    () =>
+      props.model.services.length > 0 ||
+      props.model.tasks.length > 0 ||
+      props.model.nodes.length > 0 ||
+      props.model.secrets.length > 0 ||
+      props.model.configs.length > 0,
+  );
 
   return (
     <Show
@@ -282,6 +292,21 @@ function DockerSwarm(props: { model: DockerPageModel }) {
       }
     >
       <div class="space-y-4">
+        <DockerHostsTable
+          resources={swarmHosts()}
+          sourceCount={swarmHosts().length}
+          emptyIcon={dockerIcon()}
+          emptyTitle="No Swarm hosts"
+          emptyDescription="Hosts appear here when an active Docker Swarm node reports its cluster membership."
+          title="Swarm hosts"
+        />
+        <Show when={!hasManagerInventory()}>
+          <PlatformTableEmptyState
+            icon={dockerIcon()}
+            title="No Swarm manager inventory"
+            description="Pulse can see active Swarm hosts, but no manager has reported services, tasks, nodes, secrets, or configs. Check manager connectivity and enable Swarm inventory collection."
+          />
+        </Show>
         <Show when={props.model.services.length > 0}>
           <DockerServicesTable
             resources={props.model.services}

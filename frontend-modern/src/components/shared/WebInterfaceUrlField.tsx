@@ -168,7 +168,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           </div>
         </Show>
 
-        <p class="mt-1.5 text-[10px] text-muted">
+        <p class="mt-1.5 whitespace-normal text-[10px] text-muted">
           Add a URL to quickly access this {state.targetLabel()}'s web interface from Pulse.
         </p>
       </div>
