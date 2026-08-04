@@ -80,6 +80,40 @@ export const getAvailabilityProbeEndpointLabel = (
   return addressWithPort;
 };
 
+/**
+ * True when an availability probe that resolved to this resource has failed
+ * past its configured threshold.
+ *
+ * Only `attached` facets count: a standalone, ambiguous, or unresolved probe
+ * has not been proven to describe this resource. The threshold mirrors the gate
+ * the availability poller uses before raising `availability_unreachable`, so
+ * every surface built on this agrees with the alert rather than running ahead
+ * of it.
+ *
+ * This reads the facet already projected onto the resource. The check resource
+ * remains the sole owner of the incident, its alert and its history, per the
+ * availability check identity record of 2026-07-23.
+ */
+export const hasFailedAttachedAvailabilityCheck = (source: {
+  availability?: ResourceAvailabilityMeta | null;
+  availabilityChecks?: ResourceAvailabilityMeta[] | null;
+}): boolean => {
+  const checks = source.availabilityChecks?.length
+    ? source.availabilityChecks
+    : source.availability
+      ? [source.availability]
+      : [];
+
+  return checks.some((check) => {
+    if (!check || check.enabled === false) return false;
+    if (check.available !== false) return false;
+    if (check.correlationState !== 'attached') return false;
+    const failures = check.consecutiveFailures ?? 0;
+    const threshold = Math.max(check.failureThreshold ?? 1, 1);
+    return failures >= threshold;
+  });
+};
+
 const getAvailabilityProbeFailureLabel = (availability: ResourceAvailabilityMeta): string => {
   const lastError = (availability.lastError ?? '').trim();
   const normalizedError = lastError.toLowerCase();

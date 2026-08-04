@@ -1,36 +1,36 @@
 {
   "version": 1,
-  "base_sha": "1807ab294cc53d397fb8b9e7ab1b8a3d3bca8137",
-  "verified_at": "2026-08-04T09:47:19Z",
+  "base_sha": "e86ca7da057a613a59d5cea24b8230d9a3c914df",
+  "verified_at": "2026-08-04T10:06:40Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx"
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts",
+    "frontend-modern/src/utils/status.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx": "05d38e5a9b7235804dd388b893f58b79818fbae50c90244edc077c6cbcb6c8b4"
+    "frontend-modern/src/components/Workloads/useGuestRowState.ts": "44d3b0d6ba5fa8a940dac638040aa193b8d471dd9e2d4714a6591aa9ad2ddbc7",
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "a31b6f298a8fe56c9be698ba6361cf9f8151fda4ddc5171155bc5ca53aaf1bc6",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "e51d19778743b991c81fea2d1e595b17c73e1cee35b40396e0583ce96b91371a",
+    "frontend-modern/src/utils/status.ts": "45b965582f025894b47bfa9d9fae43f6ef2308f71f481474138b84c548f97f50"
   },
-  "routes": [
-    "/settings/security-overview"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
-    {
-      "width": 1280,
-      "height": 720
-    },
-    {
-      "width": 390,
-      "height": 844
-    }
+    { "width": 1440, "height": 900 },
+    { "width": 390, "height": 844 }
   ],
   "states": [
-    "Security Overview against the live dev backend as the local admin, a privileged /api/security/status caller, showing the real posture score of 60% Moderate with all seven posture cards populated from actual payload values",
-    "Recommended hardening steps callout rendered below the posture summary for the privileged session",
-    "Narrow 390x844 layout with the posture header and stacked posture cards rendering without horizontal document overflow"
+    "Proxmox Overview against the live backend with 34 guest rows, 24 running and 10 stopped, and 36 attached availability checks none of which are currently failing",
+    "Every guest row status dot resolved through the new health indicator, reporting only Running or Stopped with no probe-degraded rows",
+    "Narrow 390px layout with the same 34 rows and the same dot resolution"
   ],
   "interactions": [
-    "Fetched /api/security/status from the page session and confirmed detailLevel is privileged with hasHTTPS false, exportProtected true, hasAuditLogging false, apiTokenConfigured true, each matching the rendered card states, so privileged rendering is unchanged by the new gate",
-    "Confirmed the new admin-session callout is absent for the privileged session and the posture summary still renders",
-    "Read console messages filtered to errors on both viewports and found none",
-    "The truncated authenticated-level branch, which now renders the admin-session explanation instead of false negatives, cannot be reached on this instance because a non-admin RBAC session requires Pro SSO role mappings; that branch is proven by the new unit tests in SecurityOverviewPanel.test.tsx which assert the callout appears and the posture score and hardening sections stay hidden"
+    "Reloaded /proxmox after the change and read every guest row status dot by aria-label, counting 24 Running and 10 Stopped against a live payload of exactly 24 running and 10 stopped guests",
+    "Confirmed zero rows resolved to the new not-responding state, so consolidating the dot onto the health indicator introduces no false positives on a fleet whose probes all pass",
+    "Resized to 390x844 and confirmed the same 34 dots and labels with no horizontal document overflow",
+    "Read console messages filtered to errors at both viewports and found none",
+    "The degraded path is proven by unit test rather than in the browser because no attached check is currently failing on this instance; the new getGuestHealthIndicator cases were confirmed red with the degradation branch disabled and green with it restored",
+    "Verification ran in the shared checkout against this exact staged file content; the commit was assembled in an isolated worktree because another agent held the shared index and had receipt edits in flight"
   ]
 }

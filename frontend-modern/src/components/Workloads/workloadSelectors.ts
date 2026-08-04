@@ -6,6 +6,7 @@ import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInt
 import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { OFFLINE_HEALTH_STATUSES } from '@/utils/status';
+import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
 import { getNodeDisplayName } from '@/utils/nodes';
 import {
   isContainerWorkloadViewMode,
@@ -57,37 +58,6 @@ const classifyWorkloadStatus = (status: string): WorkloadStatusBucket => {
   if (RUNNING_HEALTH_STATUSES.has(normalized)) return 'running';
   if (OFFLINE_HEALTH_STATUSES.has(normalized)) return 'stopped';
   return 'degraded';
-};
-
-/**
- * True when an availability probe that resolved to this guest has failed past
- * its configured threshold.
- *
- * Only `attached` facets count: a standalone, ambiguous, or unresolved probe
- * has not been proven to describe this guest. The threshold mirrors the gate
- * the availability poller uses before raising `availability_unreachable`, so a
- * guest lands in this bucket exactly when its check has alerted.
- *
- * The check resource remains the sole owner of that incident, its alert, and
- * its history (see the availability check identity record of 2026-07-23). This
- * mints nothing new; it only stops a guest whose service is unreachable from
- * being bucketed as healthy, which today hides it from the Attention filter.
- */
-const hasFailedAttachedAvailabilityCheck = (guest: WorkloadGuest): boolean => {
-  const checks = guest.availabilityChecks?.length
-    ? guest.availabilityChecks
-    : guest.availability
-      ? [guest.availability]
-      : [];
-
-  return checks.some((check) => {
-    if (!check || check.enabled === false) return false;
-    if (check.available !== false) return false;
-    if (check.correlationState !== 'attached') return false;
-    const failures = check.consecutiveFailures ?? 0;
-    const threshold = Math.max(check.failureThreshold ?? 1, 1);
-    return failures >= threshold;
-  });
 };
 
 const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket => {

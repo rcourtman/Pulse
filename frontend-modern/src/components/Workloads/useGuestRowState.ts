@@ -6,7 +6,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Container } from '@/types/api';
 import type { DisplayMetricType } from '@/utils/metricThresholds';
 import { buildMetricKey } from '@/utils/metricsKeys';
-import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
+import { getGuestHealthIndicator, isGuestRunning } from '@/utils/status';
 import { getShortImageName, formatBytes } from '@/utils/format';
 import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
 import {
@@ -234,7 +234,7 @@ export function useGuestRowState(props: GuestRowProps) {
 
   const parentOnline = createMemo(() => props.parentNodeOnline !== false);
   const isRunning = createMemo(() => isGuestRunning(props.guest, parentOnline()));
-  const guestStatus = createMemo(() => getGuestPowerIndicator(props.guest, parentOnline()));
+  const guestStatus = createMemo(() => getGuestHealthIndicator(props.guest, parentOnline()));
   const lockLabel = createMemo(() => (props.guest.lock || '').trim());
 
   const hasUnacknowledgedAlert = createMemo(() => !!props.alertStyles?.hasUnacknowledgedAlert);

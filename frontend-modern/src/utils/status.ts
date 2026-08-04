@@ -9,6 +9,8 @@ import type {
   DockerService,
   ReplicationJob,
 } from '@/types/api';
+import type { ResourceAvailabilityMeta } from '@/types/resource';
+import { hasFailedAttachedAvailabilityCheck } from '@/utils/availabilityProbePresentation';
 
 const ONLINE_STATUS = 'online';
 const RUNNING_STATUS = 'running';
@@ -214,6 +216,36 @@ export function getGuestPowerIndicator(
   return isGuestRunning(guest, parentNodeOnline)
     ? { variant: 'success', label: 'Running' }
     : { variant: 'danger', label: 'Stopped' };
+}
+
+/**
+ * Row indicator for a workload guest: power state, degraded when an
+ * availability probe attached to this guest cannot reach it.
+ *
+ * The hypervisor only knows whether a guest is powered on. A guest that is up
+ * while the service behind it stops answering is not healthy, and plain
+ * "Running" hides that. This keeps the indicator agreeing with the Attention
+ * bucket, which resolves the same probe facet through the same predicate.
+ *
+ * A guest that is not running keeps its power state unchanged: a probe says
+ * nothing useful about a guest nobody expects to answer.
+ */
+export function getGuestHealthIndicator(
+  guest:
+    | (Partial<VM | Container> & {
+        availability?: ResourceAvailabilityMeta;
+        availabilityChecks?: ResourceAvailabilityMeta[];
+      })
+    | undefined
+    | null,
+  parentNodeOnline = true,
+): StatusIndicator {
+  const power = getGuestPowerIndicator(guest, parentNodeOnline);
+  if (!guest || power.variant !== 'success') return power;
+  if (hasFailedAttachedAvailabilityCheck(guest)) {
+    return { variant: 'warning', label: 'Running, not responding to probe' };
+  }
+  return power;
 }
 
 export function getAgentStatusIndicator(agent: Partial<Agent> | undefined | null): StatusIndicator {

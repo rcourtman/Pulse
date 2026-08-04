@@ -10,6 +10,7 @@ import {
   isNodeOnline,
   isGuestRunning,
   getNodeStatusIndicator,
+  getGuestHealthIndicator,
   getGuestPowerIndicator,
   getAgentStatusIndicator,
   getDockerHostStatusIndicator,
@@ -170,6 +171,91 @@ describe('getGuestPowerIndicator', () => {
     const result = getGuestPowerIndicator({ status: 'running' }, false);
     expect(result.variant).toBe('danger');
     expect(result.label).toBe('Node offline');
+  });
+});
+
+describe('getGuestHealthIndicator', () => {
+  const failedAttachedProbe = {
+    enabled: true,
+    available: false,
+    correlationState: 'attached' as const,
+    consecutiveFailures: 3,
+    failureThreshold: 2,
+  };
+
+  it('degrades a running guest whose attached probe cannot reach it', () => {
+    const result = getGuestHealthIndicator(
+      { status: 'running', availability: failedAttachedProbe },
+      true,
+    );
+    expect(result.variant).toBe('warning');
+    expect(result.label).toBe('Running, not responding to probe');
+  });
+
+  it('leaves a running guest healthy when its probe is responding', () => {
+    const result = getGuestHealthIndicator(
+      {
+        status: 'running',
+        availability: { enabled: true, available: true, correlationState: 'attached' },
+      },
+      true,
+    );
+    expect(result.variant).toBe('success');
+    expect(result.label).toBe('Running');
+  });
+
+  it('leaves a running guest healthy when no probe is configured', () => {
+    expect(getGuestHealthIndicator({ status: 'running' }, true).variant).toBe('success');
+  });
+
+  // A probe that has not been proven to describe this guest, or that has not
+  // yet failed enough times for the poller to raise an incident, must not move
+  // the indicator ahead of the alert.
+  it('ignores probes that are not attached or are still inside the threshold', () => {
+    const standalone = getGuestHealthIndicator(
+      {
+        status: 'running',
+        availability: { ...failedAttachedProbe, correlationState: 'standalone' },
+      },
+      true,
+    );
+    const belowThreshold = getGuestHealthIndicator(
+      { status: 'running', availability: { ...failedAttachedProbe, consecutiveFailures: 1 } },
+      true,
+    );
+    const disabled = getGuestHealthIndicator(
+      { status: 'running', availability: { ...failedAttachedProbe, enabled: false } },
+      true,
+    );
+
+    expect(standalone.variant).toBe('success');
+    expect(belowThreshold.variant).toBe('success');
+    expect(disabled.variant).toBe('success');
+  });
+
+  it('keeps power state for a stopped guest and an offline node', () => {
+    expect(
+      getGuestHealthIndicator({ status: 'stopped', availability: failedAttachedProbe }, true).label,
+    ).toBe('Stopped');
+    expect(
+      getGuestHealthIndicator({ status: 'running', availability: failedAttachedProbe }, false)
+        .label,
+    ).toBe('Node offline');
+  });
+
+  it('degrades when any one of several projected checks has failed', () => {
+    const result = getGuestHealthIndicator(
+      {
+        status: 'running',
+        availability: { enabled: true, available: true, correlationState: 'attached' },
+        availabilityChecks: [
+          { enabled: true, available: true, correlationState: 'attached' },
+          failedAttachedProbe,
+        ],
+      },
+      true,
+    );
+    expect(result.variant).toBe('warning');
   });
 });
 
