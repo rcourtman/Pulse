@@ -837,6 +837,12 @@ func (m *Monitor) pollGuestsWithFallback(
 	return nil
 }
 
+// hostAgentLinkSettleWindow is how long after monitor start disk alert
+// evaluation waits for nodes that have no linked host agent yet. Agent
+// linkage only exists once agents re-report after a reload, and evaluating
+// before then treats missing --disk-exclude patterns as no exclusions.
+const hostAgentLinkSettleWindow = 2 * time.Minute
+
 func (m *Monitor) maybePollPhysicalDisksAsync(
 	ctx context.Context,
 	instanceName string,
@@ -939,6 +945,13 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		for _, h := range hosts {
 			hostByID[h.ID] = h
 		}
+		// Host-agent linkage is rebuilt from live agent reports, and a full
+		// monitor reload (every settings save) starts from empty host state.
+		// A disk poll that runs before a node's agent has re-reported sees no
+		// exclusions and raises alerts that the next cycle immediately
+		// resolves (#1674). Track which nodes are linked so alert evaluation
+		// can wait out that window for the rest.
+		linkedNodes := make(map[string]bool)
 		// Also map node name → linked host agent SMART inventory so a node whose
 		// Proxmox disk query fails can still populate its physical disks from
 		// the agent's smartctl view (#1516).
@@ -947,6 +960,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			if n.LinkedAgentID == "" || n.Instance != inst {
 				continue
 			}
+			linkedNodes[n.Name] = true
 			if linkedHost, ok := hostByID[n.LinkedAgentID]; ok {
 				if len(linkedHost.DiskExclude) > 0 {
 					diskExcludeByNode[n.Name] = linkedHost.DiskExclude
@@ -1110,8 +1124,16 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				allDisks[index] = preserveUnavailablePhysicalDiskEvidence(allDisks[index], previous)
 			}
 		}
+		awaitingAgentLinks := time.Since(m.startTime) < hostAgentLinkSettleWindow
 		for _, disk := range allDisks {
 			if !polledNodes[disk.Node] {
+				continue
+			}
+			if awaitingAgentLinks && !linkedNodes[disk.Node] {
+				log.Debug().
+					Str("node", disk.Node).
+					Str("disk", disk.DevPath).
+					Msg("Deferring disk alert evaluation until host-agent linkage settles")
 				continue
 			}
 
