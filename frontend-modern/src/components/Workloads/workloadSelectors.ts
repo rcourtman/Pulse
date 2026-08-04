@@ -59,6 +59,37 @@ const classifyWorkloadStatus = (status: string): WorkloadStatusBucket => {
   return 'degraded';
 };
 
+/**
+ * True when an availability probe that resolved to this guest has failed past
+ * its configured threshold.
+ *
+ * Only `attached` facets count: a standalone, ambiguous, or unresolved probe
+ * has not been proven to describe this guest. The threshold mirrors the gate
+ * the availability poller uses before raising `availability_unreachable`, so a
+ * guest lands in this bucket exactly when its check has alerted.
+ *
+ * The check resource remains the sole owner of that incident, its alert, and
+ * its history (see the availability check identity record of 2026-07-23). This
+ * mints nothing new; it only stops a guest whose service is unreachable from
+ * being bucketed as healthy, which today hides it from the Attention filter.
+ */
+const hasFailedAttachedAvailabilityCheck = (guest: WorkloadGuest): boolean => {
+  const checks = guest.availabilityChecks?.length
+    ? guest.availabilityChecks
+    : guest.availability
+      ? [guest.availability]
+      : [];
+
+  return checks.some((check) => {
+    if (!check || check.enabled === false) return false;
+    if (check.available !== false) return false;
+    if (check.correlationState !== 'attached') return false;
+    const failures = check.consecutiveFailures ?? 0;
+    const threshold = Math.max(check.failureThreshold ?? 1, 1);
+    return failures >= threshold;
+  });
+};
+
 const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket => {
   const resourceStatus = (guest.resourceStatus || '').trim().toLowerCase();
 
@@ -68,7 +99,17 @@ const resolveWorkloadStatusBucket = (guest: WorkloadGuest): WorkloadStatusBucket
     return classifyWorkloadStatus(resourceStatus);
   }
 
-  return classifyWorkloadStatus(guest.status || '');
+  const bucket = classifyWorkloadStatus(guest.status || '');
+
+  // A powered-on guest that its own probe cannot reach is not healthy, even
+  // though the hypervisor only knows it is running. A stopped guest keeps its
+  // own bucket; the probe says nothing useful about a guest nobody expects to
+  // answer.
+  if (bucket === 'running' && hasFailedAttachedAvailabilityCheck(guest)) {
+    return 'degraded';
+  }
+
+  return bucket;
 };
 
 type SortDirection = 'asc' | 'desc';

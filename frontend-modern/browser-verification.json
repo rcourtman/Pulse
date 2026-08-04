@@ -1,82 +1,29 @@
 {
   "version": 1,
-  "base_sha": "46af83d5fd65443f07a465446093aa805cd0b3e3",
-  "verified_at": "2026-08-04T00:12:38Z",
+  "base_sha": "2bfab3610e499abafdb416ff4eb1b57a26f01bca",
+  "verified_at": "2026-08-04T09:22:02Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
-    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts",
-    "frontend-modern/src/components/shared/columnPickerModel.ts",
-    "frontend-modern/src/components/shared/useColumnPickerState.ts",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts",
-    "frontend-modern/src/hooks/useObservedElementWidth.ts",
-    "frontend-modern/src/index.css"
-  ],
+  "changed_paths": ["frontend-modern/src/components/Workloads/workloadSelectors.ts"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "d420344cdb8a8277f9868a4e838099efa050a470ed4c22840aec0df0fd910542",
-    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "a2e4911a8974cbb03db55d7a58fca37582974257aa7f88771eb1d6f98205d44f",
-    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "6852af254cf0fac698d0481bd228186b7237108e7345085e6d48fc2923493d83",
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "4866bc3fd4ca22d73eade48321fefde6e6f2940c32ae3f98ade87a90c080254f",
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "766ee0e188ad37e386049d37535f043d29fdf138fd0fc82c340c1817e9cafc14",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "86d9a97ecb10502e6baf7ca68a884db1fdd74afed1240e6b4ff5b35ee76e2d11",
-    "frontend-modern/src/components/Workloads/workloadsFilterModel.ts": "bd418028233fc52e361a0428d859b77e8fc77f9f00dfa8baa1449577a506eb17",
-    "frontend-modern/src/components/shared/columnPickerModel.ts": "a8c34404ae8da4030a126d2188c8f3486f6a699fbdce12531e4e15e97a806175",
-    "frontend-modern/src/components/shared/useColumnPickerState.ts": "260020f896719b4fd1bed8d2511b3a47028753f822c3769a2fe7bd5a4be05d3e",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "bc7c1146577abd439ea21490c8d0ad38d4efbf030c9ebbd2d6ed0e225a2ed7bb",
-    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "35f4e5511dba2782d3f2d32a84c470094f9290635953275991eda65d9dff16d6",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "8d70932ef914db8870c96f0f77a2fab2d39bb70081918b82bd5bbf0a0b9db437",
-    "frontend-modern/src/hooks/useObservedElementWidth.ts": "cfb04bc6dde18060344b26d6c663fc4d3f147882323dc1cb1091ea3f03ac56f5",
-    "frontend-modern/src/index.css": "7b2f6c80b1e8a75849b0633b41be1c74d6740d263982aa5f3f365a6eb733dc17"
+    "frontend-modern/src/components/Workloads/workloadSelectors.ts": "f7d8e836a655443cbbc64e8f831e98047b1fe713db2a908fb84f1a3585ceb0e6"
   },
-  "routes": [
-    "/proxmox/overview"
-  ],
+  "routes": ["/proxmox/overview"],
   "viewports": [
-    { "width": 375, "height": 812 },
-    { "width": 480, "height": 812 },
-    { "width": 640, "height": 900 },
-    { "width": 768, "height": 900 },
-    { "width": 800, "height": 900 },
-    { "width": 900, "height": 900 },
-    { "width": 1024, "height": 900 },
-    { "width": 1280, "height": 900 },
     { "width": 1440, "height": 900 },
-    { "width": 1536, "height": 900 },
-    { "width": 1680, "height": 900 },
-    { "width": 1920, "height": 900 },
-    { "width": 2560, "height": 900 }
+    { "width": 390, "height": 844 }
   ],
   "states": [
-    "Live Proxmox Overview against the local backend with the Nodes table and grouped VM/LXC workload inventory visible",
-    "Automatic container-aware column stages from four essential host columns at narrow widths through the full ten-column host inventory at wide widths",
-    "Automatic workload stages from five essential columns through the wide workload metrics and context columns",
-    "Overview-only wide data workspace using the available monitor width while retaining normal text and control sizes",
-    "All optional workload columns explicitly selected with a readable 1510px table floor and intentional horizontal scrolling",
-    "Column picker with the renamed Reset action still visible after every optional column is selected",
-    "Grouped and List workload modes at compact and wide resolutions",
-    "Bars and Trends metric display modes",
-    "Pulse Assistant open beside Overview at desktop widths",
-    "Very narrow 375px and 480px layouts retaining readable essential columns through deliberate table-local scrolling"
+    "Proxmox Overview against the live backend with 42 grouped workload rows and 36 attached availability checks, none of them currently failing",
+    "Attention status filter applied, returning the canonical no-guests-match empty state because no guest is degraded",
+    "Filters cleared back to All with the full workload inventory restored",
+    "Narrow 390px layout with the unfiltered workload table"
   ],
   "interactions": [
-    "Returned from Storage to /proxmox/overview before implementation and kept all subsequent product testing scoped to Overview",
-    "Resized the real in-app browser through 375, 480, 640, 768, 800, 900, 1024, 1280, 1440, 1536, 1680, 1920 and 2560 pixel widths",
-    "Asserted both table wrapper overflow and every header's clientWidth versus scrollWidth at each final matrix width; found zero default overflow and zero clipped headers from 640px through 2560px",
-    "Visually inspected screenshots at 900x812 and 1440x900, confirming readable labels, metric bars, host context and workload density",
-    "Opened View and Columns, selected IP, AI Context, Tags, OS, Net I/O and Disk I/O, and confirmed all 15 columns render at a readable 1510px floor rather than being squeezed",
-    "Resized the all-column table from 1536px to 1024px and confirmed the 1510px floor, readable 243px first cell and table-local 572px horizontal overflow",
-    "Confirmed Reset remains available with zero hidden columns, then restored the responsive defaults and verified overflow returned to zero",
-    "Hid Tags at 1680px, resized to 1024px and back, and confirmed the hidden choice persisted; showed Tags, resized to 1024px, and confirmed the explicit choice stayed visible with a readable 996px floor before resetting",
-    "Switched to List mode across 1024, 1280, 1536, 1680, 1920 and 2560px, confirmed zero overflow, then restored Grouped mode",
-    "Switched from Bars to Trends at 900px, confirmed both tables retained zero overflow, then restored Bars",
-    "Opened Pulse Assistant and tested 1280, 1536, 1920 and 2560px; both tables adapted to the reduced measured container with zero overflow and no clipped headers",
-    "Closed Pulse Assistant, closed the View menu, restored default columns, restored the normal browser viewport and left /proxmox/overview open"
+    "Read the live resource payload and confirmed 36 availability checks are correlated as attached with zero currently unavailable, so the new degraded bucket introduces no false positives on a healthy fleet",
+    "Applied the Attention status filter and confirmed it still resolves to the empty state rather than pulling in healthy guests",
+    "Cleared filters and confirmed all 42 workload rows returned",
+    "Resized to 390x844 and confirmed the unfiltered table renders with no horizontal document overflow",
+    "Read console messages filtered to errors across both viewports and found none",
+    "The failing-probe path itself is proven by unit test rather than in the browser because no attached check is currently failing on this instance; the new cases in workloadSelectors.test.ts were confirmed red with the degradation branch disabled and green with it restored"
   ]
 }

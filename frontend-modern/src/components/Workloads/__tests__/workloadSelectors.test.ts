@@ -160,6 +160,119 @@ describe('workloadSelectors', () => {
       });
     });
 
+    it('buckets a running guest whose attached availability probe has failed as degraded', () => {
+      const failedAttachedProbe = {
+        enabled: true,
+        available: false,
+        correlationState: 'attached' as const,
+        consecutiveFailures: 3,
+        failureThreshold: 2,
+      };
+
+      const guests = [
+        makeGuest(1, { status: 'running', availability: failedAttachedProbe }),
+        makeGuest(2, { status: 'running' }),
+      ];
+
+      const filterByStatus = (statusMode: 'running' | 'degraded' | 'stopped') =>
+        filterWorkloads({
+          guests,
+          viewMode: 'all',
+          statusMode,
+          searchTerm: '',
+          selectedNode: null,
+          selectedHostHint: null,
+          selectedKubernetesContext: null,
+        }).map((guest) => guest.id);
+
+      expect(filterByStatus('degraded')).toEqual([guests[0].id]);
+      expect(filterByStatus('running')).toEqual([guests[1].id]);
+      expect(computeWorkloadStats(guests).degraded).toBe(1);
+    });
+
+    it('ignores availability probes that are not proven to describe the guest', () => {
+      const failing = {
+        enabled: true,
+        available: false,
+        consecutiveFailures: 9,
+        failureThreshold: 2,
+      };
+
+      const guests = [
+        // Not correlated to this guest, so it says nothing about the guest.
+        makeGuest(1, {
+          status: 'running',
+          availability: { ...failing, correlationState: 'standalone' as const },
+        }),
+        // Correlated but still inside the threshold the poller uses before it
+        // raises an incident, so the bucket must not run ahead of the alert.
+        makeGuest(2, {
+          status: 'running',
+          availability: {
+            ...failing,
+            correlationState: 'attached' as const,
+            consecutiveFailures: 1,
+          },
+        }),
+        // Disabled checks are not evidence of anything.
+        makeGuest(3, {
+          status: 'running',
+          availability: { ...failing, correlationState: 'attached' as const, enabled: false },
+        }),
+        // Responding normally.
+        makeGuest(4, {
+          status: 'running',
+          availability: { enabled: true, available: true, correlationState: 'attached' as const },
+        }),
+      ];
+
+      expect(computeWorkloadStats(guests).degraded).toBe(0);
+      expect(computeWorkloadStats(guests).running).toBe(4);
+    });
+
+    it('keeps a stopped guest stopped even when its probe cannot reach it', () => {
+      const guests = [
+        makeGuest(1, {
+          status: 'stopped',
+          availability: {
+            enabled: true,
+            available: false,
+            correlationState: 'attached' as const,
+            consecutiveFailures: 5,
+            failureThreshold: 2,
+          },
+        }),
+      ];
+
+      expect(computeWorkloadStats(guests).stopped).toBe(1);
+      expect(computeWorkloadStats(guests).degraded).toBe(0);
+    });
+
+    it('degrades when any one of several projected checks has failed', () => {
+      const guests = [
+        makeGuest(1, {
+          status: 'running',
+          availability: {
+            enabled: true,
+            available: true,
+            correlationState: 'attached' as const,
+          },
+          availabilityChecks: [
+            { enabled: true, available: true, correlationState: 'attached' as const },
+            {
+              enabled: true,
+              available: false,
+              correlationState: 'attached' as const,
+              consecutiveFailures: 4,
+              failureThreshold: 2,
+            },
+          ],
+        }),
+      ];
+
+      expect(computeWorkloadStats(guests).degraded).toBe(1);
+    });
+
     it('applies text and metric search filters, and supports combined filtering', () => {
       const guests = [
         makeGuest(1, { name: 'alpha-api', vmid: 201, cpu: 0.8, node: 'node-a', status: 'running' }),
