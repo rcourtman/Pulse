@@ -8,6 +8,7 @@ import {
   PlatformSortableTableHead,
   PlatformTableNumberValue,
   PlatformTableRelativeTimeValue,
+  PlatformResponsiveTableLabel,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
@@ -214,7 +215,7 @@ export const KubernetesDeploymentsTable: Component<{
                   sortKey="ready"
                   class="md:w-[7%]"
                 >
-                  Ready
+                  <PlatformResponsiveTableLabel compact="Rdy" full="Ready" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -222,7 +223,7 @@ export const KubernetesDeploymentsTable: Component<{
                   sortKey="available"
                   class="md:w-[9%]"
                 >
-                  Available
+                  <PlatformResponsiveTableLabel compact="Avail" full="Available" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
@@ -307,6 +308,9 @@ export const KubernetesDeploymentsTable: Component<{
                             <PlatformTableNumberValue
                               value={deployment.kubernetes?.readyReplicas ?? 0}
                             />
+                            <span class="k8s-deployment-ready-total">
+                              /{deployment.kubernetes?.desiredReplicas ?? 0}
+                            </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

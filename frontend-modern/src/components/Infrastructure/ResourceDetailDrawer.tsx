@@ -155,6 +155,8 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
       <Subtabs
         class="mb-1"
+        listClass="!gap-2 sm:!gap-6"
+        tabClass="!px-0.5 !text-xs sm:!px-1 sm:!text-sm"
         ariaLabel="Resource detail sections"
         value={drawer.activeTab()}
         onChange={(value) =>

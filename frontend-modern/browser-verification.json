@@ -1,43 +1,37 @@
 {
   "version": 1,
-  "base_sha": "207779529bf9dcbf3168529b03b19d270a332171",
-  "verified_at": "2026-08-04T17:30:39Z",
+  "base_sha": "8d0b53245fdcfc1b90060289b5a92de3cd011810",
+  "verified_at": "2026-08-04T17:59:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "36495918506ee371af8dbaa8cba57556573deb24bb8687f7eae3ef8f1d2ebc02",
-    "frontend-modern/src/index.css": "f54fadadbe33afa3c74c8c272c5d82a099c9176bba0e4df93b9d2f6e53026a39"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "0686cbc5576f24f2d1ec7fa6a73040c4409598d2cb8864977103fcecc15be6bb",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx": "fcd177f88a6969aa3aa1c0549f789c69afca077168193dfad0455c034b95dd0d"
   },
   "routes": [
-    "/standalone/machines",
-    "/proxmox/overview",
-    "/proxmox/storage?tab=disks&source=proxmox-all",
-    "/settings/system-updates",
-    "/settings/support/reporting",
-    "/settings/infrastructure/agent-doctor",
-    "/settings/monitoring/availability"
+    "/kubernetes/workloads",
+    "/kubernetes/overview",
+    "/proxmox/ceph",
+    "/proxmox/storage"
   ],
   "viewports": [
     { "width": 375, "height": 900 },
     { "width": 768, "height": 900 },
-    { "width": 1024, "height": 900 },
-    { "width": 1440, "height": 900 }
+    { "width": 1440, "height": 1000 }
   ],
   "states": [
-    "Rendered the Machines table with its default columns and with the user-selected IP column at phone and wide desktop sizes",
-    "Verified that a selected primary IP remains in the compact machine identity subtitle while the dedicated column is container-hidden",
-    "Verified that the selected sortable IP column appears once the actual machine table pane reaches 80rem at a 1440px viewport",
-    "Rendered Proxmox overview workload and node drawers, workload history, and physical-disk history details at 375px",
-    "Rendered update, reporting, agent-doctor, and availability settings surfaces at phone, tablet, and desktop widths"
+    "Rendered the Kubernetes deployments inventory and an expanded deployment drawer at phone width",
+    "Rendered the expanded Kubernetes cluster drawer on its Overview, Namespaces, and Deployments tabs at phone width",
+    "Rendered an expanded Ceph cluster with Pools and Services tables at phone, tablet, and desktop widths",
+    "Rendered an expanded Proxmox ZFS storage pool with trend, configuration, and pool details at phone, tablet, and desktop widths"
   ],
   "interactions": [
-    "Opened Filters, View preferences, and Columns on Machines; enabled IP, resized from 375px to 1440px, then reset the saved preference",
-    "Confirmed the Machines table and page have equal client and scroll widths at 375px and 1440px after the IP-column change",
-    "Pinned IP in the Proxmox workload column picker at 375px and confirmed the requested column appears with deliberate table-only scrolling before reset",
-    "Expanded a Proxmox workload, switched to its History tab, expanded a Proxmox node, and expanded a physical disk without page overflow",
-    "Inspected final mobile pixels for the compact Machines table and the expanded Proxmox node drawer"
+    "Expanded checkout-api and verified that the deployment table retained its primary readiness and age information without document or table overflow",
+    "Expanded Production EU, switched between Namespaces and Deployments, and verified all four resource-detail tabs remain fully visible in the 298px drawer tablist",
+    "Confirmed the Kubernetes namespace and deployment drawer tables each fit their 296px containers and that deployment readiness reads current/desired",
+    "Expanded Mock Cluster Ceph and west-c-service-pool, inspected final mobile pixels, and confirmed equal client and scroll widths at 375px, 768px, and 1440px"
   ]
 }
