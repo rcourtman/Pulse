@@ -167,6 +167,105 @@ func TestStoreProtectionPosturePersistsProviderAwareTruth(t *testing.T) {
 	}
 }
 
+func TestStoreProtectionPostureLoadsRC7NanosecondObservationEvidence(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"homelab",
+		recovery.OutcomeSuccess,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now,
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+	if err := store.UpsertProtectionProviderObservations(
+		context.Background(),
+		[]recovery.ProtectionProviderObservation{observation},
+	); err != nil {
+		t.Fatalf("UpsertProtectionProviderObservations() error = %v", err)
+	}
+
+	// Reproduce the RC7 representation: millisecond index columns alongside
+	// the original nanosecond evidence timestamps from time.Now().
+	legacyTime := now.Add(103663 * time.Nanosecond)
+	legacyEvidence := observation.Evidence.Clone()
+	legacyEvidence.ObservedAt = legacyTime
+	legacyEvidence.IngestedAt = legacyTime
+	legacyJSON, err := json.Marshal(legacyEvidence)
+	if err != nil {
+		t.Fatalf("marshal legacy evidence: %v", err)
+	}
+	if _, err := store.db.Exec(
+		`UPDATE protection_provider_observations SET evidence_json = ? WHERE id = ?`,
+		string(legacyJSON),
+		observation.ID,
+	); err != nil {
+		t.Fatalf("write legacy observation representation: %v", err)
+	}
+
+	backupTime := now.Add(-time.Hour)
+	point := recovery.RecoveryPoint{
+		ID:                "pve-backup:homelab:vm-100",
+		Provider:          recovery.ProviderProxmoxPVE,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeLocal,
+		Outcome:           recovery.OutcomeSuccess,
+		CompletedAt:       &backupTime,
+		SubjectResourceID: "resource:vm-100",
+		ProviderScope:     "homelab",
+	}
+	point.Evidence, err = recovery.NewRecoveryPointEvidence(
+		point,
+		"pve-backup-inventory",
+		now,
+	)
+	if err != nil {
+		t.Fatalf("NewRecoveryPointEvidence() error = %v", err)
+	}
+	if err := store.UpsertPoints(
+		context.Background(),
+		[]recovery.RecoveryPoint{point},
+	); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	postures, total, err := store.ListProtectionPostures(
+		context.Background(),
+		recovery.ProtectionPostureQuery{
+			SubjectResourceIDs: []string{"resource:vm-100"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ListProtectionPostures() error = %v", err)
+	}
+	if total != 1 || len(postures) != 1 {
+		t.Fatalf("postures total=%d len=%d, want 1/1", total, len(postures))
+	}
+	if postures[0].State != recovery.ProtectionStateProtected {
+		t.Fatalf("state = %q, want protected; posture=%#v", postures[0].State, postures[0])
+	}
+	if len(postures[0].ProviderStates) != 1 ||
+		postures[0].ProviderStates[0].Source != "pve-backup-enumeration" ||
+		postures[0].ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryComplete ||
+		postures[0].ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsSufficient {
+		t.Fatalf("provider state = %#v, want complete PVE enumeration", postures[0].ProviderStates)
+	}
+}
+
 func TestStoreProtectionPostureMovesWhenPointIdentityIsCorrected(t *testing.T) {
 	t.Parallel()
 

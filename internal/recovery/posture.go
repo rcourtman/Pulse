@@ -148,6 +148,17 @@ func NewProtectionProviderObservation(
 ) (ProtectionProviderObservation, error) {
 	source = strings.TrimSpace(source)
 	scope = strings.TrimSpace(scope)
+	if observedAt.IsZero() || ingestedAt.IsZero() {
+		return ProtectionProviderObservation{}, fmt.Errorf(
+			"protection provider observation times are required",
+		)
+	}
+	// Provider observations are persisted in millisecond-precision SQLite
+	// columns. Canonicalize the envelope and its identity to that precision so
+	// a write/read round trip cannot make valid evidence fail exact timestamp
+	// validation.
+	observedAt = time.UnixMilli(observedAt.UTC().UnixMilli()).UTC()
+	ingestedAt = time.UnixMilli(ingestedAt.UTC().UnixMilli()).UTC()
 	evidenceSource := operationaltrust.EvidenceSource{
 		Provider:  strings.TrimSpace(string(provider)),
 		Collector: source,

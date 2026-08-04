@@ -512,6 +512,17 @@ func (s *Store) listLatestProtectionProviderObservations(
 		if err := json.Unmarshal([]byte(evidenceRaw), &observation.Evidence); err != nil {
 			continue
 		}
+		// RC7 wrote the indexed timestamps at the schema's millisecond
+		// precision while retaining nanoseconds in the evidence envelope. The
+		// facts are the same when both representations fall in the same
+		// millisecond; restore the envelope precision before exact validation so
+		// those already-persisted observations remain usable after upgrade.
+		if observation.Evidence.ObservedAt.UTC().UnixMilli() != observedAtMs ||
+			observation.Evidence.IngestedAt.UTC().UnixMilli() != ingestedAtMs {
+			continue
+		}
+		observation.ObservedAt = observation.Evidence.ObservedAt.UTC()
+		observation.IngestedAt = observation.Evidence.IngestedAt.UTC()
 		if err := observation.Validate(); err != nil {
 			continue
 		}

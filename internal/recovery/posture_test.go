@@ -374,6 +374,49 @@ func TestNewProtectionProviderObservationRequiresTypedLimitation(t *testing.T) {
 	}
 }
 
+func TestNewProtectionProviderObservationCanonicalizesPersistentTimestampPrecision(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 8, 4, 22, 0, 1, 752103663, time.UTC)
+	ingestedAt := observedAt.Add(321 * time.Microsecond)
+	observation, err := NewProtectionProviderObservation(
+		ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"homelab",
+		OutcomeSuccess,
+		ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		observedAt,
+		ingestedAt,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+
+	wantObservedAt := time.UnixMilli(observedAt.UnixMilli()).UTC()
+	wantIngestedAt := time.UnixMilli(ingestedAt.UnixMilli()).UTC()
+	if !observation.ObservedAt.Equal(wantObservedAt) ||
+		!observation.Evidence.ObservedAt.Equal(wantObservedAt) {
+		t.Fatalf(
+			"observed times = %s / %s, want %s",
+			observation.ObservedAt,
+			observation.Evidence.ObservedAt,
+			wantObservedAt,
+		)
+	}
+	if !observation.IngestedAt.Equal(wantIngestedAt) ||
+		!observation.Evidence.IngestedAt.Equal(wantIngestedAt) {
+		t.Fatalf(
+			"ingested times = %s / %s, want %s",
+			observation.IngestedAt,
+			observation.Evidence.IngestedAt,
+			wantIngestedAt,
+		)
+	}
+}
+
 func TestDeriveProtectionPostureFailsClosedToDefaultPolicy(t *testing.T) {
 	t.Parallel()
 
