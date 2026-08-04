@@ -63,10 +63,10 @@ body:
     id: image_ref
     attributes:
       label: Image tag or digest
-      description: Exact image reference used by the running container.
+      description: For container installs, the exact image reference used by the running container. Leave blank for LXC, bare metal, and other non-container installs.
       placeholder: rcourtman/pulse:v6.0.0 or rcourtman/pulse@sha256:...
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: install_type
