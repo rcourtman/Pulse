@@ -18,6 +18,7 @@ import {
 import { API_TOKEN_CREATE_ANCHOR, PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
+import apiTokenManagerDialogsSource from '../APITokenManagerDialogs.tsx?raw';
 import { APIAccessPanel } from '../APIAccessPanel';
 import { APITokenManager } from '../APITokenManager';
 
@@ -159,6 +160,10 @@ describe('APITokenManager security surface', () => {
     expect(apiAccessPanelSource).not.toContain('AgentIntegrationsPanel');
     expect(apiAccessPanelSource).not.toContain('isExternalAgentSetupHash');
     expect(apiAccessPanelSource).not.toContain('api-access-external-agent-section');
+    expect(apiTokenManagerSource).toContain("import('./APITokenManagerDialogs')");
+    expect(apiTokenManagerSource).not.toContain('<Dialog');
+    expect(apiTokenManagerDialogsSource).toContain('ariaLabel="Edit API token scopes"');
+    expect(apiTokenManagerDialogsSource).toContain('ariaLabel="Revoke API token"');
   });
 });
 

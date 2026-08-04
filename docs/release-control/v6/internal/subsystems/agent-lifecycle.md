@@ -5587,9 +5587,13 @@ Report ingestion holds a shared lifecycle lock for the full state transition;
 deletion, manual allowance, and tombstone expiry hold the exclusive side.
 Reports that began before deletion complete first, then deletion removes their
 result. Reports arriving after deletion see the tombstone. A completed delete
-therefore cannot be undone by an in-flight report, while unrelated and
-duplicate-machine agents remain concurrent and independently bound by token
-plus hostname.
+therefore cannot be undone by an in-flight report. Before that delete returns,
+the same transition must republish the canonical unified-resource generation
+so an immediate `/api/state` read cannot retain the removed host behind the
+read-path freshness window. Unrelated and duplicate-machine agents remain
+concurrent and independently bound by token plus hostname. The focused
+read-after-delete proof lives in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
 
 The server transition does not introduce a second installer lifecycle.
 Generated host install commands still mint the canonical scoped token, and the

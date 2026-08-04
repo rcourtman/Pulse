@@ -4835,11 +4835,12 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
-// refreshUnifiedResourceStoreAfterAgentReport makes accepted agent ingest
-// immediately visible to canonical ReadState consumers. WebSocket broadcasts
-// may also rebuild the store for their own hydrate path, but client presence
-// must never be the trigger that publishes agent-backed runtime truth.
-func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
+// refreshUnifiedResourceStoreAfterAgentStateChange makes accepted agent
+// ingest and removal immediately visible to canonical ReadState consumers.
+// WebSocket broadcasts may also rebuild the store for their own hydrate path,
+// but client presence must never be the trigger that publishes agent-backed
+// runtime truth or retires removed inventory.
+func (m *Monitor) refreshUnifiedResourceStoreAfterAgentStateChange() {
 	if m == nil || m.state == nil {
 		return
 	}

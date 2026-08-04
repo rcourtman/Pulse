@@ -332,7 +332,7 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 	m.state.UpsertKubernetesCluster(cluster)
 	m.state.SetConnectionHealth(kubernetesConnectionPrefix+identifier, true)
 	m.recordKubernetesPodMetrics(cluster, receivedAt)
-	m.refreshUnifiedResourceStoreAfterAgentReport()
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	return cluster, nil
 }

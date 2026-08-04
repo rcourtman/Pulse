@@ -1,37 +1,33 @@
 {
   "version": 1,
-  "base_sha": "1e4791df4bc38be488f597b9e1f67922c850207b",
-  "verified_at": "2026-08-04T19:19:20Z",
+  "base_sha": "8e25badea1d13b32ca659aaa9f9727ecf1c32c17",
+  "verified_at": "2026-08-04T23:21:18Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "478c6e7cb0dbcd3df3cbdfa109a8c9bdaac6a74d79dd10f164effeb04b8c8d59",
-    "frontend-modern/src/features/alerts/AlertHistoryTableSection.tsx": "4ee36f4c32c7a91a18c3e1b6dcbc58772a80d32dcd77e947f99b9ea195e0d9d9",
-    "frontend-modern/src/index.css": "dee4c03b06fcb24cd5642516f11e6dc7c4777a3989a1a2ef30a50354e1625091"
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "46bd97089aab5be47b7595fc8abcbf15a908444d0922906433389222bc348777",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "7355009b809c47eae65c8704efc6c74ca673567dc7abdd24f8ef4ba247b5c1ca"
   },
-  "routes": ["/alerts/history"],
+  "routes": ["/settings/security/api"],
   "viewports": [
-    { "width": 375, "height": 812 },
-    { "width": 768, "height": 900 },
-    { "width": 1024, "height": 900 },
-    { "width": 1280, "height": 900 },
-    { "width": 1600, "height": 900 }
+    { "width": 1440, "height": 1000 },
+    { "width": 390, "height": 844 }
   ],
   "states": [
-    "Rendered grouped mobile alert cards at 375px with the desktop table fully inactive and no document overflow",
-    "Rendered the six core columns Timestamp, Resource, Severity, Message, Status, and Actions at 768px and 1024px",
-    "Rendered Duration as the seventh context column once the table shell reached 800px at the 1280px viewport",
-    "Rendered the complete nine-column inventory, including Type and Node, once the table shell reached 1024px at the 1600px viewport",
-    "Measured equal table-shell client and scroll widths at every desktop and tablet breakpoint"
+    "Rendered the API Access token inventory with five scoped credentials and no wildcard warning",
+    "Opened the deferred scope editor with the live settings:write selection and unchanged Save scopes action disabled",
+    "Opened the deferred revoke confirmation with the selected token name and irreversible-impact warning",
+    "Rendered the scope editor at 390px with a 358px dialog, bounded internal scrolling, and both footer actions visible",
+    "Confirmed both dialogs close cleanly and leave no dialog mounted",
+    "Observed no browser console errors across the desktop and narrow interaction matrix"
   ],
   "interactions": [
-    "Opened the Timeline action for the 10:24 PM pve3 row at 1024px and verified the expanded incident row remained within the table shell",
-    "Closed the expanded timeline using its Hide action without changing the responsive column allocation",
-    "Inspected the accessibility snapshot at compact width and confirmed collapsed Type, Duration, and Node columns are omitted rather than announced with hidden content",
-    "Compared the live column widths at 768px, 1024px, 1280px, and 1600px and confirmed every visible track redistributes across the full card"
+    "Opened Edit scopes from a specific token card at 1440px, inspected the complete checkbox inventory, and cancelled without mutation",
+    "Opened Revoke from the same token card, verified the explicit confirmation boundary, and cancelled without revoking the token",
+    "Repeated the deferred Edit scopes load at 390px and verified Cancel and disabled Save scopes remained visible and usable",
+    "Closed the narrow scope editor and verified the dialog was removed without changing token state"
   ]
 }

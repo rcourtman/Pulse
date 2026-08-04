@@ -93,6 +93,7 @@ an enabled external-probe assignment.
 15. `frontend-modern/src/api/responseUtils.ts`
 16. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
 17. `frontend-modern/src/components/Settings/APITokenManager.tsx`
+17. `frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx`
 18. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
 19. `frontend-modern/src/constants/apiScopes.ts`
 20. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
@@ -1190,6 +1191,11 @@ payload shape change when the portal presents compact client rows.
     pressed/unpressed selector pill shell routes through frontend-primitives
     `SelectablePillButton` instead of API-token-local rounded-full selector
     classes.
+16. `frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx` shared with `security-privacy`: the deferred API token edit and revoke dialogs preserve the shared security/privacy and API contract boundary.
+    Edit and revoke dialogs are deferred behind the explicit row action so the
+    API Access entry chunk does not ship mutation-only controls before they are
+    requested. Deferral must not weaken the existing confirmation, scope
+    validation, failure-open, or read-after-write behavior.
 17. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 18. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 19. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.

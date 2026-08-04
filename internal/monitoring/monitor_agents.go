@@ -491,6 +491,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	m.hostReportOrderMu.Lock()
 	delete(m.hostReportOrders, hostID)
 	m.hostReportOrderMu.Unlock()
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	return host, nil
 }
@@ -1382,7 +1383,7 @@ func (m *Monitor) applyRejectedHostReportLiveness(
 	// clear an offline alert, or renew the accepted telemetry lease.
 	m.state.SetConnectionHealth(hostConnectionPrefix+host.ID, true)
 	m.persistHostContinuity(host, report, order)
-	m.refreshUnifiedResourceStoreAfterAgentReport()
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	log.Debug().
 		Str("hostID", host.ID).
@@ -2183,7 +2184,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Int("containers", len(containers)).
 		Msg("Docker host report processed")
 
-	m.refreshUnifiedResourceStoreAfterAgentReport()
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	return host, nil
 }
@@ -3123,7 +3124,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// committed, because ownership is checked against that host ID.
 	m.ApplyProbeAvailabilityResults(host.ID, probeAvailabilityResultsFromReport(report.AvailabilityResults))
 	m.persistHostContinuity(host, report, reportOrder)
-	m.refreshUnifiedResourceStoreAfterAgentReport()
+	m.refreshUnifiedResourceStoreAfterAgentStateChange()
 
 	return host, nil
 }
@@ -4329,7 +4330,7 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 	}
 
 	if resourceRefreshNeeded {
-		m.refreshUnifiedResourceStoreAfterAgentReport()
+		m.refreshUnifiedResourceStoreAfterAgentStateChange()
 	}
 }
 

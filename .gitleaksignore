@@ -1,4 +1,5 @@
-# browser-verification.json stores a SHA-256 digest beside the APITokenManager
-# source path. That path context makes the generic API-key rule classify the
-# required content digest as a credential; suppress only that exact fingerprint.
-frontend-modern/browser-verification.json:generic-api-key:10
+# browser-verification.json stores SHA-256 digests beside the API token manager
+# source paths. That path context makes the generic API-key rule classify the
+# required content digests as credentials; suppress only those exact fingerprints.
+frontend-modern/browser-verification.json:generic-api-key:11
+frontend-modern/browser-verification.json:generic-api-key:12

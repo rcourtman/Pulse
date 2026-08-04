@@ -47,6 +47,7 @@ into availability-probe entitlement.
 5. `frontend-modern/src/api/security.ts`
 6. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
 7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
+7. `frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx`
 8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
 9. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
 10. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
@@ -127,6 +128,11 @@ with missing, unknown, or unrelated scopes fail closed.
    Stable in-page anchors for sibling API Access onboarding panels are allowed
    only as navigation into the token creation section; those sibling panels do
    not own token scope derivation or preset contents.
+3. `frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx` shared with `api-contracts`: the deferred API token edit and revoke dialogs preserve the shared security/privacy and API contract boundary.
+   The dialogs may load on demand after the operator selects their row action.
+   This bundle boundary changes neither authorization nor mutation semantics
+   and must preserve the explicit revoke confirmation, scope validation, and
+   failed-edit state.
 4. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `frontend-primitives`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.

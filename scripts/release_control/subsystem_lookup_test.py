@@ -4112,6 +4112,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/monitoring/kubernetes_agents_test.go",
+                "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
                 "internal/monitoring/monitor_pbs_coverage_test.go",
                 "internal/monitoring/monitor_pmg_test.go",

@@ -752,7 +752,10 @@ func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value
 	s.enqueueWrite(writeRequest{metrics: toWrite})
 }
 
-// WriteBatchSync writes metrics directly to the database without buffering.
+// WriteBatchSync bypasses the in-memory sample buffer but still serializes the
+// batch through the ingestion worker. Platform pollers call this concurrently;
+// letting every caller open its own SQLite transaction exhausts the shared
+// reader pool while those transactions wait on the single WAL writer lock.
 func (s *Store) WriteBatchSync(metrics []WriteMetric) {
 	if len(metrics) == 0 {
 		return
@@ -796,7 +799,7 @@ func (s *Store) WriteBatchSync(metrics []WriteMetric) {
 		return
 	}
 
-	s.writeBatch(batch)
+	s.enqueueAndWait(writeRequest{metrics: batch})
 }
 
 func (s *Store) enqueueMaintenance(run func()) {

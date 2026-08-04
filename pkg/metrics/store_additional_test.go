@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -134,6 +135,90 @@ func TestStoreWriteBatchSync(t *testing.T) {
 	}
 	if len(points) != 1 || points[0].Value != 10.0 {
 		t.Fatalf("expected 1 point with value 10.0, got %v", points)
+	}
+}
+
+func TestStoreWriteBatchSyncSerializesConcurrentPollers(t *testing.T) {
+	store, err := NewStore(DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+	if err := store.WaitForMaintenance(10 * time.Second); err != nil {
+		t.Fatalf("WaitForMaintenance: %v", err)
+	}
+
+	// Hold SQLite's WAL writer lock while several platform pollers submit
+	// synchronous batches. Only the store's single ingestion worker should
+	// wait on a database connection; callers must queue before the pool instead
+	// of consuming every reader connection with competing write transactions.
+	blockingTx, err := store.db.Begin()
+	if err != nil {
+		t.Fatalf("begin blocking transaction: %v", err)
+	}
+	if _, err := blockingTx.Exec(`
+		INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier)
+		VALUES ('node', 'blocker', 'cpu', 1, ?, 'raw')
+	`, time.Now().UTC().Unix()); err != nil {
+		_ = blockingTx.Rollback()
+		t.Fatalf("lock WAL writer: %v", err)
+	}
+
+	const pollers = 8
+	start := make(chan struct{})
+	done := make(chan struct{}, pollers)
+	base := time.Now().UTC().Truncate(time.Second)
+	for i := 0; i < pollers; i++ {
+		i := i
+		go func() {
+			<-start
+			store.WriteBatchSync([]WriteMetric{{
+				ResourceType: "node",
+				ResourceID:   "poller-" + strconv.Itoa(i),
+				MetricType:   "cpu",
+				Value:        float64(i),
+				Timestamp:    base,
+				Tier:         TierRaw,
+			}})
+			done <- struct{}{}
+		}()
+	}
+	close(start)
+
+	maxInUse := 0
+	observationDeadline := time.Now().Add(750 * time.Millisecond)
+	for time.Now().Before(observationDeadline) {
+		if inUse := store.db.DB.Stats().InUse; inUse > maxInUse {
+			maxInUse = inUse
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	if err := blockingTx.Rollback(); err != nil {
+		t.Fatalf("release WAL writer: %v", err)
+	}
+	for i := 0; i < pollers; i++ {
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("concurrent synchronous metrics writes did not drain")
+		}
+	}
+
+	if maxInUse > 2 {
+		t.Fatalf("concurrent writers consumed %d database connections, want at most blocker plus one ingestion worker", maxInUse)
+	}
+
+	var persisted int
+	if err := store.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM metrics
+		WHERE resource_type = 'node' AND resource_id LIKE 'poller-%'
+	`).Scan(&persisted); err != nil {
+		t.Fatalf("count persisted poller metrics: %v", err)
+	}
+	if persisted != pollers {
+		t.Fatalf("persisted poller metrics = %d, want %d", persisted, pollers)
 	}
 }
 

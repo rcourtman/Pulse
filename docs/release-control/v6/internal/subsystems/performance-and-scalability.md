@@ -1281,7 +1281,13 @@ bounded live-ingestion queue. SQLite remains the serialization boundary for
 their transactions, but maintenance CPU or read work must not stop buffered
 writes or `Flush` barriers from progressing; shutdown must join both workers
 before closing their shared database. `pkg/metrics/store_additional_test.go`
-must prove ingestion remains live while startup maintenance is blocked. Rollup
+must prove ingestion remains live while startup maintenance is blocked.
+Synchronous platform-poller batches must also enter SQLite through that single
+ingestion worker rather than opening one write transaction per caller. A busy
+WAL writer may delay the worker, but it must not let concurrent pollers consume
+the shared reader pool, starve `/api/state` history reads, or multiply slow
+`BEGIN` waits; the concurrent-poller regression proof must keep database use
+bounded to the existing writer plus one ingestion-worker connection. Rollup
 transactions must also keep a bounded
 time-window working set and resume from checkpoints across invocations instead
 of aggregating every pending series and bucket in one global SQLite GROUP BY

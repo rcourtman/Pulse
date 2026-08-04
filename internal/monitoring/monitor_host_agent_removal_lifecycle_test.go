@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
@@ -184,6 +185,39 @@ func TestHostAgentRemovalLifecycleRevokesDedicatedCredentialAndRetainsDenial(t *
 	}
 	if _, err := monitor.ApplyHostReport(report, &oldToken); err == nil {
 		t.Fatal("explicitly revoked credential bypassed the durable identity denial")
+	}
+}
+
+func TestHostAgentRemovalLifecycleRepublishesUnifiedReadState(t *testing.T) {
+	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+
+	now := time.Now().UTC()
+	report := hostRemovalLifecycleReport(
+		"state-convergence-machine",
+		"state-convergence-machine",
+		"state-convergence-agent",
+		"state-convergence.local",
+		"linux",
+		now,
+	)
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{
+		ID:        "state-convergence-token",
+		CreatedAt: now.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if hosts := adapter.Hosts(); len(hosts) != 1 {
+		t.Fatalf("unified read state before removal = %+v, want one host", hosts)
+	}
+
+	if _, err := monitor.RemoveHostAgent(host.ID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+	if hosts := adapter.Hosts(); len(hosts) != 0 {
+		t.Fatalf("unified read state retained removed host: %+v", hosts)
 	}
 }
 

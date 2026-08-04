@@ -2596,6 +2596,10 @@ snapshot and cache.
 `ApplyHostReport` and removal are ordered by the dedicated host lifecycle
 read/write lock. Concurrent reports may proceed together, but deletion waits
 for earlier reports and prevents later reports from resurrecting the host.
+Accepted reports and completed removals both republish the canonical unified
+resource store before returning. An immediate state read therefore observes
+the removal even when the prior registry generation remains inside the
+read-path freshness window.
 Only a post-removal token and matching retained machine identity may transition
 the tombstone back to active continuity. The canonical host ID survives report
 ID or persisted-agent-ID alias changes across Linux/systemd, Docker unified

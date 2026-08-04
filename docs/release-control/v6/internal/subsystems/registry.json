@@ -243,6 +243,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
+      "rationale": "the deferred API token edit and revoke dialogs preserve the shared security/privacy and API contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "security-privacy"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
       "rationale": "the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -2469,6 +2477,7 @@
         "docs/release-control/v6/internal/mobile_compatibility_manifest.schema.json",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
+        "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
         "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
@@ -2908,6 +2917,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/APITokenManager.tsx",
+              "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
               "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
               "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
               "frontend-modern/src/constants/apiScopes.ts"
@@ -5250,6 +5260,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/kubernetes_agents_test.go",
+              "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_pbs_coverage_test.go",
               "internal/monitoring/monitor_pmg_test.go",
@@ -6561,6 +6572,7 @@
         "frontend-modern/src/api/security.ts",
         "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
+        "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
         "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
         "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
@@ -6656,6 +6668,7 @@
             "match_files": [
               "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
               "frontend-modern/src/components/Settings/APITokenManager.tsx",
+              "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
               "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
               "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
               "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
