@@ -239,12 +239,31 @@
 
   /*
     Alert history has a persistent navigation rail, so its useful table width
-    can be much narrower than the viewport. Time and duration add helpful
-    context once the table owns 800px, while type and node remain reserved for
-    the 1024px full-detail layout handled by the canonical md table priority.
+    can be much narrower than the viewport. Exact time stays with the six core
+    fields whenever the desktop table is active. Duration is secondary context
+    at 800px, while type and node remain reserved for a 1024px table shell.
+    Fixed-layout tables calculate all nine tracks before collapsed columns are
+    removed, so the table width compensates at each density to let the six,
+    seven, or nine visible tracks fill the card without creating a scrollbar.
   */
-  .table-scroll-shell :is(th, td).alert-history-context-column {
-    display: none;
+  .table-scroll-shell col.alert-history-context-track,
+  .table-scroll-shell col.alert-history-full-detail-track {
+    visibility: collapse;
+  }
+
+  .table-scroll-shell :is(th, td).alert-history-context-column,
+  .table-scroll-shell :is(th, td).alert-history-full-detail-column {
+    visibility: collapse;
+  }
+
+  .table-scroll-shell col.alert-history-core-track,
+  .table-scroll-shell col.alert-history-context-track,
+  .table-scroll-shell col.alert-history-full-detail-track {
+    width: 16.6667%;
+  }
+
+  .table-scroll-shell table.alert-history-responsive-table {
+    width: 150%;
   }
 
   /*
@@ -288,8 +307,22 @@
   }
 
   @container (min-width: 50rem) {
+    .table-scroll-shell col.alert-history-context-track {
+      visibility: visible;
+    }
+
     .table-scroll-shell :is(th, td).alert-history-context-column {
-      display: table-cell;
+      visibility: visible;
+    }
+
+    .table-scroll-shell col.alert-history-core-track,
+    .table-scroll-shell col.alert-history-context-track,
+    .table-scroll-shell col.alert-history-full-detail-track {
+      width: 14.2857%;
+    }
+
+    .table-scroll-shell table.alert-history-responsive-table {
+      width: 128.5714%;
     }
 
     .table-scroll-shell :is(th, td).agent-doctor-target-column {
@@ -315,6 +348,26 @@
 
     .k8s-deployment-ready-total {
       display: none;
+    }
+  }
+
+  @container (min-width: 64rem) {
+    .table-scroll-shell col.alert-history-full-detail-track {
+      visibility: visible;
+    }
+
+    .table-scroll-shell :is(th, td).alert-history-full-detail-column {
+      visibility: visible;
+    }
+
+    .table-scroll-shell col.alert-history-core-track,
+    .table-scroll-shell col.alert-history-context-track,
+    .table-scroll-shell col.alert-history-full-detail-track {
+      width: 11.1111%;
+    }
+
+    .table-scroll-shell table.alert-history-responsive-table {
+      width: 100%;
     }
   }
 

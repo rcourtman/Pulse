@@ -505,6 +505,11 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
     expect(alertHistoryTableSectionSource).toContain('<TableCard');
     expect(alertHistoryTableSectionSource).toMatch(/<Table(?:\s|>)/);
+    expect(alertHistoryTableSectionSource).toContain('alert-history-responsive-table');
+    expect(alertHistoryTableSectionSource).toContain('<colgroup>');
+    expect(alertHistoryTableSectionSource).toContain('alert-history-timestamp-column');
+    expect(alertHistoryTableSectionSource).toContain('alert-history-full-detail-column');
+    expect(alertHistoryTableAlertRowSource).toContain('alert-history-timestamp-column');
     expect(alertHistoryTableSectionSource).not.toContain(
       'overflow-hidden rounded border border-border',
     );

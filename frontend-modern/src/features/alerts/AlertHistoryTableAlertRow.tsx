@@ -29,7 +29,7 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
         class={`border-b border-border hover:bg-surface-hover ${historyStatusPresentation().rowClassName}`}
       >
         <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} alert-history-context-column font-mono whitespace-nowrap text-muted`}
+          class={`${getPlatformTableCellClassForKind('text')} alert-history-timestamp-column font-mono whitespace-nowrap text-muted`}
         >
           {new Date(props.alert.startTime).toLocaleTimeString('en-US', {
             hour: '2-digit',
@@ -44,7 +44,9 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           {props.alert.resourceName}
         </TableCell>
 
-        <TableCell class={`${getPlatformTableCellClassForKind('badge')} hidden md:table-cell`}>
+        <TableCell
+          class={`${getPlatformTableCellClassForKind('badge')} alert-history-full-detail-column`}
+        >
           <span
             class={getAlertHistoryResourceTypeBadgeClass(props.alert.resourceType)}
             title={props.alert.resourceType}
@@ -79,10 +81,11 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
         </TableCell>
 
         <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden truncate text-muted md:table-cell`}
-          title={props.alert.nodeDisplayName || props.alert.node || ''}
+          class={`${getPlatformTableCellClassForKind('text')} alert-history-full-detail-column truncate text-muted`}
         >
-          {props.alert.nodeDisplayName || props.alert.node || '—'}
+          <span title={props.alert.nodeDisplayName || props.alert.node || ''}>
+            {props.alert.nodeDisplayName || props.alert.node || '—'}
+          </span>
         </TableCell>
 
         <TableCell class={getPlatformTableCellClassForKind('badge')}>
