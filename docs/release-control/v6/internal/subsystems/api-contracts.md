@@ -6700,6 +6700,12 @@ continuity semantics: when `/api/auto-register` receives the same
 canonical node name together with the deterministic Pulse-managed token ID for
 that node, it must update the existing PVE or PBS entry in place even if the
 host IP has changed, rather than duplicating the node under a second endpoint.
+That inferred continuity is valid only when captured TLS identity does not
+contradict it. Different known TOFU fingerprints must veto resolved-address,
+changed-address node-name/token, and cluster-member continuity matches so
+independent sites that reuse node and token names remain separate connections.
+An exact stored endpoint remains an authoritative rerun and may refresh its
+fingerprint after certificate rotation.
 That same `/api/auto-register` payload contract must now also accept ordered
 `candidateHosts` from runtime-side Proxmox callers and treat `host` as the
 preferred candidate, not an untouchable answer. The backend must normalize the

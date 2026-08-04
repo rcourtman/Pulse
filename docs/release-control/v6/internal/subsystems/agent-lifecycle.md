@@ -2069,6 +2069,13 @@ command transport, update policy, or fleet lifecycle authority.
    registration and update paths must not depend on package-global mutable test
    seams that can leak between concurrent agent sessions or tests.
 5. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node, and keep runtime-side Proxmox setup host ordering aligned with the contract: explicit report-IP override, route-aware local IP, resolvable hostname fallback, then heuristic local IP fallback.
+   Continuity matches inferred from resolved addresses, a changed-address
+   node-name/token pair, or cluster-member identity must fail safe when both
+   sides carry different TOFU TLS fingerprints. That contradiction identifies
+   distinct PVE or PBS machines and must preserve separate connections even
+   when MSP-managed sites reuse node names, token names, or private address
+   ranges. An exact stored endpoint remains authoritative so a certificate
+   rotation at the same URL can refresh its pin in place.
    That same lifecycle-adjacent shared-API boundary now covers relay and
    command-target hostname resolution too. When lifecycle flows reuse
    `internal/api/router_routes_ai_relay.go`, `internal/agentexec/server.go`,

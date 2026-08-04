@@ -62,22 +62,22 @@ func (instance PVEInstance) DeepCopy() PVEInstance {
 	return clonePVEInstances([]PVEInstance{instance})[0]
 }
 
-// normalizePVEFingerprint reduces a TLS certificate fingerprint to a
+// normalizeProxmoxFingerprint reduces a TLS certificate fingerprint to a
 // comparable form. Comparison-only: unknown stays empty, no validation.
-func normalizePVEFingerprint(raw string) string {
+func normalizeProxmoxFingerprint(raw string) string {
 	normalized := strings.ToLower(strings.TrimSpace(raw))
 	normalized = strings.TrimPrefix(normalized, "sha256:")
 	normalized = strings.ReplaceAll(normalized, ":", "")
 	return strings.ReplaceAll(normalized, " ", "")
 }
 
-// pveFingerprintsConflict reports whether two TLS fingerprints are both known
-// and disagree. Contradicting fingerprints identify two different machines,
-// which outweighs any name or address coincidence between sites that reuse
-// node hostnames and RFC1918 ranges.
-func pveFingerprintsConflict(a, b string) bool {
-	fpA := normalizePVEFingerprint(a)
-	fpB := normalizePVEFingerprint(b)
+// ProxmoxFingerprintsConflict reports whether two TLS fingerprints are both
+// known and disagree. Contradicting fingerprints identify two different
+// machines, which outweighs inferred name or address coincidence between
+// sites that reuse node hostnames, token identities, and RFC1918 ranges.
+func ProxmoxFingerprintsConflict(a, b string) bool {
+	fpA := normalizeProxmoxFingerprint(a)
+	fpB := normalizeProxmoxFingerprint(b)
 	return fpA != "" && fpB != "" && fpA != fpB
 }
 
@@ -90,14 +90,14 @@ func pveFingerprintsConflict(a, b string) bool {
 // certificate rotated between discoveries stays as two views rather than two
 // distinct clusters being silently folded into one.
 func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
-	if pveFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
+	if ProxmoxFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
 		return true
 	}
 	indexEndpoints := func(instance PVEInstance) (byNode, byKey map[string]string) {
 		byNode = make(map[string]string)
 		byKey = make(map[string]string)
 		for _, endpoint := range instance.ClusterEndpoints {
-			fp := normalizePVEFingerprint(endpoint.Fingerprint)
+			fp := normalizeProxmoxFingerprint(endpoint.Fingerprint)
 			if fp == "" {
 				continue
 			}
@@ -519,7 +519,7 @@ func mergeStandalonePVEIntoClusters(instances []PVEInstance) bool {
 		}
 
 		endpoint := &instances[ref.clusterIdx].ClusterEndpoints[ref.endpointIdx]
-		if pveFingerprintsConflict(instances[idx].Fingerprint, endpoint.Fingerprint) {
+		if ProxmoxFingerprintsConflict(instances[idx].Fingerprint, endpoint.Fingerprint) {
 			continue
 		}
 		mergeClusterEndpointData(endpoint, ClusterEndpoint{

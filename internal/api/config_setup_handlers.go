@@ -1022,6 +1022,20 @@ func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Con
 	}
 	instance := &instances[i]
 	endpoint := &instance.ClusterEndpoints[j]
+	selectedIdentity := clusterMemberOverrideIdentity(selectedHost)
+	effectiveIdentity := clusterMemberOverrideIdentity(endpoint.EffectiveIP())
+	willAdoptSelectedAddress := selectedIdentity != "" &&
+		selectedIdentity != effectiveIdentity &&
+		shouldAdoptClusterMemberAutoRegisterAddress(endpoint.IPOverride, candidateHosts)
+	if willAdoptSelectedAddress && config.ProxmoxFingerprintsConflict(endpoint.Fingerprint, fingerprint) {
+		log.Warn().
+			Str("cluster", instance.Name).
+			Str("node", endpoint.NodeName).
+			Str("existingHost", endpoint.EffectiveIP()).
+			Str("newHost", selectedHost).
+			Msg("Canonical auto-register rejected inferred cluster member match because TLS fingerprints conflict")
+		return false
+	}
 
 	switch {
 	case tokenID != "" && instance.TokenName == tokenID:
@@ -1036,8 +1050,6 @@ func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Con
 		instance.Source = strings.TrimSpace(source)
 	}
 
-	selectedIdentity := clusterMemberOverrideIdentity(selectedHost)
-	effectiveIdentity := clusterMemberOverrideIdentity(endpoint.EffectiveIP())
 	switch {
 	case selectedIdentity == "":
 		return true
@@ -2065,6 +2077,14 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 				existingIndex = i
 				break
 			}
+			if config.ProxmoxFingerprintsConflict(node.Fingerprint, fingerprint) {
+				log.Warn().
+					Str("existingHost", node.Host).
+					Str("newHost", host).
+					Str("type", "pve").
+					Msg("Canonical auto-register rejected inferred node match because TLS fingerprints conflict")
+				continue
+			}
 			if hostsShareResolvedIdentity(node.Host, host) {
 				existingIndex = i
 				preserveHost = shouldPreserveExistingAutoRegisterHost(node.Host, candidateHosts)
@@ -2147,6 +2167,14 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if node.Host == host {
 				existingIndex = i
 				break
+			}
+			if config.ProxmoxFingerprintsConflict(node.Fingerprint, fingerprint) {
+				log.Warn().
+					Str("existingHost", node.Host).
+					Str("newHost", host).
+					Str("type", "pbs").
+					Msg("Canonical auto-register rejected inferred node match because TLS fingerprints conflict")
+				continue
 			}
 			if hostsShareResolvedIdentity(node.Host, host) {
 				existingIndex = i

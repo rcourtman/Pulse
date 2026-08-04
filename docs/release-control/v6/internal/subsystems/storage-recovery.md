@@ -1105,6 +1105,11 @@ recovery scope, or a storage/recovery-owned secret source.
     delete so adjacent recovery/storage surfaces do not retain stale provider
     context after Pulse credentials have been removed from the host.
 14. Preserve canonical /api/auto-register DHCP continuity in those shared helpers so a PVE or PBS node that reruns registration from a new IP with the same canonical node name and deterministic Pulse-managed token identity updates in place instead of duplicating the inventory record.
+    Known contradictory TLS fingerprints must veto inferred resolved-address,
+    changed-address name/token, and cluster-member continuity matches so
+    separate protected sources are not overwritten when sites reuse node
+    names, token identities, or private address ranges. An exact stored
+    endpoint remains authoritative for in-place certificate rotation.
     That same shared helper boundary now also owns runtime-side Proxmox
     `candidateHosts` selection from Pulse's network view: storage and
     recovery-adjacent transport flows may not bypass server-side reachable-host

@@ -1175,6 +1175,200 @@ func TestHandleCanonicalAutoRegister_PVEUpdatesExistingNodeOnDHCPHostChange(t *t
 	}
 }
 
+func TestHandleCanonicalAutoRegister_PVEKeepsDistinctSameNameTokenWhenFingerprintsConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	incomingFingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("fetch incoming fingerprint: %v", err)
+	}
+	existingFingerprint := strings.Repeat("a", 64)
+	if strings.EqualFold(existingFingerprint, incomingFingerprint) {
+		existingFingerprint = strings.Repeat("b", 64)
+	}
+	tokenID := "pulse-monitor@pve!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "pve01",
+				Host:        "https://10.0.0.10:8006",
+				TokenName:   tokenID,
+				TokenValue:  "site-one-token",
+				Fingerprint: existingFingerprint,
+				Source:      "script",
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       server.URL,
+		ServerName: "pve01",
+		TokenID:    tokenID,
+		TokenValue: "site-two-token",
+		Source:     "script",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	req.Host = "pulse.example.com"
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(handler.defaultConfig.PVEInstances) != 2 {
+		t.Fatalf("PVE instances = %#v, want both sites to remain configured", handler.defaultConfig.PVEInstances)
+	}
+
+	existing := handler.defaultConfig.PVEInstances[0]
+	if existing.Host != "https://10.0.0.10:8006" || existing.TokenValue != "site-one-token" || existing.Fingerprint != existingFingerprint {
+		t.Fatalf("existing site was mutated: %#v", existing)
+	}
+	registered := handler.defaultConfig.PVEInstances[1]
+	if registered.Host != server.URL || registered.TokenValue != "site-two-token" || registered.Fingerprint != incomingFingerprint {
+		t.Fatalf("new site = %#v, want independently registered endpoint", registered)
+	}
+	if strings.EqualFold(registered.Name, existing.Name) {
+		t.Fatalf("new site name = %q, want disambiguation from existing %q", registered.Name, existing.Name)
+	}
+}
+
+func TestHandleCanonicalAutoRegister_PVERotatesFingerprintAtExactHost(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	incomingFingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("fetch incoming fingerprint: %v", err)
+	}
+	tokenID := "pulse-monitor@pve!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "pve01",
+				Host:        server.URL,
+				TokenName:   tokenID,
+				TokenValue:  "old-token",
+				Fingerprint: strings.Repeat("a", 64),
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       server.URL,
+		ServerName: "pve01",
+		TokenID:    tokenID,
+		TokenValue: "rotated-token",
+		Source:     "script",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected exact-host rerun to remain one PVE instance, got %d", len(handler.defaultConfig.PVEInstances))
+	}
+	instance := handler.defaultConfig.PVEInstances[0]
+	if instance.TokenValue != "rotated-token" || instance.Fingerprint != incomingFingerprint {
+		t.Fatalf("exact-host rerun = %#v, want refreshed token and fingerprint", instance)
+	}
+}
+
+func TestHandleCanonicalAutoRegister_PVEKeepsDistinctClusterMemberWhenFingerprintsConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	incomingFingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("fetch incoming fingerprint: %v", err)
+	}
+	existingFingerprint := strings.Repeat("a", 64)
+	if strings.EqualFold(existingFingerprint, incomingFingerprint) {
+		existingFingerprint = strings.Repeat("b", 64)
+	}
+	tokenID := "pulse-monitor@pve!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "site-one",
+				Host:        "https://10.0.0.10:8006",
+				TokenName:   tokenID,
+				TokenValue:  "site-one-token",
+				IsCluster:   true,
+				ClusterName: "production",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{
+						NodeName:    "pve01",
+						Host:        "https://10.0.0.11:8006",
+						IP:          "10.0.0.11",
+						Fingerprint: existingFingerprint,
+					},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       server.URL,
+		ServerName: "pve01",
+		TokenID:    tokenID,
+		TokenValue: "site-two-token",
+		Source:     "script",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	req.Host = "pulse.example.com"
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(handler.defaultConfig.PVEInstances) != 2 {
+		t.Fatalf("PVE instances = %#v, want existing cluster and new site", handler.defaultConfig.PVEInstances)
+	}
+	existing := handler.defaultConfig.PVEInstances[0]
+	if existing.TokenValue != "site-one-token" || existing.ClusterEndpoints[0].Fingerprint != existingFingerprint || existing.ClusterEndpoints[0].IPOverride != "" {
+		t.Fatalf("existing cluster member was mutated: %#v", existing)
+	}
+	registered := handler.defaultConfig.PVEInstances[1]
+	if registered.Name != "pve01" || registered.Host != server.URL || registered.TokenValue != "site-two-token" || registered.Fingerprint != incomingFingerprint {
+		t.Fatalf("new site = %#v, want independent pve01 registration", registered)
+	}
+}
+
 func TestHandleCanonicalAutoRegister_PBSPreservesExistingHostnameWhenRequestUsesSameIP(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -1295,5 +1489,71 @@ func TestHandleCanonicalAutoRegister_PBSUpdatesExistingNodeOnDHCPHostChange(t *t
 	}
 	if instance.TokenValue != "existing-token" {
 		t.Fatalf("token value = %q, want reused Pulse-managed token", instance.TokenValue)
+	}
+}
+
+func TestHandleCanonicalAutoRegister_PBSKeepsDistinctSameNameTokenWhenFingerprintsConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	incomingFingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("fetch incoming fingerprint: %v", err)
+	}
+	existingFingerprint := strings.Repeat("a", 64)
+	if strings.EqualFold(existingFingerprint, incomingFingerprint) {
+		existingFingerprint = strings.Repeat("b", 64)
+	}
+	tokenID := "pulse-monitor@pbs!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PBSInstances: []config.PBSInstance{
+			{
+				Name:        "pbs01",
+				Host:        "https://10.0.0.20:8007",
+				TokenName:   tokenID,
+				TokenValue:  "site-one-token",
+				Fingerprint: existingFingerprint,
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       server.URL,
+		ServerName: "pbs01",
+		TokenID:    tokenID,
+		TokenValue: "site-two-token",
+		Source:     "script",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	req.Host = "pulse.example.com"
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if len(handler.defaultConfig.PBSInstances) != 2 {
+		t.Fatalf("PBS instances = %#v, want both sites to remain configured", handler.defaultConfig.PBSInstances)
+	}
+	existing := handler.defaultConfig.PBSInstances[0]
+	if existing.Host != "https://10.0.0.20:8007" || existing.TokenValue != "site-one-token" || existing.Fingerprint != existingFingerprint {
+		t.Fatalf("existing site was mutated: %#v", existing)
+	}
+	registered := handler.defaultConfig.PBSInstances[1]
+	if registered.Host != server.URL || registered.TokenValue != "site-two-token" || registered.Fingerprint != incomingFingerprint {
+		t.Fatalf("new site = %#v, want independently registered endpoint", registered)
+	}
+	if strings.EqualFold(registered.Name, existing.Name) {
+		t.Fatalf("new site name = %q, want disambiguation from existing %q", registered.Name, existing.Name)
 	}
 }
