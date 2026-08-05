@@ -149,6 +149,8 @@ func Run(ctx context.Context, version string) error {
 	})
 	defer logging.Shutdown()
 
+	applyRuntimeMemoryLimit()
+
 	if err := api.ValidateTrustedProxyCIDRsFromEnv(); err != nil {
 		return err
 	}
