@@ -2183,3 +2183,16 @@ most one tenant-local system-settings read; it must not scan tenants, read
 external logo files, call a licensing network service, or add per-route and
 per-component refetches. The response remains bounded to an enabled flag, one
 120-character display name, and the already size-limited inline image.
+### Per-tenant resource stores are released on offboarding and shutdown
+
+`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
+process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
+called from `Router.CleanupTenant` alongside the other per-tenant teardown;
+`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
+Without this an offboarded tenant kept its file descriptors and its
+`unified_resources.db-wal`/`-shm` files alive and its directory could not be
+fully removed. Closed stores are evicted from the cache so a later request opens
+a fresh handle rather than using a closed one
+(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
+are idempotent and nil-safe
+(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).

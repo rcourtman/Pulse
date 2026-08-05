@@ -1938,3 +1938,16 @@ because it looks like data in the fleet aggregate.
 `audit_logging_persistent`, `audit_events_30d`, and
 `pulse_intelligence_patrol_autofixes_30d` so they cannot return under their old
 names.
+### Per-tenant resource stores are released on offboarding and shutdown
+
+`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
+process lifetime. `CloseTenantStore` releases and evicts one org's handle and is
+called from `Router.CleanupTenant` alongside the other per-tenant teardown;
+`CloseStores`, exposed as `Router.ShutdownResourceStores`, releases all of them.
+Without this an offboarded tenant kept its file descriptors and its
+`unified_resources.db-wal`/`-shm` files alive and its directory could not be
+fully removed. Closed stores are evicted from the cache so a later request opens
+a fresh handle rather than using a closed one
+(`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
+are idempotent and nil-safe
+(`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).

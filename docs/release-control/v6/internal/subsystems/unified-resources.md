@@ -4395,3 +4395,16 @@ destructive migration is not. The boundary is only that fresh schema creation
 stops declaring dead tables.
 `internal/unifiedresources/store_test.go` pins this by failing if a fresh
 store's `sqlite_master` contains `resource_metadata`.
+
+### Cached per-tenant resource stores must be releasable
+
+`ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the
+process lifetime, so the cache needs an explicit release path or an offboarded
+tenant keeps its handle, its file descriptors, and its
+`unified_resources.db-wal`/`-shm` sidecars, and its directory cannot be removed.
+`CloseTenantStore` releases one org, `CloseStores` releases all of them, and
+`Router.CleanupTenant` calls the former alongside the rest of per-tenant
+teardown. `TestCachedResourceStoresHaveATenantReleasePath` in
+`internal/unifiedresources/code_standards_test.go` is a source-shape guard,
+because the leak is invisible at runtime until a tenant is deleted or a data
+directory is torn down.

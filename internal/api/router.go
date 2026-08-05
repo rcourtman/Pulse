@@ -1039,6 +1039,12 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 	if r.licenseHandlers != nil {
 		r.licenseHandlers.RemoveTenantService(orgID)
 	}
+	if r.resourceHandlers != nil {
+		if err := r.resourceHandlers.CloseTenantStore(orgID); err != nil {
+			errs = append(errs, fmt.Errorf("resource store cleanup: %w", err))
+		}
+	}
+
 	r.monitorAdapterMu.Lock()
 	delete(r.monitorResourceAdapters, orgID)
 	r.monitorAdapterMu.Unlock()
@@ -2962,6 +2968,21 @@ func (r *Router) ShutdownAIIntelligence() {
 
 // ShutdownRBAC closes every organization RBAC store owned by this router and
 // clears the global manager only when it points at the same provider.
+// ShutdownResourceStores closes every cached per-org unified resource store.
+//
+// getStore opens these lazily and caches them for the process lifetime, so
+// without an explicit shutdown the SQLite handles and their -wal/-shm files
+// outlive the router. Tests that build a Router against a temporary data
+// directory must call this, or the open handles race directory cleanup.
+func (r *Router) ShutdownResourceStores() {
+	if r == nil || r.resourceHandlers == nil {
+		return
+	}
+	if err := r.resourceHandlers.CloseStores(); err != nil {
+		log.Warn().Err(err).Msg("failed to close unified resource stores")
+	}
+}
+
 func (r *Router) ShutdownRBAC() {
 	if r.rbacProvider == nil {
 		return

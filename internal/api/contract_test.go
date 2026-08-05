@@ -22384,3 +22384,32 @@ func TestIssue1649StrandedDockerUpdateReconcilesWithoutRedispatch(t *testing.T) 
 		t.Fatalf("receipt=%#v update=%d lifecycle=%d raw=%d", receipt, len(agents.typedUpdateCalls), len(agents.typedCalls), len(agents.calls))
 	}
 }
+
+// Tenant offboarding must release every per-tenant resource the router holds.
+// The resource store was the one that was missed: getStore caches a SQLite
+// handle per org for the process lifetime, so a deleted tenant kept its handle
+// and its directory could not be removed.
+func TestCleanupTenantReleasesPerTenantResourceStore(t *testing.T) {
+	routerSource, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	src := string(routerSource)
+
+	cleanupStart := strings.Index(src, "func (r *Router) CleanupTenant(")
+	if cleanupStart < 0 {
+		t.Fatal("CleanupTenant not found")
+	}
+	cleanupEnd := strings.Index(src[cleanupStart:], "\n}\n")
+	if cleanupEnd < 0 {
+		t.Fatal("could not bound CleanupTenant")
+	}
+	cleanup := src[cleanupStart : cleanupStart+cleanupEnd]
+
+	if !strings.Contains(cleanup, "CloseTenantStore(orgID)") {
+		t.Error("CleanupTenant must close the offboarded tenant's unified resource store")
+	}
+	if !strings.Contains(src, "func (r *Router) ShutdownResourceStores()") {
+		t.Error("Router must expose ShutdownResourceStores for shutdown-time release")
+	}
+}

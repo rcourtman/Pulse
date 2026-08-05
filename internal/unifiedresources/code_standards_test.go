@@ -2810,3 +2810,37 @@ func TestGuestRRDPointCarriesOnlyRecordedGuestColumns(t *testing.T) {
 		}
 	}
 }
+
+// A per-tenant cache of SQLite resource stores must have a release path, and
+// tenant teardown must use it.
+//
+// ResourceHandlers.getStore opens a handle per org and caches it for the
+// process lifetime. Without an explicit release, offboarding a tenant leaves
+// its handle, file descriptors, and -wal/-shm sidecars alive and its directory
+// unremovable. This is a source-shape guard because the leak is invisible at
+// runtime until a tenant is deleted or a data directory is torn down.
+func TestCachedResourceStoresHaveATenantReleasePath(t *testing.T) {
+	resources, err := os.ReadFile("../api/resources.go")
+	if err != nil {
+		t.Fatalf("read resources.go: %v", err)
+	}
+	for _, fragment := range []string{
+		"func (h *ResourceHandlers) CloseTenantStore(orgID string) error",
+		"func (h *ResourceHandlers) CloseStores() error",
+	} {
+		if !strings.Contains(string(resources), fragment) {
+			t.Errorf("internal/api/resources.go must expose %q so cached per-tenant stores can be released", fragment)
+		}
+	}
+
+	router, err := os.ReadFile("../api/router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	if !strings.Contains(string(router), "r.resourceHandlers.CloseTenantStore(orgID)") {
+		t.Error("Router.CleanupTenant must release the offboarded tenant's resource store")
+	}
+	if !strings.Contains(string(router), "func (r *Router) ShutdownResourceStores()") {
+		t.Error("Router must expose ShutdownResourceStores so every cached store can be released on shutdown")
+	}
+}

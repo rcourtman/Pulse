@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -1277,6 +1278,61 @@ func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error)
 	}
 	h.stores[key] = store
 	return store, nil
+}
+
+// CloseTenantStore closes and evicts one org's cached resource store.
+//
+// getStore opens a SQLite handle per org and caches it for the process
+// lifetime. Without this, offboarding a tenant left its handle open: the
+// -wal and -shm files stay on disk, the file descriptors are never returned,
+// and the tenant directory cannot be fully removed.
+func (h *ResourceHandlers) CloseTenantStore(orgID string) error {
+	if h == nil {
+		return nil
+	}
+	key := cacheKey(orgID)
+
+	h.storeMu.Lock()
+	store, ok := h.stores[key]
+	if ok {
+		delete(h.stores, key)
+	}
+	h.storeMu.Unlock()
+
+	h.invalidateCache(orgID)
+
+	if !ok || store == nil {
+		return nil
+	}
+	return store.Close()
+}
+
+// CloseStores closes and evicts every cached resource store. Used on shutdown
+// so SQLite handles are released rather than left to process exit.
+func (h *ResourceHandlers) CloseStores() error {
+	if h == nil {
+		return nil
+	}
+
+	h.storeMu.Lock()
+	stores := make(map[string]unified.ResourceStore, len(h.stores))
+	for key, store := range h.stores {
+		stores[key] = store
+	}
+	h.stores = make(map[string]unified.ResourceStore)
+	h.storeMu.Unlock()
+
+	var errs []error
+	for key, store := range stores {
+		if store == nil {
+			continue
+		}
+		if err := store.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close resource store for %s: %w", key, err))
+		}
+		h.invalidateCache(key)
+	}
+	return errors.Join(errs...)
 }
 
 func (h *ResourceHandlers) invalidateCache(orgID string) {
