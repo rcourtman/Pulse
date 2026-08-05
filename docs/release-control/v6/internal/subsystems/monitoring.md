@@ -496,7 +496,13 @@ changes.
    fixture registries synced in `internal/mock/metric_personas.go`, never a
    per-call fixture graph clone on the chart path. A percentage series without
    its byte companion silently empties the host-capacity memory column instead
-   of degrading it.
+   of degrading it. The same obligation is general. Seeded coverage in
+   `internal/monitoring/mock_metrics_history.go` and the synthetic generator
+   must carry the same series set per resource kind, so a chart window never
+   decides whether a series exists. Docker hosts seed disk and network I/O for
+   that reason, matching what the agent reports on a real host. A series
+   present on one range and absent on another reads as a broken column, not as
+   missing history.
    Discovery config and configured-host IP resolution must stay off the
    monitor lock. `internal/monitoring/monitor_discovery_helpers.go` exposes
    the canonical `discoveryConfigSnapshot()` that discovery providers consume,

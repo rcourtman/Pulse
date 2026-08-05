@@ -914,13 +914,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
+		// Docker hosts report disk and network I/O through the agent, and the
+		// synthetic generator emits both beyond the seeded window. Seeding the
+		// same series keeps short ranges from being the only ones missing them.
 		recordGuest(
 			[]string{"dockerHost:" + host.ID},
 			"dockerHost",
 			host.ID,
 			true,
-			false,
-			false,
+			true,
+			true,
 		)
 
 		for _, container := range host.Containers {

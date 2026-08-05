@@ -1989,3 +1989,29 @@ func TestSeedMockMetricsHistory_DiskTelemetryParityAcrossNativeAndTrueNAS(t *tes
 		}
 	}
 }
+
+// Seeded mock history and the synthetic generator must agree on which series a
+// resource carries. Docker hosts previously seeded cpu, memory, and disk only,
+// so their I/O series existed on ranges past the seed window and nowhere else.
+func TestMockDockerHostSeedCoversTheSameSeriesAsTheSyntheticGenerator(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	history := NewMetricsHistory(4096, 24*time.Hour)
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.DockerHosts) == 0 {
+		t.Fatal("mock fixture graph has no docker hosts")
+	}
+
+	now := time.Now().UTC()
+	seedMockMetricsHistory(history, nil, graph, now, 2*time.Hour, time.Minute)
+
+	hostID := graph.State.DockerHosts[0].ID
+	for _, metricType := range mockGuestChartMetricTypes {
+		points := history.GetGuestMetrics("dockerHost:"+hostID, metricType, 2*time.Hour)
+		if len(points) == 0 {
+			t.Fatalf("seeded docker host %s is missing the %s series", hostID, metricType)
+		}
+	}
+}
