@@ -3798,6 +3798,48 @@ auto-register mutation boundary.
     `internal/api/rbac_handlers_test.go`, and the rejection cases in
     `pkg/auth/sqlite_manager_test.go`.
 
+35. A published capability is a promise the route has to keep. Every field of
+    `securityStatusSettingsCapabilities` names a surface the frontend gates on,
+    so a capability that reports `true` where the matching route answers `403`
+    renders a tab whose first request fails, and one that reports `false` where
+    the route would have allowed hides a surface the caller owns. Both are
+    defects in the capability, not in the route.
+
+    The failure mode is always the same: the capability and the route each
+    answer "is this caller an admin" from their own copy of the rule, and the
+    copies drift. Three separate defects in this shape landed on 2026-08-05.
+    `apiAccessRead`, `apiAccessWrite`, `singleSignOnRead` and
+    `singleSignOnWrite` were derived from the authorizer alone, which without an
+    RBAC licence allows everything, while `ensureSettingsScope` refused the
+    request (`28fd2d1c1`). `canCapturePublicURL`, `discovery.isAdminRequest` and
+    the config export and import guards compared the session user against
+    `cfg.AuthUser` directly, which is empty on an instance whose only
+    administrators are SSO principals, so they refused callers the settings
+    routes admitted (`7d066f1d5`). `RequirePlatformAdmin` did the same against
+    the `billingAdmin` capability (`563a3aa06`).
+
+    Therefore: a session admin decision is `sessionUserCarriesAdminPrivileges`,
+    reached through `ensureAdminSession` or `snapshot.sessionIsAdmin` rather
+    than re-derived. A caller bound to a tenant organization is never an
+    instance administrator regardless of username, tested with
+    `sessionIsOrgScoped`, because that helper's SSO fallback is correct for a
+    single-tenant instance and would hand every tenant platform admin on a
+    control plane configuring no local admin. Authorizer output alone cannot
+    establish a capability while `DefaultAuthorizer` allows every action.
+
+    New capability fields must state which route they describe and be exercised
+    against it in both directions, since a source read cannot establish what a
+    request path does: the gate is frequently a wrapper two calls above the
+    handler. Regression coverage:
+    `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` in
+    `internal/api/security_status_capability_enforcement_test.go`,
+    `TestOIDCOnlyAdminReachesEveryAdminGuard` and
+    `TestUnrelatedSSOUserStillRefusedWhenLocalAdminConfigured` in
+    `internal/api/oidc_only_admin_parity_test.go`, and
+    `TestPlatformAdminRouteAgreesWithBillingAdminCapability` and
+    `TestPlatformAdminRouteRefusesOrgScopedTenantSession` in
+    `internal/api/platform_admin_session_parity_test.go`.
+
 ## Current State
 
 ### Host sensor payloads carry typed command and REST custom readings
