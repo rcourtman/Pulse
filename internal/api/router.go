@@ -5169,6 +5169,20 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
+	// Hold session callers to the same rule the proxy branch above applies.
+	// Knowing the current password is the real gate on the change itself, so
+	// this is not an escalation, but without it any authenticated non-admin
+	// session could probe the admin password one guess at a time and read the
+	// answer from the 401. ensureAdminSession is a no-op when the request
+	// carries no session cookie, so the Basic Auth flow is unaffected.
+	if !ensureAdminSession(r.config, w, req) {
+		log.Warn().
+			Str("ip", req.RemoteAddr).
+			Str("path", req.URL.Path).
+			Msg("Non-admin session attempted to change password")
+		return
+	}
+
 	// Parse request
 	var changeReq struct {
 		CurrentPassword string `json:"currentPassword"`
