@@ -234,14 +234,19 @@ export const TrueNASAppsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <PlatformSortableTableHead kind="name" sort={sort} sortKey="app" class="md:w-[17%]">
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="app"
+                  class="truenas-app-name-column md:w-[17%]"
+                >
                   App
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
                   sortKey="version"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="truenas-app-version-column hidden md:table-cell md:w-[10%]"
                 >
                   Version
                 </PlatformSortableTableHead>
@@ -249,7 +254,7 @@ export const TrueNASAppsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="md:w-[9%]"
+                  class="truenas-app-cpu-column md:w-[9%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -257,7 +262,7 @@ export const TrueNASAppsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[12%]"
+                  class="truenas-app-memory-column md:w-[12%]"
                 >
                   Memory
                 </PlatformSortableTableHead>
@@ -265,21 +270,21 @@ export const TrueNASAppsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="containers"
-                  class="hidden sm:table-cell md:w-[12%]"
+                  class="truenas-app-containers-column hidden sm:table-cell md:w-[12%]"
                 >
                   Containers
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden md:table-cell md:w-[18%]"
+                  class="truenas-app-ports-column hidden md:table-cell md:w-[18%]"
                 >
                   Ports
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"
                   sort={sort}
-                  class="hidden lg:table-cell md:w-[12%]"
+                  class="truenas-app-images-column hidden lg:table-cell md:w-[12%]"
                 >
                   Images
                 </PlatformSortableTableHead>
@@ -287,7 +292,7 @@ export const TrueNASAppsTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="updates"
-                  class="md:w-[10%]"
+                  class="truenas-app-updates-column md:w-[10%]"
                 >
                   Updates
                 </PlatformSortableTableHead>

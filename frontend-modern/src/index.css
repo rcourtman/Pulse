@@ -931,6 +931,64 @@ body,
   .table-scroll-shell > .table-fixed th.platform-table-mobile-w-15 {
     width: 15%;
   }
+
+  /* TrueNAS app identity, live load, and update posture are the useful phone
+     scan. Allocate the entire row to those four visible tracks. */
+  .table-scroll-shell > .table-fixed th.truenas-app-name-column {
+    width: 40%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-cpu-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
+    width: 20%;
+  }
+}
+
+/* Rebalance the TrueNAS app inventory whenever another priority tier appears.
+   Hidden fixed-table tracks otherwise keep their desktop percentage and leave
+   a large unused strip while visible operational columns become unreadable. */
+@container (min-width: 34rem) and (max-width: 63.999rem) {
+  .table-scroll-shell > .table-fixed th.truenas-app-name-column {
+    width: 28%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-cpu-column {
+    width: 15%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-containers-column {
+    width: 20%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
+    width: 17%;
+  }
+}
+
+@container (min-width: 64rem) and (max-width: 75.999rem) {
+  .table-scroll-shell > .table-fixed th.truenas-app-name-column {
+    width: 19%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-version-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-updates-column {
+    width: 11%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-cpu-column {
+    width: 10%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-containers-column {
+    width: 14%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-ports-column {
+    width: 21%;
+  }
 }
 
 /* Keep name column single line to avoid wrapping while giving it more space */

@@ -1,33 +1,45 @@
 {
   "version": 1,
-  "base_sha": "8e25badea1d13b32ca659aaa9f9727ecf1c32c17",
-  "verified_at": "2026-08-04T23:21:18Z",
+  "base_sha": "58864f5ecc3abd351cf252b07995d605e3f7c498",
+  "verified_at": "2026-08-05T11:30:51Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/APITokenManager.tsx",
-    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/APITokenManager.tsx": "46bd97089aab5be47b7595fc8abcbf15a908444d0922906433389222bc348777",
-    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "7355009b809c47eae65c8704efc6c74ca673567dc7abdd24f8ef4ba247b5c1ca"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "c614aee58b3953fdafb6e65035c73796dcc5ae3b6b8a55479632e61d95af1f12",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "50374a199a49dcac90386a1b22cc45c38674225defba469bad3d1d263ae6b8df",
+    "frontend-modern/src/index.css": "817c3f407d83909e43bb771019f0b7b460b498d0333e9eb3cac2fe697b5d78be"
   },
-  "routes": ["/settings/security/api"],
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/kubernetes/overview",
+    "/truenas/apps",
+    "/truenas/shares",
+    "/vmware/overview"
+  ],
   "viewports": [
-    { "width": 1440, "height": 1000 },
-    { "width": 390, "height": 844 }
+    { "width": 320, "height": 900 },
+    { "width": 375, "height": 812 },
+    { "width": 768, "height": 900 },
+    { "width": 1024, "height": 900 },
+    { "width": 1280, "height": 900 },
+    { "width": 1600, "height": 900 }
   ],
   "states": [
-    "Rendered the API Access token inventory with five scoped credentials and no wildcard warning",
-    "Opened the deferred scope editor with the live settings:write selection and unchanged Save scopes action disabled",
-    "Opened the deferred revoke confirmation with the selected token name and irreversible-impact warning",
-    "Rendered the scope editor at 390px with a 358px dialog, bounded internal scrolling, and both footer actions visible",
-    "Confirmed both dialogs close cleanly and leave no dialog mounted",
-    "Observed no browser console errors across the desktop and narrow interaction matrix"
+    "Rendered TrueNAS Apps with App, CPU, Memory, and Updates using the complete phone-width table instead of reserving hidden desktop tracks",
+    "Kept expanded TrueNAS App and Share detail rows aligned as visible column counts changed from phone through desktop breakpoints",
+    "Kept expanded Kubernetes deployment, Docker host, vSphere host, Proxmox node, and Proxmox workload rows aligned to their visible summary columns",
+    "Measured visible header widths against table widths at 320, 375, 768, 1024, 1280, and 1600 pixels with no document overflow",
+    "Visually inspected the expanded Proxmox node and workload details at phone width with operational columns and drawer content remaining readable"
   ],
   "interactions": [
-    "Opened Edit scopes from a specific token card at 1440px, inspected the complete checkbox inventory, and cancelled without mutation",
-    "Opened Revoke from the same token card, verified the explicit confirmation boundary, and cancelled without revoking the token",
-    "Repeated the deferred Edit scopes load at 390px and verified Cancel and disabled Save scopes remained visible and usable",
-    "Closed the narrow scope editor and verified the dialog was removed without changing token state"
+    "Expanded and collapsed representative resource rows using their disclosure controls across Proxmox, Docker, Kubernetes, TrueNAS, and vSphere",
+    "Resized the live browser repeatedly across every audited breakpoint while each representative detail row remained open",
+    "Sorted TrueNAS Apps by CPU through descending and ascending states, then restored the default order",
+    "Verified responsive detail colspans returned to compact values after resizing from desktop back to phone width"
   ]
 }

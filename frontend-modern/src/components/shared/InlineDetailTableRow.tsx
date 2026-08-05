@@ -1,4 +1,4 @@
-import { splitProps, type JSX } from 'solid-js';
+import { createSignal, onCleanup, onMount, splitProps, type JSX } from 'solid-js';
 
 import { TableCell, TableRow, type TableRowProps } from './Table';
 
@@ -35,12 +35,49 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
   ]);
   const containClicks = () => local.containClicks ?? true;
   const contentClass = () => local.contentClass ?? INLINE_DETAIL_TABLE_CONTENT_CLASS;
+  const requestedColspan = () => local.colspan ?? local.colSpan ?? 1;
+  const [effectiveColspan, setEffectiveColspan] = createSignal(requestedColspan());
+  let detailRow: HTMLTableRowElement | undefined;
+
+  const syncColspanToVisibleSummaryCells = () => {
+    const summaryRow = detailRow?.previousElementSibling;
+    if (!(summaryRow instanceof HTMLTableRowElement)) {
+      setEffectiveColspan(requestedColspan());
+      return;
+    }
+
+    const visibleColspan = Array.from(
+      summaryRow.querySelectorAll<HTMLTableCellElement>(':scope > th, :scope > td'),
+    ).reduce(
+      (total, cell) =>
+        window.getComputedStyle(cell).display === 'none' ? total : total + cell.colSpan,
+      0,
+    );
+    setEffectiveColspan(visibleColspan || requestedColspan());
+  };
+
+  onMount(() => {
+    syncColspanToVisibleSummaryCells();
+    window.addEventListener('resize', syncColspanToVisibleSummaryCells);
+
+    const tableShell = detailRow?.closest('.table-scroll-shell');
+    const observer =
+      tableShell && typeof ResizeObserver === 'function'
+        ? new ResizeObserver(syncColspanToVisibleSummaryCells)
+        : undefined;
+    if (tableShell) observer?.observe(tableShell);
+
+    onCleanup(() => {
+      window.removeEventListener('resize', syncColspanToVisibleSummaryCells);
+      observer?.disconnect();
+    });
+  });
 
   return (
-    <TableRow class={local.class} {...rest}>
+    <TableRow ref={detailRow} class={local.class} {...rest}>
       <TableCell
         id={local.cellId}
-        colspan={local.colspan ?? local.colSpan}
+        colspan={effectiveColspan()}
         class={joinClasses(INLINE_DETAIL_TABLE_CELL_CLASS, local.cellClass)}
       >
         <div

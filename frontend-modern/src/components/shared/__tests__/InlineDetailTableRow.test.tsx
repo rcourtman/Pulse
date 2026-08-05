@@ -1,4 +1,4 @@
-import { render, screen } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -57,5 +57,29 @@ describe('InlineDetailTableRow', () => {
     screen.getByRole('button', { name: 'Nested action' }).click();
 
     expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it('spans only the summary cells visible at the current responsive layout', async () => {
+    render(() => (
+      <Table>
+        <TableBody>
+          <tr>
+            <td>Identity</td>
+            <td style={{ display: 'none' }}>Desktop-only detail</td>
+            <td>State</td>
+          </tr>
+          <InlineDetailTableRow colspan={3}>
+            <div>Responsive detail content</div>
+          </InlineDetailTableRow>
+        </TableBody>
+      </Table>
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByText('Responsive detail content').closest('td')).toHaveAttribute(
+        'colspan',
+        '2',
+      );
+    });
   });
 });

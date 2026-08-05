@@ -333,6 +333,9 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
     expect(truenasAppsTableSource).toContain('md:min-w-[960px]');
+    expect(truenasAppsTableSource).toContain('truenas-app-name-column');
+    expect(truenasAppsTableSource).toContain('truenas-app-containers-column');
+    expect(truenasAppsTableSource).toContain('truenas-app-updates-column');
     expect(truenasAppsTableSource).not.toContain('Volumes');
     expect(truenasNetworkSharesTableSource).toContain('md:min-w-[960px]');
     expect(truenasNetworkSharesTableSource).not.toMatch(
