@@ -43,19 +43,21 @@ describe('BackupStatusCell', () => {
     expect(badge.className).toContain('border-yellow-200');
   });
 
-  it('draws the age and pill chrome when the backup is critical', () => {
+  it('keeps the age and amber pill chrome when the backup is overdue', () => {
     const badge = renderCell(Date.now() - 200 * HOUR_MS);
 
     expect(badge.textContent?.trim()).not.toBe('');
     expect(badge.className).toContain('rounded-full');
-    expect(badge.className).toContain('border-red-200');
+    expect(badge.className).toContain('border-yellow-200');
+    expect(badge.className).not.toContain('border-red-200');
   });
 
-  it('labels a guest that has never been backed up', () => {
+  it('labels a guest that has never been backed up in red', () => {
     const badge = renderCell(null);
 
     expect(badge.textContent?.trim()).toBe('None');
     expect(badge.className).toContain('rounded-full');
-    expect(badge.getAttribute('aria-label')).toBe('Backup status: never');
+    expect(badge.className).toContain('border-red-200');
+    expect(badge.getAttribute('aria-label')).toBe('Backup status: no backup found');
   });
 });

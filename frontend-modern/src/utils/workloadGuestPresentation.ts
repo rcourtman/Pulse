@@ -17,14 +17,14 @@ const BACKUP_STATUS_PRESENTATION: Record<BackupStatus, WorkloadsGuestBackupStatu
     bgColor: 'bg-yellow-100 dark:bg-yellow-900',
     icon: 'warning',
   },
-  critical: {
-    color: 'text-red-600 dark:text-red-400',
-    bgColor: 'bg-red-100 dark:bg-red-900',
-    icon: 'x',
+  overdue: {
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-100 dark:bg-yellow-900',
+    icon: 'warning',
   },
   never: {
-    color: 'text-muted',
-    bgColor: 'bg-surface-alt',
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-100 dark:bg-red-900',
     icon: 'x',
   },
 };

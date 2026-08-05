@@ -14,9 +14,14 @@ describe('workloadGuestPresentation', () => {
       icon: 'check',
     });
     expect(getWorkloadsGuestBackupStatusPresentation('never')).toEqual({
-      color: 'text-muted',
-      bgColor: 'bg-surface-alt',
+      color: 'text-red-600 dark:text-red-400',
+      bgColor: 'bg-red-100 dark:bg-red-900',
       icon: 'x',
+    });
+    expect(getWorkloadsGuestBackupStatusPresentation('overdue')).toEqual({
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-100 dark:bg-yellow-900',
+      icon: 'warning',
     });
   });
 

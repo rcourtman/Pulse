@@ -655,7 +655,7 @@ describe('guestDrawerModel (branch coverage)', () => {
 
     const expectPresentation = (days: number) => {
       const lastBackup = backupNDaysAgo(days);
-      const result = getGuestDrawerBackupPresentation(lastBackup, now);
+      const result = getGuestDrawerBackupPresentation(lastBackup, undefined, now);
       expect(result.dateLabel).toBe(new Date(lastBackup).toLocaleDateString());
       return result;
     };
@@ -674,33 +674,35 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(result.ageClass).toBe('text-green-600 dark:text-green-400');
     });
 
-    it('uses the green class up to and including day 7 (isOld = daysSince > 7)', () => {
-      expect(expectPresentation(7).ageClass).toBe('text-green-600 dark:text-green-400');
-      expect(expectPresentation(7).ageLabel).toBe('7d ago');
+    it('uses the configured policy to keep a 15-day-old backup green', () => {
+      const lastBackup = backupNDaysAgo(15);
+      const result = getGuestDrawerBackupPresentation(
+        lastBackup,
+        { freshHours: 15 * 24, staleHours: 30 * 24 },
+        now,
+      );
+
+      expect(result.ageClass).toBe('text-green-600 dark:text-green-400');
+      expect(result.ageLabel).toBe('15d ago');
     });
 
-    it('switches to the amber class at day 8', () => {
-      const result = expectPresentation(8);
-      expect(result.ageClass).toBe('text-amber-600 dark:text-amber-400');
-      expect(result.ageLabel).toBe('8d ago');
+    it('uses the yellow caution class after the fresh threshold', () => {
+      const result = expectPresentation(2);
+      expect(result.ageClass).toBe('text-yellow-600 dark:text-yellow-400');
+      expect(result.ageLabel).toBe('2d ago');
     });
 
-    it('keeps the amber class at day 30 (isCritical = daysSince > 30)', () => {
-      expect(expectPresentation(30).ageClass).toBe('text-amber-600 dark:text-amber-400');
-      expect(expectPresentation(30).ageLabel).toBe('30d ago');
-    });
-
-    it('switches to the red (critical) class at day 31', () => {
+    it('keeps overdue existing backups yellow rather than red', () => {
       const result = expectPresentation(31);
-      expect(result.ageClass).toBe('text-red-600 dark:text-red-400');
+      expect(result.ageClass).toBe('text-yellow-600 dark:text-yellow-400');
       expect(result.ageLabel).toBe('31d ago');
     });
 
     it('accepts a numeric (ms) lastBackup value', () => {
       const lastBackup = backupNDaysAgo(10).getTime();
-      const result = getGuestDrawerBackupPresentation(lastBackup, now);
+      const result = getGuestDrawerBackupPresentation(lastBackup, undefined, now);
       expect(result.ageLabel).toBe('10d ago');
-      expect(result.ageClass).toBe('text-amber-600 dark:text-amber-400');
+      expect(result.ageClass).toBe('text-yellow-600 dark:text-yellow-400');
       expect(result.dateLabel).toBe(new Date(lastBackup).toLocaleDateString());
     });
   });

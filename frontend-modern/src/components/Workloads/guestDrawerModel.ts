@@ -7,7 +7,8 @@ import type {
 } from '@/api/charts';
 
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
-import { formatBytes, formatPercent } from '@/utils/format';
+import { formatBytes, formatPercent, getBackupInfo, type BackupThresholds } from '@/utils/format';
+import { getWorkloadsGuestBackupStatusPresentation } from '@/utils/workloadGuestPresentation';
 import {
   getCanonicalWorkloadId,
   getWorkloadCPUPercent,
@@ -355,19 +356,19 @@ export const normalizeGuestDrawerTags = (tags: Guest['tags']): string[] => {
 
 export const getGuestDrawerBackupPresentation = (
   lastBackup: string | number | Date,
+  thresholds?: BackupThresholds,
   now: Date = new Date(),
 ): GuestDrawerBackupPresentation => {
   const backupDate = new Date(lastBackup);
-  const daysSince = Math.floor((now.getTime() - backupDate.getTime()) / (1000 * 60 * 60 * 24));
-  const isOld = daysSince > 7;
-  const isCritical = daysSince > 30;
+  const daysSince = Math.max(
+    0,
+    Math.floor((now.getTime() - backupDate.getTime()) / (1000 * 60 * 60 * 24)),
+  );
+  const info = getBackupInfo(backupDate.getTime(), thresholds, now);
+  const statusPresentation = getWorkloadsGuestBackupStatusPresentation(info.status);
 
   return {
-    ageClass: isCritical
-      ? 'text-red-600 dark:text-red-400'
-      : isOld
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-green-600 dark:text-green-400',
+    ageClass: statusPresentation.color,
     ageLabel: daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince}d ago`,
     dateLabel: backupDate.toLocaleDateString(),
   };

@@ -26,7 +26,7 @@ function BackupIndicator(props: {
 
   const shouldShow = createMemo(() => {
     const status = backupInfo().status;
-    return status === 'stale' || status === 'critical' || status === 'never';
+    return status === 'stale' || status === 'overdue' || status === 'never';
   });
 
   const tooltipText = createMemo(() => {
@@ -88,11 +88,10 @@ function getBackupAgeBadgeLabel(
 function getBackupAgeBadgeClass(status: BackupInfo['status']): string {
   const layout =
     'inline-flex h-5 min-w-[3.25rem] items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
-  // A healthy backup only needs its shield. The colour already carries the
-  // verdict and the threshold already decides what counts as acceptable, so the
-  // exact age is decoration on the rows nobody has to act on; it stays in the
-  // tooltip and the aria-label. Age and pill chrome are reserved for the states
-  // that need attention.
+  // A healthy backup only needs its shield. Existing backups that cross an age
+  // threshold remain amber because age is a policy-relative caution, while red
+  // is reserved for the materially different state where no backup exists.
+  // The exact age stays visible for every non-fresh state.
   const pill = `${layout} rounded-full border`;
 
   switch (status) {
@@ -100,10 +99,10 @@ function getBackupAgeBadgeClass(status: BackupInfo['status']): string {
       return `${layout} text-green-600 dark:text-green-400`;
     case 'stale':
       return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
-    case 'critical':
-      return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
+    case 'overdue':
+      return `${pill} border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/70 dark:bg-yellow-950/40 dark:text-yellow-300`;
     case 'never':
-      return `${pill} border-border bg-surface-alt text-muted`;
+      return `${pill} border-red-200 bg-red-50 text-red-700 dark:border-red-900/70 dark:bg-red-950/40 dark:text-red-300`;
   }
 }
 
@@ -319,7 +318,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
   const badgeLabel = createMemo(() => getBackupAgeBadgeLabel(props.lastBackup, info()));
   const ariaLabel = createMemo(() => {
     const currentInfo = info();
-    if (currentInfo.status === 'never') return 'Backup status: never';
+    if (currentInfo.status === 'never') return 'Backup status: no backup found';
     return `Backup status: ${currentInfo.status}, last backup ${currentInfo.ageFormatted}`;
   });
 
@@ -376,7 +375,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
               <div class="text-slate-300">{new Date(props.lastBackup!).toLocaleTimeString()}</div>
             </div>
             <div class="pt-1 mt-1 border-t border-border">
-              <span class={config().color}>{info().ageFormatted} ago</span>
+              <span class={config().color}>{info().ageFormatted}</span>
             </div>
           </Show>
           <Show when={info().status === 'never'}>

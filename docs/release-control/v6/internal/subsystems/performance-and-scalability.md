@@ -545,12 +545,21 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     from the row's scalar `lastBackup` value, but they must remain
     presentation-only: no per-row backup API calls, recovery evidence joins, or
     provider-specific backup fetches belong in the shared workload hot path.
+    Freshness classification must reuse the configured backup thresholds and
+    the shared `getBackupInfo` / `workloadGuestPresentation` vocabulary:
+    existing stale or overdue backups stay amber, while red is reserved for a
+    supported guest with no recorded backup. The compact row must not infer a
+    red failure state from a fixed backup age.
 11. Extend workload drawer derivations and runtime wiring through `frontend-modern/src/components/Workloads/guestDrawerModel.ts` and `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`, and extend drawer overview rendering through `frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx`, rather than rebuilding canonical guest identity, discovery routing, or drawer-local normalization inside `frontend-modern/src/components/Workloads/GuestDrawer.tsx`
     Drawer history charts belong to `frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx`.
     History cards must let the plot area stretch to the card height instead of
     pinning the SVG wrapper to a fixed short height, so guest and node drawer
     history cards do not leave unused card space when headers have different
     legend heights.
+    The drawer backup card must consume the same configured thresholds and
+    shared freshness presentation as the workload row. Drawer-local 7-day,
+    30-day, or other fixed color cutoffs are forbidden because they can
+    contradict both user policy and the table beside the drawer.
 12. Extend workload disk-list derivations and fallback runtime wiring through `frontend-modern/src/components/Workloads/diskListModel.ts` and `frontend-modern/src/components/Workloads/useDiskListState.ts` rather than rebuilding usage math, progress-state mapping, or tooltip fallback logic inside `frontend-modern/src/components/Workloads/DiskList.tsx`
 13. Extend workload guest metadata cache persistence, metadata refresh, org-scope switching, and optimistic custom-URL updates through `frontend-modern/src/components/Workloads/useWorkloadGuestMetadataState.ts` rather than rebuilding workload-local storage caches, event listeners, or guest metadata API wiring inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`
 14. Extend workload deep-link selection and hovered-row continuity semantics through `frontend-modern/src/components/Workloads/workloadSelectionModel.ts`, and extend table scroll preservation plus reactive selection state through `frontend-modern/src/components/Workloads/useWorkloadSelectionState.ts`, rather than rebuilding resource-query parsing, selected-row scroll pinning, or hovered-row invalidation inside `frontend-modern/src/components/Workloads/useWorkloadsState.ts`; canonical typed workload IDs such as `app-container:<host>:<provider-id>` must remain exact route/selection keys and must not be reinterpreted into synthetic node scopes

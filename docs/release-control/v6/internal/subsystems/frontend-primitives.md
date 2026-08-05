@@ -950,6 +950,14 @@ not a replacement status card, CTA band, or page-local nested card.
    Proxmox backup source/state chips follow the same boundary: storage/recovery
    owns backup-source labels and state semantics, while the visible chip shell
    and tone vocabulary route through `MetadataBadge`.
+   Workload backup freshness follows a separate shared presentation boundary:
+   `frontend-modern/src/utils/workloadGuestPresentation.ts` owns the canonical
+   tone and icon mapping consumed by workload rows and drawers. A recorded
+   backup may be green or amber according to the configured freshness
+   thresholds, but age alone must not produce a red failure treatment. Red is
+   reserved for the materially different `never` state where no backup has
+   been recorded; unsupported workloads and templates remain neutral rather
+   than being classified as unprotected.
    Inline detail content belongs to the shared detail-section primitive family.
    Feature surfaces may own the platform-specific rows, section labels, and
    source model, but section row shaping, empty-row compaction, value tone

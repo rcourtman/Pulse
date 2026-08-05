@@ -271,11 +271,11 @@ describe('getBackupInfo', () => {
     expect(result.ageFormatted).toBe('2 days ago');
   });
 
-  it('returns critical status for backup older than 72 hours', () => {
+  it('returns overdue status for backup older than 72 hours', () => {
     const now = Date.now();
     const fourDaysAgo = now - 4 * 24 * 60 * 60 * 1000;
     const result = getBackupInfo(fourDaysAgo);
-    expect(result.status).toBe('critical');
+    expect(result.status).toBe('overdue');
     expect(result.ageFormatted).toBe('4 days ago');
   });
 
@@ -315,11 +315,11 @@ describe('getBackupInfo', () => {
       expect(result.status).toBe('stale');
     });
 
-    it('critical just after 72 hours', () => {
+    it('overdue just after 72 hours', () => {
       const now = Date.now();
       const justOver72Hours = now - (72 * 60 * 60 * 1000 + 1000);
       const result = getBackupInfo(justOver72Hours);
-      expect(result.status).toBe('critical');
+      expect(result.status).toBe('overdue');
     });
   });
 
@@ -349,7 +349,7 @@ describe('getBackupInfo', () => {
 
       // With custom threshold of 24h stale (same as fresh)
       const resultCustom = getBackupInfo(twoDaysAgo, { freshHours: 12, staleHours: 24 });
-      expect(resultCustom.status).toBe('critical'); // 48 hours > 24 hours stale threshold
+      expect(resultCustom.status).toBe('overdue'); // 48 hours > 24 hours stale threshold
     });
 
     it('handles partial custom thresholds', () => {

@@ -1,37 +1,40 @@
 {
   "version": 1,
-  "base_sha": "9524c6ac79e68c95f1a1760ccfdca65233da6f36",
-  "verified_at": "2026-08-05T12:43:32Z",
+  "base_sha": "9a7afbd2eb5dd511eeadb30588c8479743e9c992",
+  "verified_at": "2026-08-05T13:13:29Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
-    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
-    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx"
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "195d9d568f05d075cf82f9d3f09b76332d9b7438c7db00b2854fd59385672874",
-    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "4dcfeaa8e4a4b79e37d6121e25fcd5395257c32ad1e947e4551584c672935339",
-    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "5562fdee0d1b74a9ea819962183a5860b9fb4a9677fd66ed7182639e5218b1b4"
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "6be782b43d9918672cee3cf10dab559bced312f7fcaac1f73a37b6273e64ccda",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "df599fe2a2d282fdf1b2afcde4fe813fe8e23df86a2d1255792ccaa9436f7833",
+    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "149410968bfb29f845d47a9d9288fa264751fb7f43816cff78b8ab42d605ee27",
+    "frontend-modern/src/utils/format.ts": "d9e3d7fe2fe58e10666a414f208ed7aef53f2028db4f59c9c8a0e3bfd76e6901",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "b1d16be6ee3393d91161f2a97902fd152b7058f12a560e62baa9d023c02fb48b"
   },
   "routes": [
-    "/truenas/protection",
-    "/vmware/health"
+    "/proxmox/overview"
   ],
   "viewports": [
-    { "width": 390, "height": 844 },
+    { "width": 600, "height": 900 },
     { "width": 1440, "height": 1000 }
   ],
   "states": [
-    "vSphere health default history with the compact counted Attention filter and no posture banner",
-    "vSphere Attention filter selected with all five warning health signals visible",
-    "TrueNAS protection default history with one failed event and the compact counted Attention filter",
-    "TrueNAS Attention filter selected with the one matching failed event",
-    "Filters expanded at the narrow viewport on both routes"
+    "Proxmox workload table with fresh backups green, aging and overdue backups amber, and missing backups red",
+    "Desktop backup tooltips for a 15-day existing backup and a guest with no backup",
+    "Desktop workload drawer showing the 15-day backup in the policy-derived amber tone",
+    "Narrow workload table using amber and red shield indicators beside workload names",
+    "Narrow workload drawer scrolled to the visible 15-day backup card"
   ],
   "interactions": [
-    "Selected and cleared the vSphere Attention filter at desktop and narrow viewports",
-    "Selected and cleared the TrueNAS Attention filter at desktop and narrow viewports",
-    "Verified the vSphere and TrueNAS result counts track each counted Attention filter",
-    "Verified both narrow layouts keep document scroll width equal to client width"
+    "Hovered the 15-day and no-backup indicators and verified their tooltip copy and placement",
+    "Opened and closed the 15-day workload drawer at desktop and narrow viewports",
+    "Scrolled the narrow workload view until the full backup card was visible",
+    "Verified the 15-day drawer value stays amber and the browser console remains error-free"
   ]
 }

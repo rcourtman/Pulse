@@ -189,7 +189,7 @@ function formatTimeDiff(diffMs: number, compact?: boolean): string {
   }
 }
 
-export type BackupStatus = 'fresh' | 'stale' | 'critical' | 'never';
+export type BackupStatus = 'fresh' | 'stale' | 'overdue' | 'never';
 
 export interface BackupInfo {
   status: BackupStatus;
@@ -210,11 +210,13 @@ export interface BackupThresholds {
  * Analyzes backup freshness for a guest.
  * @param lastBackup - ISO timestamp string or Unix timestamp (ms)
  * @param thresholds - Optional thresholds for fresh/stale determination (in hours)
+ * @param now - Optional current time override for deterministic consumers and tests
  * @returns BackupInfo with status and formatted age
  */
 export function getBackupInfo(
   lastBackup: string | number | null | undefined,
   thresholds?: BackupThresholds,
+  now: number | Date = Date.now(),
 ): BackupInfo {
   if (!lastBackup) {
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
@@ -231,8 +233,8 @@ export function getBackupInfo(
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
   }
 
-  const now = Date.now();
-  const ageMs = now - timestamp;
+  const nowMs = typeof now === 'number' ? now : now.getTime();
+  const ageMs = nowMs - timestamp;
 
   // Use provided thresholds or fall back to defaults
   const freshHours = thresholds?.freshHours ?? DEFAULT_FRESH_HOURS;
@@ -246,7 +248,7 @@ export function getBackupInfo(
   } else if (ageMs <= staleThresholdMs) {
     status = 'stale';
   } else {
-    status = 'critical';
+    status = 'overdue';
   }
 
   return {

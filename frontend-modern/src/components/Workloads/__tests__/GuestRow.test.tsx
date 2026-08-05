@@ -1397,12 +1397,34 @@ describe('backup column', () => {
     expect(badge?.textContent?.trim()).toMatch(/\d/);
   });
 
-  it('shows None for supported guests without a backup', () => {
-    renderGuestRow({
+  it('keeps an overdue backup amber because a backup still exists', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-26T12:00:00Z'));
+
+    const { container } = renderGuestRow({
+      guest: makeGuest({
+        type: 'qemu',
+        workloadType: 'vm',
+        lastBackup: Date.parse('2026-05-21T12:00:00Z'),
+      }),
+      visibleColumnIds: ['name', 'backup'],
+    });
+
+    const badge = container.querySelector('[aria-label^="Backup status: overdue"]');
+    expect(badge).toBeTruthy();
+    expect(badge?.classList.contains('text-yellow-700')).toBe(true);
+    expect(badge?.className).not.toContain('text-red');
+  });
+
+  it('reserves red for supported guests without a backup', () => {
+    const { container } = renderGuestRow({
       guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
       visibleColumnIds: ['name', 'backup'],
     });
     expect(screen.getByText('None')).toBeTruthy();
+    const badge = container.querySelector('[aria-label="Backup status: no backup found"]');
+    expect(badge).toBeTruthy();
+    expect(badge?.classList.contains('text-red-700')).toBe(true);
   });
 
   it('shows dash for app-container workloads (no backup support)', () => {

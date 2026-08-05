@@ -837,22 +837,23 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('5d ago')).toBeInTheDocument();
     });
 
-    it('applies warning color for backups older than 7 days', () => {
+    it('applies the caution color for an aging backup', () => {
       const tenDaysAgo = new Date('2026-02-20T12:00:00Z').getTime();
       render(() => <GuestDrawer guest={makeGuest({ lastBackup: tenDaysAgo })} onClose={vi.fn()} />);
       expect(screen.getByText('10d ago')).toBeInTheDocument();
       const ageEl = screen.getByText('10d ago');
-      expect(ageEl.className).toContain('amber');
+      expect(ageEl.className).toContain('yellow');
     });
 
-    it('applies critical color for backups older than 30 days', () => {
+    it('keeps an old existing backup in the caution color rather than red', () => {
       const fortyDaysAgo = new Date('2026-01-21T12:00:00Z').getTime();
       render(() => (
         <GuestDrawer guest={makeGuest({ lastBackup: fortyDaysAgo })} onClose={vi.fn()} />
       ));
       expect(screen.getByText('40d ago')).toBeInTheDocument();
       const ageEl = screen.getByText('40d ago');
-      expect(ageEl.className).toContain('red');
+      expect(ageEl.className).toContain('yellow');
+      expect(ageEl.className).not.toContain('red');
     });
 
     it('applies green color for recent backups', () => {
