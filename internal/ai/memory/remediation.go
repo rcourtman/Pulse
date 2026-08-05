@@ -55,7 +55,9 @@ type RemediationRecord struct {
 
 // RemediationLog stores remediation history
 type RemediationLog struct {
-	mu         sync.RWMutex
+	mu        sync.RWMutex
+	persistMu sync.Mutex
+
 	records    []RemediationRecord
 	maxRecords int
 
@@ -287,9 +289,14 @@ func (r *RemediationLog) saveToDisk() error {
 		return nil
 	}
 
+	// Async callers share one destination and temporary path. Serialize the
+	// complete persistence operation so an older goroutine cannot race a newer
+	// snapshot or rename another writer's temporary file.
+	r.persistMu.Lock()
+	defer r.persistMu.Unlock()
+
 	r.mu.RLock()
-	records := make([]RemediationRecord, len(r.records))
-	copy(records, r.records)
+	records := cloneRemediationRecords(r.records)
 	r.mu.RUnlock()
 
 	path, err := memoryPersistencePath(r.dataDir, remediationHistoryFileName)
@@ -307,6 +314,24 @@ func (r *RemediationLog) saveToDisk() error {
 	}
 
 	return os.Rename(tmpPath, path)
+}
+
+func cloneRemediationRecords(records []RemediationRecord) []RemediationRecord {
+	cloned := make([]RemediationRecord, len(records))
+	for i := range records {
+		cloned[i] = records[i]
+		if records[i].Rollback == nil {
+			continue
+		}
+
+		rollback := *records[i].Rollback
+		if records[i].Rollback.RolledBackAt != nil {
+			rolledBackAt := *records[i].Rollback.RolledBackAt
+			rollback.RolledBackAt = &rolledBackAt
+		}
+		cloned[i].Rollback = &rollback
+	}
+	return cloned
 }
 
 // loadFromDisk loads records from JSON file

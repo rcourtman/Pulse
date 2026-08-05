@@ -4063,6 +4063,13 @@ unchanged configuration remains cacheable during the process lifetime while
 credential rotation invalidates the cache without creating an offline
 credential verifier.
 
+Remediation-history persistence is a serialized snapshot boundary. Async log
+and rollback saves must take a deep copy of rollback metadata while holding the
+record lock, then serialize and atomically replace the history file under one
+persistence lock. Concurrent saves must never marshal shared rollback pointers,
+race over the common temporary path, or allow an older async writer to replace
+newer in-memory state.
+
 The canonical findings store must present one active Patrol issue per real
 problem. When the model reports an equivalent active sibling under a different
 finding ID, key, or severity for the same resource, `internal/ai/findings.go`

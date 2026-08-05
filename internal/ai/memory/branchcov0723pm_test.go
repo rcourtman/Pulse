@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -265,6 +267,50 @@ func TestBranchcov0723pmMarkRolledBack(t *testing.T) {
 			t.Errorf("expected PreState preserved, got %q", rb.PreState)
 		}
 	})
+}
+
+func TestRemediationLogConcurrentPersistenceKeepsLatestState(t *testing.T) {
+	dataDir := t.TempDir()
+	remediationLog := NewRemediationLog(RemediationLogConfig{DataDir: dataDir})
+
+	const recordCount = 32
+	for i := 0; i < recordCount; i++ {
+		id := fmt.Sprintf("rec-%d", i)
+		if err := remediationLog.Log(RemediationRecord{
+			ID:        id,
+			Problem:   "p",
+			Action:    "a",
+			Timestamp: time.Now(),
+			Rollback:  &RollbackInfo{Reversible: true},
+		}); err != nil {
+			t.Fatalf("Log(%s): %v", id, err)
+		}
+		if err := remediationLog.MarkRolledBack(id, "rollback-"+id, "operator"); err != nil {
+			t.Fatalf("MarkRolledBack(%s): %v", id, err)
+		}
+	}
+
+	if err := remediationLog.saveToDisk(); err != nil {
+		t.Fatalf("saveToDisk: %v", err)
+	}
+	waitForRemediationSaveQuiescence(t, dataDir)
+
+	data, err := os.ReadFile(filepath.Join(dataDir, remediationHistoryFileName))
+	if err != nil {
+		t.Fatalf("read remediation history: %v", err)
+	}
+	var records []RemediationRecord
+	if err := json.Unmarshal(data, &records); err != nil {
+		t.Fatalf("unmarshal remediation history: %v", err)
+	}
+	if len(records) != recordCount {
+		t.Fatalf("expected %d persisted records, got %d", recordCount, len(records))
+	}
+	for _, record := range records {
+		if record.Rollback == nil || !record.Rollback.RolledBack {
+			t.Fatalf("record %q did not persist its latest rollback state", record.ID)
+		}
+	}
 }
 
 func TestBranchcov0723pmGetRollbackable(t *testing.T) {
