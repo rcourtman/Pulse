@@ -1,40 +1,32 @@
 {
   "version": 1,
-  "base_sha": "9a7afbd2eb5dd511eeadb30588c8479743e9c992",
-  "verified_at": "2026-08-05T13:13:29Z",
+  "base_sha": "364a3f458938a0610eb2a27c1ce81a73d0a0ffa7",
+  "verified_at": "2026-08-05T14:24:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
-    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts",
-    "frontend-modern/src/utils/format.ts",
-    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "6be782b43d9918672cee3cf10dab559bced312f7fcaac1f73a37b6273e64ccda",
-    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "df599fe2a2d282fdf1b2afcde4fe813fe8e23df86a2d1255792ccaa9436f7833",
-    "frontend-modern/src/components/Workloads/useGuestDrawerState.ts": "149410968bfb29f845d47a9d9288fa264751fb7f43816cff78b8ab42d605ee27",
-    "frontend-modern/src/utils/format.ts": "d9e3d7fe2fe58e10666a414f208ed7aef53f2028db4f59c9c8a0e3bfd76e6901",
-    "frontend-modern/src/utils/workloadGuestPresentation.ts": "b1d16be6ee3393d91161f2a97902fd152b7058f12a560e62baa9d023c02fb48b"
+    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx": "4ea1aee30e4c5c0ecc0f07285a2da70f90b234137793d3d6bca1fcb73a9bb108"
   },
   "routes": [
-    "/proxmox/overview"
+    "/alerts/thresholds/proxmox"
   ],
   "viewports": [
     { "width": 600, "height": 900 },
     { "width": 1440, "height": 1000 }
   ],
   "states": [
-    "Proxmox workload table with fresh backups green, aging and overdue backups amber, and missing backups red",
-    "Desktop backup tooltips for a 15-day existing backup and a guest with no backup",
-    "Desktop workload drawer showing the 15-day backup in the policy-derived amber tone",
-    "Narrow workload table using amber and red shield indicators beside workload names",
-    "Narrow workload drawer scrolled to the visible 15-day backup card"
+    "Guests section expanded at 1440 wide reporting a 10958px grid row track with computed max-height none and no clipping",
+    "Guests section collapsed at 1440 wide reporting a 0px row track with its content clipped by the inner overflow wrapper",
+    "Guests section expanded at 600 wide reporting a 10810px row track and no clipping",
+    "Nodes section expanded alongside at 2414px, confirming a second CollapsibleSection instance resolves its own track",
+    "Document scroll width equal to client width at both viewports with no console errors"
   ],
   "interactions": [
-    "Hovered the 15-day and no-backup indicators and verified their tooltip copy and placement",
-    "Opened and closed the 15-day workload drawer at desktop and narrow viewports",
-    "Scrolled the narrow workload view until the full backup card was visible",
-    "Verified the 15-day drawer value stays amber and the browser console remains error-free"
+    "Collapsed and expanded the guests section three times at 1440 wide and confirmed the row track alternates between 0px and the full content height",
+    "Collapsed and expanded the guests section at 600 wide and confirmed the same alternation",
+    "Compared inner scrollHeight against clientHeight in every expanded state to prove the content is no longer truncated at the former 5000px cap",
+    "Confirmed the computed transition-property is opacity, since transition-all pinned grid-template-rows at its pre-toggle pixel value and left the section stuck"
   ]
 }

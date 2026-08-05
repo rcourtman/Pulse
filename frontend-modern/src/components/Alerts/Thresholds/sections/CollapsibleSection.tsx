@@ -133,18 +133,38 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
       </button>
 
       {/* Section Content */}
+      {/*
+        Collapse switches the grid row track between 0fr and 1fr rather than
+        animating max-height. CSS cannot transition to height:auto, so the
+        earlier form animated up to a fixed max-h-[5000px] and clipped every
+        section that grew past it (#1680). A taller cap only moves the cliff,
+        so the row track carries the natural height and there is no ceiling.
+
+        The transition is deliberately scoped to opacity. Under transition-all
+        the browser holds grid-template-rows at whatever pixel value it had
+        when the class flipped and never resolves the new track, which leaves
+        a section stuck open or stuck shut permanently rather than merely
+        un-animated. Verified in the browser: with transition-all the expanded
+        track reported 0px indefinitely, and scoping to opacity resolved it to
+        the full content height on the same element.
+
+        The inner wrapper owns overflow-hidden so the collapsed track actually
+        clips its content.
+      */}
       <div
         id={`section-content-${props.id}`}
-        class={`overflow-hidden transition-all duration-200 ease-in-out
- ${isCollapsed() ? 'max-h-0 opacity-0' : 'max-h-[5000px] opacity-100'}`}
+        class={`grid transition-opacity duration-200 ease-in-out
+ ${isCollapsed() ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
       >
-        <div class="p-4">
-          <Show when={showEmpty()}>
-            <div class="text-center py-8 text-muted">
-              <p>{props.emptyMessage}</p>
-            </div>
-          </Show>
-          <Show when={!isEmpty() || !props.emptyMessage}>{props.children}</Show>
+        <div class="overflow-hidden min-h-0">
+          <div class="p-4">
+            <Show when={showEmpty()}>
+              <div class="text-center py-8 text-muted">
+                <p>{props.emptyMessage}</p>
+              </div>
+            </Show>
+            <Show when={!isEmpty() || !props.emptyMessage}>{props.children}</Show>
+          </div>
         </div>
       </div>
     </div>
