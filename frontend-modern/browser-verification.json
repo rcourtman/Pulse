@@ -1,77 +1,33 @@
 {
   "version": 1,
-  "base_sha": "7d066f1d5c2f8921695cae5cf5bddf2e2b8e7151",
-  "verified_at": "2026-08-05T12:07:34Z",
+  "base_sha": "fed7179c92b30211035ad9651c52a5b038519e5c",
+  "verified_at": "2026-08-05T12:22:01Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
-    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx"
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "a5a10d77fc0f575d05fb5754d7b65840692c9fde7a726899f1a4814c2b5cd2b1",
-    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "9571289310a518495c88860089cd0ba191c69cd4821c7ba90163e97a42217c12",
-    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "1ec149f222086b4e9433d07b15699775cb6eca5a20ee968eaf817f030f4f3ac1",
-    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx": "7c2580565602b9e7927ea4a16548f104d0144ec37ec93f692cc882171b1f9b57"
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "21f999c1e8cdb0d7656c9becaecc936da49d9a048af6a9abc5407e255a9a656a",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "3fc3ea385e59c6deb7e2d971adda673ea131d837496d1f9113416c2dc703a5bc"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/replication",
-    "/proxmox/backups",
-    "/proxmox/ceph",
-    "/proxmox/mail",
-    "/docker/overview",
-    "/docker/images",
-    "/docker/storage",
-    "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/truenas/services",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/overview",
-    "/vmware/storage",
-    "/vmware/networks",
-    "/vmware/health",
-    "/vmware/activity",
-    "/standalone/machines",
-    "/standalone/availability"
+    "/truenas/protection"
   ],
   "viewports": [
-    { "width": 320, "height": 900 },
-    { "width": 375, "height": 900 },
-    { "width": 768, "height": 900 },
-    { "width": 1024, "height": 900 },
-    { "width": 1280, "height": 900 },
-    { "width": 1600, "height": 900 }
+    { "width": 390, "height": 844 },
+    { "width": 1440, "height": 1000 }
   ],
   "states": [
-    "Rendered every audited platform table at phone, tablet, laptop, desktop, and wide-desktop widths without document overflow",
-    "Kept Proxmox replication guest names readable by prioritizing Guest over Job, Fails, and Error while progressively revealing operational columns",
-    "Prioritized Docker network attachment summaries over the compact Attention field and retained useful network, subnet, driver, and host context as space increased",
-    "Displayed TrueNAS VM state, CPU, and memory at phone width while deferring secondary Flags metadata until tablet width",
-    "Displayed vSphere network VM impact at phone width alongside network name and type, with hosts and datacenter returning at wider layouts",
-    "Kept representative expanded detail rows aligned to the actual visible summary columns after resizing in both directions",
-    "Matched Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines page, tab, panel, and table bounds at 1280 pixels"
+    "Default protection history with one failed event, one running event, and healthy events",
+    "Attention filter selected with one matching failed event",
+    "Filters expanded and collapsed at the narrow viewport",
+    "All events restored through Clear filters"
   ],
   "interactions": [
-    "Expanded representative healthy, degraded, stopped, pending, warning, and failed rows across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines",
-    "Resized each audited table repeatedly through 320, 375, 768, 1024, 1280, and 1600 pixel widths while representative details remained open",
-    "Switched Proxmox backup views and storage tabs to exercise their independent table layouts",
-    "Verified final TrueNAS VM detail colspans changed from 4 compact columns to 7 desktop columns",
-    "Verified final vSphere network detail colspans changed from 3 compact columns to 5 expanded columns",
-    "Measured every visible header allocation against its table width and checked for horizontal document overflow"
+    "Selected the Attention 1 filter and verified the table narrowed from 10 events to the failed event",
+    "Cleared filters and verified all 10 events returned",
+    "Expanded the narrow filter rail and repeated the Attention filter interaction",
+    "Reloaded the route at the narrow viewport and confirmed the failed event remained first in default order"
   ]
 }

@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('TrueNASProtectionTable', () => {
-  it('summarizes protection issues and filters directly to attention outcomes', async () => {
+  it('keeps the issue count in the filters and filters directly to attention outcomes', async () => {
     render(() => (
       <TrueNASProtectionTable
         points={[
@@ -43,14 +43,22 @@ describe('TrueNASProtectionTable', () => {
       />
     ));
 
-    expect(screen.getByRole('region', { name: 'Protection posture' })).toHaveTextContent(
-      '1 protection issue needs review',
+    expect(screen.queryByRole('region', { name: 'Protection posture' })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-truenas-protection-row]')).toHaveAttribute(
+      'data-truenas-protection-row',
+      'failed',
     );
-    await fireEvent.click(screen.getByRole('button', { name: 'Show issues' }));
+
+    const attentionFilter = screen.getByRole('button', { name: 'Attention, 1 issue' });
+    expect(attentionFilter).toHaveTextContent('Attention');
+    expect(attentionFilter).toHaveTextContent('1');
+    await fireEvent.click(attentionFilter);
 
     expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(1);
     expect(document.querySelector('[data-truenas-protection-row="failed"]')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Show all events' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(3);
   });
 
   it('opens inline table details for a TrueNAS replication recovery point', async () => {

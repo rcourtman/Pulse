@@ -952,6 +952,34 @@ describe('truenasPageModel', () => {
     ]);
   });
 
+  it('orders failed and warning protection events ahead of newer routine activity', () => {
+    const healthy = makeRecoveryPoint({
+      id: 'newer-healthy-snapshot',
+      kind: 'snapshot',
+      mode: 'snapshot',
+      outcome: 'success',
+      completedAt: '2026-05-21T00:00:00Z',
+    });
+    const warning = makeRecoveryPoint({
+      id: 'warning-replication',
+      kind: 'backup',
+      mode: 'remote',
+      outcome: 'warning',
+      completedAt: '2026-05-19T00:00:00Z',
+    });
+    const failed = makeRecoveryPoint({
+      id: 'failed-replication',
+      kind: 'backup',
+      mode: 'remote',
+      outcome: 'failed',
+      completedAt: '2026-05-18T00:00:00Z',
+    });
+
+    expect(
+      sortTrueNASProtectionPoints([healthy, warning, failed]).map((point) => point.id),
+    ).toEqual(['failed-replication', 'warning-replication', 'newer-healthy-snapshot']);
+  });
+
   it('deduplicates a native alert projected onto multiple resources and keeps the most specific subject', () => {
     const nativeIncident = {
       provider: 'truenas',

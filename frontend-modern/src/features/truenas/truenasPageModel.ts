@@ -812,8 +812,18 @@ const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
   ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 };
 
+const trueNASProtectionAttentionRank = (point: RecoveryPoint): number => {
+  const status = mapTrueNASProtectionStatus(point);
+  if (status === 'failed') return 0;
+  if (status === 'warning') return 1;
+  return 2;
+};
+
 export function sortTrueNASProtectionPoints(points: readonly RecoveryPoint[]): RecoveryPoint[] {
   return [...points].sort((left, right) => {
+    const attentionDelta =
+      trueNASProtectionAttentionRank(left) - trueNASProtectionAttentionRank(right);
+    if (attentionDelta !== 0) return attentionDelta;
     const timeDelta = getRecoveryPointTimestampMs(right) - getRecoveryPointTimestampMs(left);
     if (timeDelta !== 0) return timeDelta;
     const leftLabel =

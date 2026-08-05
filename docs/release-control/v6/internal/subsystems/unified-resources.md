@@ -2241,6 +2241,10 @@ their forensic backup detail. That presentation state is not a fifth server
 posture and must not be counted as unknown provider evidence. Unified resources
 own row identity only; they do not derive backup
 freshness, provider completeness, verification, or protection state.
+`TrueNASProtectionTable` likewise consumes storage/recovery-owned event
+outcomes without turning its compact failed/warning attention count into a
+canonical workload `ProtectionPosture`; that count is event-history navigation,
+not a second protection-truth projection.
 
 ### APT Product Trust browser projection
 

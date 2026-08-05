@@ -5515,6 +5515,11 @@ Protection table controls continue to compose shared filter, table, status,
 counter, loading, error, disclosure, and inline-detail primitives. The bounded
 batch hook retains fulfilled values during refresh and issues at most one
 request per 200 resource rows, rather than placing a request under each row.
+TrueNAS protection history keeps issue prominence inside that existing control
+rail: the Attention filter carries the compact failed/warning count, and the
+built-in row order places failed then warning outcomes ahead of routine recency.
+It must not add a page-level posture summary card above the toolbar; running
+replication remains an ordinary event state rather than page-level alarm copy.
 
 ### Operational Trust attention interaction boundary
 

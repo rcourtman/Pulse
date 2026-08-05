@@ -1,9 +1,8 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
-import { Button } from '@/components/shared/Button';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
 import {
   getRecoveryOutcomeBadgeClass,
   getRecoveryOutcomeLabel,
@@ -53,16 +52,39 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 
-const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
-  [
-    { value: 'all', label: 'All' },
-    { value: 'attention', label: 'Attention', compactLabel: 'Issues', tone: 'warning' },
-    { value: 'success', label: 'Healthy', compactLabel: 'OK', tone: 'success' },
-    { value: 'warning', label: 'Warning', compactLabel: 'Warn', tone: 'warning' },
-    { value: 'failed', label: 'Failed', compactLabel: 'Fail', tone: 'danger' },
-    { value: 'running', label: 'Running', compactLabel: 'Run', tone: 'info' },
-    { value: 'unknown', label: 'Unknown', compactLabel: 'Unk', tone: 'muted' },
-  ];
+const getTrueNASProtectionStatusOptions = (
+  attention: number,
+  failed: number,
+): PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] => [
+  { value: 'all', label: 'All' },
+  {
+    value: 'attention',
+    label: 'Attention',
+    ariaLabel:
+      attention > 0 ? `Attention, ${attention} issue${attention === 1 ? '' : 's'}` : 'Attention',
+    title:
+      attention > 0
+        ? `Show ${attention} protection issue${attention === 1 ? '' : 's'}`
+        : 'Show protection issues',
+    compactLabel: 'Issues',
+    tone: failed > 0 ? 'danger' : 'warning',
+    visualLabel: (
+      <>
+        <span>Attention</span>
+        {attention > 0 ? (
+          <MetadataBadge tone={failed > 0 ? 'danger' : 'warning'} size="xs" aria-hidden="true">
+            {attention}
+          </MetadataBadge>
+        ) : null}
+      </>
+    ),
+  },
+  { value: 'success', label: 'Healthy', compactLabel: 'OK', tone: 'success' },
+  { value: 'warning', label: 'Warning', compactLabel: 'Warn', tone: 'warning' },
+  { value: 'failed', label: 'Failed', compactLabel: 'Fail', tone: 'danger' },
+  { value: 'running', label: 'Running', compactLabel: 'Run', tone: 'info' },
+  { value: 'unknown', label: 'Unknown', compactLabel: 'Unk', tone: 'muted' },
+];
 
 const detailString = (point: RecoveryPoint, key: string): string =>
   asTrimmedString(point.details?.[key]) || '';
@@ -353,6 +375,9 @@ export const TrueNASProtectionTable: Component<{
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
   const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
+  const statusOptions = createMemo(() =>
+    getTrueNASProtectionStatusOptions(posture().attention, posture().failed),
+  );
   const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-protection-detail' });
   const tableState = createPlatformTableFilterState({
     resources: rows,
@@ -399,44 +424,6 @@ export const TrueNASProtectionTable: Component<{
           }
         >
           <div class="space-y-3">
-            <Show when={posture().attention > 0 || posture().running > 0}>
-              <PlatformAttentionSummary
-                title="Protection posture"
-                headline={
-                  posture().attention > 0
-                    ? `${posture().attention} protection issue${posture().attention === 1 ? '' : 's'} ${posture().attention === 1 ? 'needs' : 'need'} review`
-                    : `${posture().running} replication task${posture().running === 1 ? '' : 's'} running`
-                }
-                description={
-                  posture().attention > 0
-                    ? 'Review failed or warning replication outcomes first; successful snapshots remain available in the full event history.'
-                    : 'No failed protection outcomes are reported. Monitor the active replication task until it completes.'
-                }
-                tone={
-                  posture().failed > 0 ? 'danger' : posture().attention > 0 ? 'warning' : 'info'
-                }
-                metrics={[
-                  { label: 'failed', value: posture().failed },
-                  { label: 'warning', value: posture().warning },
-                  { label: 'running', value: posture().running },
-                ]}
-                actions={
-                  <Show when={posture().attention > 0}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        tableState.setStatus(
-                          tableState.status() === 'attention' ? 'all' : 'attention',
-                        )
-                      }
-                    >
-                      {tableState.status() === 'attention' ? 'Show all events' : 'Show issues'}
-                    </Button>
-                  </Show>
-                }
-              />
-            </Show>
             <Show when={props.showToolbar !== false}>
               <PlatformTableToolbar
                 search={tableState.search}
@@ -444,7 +431,7 @@ export const TrueNASProtectionTable: Component<{
                 searchPlaceholder="Search snapshots or replication"
                 status={tableState.status()}
                 onStatusChange={tableState.setStatus}
-                statusOptions={TRUENAS_PROTECTION_STATUS_OPTIONS}
+                statusOptions={statusOptions()}
                 visible={tableState.visible()}
                 total={tableState.total()}
                 rowNoun="events"
