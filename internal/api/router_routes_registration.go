@@ -437,8 +437,12 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				hasValidSession = ValidateSession(cookie.Value)
 				if hasValidSession {
 					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
-					configuredAdmin := strings.TrimSpace(r.config.AuthUser)
-					sessionIsAdmin = configuredAdmin != "" && strings.EqualFold(sessionUsername, configuredAdmin)
+					// Same admin test the settings routes apply. Comparing
+					// against r.config.AuthUser alone cannot match on an
+					// instance whose only administrators are SSO principals,
+					// which locked those operators out of their own config
+					// export and import.
+					sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, sessionUsername)
 				}
 			}
 
@@ -567,8 +571,12 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				hasValidSession = ValidateSession(cookie.Value)
 				if hasValidSession {
 					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
-					configuredAdmin := strings.TrimSpace(r.config.AuthUser)
-					sessionIsAdmin = configuredAdmin != "" && strings.EqualFold(sessionUsername, configuredAdmin)
+					// Same admin test the settings routes apply. Comparing
+					// against r.config.AuthUser alone cannot match on an
+					// instance whose only administrators are SSO principals,
+					// which locked those operators out of their own config
+					// export and import.
+					sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, sessionUsername)
 				}
 			}
 

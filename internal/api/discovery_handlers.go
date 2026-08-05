@@ -201,15 +201,16 @@ func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 		}
 	}
 
-	// 3. Check for configured admin session (OIDC/SAML/local session)
+	// 3. Check for an admin session (OIDC/SAML/local session). The admin test is
+	// sessionUserCarriesAdminPrivileges, the same one the settings routes apply,
+	// so an RBAC admin grant and the SSO-principal-with-no-local-admin case both
+	// count. Comparing against h.config.AuthUser alone cannot match on an
+	// instance whose only administrators are SSO principals.
 	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
-			configuredAdmin := strings.TrimSpace(h.config.AuthUser)
-			if configuredAdmin != "" {
-				sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
-				if strings.EqualFold(sessionUser, configuredAdmin) {
-					return true
-				}
+			sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+			if sessionUserCarriesAdminPrivileges(h.config, sessionUser) {
+				return true
 			}
 		}
 	}

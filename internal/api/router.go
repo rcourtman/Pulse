@@ -5007,16 +5007,17 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// Session (Browser): allow capture only for the configured local admin session.
-	// This prevents low-privilege session users from poisoning public URL auto-detection.
+	// Session (Browser): allow capture only for an admin session. This prevents
+	// low-privilege session users from poisoning public URL auto-detection.
+	// The admin test is sessionUserCarriesAdminPrivileges, the same one the
+	// settings routes apply, rather than a local comparison against
+	// cfg.AuthUser: that comparison cannot match on an instance whose only
+	// administrators are SSO principals, so it locked those operators out.
 	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
-			adminUser := strings.TrimSpace(cfg.AuthUser)
-			if adminUser != "" {
-				username := strings.TrimSpace(GetSessionUsername(cookie.Value))
-				if constantTimeStringEqual(strings.ToLower(username), strings.ToLower(adminUser)) {
-					return true
-				}
+			username := strings.TrimSpace(GetSessionUsername(cookie.Value))
+			if sessionUserCarriesAdminPrivileges(cfg, username) {
+				return true
 			}
 		}
 	}
