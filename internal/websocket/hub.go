@@ -30,6 +30,18 @@ const (
 	websocketHubComponent    = "websocket_hub"
 	initialWelcomeDelay      = 500 * time.Millisecond
 	initialStateMessageDelay = 100 * time.Millisecond
+	// clientReadDeadline is how long a client may stay silent before the server
+	// drops it. Liveness is proven by ANY inbound frame (data, JSON heartbeat,
+	// or protocol pong) — proxies and middleboxes (Cloudflare, AV products)
+	// sometimes eat ping/pong control frames, so pongs must not be the only
+	// accepted proof of life. Must be comfortably above clientPingPeriod and
+	// the frontend's 30s JSON heartbeat, including a background tab throttled
+	// to one heartbeat per minute.
+	clientReadDeadline = 90 * time.Second
+	// clientPingPeriod is how often writePump sends protocol pings. At 30s a
+	// pong-only client survives two consecutive lost ping/pong round trips
+	// within clientReadDeadline.
+	clientPingPeriod = 30 * time.Second
 )
 
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
@@ -1592,12 +1604,12 @@ func (c *Client) readPump() {
 		}
 	}()
 
-	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+	if err := c.conn.SetReadDeadline(time.Now().Add(clientReadDeadline)); err != nil {
 		log.Warn().Err(err).Str("client", c.id).Msg("failed to set initial read deadline")
 	}
 	c.conn.SetReadLimit(maxWebSocketInboundMessageSize)
 	c.conn.SetPongHandler(func(string) error {
-		if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		if err := c.conn.SetReadDeadline(time.Now().Add(clientReadDeadline)); err != nil {
 			log.Warn().Err(err).Str("client", c.id).Msg("failed to refresh read deadline on pong")
 		}
 		c.lastPing = time.Now()
@@ -1615,6 +1627,13 @@ func (c *Client) readPump() {
 				log.Info().Err(err).Str("client", c.id).Msg("webSocket closed")
 			}
 			break
+		}
+
+		// Any successful read proves the peer is alive; without this refresh a
+		// client whose pong frames are lost in transit dies at the deadline even
+		// while its 30s JSON heartbeats are arriving.
+		if err := c.conn.SetReadDeadline(time.Now().Add(clientReadDeadline)); err != nil {
+			log.Warn().Err(err).Str("client", c.id).Msg("failed to refresh read deadline on message")
 		}
 
 		// Handle incoming messages
@@ -1658,7 +1677,7 @@ func (c *Client) writePump() {
 	// Ping deadline can be shorter since pings are small
 	const pingDeadline = 10 * time.Second
 
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(clientPingPeriod)
 	defer func() {
 		log.Info().Str("client", c.id).Msg("writePump exiting")
 		ticker.Stop()
