@@ -176,6 +176,24 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 	return true
 }
 
+// sessionIsOrgScoped reports whether the request is bound to a tenant
+// organization rather than the instance itself. Instance-admin rules must not
+// be applied to an org-scoped session: those callers are governed by their
+// organization's own management rules, and on a control plane configuring no
+// local admin they would otherwise inherit the SSO fallback in
+// sessionUserCarriesAdminPrivileges and each become an instance administrator.
+func sessionIsOrgScoped(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	org := GetOrganization(req.Context())
+	if org == nil {
+		return false
+	}
+	orgID := strings.TrimSpace(org.ID)
+	return orgID != "" && orgID != "default"
+}
+
 // sessionUserCarriesAdminPrivileges reports whether a non-org-scoped session
 // username carries instance admin privileges: the configured local admin
 // identity, an RBAC assignment granting the admin action (how SSO group role

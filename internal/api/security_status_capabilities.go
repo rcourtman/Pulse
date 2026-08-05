@@ -157,12 +157,7 @@ func (r *Router) buildSecurityStatusAuthSnapshot(req *http.Request) securityStat
 		// session on an instance with no local admin. Org-scoped sessions keep
 		// their own management rules.
 		sessionIsAdmin := false
-		orgScoped := false
-		if org := GetOrganization(req.Context()); org != nil {
-			orgID := strings.TrimSpace(org.ID)
-			orgScoped = orgID != "" && orgID != "default"
-		}
-		if !orgScoped {
+		if !sessionIsOrgScoped(req) {
 			sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, username)
 		}
 		return securityStatusAuthSnapshot{
