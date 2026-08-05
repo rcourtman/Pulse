@@ -13,6 +13,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
+  type PlatformTableContainerLayout,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -29,6 +30,84 @@ import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 // pipeline.
 
 type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disabled';
+
+type ReplicationColumn =
+  | 'status'
+  | 'job'
+  | 'guest'
+  | 'route'
+  | 'schedule'
+  | 'lastSync'
+  | 'nextSync'
+  | 'duration'
+  | 'fails'
+  | 'error';
+
+const REPLICATION_COLUMN_WIDTH_CLASS: Record<
+  PlatformTableContainerLayout,
+  Record<ReplicationColumn, string>
+> = {
+  compact: {
+    status: 'w-[20%]',
+    job: 'w-0',
+    guest: 'w-[40%]',
+    route: 'w-[20%]',
+    schedule: 'w-0',
+    lastSync: 'w-[20%]',
+    nextSync: 'w-0',
+    duration: 'w-0',
+    fails: 'w-0',
+    error: 'w-0',
+  },
+  basic: {
+    status: 'w-[14%]',
+    job: 'w-[11%]',
+    guest: 'w-[28%]',
+    route: 'w-[17%]',
+    schedule: 'w-0',
+    lastSync: 'w-[15%]',
+    nextSync: 'w-[15%]',
+    duration: 'w-0',
+    fails: 'w-0',
+    error: 'w-0',
+  },
+  operational: {
+    status: 'w-[11%]',
+    job: 'w-[7%]',
+    guest: 'w-[21%]',
+    route: 'w-[12%]',
+    schedule: 'w-[9%]',
+    lastSync: 'w-[11%]',
+    nextSync: 'w-[13%]',
+    duration: 'w-[11%]',
+    fails: 'w-[5%]',
+    error: 'w-0',
+  },
+  expanded: {
+    status: 'w-[10%]',
+    job: 'w-[7%]',
+    guest: 'w-[20%]',
+    route: 'w-[11%]',
+    schedule: 'w-[8%]',
+    lastSync: 'w-[10%]',
+    nextSync: 'w-[12%]',
+    duration: 'w-[10%]',
+    fails: 'w-[4%]',
+    error: 'w-[8%]',
+  },
+  full: {
+    status: 'w-[10%]',
+    job: 'w-[7%]',
+    guest: 'w-[20%]',
+    route: 'w-[11%]',
+    schedule: 'w-[8%]',
+    lastSync: 'w-[10%]',
+    nextSync: 'w-[12%]',
+    duration: 'w-[10%]',
+    fails: 'w-[4%]',
+    error: 'w-[8%]',
+  },
+};
 
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -193,6 +272,8 @@ export const ProxmoxReplicationTable: Component<{
   const showNext = createMemo(() => layout() !== 'compact');
   const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
   const showError = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const columnWidthClass = (column: ReplicationColumn) =>
+    REPLICATION_COLUMN_WIDTH_CLASS[layout()][column];
 
   return (
     <Show
@@ -255,40 +336,66 @@ export const ProxmoxReplicationTable: Component<{
                 tableClass="min-w-[0px] table-fixed text-xs"
                 header={
                   <>
-                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-                    <Show when={showJob()}>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
-                    </Show>
-                    <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
                     <TableHead
-                      class={getPlatformTableHeadClassForKind('text')}
+                      class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('status')}`}
+                    >
+                      Status
+                    </TableHead>
+                    <Show when={showJob()}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('job')}`}
+                      >
+                        Job
+                      </TableHead>
+                    </Show>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('name')} ${columnWidthClass('guest')}`}
+                    >
+                      Guest
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('route')}`}
                       title="Source → target"
                     >
                       Route
                     </TableHead>
                     <Show when={showOperational()}>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('schedule')}`}
+                      >
                         Schedule
                       </TableHead>
                     </Show>
-                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('lastSync')}`}
+                    >
                       Last sync
                     </TableHead>
                     <Show when={showNext()}>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('nextSync')}`}
+                      >
                         Next sync
                       </TableHead>
                     </Show>
                     <Show when={showOperational()}>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('duration')}`}
+                      >
                         Duration
                       </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('numeric-value')} ${columnWidthClass('fails')}`}
+                      >
                         Fails
                       </TableHead>
                     </Show>
                     <Show when={showError()}>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                      <TableHead
+                        class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('error')}`}
+                      >
+                        Error
+                      </TableHead>
                     </Show>
                   </>
                 }

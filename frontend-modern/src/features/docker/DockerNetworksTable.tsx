@@ -12,6 +12,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableContainerLayout,
   getPlatformTableHeadClassForKind,
+  type PlatformTableContainerLayout,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
@@ -45,6 +46,54 @@ type DockerNetworksTableProps = DockerNativeTableProps & {
 type AttachmentGroupKey = 'attention' | 'running' | 'other';
 
 type AttachmentStatusFilter = 'all' | AttachmentGroupKey;
+
+type DockerNetworkColumn = 'network' | 'attached' | 'attention' | 'subnet' | 'driver' | 'host';
+
+const DOCKER_NETWORK_COLUMN_WIDTH_CLASS: Record<
+  PlatformTableContainerLayout,
+  Record<DockerNetworkColumn, string>
+> = {
+  compact: {
+    network: 'w-[40%]',
+    attached: 'w-[40%]',
+    attention: 'w-[20%]',
+    subnet: 'w-0',
+    driver: 'w-0',
+    host: 'w-0',
+  },
+  basic: {
+    network: 'w-[38%]',
+    attached: 'w-[42%]',
+    attention: 'w-[20%]',
+    subnet: 'w-0',
+    driver: 'w-0',
+    host: 'w-0',
+  },
+  operational: {
+    network: 'w-[25%]',
+    attached: 'w-[35%]',
+    attention: 'w-[15%]',
+    subnet: 'w-[25%]',
+    driver: 'w-0',
+    host: 'w-0',
+  },
+  expanded: {
+    network: 'w-[23%]',
+    attached: 'w-[32%]',
+    attention: 'w-[13%]',
+    subnet: 'w-[22%]',
+    driver: 'w-[10%]',
+    host: 'w-0',
+  },
+  full: {
+    network: 'w-[20%]',
+    attached: 'w-[27%]',
+    attention: 'w-[13%]',
+    subnet: 'w-[18%]',
+    driver: 'w-[10%]',
+    host: 'w-[12%]',
+  },
+};
 
 type AttachmentGroup = {
   key: AttachmentGroupKey;
@@ -369,6 +418,8 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
   const showSubnet = createMemo(() => !['compact', 'basic'].includes(layout()));
   const showDriver = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showHost = createMemo(() => layout() === 'full');
+  const columnWidthClass = (column: DockerNetworkColumn) =>
+    DOCKER_NETWORK_COLUMN_WIDTH_CLASS[layout()][column];
   const visibleColumnCount = createMemo(
     () => 3 + Number(showSubnet()) + Number(showDriver()) + Number(showHost()),
   );
@@ -414,19 +465,41 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
             tableClass="min-w-[0px] table-fixed text-xs"
             header={
               <>
-                <TableHead class={getPlatformTableHeadClassForKind('name')}>Network</TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('name')} ${columnWidthClass('network')}`}
+                >
+                  Network
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('attached')}`}
+                >
                   <PlatformResponsiveTableLabel compact="Attached" full="Attached workloads" />
                 </TableHead>
-                <TableHead class={getPlatformTableHeadClassForKind('text')}>Attention</TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('attention')}`}
+                >
+                  Attention
+                </TableHead>
                 <Show when={showSubnet()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Subnets</TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('subnet')}`}
+                  >
+                    Subnets
+                  </TableHead>
                 </Show>
                 <Show when={showDriver()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Driver</TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('driver')}`}
+                  >
+                    Driver
+                  </TableHead>
                 </Show>
                 <Show when={showHost()}>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Host</TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} ${columnWidthClass('host')}`}
+                  >
+                    Host
+                  </TableHead>
                 </Show>
               </>
             }

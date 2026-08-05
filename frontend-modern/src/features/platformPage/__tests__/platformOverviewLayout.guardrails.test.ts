@@ -301,6 +301,9 @@ describe('platform overview layout guardrails', () => {
     expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerVolumesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerNetworksTable');
+    expect(dockerNetworksTableSource).toContain('DOCKER_NETWORK_COLUMN_WIDTH_CLASS');
+    expect(dockerNetworksTableSource).toContain("attached: 'w-[35%]'");
+    expect(dockerNetworksTableSource).toContain("attention: 'w-[15%]'");
     expect(dockerPageSurfaceSource).not.toContain('<WorkloadsSurface');
     expect(dockerPageSurfaceSource).toContain('<DockerSwarmNodesTable');
     expect(dockerPageSurfaceSource).toContain('<DockerServicesTable');
@@ -345,6 +348,9 @@ describe('platform overview layout guardrails', () => {
     expect(truenasProtectionTableSource).toContain('md:min-w-[960px]');
     expect(truenasStorageTopologyTableSource).toContain('md:min-w-[960px]');
     expect(truenasVirtualMachinesTableSource).toContain('md:min-w-[960px]');
+    expect(truenasVirtualMachinesTableSource).toMatch(
+      /class="hidden sm:table-cell md:w-\[19%\]"[\s\S]{0,120}?Flags/,
+    );
     expect(vmwarePageSurfaceSource).toContain('<VsphereHostsTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereAlertsTable');
     expect(vmwarePageSurfaceSource).toContain("activeTab() === 'health'");
@@ -355,10 +361,16 @@ describe('platform overview layout guardrails', () => {
     expect(vmwarePageSurfaceSource).toContain('suppressTypeFilter');
     expect(vmwarePageSurfaceSource).toContain('<VsphereDatastoresTable');
     expect(vmwarePageSurfaceSource).toContain('<VsphereNetworksTable');
+    expect(vsphereNetworksTableSource).toMatch(
+      /sortKey="vms"[\s\S]{0,120}?class="w-\[20%\] md:w-\[7%\]"/,
+    );
     expect(vmwarePageSurfaceSource).toContain('<VsphereActivityTable');
     expect(vmwarePageSurfaceSource).not.toContain('<StorageSurface');
     expect(vmwarePageSurfaceSource).not.toContain('forcedView="pools"');
     expect(proxmoxPageSurfaceSource).toContain('suppressNodeFilter');
+    expect(proxmoxReplicationTableSource).toContain('REPLICATION_COLUMN_WIDTH_CLASS');
+    expect(proxmoxReplicationTableSource).toContain("guest: 'w-[20%]'");
+    expect(proxmoxReplicationTableSource).toContain("fails: 'w-[4%]'");
     expect(standalonePageSurfaceSource).toContain('<AgentsMachinesTable');
     expect(standalonePageSurfaceSource).not.toContain('InfrastructureSummary');
     expect(standalonePageSurfaceSource).not.toContain('StickySummarySection');

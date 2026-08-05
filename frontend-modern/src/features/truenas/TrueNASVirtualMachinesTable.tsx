@@ -219,7 +219,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="cpu"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="md:w-[10%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -227,7 +227,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="memory"
-                  class="hidden sm:table-cell md:w-[10%]"
+                  class="md:w-[10%]"
                 >
                   Memory
                 </PlatformSortableTableHead>
@@ -246,7 +246,11 @@ export const TrueNASVirtualMachinesTable: Component<{
                 >
                   Devices
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[19%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden sm:table-cell md:w-[19%]"
+                >
                   Flags
                 </PlatformSortableTableHead>
               </>
@@ -312,12 +316,12 @@ export const TrueNASVirtualMachinesTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {formatCPU(vm())}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             {formatPlatformTableBytesValue(vm()?.memoryBytes, '-')}
                           </TableCell>
@@ -333,7 +337,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                             <span class="truncate">{devices().label}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                             title={flags().join(', ')}
                           >
                             <Show

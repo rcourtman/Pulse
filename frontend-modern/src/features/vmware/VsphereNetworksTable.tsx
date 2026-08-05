@@ -173,7 +173,7 @@ export const VsphereNetworksTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="network"
-                  class="md:w-[24%]"
+                  class="w-[45%] md:w-[24%]"
                 >
                   Network
                 </PlatformSortableTableHead>
@@ -181,7 +181,7 @@ export const VsphereNetworksTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="md:w-[13%]"
+                  class="w-[35%] md:w-[13%]"
                 >
                   Type
                 </PlatformSortableTableHead>
@@ -196,7 +196,7 @@ export const VsphereNetworksTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="vms"
-                  class="hidden sm:table-cell md:w-[7%]"
+                  class="w-[20%] md:w-[7%]"
                 >
                   VMs
                 </PlatformSortableTableHead>
@@ -280,7 +280,7 @@ export const VsphereNetworksTable: Component<{
                             <span class="block truncate">{hosts().label}</span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums sm:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             {vmCount(network)}
                           </TableCell>

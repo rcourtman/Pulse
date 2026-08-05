@@ -1,45 +1,77 @@
 {
   "version": 1,
-  "base_sha": "58864f5ecc3abd351cf252b07995d605e3f7c498",
-  "verified_at": "2026-08-05T11:30:51Z",
+  "base_sha": "7d066f1d5c2f8921695cae5cf5bddf2e2b8e7151",
+  "verified_at": "2026-08-05T12:07:34Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
-    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "c614aee58b3953fdafb6e65035c73796dcc5ae3b6b8a55479632e61d95af1f12",
-    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "50374a199a49dcac90386a1b22cc45c38674225defba469bad3d1d263ae6b8df",
-    "frontend-modern/src/index.css": "817c3f407d83909e43bb771019f0b7b460b498d0333e9eb3cac2fe697b5d78be"
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "a5a10d77fc0f575d05fb5754d7b65840692c9fde7a726899f1a4814c2b5cd2b1",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "9571289310a518495c88860089cd0ba191c69cd4821c7ba90163e97a42217c12",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "1ec149f222086b4e9433d07b15699775cb6eca5a20ee968eaf817f030f4f3ac1",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx": "7c2580565602b9e7927ea4a16548f104d0144ec37ec93f692cc882171b1f9b57"
   },
   "routes": [
     "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/replication",
+    "/proxmox/backups",
+    "/proxmox/ceph",
+    "/proxmox/mail",
     "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
     "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
     "/truenas/apps",
+    "/truenas/vms",
     "/truenas/shares",
-    "/vmware/overview"
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability"
   ],
   "viewports": [
     { "width": 320, "height": 900 },
-    { "width": 375, "height": 812 },
+    { "width": 375, "height": 900 },
     { "width": 768, "height": 900 },
     { "width": 1024, "height": 900 },
     { "width": 1280, "height": 900 },
     { "width": 1600, "height": 900 }
   ],
   "states": [
-    "Rendered TrueNAS Apps with App, CPU, Memory, and Updates using the complete phone-width table instead of reserving hidden desktop tracks",
-    "Kept expanded TrueNAS App and Share detail rows aligned as visible column counts changed from phone through desktop breakpoints",
-    "Kept expanded Kubernetes deployment, Docker host, vSphere host, Proxmox node, and Proxmox workload rows aligned to their visible summary columns",
-    "Measured visible header widths against table widths at 320, 375, 768, 1024, 1280, and 1600 pixels with no document overflow",
-    "Visually inspected the expanded Proxmox node and workload details at phone width with operational columns and drawer content remaining readable"
+    "Rendered every audited platform table at phone, tablet, laptop, desktop, and wide-desktop widths without document overflow",
+    "Kept Proxmox replication guest names readable by prioritizing Guest over Job, Fails, and Error while progressively revealing operational columns",
+    "Prioritized Docker network attachment summaries over the compact Attention field and retained useful network, subnet, driver, and host context as space increased",
+    "Displayed TrueNAS VM state, CPU, and memory at phone width while deferring secondary Flags metadata until tablet width",
+    "Displayed vSphere network VM impact at phone width alongside network name and type, with hosts and datacenter returning at wider layouts",
+    "Kept representative expanded detail rows aligned to the actual visible summary columns after resizing in both directions",
+    "Matched Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines page, tab, panel, and table bounds at 1280 pixels"
   ],
   "interactions": [
-    "Expanded and collapsed representative resource rows using their disclosure controls across Proxmox, Docker, Kubernetes, TrueNAS, and vSphere",
-    "Resized the live browser repeatedly across every audited breakpoint while each representative detail row remained open",
-    "Sorted TrueNAS Apps by CPU through descending and ascending states, then restored the default order",
-    "Verified responsive detail colspans returned to compact values after resizing from desktop back to phone width"
+    "Expanded representative healthy, degraded, stopped, pending, warning, and failed rows across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines",
+    "Resized each audited table repeatedly through 320, 375, 768, 1024, 1280, and 1600 pixel widths while representative details remained open",
+    "Switched Proxmox backup views and storage tabs to exercise their independent table layouts",
+    "Verified final TrueNAS VM detail colspans changed from 4 compact columns to 7 desktop columns",
+    "Verified final vSphere network detail colspans changed from 3 compact columns to 5 expanded columns",
+    "Measured every visible header allocation against its table width and checked for horizontal document overflow"
   ]
 }
