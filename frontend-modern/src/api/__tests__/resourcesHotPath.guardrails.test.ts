@@ -8,18 +8,15 @@ const resourcesHandlerSource = readFileSync(
 );
 
 describe('resource API hot-path guardrails', () => {
-  it('reuses one registry snapshot per request when deriving canonical by-type aggregations', () => {
-    expect(resourcesHandlerSource.match(/allResources := registry\.List\(\)/g) ?? []).toHaveLength(
-      0,
-    );
+  it('reuses the per-generation presentation snapshot across list and stats requests', () => {
     expect(
-      resourcesHandlerSource.match(
-        /allResources := presentationResourcesFromRegistry\(registry\)/g,
-      ) ?? [],
+      resourcesHandlerSource.match(/sharedPresentationResources\(orgID\)/g) ?? [],
     ).toHaveLength(2);
+    expect(resourcesHandlerSource).toContain('allResources := flatCopyResources(sharedResources)');
     expect(
       resourcesHandlerSource.match(/computeResourceContractStats\(allResources\)/g) ?? [],
     ).toHaveLength(2);
+    expect(resourcesHandlerSource).not.toContain('allResources := registry.List()');
     expect(resourcesHandlerSource).not.toContain('computeResourceContractByType(registry.List())');
   });
 });

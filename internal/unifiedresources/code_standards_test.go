@@ -2606,7 +2606,7 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 //
 // Migration changelog preserved in git history (see commits SRC-03f → SRC-04g).
 
-func TestResourceAPIHotPathUsesSingleRegistryListSnapshot(t *testing.T) {
+func TestResourceAPIHotPathUsesSharedPresentationSnapshot(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
 	path := filepath.Join(repoRoot, "internal", "api", "resources.go")
 
@@ -2618,11 +2618,17 @@ func TestResourceAPIHotPathUsesSingleRegistryListSnapshot(t *testing.T) {
 	source := string(data)
 	normalizedPath := filepath.ToSlash(path)
 
-	if strings.Count(source, "allResources := presentationResourcesFromRegistry(registry)") != 2 {
-		t.Fatalf("%s: expected HandleListResources and HandleStats to each seed exactly one presentation resource snapshot", normalizedPath)
+	if strings.Count(source, "sharedPresentationResources(orgID)") != 2 {
+		t.Fatalf("%s: expected HandleListResources and HandleStats to share the cached presentation snapshot for the registry generation", normalizedPath)
+	}
+	if !strings.Contains(source, "allResources := flatCopyResources(sharedResources)") {
+		t.Fatalf("%s: expected HandleListResources to copy the shared presentation slice before request-local decoration", normalizedPath)
 	}
 	if strings.Count(source, "computeResourceContractStats(allResources)") != 2 {
-		t.Fatalf("%s: expected canonical aggregations to reuse the seeded presentation snapshot in both handlers", normalizedPath)
+		t.Fatalf("%s: expected canonical aggregations to reuse the shared presentation snapshot in both handlers", normalizedPath)
+	}
+	if strings.Contains(source, "allResources := registry.List()") {
+		t.Fatalf("%s: direct registry.List() hot-path aggregation detected", normalizedPath)
 	}
 	if strings.Contains(source, "computeResourceContractByType(registry.List())") {
 		t.Fatalf("%s: duplicate registry.List() hot-path aggregation detected", normalizedPath)

@@ -1919,8 +1919,13 @@ func TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
+		"version := mock.FixtureDataVersion()",
+		"m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version",
 		"resources, freshness := mock.UnifiedResourceSnapshot()",
-		"return monitorUnifiedStateViewFromResources(resources, freshness)",
+		"view := monitorUnifiedStateViewFromResources(resources, freshness)",
+		"m.mockUnifiedView = view",
+		"m.mockUnifiedViewVersion = version",
+		"return view",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

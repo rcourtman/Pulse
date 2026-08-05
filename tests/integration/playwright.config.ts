@@ -67,6 +67,9 @@ const PROBATION_SPECS = [
   '**/59-workloads-column-layout.spec.ts',
   '**/62-storage-growth-column.spec.ts',
   '**/64-workloads-proxmox-refresh-stability.spec.ts',
+  // Demoted 2026-08-05: rate-limit/shared-state retry flake on main in
+  // run 31033254657; it must earn 10 consecutive green runs to return.
+  '**/68-infrastructure-onboarding.spec.ts',
   '**/68-platform-pages-shell.spec.ts',
   '**/77-msp-isolation.spec.ts',
   '**/79-update-flow.spec.ts',
