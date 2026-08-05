@@ -33,6 +33,16 @@ export interface State {
   resources: Resource[];
 }
 
+export interface ResourceStateDelta {
+  upserts?: Array<Partial<Resource> & Pick<Resource, 'id'>>;
+  removed?: string[];
+  order?: string[];
+}
+
+export type StateUpdate = Partial<State> & {
+  resourceDelta?: ResourceStateDelta;
+};
+
 export interface PVETagStyle {
   colors: Record<string, string>;
   caseSensitive: boolean;
@@ -1333,7 +1343,7 @@ export interface Incident {
 // WebSocket message types
 export type WSMessage =
   | { type: 'initialState'; data: State }
-  | { type: 'rawData'; data: State }
+  | { type: 'rawData'; data: StateUpdate }
   | { type: 'error'; error: string }
   | { type: 'ping'; data?: unknown }
   | { type: 'pong'; data?: unknown }

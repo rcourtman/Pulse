@@ -7,6 +7,7 @@ import type {
   ResolvedAlert,
   ConnectedInfrastructureItem,
 } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
@@ -40,8 +41,74 @@ const shownAutoRegisterNotifications = new Map<string, number>();
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+const asMergePatchRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+const isInboundPayloadWithinLimit = (payload: string): boolean => {
+  // JSON state is overwhelmingly ASCII. Avoid allocating a second multi-megabyte
+  // Blob for normal messages, while retaining an exact UTF-8 check for strings
+  // large enough that non-ASCII code points could cross the byte limit.
+  if (payload.length <= Math.floor(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES / 3)) return true;
+  if (payload.length > MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES) return false;
+  return new TextEncoder().encode(payload).byteLength <= MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES;
+};
+
+const applyJSONMergePatch = (current: unknown, patch: unknown): unknown => {
+  const patchRecord = asMergePatchRecord(patch);
+  if (!patchRecord) return patch;
+
+  const result: Record<string, unknown> = { ...(asMergePatchRecord(current) ?? {}) };
+  Object.entries(patchRecord).forEach(([key, value]) => {
+    if (value === null) {
+      delete result[key];
+      return;
+    }
+    result[key] = asMergePatchRecord(value) ? applyJSONMergePatch(result[key], value) : value;
+  });
+  return result;
+};
+
+const applyResourceStateDelta = (
+  current: readonly Resource[],
+  delta: { upserts?: unknown; removed?: unknown; order?: unknown },
+): Resource[] => {
+  const resourcesById = new Map(current.map((resource) => [resource.id, resource] as const));
+  const removed = Array.isArray(delta.removed)
+    ? new Set(delta.removed.filter((id): id is string => typeof id === 'string'))
+    : new Set<string>();
+  removed.forEach((id) => resourcesById.delete(id));
+
+  const addedIds: string[] = [];
+  if (Array.isArray(delta.upserts)) {
+    delta.upserts.forEach((patch) => {
+      const id = asString(asRecord(patch)?.id);
+      if (!id) return;
+      if (!resourcesById.has(id)) addedIds.push(id);
+      const next = applyJSONMergePatch(resourcesById.get(id), patch) as Resource;
+      if (next.id === id) resourcesById.set(id, next);
+    });
+  }
+
+  const requestedOrder = Array.isArray(delta.order)
+    ? delta.order.filter((id): id is string => typeof id === 'string')
+    : undefined;
+  const order = requestedOrder ?? [
+    ...current.map((resource) => resource.id).filter((id) => !removed.has(id)),
+    ...addedIds,
+  ];
+  const ordered = order
+    .map((id) => resourcesById.get(id))
+    .filter((resource): resource is Resource => Boolean(resource));
+  const included = new Set(ordered.map((resource) => resource.id));
+  resourcesById.forEach((resource, id) => {
+    if (!included.has(id)) ordered.push(resource);
+  });
+  return ordered;
+};
 
 const parseTimestampMs = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -407,10 +474,9 @@ export function createWebSocketStore(url: string) {
         return;
       }
 
-      const payloadSizeBytes = new Blob([event.data]).size;
-      if (payloadSizeBytes > MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES) {
+      if (!isInboundPayloadWithinLimit(event.data)) {
         logger.warn('Ignoring oversized WebSocket payload', {
-          sizeBytes: payloadSizeBytes,
+          characterCount: event.data.length,
           maxBytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES,
         });
         return;
@@ -466,10 +532,21 @@ export function createWebSocketStore(url: string) {
                 setState('pveTagStyles', message.data.pveTagStyles ?? {});
               }
               // Handle unified resources
+              let nextResources: Resource[] | undefined;
               if (message.data.resources !== undefined) {
-                const nextResources = Array.isArray(message.data.resources)
+                nextResources = Array.isArray(message.data.resources)
                   ? mergeCanonicalResourceSnapshot(message.data.resources, state.resources)
                   : [];
+              } else if (
+                'resourceDelta' in message.data &&
+                message.data.resourceDelta !== undefined
+              ) {
+                nextResources = applyResourceStateDelta(
+                  state.resources,
+                  message.data.resourceDelta,
+                );
+              }
+              if (nextResources !== undefined) {
                 logger.debug('[WebSocket] Updating resources', {
                   count: nextResources.length,
                   types: [...new Set(nextResources.map((resource) => resource.type) || [])],

@@ -162,6 +162,57 @@ describe('websocket store resilience', () => {
     }
   });
 
+  it('preserves active alert state when a resource-only delta arrives', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const alert = {
+        id: 'agent:host-1-cpu',
+        type: 'cpu',
+        level: 'warning',
+        resourceId: 'agent:host-1',
+        resourceName: 'host-1',
+        node: 'host-1',
+        instance: 'host-1',
+        message: 'CPU above threshold',
+        value: 90,
+        threshold: 80,
+        startTime: '2026-05-14T07:59:00Z',
+        acknowledged: false,
+      };
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            connectedInfrastructure: [],
+            resources: [{ id: 'agent:host-1', type: 'agent', name: 'host-1' }],
+            activeAlerts: [alert],
+            recentlyResolved: [],
+            lastUpdate: Date.now(),
+          },
+        }),
+      } as MessageEvent);
+
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resourceDelta: {
+              upserts: [{ id: 'agent:host-1', cpu: { current: 91 } }],
+            },
+            lastUpdate: Date.now() + 1_000,
+          },
+        }),
+      } as MessageEvent);
+
+      expect(store.activeAlerts[alert.id]).toMatchObject(alert);
+      expect(store.state.activeAlerts).toHaveLength(1);
+      expect(store.state.resources[0]?.cpu?.current).toBe(91);
+    } finally {
+      dispose();
+    }
+  });
+
   it('manual reconnect avoids duplicate reconnect scheduling', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

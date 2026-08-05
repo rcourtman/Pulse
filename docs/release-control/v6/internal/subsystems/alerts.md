@@ -216,6 +216,7 @@ acknowledgement, history, and recovery reuse the normal alert pipeline.
 73. `frontend-modern/src/utils/alertsActivation.ts`
 74. `internal/operationaltrust/contracts.go`
 75. `internal/alerts/operational_contract.go`
+76. `internal/alerts/issue1497_test.go`
 
 ## Shared Boundaries
 

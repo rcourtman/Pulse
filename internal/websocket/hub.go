@@ -273,6 +273,8 @@ type Client struct {
 	lifecycleMu   sync.Mutex
 	lifecycleDone chan struct{}
 	lifecycleOnce sync.Once
+	stateMu       sync.Mutex
+	stateSnapshot *clientStateSnapshot
 }
 
 func (c *Client) lifecycleSignal() chan struct{} {
@@ -318,6 +320,57 @@ func (c *Client) safeSend(data []byte) (sent bool) {
 	default:
 		return false
 	}
+}
+
+func (c *Client) queueFullState(messageType string, state interface{}) (int, bool, error) {
+	snapshot, err := buildClientStateSnapshot(state)
+	if err != nil {
+		return 0, false, err
+	}
+	data, err := json.Marshal(Message{Type: messageType, Data: state})
+	if err != nil {
+		return 0, false, err
+	}
+
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	if !c.safeSend(data) {
+		return len(data), false, nil
+	}
+	c.stateSnapshot = snapshot
+	return len(data), true, nil
+}
+
+func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool, error) {
+	if current == nil {
+		return 0, false, false, fmt.Errorf("current state snapshot is nil")
+	}
+
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	if c.stateSnapshot == nil {
+		// Initial hydration owns the baseline. A client still waiting for that
+		// payload must not receive a delta based on state it has never seen.
+		return 0, false, false, nil
+	}
+
+	delta, err := buildClientStateDelta(c.stateSnapshot, current)
+	if err != nil {
+		return 0, true, false, err
+	}
+	if len(delta) == 0 {
+		c.stateSnapshot = current
+		return 0, false, true, nil
+	}
+	data, err := json.Marshal(Message{Type: "rawData", Data: delta})
+	if err != nil {
+		return 0, true, false, err
+	}
+	if !c.safeSend(data) {
+		return len(data), true, false, nil
+	}
+	c.stateSnapshot = current
+	return len(data), true, true, nil
 }
 
 // cloneAlertData returns a broadcast-safe copy of alert data to avoid data races when
@@ -753,15 +806,7 @@ func (h *Hub) sendInitialState(client *Client) {
 	log.Debug().Str("client", client.id).Msg("about to get state")
 	stateData := h.getStateForClient(client)
 	log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("got state for initial message")
-	initialMsg := Message{
-		Type: "initialState",
-		Data: sanitizeData(h.prepareStateForBroadcast(stateData)),
-	}
-	data, err = json.Marshal(initialMsg)
-	if err != nil {
-		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
-		return
-	}
+	stateData = h.prepareStateForBroadcast(stateData)
 
 	h.mu.RLock()
 	_, stillRegistered := h.clients[client]
@@ -771,8 +816,14 @@ func (h *Hub) sendInitialState(client *Client) {
 		return
 	}
 
-	log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("sending initial state to client")
-	if client.safeSend(data) {
+	dataLen, sent, err := client.queueFullState("initialState", stateData)
+	if err != nil {
+		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
+		return
+	}
+
+	log.Info().Str("client", client.id).Int("dataLen", dataLen).Int("dataKB", dataLen/1024).Msg("sending initial state to client")
+	if sent {
 		log.Info().Str("client", client.id).Msg("initial state sent successfully")
 	} else {
 		log.Warn().Str("client", client.id).Msg("client closed or buffer full, skipping initial state")
@@ -789,16 +840,15 @@ func (h *Hub) sendRequestedState(client *Client) {
 	}
 	defer h.releaseStateBuildSlot()
 
-	stateMsg := Message{
-		Type: "rawData",
-		Data: sanitizeData(h.prepareStateForBroadcast(h.getStateForClient(client))),
-	}
-	data, err := json.Marshal(stateMsg)
+	_, sent, err := client.queueFullState(
+		"rawData",
+		h.prepareStateForBroadcast(h.getStateForClient(client)),
+	)
 	if err != nil {
 		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal state for requestData")
 		return
 	}
-	if !client.safeSend(data) {
+	if !sent {
 		log.Warn().Str("client", client.id).Msg("Failed to queue requestData state response; client channel closed or full")
 	}
 }
@@ -1126,6 +1176,14 @@ func (h *Hub) dispatchStateBroadcast(pending *Message, orgID string) {
 		return
 	}
 	defer h.releaseStateBuildSlot()
+	if _, currentStateRequest := h.messageHasCurrentStateRequest(*pending); currentStateRequest {
+		prepared, ok := h.prepareMessageForMarshal(*pending, orgID)
+		if !ok {
+			return
+		}
+		h.dispatchCurrentStateSnapshot(prepared.Data, orgID)
+		return
+	}
 	data, ok := h.marshalBroadcastMessage(*pending, orgID)
 	if !ok {
 		return
@@ -1135,6 +1193,46 @@ func (h *Hub) dispatchStateBroadcast(pending *Message, orgID string) {
 		return
 	}
 	h.dispatchToTenantClients(orgID, data, "Client send channel full, dropping tenant coalesced message and closing connection")
+}
+
+func (h *Hub) dispatchCurrentStateSnapshot(state interface{}, orgID string) {
+	snapshot, err := buildClientStateSnapshot(state)
+	if err != nil {
+		log.Error().Err(err).Str("org_id", normalizeOrgID(orgID)).Msg("Failed to build WebSocket state delta snapshot")
+		return
+	}
+
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	if orgID == "" {
+		for client := range h.clients {
+			clients = append(clients, client)
+		}
+	} else if tenantClients := h.clientsByTenant[orgID]; tenantClients != nil {
+		for client := range tenantClients {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, client := range clients {
+		dataLen, attempted, sent, queueErr := client.queueStateDelta(snapshot)
+		if queueErr != nil {
+			log.Error().Err(queueErr).Str("client", client.id).Str("org_id", client.orgID).Msg("Failed to marshal WebSocket state delta")
+			continue
+		}
+		if !attempted || sent {
+			if sent {
+				log.Debug().Str("client", client.id).Int("dataLen", dataLen).Msg("queued WebSocket state delta")
+			}
+			continue
+		}
+		h.mu.Lock()
+		if h.removeClientLocked(client) {
+			log.Warn().Str("client", client.id).Str("org_id", client.orgID).Msg("Client send channel full, dropping state delta and closing connection")
+		}
+		h.mu.Unlock()
+	}
 }
 
 func (h *Hub) runStateBroadcastWorker() {

@@ -1,38 +1,42 @@
 {
   "version": 1,
-  "base_sha": "1b8bb4e91c905de19931634ab79e9e95960f811a",
-  "verified_at": "2026-08-05T23:31:48Z",
+  "base_sha": "662bb4f1946606e51122bfe06fd2d82aa33c6a15",
+  "verified_at": "2026-08-05T23:44:24Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/shared/InlineDetailTableRow.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "aeb0e3d0d5946d5dc5929d2d5ce9ae1a39d1c48fc8cc35db2332059d577d5c9e"
+    "frontend-modern/src/stores/websocket.ts": "056eb325939f188c6095273441fd3b48c0f02cdfb4dd0a5b044c43b73868301a",
+    "frontend-modern/src/types/api.ts": "895ab5aa5ee5e1162008be6c8da83377169941d25b1655d73a1042d91076697b"
   },
   "routes": [
-    "/standalone/machines",
-    "/proxmox/backups?view=coverage",
-    "/proxmox/ceph",
-    "/proxmox/mail"
+    "/proxmox/overview",
+    "/truenas/overview"
   ],
   "viewports": [
-    { "width": 1920, "height": 1080 },
-    { "width": 1280, "height": 820 },
-    { "width": 768, "height": 820 },
-    { "width": 390, "height": 820 },
-    { "width": 320, "height": 820 }
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
   ],
   "states": [
-    "collapsed and expanded Agent machine resource details",
-    "collapsed and expanded Proxmox backup coverage evidence",
-    "auto-opened and closed single-cluster Ceph details",
-    "collapsed, expanded, and closed Mail Gateway details",
-    "desktop, tablet, narrow-phone, and minimum-width responsive table columns"
+    "full initial WebSocket state hydration",
+    "live resource merge-patch refresh after the initial baseline",
+    "full WebSocket resync after a page reload",
+    "Proxmox node disk-array rendering after a delta refresh",
+    "TrueNAS system and health-alert rendering after desktop and narrow delta refreshes"
   ],
   "interactions": [
-    "opened and closed the Agent machine resource drawer and confirmed focus returned to its disclosure",
-    "expanded and collapsed backup coverage evidence and confirmed focus remained on its disclosure",
-    "closed the auto-opened Ceph cluster drawer and confirmed focus returned to its disclosure",
-    "opened and closed the Mail Gateway drawer and confirmed focus returned to its disclosure",
-    "measured every visible table at all five viewports and confirmed table width matched its container with zero document overflow",
-    "visually inspected the final Mail Gateway table at 1920 and 320 pixels"
+    "signed in to the current local build and waited for the initial Proxmox resource workspace to hydrate",
+    "waited through a live refresh and confirmed changing metrics rendered without disconnecting or logging browser errors",
+    "opened the TrueNAS workspace and confirmed its system and alert projections remained intact after delta application",
+    "reloaded the TrueNAS route and confirmed the complete resync restored a connected, populated workspace",
+    "repeated TrueNAS initial hydration and live refresh at 390 by 844 and visually inspected the responsive result"
   ]
 }

@@ -88,6 +88,11 @@ an enabled external-probe assignment.
 11. `pkg/pulsecli/root.go`
 12. `frontend-modern/src/types/api.ts`
     12a. `frontend-modern/src/types/operationalTrust.ts`
+    12b. `frontend-modern/src/stores/websocket.ts`
+    12c. `frontend-modern/src/stores/__tests__/websocket-unified.test.ts`
+    12d. `internal/websocket/hub.go`
+    12e. `internal/websocket/state_delta.go`
+    12f. `internal/websocket/state_delta_test.go`
 13. `frontend-modern/src/types/actionAudit.ts`
 14. `frontend-modern/src/api/actionAudit.ts`
     14a. `frontend-modern/src/api/patrolAttention.ts`
@@ -291,12 +296,20 @@ not a parallel API payload contract. `internal/api/agent_handlers_base.go` and
 or retain full frontend-state payloads at the handler boundary. The WebSocket
 hub owns tenant-aware state resolution after coalescing, through the same state
 getter that backs the canonical `/api/state` payload. The hub must serialize
-whole-state resolution and JSON construction across coalesced broadcasts,
-initial-client delivery, and explicit client data requests; cancel delayed or
-queued work when its client leaves; and join every state producer before
-closing client channels. Reconnect, request, or invalidation churn must not
-multiply concurrent clones of that canonical payload or race shutdown sends
-against channel closure. A client's lifecycle cancellation signal must be
+whole-state resolution across coalesced broadcasts, initial-client delivery,
+and explicit client data requests. Initial hydration and explicit resync return
+the complete canonical state; subsequent invalidation broadcasts must derive
+ordered, per-client resource merge patches from that same resolved state,
+including explicit removals and resource order, instead of repeatedly
+serialising the whole resource graph. A delta may be sent only after that
+client has accepted its full baseline, and the baseline may advance only after
+the ordered client queue accepts the delta. The frontend must apply JSON Merge
+Patch deletion semantics, preserve unchanged resource fields, and retain
+support for complete `rawData` snapshots during resync. The hub must cancel
+delayed or queued work when its client leaves and join every state producer
+before closing client channels. Reconnect, request, or invalidation churn must
+not multiply concurrent clones of that canonical payload or race shutdown
+sends against channel closure. A client's lifecycle cancellation signal must be
 initialized and read through one synchronized owner before registration,
 requested-state work, delayed initial-state delivery, or disconnect may race
 over it; every path must observe the same stable signal. Ordinary unregister

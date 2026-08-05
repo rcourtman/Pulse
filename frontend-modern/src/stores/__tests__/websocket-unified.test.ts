@@ -254,6 +254,72 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('applies resource merge patches without replacing unchanged resource data', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'agent-1',
+              type: 'agent',
+              name: 'agent-1',
+              status: 'online',
+              lastSeen: 100,
+              cpu: { current: 10 },
+              platformData: {
+                agent: { osName: 'Debian', agentVersion: '6.2.0' },
+                disks: [{ name: 'sda', usage: 10 }],
+              },
+            },
+            { id: 'vm-1', type: 'vm', name: 'vm-1', status: 'running' },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [
+              {
+                id: 'agent-1',
+                lastSeen: 200,
+                cpu: { current: 42 },
+                status: null,
+                platformData: { disks: [{ name: 'sda', usage: 20 }] },
+              },
+              { id: 'vm-2', type: 'vm', name: 'vm-2', status: 'running' },
+            ],
+            removed: ['vm-1'],
+            order: ['vm-2', 'agent-1'],
+          },
+        },
+      });
+
+      expect(store.state.resources.map((resource) => resource.id)).toEqual(['vm-2', 'agent-1']);
+      const agent = store.state.resources[1];
+      expect(agent?.cpu?.current).toBe(42);
+      expect(agent?.lastSeen).toBe(200);
+      expect(agent?.platformData).toMatchObject({
+        agent: { osName: 'Debian', agentVersion: '6.2.0' },
+        disks: [{ name: 'sda', usage: 20 }],
+      });
+      expect(agent).not.toHaveProperty('status');
+      expect(store.state.lastUpdate).toBe(200);
+    } finally {
+      dispose();
+    }
+  });
+
   it('preserves connected infrastructure when raw updates omit that projection', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
