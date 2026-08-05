@@ -920,6 +920,27 @@ changes.
     `TestClusterClient_GetTaskLog` in
     `pkg/proxmox/cluster_client_api_test.go`.
 
+14. A TrueNAS app container reported as `EXITED` is a completed workload and
+    must raise no incident. TrueNAS classifies container exits before Pulse
+    sees them: a normal exit code becomes `EXITED`, an abnormal one becomes
+    `CRASHED`, and any `CRASHED` container promotes the app itself to
+    `CRASHED`. Every SCALE catalog app ships one-shot init containers from
+    ixSystems' base images (`permissions`, `postgres_upgrade`,
+    `pgvecto_upgrade`) that exit cleanly and stay exited for the life of the
+    app, so treating `EXITED` as failure raises a standing critical per
+    installed app that can never clear. `incidentsFromAppState` therefore
+    raises `truenas_app_container_failed` only for `CRASHED` containers,
+    where the per-container incident exists to name the failing service
+    behind the app-level `truenas_app_crashed`. The rendered container state
+    is likewise a collapse of every workload using the precedence TrueNAS
+    applies (`crashed` > `created` > `starting` > `running` > `exited`), not
+    the first entry `app.query` happens to return, so an init container
+    sorting first cannot make a running app read as exited. Regression
+    coverage: `TestRunningTrueNASAppWithCompletedOneShotContainersRaisesNoIncident`,
+    `TestCrashedTrueNASAppContainerStillRaisesIncident` and
+    `TestStoppedTrueNASAppContainerStateStaysExited` in
+    `internal/truenas/provider_oneshot_containers_test.go`.
+
 
 ## Current State
 

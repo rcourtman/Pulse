@@ -1488,12 +1488,16 @@ func incidentsFromAppState(app App, observedAt time.Time) []unifiedresources.Res
 	case "STOPPED":
 		out = append(out, makeIncident("app:"+appID, "truenas_app_stopped", storagehealth.RiskWarning, fmt.Sprintf("TrueNAS app %s is stopped", name)))
 	}
-	if !strings.EqualFold(strings.TrimSpace(app.State), "RUNNING") {
-		return out
-	}
+	// TrueNAS already separates a completed workload from a failed one before
+	// Pulse sees it: a container that exits with a normal exit code is reported
+	// as EXITED, and one that exits abnormally is reported as CRASHED. Catalog
+	// apps ship one-shot init containers (permissions, *_upgrade) that exit
+	// cleanly and stay EXITED for the life of the app, so EXITED carries no
+	// failure signal at all and must never raise an incident. CRASHED is the
+	// real failure state, and TrueNAS rolls it up into an app-level CRASHED,
+	// so the per-container incident exists to name the failing service.
 	for _, container := range app.Containers {
-		state := strings.ToUpper(strings.TrimSpace(container.State))
-		if state != "CRASHED" && state != "EXITED" {
+		if !strings.EqualFold(strings.TrimSpace(container.State), "CRASHED") {
 			continue
 		}
 		containerID := firstNonEmptyString(container.ID, container.ServiceName, container.Image)
@@ -1505,7 +1509,7 @@ func incidentsFromAppState(app App, observedAt time.Time) []unifiedresources.Res
 			"app:"+appID+":container:"+containerID,
 			"truenas_app_container_failed",
 			storagehealth.RiskCritical,
-			fmt.Sprintf("Container %s in TrueNAS app %s is %s", containerName, name, state),
+			fmt.Sprintf("Container %s in TrueNAS app %s is crashed", containerName, name),
 		))
 	}
 	return out
@@ -2413,12 +2417,39 @@ func copyStringLabels(labels map[string]string) map[string]string {
 	return out
 }
 
+// appContainerState collapses a TrueNAS app's workloads into the single state
+// Pulse renders for the app. It mirrors the precedence TrueNAS uses to derive
+// the app state itself, so the answer does not depend on the order app.query
+// happens to return container_details in. Reading only the first container made
+// an app whose init container (permissions, *_upgrade) sorted first read as
+// "exited" while TrueNAS reported it RUNNING.
 func appContainerState(app App) string {
-	if len(app.Containers) > 0 {
-		state := strings.ToLower(strings.TrimSpace(app.Containers[0].State))
-		if state != "" {
-			return state
+	var sawCrashed, sawCreated, sawStarting, sawRunning, sawExited bool
+	for _, container := range app.Containers {
+		switch strings.ToLower(strings.TrimSpace(container.State)) {
+		case "crashed":
+			sawCrashed = true
+		case "created":
+			sawCreated = true
+		case "starting":
+			sawStarting = true
+		case "running":
+			sawRunning = true
+		case "exited":
+			sawExited = true
 		}
+	}
+	switch {
+	case sawCrashed:
+		return "crashed"
+	case sawCreated:
+		return "created"
+	case sawStarting:
+		return "starting"
+	case sawRunning:
+		return "running"
+	case sawExited:
+		return "exited"
 	}
 	return strings.ToLower(strings.TrimSpace(app.State))
 }

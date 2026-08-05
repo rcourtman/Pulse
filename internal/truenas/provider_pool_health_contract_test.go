@@ -51,7 +51,13 @@ func TestProviderProjectsFullZFSHealthAndActionableDatasetAppIncidents(t *testin
 		Apps: []App{
 			{ID: "crashed", Name: "crashed", State: "CRASHED"},
 			{ID: "stopped", Name: "stopped", State: "STOPPED"},
-			{ID: "partial", Name: "partial", State: "RUNNING", Containers: []AppContainer{{ID: "worker", ServiceName: "worker", State: "exited"}}},
+			{ID: "partial", Name: "partial", State: "CRASHED", Containers: []AppContainer{{ID: "worker", ServiceName: "worker", State: "crashed"}}},
+			// One-shot init containers exit cleanly and stay EXITED for the life
+			// of a healthy app, so they must project no incident at all.
+			{ID: "oneshot", Name: "oneshot", State: "RUNNING", Containers: []AppContainer{
+				{ID: "oneshot-permissions", ServiceName: "permissions", State: "exited"},
+				{ID: "oneshot-web", ServiceName: "web", State: "running"},
+			}},
 		},
 	})
 
@@ -108,6 +114,17 @@ func TestProviderProjectsFullZFSHealthAndActionableDatasetAppIncidents(t *testin
 		if !poolHealthHasIncidentCode(record.Resource.Incidents, code) {
 			t.Fatalf("%s incidents = %+v", name, record.Resource.Incidents)
 		}
+	}
+
+	oneshot := requireRecordByNameAndType(t, records, "oneshot", unifiedresources.ResourceTypeAppContainer)
+	if len(oneshot.Resource.Incidents) != 0 {
+		t.Fatalf("healthy app with a completed one-shot container must raise nothing, got %+v", oneshot.Resource.Incidents)
+	}
+	if oneshot.Resource.Status != unifiedresources.StatusOnline {
+		t.Fatalf("oneshot status = %q, want online", oneshot.Resource.Status)
+	}
+	if oneshot.Resource.Docker == nil || oneshot.Resource.Docker.ContainerState != "running" {
+		t.Fatalf("oneshot container state must not follow an arbitrary init container: %+v", oneshot.Resource.Docker)
 	}
 }
 
