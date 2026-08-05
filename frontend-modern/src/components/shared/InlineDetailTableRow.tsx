@@ -39,6 +39,22 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
   const [effectiveColspan, setEffectiveColspan] = createSignal(requestedColspan());
   let detailRow: HTMLTableRowElement | undefined;
 
+  onCleanup(() => {
+    const activeElement = document.activeElement;
+    const cellId = local.cellId;
+    if (!cellId || !activeElement || !detailRow?.contains(activeElement)) return;
+
+    // A drawer close commonly disposes the button that currently owns focus.
+    // Restore it to the disclosure controlling this detail row once Solid has
+    // removed the row, so keyboard users stay anchored to the same resource.
+    queueMicrotask(() => {
+      const disclosure = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('button[aria-controls]'),
+      ).find((button) => button.getAttribute('aria-controls') === cellId);
+      disclosure?.focus();
+    });
+  });
+
   const syncColspanToVisibleSummaryCells = () => {
     const summaryRow = detailRow?.previousElementSibling;
     if (!(summaryRow instanceof HTMLTableRowElement)) {

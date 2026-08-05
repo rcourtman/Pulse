@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Show, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -81,5 +82,39 @@ describe('InlineDetailTableRow', () => {
         '2',
       );
     });
+  });
+
+  it('restores focus to the controlling disclosure when focused detail content closes', async () => {
+    const Fixture = () => {
+      const [open, setOpen] = createSignal(true);
+      return (
+        <Table>
+          <TableBody>
+            <tr>
+              <td>
+                <button type="button" aria-controls="detail-row-focus">
+                  Resource details
+                </button>
+              </td>
+            </tr>
+            <Show when={open()}>
+              <InlineDetailTableRow cellId="detail-row-focus" colspan={1}>
+                <button type="button" onClick={() => setOpen(false)}>
+                  Close details
+                </button>
+              </InlineDetailTableRow>
+            </Show>
+          </TableBody>
+        </Table>
+      );
+    };
+
+    render(() => <Fixture />);
+    const disclosure = screen.getByRole('button', { name: 'Resource details' });
+    const close = screen.getByRole('button', { name: 'Close details' });
+    close.focus();
+    await fireEvent.click(close);
+
+    await waitFor(() => expect(disclosure).toHaveFocus());
   });
 });

@@ -1,27 +1,38 @@
 {
   "version": 1,
-  "base_sha": "c42399e2c389ff29652e95a5bb672fc09b545173",
-  "verified_at": "2026-08-05T23:17:45Z",
+  "base_sha": "1b8bb4e91c905de19931634ab79e9e95960f811a",
+  "verified_at": "2026-08-05T23:31:48Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/AppLayout.tsx"],
+  "changed_paths": ["frontend-modern/src/components/shared/InlineDetailTableRow.tsx"],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "1c439db068a2c751e3302019e8234b8fad9235b3938520eb27b5de596de9851f"
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "aeb0e3d0d5946d5dc5929d2d5ce9ae1a39d1c48fc8cc35db2332059d577d5c9e"
   },
-  "routes": ["/vmware/overview"],
+  "routes": [
+    "/standalone/machines",
+    "/proxmox/backups?view=coverage",
+    "/proxmox/ceph",
+    "/proxmox/mail"
+  ],
   "viewports": [
-    { "width": 1920, "height": 900 },
+    { "width": 1920, "height": 1080 },
+    { "width": 1280, "height": 820 },
+    { "width": 768, "height": 820 },
+    { "width": 390, "height": 820 },
     { "width": 320, "height": 820 }
   ],
   "states": [
-    "vSphere hosts and workloads tables with the Assistant launcher visible",
-    "phone launcher rendered as a 32 by 44 pixel right-edge tab",
-    "phone Assistant overlay open over the vSphere overview",
-    "desktop Assistant launcher and overlay"
+    "collapsed and expanded Agent machine resource details",
+    "collapsed and expanded Proxmox backup coverage evidence",
+    "auto-opened and closed single-cluster Ceph details",
+    "collapsed, expanded, and closed Mail Gateway details",
+    "desktop, tablet, narrow-phone, and minimum-width responsive table columns"
   ],
   "interactions": [
-    "opened Pulse Assistant from the vSphere overview at phone and desktop widths",
-    "closed Pulse Assistant with its header control at phone and desktop widths",
-    "confirmed each close returned keyboard focus to the vSphere Assistant launcher",
-    "measured both visible tables and confirmed they exactly matched their containers with zero document overflow"
+    "opened and closed the Agent machine resource drawer and confirmed focus returned to its disclosure",
+    "expanded and collapsed backup coverage evidence and confirmed focus remained on its disclosure",
+    "closed the auto-opened Ceph cluster drawer and confirmed focus returned to its disclosure",
+    "opened and closed the Mail Gateway drawer and confirmed focus returned to its disclosure",
+    "measured every visible table at all five viewports and confirmed table width matched its container with zero document overflow",
+    "visually inspected the final Mail Gateway table at 1920 and 320 pixels"
   ]
 }
