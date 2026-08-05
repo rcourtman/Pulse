@@ -7,11 +7,14 @@ test.describe("VMware alert history resource incidents", () => {
 
   test("opens VMware resource incidents through the shared alert history surface", async ({
     page,
+    isMobile,
   }) => {
     // Recent timestamps keep the fixture inside the history view's default
     // period window; fixed dates silently age out of it.
     const INCIDENT_START = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    const INCIDENT_LAST_SEEN = new Date(Date.now() - 28 * 60 * 1000).toISOString();
+    const INCIDENT_LAST_SEEN = new Date(
+      Date.now() - 28 * 60 * 1000,
+    ).toISOString();
     await page.route("**/api/alerts/config", async (route) => {
       await route.fulfill({
         status: 200,
@@ -186,24 +189,33 @@ test.describe("VMware alert history resource incidents", () => {
     await expect(
       page.getByRole("heading", { name: "Alert History" }),
     ).toBeVisible();
-    await expect(page.getByText("app-01")).toBeVisible();
-    const historyRow = page.locator("tr").filter({ hasText: "app-01" }).first();
-    await expect(historyRow).toContainText(
+    const historyItem = (
+      isMobile
+        ? page.getByTestId("alert-history-mobile-list").locator("article")
+        : page.locator("tr")
+    )
+      .filter({ hasText: "app-01" })
+      .first();
+    await expect(historyItem).toContainText(
       "VM vm-201 has VMware alarm VM replication fault (red)",
     );
-    await historyRow.getByRole("button", { name: "Resource" }).click();
+    await historyItem.getByRole("button", { name: "Resource" }).click();
 
-    // The message renders in both the history table cell and the opened
-    // resource drawer; assert the drawer copy specifically.
+    const incidentsHeading = page.getByRole("heading", {
+      name: "Resource incidents",
+    });
+    const incidentsPanel = incidentsHeading.locator("xpath=../../..");
     await expect(
-      page
-        .getByRole("paragraph")
-        .filter({ hasText: "VM vm-201 has VMware alarm VM replication fault (red)" }),
+      incidentsPanel.getByText(
+        "VM vm-201 has VMware alarm VM replication fault (red)",
+      ),
     ).toBeVisible();
-    await expect(page.getByText("Resource incidents")).toBeVisible();
+    await expect(incidentsHeading).toBeVisible();
     // "Resource Health" renders as both the incident label and a type badge
     // inside the drawer.
-    await expect(page.getByText("Resource Health").first()).toBeVisible();
+    await expect(
+      incidentsPanel.getByText("Resource Health").first(),
+    ).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

@@ -2,6 +2,21 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 type AttentionMode = "active" | "calm" | "failed";
 
+async function selectAttentionState(page: Page, label: string, value: string) {
+  const queue = page.getByRole("region", { name: "Needs attention" });
+  const segmentedChoice = queue.getByRole("button", {
+    name: label,
+    exact: true,
+  });
+  if (await segmentedChoice.isVisible()) {
+    await segmentedChoice.click();
+    return;
+  }
+  await queue
+    .getByRole("combobox", { name: "Attention state" })
+    .selectOption(value);
+}
+
 test.beforeEach(async ({ page }) => {
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
@@ -714,31 +729,23 @@ test("makes active operational work primary and preserves the evidence boundary"
     page.getByRole("button", { name: "Explain with Assistant" }),
   ).toHaveCount(0);
 
-  await queue
-    .getByRole("button", { name: "Acknowledged 1", exact: true })
-    .click();
+  await selectAttentionState(page, "Acknowledged 1", "acknowledged");
   await expect(
     queue.getByText("Memory pressure acknowledged on pve-lab"),
   ).toBeVisible();
-  await queue
-    .getByRole("button", { name: "Suppressed 1", exact: true })
-    .click();
+  await selectAttentionState(page, "Suppressed 1", "suppressed");
   await expect(
     queue.getByText("Maintenance alert suppressed on pve-maintenance"),
   ).toBeVisible();
-  await queue
-    .getByRole("button", { name: "Stale or unknown 1", exact: true })
-    .click();
+  await selectAttentionState(page, "Stale or unknown 1", "stale_unknown");
   await expect(
     queue.getByText("Connection state unknown for pve-edge"),
   ).toBeVisible();
-  await queue
-    .getByRole("button", { name: "Recent resolved 1", exact: true })
-    .click();
+  await selectAttentionState(page, "Recent resolved 1", "resolved");
   await expect(
     queue.getByText("Storage pressure resolved on pve-recovered"),
   ).toBeVisible();
-  await queue.getByRole("button", { name: "Active 2", exact: true }).click();
+  await selectAttentionState(page, "Active 2", "active");
 
   const itemButton = queue.getByRole("button", {
     name: "Open CPU pressure on pve-main",

@@ -130,7 +130,9 @@ test("audit log fails closed, recovers, pages atomically, and ignores stale resp
 
   mode = "busy";
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.locator("main").getByRole("alert")).toContainText("storage is busy");
+  await expect(page.locator("main").getByRole("alert")).toContainText(
+    "storage is busy",
+  );
   await expect(page.getByText("initial-row", { exact: true })).toHaveCount(0);
 
   mode = "recovered";
@@ -139,6 +141,7 @@ test("audit log fails closed, recovers, pages atomically, and ignores stale resp
   await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
 
   mode = "page-size";
+  await page.getByRole("button", { name: "View", exact: true }).click();
   await page.getByLabel("Audit page size").selectOption("25");
   await expect(page.getByText("Showing 1-25 of 250")).toBeVisible();
   expect(
@@ -159,6 +162,8 @@ test("audit log fails closed, recovers, pages atomically, and ignores stale resp
 
   mode = "invalid";
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.locator("main").getByRole("alert")).toContainText("invalid response");
+  await expect(page.locator("main").getByRole("alert")).toContainText(
+    "invalid response",
+  );
   await expect(page.getByText("latest-row", { exact: true })).toHaveCount(0);
 });
