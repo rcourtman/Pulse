@@ -633,6 +633,41 @@ describe('APITokenManager', () => {
     expect(within(updatedRow).queryByText('Docker / Podman reporting')).not.toBeInTheDocument();
   });
 
+  it('returns focus to token action triggers after dialogs close', async () => {
+    listTokensMock.mockResolvedValue([
+      makeToken({
+        id: 'token-focus-return',
+        name: 'Keyboard token',
+        scopes: [DOCKER_REPORT_SCOPE],
+      }),
+    ]);
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    const row = await findTokenTableRow('Keyboard token');
+    const trigger = within(row).getByRole('button', { name: 'Edit scopes' });
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    fireEvent.click(trigger);
+    await screen.findByRole('dialog', { name: 'Edit API token scopes' });
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    const revokeTrigger = within(row).getByRole('button', { name: 'Revoke' });
+    fireEvent.click(revokeTrigger);
+
+    const revokeDialog = await screen.findByRole('dialog', { name: 'Revoke API token' });
+    fireEvent.click(within(revokeDialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(revokeTrigger).toHaveFocus());
+  });
+
   it('requires at least one changed scope and keeps failed edits open', async () => {
     listTokensMock.mockResolvedValue([
       makeToken({

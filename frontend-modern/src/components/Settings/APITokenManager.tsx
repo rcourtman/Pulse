@@ -33,6 +33,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const [tokenToRevoke, setTokenToRevoke] = createSignal<APITokenRecord | null>(null);
   const [tokenToEdit, setTokenToEdit] = createSignal<APITokenRecord | null>(null);
   const [editScopes, setEditScopes] = createSignal<string[]>([]);
+  let dialogTrigger: HTMLButtonElement | undefined;
   const {
     API_SCOPE_LABELS,
     API_TOKEN_SCOPES_DOC_URL,
@@ -80,15 +81,34 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
   const effectiveScopes = (token: APITokenRecord) =>
     token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
 
-  const openScopeEditor = (token: APITokenRecord) => {
+  const rememberDialogTrigger = (trigger: HTMLButtonElement) => {
+    dialogTrigger = trigger;
+  };
+
+  const restoreDialogTrigger = () => {
+    const trigger = dialogTrigger;
+    dialogTrigger = undefined;
+    queueMicrotask(() => {
+      if (trigger?.isConnected && !trigger.disabled) trigger.focus();
+    });
+  };
+
+  const openScopeEditor = (token: APITokenRecord, trigger: HTMLButtonElement) => {
+    rememberDialogTrigger(trigger);
     setEditScopes([...effectiveScopes(token)]);
     setTokenToEdit(token);
+  };
+
+  const openRevokeDialog = (token: APITokenRecord, trigger: HTMLButtonElement) => {
+    rememberDialogTrigger(trigger);
+    setTokenToRevoke(token);
   };
 
   const closeScopeEditor = () => {
     if (updatingTokenId() !== null) return;
     setTokenToEdit(null);
     setEditScopes([]);
+    restoreDialogTrigger();
   };
 
   const toggleEditScope = (scope: string) => {
@@ -119,12 +139,19 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     if (await handleUpdateScopes(token, editScopes())) {
       setTokenToEdit(null);
       setEditScopes([]);
+      restoreDialogTrigger();
     }
   };
 
   const revokeToken = (token: APITokenRecord) => {
     setTokenToRevoke(null);
+    restoreDialogTrigger();
     void handleDelete(token);
+  };
+
+  const cancelRevoke = () => {
+    setTokenToRevoke(null);
+    restoreDialogTrigger();
   };
 
   const renderTokenScopes = (token: APITokenRecord) => {
@@ -212,7 +239,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     >
       <button
         type="button"
-        onClick={() => openScopeEditor(token)}
+        onClick={(event) => openScopeEditor(token, event.currentTarget)}
         disabled={!canManage()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-blue-300 dark:hover:bg-blue-900 dark:hover:text-blue-200 ${
           compact ? 'flex-1 border border-blue-200 dark:border-blue-800' : 'sm:min-h-9'
@@ -222,7 +249,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </button>
       <button
         type="button"
-        onClick={() => setTokenToRevoke(token)}
+        onClick={(event) => openRevokeDialog(token, event.currentTarget)}
         disabled={!canManage()}
         class={`inline-flex min-h-10 items-center justify-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300 ${
           compact ? 'flex-1 border border-red-200 dark:border-red-900' : 'sm:min-h-9'
@@ -710,7 +737,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           onToggleEditScope={toggleEditScope}
           onCloseScopeEditor={closeScopeEditor}
           onSaveEditedScopes={() => void saveEditedScopes()}
-          onCancelRevoke={() => setTokenToRevoke(null)}
+          onCancelRevoke={cancelRevoke}
           onRevoke={revokeToken}
         />
       </Show>

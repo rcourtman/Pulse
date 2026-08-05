@@ -16,6 +16,8 @@ paths = [
     '''_test\.go$''',
     '''_test\.ts$''',
     '''tests/integration/''',
+    # Generated receipt contains required SHA-256 content digests
+    '''^frontend-modern/browser-verification\.json$''',
     # tmp/ is gitignored but shows up in --no-git scans
     '''^tmp/''',
 ]

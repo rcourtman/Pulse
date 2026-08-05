@@ -1,33 +1,27 @@
 {
   "version": 1,
-  "base_sha": "66388197430a093cc707b3a914845dcfcbd17d02",
-  "verified_at": "2026-08-05T22:41:40Z",
+  "base_sha": "b724dc1a9d7e2683bd8a8e0a3738aa1624c538d2",
+  "verified_at": "2026-08-05T23:01:14Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts"],
+  "changed_paths": ["frontend-modern/src/components/Settings/APITokenManager.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "538ce70e4c8efebe6ea28657c915ea94401bebd460fba4b46b49aa9e643e08e0"
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "86eb27e2ddea78dfef789df8422fab56b25e1ad1f7679c967265f430ef168758"
   },
-  "routes": ["/proxmox/overview", "/docker/overview"],
+  "routes": ["/settings/security/api"],
   "viewports": [
-    { "width": 1440, "height": 900 },
-    { "width": 768, "height": 1024 },
+    { "width": 1920, "height": 900 },
     { "width": 390, "height": 844 }
   ],
   "states": [
-    "workloads table in Trends mode with memory relative to Host capacity, 1h range",
-    "workloads table in Trends mode with memory relative to Guest allocation, 1h range",
-    "workloads table in Trends mode, 24h range with 48 sampled points per series",
-    "workloads table in Bars mode, stacked memory bars unaffected by the scale change",
-    "Proxmox nodes table CPU, memory and disk trend cells",
-    "memory sparkline hover tooltip showing Host memory share at a sampled timestamp",
-    "Docker overview confirmed to carry no mini sparkline cells"
+    "desktop API token inventory with the scope editor opened and dismissed",
+    "phone API token cards with the scope editor contained inside the viewport",
+    "phone revoke confirmation opened and dismissed",
+    "scope editor measured at 358 pixels wide with zero document overflow"
   ],
   "interactions": [
-    "opened the View menu and switched Metrics between Bars and Trends",
-    "switched Memory relative to between Guest allocation and Host capacity",
-    "switched Trend range between 1h and 24h",
-    "hovered a guest memory sparkline and read the tooltip value and cursor line",
-    "read rendered path geometry per row to confirm the trend line clears the axis rule",
-    "reloaded each route and checked the browser console for errors"
+    "opened Edit scopes and cancelled with the Cancel button at desktop and phone widths",
+    "opened Edit scopes and dismissed it with Escape at phone width",
+    "opened Revoke and cancelled the confirmation at phone width",
+    "confirmed each close path returned keyboard focus to its exact triggering button"
   ]
 }
