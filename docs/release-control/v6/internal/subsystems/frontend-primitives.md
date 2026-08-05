@@ -5515,11 +5515,15 @@ Protection table controls continue to compose shared filter, table, status,
 counter, loading, error, disclosure, and inline-detail primitives. The bounded
 batch hook retains fulfilled values during refresh and issues at most one
 request per 200 resource rows, rather than placing a request under each row.
-TrueNAS protection history keeps issue prominence inside that existing control
-rail: the Attention filter carries the compact failed/warning count, and the
-built-in row order places failed then warning outcomes ahead of routine recency.
-It must not add a page-level posture summary card above the toolbar; running
-replication remains an ordinary event state rather than page-level alarm copy.
+Table-local provider histories keep issue prominence inside that existing
+control rail through `withPlatformAttentionCount`: TrueNAS Protection carries
+the compact failed/warning count, vSphere Health carries the compact
+critical/warning count, and each built-in row order keeps attention ahead of
+routine activity. They must not add page-level attention summary cards above
+their toolbars. Full-width attention summaries are reserved for genuinely
+cross-section overview state, such as Kubernetes aggregating nodes, workloads,
+and health signals with distinct destinations. Running replication remains an
+ordinary event state rather than page-level alarm copy.
 
 ### Operational Trust attention interaction boundary
 

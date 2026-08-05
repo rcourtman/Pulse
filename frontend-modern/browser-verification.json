@@ -1,40 +1,37 @@
 {
   "version": 1,
-  "base_sha": "6fc571bcb14cddec3eaf5cd1c94807c5b5e9cd0d",
-  "verified_at": "2026-08-05T12:44:42Z",
+  "base_sha": "9524c6ac79e68c95f1a1760ccfdca65233da6f36",
+  "verified_at": "2026-08-05T12:43:32Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
-    "frontend-modern/src/components/shared/selectablePillModel.ts"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "dd8a0285f791a4a7b9ee6edced172ef9fea0dabecff8770ddd83fe0791e3f5bd",
-    "frontend-modern/src/components/shared/selectablePillModel.ts": "0cb855ed62ec2fd620191580ae777b4ed1fc9a4f9f70717a7b97c42c4be0f6bc"
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "195d9d568f05d075cf82f9d3f09b76332d9b7438c7db00b2854fd59385672874",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "4dcfeaa8e4a4b79e37d6121e25fcd5395257c32ad1e947e4551584c672935339",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "5562fdee0d1b74a9ea819962183a5860b9fb4a9677fd66ed7182639e5218b1b4"
   },
   "routes": [
-    "/settings/pulse-intelligence/assistant",
-    "/settings/security/api"
+    "/truenas/protection",
+    "/vmware/health"
   ],
   "viewports": [
-    { "width": 320, "height": 800 },
-    { "width": 375, "height": 812 },
-    { "width": 768, "height": 900 },
-    { "width": 1024, "height": 900 },
-    { "width": 1280, "height": 900 },
-    { "width": 1600, "height": 1000 }
+    { "width": 390, "height": 844 },
+    { "width": 1440, "height": 1000 }
   ],
   "states": [
-    "Assistant settings with no provider configured and Observe only selected",
-    "Assistant chat action label, select, and explanatory copy stacked at both phone widths",
-    "Assistant chat action control restored to its aligned row layout from tablet through wide desktop",
-    "API token compact inventory and create-token presets at phone, tablet, and desktop widths",
-    "API custom scopes expanded with long Docker and Kubernetes scope labels wrapping inside the card",
-    "API token desktop table with all seven operator columns visible at 1600 pixels"
+    "vSphere health default history with the compact counted Attention filter and no posture banner",
+    "vSphere Attention filter selected with all five warning health signals visible",
+    "TrueNAS protection default history with one failed event and the compact counted Attention filter",
+    "TrueNAS Attention filter selected with the one matching failed event",
+    "Filters expanded at the narrow viewport on both routes"
   ],
   "interactions": [
-    "Expanded Custom scopes at 320 and 375 pixels and measured both long scope pills inside the card bounds",
-    "Verified the Assistant select and its help text stay inside the action-permission panel at all six widths",
-    "Verified both routes keep document scroll width equal to client width at all six widths",
-    "Compared the API token compact cards below 1600 pixels with the full desktop token table"
+    "Selected and cleared the vSphere Attention filter at desktop and narrow viewports",
+    "Selected and cleared the TrueNAS Attention filter at desktop and narrow viewports",
+    "Verified the vSphere and TrueNAS result counts track each counted Attention filter",
+    "Verified both narrow layouts keep document scroll width equal to client width"
   ]
 }

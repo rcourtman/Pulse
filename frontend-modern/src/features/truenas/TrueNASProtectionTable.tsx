@@ -1,6 +1,5 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
-import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
@@ -23,6 +22,7 @@ import {
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableDateTimeSortValue,
+  withPlatformAttentionCount,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
   PlatformTableShell,
@@ -52,39 +52,21 @@ import {
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 
-const getTrueNASProtectionStatusOptions = (
-  attention: number,
-  failed: number,
-): PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] => [
-  { value: 'all', label: 'All' },
-  {
-    value: 'attention',
-    label: 'Attention',
-    ariaLabel:
-      attention > 0 ? `Attention, ${attention} issue${attention === 1 ? '' : 's'}` : 'Attention',
-    title:
-      attention > 0
-        ? `Show ${attention} protection issue${attention === 1 ? '' : 's'}`
-        : 'Show protection issues',
-    compactLabel: 'Issues',
-    tone: failed > 0 ? 'danger' : 'warning',
-    visualLabel: (
-      <>
-        <span>Attention</span>
-        {attention > 0 ? (
-          <MetadataBadge tone={failed > 0 ? 'danger' : 'warning'} size="xs" aria-hidden="true">
-            {attention}
-          </MetadataBadge>
-        ) : null}
-      </>
-    ),
-  },
-  { value: 'success', label: 'Healthy', compactLabel: 'OK', tone: 'success' },
-  { value: 'warning', label: 'Warning', compactLabel: 'Warn', tone: 'warning' },
-  { value: 'failed', label: 'Failed', compactLabel: 'Fail', tone: 'danger' },
-  { value: 'running', label: 'Running', compactLabel: 'Run', tone: 'info' },
-  { value: 'unknown', label: 'Unknown', compactLabel: 'Unk', tone: 'muted' },
-];
+const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    {
+      value: 'attention',
+      label: 'Attention',
+      compactLabel: 'Issues',
+      tone: 'warning',
+    },
+    { value: 'success', label: 'Healthy', compactLabel: 'OK', tone: 'success' },
+    { value: 'warning', label: 'Warning', compactLabel: 'Warn', tone: 'warning' },
+    { value: 'failed', label: 'Failed', compactLabel: 'Fail', tone: 'danger' },
+    { value: 'running', label: 'Running', compactLabel: 'Run', tone: 'info' },
+    { value: 'unknown', label: 'Unknown', compactLabel: 'Unk', tone: 'muted' },
+  ];
 
 const detailString = (point: RecoveryPoint, key: string): string =>
   asTrimmedString(point.details?.[key]) || '';
@@ -376,7 +358,12 @@ export const TrueNASProtectionTable: Component<{
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
   const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
   const statusOptions = createMemo(() =>
-    getTrueNASProtectionStatusOptions(posture().attention, posture().failed),
+    withPlatformAttentionCount(TRUENAS_PROTECTION_STATUS_OPTIONS, {
+      value: 'attention',
+      count: posture().attention,
+      tone: posture().failed > 0 ? 'danger' : 'warning',
+      noun: 'protection issue',
+    }),
   );
   const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-protection-detail' });
   const tableState = createPlatformTableFilterState({

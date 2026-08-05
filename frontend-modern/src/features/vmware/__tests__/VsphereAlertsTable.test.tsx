@@ -44,7 +44,25 @@ afterEach(() => {
 describe('VsphereAlertsTable', () => {
   it('renders native vSphere health signal rows with inline details', async () => {
     const host = makeHost();
-    const incidents = buildVmwareIncidentRows([host]);
+    const informational = makeHost({
+      id: 'datastore-info',
+      type: 'storage',
+      name: 'archive-datastore',
+      displayName: 'archive-datastore',
+      status: 'online',
+      incidents: [
+        {
+          provider: 'vmware',
+          nativeId: 'alarm-info',
+          code: 'vmware_health_state',
+          severity: 'info',
+          source: 'vmware',
+          summary: 'Datastore archive-datastore health is green',
+          startedAt: '2026-05-21T14:35:00Z',
+        },
+      ],
+    });
+    const incidents = buildVmwareIncidentRows([informational, host]);
 
     render(() => (
       <VsphereAlertsTable
@@ -52,7 +70,6 @@ describe('VsphereAlertsTable', () => {
         emptyIcon={<span />}
         emptyTitle="No signals"
         emptyDescription="No signals"
-        showToolbar={false}
       />
     ));
 
@@ -63,18 +80,27 @@ describe('VsphereAlertsTable', () => {
     expect(within(table).getByText('vCenter')).toBeInTheDocument();
     expect(within(table).getByText('Entity')).toBeInTheDocument();
     expect(screen.getByText('esxi-01.lab.local')).toBeInTheDocument();
-    expect(screen.getByText('Critical')).toBeInTheDocument();
+    expect(within(table).getByText('Critical')).toBeInTheDocument();
     expect(
       screen.getByText('Host host-101 has VMware alarm Host connection and power state (red)'),
     ).toBeInTheDocument();
-    expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
-    expect(screen.getByText('host-101')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'vSphere attention' })).toHaveTextContent(
-      '1 health signal needs review',
-    );
+    expect(screen.queryByRole('region', { name: 'vSphere attention' })).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-vsphere-alert-row]')).toHaveLength(2);
+    const firstRow = document.querySelector('[data-vsphere-alert-row]') as HTMLElement;
+    expect(firstRow).toHaveAttribute('data-vsphere-alert-row', 'host-alarm:incident:alarm-401:0');
+    expect(within(firstRow).getByText('lab-vcenter')).toBeInTheDocument();
+    expect(within(firstRow).getByText('host-101')).toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Show attention' }));
-    expect(screen.getByRole('button', { name: 'Show all signals' })).toBeInTheDocument();
+    const attentionFilter = screen.getByRole('button', {
+      name: 'Attention, 1 health signal',
+    });
+    expect(attentionFilter).toHaveTextContent('Attention');
+    expect(attentionFilter).toHaveTextContent('1');
+    await fireEvent.click(attentionFilter);
+    expect(document.querySelectorAll('[data-vsphere-alert-row]')).toHaveLength(1);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(document.querySelectorAll('[data-vsphere-alert-row]')).toHaveLength(2);
 
     const row = screen
       .getByText('Host host-101 has VMware alarm Host connection and power state (red)')

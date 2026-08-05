@@ -5249,6 +5249,19 @@ describe('shared primitive guardrails', () => {
     );
   });
 
+  it('keeps table-local attention counts on the shared platform filter template', () => {
+    expect(sharedPlatformPageSource).toContain('export function withPlatformAttentionCount');
+    expect(sharedPlatformPageSource).toContain('<MetadataBadge');
+
+    for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
+      expect(source).toContain('withPlatformAttentionCount');
+      expect(source).not.toContain('PlatformAttentionSummary');
+      expect(source).not.toContain('<MetadataBadge');
+    }
+
+    expect(kubernetesPageSurfaceSource).toContain('PlatformAttentionSummary');
+  });
+
   it('keeps platform table empty states on the shared shell template', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       patternGuards: Array<{

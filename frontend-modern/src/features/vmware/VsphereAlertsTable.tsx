@@ -1,6 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
-import { Button } from '@/components/shared/Button';
-import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -18,6 +16,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  withPlatformAttentionCount,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -122,7 +121,15 @@ export const VsphereAlertsTable: Component<{
     filter: filterVmwareIncidents,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-alert-drawer' });
-  const posture = () => buildVmwareHealthPosture(props.incidents);
+  const posture = createMemo(() => buildVmwareHealthPosture(props.incidents));
+  const statusOptions = createMemo(() =>
+    withPlatformAttentionCount(VSPHERE_INCIDENT_STATUS_OPTIONS, {
+      value: 'attention',
+      count: posture().attention,
+      tone: posture().critical > 0 ? 'danger' : 'warning',
+      noun: 'health signal',
+    }),
+  );
   const filteredEmptyState = () => getAlertFilteredEmptyState('vSphere health signals', 'severity');
 
   return (
@@ -137,30 +144,6 @@ export const VsphereAlertsTable: Component<{
       }
     >
       <div class="space-y-3">
-        <Show when={posture().attention > 0}>
-          <PlatformAttentionSummary
-            title="vSphere attention"
-            headline={`${posture().attention} health signal${posture().attention === 1 ? '' : 's'} ${posture().attention === 1 ? 'needs' : 'need'} review`}
-            description="Review affected resources before opening lower-priority informational signals. Provider identifiers remain available in each row's detail."
-            tone={posture().critical > 0 ? 'danger' : 'warning'}
-            metrics={[
-              { label: 'critical', value: posture().critical },
-              { label: 'warning', value: posture().warning },
-              { label: 'resources', value: posture().affectedResources },
-            ]}
-            actions={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  tableState.setStatus(tableState.status() === 'attention' ? 'all' : 'attention')
-                }
-              >
-                {tableState.status() === 'attention' ? 'Show all signals' : 'Show attention'}
-              </Button>
-            }
-          />
-        </Show>
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
             search={tableState.search}
@@ -168,7 +151,7 @@ export const VsphereAlertsTable: Component<{
             searchPlaceholder="Search vSphere health"
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={VSPHERE_INCIDENT_STATUS_OPTIONS}
+            statusOptions={statusOptions()}
             visible={tableState.visible()}
             total={tableState.total()}
             rowNoun="signals"

@@ -49,7 +49,9 @@ describe('TrueNASProtectionTable', () => {
       'failed',
     );
 
-    const attentionFilter = screen.getByRole('button', { name: 'Attention, 1 issue' });
+    const attentionFilter = screen.getByRole('button', {
+      name: 'Attention, 1 protection issue',
+    });
     expect(attentionFilter).toHaveTextContent('Attention');
     expect(attentionFilter).toHaveTextContent('1');
     await fireEvent.click(attentionFilter);

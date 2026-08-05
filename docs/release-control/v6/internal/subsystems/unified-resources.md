@@ -2898,6 +2898,10 @@ severity-label helpers, detail severity row tones must use
 and their severity toolbar filters must use
 `getPlatformAlertSeverityFilterOptions` instead of restoring local
 All/Critical/Warning/Info option arrays,
+and table-local aggregate Attention filters must compose
+`withPlatformAttentionCount` instead of restoring provider-local count badges
+or page-level attention summary cards; cross-section overview summaries remain
+a separate frontend-primitives concern,
 and platform alert detail fields must use
 `formatPlatformAlertCode`, `formatPlatformAlertResourceType`,
 `formatPlatformAlertEntityType`, `formatPlatformAlertStartedAt`, and

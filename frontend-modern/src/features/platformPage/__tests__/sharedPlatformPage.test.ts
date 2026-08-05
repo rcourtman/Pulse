@@ -34,10 +34,47 @@ import {
   getPlatformTableWeightedColumnWidthStyle,
   normalizePlatformResourceStatusFilter,
   summarizePlatformTableValues,
+  withPlatformAttentionCount,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
 afterEach(cleanup);
+
+describe('withPlatformAttentionCount', () => {
+  it('decorates one attention option with a compact accessible count', () => {
+    let attention: ReturnType<typeof withPlatformAttentionCount<string>>[number] | undefined;
+    render(() => {
+      const options = withPlatformAttentionCount(
+        [
+          { value: 'all', label: 'All' },
+          { value: 'attention', label: 'Attention', tone: 'warning' },
+        ],
+        { value: 'attention', count: 2, tone: 'danger', noun: 'health signal' },
+      );
+      attention = options[1];
+      return attention.visualLabel;
+    });
+
+    expect(attention).toMatchObject({
+      ariaLabel: 'Attention, 2 health signals',
+      title: 'Show 2 health signals',
+      tone: 'danger',
+      leading: undefined,
+    });
+
+    expect(document.body).toHaveTextContent('Attention2');
+  });
+
+  it('leaves the base options undecorated when there is no attention', () => {
+    const options = withPlatformAttentionCount(
+      [{ value: 'attention', label: 'Attention', tone: 'warning' }],
+      { value: 'attention', count: 0, tone: 'warning', noun: 'issue' },
+    );
+
+    expect(options[0].visualLabel).toBeUndefined();
+    expect(options[0].ariaLabel).toBeUndefined();
+  });
+});
 
 describe('getPlatformResourceCountNoun', () => {
   it('uses singular platform nouns for one visible total', () => {

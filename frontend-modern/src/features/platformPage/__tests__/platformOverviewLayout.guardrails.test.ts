@@ -171,6 +171,14 @@ const proxmoxInlineDetailTableSources = [
 ];
 
 describe('platform overview layout guardrails', () => {
+  it('keeps table-local attention in filters and reserves summaries for cross-section overviews', () => {
+    for (const source of [truenasProtectionTableSource, vsphereAlertsTableSource]) {
+      expect(source).toContain('withPlatformAttentionCount');
+      expect(source).not.toContain('PlatformAttentionSummary');
+    }
+    expect(kubernetesPageSurfaceSource).toContain('PlatformAttentionSummary');
+  });
+
   it('keeps platform inventory tables on the shared dense table styling contract', () => {
     expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_CARD_CLASS');
     expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');

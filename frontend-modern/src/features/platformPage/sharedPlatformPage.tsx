@@ -5,6 +5,7 @@ import { For, Show, createMemo, createSignal, type Component, type JSX } from 's
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
@@ -25,6 +26,39 @@ import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
 
 export type { PlatformTableFilterOption };
+
+export function withPlatformAttentionCount<T extends string | number>(
+  options: readonly PlatformTableFilterOption<T>[],
+  config: {
+    value: T;
+    count: number;
+    tone: 'warning' | 'danger';
+    noun: string;
+  },
+): PlatformTableFilterOption<T>[] {
+  const count = Number.isFinite(config.count) ? Math.max(0, Math.trunc(config.count)) : 0;
+  if (count === 0) return [...options];
+
+  const countedNoun = count === 1 ? config.noun : `${config.noun}s`;
+  return options.map((option) => {
+    if (option.value !== config.value) return option;
+    return {
+      ...option,
+      ariaLabel: `${option.label}, ${count} ${countedNoun}`,
+      title: `Show ${count} ${countedNoun}`,
+      tone: config.tone,
+      leading: undefined,
+      visualLabel: (
+        <>
+          <span>{option.label}</span>
+          <MetadataBadge tone={config.tone} size="xs" aria-hidden="true">
+            {count}
+          </MetadataBadge>
+        </>
+      ),
+    };
+  });
+}
 
 export type PlatformTabSpec<TabId extends string> = {
   id: TabId;
