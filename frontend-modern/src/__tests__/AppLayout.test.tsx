@@ -11,10 +11,7 @@ import {
 import { isKioskMode, setKioskMode } from '@/utils/url';
 import type { PlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 import { aiChatStore } from '@/stores/aiChat';
-import {
-  clearRuntimeBranding,
-  updateRuntimeBrandingFromResponse,
-} from '@/stores/systemSettings';
+import { clearRuntimeBranding, updateRuntimeBrandingFromResponse } from '@/stores/systemSettings';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
 window.scrollTo = vi.fn();
@@ -358,16 +355,19 @@ describe('AppLayout navigation icons', () => {
     expect(document.title).toBe('Settings · Acme Operations');
   });
 
-  it('keeps the assistant launcher clear of the mobile navigation breakpoint', () => {
+  it('keeps the assistant launcher in the mobile edge gutter above navigation', () => {
     renderLayout();
 
     const launcher = screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' });
     const launcherClass = launcher.getAttribute('class') ?? '';
 
-    expect(launcherClass).toContain('right-4');
+    expect(launcherClass).toContain('right-0');
     expect(launcherClass).toContain('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
-    expect(launcherClass).toContain('rounded-full');
-    expect(launcherClass).toContain('lg:right-0');
+    expect(launcherClass).toContain('h-11');
+    expect(launcherClass).toContain('w-8');
+    expect(launcherClass).toContain('rounded-l-full');
+    expect(launcherClass).toContain('rounded-r-none');
+    expect(launcherClass).toContain('border-r-0');
     expect(launcherClass).toContain('lg:top-1/2');
     expect(launcherClass).toContain('lg:bottom-auto');
     expect(launcherClass).not.toContain('sm:top-1/2');
@@ -398,6 +398,31 @@ describe('AppLayout navigation icons', () => {
           }),
         }),
       );
+    });
+    openAssistant.mockRestore();
+  });
+
+  it('returns focus to the Assistant launcher after chat closes', async () => {
+    renderLayout();
+
+    const launcher = screen.getByRole('button', {
+      name: 'Ask Pulse Assistant about Settings',
+    });
+    launcher.focus();
+    await fireEvent.click(launcher);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Ask Pulse Assistant about Settings' }),
+      ).not.toBeInTheDocument();
+    });
+
+    aiChatStore.close();
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' }),
+      ).toHaveFocus();
     });
   });
 });

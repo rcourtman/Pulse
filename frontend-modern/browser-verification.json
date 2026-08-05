@@ -1,27 +1,27 @@
 {
   "version": 1,
-  "base_sha": "b724dc1a9d7e2683bd8a8e0a3738aa1624c538d2",
-  "verified_at": "2026-08-05T23:01:14Z",
+  "base_sha": "c42399e2c389ff29652e95a5bb672fc09b545173",
+  "verified_at": "2026-08-05T23:17:45Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/components/Settings/APITokenManager.tsx"],
+  "changed_paths": ["frontend-modern/src/AppLayout.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/APITokenManager.tsx": "86eb27e2ddea78dfef789df8422fab56b25e1ad1f7679c967265f430ef168758"
+    "frontend-modern/src/AppLayout.tsx": "1c439db068a2c751e3302019e8234b8fad9235b3938520eb27b5de596de9851f"
   },
-  "routes": ["/settings/security/api"],
+  "routes": ["/vmware/overview"],
   "viewports": [
     { "width": 1920, "height": 900 },
-    { "width": 390, "height": 844 }
+    { "width": 320, "height": 820 }
   ],
   "states": [
-    "desktop API token inventory with the scope editor opened and dismissed",
-    "phone API token cards with the scope editor contained inside the viewport",
-    "phone revoke confirmation opened and dismissed",
-    "scope editor measured at 358 pixels wide with zero document overflow"
+    "vSphere hosts and workloads tables with the Assistant launcher visible",
+    "phone launcher rendered as a 32 by 44 pixel right-edge tab",
+    "phone Assistant overlay open over the vSphere overview",
+    "desktop Assistant launcher and overlay"
   ],
   "interactions": [
-    "opened Edit scopes and cancelled with the Cancel button at desktop and phone widths",
-    "opened Edit scopes and dismissed it with Escape at phone width",
-    "opened Revoke and cancelled the confirmation at phone width",
-    "confirmed each close path returned keyboard focus to its exact triggering button"
+    "opened Pulse Assistant from the vSphere overview at phone and desktop widths",
+    "closed Pulse Assistant with its header control at phone and desktop widths",
+    "confirmed each close returned keyboard focus to the vSphere Assistant launcher",
+    "measured both visible tables and confirmed they exactly matched their containers with zero document overflow"
   ]
 }

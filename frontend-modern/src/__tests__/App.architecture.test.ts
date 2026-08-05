@@ -500,9 +500,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');
     expect(appLayoutSource).toContain('aiChatStore.enabled === true &&');
     expect(appLayoutSource).toContain('!dialogStackHasBlockingDialog()');
-    expect(appLayoutSource).toContain(
-      'onClick={() => aiChatStore.open(assistantPageContext().context)}',
-    );
+    expect(appLayoutSource).toContain('onClick={openAssistantFromLauncher}');
     expect(appLayoutSource).toContain('getAssistantPageContext');
     expect(appLayoutSource).toContain('const AI_CHAT_LAUNCHER_BUTTON_CLASS =');
     expect(appLayoutSource).toContain('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
