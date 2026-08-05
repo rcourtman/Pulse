@@ -75,6 +75,7 @@ export const WORKLOAD_TABLE_HISTORY_RANGE_LABELS: Record<WorkloadTableMetricHist
   };
 export const WORKLOAD_TABLE_HISTORY_DEFAULT_RANGE: WorkloadTableMetricHistoryRange = '1h';
 export const WORKLOAD_TABLE_HISTORY_MAX_POINTS = 72;
+export const MIN_PERCENT_SCALE_CEILING = 5;
 export const WORKLOAD_TABLE_HISTORY_POLL_MS = 30_000;
 
 export const WORKLOAD_TABLE_HISTORY_INFRA_METRICS = [
@@ -298,10 +299,6 @@ export const getMetricMiniSparklineScale = (
   series: readonly WorkloadMetricSparklineSeries[],
   unit?: string,
 ): MetricMiniSparklineScale => {
-  if (unit === '%') {
-    return { minValue: 0, maxValue: 100 };
-  }
-
   let maxValue = 0;
   for (const item of series) {
     for (const point of item.points) {
@@ -309,6 +306,18 @@ export const getMetricMiniSparklineScale = (
         maxValue = point.value;
       }
     }
+  }
+
+  if (unit === '%') {
+    // Percent sparklines stay zero-floored, but a hard 0-100 window pins
+    // low-domain series onto the axis rule where no shape survives: a guest's
+    // share of host memory is single digits by construction, and idle guests
+    // sit near zero on CPU. Scale to the observed peak like the I/O series do,
+    // with a floor ceiling so idle noise stays flat instead of amplified.
+    return {
+      minValue: 0,
+      maxValue: Math.min(100, Math.max(MIN_PERCENT_SCALE_CEILING, maxValue * 1.15)),
+    };
   }
 
   return {

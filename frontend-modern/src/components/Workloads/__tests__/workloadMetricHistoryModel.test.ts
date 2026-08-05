@@ -147,6 +147,48 @@ describe('workloadMetricHistoryModel', () => {
     ).toBe('M1.00,16.00 L48.00,9.00 L95.00,2.00');
   });
 
+  it('lifts low-domain percent sparklines off the axis instead of pinning them to a 0-100 window', () => {
+    const hostMemoryShare = [
+      {
+        id: 'memory',
+        label: 'Host memory share',
+        color: '#f59e0b',
+        points: [
+          { timestamp: 1, value: 1.9 },
+          { timestamp: 2, value: 2.4 },
+          { timestamp: 3, value: 2.1 },
+        ],
+      },
+    ];
+    const scale = getMetricMiniSparklineScale(hostMemoryShare, '%');
+
+    // A guest's share of host memory is single digits by construction; a fixed
+    // 0-100 window drew it on top of the axis rule.
+    expect(scale).toEqual({ minValue: 0, maxValue: 5 });
+    expect(buildMetricMiniSparklinePath(hostMemoryShare[0].points, scale)).toBe(
+      'M1.00,10.68 L48.00,9.28 L95.00,10.12',
+    );
+  });
+
+  it('keeps percent sparklines zero-floored and capped at 100', () => {
+    const scale = getMetricMiniSparklineScale(
+      [
+        {
+          id: 'cpu',
+          label: 'CPU',
+          color: '#8b5cf6',
+          points: [
+            { timestamp: 1, value: 40 },
+            { timestamp: 2, value: 95 },
+          ],
+        },
+      ],
+      '%',
+    );
+
+    expect(scale).toEqual({ minValue: 0, maxValue: 100 });
+  });
+
   it('uses a shared time range and resolves nearest hover values for paired I/O sparklines', () => {
     const series = [
       {

@@ -1041,6 +1041,20 @@ AI actions belongs on intentful guest/action surfaces, such as the guest
 drawer, where the operator is inspecting a specific workload and can decide
 whether that guest should be agent-managed.
 
+Trend-mode cells own their vertical scale through
+`getMetricMiniSparklineScale` in
+`frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts`.
+Percent series are zero-floored and scaled to their own observed peak with a
+5% floor ceiling and a 100% cap, the same shape rule the network and disk I/O
+series already follow. A fixed 0-100 window is not the contract, because inside
+a 16px table cell it draws low-domain series such as a guest's share of host
+memory or an idle guest's CPU on top of the axis rule, where a flat line is
+indistinguishable from missing history. Absolute level stays readable through
+the per-cell current-value label, the hover tooltip, and bar mode, so scale
+work must not remove those. The scale is derived from the points already
+fetched for that cell and must not add history reads, cross-row coordination,
+or a second pass over the Workloads hot path.
+
 The Workloads table metric display mode is part of the protected Workloads
 hot path. The default bar mode must keep the existing zero-extra-history cost;
 the sparkline mode may hydrate a short shared history window only when selected
