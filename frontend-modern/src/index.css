@@ -939,6 +939,40 @@ body,
   }
 }
 
+/* On narrow phones, preserving enough identity to distinguish similar app,
+   service, and ingress names is more useful than giving every compact metric
+   the same space. Detail rows retain the full secondary values on demand. */
+@container (max-width: 23.999rem) {
+  .table-scroll-shell > .table-fixed th.truenas-app-name-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-service-name-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-network-name-column {
+    width: 52%;
+  }
+
+  .table-scroll-shell > .table-fixed th.truenas-app-cpu-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-memory-column,
+  .table-scroll-shell > .table-fixed th.truenas-app-updates-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-service-type-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-service-ip-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-service-ports-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-network-kind-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-network-class-column,
+  .table-scroll-shell > .table-fixed th.kubernetes-network-ports-column {
+    width: 16%;
+  }
+
+  .table-scroll-shell > .table-fixed td:first-child .truenas-app-name-value,
+  .table-scroll-shell > .table-fixed td:first-child .kubernetes-service-name-value,
+  .table-scroll-shell > .table-fixed td:first-child .kubernetes-network-name-value {
+    display: -webkit-box;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
 /* Rebalance the TrueNAS app inventory whenever another priority tier appears.
    Hidden fixed-table tracks otherwise keep their desktop percentage and leave
    a large unused strip while visible operational columns become unreadable. */

@@ -202,7 +202,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="md:w-[19%]"
+                  class="kubernetes-network-name-column md:w-[19%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -210,7 +210,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="md:w-[12%]"
+                  class="kubernetes-network-kind-column md:w-[12%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -226,7 +226,7 @@ export const KubernetesNetworkingTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="typeClass"
-                  class="md:w-[12%]"
+                  class="kubernetes-network-class-column md:w-[12%]"
                 >
                   <PlatformResponsiveTableLabel compact="Class" full="Type / class" />
                 </PlatformSortableTableHead>
@@ -237,7 +237,11 @@ export const KubernetesNetworkingTable: Component<{
                 >
                   Address / hosts
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[12%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="kubernetes-network-ports-column md:w-[12%]"
+                >
                   Ports
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -287,7 +291,10 @@ export const KubernetesNetworkingTable: Component<{
                                 title={resource.status || 'unknown'}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
+                              <span
+                                class="kubernetes-network-name-value truncate font-semibold text-base-content"
+                                title={name()}
+                              >
                                 {name()}
                               </span>
                             </div>

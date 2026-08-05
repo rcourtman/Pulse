@@ -11,6 +11,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   PlatformSortableTableHead,
+  PlatformResponsiveTableLabel,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -111,13 +112,19 @@ const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (pro
         }
       >
         <Show when={hasAppUpdate()}>
-          <span class="rounded border border-amber-300/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-            App
+          <span
+            class="rounded border border-amber-300/50 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+            title="App update available"
+          >
+            <PlatformResponsiveTableLabel compact="A" full="App" />
           </span>
         </Show>
         <Show when={hasImageUpdate()}>
-          <span class="rounded border border-blue-300/50 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300">
-            Image
+          <span
+            class="rounded border border-blue-300/50 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300"
+            title="Image update available"
+          >
+            <PlatformResponsiveTableLabel compact="I" full="Image" />
           </span>
         </Show>
       </Show>
@@ -294,7 +301,7 @@ export const TrueNASAppsTable: Component<{
                   sortKey="updates"
                   class="truenas-app-updates-column md:w-[10%]"
                 >
-                  Updates
+                  <PlatformResponsiveTableLabel compact="Upd." full="Updates" />
                 </PlatformSortableTableHead>
               </>
             }
@@ -357,7 +364,10 @@ export const TrueNASAppsTable: Component<{
                                 title={indicator().label}
                               />
                               <div class="min-w-0">
-                                <div class="truncate font-medium text-base-content" title={name()}>
+                                <div
+                                  class="truenas-app-name-value truncate font-medium text-base-content"
+                                  title={name()}
+                                >
                                   {name()}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">

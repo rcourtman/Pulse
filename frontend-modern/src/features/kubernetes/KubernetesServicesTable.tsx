@@ -160,7 +160,7 @@ export const KubernetesServicesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="service"
-                  class="md:w-[19%]"
+                  class="kubernetes-service-name-column md:w-[19%]"
                 >
                   Service
                 </PlatformSortableTableHead>
@@ -176,7 +176,7 @@ export const KubernetesServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="md:w-[11%]"
+                  class="kubernetes-service-type-column md:w-[11%]"
                 >
                   Type
                 </PlatformSortableTableHead>
@@ -184,7 +184,7 @@ export const KubernetesServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="clusterIp"
-                  class="md:w-[13%]"
+                  class="kubernetes-service-ip-column md:w-[13%]"
                 >
                   <PlatformResponsiveTableLabel compact="IP" full="Cluster IP" />
                 </PlatformSortableTableHead>
@@ -195,7 +195,11 @@ export const KubernetesServicesTable: Component<{
                 >
                   External IPs
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[16%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="kubernetes-service-ports-column md:w-[16%]"
+                >
                   Ports
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -253,7 +257,7 @@ export const KubernetesServicesTable: Component<{
                                 name={name()}
                                 url={resource.customUrl}
                                 class="min-w-0"
-                                nameClass="truncate font-semibold text-base-content"
+                                nameClass="kubernetes-service-name-value truncate font-semibold text-base-content"
                               />
                             </div>
                           </TableCell>

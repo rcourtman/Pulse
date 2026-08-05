@@ -1,26 +1,63 @@
 {
   "version": 1,
-  "base_sha": "f5c492357ecf42ac35cf028190189e26b3d61299",
-  "verified_at": "2026-08-05T21:29:35Z",
+  "base_sha": "bcaef22bd63350f5e50d559dbe5eb9cefbb440f9",
+  "verified_at": "2026-08-05T21:50:05Z",
   "result": "passed",
   "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
     "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/index.css": "b692bd3e245cec68cfaaf036ba3e55617f48fb95f036389e752634300b54350c"
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx": "ff75789c94375cdc49280867b82672f04f714e95230908250651f9c43f521aab",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "606c14b143e37a78d87401a109d3352f2db1a069b28e465915a8b25d5662301c",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "b7477fb658a28c2b9174af5cce8e35d6a10f62956f6a02d45240b9c1497312af",
+    "frontend-modern/src/index.css": "78af243a7b0558a3a1e5020d53f50b585ac3d03cc48580c8770d45076d0916a4"
   },
   "routes": [
     "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/replication",
+    "/proxmox/backups?view=coverage",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability",
     "/alerts/overview",
+    "/alerts/history",
     "/actions",
     "/patrol",
-    "/settings/infrastructure"
+    "/settings/infrastructure",
+    "/settings/infrastructure/agent-doctor",
+    "/settings/pulse-intelligence/provider",
+    "/settings/security-roles"
   ],
   "viewports": [
-    {
-      "width": 2560,
-      "height": 1100
-    },
     {
       "width": 1920,
       "height": 1000
@@ -28,6 +65,10 @@
     {
       "width": 1280,
       "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 800
     },
     {
       "width": 768,
@@ -43,19 +84,18 @@
     }
   ],
   "states": [
-    "Proxmox overview shell while its resource snapshot was loading and after its dense data surface rendered",
-    "Alerts overview with its fixed navigation rail and populated active-alert cards",
-    "Actions open queue with three populated action rows",
-    "Patrol enabled with its populated needs-attention workbench",
-    "Settings infrastructure with its fixed navigation rail and populated connected-systems table",
-    "Desktop shell capped at 1920px on a 2560px viewport",
-    "Fluid 97vw shell at 1920px, 1280px, 768px, 390px, and 320px viewports"
+    "Populated mock-data inventories across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, Alerts, Actions, Patrol, and reachable Settings destinations",
+    "Dense platform tables at desktop, laptop, tablet, standard phone, and 320px narrow-phone widths",
+    "Kubernetes Services and Ingresses / EndpointSlices with similarly prefixed checkout resource names",
+    "TrueNAS Apps with long app identities, live CPU and memory values, and simultaneous app and image updates",
+    "Compact narrow-phone identity rows and the expanded column sets restored at 768px and 1024px"
   ],
   "interactions": [
-    "Navigated among Proxmox, Alerts, Actions, Patrol, and Settings and compared the shell and main-content bounding boxes",
-    "Confirmed every rendered top-level destination measured the same shell width and left edge at each shared viewport",
-    "Confirmed all five routes had zero document-level horizontal overflow at every tested viewport",
-    "Captured and visually inspected populated Alerts, Actions, Patrol, and Settings layouts at 1920px",
-    "Captured and visually inspected Settings at 320px to confirm its mobile drill-in layout remained contained"
+    "Navigated through 66 reachable routes at 320px and checked document and table scroll boundaries",
+    "Compared visible operator columns across 1920px, 1280px, 1024px, 768px, 390px, and 320px viewports",
+    "Captured and visually inspected Proxmox backup coverage, Kubernetes Services, TrueNAS Apps, and Settings Roles at narrow widths",
+    "Confirmed checkout-api, checkout-public, and checkout-web remain distinguishable without horizontal scrolling",
+    "Confirmed TrueNAS app names can wrap to two lines and simultaneous app and image updates fit as compact A and I markers",
+    "Confirmed full update labels and wider secondary columns return at 768px and 1024px"
   ]
 }

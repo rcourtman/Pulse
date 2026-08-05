@@ -345,8 +345,24 @@ describe('platform overview layout guardrails', () => {
     expect(truenasPageSurfaceSource).not.toContain('<TrueNASDisksTable');
     expect(truenasAppsTableSource).toContain('md:min-w-[960px]');
     expect(truenasAppsTableSource).toContain('truenas-app-name-column');
+    expect(truenasAppsTableSource).toContain('truenas-app-name-value');
     expect(truenasAppsTableSource).toContain('truenas-app-containers-column');
     expect(truenasAppsTableSource).toContain('truenas-app-updates-column');
+    expect(truenasAppsTableSource).toContain(
+      '<PlatformResponsiveTableLabel compact="Upd." full="Updates" />',
+    );
+    expect(truenasAppsTableSource).toContain(
+      '<PlatformResponsiveTableLabel compact="A" full="App" />',
+    );
+    expect(truenasAppsTableSource).toContain(
+      '<PlatformResponsiveTableLabel compact="I" full="Image" />',
+    );
+    expect(kubernetesServicesTableSource).toContain('kubernetes-service-name-column');
+    expect(kubernetesServicesTableSource).toContain('kubernetes-service-name-value');
+    expect(kubernetesServicesTableSource).toContain('kubernetes-service-ports-column');
+    expect(kubernetesNetworkingTableSource).toContain('kubernetes-network-name-column');
+    expect(kubernetesNetworkingTableSource).toContain('kubernetes-network-name-value');
+    expect(kubernetesNetworkingTableSource).toContain('kubernetes-network-ports-column');
     expect(truenasAppsTableSource).not.toContain('Volumes');
     expect(truenasNetworkSharesTableSource).toContain('md:min-w-[960px]');
     expect(truenasNetworkSharesTableSource).not.toMatch(
