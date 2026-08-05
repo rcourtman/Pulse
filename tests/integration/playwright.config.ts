@@ -73,6 +73,7 @@ const PROBATION_SPECS = [
   // Demoted 2026-07-20: failed on main in run 29731882505, the first
   // tiered run, one run after clearing the 10-green seeding window.
   '**/90-operational-trust-protection-posture.spec.ts',
+  '**/91-proxmox-node-display-names.spec.ts',
 ];
 
 const E2E_TIER = String(process.env.PULSE_E2E_TIER || '')
