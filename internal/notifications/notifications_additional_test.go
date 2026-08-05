@@ -129,6 +129,92 @@ func TestSendGroupedWebhookGeneric(t *testing.T) {
 	}
 }
 
+func TestSendGroupedWebhookNtfyIncludesLiveMetadataAndEveryAlert(t *testing.T) {
+	var gotTitle string
+	var gotPriority string
+	var gotTags string
+	var gotAuthorization string
+	var gotBody string
+
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotTitle = r.Header.Get("Title")
+		gotPriority = r.Header.Get("Priority")
+		gotTags = r.Header.Get("Tags")
+		gotAuthorization = r.Header.Get("Authorization")
+		body, _ := io.ReadAll(r.Body)
+		gotBody = string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	manager := NewNotificationManager("https://pulse.example")
+	defer manager.Stop()
+	manager.webhookClient = server.Client()
+	if err := manager.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("allowlist: %v", err)
+	}
+
+	alertList := []*alerts.Alert{
+		{
+			ID:           "alert-critical",
+			Type:         "cpu",
+			Level:        alerts.AlertLevelCritical,
+			ResourceID:   "vm-101",
+			ResourceName: "database",
+			Node:         "node-a",
+			Message:      "CPU is critical",
+			Value:        99,
+			Threshold:    90,
+			StartTime:    time.Now().Add(-2 * time.Minute),
+		},
+		{
+			ID:           "alert-warning",
+			Type:         "memory",
+			Level:        alerts.AlertLevelWarning,
+			ResourceID:   "vm-102",
+			ResourceName: "cache",
+			Node:         "node-b",
+			Message:      "Memory is high",
+			Value:        88,
+			Threshold:    80,
+			StartTime:    time.Now().Add(-time.Minute),
+		},
+	}
+
+	webhook := WebhookConfig{
+		Name:    "ntfy-live",
+		URL:     server.URL + "/topic",
+		Enabled: true,
+		Service: "ntfy",
+		Headers: map[string]string{"Authorization": "Bearer secret"},
+	}
+
+	if err := manager.sendGroupedWebhook(webhook, alertList); err != nil {
+		t.Fatalf("sendGroupedWebhook error: %v", err)
+	}
+
+	if gotTitle != "CRITICAL: 2 alerts" {
+		t.Fatalf("Title = %q, want %q", gotTitle, "CRITICAL: 2 alerts")
+	}
+	if gotPriority != "urgent" {
+		t.Fatalf("Priority = %q, want urgent", gotPriority)
+	}
+	if !strings.Contains(gotTags, "rotating_light") || !strings.Contains(gotTags, "pulse") {
+		t.Fatalf("Tags = %q, want critical Pulse tags", gotTags)
+	}
+	if gotAuthorization != "Bearer secret" {
+		t.Fatalf("Authorization = %q, want configured header preserved", gotAuthorization)
+	}
+	for _, resourceName := range []string{"database", "cache"} {
+		if !strings.Contains(gotBody, resourceName) {
+			t.Fatalf("ntfy body %q does not include alert resource %q", gotBody, resourceName)
+		}
+	}
+	if !strings.Contains(gotBody, "Memory is high") {
+		t.Fatalf("ntfy body %q does not include the second alert message", gotBody)
+	}
+}
+
 func TestSendGroupedWebhookDiscordEscapesSpecialCharacters(t *testing.T) {
 	var gotBody []byte
 

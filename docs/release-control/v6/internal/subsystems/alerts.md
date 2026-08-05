@@ -24,6 +24,11 @@ target. The selected initial target owns firing, grouped, and recovery delivery,
 while every escalation level retains its own independently normalized target.
 Saving the alert configuration must update the live notification manager as
 well as persistence so delivery does not differ before and after restart.
+Configuration-change reevaluation may resolve metric-backed alerts against
+their updated thresholds and may apply explicit resource-disable policies, but
+it must not treat provider-owned incidents as missing thresholds. Unrelated
+configuration saves preserve those incidents and their acknowledgement state
+until their provider evaluator supplies recovery evidence.
 Docker and Podman container CPU thresholds evaluate host-capacity-normalized
 CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
 carry the raw per-core value and reporting host CPU count for evidence, but the
@@ -508,6 +513,10 @@ resource type metadata before the legacy node fallback. Host-agent Ceph pool
 alerts may carry no-colon resource ids with `Instance == Node`, but when
 metadata or resource type says storage they must keep using storage threshold
 resolution and source-alias overrides instead of node defaults.
+That reevaluation boundary distinguishes metric-backed alert types from
+provider-owned incidents. A nil metric threshold may resolve only a known
+threshold-backed metric; it is not recovery evidence for resource incidents,
+and must not erase their acknowledgement state during a schedule-only save.
 
 Browser metric severity colors are also alert-backed. Workloads,
 Infrastructure, Storage, and the platform-page tables (Docker hosts and

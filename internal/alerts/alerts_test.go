@@ -4568,6 +4568,64 @@ func TestReevaluateClearsDockerContainerAlertWhenOverrideDisabled(t *testing.T) 
 	}
 }
 
+func TestUpdateConfigPreservesAcknowledgedProviderIncident(t *testing.T) {
+	m := newTestManager(t)
+
+	resourceID := "truenas:system-1:app-container:plex"
+	alertID := resourceID + "::resource-incident"
+	ackTime := time.Now().Add(-time.Minute).UTC()
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "resource-incident",
+		Level:        AlertLevelCritical,
+		ResourceID:   resourceID,
+		ResourceName: "plex",
+		Node:         "truenas-1",
+		Instance:     "TrueNAS",
+		Message:      "Container permissions need attention",
+		StartTime:    time.Now().Add(-10 * time.Minute),
+		LastSeen:     time.Now(),
+		Acknowledged: true,
+		AckTime:      &ackTime,
+		AckUser:      "operator",
+		Metadata: map[string]interface{}{
+			"resourceType": "app-container",
+			"provider":     "truenas",
+		},
+	}
+
+	resolved := make(chan string, 1)
+	m.SetResolvedCallback(func(id string) {
+		resolved <- id
+	})
+
+	m.mu.Lock()
+	m.setActiveAlertNoLock(alertID, alert)
+	m.mu.Unlock()
+
+	config := m.GetConfig()
+	config.Schedule.Cooldown++
+	m.UpdateConfig(config)
+
+	m.mu.RLock()
+	_, retained := testLookupActiveAlert(t, m, alertID)
+	retainedAlert := m.activeAlerts[alertID]
+	m.mu.RUnlock()
+
+	if !retained {
+		t.Fatalf("provider incident was resolved by an unrelated config save")
+	}
+	if retainedAlert == nil || !retainedAlert.Acknowledged || retainedAlert.AckUser != "operator" || retainedAlert.AckTime == nil || !retainedAlert.AckTime.Equal(ackTime) {
+		t.Fatalf("acknowledgement state was not preserved: %#v", retainedAlert)
+	}
+
+	select {
+	case id := <-resolved:
+		t.Fatalf("resolved callback fired for retained provider incident %q", id)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
 func TestReevaluateClearsDockerContainerAlertWhenIgnoredPrefixAdded(t *testing.T) {
 	m := newTestManager(t)
 

@@ -24,6 +24,9 @@ initial-delivery target to the tenant notification manager. This is runtime
 wiring only: monitoring does not choose destinations or own notification
 policy, and live API saves must apply the same setting without requiring a
 monitor restart.
+Monitor construction also applies the persisted grouping enabled flag, window,
+and node/guest keys as one notification-manager policy, so restart behavior is
+identical to a live alert-configuration save.
 Monitoring also owns the distinction between Proxmox VM power state and QEMU
 guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy

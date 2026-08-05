@@ -211,8 +211,9 @@ func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request
 	notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
 	notificationMgr.SetEnabled(updatedConfig.Enabled && updatedConfig.ActivationState == alerts.ActivationActive)
 	notificationMgr.SetCooldown(updatedConfig.Schedule.Cooldown)
-	notificationMgr.SetGroupingWindow(updatedConfig.Schedule.Grouping.Window)
-	notificationMgr.SetGroupingOptions(
+	notificationMgr.SetGroupingConfig(
+		updatedConfig.Schedule.Grouping.Enabled,
+		updatedConfig.Schedule.Grouping.Window,
 		updatedConfig.Schedule.Grouping.ByNode,
 		updatedConfig.Schedule.Grouping.ByGuest,
 	)

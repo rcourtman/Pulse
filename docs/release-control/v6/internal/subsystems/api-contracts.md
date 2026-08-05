@@ -29,6 +29,10 @@ The accepted values are `all`, `email`, `webhook`, and `apprise`; the backend
 normalizes aliases and invalid values before responding, persisting, and
 updating the live notification runtime. Escalation levels use the same value
 vocabulary but remain independent of the initial target.
+The same live update applies all four `schedule.grouping` fields atomically.
+When grouping is disabled, pending and subsequent alerts are delivered
+individually; the API boundary must not reduce that setting to the window or
+grouping-key fields while silently ignoring `enabled`.
 `DELETE /api/ai/patrol/suppressions/finding_{findingID}` is the canonical
 reopen path for a dismissed Patrol finding. It removes the finding-backed
 suppression row, preserves the operator note, clears dismissal state in both

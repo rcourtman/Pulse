@@ -23,6 +23,11 @@ Escalation delivery remains independently targetable per level, allowing an
 Apprise/ntfy first notification to escalate through email, or the reverse.
 Unknown and absent persisted targets preserve historical all-destination
 behavior, and destination tag filters still apply after target selection.
+Grouping is an explicit runtime policy: `grouping.enabled=false` or a zero
+window delivers each alert independently, and disabling grouping flushes any
+pending alerts as individual deliveries. Grouped provider payloads must retain
+every alert, while live ntfy firing deliveries and webhook tests share the same
+severity-derived title, priority, and tags.
 
 ## Canonical Files
 
@@ -258,6 +263,12 @@ cooldown is disabled or still active; scheduled escalation delivery is the
 explicit exception and must route through the dedicated escalation send path so
 the alert schedule, not transport cooldown, controls escalation cadence and
 channel targeting.
+The grouping timer is also notification-owned delivery state. Live alert
+configuration must apply enabled, window, node, and guest grouping fields as
+one policy update. Turning grouping off must stop the timer and deliver every
+already-pending alert separately; service templates must be rendered only
+after the grouped summary contains every alert, so provider-specific payloads
+cannot silently collapse to the first alert.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with

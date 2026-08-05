@@ -568,57 +568,8 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 	}
 
 	if webhook.Service == "ntfy" {
-		headers := make(map[string]string, len(webhook.Headers)+4)
-		for key, value := range webhook.Headers {
-			if !strings.Contains(value, "{{") {
-				headers[key] = value
-			}
-		}
-		webhook.Headers = headers
-		webhook.Headers["Content-Type"] = "text/plain"
-
-		// Set dynamic headers based on alert level
-		title := fmt.Sprintf("%s: %s",
-			func() string {
-				switch testAlert.Level {
-				case alerts.AlertLevelCritical:
-					return "CRITICAL"
-				case alerts.AlertLevelWarning:
-					return "WARNING"
-				default:
-					return "INFO"
-				}
-			}(),
-			testAlert.ResourceName,
-		)
-		webhook.Headers["Title"] = title
-
-		priority := func() string {
-			switch testAlert.Level {
-			case alerts.AlertLevelCritical:
-				return "urgent"
-			case alerts.AlertLevelWarning:
-				return "high"
-			default:
-				return "default"
-			}
-		}()
-		webhook.Headers["Priority"] = priority
-
-		tags := fmt.Sprintf("%s,pulse,%s",
-			func() string {
-				switch testAlert.Level {
-				case alerts.AlertLevelCritical:
-					return "rotating_light"
-				case alerts.AlertLevelWarning:
-					return "warning"
-				default:
-					return "white_check_mark"
-				}
-			}(),
-			testAlert.Type,
-		)
-		webhook.Headers["Tags"] = tags
+		canonical := withNtfyAlertHeaders(canonicalWebhookConfigForEnhanced(webhook), []*alerts.Alert{testAlert})
+		webhook.Headers = canonical.Headers
 	}
 
 	result, err := n.executeEnhancedWebhookRequest(webhook, payload, WebhookTestTimeout, "Pulse-Monitoring/2.0 (Test)", webhookEventID(testAlert.ID, "alert"))

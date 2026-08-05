@@ -241,6 +241,7 @@ type NotificationManager struct {
 	lastNotified       map[string]notificationRecord
 	deliveryReceipts   map[string]struct{}
 	groupWindow        time.Duration
+	groupingEnabled    bool
 	pendingAlerts      []*alerts.Alert
 	groupTimer         *time.Timer
 	groupByNode        bool
@@ -726,6 +727,7 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 			APIKeyHeader:   "X-API-KEY",
 		},
 		groupWindow:       30 * time.Second,
+		groupingEnabled:   true,
 		tenantID:          strings.TrimSpace(os.Getenv("PULSE_TENANT_ID")),
 		tenantName:        strings.TrimSpace(os.Getenv("PULSE_TENANT_NAME")),
 		pendingAlerts:     make([]*alerts.Alert, 0),
@@ -925,6 +927,54 @@ func (n *NotificationManager) SetGroupingWindow(seconds int) {
 	log.Info().Int("seconds", seconds).Msg("updated notification grouping window")
 }
 
+// SetGroupingConfig atomically applies the complete grouping policy. Disabling
+// grouping (or selecting a zero-second window) flushes already-pending alerts
+// as individual deliveries so a live config change cannot merge or lose them.
+func (n *NotificationManager) SetGroupingConfig(enabled bool, seconds int, byNode, byGuest bool) {
+	if seconds < 0 {
+		seconds = 0
+	}
+
+	n.mu.Lock()
+	n.groupingEnabled = enabled
+	n.groupWindow = time.Duration(seconds) * time.Second
+	n.groupByNode = byNode
+	n.groupByGuest = byGuest
+
+	var pending []*alerts.Alert
+	var emailConfig EmailConfig
+	var webhooks []WebhookConfig
+	var appriseConfig AppriseConfig
+	var initialTarget notificationDeliveryTarget
+	var queue *NotificationQueue
+	if !enabled || seconds == 0 {
+		pending = append(pending, n.pendingAlerts...)
+		n.pendingAlerts = n.pendingAlerts[:0]
+		if n.groupTimer != nil {
+			n.groupTimer.Stop()
+			n.groupTimer = nil
+		}
+		emailConfig = copyEmailConfig(n.emailConfig)
+		webhooks = copyWebhookConfigs(n.webhooks)
+		appriseConfig = copyAppriseConfig(n.appriseConfig)
+		initialTarget = n.initialTarget
+		queue = n.queue
+	}
+	n.mu.Unlock()
+
+	for _, alert := range pending {
+		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, initialTarget, queue)
+	}
+
+	log.Info().
+		Bool("enabled", enabled).
+		Int("seconds", seconds).
+		Bool("byNode", byNode).
+		Bool("byGuest", byGuest).
+		Int("flushedIndividually", len(pending)).
+		Msg("updated notification grouping configuration")
+}
+
 // SetGroupingOptions updates grouping options
 func (n *NotificationManager) SetGroupingOptions(byNode, byGuest bool) {
 	n.mu.Lock()
@@ -1109,32 +1159,14 @@ func (n *NotificationManager) sendAlert(alert *alerts.Alert, options alertSendOp
 		return
 	}
 
-	if options.immediate {
+	if options.immediate || !n.groupingEnabled || n.groupWindow <= 0 {
 		emailConfig := copyEmailConfig(n.emailConfig)
 		webhooks := copyWebhookConfigs(n.webhooks)
 		appriseConfig := copyAppriseConfig(n.appriseConfig)
 		queue := n.queue
 		n.mu.Unlock()
 
-		alertsToSend := []*alerts.Alert{alert}
-		jobs := buildNotificationDeliveryJobsForTarget(
-			emailConfig,
-			webhooks,
-			appriseConfig,
-			alertsToSend,
-			eventAlert,
-			time.Time{},
-			options.target,
-		)
-		if len(jobs) == 0 {
-			n.markAlertsNotified(alertsToSend, time.Now())
-			return
-		}
-		if queue != nil {
-			n.enqueueNotificationJobs(queue, jobs)
-		} else {
-			n.dispatchNotificationJobsAsync(jobs)
-		}
+		n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, []*alerts.Alert{alert}, options.target, queue)
 		return
 	}
 
@@ -1178,6 +1210,34 @@ func (n *NotificationManager) markAlertsNotified(alertsToSend []*alerts.Alert, s
 		}
 	}
 	n.mu.Unlock()
+}
+
+func (n *NotificationManager) dispatchFiringAlerts(
+	emailConfig EmailConfig,
+	webhooks []WebhookConfig,
+	appriseConfig AppriseConfig,
+	alertsToSend []*alerts.Alert,
+	target notificationDeliveryTarget,
+	queue *NotificationQueue,
+) {
+	jobs := buildNotificationDeliveryJobsForTarget(
+		emailConfig,
+		webhooks,
+		appriseConfig,
+		alertsToSend,
+		eventAlert,
+		time.Time{},
+		target,
+	)
+	if len(jobs) == 0 {
+		n.markAlertsNotified(alertsToSend, time.Now())
+		return
+	}
+	if queue != nil {
+		n.enqueueNotificationJobs(queue, jobs)
+		return
+	}
+	n.dispatchNotificationJobsAsync(jobs)
 }
 
 func notificationDeliveryDestinationKey(job notificationDeliveryJob) string {
@@ -1467,30 +1527,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 	queue := n.queue
 	n.mu.Unlock()
 
-	jobs := buildNotificationDeliveryJobsForTarget(
-		emailConfig,
-		webhooks,
-		appriseConfig,
-		alertsToSend,
-		eventAlert,
-		time.Time{},
-		initialTarget,
-	)
-	if len(jobs) == 0 {
-		// Preserve cooldown semantics when notifications are globally enabled
-		// but no destination is configured. Delivery receipts remain empty, so
-		// a later recovery is still correctly suppressed.
-		n.markAlertsNotified(alertsToSend, time.Now())
-		return
-	}
-
-	// Use persistent queue if available, otherwise send directly
-	if queue != nil {
-		n.enqueueNotificationJobs(queue, jobs)
-		// Note: Cooldown will be marked after successful dequeue and send
-	} else {
-		n.dispatchNotificationJobsAsync(jobs)
-	}
+	n.dispatchFiringAlerts(emailConfig, webhooks, appriseConfig, alertsToSend, initialTarget, queue)
 }
 
 func buildNotificationDeliveryJobs(emailConfig EmailConfig, webhooks []WebhookConfig, appriseConfig AppriseConfig, alertsToSend []*alerts.Alert, event notificationEvent, resolvedAt time.Time) []notificationDeliveryJob {
@@ -2413,6 +2450,55 @@ func (n *NotificationManager) renderWebhookPayloadJSON(webhook WebhookConfig, da
 	return fallback()
 }
 
+func withNtfyAlertHeaders(webhook WebhookConfig, alertList []*alerts.Alert) WebhookConfig {
+	webhook = copyWebhookConfig(webhook)
+	if webhook.Headers == nil {
+		webhook.Headers = make(map[string]string)
+	}
+
+	level := alerts.AlertLevelWarning
+	var primary *alerts.Alert
+	for _, alert := range alertList {
+		if alert == nil {
+			continue
+		}
+		if primary == nil {
+			primary = alert
+		}
+		if alert.Level == alerts.AlertLevelCritical {
+			level = alerts.AlertLevelCritical
+			break
+		}
+	}
+
+	levelLabel := "WARNING"
+	priority := "high"
+	severityTag := "warning"
+	if level == alerts.AlertLevelCritical {
+		levelLabel = "CRITICAL"
+		priority = "urgent"
+		severityTag = "rotating_light"
+	}
+
+	titleSubject := fmt.Sprintf("%d alerts", len(alertList))
+	typeTag := "grouped"
+	if len(alertList) == 1 && primary != nil {
+		titleSubject = primary.ResourceName
+		if primary.Node != "" {
+			titleSubject += " on " + primary.Node
+		}
+		if primary.Type != "" {
+			typeTag = primary.Type
+		}
+	}
+
+	webhook.Headers["Content-Type"] = "text/plain"
+	webhook.Headers["Title"] = fmt.Sprintf("%s: %s", levelLabel, titleSubject)
+	webhook.Headers["Priority"] = priority
+	webhook.Headers["Tags"] = fmt.Sprintf("%s,pulse,%s", severityTag, typeTag)
+	return webhook
+}
+
 // sendGroupedWebhook sends a grouped webhook notification
 func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertList []*alerts.Alert) error {
 	if len(alertList) == 0 {
@@ -2424,57 +2510,44 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 	originalPrimary := alertList[0]
 	alertCopy := *originalPrimary
 	primaryAlert := &alertCopy
+	usesRenderedAlert := strings.TrimSpace(webhook.Template) != "" || (webhook.Service != "" && webhook.Service != "generic")
+	if usesRenderedAlert && len(alertList) > 1 {
+		otherAlerts := make([]string, 0, len(alertList)-1)
+		for i := 1; i < len(alertList); i++ {
+			if alertList[i] == nil {
+				continue
+			}
+			alertLabel := alertList[i].ResourceName
+			if alertList[i].Node != "" {
+				alertLabel += " on " + alertList[i].Node
+			}
+			if alertList[i].Message != "" {
+				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %s", alertLabel, alertList[i].Message))
+			} else {
+				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertLabel, alertList[i].Value))
+			}
+		}
+		if len(otherAlerts) > 0 {
+			if webhook.Service == "discord" {
+				primaryAlert.Message = fmt.Sprintf("%s | %d alerts: %s", primaryAlert.Message, len(alertList), strings.Join(otherAlerts, ", "))
+			} else if strings.TrimSpace(webhook.Template) != "" {
+				primaryAlert.Message = fmt.Sprintf("%s\\n\\nAll %d alerts:\\n%s", primaryAlert.Message, len(alertList), strings.Join(otherAlerts, "\\n"))
+			} else {
+				primaryAlert.Message = fmt.Sprintf("%s\n\nAll %d alerts:\n%s", primaryAlert.Message, len(alertList), strings.Join(otherAlerts, "\n"))
+			}
+		}
+	}
+
+	// Prepare template data only after enriching the primary alert. Preparing it
+	// first captured the original message and silently omitted grouped alerts
+	// from built-in service payloads.
 	customFields := convertWebhookCustomFields(webhook.CustomFields)
 	data := n.prepareWebhookData(primaryAlert, customFields)
 	data.AlertCount = len(alertList)
 	data.Alerts = alertList
 	data.Mention = webhook.Mention
-
-	// Check if webhook has a custom template first
-	// Only use custom template if it's not empty
-	if webhook.Template != "" && strings.TrimSpace(webhook.Template) != "" && len(alertList) > 0 {
-		// Use custom template with enhanced message for grouped alerts
-		alert := primaryAlert
-		if len(alertList) > 1 {
-			// Build a full list of all alerts
-			summary := alert.Message
-			otherAlerts := []string{}
-			for i := 1; i < len(alertList); i++ { // Show ALL alerts
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertList[i].ResourceName, alertList[i].Value))
-			}
-			if len(otherAlerts) > 0 {
-				// For custom templates, we need to escape newlines since they're likely
-				// used in shell commands or other contexts that need escaping
-				alert.Message = fmt.Sprintf("%s\\n\\nAll %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
-			}
-		}
-	}
-
-	if webhook.Service != "" && webhook.Service != "generic" && len(alertList) > 0 {
-		// For service-specific webhooks, use the first alert with a note about others
-		// For simplicity, send the first alert with a note about others
-		// Most webhook services work better with single structured payloads
-		alert := primaryAlert
-
-		// Modify message if multiple alerts - but format differently for Discord
-		if len(alertList) > 1 {
-			summary := alert.Message
-			otherAlerts := []string{}
-			for i := 1; i < len(alertList); i++ {
-				otherAlerts = append(otherAlerts, fmt.Sprintf("• %s: %.1f%%", alertList[i].ResourceName, alertList[i].Value))
-			}
-			if len(otherAlerts) > 0 {
-				// For Discord, format as a single line list to avoid newline issues
-				// Discord embeds don't render \n in description anyway
-				if webhook.Service == "discord" {
-					// Use comma-separated list for Discord
-					alert.Message = fmt.Sprintf("%s | %d alerts: %s", summary, len(alertList), strings.Join(otherAlerts, ", "))
-				} else {
-					// For other services, escape newlines properly
-					alert.Message = fmt.Sprintf("%s\\n\\nAll %d alerts:\\n%s", summary, len(alertList), strings.Join(otherAlerts, "\\n"))
-				}
-			}
-		}
+	if webhook.Service == "ntfy" {
+		webhook = withNtfyAlertHeaders(webhook, alertList)
 	}
 
 	var err error

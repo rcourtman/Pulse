@@ -237,6 +237,84 @@ func TestSetGroupingWindowClampsNegativeValues(t *testing.T) {
 	nm.mu.RUnlock()
 }
 
+func TestGroupingDisabledFlushesPendingAndDeliversIndividually(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	originalSpawn := spawnAsync
+	spawnAsync = func(f func()) { f() }
+	t.Cleanup(func() { spawnAsync = originalSpawn })
+
+	var requestMu sync.Mutex
+	requestCount := 0
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestMu.Lock()
+		requestCount++
+		requestMu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.webhookClient = server.Client()
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("allowlist: %v", err)
+	}
+	nm.mu.Lock()
+	if nm.queue != nil {
+		_ = nm.queue.Stop()
+		nm.queue = nil
+	}
+	nm.mu.Unlock()
+	nm.AddWebhook(WebhookConfig{Name: "capture", URL: server.URL, Enabled: true})
+	nm.SetGroupingConfig(true, 3600, true, false)
+
+	newAlert := func(id string) *alerts.Alert {
+		return &alerts.Alert{
+			ID:           id,
+			Type:         "cpu",
+			Level:        alerts.AlertLevelWarning,
+			ResourceID:   id,
+			ResourceName: id,
+			Message:      "CPU is high",
+			Value:        90,
+			Threshold:    80,
+			StartTime:    time.Now(),
+		}
+	}
+
+	nm.SendAlert(newAlert("vm-1"))
+	nm.SendAlert(newAlert("vm-2"))
+	requestMu.Lock()
+	if requestCount != 0 {
+		requestMu.Unlock()
+		t.Fatalf("grouped alerts delivered before the grouping window elapsed: %d", requestCount)
+	}
+	requestMu.Unlock()
+
+	nm.SetGroupingConfig(false, 30, true, false)
+	requestMu.Lock()
+	if requestCount != 2 {
+		requestMu.Unlock()
+		t.Fatalf("disabling grouping delivered %d requests, want 2 individual requests", requestCount)
+	}
+	requestMu.Unlock()
+
+	nm.mu.RLock()
+	pendingCount := len(nm.pendingAlerts)
+	nm.mu.RUnlock()
+	if pendingCount != 0 {
+		t.Fatalf("pending alerts after disabling grouping = %d, want 0", pendingCount)
+	}
+
+	nm.SendAlert(newAlert("vm-3"))
+	requestMu.Lock()
+	defer requestMu.Unlock()
+	if requestCount != 3 {
+		t.Fatalf("alert sent with grouping disabled produced %d total requests, want 3", requestCount)
+	}
+}
+
 func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	nm := NewNotificationManager("")

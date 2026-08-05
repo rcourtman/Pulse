@@ -150,10 +150,14 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 	if m.config.DisableAllNodesOffline {
 		var nodeAlerts []string
 		for storageKey, alert := range m.activeAlerts {
-			if alert != nil && alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) {
-				if resourceType, _ := alert.Metadata["resourceType"].(string); resourceType == "node" {
-					nodeAlerts = append(nodeAlerts, storageKey)
-				}
+			if alert == nil {
+				continue
+			}
+			resourceType, _ := alert.Metadata["resourceType"].(string)
+			isCanonicalNodeConnectivity := alert.CanonicalKind == string(alertspecs.AlertSpecKindConnectivity) && resourceType == "node"
+			isLegacyNodeConnectivity := alert.Type == "connectivity" && (strings.HasPrefix(alert.ID, "node-offline-") || strings.HasPrefix(storageKey, "node-offline-"))
+			if isCanonicalNodeConnectivity || isLegacyNodeConnectivity {
+				nodeAlerts = append(nodeAlerts, storageKey)
 			}
 		}
 		for _, alertID := range nodeAlerts {
@@ -320,6 +324,15 @@ func alertResourceTypeKeysContain(keys []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func isConfigReevaluatedMetricType(metricType string) bool {
+	switch metricType {
+	case "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut", "temperature", "usage":
+		return true
+	default:
+		return false
+	}
 }
 
 // reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration.
@@ -522,6 +535,14 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 
 			threshold = getThresholdForMetric(guestThresholds, metricType)
+		}
+
+		// Provider-owned incidents and other non-metric alerts are not threshold
+		// observations. An unrelated config save must leave their lifecycle and
+		// acknowledgement state intact; only their evaluator (or an explicit
+		// resource-disable policy handled above) can resolve them.
+		if !isConfigReevaluatedMetricType(metricType) {
+			continue
 		}
 
 		if threshold == nil || threshold.Trigger <= 0 {
