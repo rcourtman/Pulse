@@ -109,14 +109,15 @@ describe('App platform navigation admission', () => {
 });
 
 describe('App architecture', () => {
-  it('limits the wider shell treatment to marked data surfaces', () => {
-    expect(appStylesSource).toContain(
+  it('keeps every top-level destination on the same wide shell contract', () => {
+    expect(appStylesSource).toContain('--pulse-shell-max-width: min(97vw, 1920px)');
+    expect(appStylesSource).not.toContain('--pulse-shell-max-width: min(97vw, 1560px)');
+    expect(appStylesSource).not.toContain(
       '.pulse-shell:has(.pulse-wide-data-surface):not(.pulse-shell--full-width)',
     );
-    expect(appStylesSource).toContain('--pulse-shell-max-width: min(97vw, 1920px)');
   });
 
-  it('keeps every infrastructure platform on the same wide shell contract', () => {
+  it('keeps infrastructure platforms marked as dense data surfaces', () => {
     platformSurfaceSources.forEach((source) => {
       expect(source).toMatch(/data-testid="[^"]+-page" class="pulse-wide-data-surface /);
     });

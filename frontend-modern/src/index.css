@@ -61,9 +61,9 @@
   :root {
     /*
       Layout tokens.
-      Goal: keep the app readable (not "widescreen"), but avoid self-inflicted cramping on large monitors.
+      Goal: keep top-level navigation spatially stable while giving dense operational views room to breathe.
     */
-    --pulse-shell-max-width: min(97vw, 1560px);
+    --pulse-shell-max-width: min(97vw, 1920px);
     --pulse-shell-padding-inline: clamp(0.75rem, 1.2vw, 1.5rem);
     --pulse-panel-padding: clamp(0.75rem, 1.4vw, 1.25rem);
 
@@ -399,12 +399,6 @@
   .pulse-shell--full-width {
     --pulse-shell-max-width: 100%;
     --pulse-shell-padding-inline: clamp(1rem, 2vw, 3rem);
-  }
-
-  /* Dense overview tables benefit from a larger workspace on wide monitors,
-     while ordinary reading and form surfaces keep the default 1560px cap. */
-  .pulse-shell:has(.pulse-wide-data-surface):not(.pulse-shell--full-width) {
-    --pulse-shell-max-width: min(97vw, 1920px);
   }
 
   .pulse-panel {

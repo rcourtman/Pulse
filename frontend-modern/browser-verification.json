@@ -1,38 +1,61 @@
 {
   "version": 1,
-  "base_sha": "518a5e22942cfac4304ab13a5de6dd73f6a8a048",
-  "verified_at": "2026-08-05T16:33:39Z",
+  "base_sha": "f5c492357ecf42ac35cf028190189e26b3d61299",
+  "verified_at": "2026-08-05T21:29:35Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/settings.ts"
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/settings.ts": "29b7e4dadf5bea59b21ecad808eaa3ad0b75d9f40b3851fb60b88206e7887d67"
+    "frontend-modern/src/index.css": "b692bd3e245cec68cfaaf036ba3e55617f48fb95f036389e752634300b54350c"
   },
   "routes": [
-    "/settings"
+    "/proxmox/overview",
+    "/alerts/overview",
+    "/actions",
+    "/patrol",
+    "/settings/infrastructure"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 720
+      "width": 2560,
+      "height": 1100
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 1920,
+      "height": 1000
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 700
     }
   ],
   "states": [
-    "Settings > General > Usage data and privacy before a payload is loaded",
-    "Heartbeat payload on an unlicensed install: schema_version 7, audit_reads_30d 0, and audit_logging_persistent / audit_events_30d / pulse_intelligence_patrol_autofixes_30d all absent. On this same unlicensed install schema v6 reported audit_logging_persistent true and a five-figure audit_events_30d, which is the defect this release corrects",
-    "Heartbeat payload after seeding four audit-read markers (two valid inside the window, one outside it, one with an unrecognized activity class): audit_reads_30d reads 2, so the window filter and the activity-class allowlist both hold on the real read path",
-    "Payload block at the 375px narrow viewport rendering its full 2930px height inside its own overflow-x container with no horizontal page scroll",
-    "Re-verified on parent 518a5e229 after that commit changed mock snapshot caching: schema_version 7 and audit_reads_30d 2 unchanged, retired fields still absent"
+    "Proxmox overview shell while its resource snapshot was loading and after its dense data surface rendered",
+    "Alerts overview with its fixed navigation rail and populated active-alert cards",
+    "Actions open queue with three populated action rows",
+    "Patrol enabled with its populated needs-attention workbench",
+    "Settings infrastructure with its fixed navigation rail and populated connected-systems table",
+    "Desktop shell capped at 1920px on a 2560px viewport",
+    "Fluid 97vw shell at 1920px, 1280px, 768px, 390px, and 320px viewports"
   ],
   "interactions": [
-    "Signed in and opened Settings > General",
-    "Clicked Preview payload and read the rendered heartbeat payload",
-    "Seeded audit_read_activity.json with in-window, out-of-window, and invalid-class records, then re-read the payload to confirm only the two valid in-window reads counted",
-    "Resized to the 375px narrow viewport and scrolled the payload block to confirm it owns its horizontal overflow"
+    "Navigated among Proxmox, Alerts, Actions, Patrol, and Settings and compared the shell and main-content bounding boxes",
+    "Confirmed every rendered top-level destination measured the same shell width and left edge at each shared viewport",
+    "Confirmed all five routes had zero document-level horizontal overflow at every tested viewport",
+    "Captured and visually inspected populated Alerts, Actions, Patrol, and Settings layouts at 1920px",
+    "Captured and visually inspected Settings at 320px to confirm its mobile drill-in layout remained contained"
   ]
 }
