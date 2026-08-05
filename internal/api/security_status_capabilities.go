@@ -182,9 +182,26 @@ func (r *Router) canAccessPermissionSurface(snapshot securityStatusAuthSnapshot,
 		return false
 	}
 
-	if snapshot.authMethod == "proxy" && !snapshot.proxyIsAdmin {
-		if _, isDefaultAuthorizer := r.authorizer.(*internalauth.DefaultAuthorizer); isDefaultAuthorizer {
-			return false
+	// Without a real RBAC authorizer, Authorize allows every action, so it
+	// cannot be the sole input to a capability. The routes these capabilities
+	// describe are still gated, by ensureSettingsScope and in turn
+	// ensureAdminSession, so reporting the capability from the authorizer alone
+	// advertises a surface the caller will be refused: the tab renders and its
+	// first request comes back 403. Fall back to the same admin identity the
+	// routes enforce, which snapshot.sessionIsAdmin already derives from
+	// sessionUserCarriesAdminPrivileges. Only the proxy half of this rule was
+	// ever written, so session and SSO callers were told they could reach API
+	// token management and SSO provider configuration when they could not.
+	if _, isDefaultAuthorizer := r.authorizer.(*internalauth.DefaultAuthorizer); isDefaultAuthorizer {
+		switch snapshot.authMethod {
+		case "proxy":
+			if !snapshot.proxyIsAdmin {
+				return false
+			}
+		case "session":
+			if !snapshot.sessionIsAdmin {
+				return false
+			}
 		}
 	}
 
