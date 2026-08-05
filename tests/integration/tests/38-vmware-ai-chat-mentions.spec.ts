@@ -78,7 +78,8 @@ test.describe('VMware AI chat mentions', () => {
       .filter({ hasText: /esxi-01\.lab\.local/ })
       .first();
     await expect(hostOption).toBeVisible({ timeout: 30_000 });
-    await hostOption.click();
+    await expect(hostOption).toHaveAttribute('aria-selected', 'true');
+    await textarea.press('Enter');
     await expect(textarea).toHaveValue('@esxi-01.lab.local ');
 
     // API-backed vSphere VMs use the same shared mention contract, carrying
@@ -91,7 +92,8 @@ test.describe('VMware AI chat mentions', () => {
       .filter({ hasText: /warehouse-api-01/ })
       .first();
     await expect(vmOption).toBeVisible({ timeout: 30_000 });
-    await vmOption.click();
+    await expect(vmOption).toHaveAttribute('aria-selected', 'true');
+    await textarea.press('Enter');
     await expect(textarea).toHaveValue('@warehouse-api-01 ');
 
     expect(unexpectedVMwareRequests).toEqual([]);

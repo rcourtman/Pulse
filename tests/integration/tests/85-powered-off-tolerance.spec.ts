@@ -44,8 +44,16 @@ test("powered-off tolerance preserves inheritance, explicit zero, and strict val
   };
   const updates: Array<Record<string, unknown>> = [];
 
-  await page.route("**/api/resources?**", async (route: Route) => {
+  // Keep this policy contract deterministic. Live inventory frames can arrive
+  // after the REST response and replace the single resource fixture.
+  await page.routeWebSocket("**/ws*", () => {});
+
+  await page.route("**/api/resources**", async (route: Route) => {
     const url = new URL(route.request().url());
+    if (url.pathname !== "/api/resources") {
+      await route.continue();
+      return;
+    }
     const pageNumber = Number(url.searchParams.get("page") ?? "1");
     const data =
       pageNumber === 1
@@ -135,7 +143,10 @@ test("powered-off tolerance preserves inheritance, explicit zero, and strict val
   const override = page.getByRole("spinbutton", {
     name: /Grace override \(seconds\)/,
   });
-  await override.fill("1.5");
+  // Exponent syntax is valid for a number input, but intentionally rejected by
+  // the policy's whole-number grammar. WebKit clears step-invalid decimals.
+  await override.fill("1e2");
+  await expect(override).toHaveValue("1e2");
   await page.getByRole("button", { name: "Save override" }).click();
   await expect(
     page.getByText("Grace override must be a whole number of seconds.", {
