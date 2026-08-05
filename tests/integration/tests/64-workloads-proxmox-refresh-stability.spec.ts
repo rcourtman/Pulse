@@ -239,7 +239,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     );
   });
 
-  test("retains running LXC rows through stale availability projections and removes a confirmed deletion", async ({
+  test("retains LXC rows through warning health projections and removes a confirmed deletion", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -253,6 +253,11 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     let staleProjectionResponses = 0;
     let deletionResponses = 0;
     let publishDeletion = false;
+
+    // The REST sequence is the contract under test. Prevent live inventory
+    // frames from replacing it while polling is exercised.
+    await page.routeWebSocket("**/ws*", () => {});
+
     await page.route("**/api/resources?**", async (route) => {
       const url = new URL(route.request().url());
       if (
@@ -297,7 +302,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     });
 
     await page.goto(
-      "/proxmox/workloads?type=system-container&platform=proxmox-pve&status=running",
+      "/proxmox/workloads?type=system-container&platform=proxmox-pve",
       { waitUntil: "domcontentloaded" },
     );
 

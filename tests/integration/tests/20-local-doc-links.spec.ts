@@ -81,8 +81,8 @@ test.describe('Local docs links', () => {
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
     const guideLink = page.getByRole('link', { name: /Read proxy auth guide/i });
-    await expect(guideLink).toHaveAttribute('href', '/docs/PROXY_AUTH.md');
-    await expectPopupDoc(page, guideLink, '/docs/PROXY_AUTH.md', 'Proxy Authentication');
+    await expect(guideLink).toHaveAttribute('href', '/docs/PROXY_AUTH');
+    await expectPopupDoc(page, guideLink, '/docs/PROXY_AUTH', 'Proxy Authentication');
   });
 
   test('api access opens the shipped token scope reference', async ({ page }, testInfo) => {
@@ -92,11 +92,11 @@ test.describe('Local docs links', () => {
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
     const scopeReferenceLink = page.getByRole('link', { name: 'View scope reference' });
-    await expect(scopeReferenceLink).toHaveAttribute('href', '/docs/CONFIGURATION.md');
+    await expect(scopeReferenceLink).toHaveAttribute('href', '/docs/CONFIGURATION');
     await expectPopupDoc(
       page,
       scopeReferenceLink,
-      '/docs/CONFIGURATION.md',
+      '/docs/CONFIGURATION',
       'API tokens provide scoped, revocable access to Pulse.',
     );
   });
@@ -129,8 +129,8 @@ test.describe('Local docs links', () => {
     await page.goto('/infrastructure', { waitUntil: 'domcontentloaded' });
 
     const securityGuideLink = page.getByRole('link', { name: 'Learn More' }).first();
-    await expect(securityGuideLink).toHaveAttribute('href', '/docs/SECURITY.md');
-    await expectPopupDoc(page, securityGuideLink, '/docs/SECURITY.md', 'Pulse Security');
+    await expect(securityGuideLink).toHaveAttribute('href', '/docs/SECURITY');
+    await expectPopupDoc(page, securityGuideLink, '/docs/SECURITY', 'Pulse Security');
   });
 
   test('ai runtime controls open the shipped terms doc', async ({ page }, testInfo) => {
@@ -166,11 +166,11 @@ test.describe('Local docs links', () => {
     await permissionSelect.selectOption('autonomous');
 
     const termsLink = page.getByRole('link', { name: 'Terms of Service' }).first();
-    await expect(termsLink).toHaveAttribute('href', '/docs/TERMS.md');
+    await expect(termsLink).toHaveAttribute('href', '/docs/TERMS');
     await expectPopupDoc(
       page,
       termsLink,
-      '/docs/TERMS.md',
+      '/docs/TERMS',
       'Pulse Pro - Terms of Service & Software License Agreement',
     );
   });
@@ -186,11 +186,11 @@ test.describe('Local docs links', () => {
     await page.getByText('Manual key recovery', { exact: true }).click();
 
     const termsLink = page.getByRole('link', { name: /terms of service/i }).first();
-    await expect(termsLink).toHaveAttribute('href', '/docs/TERMS.md');
+    await expect(termsLink).toHaveAttribute('href', '/docs/TERMS');
     await expectPopupDoc(
       page,
       termsLink,
-      '/docs/TERMS.md',
+      '/docs/TERMS',
       'Pulse Pro - Terms of Service & Software License Agreement',
     );
   });

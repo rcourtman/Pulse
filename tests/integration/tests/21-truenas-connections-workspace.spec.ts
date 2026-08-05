@@ -264,7 +264,9 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
 
     await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Tower NAS");
     await dialog.getByRole("textbox", { name: "Host" }).fill("tower.local");
-    await dialog.getByRole("textbox", { name: "API key" }).fill("secret-api-key");
+    await dialog
+      .getByRole("textbox", { name: "API key", exact: true })
+      .fill("secret-api-key");
 
     await dialog.getByRole("button", { name: "Test connection" }).click();
     await expect.poll(() => draftTestPayload).not.toBeNull();
@@ -345,7 +347,9 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
 
     await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Tower NAS");
     await dialog.getByRole("textbox", { name: "Host" }).fill("tower.local");
-    await dialog.getByRole("textbox", { name: "API key" }).fill("secret-api-key");
+    await dialog
+      .getByRole("textbox", { name: "API key", exact: true })
+      .fill("secret-api-key");
 
     await dialog.getByRole("button", { name: "Add connection" }).click();
 
