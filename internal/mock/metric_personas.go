@@ -168,27 +168,32 @@ func buildMetricRoleRegistry(graph FixtureGraph) map[string]string {
 	return registry
 }
 
+// metricRoleClassifiers is package-level state: inferMetricRole runs per
+// resource per mock tick, and rebuilding this table (and its keyword slices)
+// on every call dominated the demo's allocation profile.
+var metricRoleClassifiers = []struct {
+	role     string
+	keywords []string
+}{
+	{metricRoleDatabase, []string{"postgres", "mysql", "mariadb", "mongodb", "database", "db", "sql", "pg", "influxdb"}},
+	{metricRoleCache, []string{"redis", "memcached", "cache", "valkey"}},
+	{metricRoleMonitoring, []string{"prometheus", "grafana", "loki", "monitoring", "metrics", "telemetry", "alertmanager", "jaeger"}},
+	{metricRoleBackup, []string{"backup", "pbs", "archive", "snapshot", "replica", "replication", "offsite", "borg", "restic"}},
+	{metricRoleStorage, []string{"storage", "datastore", "dataset", "pool", "zfs", "nfs", "smb", "ceph", "nas", "minio"}},
+	{metricRoleIngress, []string{"nginx", "traefik", "haproxy", "envoy", "proxy", "ingress", "loadbalancer", "load-balancer"}},
+	{metricRoleSecurity, []string{"bitwarden", "vaultwarden", "wireguard", "openvpn", "firewall", "pihole", "cloudflare", "auth", "vpn"}},
+	{metricRoleMedia, []string{"jellyfin", "plex", "sonarr", "radarr", "transmission", "deluge", "sabnzbd", "media", "stream"}},
+	{metricRoleCI, []string{"jenkins", "gitlab", "runner", "build", "ci"}},
+	{metricRoleQueue, []string{"queue", "worker", "rabbitmq", "kafka", "broker"}},
+	{metricRoleAPI, []string{"api", "backend", "service", "worker-api"}},
+	{metricRoleWeb, []string{"web", "frontend", "portal", "site", "ui", "dashboard", "nextcloud", "seafile", "owncloud", "gitea"}},
+}
+
 func inferMetricRole(resourceClass, resourceID string, hints ...string) string {
 	classKey := normalizeMetricClass(resourceClass)
 	tokens := normalizeMetricRoleTokens(append([]string{resourceID, classKey}, hints...)...)
 
-	for _, classifier := range []struct {
-		role     string
-		keywords []string
-	}{
-		{metricRoleDatabase, []string{"postgres", "mysql", "mariadb", "mongodb", "database", "db", "sql", "pg", "influxdb"}},
-		{metricRoleCache, []string{"redis", "memcached", "cache", "valkey"}},
-		{metricRoleMonitoring, []string{"prometheus", "grafana", "loki", "monitoring", "metrics", "telemetry", "alertmanager", "jaeger"}},
-		{metricRoleBackup, []string{"backup", "pbs", "archive", "snapshot", "replica", "replication", "offsite", "borg", "restic"}},
-		{metricRoleStorage, []string{"storage", "datastore", "dataset", "pool", "zfs", "nfs", "smb", "ceph", "nas", "minio"}},
-		{metricRoleIngress, []string{"nginx", "traefik", "haproxy", "envoy", "proxy", "ingress", "loadbalancer", "load-balancer"}},
-		{metricRoleSecurity, []string{"bitwarden", "vaultwarden", "wireguard", "openvpn", "firewall", "pihole", "cloudflare", "auth", "vpn"}},
-		{metricRoleMedia, []string{"jellyfin", "plex", "sonarr", "radarr", "transmission", "deluge", "sabnzbd", "media", "stream"}},
-		{metricRoleCI, []string{"jenkins", "gitlab", "runner", "build", "ci"}},
-		{metricRoleQueue, []string{"queue", "worker", "rabbitmq", "kafka", "broker"}},
-		{metricRoleAPI, []string{"api", "backend", "service", "worker-api"}},
-		{metricRoleWeb, []string{"web", "frontend", "portal", "site", "ui", "dashboard", "nextcloud", "seafile", "owncloud", "gitea"}},
-	} {
+	for _, classifier := range metricRoleClassifiers {
 		for _, keyword := range classifier.keywords {
 			if keyword != "" && strings.Contains(tokens, keyword) {
 				return classifier.role
@@ -253,6 +258,11 @@ func stableMetricRoleChoice(seed string, roles []weightedMetricRole) string {
 	return roles[0].role
 }
 
+// metricRoleTokenReplacer is package-level state: a strings.Replacer builds
+// its lookup structure lazily on first use, so constructing one per call paid
+// that build cost for every normalized token.
+var metricRoleTokenReplacer = strings.NewReplacer("-", " ", "_", " ", "/", " ", ":", " ")
+
 func normalizeMetricRoleTokens(values ...string) string {
 	var builder strings.Builder
 	for _, value := range values {
@@ -260,7 +270,7 @@ func normalizeMetricRoleTokens(values ...string) string {
 		if normalized == "" {
 			continue
 		}
-		normalized = strings.NewReplacer("-", " ", "_", " ", "/", " ", ":", " ").Replace(normalized)
+		normalized = metricRoleTokenReplacer.Replace(normalized)
 		if builder.Len() > 0 {
 			builder.WriteByte(' ')
 		}
