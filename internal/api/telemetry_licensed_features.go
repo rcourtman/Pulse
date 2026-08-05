@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
 
@@ -12,18 +11,16 @@ import (
 // adoption counts for licensed features whose state lives behind the router
 // rather than in persisted config files.
 //
-// Everything here is a count or a coarse boolean. Role names, permission sets,
-// usernames, audit event types, actors, and audit event detail all stay on the
-// install; only "how many" and "is a persistent store active" leave it.
+// Counts only. Role names, permission sets, and usernames stay on the install;
+// only "how many" leaves it. The `now` parameter is retained for symmetry with
+// the other router telemetry boundaries.
 func (r *Router) ApplyLicensedFeatureTelemetrySnapshot(s *telemetry.Snapshot, now time.Time) {
 	if r == nil || s == nil {
 		return
 	}
 
-	since := now.Add(-telemetry.PulseIntelligenceTelemetryWindow)
 	for _, orgID := range r.pulseIntelligenceTelemetryOrgIDs() {
 		applyRBACAdoption(s, r, orgID)
-		applyAuditAdoption(s, orgID, since)
 	}
 }
 
@@ -48,21 +45,4 @@ func applyRBACAdoption(s *telemetry.Snapshot, r *Router, orgID string) {
 		}
 	}
 	s.RBACUserAssignments += len(manager.GetUserAssignments())
-}
-
-// applyAuditAdoption records whether a persistent audit store is active and how
-// many events it retained inside the telemetry window.
-func applyAuditAdoption(s *telemetry.Snapshot, orgID string, since time.Time) {
-	logger := getLoggerForOrg(orgID)
-	if logger == nil || !isPersistentLogger(logger) {
-		return
-	}
-	s.AuditLoggingPersistent = true
-
-	count, err := logger.Count(audit.QueryFilter{StartTime: &since})
-	if err != nil {
-		log.Debug().Err(err).Str("org_id", orgID).Msg("Unable to count audit events for telemetry summary")
-		return
-	}
-	s.AuditEvents30d += count
 }

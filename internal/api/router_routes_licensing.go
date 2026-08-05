@@ -53,49 +53,49 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditAdminEndpoints.HandleListEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityList, auditAdminEndpoints.HandleListEvents)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditAdminEndpoints.HandleListEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityList, auditAdminEndpoints.HandleListEvents)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/{id}/verify", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditAdminEndpoints.HandleVerifyEvent))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityVerify, auditAdminEndpoints.HandleVerifyEvent)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/export", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditAdminEndpoints.HandleExportEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityExport, auditAdminEndpoints.HandleExportEvents)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/summary", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditAdminEndpoints.HandleSummary))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivitySummary, auditAdminEndpoints.HandleSummary)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/actions", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditHandlers.HandleListUnifiedActionAudits))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityList, auditHandlers.HandleListUnifiedActionAudits)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/actions/{id}/events", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditHandlers.HandleListUnifiedActionLifecycleEvents))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityList, auditHandlers.HandleListUnifiedActionLifecycleEvents)))(w, req)
 	}))
 	r.mux.HandleFunc("GET /api/audit/exports", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceAuditLogs, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, auditHandlers.HandleListUnifiedExportAudits))(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureAuditLoggingValue, RequireScope(config.ScopeAuditRead, r.withAuditReadActivity(config.AuditReadActivityExport, auditHandlers.HandleListUnifiedExportAudits)))(w, req)
 	}))
 
 	// RBAC routes (Phase 2 - Enterprise feature)

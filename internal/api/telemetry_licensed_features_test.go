@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -49,34 +48,6 @@ func TestApplyLicensedFeatureTelemetrySnapshot_CountsOnlyOperatorAuthoredRBAC(t 
 	}
 	if snap.RBACUserAssignments != 1 {
 		t.Fatalf("user assignments = %d, want 1", snap.RBACUserAssignments)
-	}
-}
-
-// The OSS console audit logger is not a persistent store; reporting it as one
-// would overstate audit-logging adoption across the fleet.
-func TestApplyLicensedFeatureTelemetrySnapshot_ConsoleAuditLoggerIsNotAdoption(t *testing.T) {
-	provider := NewTenantRBACProvider(t.TempDir())
-	t.Cleanup(func() {
-		if err := provider.Close(); err != nil {
-			t.Errorf("provider close failed: %v", err)
-		}
-	})
-
-	// The audit logger is process-global, so pin it rather than inheriting
-	// whatever a sibling test in this package installed.
-	previous := audit.GetLogger()
-	audit.SetLogger(audit.NewConsoleLogger())
-	t.Cleanup(func() { audit.SetLogger(previous) })
-
-	router := &Router{rbacProvider: provider}
-	var snap telemetry.Snapshot
-	router.ApplyLicensedFeatureTelemetrySnapshot(&snap, time.Now().UTC())
-
-	if snap.AuditLoggingPersistent {
-		t.Fatal("console audit logger must not report persistent audit logging")
-	}
-	if snap.AuditEvents30d != 0 {
-		t.Fatalf("audit events = %d, want 0 without a persistent store", snap.AuditEvents30d)
 	}
 }
 

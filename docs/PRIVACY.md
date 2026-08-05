@@ -111,8 +111,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Has API tokens | `true`/`false` | See whether token-based automation/integration is being used without sending token counts |
 | RBAC custom roles | `3` | Count roles created by the operator, excluding the roles that ship built in, without sending role names, permissions, or scopes |
 | RBAC user assignments | `7` | Count user-to-role assignments without sending usernames, role names, or permissions |
-| Audit logging persistent | `true`/`false` | See whether a persistent audit store is active rather than console-only logging, without sending any audit event |
-| Audit events 30d | `41` | Count audit events retained in the current 30-day telemetry window without sending event types, actors, targets, outcomes, or event detail |
+| Audit reads 30d | `41` | Count how many times an entitled operator opened or exported the audit log in the current 30-day telemetry window, without sending query filters, actors, ranges, or any audit event |
 | Report schedules | `5` | Count configured scheduled reports without sending schedule names, report scope, formats, or delivery recipients |
 | Report schedules enabled | `4` | Count scheduled reports that are switched on, without sending schedule names, scope, or recipients |
 | Report schedules run 30d | `2` | Count scheduled reports that last ran inside the current 30-day telemetry window, without sending run times, report contents, or delivery results |

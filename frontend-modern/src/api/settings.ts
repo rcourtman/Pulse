@@ -67,8 +67,7 @@ export interface TelemetryPingPreview {
   has_api_tokens: boolean;
   rbac_custom_roles: number;
   rbac_user_assignments: number;
-  audit_logging_persistent: boolean;
-  audit_events_30d: number;
+  audit_reads_30d: number;
   report_schedules: number;
   report_schedules_enabled: number;
   report_schedules_run_30d: number;

@@ -1903,3 +1903,38 @@ adoption. `TestTenantRBACProvider_PeekManagerDoesNotProvision` and
 `internal/api/rbac_tenant_provider_test.go` pin both properties, and
 `TestApplyLicensedFeatureTelemetrySnapshot_DoesNotCreateRBACStores` pins it
 through the router boundary.
+### Audit adoption telemetry counts gated reads, never store presence
+
+Schema v7 replaced `audit_logging_persistent` and `audit_events_30d` with
+`audit_reads_30d`. The first two did not discriminate: `pkg/server` installs the
+SQLite audit logger on every install for defense in depth and gates only the
+read and export endpoints, so the boolean was true on every install that
+reported it and the event count measured background write volume, saturating
+the receiver clamp on unlicensed community installs. `audit_reads_30d` counts
+requests that cleared `RequireLicenseFeature(featureAuditLoggingValue, ...)` on
+an audit read or export surface, which requires a human action and so cannot
+settle into a constant. The recorder in
+`internal/api/telemetry_audit_reads.go` is wrapped inside the licence gate, and
+`AuditReadActivityRecord` (`internal/config/audit_read_activity.go`) carries
+only a timestamp and an activity class drawn from a fixed allowlist; unknown
+classes are dropped rather than stored. Query filters, requested ranges, the
+actor, and every audit row read stay on the install.
+`TestWithAuditReadActivity_RecordIsContentFree` and
+`TestRecordAuditReadActivity_RejectsUnknownActivity` pin both properties.
+
+### Licensed-feature adoption fields must discriminate
+
+`telemetry.LicensedFeatureAdoptionFields` registers every telemetry field whose
+purpose is to measure adoption of a licensed feature, and
+`TestLicensedFeatureAdoptionFieldsDiscriminate`
+(`pkg/server/telemetry_licensed_features_guard_test.go`) fails if any registered
+field is non-zero on an install that uses none of them. The guard builds that
+install through the real production snapshot paths and installs a real SQLite
+audit logger exactly as `pkg/server` does, because pinning a console logger
+would let the guard pass while the outbound payload lied. A field that reads the
+same on a used and an unused install measures nothing and is worse than no field
+because it looks like data in the fleet aggregate.
+`TestRetiredNonDiscriminatingFieldsStayRemoved` additionally pins
+`audit_logging_persistent`, `audit_events_30d`, and
+`pulse_intelligence_patrol_autofixes_30d` so they cannot return under their old
+names.

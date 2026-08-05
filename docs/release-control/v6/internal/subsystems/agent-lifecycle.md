@@ -5801,3 +5801,13 @@ The read happens in `applyLicensedFeatureConfigSnapshot`
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`,
 which also asserts an unconfigured install reports zero rather than omitting
 the field.
+### Licence-gated audit read surfaces record a content-free usage marker
+
+The eight audit read and export routes registered in
+`internal/api/router_routes_licensing.go` wrap their handlers with
+`Router.withAuditReadActivity` inside `RequireLicenseFeature`, so only requests
+that cleared the licence gate record a marker. The marker is a timestamp plus a
+coarse activity class (`list`, `export`, `verify`, `summary`); the handler runs
+unchanged whether or not recording succeeds, and a router without persistence
+serves the request rather than failing it
+(`TestWithAuditReadActivity_NilPersistenceIsSafe`).

@@ -4973,3 +4973,14 @@ reporting actually produced output, not whether it is currently armed. The read
 is in `applyLicensedFeatureConfigSnapshot`
 (`pkg/server/telemetry_licensed_features.go`), pinned by
 `TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.
+### Audit-read activity is a bounded, content-free local history
+
+`audit_read_activity.json` follows the same shape as the existing external-agent
+and workflow-prompt activity histories: bounded to 500 records, pruned to a
+90-day retention on every append, written through the shared
+`recordActivityHistoryLocked` cycle, and encrypted at rest when crypto is
+configured. Records carry a timestamp and an activity class only. Reads outside
+the 30-day telemetry window are excluded at count time by
+`CountAuditReadActivitySince`, so the derived signal stays "is using" rather
+than drifting into "has ever used"
+(`TestAuditReadsOutsideWindowAreNotCounted`).

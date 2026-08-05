@@ -48,6 +48,7 @@ type ConfigPersistence struct {
 	aiUsageHistoryFile         string
 	externalAgentActivityFile  string
 	workflowPromptActivityFile string
+	auditReadActivityFile      string
 	agentProfilesFile          string
 	agentAssignmentsFile       string
 	aiChatSessionsFile         string
@@ -128,6 +129,7 @@ type resolvedConfigPersistencePaths struct {
 	aiUsageHistoryFile         string
 	externalAgentActivityFile  string
 	workflowPromptActivityFile string
+	auditReadActivityFile      string
 	agentProfilesFile          string
 	agentAssignmentsFile       string
 	aiChatSessionsFile         string
@@ -225,6 +227,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve workflow_prompt_activity.json: %w", err)
 	}
+	auditReadActivityFile, err := resolveLeaf("audit_read_activity.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve audit_read_activity.json: %w", err)
+	}
 	agentProfilesFile, err := resolveLeaf("agent_profiles.json")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve agent_profiles.json: %w", err)
@@ -267,6 +273,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		aiUsageHistoryFile:         aiUsageHistoryFile,
 		externalAgentActivityFile:  externalAgentActivityFile,
 		workflowPromptActivityFile: workflowPromptActivityFile,
+		auditReadActivityFile:      auditReadActivityFile,
 		agentProfilesFile:          agentProfilesFile,
 		agentAssignmentsFile:       agentAssignmentsFile,
 		aiChatSessionsFile:         aiChatSessionsFile,
@@ -323,6 +330,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		aiUsageHistoryFile:         resolvedPaths.aiUsageHistoryFile,
 		externalAgentActivityFile:  resolvedPaths.externalAgentActivityFile,
 		workflowPromptActivityFile: resolvedPaths.workflowPromptActivityFile,
+		auditReadActivityFile:      resolvedPaths.auditReadActivityFile,
 		agentProfilesFile:          resolvedPaths.agentProfilesFile,
 		agentAssignmentsFile:       resolvedPaths.agentAssignmentsFile,
 		aiChatSessionsFile:         resolvedPaths.aiChatSessionsFile,
@@ -2934,6 +2942,17 @@ const (
 
 	maxWorkflowPromptActivityHistoryRecords = 500
 	workflowPromptActivityHistoryRetention  = 90 * 24 * time.Hour
+
+	// Audit-read activity classes. These mark that an operator reached one of
+	// the license-gated audit read/export surfaces; the audit events they read
+	// never enter this history.
+	AuditReadActivityList    = "list"
+	AuditReadActivityExport  = "export"
+	AuditReadActivityVerify  = "verify"
+	AuditReadActivitySummary = "summary"
+
+	maxAuditReadActivityHistoryRecords = 500
+	auditReadActivityHistoryRetention  = 90 * 24 * time.Hour
 )
 
 // ExternalAgentActivityHistoryData represents persisted external-agent surface
@@ -2971,6 +2990,26 @@ type WorkflowPromptActivityRecord struct {
 	Timestamp  time.Time `json:"timestamp"`
 	Surface    string    `json:"surface"`
 	PromptName string    `json:"prompt_name"`
+}
+
+// AuditReadActivityHistoryData represents persisted audit-read activity with
+// metadata. Events carry only a coarse activity class and a timestamp: the
+// audit events that were read, the query filters, the actor, and the exported
+// rows never belong in this telemetry source.
+type AuditReadActivityHistoryData struct {
+	Version   int                       `json:"version"`
+	LastSaved time.Time                 `json:"last_saved"`
+	Events    []AuditReadActivityRecord `json:"events"`
+}
+
+// AuditReadActivityRecord is a content-free marker that an entitled operator
+// read or exported the audit log. Recording the read rather than the presence
+// of an audit store is deliberate: the SQLite audit logger is installed on
+// every install for defense in depth, so only a read distinguishes an install
+// that uses audit logging from one that merely has it.
+type AuditReadActivityRecord struct {
+	Timestamp time.Time `json:"timestamp"`
+	Activity  string    `json:"activity"`
 }
 
 func normalizeExternalAgentActivityRecord(record ExternalAgentActivityRecord) (ExternalAgentActivityRecord, bool) {

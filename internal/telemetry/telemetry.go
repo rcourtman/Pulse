@@ -141,7 +141,13 @@ const (
 	// scheduled reporting, agent profiles, alert-triggered AI) and drops
 	// pulse_intelligence_patrol_autofixes_30d, which no code path could ever
 	// set to a non-zero value.
-	TelemetrySchemaVersion = 6
+	// Schema v7 replaces audit_logging_persistent and audit_events_30d with
+	// audit_reads_30d. The SQLite audit logger is installed on every install
+	// for defense in depth, so the boolean was true everywhere and the event
+	// count measured background write volume; neither discriminated an install
+	// that uses audit logging from one that merely has it. Reaching a
+	// license-gated audit read does.
+	TelemetrySchemaVersion = 7
 )
 
 type installIDRecord struct {
@@ -231,17 +237,16 @@ type Ping struct {
 
 	// Licensed-feature adoption. Counts only: no role names, schedule names,
 	// profile names, recipients, report contents, or audit event detail.
-	RBACCustomRoles        int  `json:"rbac_custom_roles"`
-	RBACUserAssignments    int  `json:"rbac_user_assignments"`
-	AuditLoggingPersistent bool `json:"audit_logging_persistent"`
-	AuditEvents30d         int  `json:"audit_events_30d"`
-	ReportSchedules        int  `json:"report_schedules"`
-	ReportSchedulesEnabled int  `json:"report_schedules_enabled"`
-	ReportSchedulesRun30d  int  `json:"report_schedules_run_30d"`
-	AgentProfiles          int  `json:"agent_profiles"`
-	UpdateAttempts30d      int  `json:"update_attempts_30d"`
-	UpdateSuccesses30d     int  `json:"update_successes_30d"`
-	UpdateFailures30d      int  `json:"update_failures_30d"`
+	RBACCustomRoles        int `json:"rbac_custom_roles"`
+	RBACUserAssignments    int `json:"rbac_user_assignments"`
+	AuditReads30d          int `json:"audit_reads_30d"`
+	ReportSchedules        int `json:"report_schedules"`
+	ReportSchedulesEnabled int `json:"report_schedules_enabled"`
+	ReportSchedulesRun30d  int `json:"report_schedules_run_30d"`
+	AgentProfiles          int `json:"agent_profiles"`
+	UpdateAttempts30d      int `json:"update_attempts_30d"`
+	UpdateSuccesses30d     int `json:"update_successes_30d"`
+	UpdateFailures30d      int `json:"update_failures_30d"`
 	// Last coarse update failure category; never raw error text.
 	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
 
@@ -380,8 +385,7 @@ type Snapshot struct {
 	HasAPITokens                                                   bool
 	RBACCustomRoles                                                int
 	RBACUserAssignments                                            int
-	AuditLoggingPersistent                                         bool
-	AuditEvents30d                                                 int
+	AuditReads30d                                                  int
 	ReportSchedules                                                int
 	ReportSchedulesEnabled                                         int
 	ReportSchedulesRun30d                                          int
@@ -913,6 +917,18 @@ func platformName(isDocker bool) string {
 	return "binary"
 }
 
+// BuildPingForSnapshot projects a Snapshot onto an otherwise-zero Ping using
+// the same merge the outbound path uses.
+//
+// It exists so the licensed-feature adoption guard can assert against the real
+// serialized payload instead of a hand-built stand-in. Asserting on a
+// hand-built ping is what lets a field look correct in a test while shipping
+// something else, which is how audit_logging_persistent reached production
+// reading true on every install.
+func BuildPingForSnapshot(s Snapshot) Ping {
+	return applySnapshot(Ping{}, func() Snapshot { return s })
+}
+
 // applySnapshot merges dynamic state into the base ping.
 func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping := base
@@ -959,8 +975,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.HasAPITokens = s.HasAPITokens
 	ping.RBACCustomRoles = s.RBACCustomRoles
 	ping.RBACUserAssignments = s.RBACUserAssignments
-	ping.AuditLoggingPersistent = s.AuditLoggingPersistent
-	ping.AuditEvents30d = s.AuditEvents30d
+	ping.AuditReads30d = s.AuditReads30d
 	ping.ReportSchedules = s.ReportSchedules
 	ping.ReportSchedulesEnabled = s.ReportSchedulesEnabled
 	ping.ReportSchedulesRun30d = s.ReportSchedulesRun30d

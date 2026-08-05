@@ -8865,3 +8865,15 @@ scrubbed columns. Schema v6 adds nine licensed-feature adoption fields and
 removes `pulse_intelligence_patrol_autofixes_30d`. The frontend interface is
 not decorative: the Settings telemetry preview renders the payload verbatim, so
 a field missing there is a field the user is not shown before it is sent.
+### Telemetry payload parity spans three surfaces at schema v7
+
+The outbound telemetry contract stays defined in exactly three places that move
+together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
+`var ping struct` receiver in the private license server, and
+`export interface TelemetryPingPreview` in
+`frontend-modern/src/api/settings.ts`, all checked by
+`scripts/check_telemetry_schema_parity.py`. Schema v7 removes
+`audit_logging_persistent` and `audit_events_30d` and adds `audit_reads_30d`.
+Retired columns stay in the live receiver database rather than being dropped:
+migrations only add, the columns hold real rows from the schema-v6 window, and
+nothing writes them once the receiver struct loses the fields.

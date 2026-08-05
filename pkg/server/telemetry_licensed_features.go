@@ -34,4 +34,10 @@ func applyLicensedFeatureConfigSnapshot(snap *telemetry.Snapshot, persistence *c
 	if profiles, err := persistence.LoadAgentProfiles(); err == nil {
 		snap.AgentProfiles = len(profiles)
 	}
+
+	// Audit adoption is a read count, not store presence: the SQLite audit
+	// logger is installed on every install for defense in depth, so only an
+	// operator reaching a license-gated read surface distinguishes an install
+	// that uses audit logging from one that merely has it.
+	snap.AuditReads30d = persistence.CountAuditReadActivitySince(now.Add(-telemetry.PulseIntelligenceTelemetryWindow))
 }

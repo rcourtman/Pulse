@@ -358,8 +358,7 @@ func TestApplySnapshot(t *testing.T) {
 			HasAPITokens:                    true,
 			RBACCustomRoles:                 3,
 			RBACUserAssignments:             7,
-			AuditLoggingPersistent:          true,
-			AuditEvents30d:                  41,
+			AuditReads30d:                   41,
 			ReportSchedules:                 5,
 			ReportSchedulesEnabled:          4,
 			ReportSchedulesRun30d:           2,
@@ -471,8 +470,8 @@ func TestApplySnapshot(t *testing.T) {
 	if ping.RBACCustomRoles != 3 || ping.RBACUserAssignments != 7 {
 		t.Fatalf("RBAC adoption counts not applied: %#v", ping)
 	}
-	if !ping.AuditLoggingPersistent || ping.AuditEvents30d != 41 {
-		t.Fatalf("audit adoption signals not applied: %#v", ping)
+	if ping.AuditReads30d != 41 {
+		t.Fatalf("audit read count not applied: %#v", ping)
 	}
 	if ping.ReportSchedules != 5 || ping.ReportSchedulesEnabled != 4 || ping.ReportSchedulesRun30d != 2 {
 		t.Fatalf("report schedule adoption counts not applied: %#v", ping)
