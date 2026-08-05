@@ -54,7 +54,7 @@ func (h *ResourceHandlers) HandleK8sNamespaces(w http.ResponseWriter, r *http.Re
 	}
 
 	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
+	resources, _, err := h.sharedRawResources(orgID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -111,11 +111,15 @@ func (h *ResourceHandlers) HandleK8sNamespaces(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	for _, pod := range registry.ListByType(unified.ResourceTypePod) {
-		ingest(pod, false)
-	}
-	for _, dep := range registry.ListByType(unified.ResourceTypeK8sDeployment) {
-		ingest(dep, true)
+	// Read-only aggregation over the shared per-generation list; ingest only
+	// counts, so no copies are needed.
+	for i := range resources {
+		switch unified.CanonicalResourceType(resources[i].Type) {
+		case unified.ResourceTypePod:
+			ingest(resources[i], false)
+		case unified.ResourceTypeK8sDeployment:
+			ingest(resources[i], true)
+		}
 	}
 
 	namespaces := make([]string, 0, len(byNamespace))

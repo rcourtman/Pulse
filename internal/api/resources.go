@@ -168,13 +168,15 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	}
 
 	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
+	sharedResources, registry, err := h.sharedPresentationResources(orgID)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
-	allResources := presentationResourcesFromRegistry(registry)
+	// Flat copy so the per-request decorations below stay top-level writes
+	// on request-owned elements while nested data remains shared.
+	allResources := flatCopyResources(sharedResources)
 	h.applyActionAvailability(r.Context(), allResources)
 	resources := allResources
 	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
@@ -217,13 +219,12 @@ func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.R
 	}
 
 	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
+	resources, _, err := h.sharedRawResources(orgID)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
-	resources := registry.List()
 	filters := parseListFilters(r)
 	storageSubjects := make([]unified.Resource, 0, len(resources))
 	for _, resource := range resources {
@@ -248,13 +249,12 @@ func (h *ResourceHandlers) HandleStorageIncidents(w http.ResponseWriter, r *http
 	}
 
 	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
+	resources, _, err := h.sharedRawResources(orgID)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
-	resources := registry.List()
 	filters := parseListFilters(r)
 	incidentSubjects := make([]unified.Resource, 0, len(resources))
 	for _, resource := range resources {
@@ -285,10 +285,15 @@ func pruneResourceForListResponse(resource *unified.Resource) {
 	}
 
 	// PMG domain stats can be very large; keep summary-only in list.
+	// Clone before clearing: the PMG struct is reachable through the shared
+	// per-generation resource cache, and writing through the pointer would
+	// corrupt it for every other request.
 	if resource.PMG != nil {
-		resource.PMG.RelayDomains = nil
-		resource.PMG.DomainStats = nil
-		resource.PMG.DomainStatsAsOf = time.Time{}
+		pruned := *resource.PMG
+		pruned.RelayDomains = nil
+		pruned.DomainStats = nil
+		pruned.DomainStatsAsOf = time.Time{}
+		resource.PMG = &pruned
 	}
 }
 
@@ -742,13 +747,13 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
+	allResources, _, err := h.sharedPresentationResources(orgID)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return
 	}
 
-	allResources := presentationResourcesFromRegistry(registry)
+	// Both aggregations are read-only over the shared list.
 	stats := computeResourceContractStats(allResources)
 	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
 
@@ -1435,6 +1440,81 @@ type StorageIncidentSection struct {
 type registryCacheEntry struct {
 	registry   *unified.ResourceRegistry
 	lastUpdate time.Time
+	// rawList and presentation are lazily built once per registry generation
+	// and SHARED between requests. Both the slices and the nested data of
+	// their elements are read-only: take a flat copy (flatCopyResources)
+	// before any top-level field writes, and never write through nested
+	// pointers or into nested maps/slices of shared elements.
+	rawList      []unified.Resource
+	presentation []unified.Resource
+}
+
+// flatCopyResources returns a top-level copy of a shared resource list.
+// Element values are copies, so top-level field writes and in-place
+// reordering are safe; nested data stays shared with the cache, so writes
+// through nested pointers remain forbidden (clone the nested struct first,
+// as pruneResourceForListResponse does for PMG).
+func flatCopyResources(shared []unified.Resource) []unified.Resource {
+	out := make([]unified.Resource, len(shared))
+	copy(out, shared)
+	return out
+}
+
+// sharedPresentationResources returns the org's cached presentation-shape
+// resource list for the current registry generation, building it at most
+// once per generation instead of deep-cloning the registry on every request.
+func (h *ResourceHandlers) sharedPresentationResources(orgID string) ([]unified.Resource, *unified.ResourceRegistry, error) {
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		return nil, nil, err
+	}
+	key := cacheKey(orgID)
+
+	h.cacheMu.Lock()
+	if entry, ok := h.registryCache[key]; ok && entry.registry == registry && entry.presentation != nil {
+		list := entry.presentation
+		h.cacheMu.Unlock()
+		return list, registry, nil
+	}
+	h.cacheMu.Unlock()
+
+	list := presentationResourcesFromRegistry(registry)
+
+	h.cacheMu.Lock()
+	if entry, ok := h.registryCache[key]; ok && entry.registry == registry {
+		entry.presentation = list
+		h.registryCache[key] = entry
+	}
+	h.cacheMu.Unlock()
+	return list, registry, nil
+}
+
+// sharedRawResources is sharedPresentationResources for the raw (uncoalesced)
+// registry list.
+func (h *ResourceHandlers) sharedRawResources(orgID string) ([]unified.Resource, *unified.ResourceRegistry, error) {
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		return nil, nil, err
+	}
+	key := cacheKey(orgID)
+
+	h.cacheMu.Lock()
+	if entry, ok := h.registryCache[key]; ok && entry.registry == registry && entry.rawList != nil {
+		list := entry.rawList
+		h.cacheMu.Unlock()
+		return list, registry, nil
+	}
+	h.cacheMu.Unlock()
+
+	list := registry.List()
+
+	h.cacheMu.Lock()
+	if entry, ok := h.registryCache[key]; ok && entry.registry == registry {
+		entry.rawList = list
+		h.registryCache[key] = entry
+	}
+	h.cacheMu.Unlock()
+	return list, registry, nil
 }
 
 func buildStorageSummaryResponse(resources []unified.Resource) StorageSummaryResponse {
