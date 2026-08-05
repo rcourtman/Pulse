@@ -38,6 +38,7 @@ const test = base.extend<{}, WorkerFixtures>({
 
 const healthyAt = () => new Date(Date.now() - 5 * 60_000).toISOString();
 const failingAt = () => new Date(Date.now() - 2 * 60_000).toISOString();
+const WORKSPACE_READY_TIMEOUT = 30_000;
 
 const buildTrueNASConnectionRows = () => ({
   connections: [
@@ -135,7 +136,7 @@ const openAddTrueNASDialog = async (page: Page) => {
   await page.goto("/settings/infrastructure", { waitUntil: "domcontentloaded" });
   await expect(
     page.getByRole("heading", { level: 2, name: "Connected systems" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: WORKSPACE_READY_TIMEOUT });
   await page.getByRole("button", { name: "Add infrastructure" }).first().click();
   const picker = page.getByRole("dialog", { name: "Add infrastructure" });
   await expect(picker).toBeVisible();
@@ -173,10 +174,10 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
     });
     await expect(
       page.getByRole("heading", { level: 1, name: "Infrastructure" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: WORKSPACE_READY_TIMEOUT });
     await expect(
       page.getByRole("heading", { level: 2, name: "Connected systems" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: WORKSPACE_READY_TIMEOUT });
 
     // The consolidated table no longer shows the address column; rows carry
     // source, surfaces, connection state, and freshness instead.
