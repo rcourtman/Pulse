@@ -214,7 +214,6 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             workloadMemoryDisplayBasis={state.workloadMemoryDisplayBasis}
             workloadMetricHistory={state.workloadMetricHistory}
             workloadTableLayoutMode={state.workloadTableLayoutMode}
-            workloadTableMinimumWidth={state.workloadTableMinimumWidth}
             workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
             workloadTableVisibleColumns={state.workloadTableVisibleColumns}
           />

@@ -13,7 +13,6 @@ import {
   GUEST_COLUMNS,
   VIEW_MODE_COLUMNS,
   getWorkloadTableLayoutModeForContainer,
-  getWorkloadTableReadableMinWidth,
   getWorkloadTableLayoutMode,
   getWorkloadVisibleColumnsForLayout,
 } from './guestRowModel';
@@ -223,59 +222,16 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     ['aiContext'],
   );
 
-  // Columns the user explicitly chose to show. Keeping that intent separate
-  // from the responsive defaults makes the choice stable across resizing:
-  // automatic columns may disappear as space contracts, while an explicit
-  // choice remains readable via horizontal scrolling when necessary.
-  const [forcedColumnIds, setForcedColumnIds] = usePersistentSignal<string[]>(
-    `${columnStorageKey}:forced`,
-    [],
-    {
-      serialize: (arr) => JSON.stringify(arr),
-      deserialize: (str) => {
-        try {
-          const parsed: unknown = JSON.parse(str);
-          if (!Array.isArray(parsed)) return [];
-          return parsed.filter((value): value is string => typeof value === 'string');
-        } catch {
-          return [];
-        }
-      },
-    },
-  );
-  const forcedColumnIdSet = createMemo(() => new Set(forcedColumnIds()));
-  const layoutHiddenColumnIds = createMemo(() => {
-    const layoutVisible = new Set(
-      getWorkloadVisibleColumnsForLayout(workloadColumns, workloadTableLayoutMode()).map(
-        (column) => column.id,
-      ),
-    );
-    return new Set(
-      workloadColumns.filter((column) => !layoutVisible.has(column.id)).map((c) => c.id),
-    );
-  });
-
   const visibleColumns = columnVisibility.visibleColumns;
-  const workloadTableVisibleColumns = createMemo(() => {
-    const layoutVisible = new Set(
-      getWorkloadVisibleColumnsForLayout(visibleColumns(), workloadTableLayoutMode()).map(
-        (column) => column.id,
-      ),
-    );
-    const forced = forcedColumnIdSet();
-    return visibleColumns().filter(
-      (column) => layoutVisible.has(column.id) || forced.has(column.id),
-    );
-  });
+  // User choices persist independently of the current width, but the live
+  // table only presents columns its responsive stage can keep readable. A
+  // selected wide-only column therefore disappears while space is tight and
+  // returns automatically when the table grows again.
+  const workloadTableVisibleColumns = createMemo(() =>
+    getWorkloadVisibleColumnsForLayout(visibleColumns(), workloadTableLayoutMode()),
+  );
   const workloadTableVisibleColumnIds = createMemo(() =>
     workloadTableVisibleColumns().map((column) => column.id),
-  );
-  const workloadTableMinimumWidth = createMemo(() =>
-    getWorkloadTableReadableMinWidth(
-      workloadTableVisibleColumns(),
-      workloadTableLayoutMode(),
-      forcedColumnIdSet(),
-    ),
   );
   const totalColumns = createMemo(() => workloadTableVisibleColumns().length);
 
@@ -353,34 +309,14 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     }
   };
 
-  // Menu checkbox state mirrors what the table actually renders. Showing a
-  // column records explicit intent; hiding it removes that pin and applies the
-  // same preference at every responsive stage.
-  const isColumnHiddenForMenu = (id: string): boolean =>
-    columnVisibility.isHiddenByUser(id) ||
-    (layoutHiddenColumnIds().has(id) && !forcedColumnIdSet().has(id));
-
-  const handleColumnToggle = (id: string): void => {
-    if (!isColumnHiddenForMenu(id)) {
-      setForcedColumnIds(forcedColumnIds().filter((existing) => existing !== id));
-      columnVisibility.hide(id);
-      return;
-    }
-    columnVisibility.show(id);
-    if (!forcedColumnIdSet().has(id)) setForcedColumnIds([...forcedColumnIds(), id]);
-  };
-
-  const handleColumnReset = (): void => {
-    setForcedColumnIds([]);
-    columnVisibility.resetToDefaults();
-  };
-
   const workloadsFilterColumnVisibility = createMemo(() => ({
-    availableColumns: columnVisibility.availableToggles(),
-    isColumnHidden: isColumnHiddenForMenu,
-    onColumnToggle: handleColumnToggle,
-    onColumnReset: handleColumnReset,
-    showReset: forcedColumnIds().length > 0,
+    availableColumns: getWorkloadVisibleColumnsForLayout(
+      columnVisibility.availableToggles(),
+      workloadTableLayoutMode(),
+    ),
+    isColumnHidden: columnVisibility.isHiddenByUser,
+    onColumnToggle: columnVisibility.toggle,
+    onColumnReset: columnVisibility.resetToDefaults,
   }));
 
   return {
@@ -409,7 +345,6 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     workloadTableVisibleColumnIds,
     workloadTableVisibleColumns,
     workloadTableLayoutMode,
-    workloadTableMinimumWidth,
     setWorkloadMetricHistoryRange,
     setWorkloadMetricDisplayMode,
   } as const;

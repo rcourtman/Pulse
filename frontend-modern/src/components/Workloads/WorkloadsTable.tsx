@@ -58,7 +58,6 @@ type WorkloadsTableProps = Pick<
   | 'workloadMemoryDisplayBasis'
   | 'workloadMetricHistory'
   | 'workloadTableLayoutMode'
-  | 'workloadTableMinimumWidth'
   | 'workloadTableVisibleColumnIds'
   | 'workloadTableVisibleColumns'
 >;
@@ -75,11 +74,6 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
         <Table
           wrapperRef={props.setTableWrapperRef}
           class={`workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}`}
-          style={
-            props.workloadTableMinimumWidth()
-              ? { 'min-width': `${props.workloadTableMinimumWidth()}px` }
-              : undefined
-          }
         >
           <colgroup>
             <For each={props.workloadTableVisibleColumns()}>

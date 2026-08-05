@@ -137,7 +137,6 @@ import {
   getGuestColumnWidthStyle,
   getWorkloadTableLayoutMode,
   getWorkloadTableLayoutModeForContainer,
-  getWorkloadTableReadableMinWidth,
   getWorkloadVisibleColumnsForLayout,
   type WorkloadIOEmphasis,
 } from '../guestRowModel';
@@ -1151,16 +1150,6 @@ describe('GUEST_COLUMNS', () => {
     expect(getWorkloadTableLayoutModeForContainer(900)).toBe('compact');
     expect(getWorkloadTableLayoutModeForContainer(1439)).toBe('compact');
     expect(getWorkloadTableLayoutModeForContainer(1440)).toBe('wide');
-  });
-
-  it('adds a readable width floor only when an explicit column exceeds the layout', () => {
-    const columns = GUEST_COLUMNS.filter((column) =>
-      ['name', 'cpu', 'memory', 'netIo'].includes(column.id),
-    );
-
-    expect(getWorkloadTableReadableMinWidth(columns, 'compact', new Set(['netIo']))).toBe(630);
-    expect(getWorkloadTableReadableMinWidth(columns, 'compact', new Set(['cpu']))).toBeNull();
-    expect(getWorkloadTableReadableMinWidth(columns, 'wide', new Set(['netIo']))).toBeNull();
   });
 
   it('keeps CPU and memory fixed while allowing disk to be platform-scoped', () => {

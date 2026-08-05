@@ -240,6 +240,18 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    derivation, summary statistics, and row rendering so a platform overview
    that demotes nested workloads does not carry hidden rows through downstream
    table state.
+   Responsive workload columns are part of the same table hot-path and
+   usability contract. The active width stage must filter both the rendered
+   column set and the column picker's available choices; a remembered user
+   selection must not force a wider table or introduce horizontal scrolling
+   when the current container cannot present that column readably. User-hidden
+   preferences remain width-independent, and selected wide-only columns must
+   return automatically when the table reaches a supporting width. The phone
+   stage keeps workload identity, availability, CPU, memory, and disk visible,
+   while row expansion owns secondary operational detail. State-model tests
+   must cover contraction and restoration of selected columns, and the browser
+   receipt must prove table and container scroll-width parity across the
+   affected breakpoint boundaries.
    When a platform page still needs a visible signal for those demoted nested
    workloads, `nestedWorkloadContext.ts` must derive a bounded summary from the
    same raw workload snapshot before row rendering. That derivation must use

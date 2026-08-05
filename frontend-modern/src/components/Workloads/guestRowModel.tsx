@@ -18,9 +18,9 @@ export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
 // Layout stages key off the viewport, but the table renders inside a shell
 // that is ~120px narrower (nav rail + page padding). The wide column set sums
 // to ~1370px, so engaging it at a 1440px viewport left the default layout
-// horizontally scrolling by ~50px. Horizontal scroll is reserved for columns
-// a user explicitly pins (see forcedColumnIds); the breakpoint default must
-// fit, so wide waits until the shell can actually hold the full set.
+// horizontally scrolling by ~50px. The responsive column set must fit without
+// relying on horizontal scroll, so wide waits until the shell can actually
+// hold the full set.
 export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1536;
 export const WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH = 720;
 export const WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH = 900;
@@ -568,31 +568,6 @@ export const getWorkloadVisibleColumnsForLayout = (
     const minimumLayout = WORKLOAD_COLUMN_MIN_LAYOUT[column.id] ?? 'wide';
     return WORKLOAD_TABLE_LAYOUT_ORDER[minimumLayout] <= layoutRank;
   });
-};
-
-const parsePixelWidth = (value: string | undefined): number => {
-  const match = value?.trim().match(/^(\d+(?:\.\d+)?)px$/);
-  return match ? Number(match[1]) : 0;
-};
-
-export const getWorkloadTableReadableMinWidth = (
-  columns: readonly ColumnDef[],
-  layoutMode: WorkloadTableLayoutMode,
-  forcedColumnIds: ReadonlySet<string>,
-): number | null => {
-  const layoutRank = WORKLOAD_TABLE_LAYOUT_ORDER[layoutMode];
-  const hasForcedOverflowColumn = columns.some((column) => {
-    if (!forcedColumnIds.has(column.id)) return false;
-    const minimumLayout = WORKLOAD_COLUMN_MIN_LAYOUT[column.id] ?? 'wide';
-    return WORKLOAD_TABLE_LAYOUT_ORDER[minimumLayout] > layoutRank;
-  });
-  if (!hasForcedOverflowColumn) return null;
-
-  const width = columns.reduce(
-    (total, column) => total + parsePixelWidth(column.minWidth ?? column.width),
-    0,
-  );
-  return width > 0 ? Math.ceil(width) : null;
 };
 
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {

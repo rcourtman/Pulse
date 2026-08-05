@@ -1,78 +1,59 @@
 {
   "version": 1,
-  "base_sha": "bcaef22bd63350f5e50d559dbe5eb9cefbb440f9",
-  "verified_at": "2026-08-05T21:50:05Z",
+  "base_sha": "0f7b1ddee4960573f6009f2f2e0995b9a76508c7",
+  "verified_at": "2026-08-05T22:35:48Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
-    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
-    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx": "ff75789c94375cdc49280867b82672f04f714e95230908250651f9c43f521aab",
-    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "606c14b143e37a78d87401a109d3352f2db1a069b28e465915a8b25d5662301c",
-    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "b7477fb658a28c2b9174af5cce8e35d6a10f62956f6a02d45240b9c1497312af",
-    "frontend-modern/src/index.css": "78af243a7b0558a3a1e5020d53f50b585ac3d03cc48580c8770d45076d0916a4"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "3e2d0e313aebcfd563c39792f45d63d72d75783d8afe405bfb39476201b85a32",
+    "frontend-modern/src/components/Workloads/WorkloadsTable.tsx": "23cc10b33810af82d6726cc18c580c1c1c53504e0691707c40cfdfb2e6abe70e",
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "51ef0831a897393292c5e27ea7aa19ccfb343a5729d2b80d023f7b8cf79efbd5",
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "dc9aa36e8890b1b467bfdbdf5627dde8b74d6c57975988d18bbd7c125cb32f60",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "1d4d01757a36691c3aa62402bdf5beb9bdf592ae9cc29bd2f73f6de65b9ffb53"
   },
   "routes": [
     "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/replication",
-    "/proxmox/backups?view=coverage",
-    "/proxmox/ceph",
-    "/proxmox/mail",
     "/docker/overview",
-    "/docker/images",
-    "/docker/storage",
-    "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/truenas/services",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/overview",
-    "/vmware/storage",
-    "/vmware/networks",
-    "/vmware/health",
-    "/vmware/activity",
-    "/standalone/machines",
-    "/standalone/availability",
-    "/alerts/overview",
-    "/alerts/history",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure",
-    "/settings/infrastructure/agent-doctor",
-    "/settings/pulse-intelligence/provider",
-    "/settings/security-roles"
+    "/vmware/overview"
   ],
   "viewports": [
     {
       "width": 1920,
-      "height": 1000
+      "height": 900
+    },
+    {
+      "width": 1536,
+      "height": 800
+    },
+    {
+      "width": 1440,
+      "height": 800
     },
     {
       "width": 1280,
-      "height": 900
+      "height": 800
     },
     {
       "width": 1024,
       "height": 800
     },
     {
+      "width": 900,
+      "height": 800
+    },
+    {
       "width": 768,
-      "height": 900
+      "height": 800
+    },
+    {
+      "width": 720,
+      "height": 800
     },
     {
       "width": 390,
@@ -80,22 +61,25 @@
     },
     {
       "width": 320,
-      "height": 700
+      "height": 800
     }
   ],
   "states": [
-    "Populated mock-data inventories across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, Alerts, Actions, Patrol, and reachable Settings destinations",
-    "Dense platform tables at desktop, laptop, tablet, standard phone, and 320px narrow-phone widths",
-    "Kubernetes Services and Ingresses / EndpointSlices with similarly prefixed checkout resource names",
-    "TrueNAS Apps with long app identities, live CPU and memory values, and simultaneous app and image updates",
-    "Compact narrow-phone identity rows and the expanded column sets restored at 768px and 1024px"
+    "Populated Proxmox mock inventory with every workload column selected at the wide layout",
+    "Responsive workload column sets at wide, compact, tablet, and phone stages",
+    "Proxmox View preferences and nested Columns picker at 1920px and 1024px",
+    "Expanded Proxmox workload details at 390px",
+    "Populated Docker host and container tables across desktop, tablet, and phone widths",
+    "Populated vSphere host and VM tables across desktop, tablet, and phone widths",
+    "vSphere View preferences and nested Columns picker at 1024px"
   ],
   "interactions": [
-    "Navigated through 66 reachable routes at 320px and checked document and table scroll boundaries",
-    "Compared visible operator columns across 1920px, 1280px, 1024px, 768px, 390px, and 320px viewports",
-    "Captured and visually inspected Proxmox backup coverage, Kubernetes Services, TrueNAS Apps, and Settings Roles at narrow widths",
-    "Confirmed checkout-api, checkout-public, and checkout-web remain distinguishable without horizontal scrolling",
-    "Confirmed TrueNAS app names can wrap to two lines and simultaneous app and image updates fit as compact A and I markers",
-    "Confirmed full update labels and wider secondary columns return at 768px and 1024px"
+    "Selected every available Proxmox workload column at 1920px and confirmed all selections fit without internal or document overflow",
+    "Resized the same selected-column state through 1920, 1536, 1440, 1280, 1024, 900, 768, 720, 390, and 320px and confirmed selected wide columns return automatically when space permits",
+    "Opened View preferences and the nested Columns picker at 1024px and confirmed wide-only choices are omitted while compact choices remain available",
+    "Opened the wide Columns picker at 1920px and confirmed IP, Tags, OS, Net I/O, and Disk I/O remain selected and available",
+    "Expanded auth-service-01 at 390px and visually inspected the identity row, primary metrics, tabs, and detail cards without clipping or horizontal scroll",
+    "Measured every visible Docker and vSphere table at 1920, 1280, 1024, 768, 390, and 320px and confirmed table and document scroll widths match their containers",
+    "Opened the vSphere compact Columns picker and confirmed only columns supported by the current layout are offered"
   ]
 }
