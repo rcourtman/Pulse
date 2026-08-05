@@ -35,12 +35,12 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 		AvailabilityFixtures: defaultAvailabilityFixtures(now),
 	}
 	applyDemoScenarioGraph(&graph, now)
-	syncMetricRoleRegistryFromGraph(graph)
+	syncMetricFixtureRegistriesFromGraph(graph)
 	graph.UpdateMetrics(cfg, now)
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
 	resources, _ := graph.UnifiedResourceSnapshot()
 	graph.ActionFixtures = buildActionFixtures(resources, now)
-	syncMetricRoleRegistryFromGraph(graph)
+	syncMetricFixtureRegistriesFromGraph(graph)
 	return graph
 }
 
@@ -62,13 +62,13 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 
 	setMockUpdateInterval(cfg.UpdateInterval)
 	applyDemoScenarioGraph(g, now)
-	syncMetricRoleRegistryFromGraph(*g)
+	syncMetricFixtureRegistriesFromGraph(*g)
 	updateFixtureStateMetricsAt(&g.State, cfg, now)
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 	g.AvailabilityFixtures = rebaseAvailabilityFixtures(g.AvailabilityFixtures, now)
 	applyDemoScenarioGraph(g, now)
 	g.DiscoveryFixtures = buildDiscoveryFixtures(g.State, now)
-	syncMetricRoleRegistryFromGraph(*g)
+	syncMetricFixtureRegistriesFromGraph(*g)
 }
 
 func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []models.ResolvedAlert) {

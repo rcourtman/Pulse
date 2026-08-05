@@ -4,6 +4,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 )
 
 var (
@@ -75,11 +77,45 @@ func mockGuestMetricsForChart(resourceType, resourceID string, duration time.Dur
 	}
 
 	timestamps := mockChartTimestamps(duration)
-	result := make(map[string][]MetricPoint, len(mockGuestChartMetricTypes))
+	result := make(map[string][]MetricPoint, len(mockGuestChartMetricTypes)+1)
 	for _, metricType := range mockGuestChartMetricTypes {
 		result[metricType] = mockCanonicalMetricSeries(resourceType, resourceID, metricType, timestamps)
 	}
+	if series := mockGuestMemoryUsedSeries(resourceType, resourceID, result["memory"]); len(series) > 0 {
+		result["memoryused"] = series
+	}
 	return result
+}
+
+// mockGuestMemoryUsedSeries derives the host-relative memory byte series from
+// the guest-relative percentage series and the fixture memory capacity, the
+// same derivation live mock ticks and the history seeder use. Without it a
+// chart window that falls outside the seeded history, such as 7d, returns no
+// `memoryused` at all and the host-capacity memory column has nothing to draw.
+func mockGuestMemoryUsedSeries(resourceType, resourceID string, memoryPercent []MetricPoint) []MetricPoint {
+	switch resourceType {
+	case "vm", "container":
+	default:
+		return nil
+	}
+	if len(memoryPercent) == 0 {
+		return nil
+	}
+
+	total := mock.MemoryTotalForResource(resourceType, resourceID)
+	if total <= 0 {
+		return nil
+	}
+
+	series := make([]MetricPoint, len(memoryPercent))
+	for i, point := range memoryPercent {
+		percent := math.Max(0, math.Min(100, point.Value))
+		series[i] = MetricPoint{
+			Timestamp: point.Timestamp,
+			Value:     total * (percent / 100),
+		}
+	}
+	return series
 }
 
 func mockNodeMetricsForChart(nodeID string, metricTypes []string, duration time.Duration) map[string][]MetricPoint {

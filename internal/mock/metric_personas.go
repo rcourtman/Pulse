@@ -31,8 +31,14 @@ type weightedMetricRole struct {
 
 var metricRoleRegistry atomic.Value
 
+// metricMemoryTotalRegistry holds fixture memory capacity in bytes per guest.
+// Host-relative memory history is a byte series, so generators derive it from
+// this capacity rather than sampling a second percentage.
+var metricMemoryTotalRegistry atomic.Value
+
 func init() {
 	metricRoleRegistry.Store(map[string]string{})
+	metricMemoryTotalRegistry.Store(map[string]float64{})
 }
 
 func metricRoleRegistryKey(resourceClass, resourceID string) string {
@@ -76,8 +82,55 @@ func MetricRole(resourceClass, resourceID string) string {
 	return inferMetricRole(resourceClass, resourceID)
 }
 
-func syncMetricRoleRegistryFromGraph(graph FixtureGraph) {
+// MemoryTotalForResource returns the fixture memory capacity in bytes for a
+// mock guest, or 0 when that resource has no known capacity.
+func MemoryTotalForResource(resourceClass, resourceID string) float64 {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return 0
+	}
+	registry, _ := metricMemoryTotalRegistry.Load().(map[string]float64)
+	if registry == nil {
+		return 0
+	}
+	return registry[metricRoleRegistryKey(resourceClass, resourceID)]
+}
+
+func setMetricMemoryTotalRegistry(registry map[string]float64) {
+	cloned := make(map[string]float64, len(registry))
+	for key, value := range registry {
+		key = strings.TrimSpace(key)
+		if key == "" || value <= 0 {
+			continue
+		}
+		cloned[key] = value
+	}
+	metricMemoryTotalRegistry.Store(cloned)
+}
+
+func buildMetricMemoryTotalRegistry(graph FixtureGraph) map[string]float64 {
+	registry := make(map[string]float64)
+	record := func(resourceClass, resourceID string, total int64) {
+		resourceID = strings.TrimSpace(resourceID)
+		if resourceID == "" || total <= 0 {
+			return
+		}
+		registry[metricRoleRegistryKey(resourceClass, resourceID)] = float64(total)
+	}
+
+	for _, vm := range graph.State.VMs {
+		record("vm", vm.ID, vm.Memory.Total)
+	}
+	for _, ct := range graph.State.Containers {
+		record("container", ct.ID, ct.Memory.Total)
+	}
+
+	return registry
+}
+
+func syncMetricFixtureRegistriesFromGraph(graph FixtureGraph) {
 	setMetricRoleRegistry(buildMetricRoleRegistry(graph))
+	setMetricMemoryTotalRegistry(buildMetricMemoryTotalRegistry(graph))
 }
 
 func buildMetricRoleRegistry(graph FixtureGraph) map[string]string {

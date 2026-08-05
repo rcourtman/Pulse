@@ -802,3 +802,49 @@ func diffIdentitySets(first, second []string) string {
 	}
 	return out
 }
+
+// Host-relative guest memory history is a byte series derived from fixture
+// capacity, so the fixture registries must expose that capacity per guest
+// without a caller cloning the whole graph on every lookup.
+func TestMemoryTotalForResourceTracksFixtureCapacity(t *testing.T) {
+	mustSetEnabled(t, true)
+	t.Cleanup(func() {
+		mustSetEnabled(t, false)
+	})
+
+	graph := CurrentFixtureGraph()
+
+	checked := 0
+	for _, vm := range graph.State.VMs {
+		if vm.ID == "" || vm.Memory.Total <= 0 {
+			continue
+		}
+		if got := MemoryTotalForResource("vm", vm.ID); got != float64(vm.Memory.Total) {
+			t.Fatalf("MemoryTotalForResource(vm, %s) = %f, want %d", vm.ID, got, vm.Memory.Total)
+		}
+		checked++
+		if checked >= 3 {
+			break
+		}
+	}
+	if checked == 0 {
+		t.Fatal("fixture graph has no VM with a memory total")
+	}
+
+	for _, ct := range graph.State.Containers {
+		if ct.ID == "" || ct.Memory.Total <= 0 {
+			continue
+		}
+		if got := MemoryTotalForResource("container", ct.ID); got != float64(ct.Memory.Total) {
+			t.Fatalf("MemoryTotalForResource(container, %s) = %f, want %d", ct.ID, got, ct.Memory.Total)
+		}
+		break
+	}
+
+	if got := MemoryTotalForResource("vm", "definitely-not-a-fixture-guest"); got != 0 {
+		t.Fatalf("unknown guest capacity = %f, want 0", got)
+	}
+	if got := MemoryTotalForResource("vm", "   "); got != 0 {
+		t.Fatalf("blank guest capacity = %f, want 0", got)
+	}
+}

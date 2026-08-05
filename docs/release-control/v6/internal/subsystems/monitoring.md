@@ -487,7 +487,16 @@ changes.
    metric writes. Proxmox guest memory history stores both the canonical
    guest-relative `memory` percentage and raw `memoryused` bytes so API
    consumers can apply alternate capacity denominators without reconstructing
-   bytes from a mutable guest allocation.
+   bytes from a mutable guest allocation. Mock mode owes the same pair on
+   every chart window. Seeded mock history covers a bounded window, so ranges
+   beyond it fall through to the synthetic generator in
+   `internal/monitoring/mock_chart_history.go`, and that generator must derive
+   `memoryused` from the sampled `memory` percentage and the fixture memory
+   capacity rather than omitting the series. Capacity resolves through the
+   fixture registries synced in `internal/mock/metric_personas.go`, never a
+   per-call fixture graph clone on the chart path. A percentage series without
+   its byte companion silently empties the host-capacity memory column instead
+   of degrading it.
    Discovery config and configured-host IP resolution must stay off the
    monitor lock. `internal/monitoring/monitor_discovery_helpers.go` exposes
    the canonical `discoveryConfigSnapshot()` that discovery providers consume,

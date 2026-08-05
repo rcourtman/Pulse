@@ -2743,3 +2743,73 @@ func TestResourceStaleThresholdsPreserveDefaultFloors(t *testing.T) {
 		t.Fatalf("default PMG threshold = %v, want %v", got, 120*time.Second)
 	}
 }
+
+// Mock history is seeded for a bounded window, so chart ranges longer than the
+// seed fall through to the synthetic generator. That generator must still carry
+// the host-relative `memoryused` byte series, or the workloads memory column in
+// host-capacity mode has nothing to draw at 7d while every other series renders.
+func TestMockGuestChartHistoryCarriesMemoryUsedBeyondSeededWindow(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	graph := mock.CurrentFixtureGraph()
+	var (
+		guestID string
+		total   float64
+	)
+	for _, vm := range graph.State.VMs {
+		if vm.ID != "" && vm.Memory.Total > 0 {
+			guestID = vm.ID
+			total = float64(vm.Memory.Total)
+			break
+		}
+	}
+	if guestID == "" {
+		t.Fatal("mock fixture graph has no VM with a memory total")
+	}
+
+	series := mockGuestMetricsForChart("vm", guestID, 7*24*time.Hour)
+	memoryUsed := series["memoryused"]
+	memoryPercent := series["memory"]
+
+	if len(memoryUsed) == 0 {
+		t.Fatalf("expected a memoryused series for %s over 7d, got none", guestID)
+	}
+	if len(memoryUsed) != len(memoryPercent) {
+		t.Fatalf(
+			"expected memoryused to track the memory series length, got %d vs %d",
+			len(memoryUsed),
+			len(memoryPercent),
+		)
+	}
+
+	for i, point := range memoryUsed {
+		if !point.Timestamp.Equal(memoryPercent[i].Timestamp) {
+			t.Fatalf("memoryused timestamp %d diverged from the memory series", i)
+		}
+		want := total * (math.Max(0, math.Min(100, memoryPercent[i].Value)) / 100)
+		if math.Abs(point.Value-want) > 1 {
+			t.Fatalf("memoryused[%d] = %f, want %f bytes", i, point.Value, want)
+		}
+	}
+}
+
+// Docker containers and pods are outside the Proxmox host-capacity memory
+// contract, so the synthetic generator must not start emitting bytes for them.
+func TestMockGuestChartHistorySkipsMemoryUsedForNonProxmoxGuests(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mustSetMockEnabled(t, true)
+	defer mustSetMockEnabled(t, previous)
+
+	for _, resourceType := range []string{"dockerContainer", "k8s"} {
+		series := mockGuestMetricsForChart(resourceType, "any-guest-id", 7*24*time.Hour)
+		if len(series["memoryused"]) != 0 {
+			t.Fatalf(
+				"expected no memoryused series for %s, got %d points",
+				resourceType,
+				len(series["memoryused"]),
+			)
+		}
+	}
+}
