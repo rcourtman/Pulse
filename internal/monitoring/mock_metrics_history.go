@@ -22,7 +22,13 @@ import (
 )
 
 const (
-	defaultMockSeedDuration   = 90 * 24 * time.Hour
+	// defaultMockSeedDuration bounds how much synthetic trend history mock
+	// mode seeds at startup. Measured on the demo droplet (identical entity
+	// counts): a 90-day seed put the process near 1GB of heap before the
+	// first real tick, a 6h seed at ~200MB. 48h keeps day-scale charts fully
+	// populated; anyone exercising long-range charts opts into more via
+	// PULSE_MOCK_TRENDS_SEED_DURATION.
+	defaultMockSeedDuration   = 48 * time.Hour
 	defaultMockSampleInterval = 1 * time.Minute // 1m for detailed recent charts
 )
 
