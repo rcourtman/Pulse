@@ -1055,6 +1055,10 @@ type Monitor struct {
 	config                     *config.Config
 	state                      *models.State
 	orgID                      string // Organization ID for tenant isolation (empty = default/legacy)
+	mockUnifiedViewMu          sync.Mutex
+	mockUnifiedView            monitorUnifiedStateView
+	mockUnifiedViewVersion     uint64
+	mockUnifiedViewValid       bool
 	pveClients                 map[string]PVEClientInterface
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
@@ -4577,9 +4581,30 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	if mock.IsMockEnabled() {
+		// Read the version before the snapshot so a tick landing in between
+		// caches newer data under an older token (harmless rebuild next
+		// call) rather than ever serving stale data under a newer one.
+		version := mock.FixtureDataVersion()
+		m.mockUnifiedViewMu.Lock()
+		if m.mockUnifiedViewValid && m.mockUnifiedViewVersion == version {
+			view := m.mockUnifiedView
+			m.mockUnifiedViewMu.Unlock()
+			return view
+		}
+		m.mockUnifiedViewMu.Unlock()
+
 		resources, freshness := mock.UnifiedResourceSnapshot()
 		if len(resources) > 0 || !freshness.IsZero() {
-			return monitorUnifiedStateViewFromResources(resources, freshness)
+			// Consumers share this view between ticks, mirroring the
+			// sharing semantics the persistent-store ReadState path has
+			// always had in real mode: views are read-only.
+			view := monitorUnifiedStateViewFromResources(resources, freshness)
+			m.mockUnifiedViewMu.Lock()
+			m.mockUnifiedView = view
+			m.mockUnifiedViewVersion = version
+			m.mockUnifiedViewValid = true
+			m.mockUnifiedViewMu.Unlock()
+			return view
 		}
 		return monitorUnifiedStateViewFromSnapshot(m.GetState())
 	}

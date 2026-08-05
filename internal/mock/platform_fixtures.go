@@ -3,6 +3,7 @@ package mock
 import (
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -159,12 +160,46 @@ func SupplementalOwnedSources() []unifiedresources.DataSource {
 	}
 }
 
+// unifiedSnapshotMemo caches the package-level UnifiedResourceSnapshot result
+// per FixtureDataVersion. Building the snapshot constructs a full throwaway
+// registry (ingest-clone in, List-clone out) — before this memo, every
+// consumer paid that on every read, which dominated the demo's allocation
+// profile.
+var unifiedSnapshotMemo struct {
+	mu        sync.Mutex
+	valid     bool
+	version   uint64
+	resources []unifiedresources.Resource
+	freshness time.Time
+}
+
+// UnifiedResourceSnapshot returns the current mock world as unified
+// resources. The returned slice and the nested data of its elements are
+// shared between callers — treat them as read-only. Every current consumer
+// either ingests them into a registry (which deep-clones) or copies the slice
+// before writing top-level fields.
 func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	if !IsMockEnabled() {
 		return nil, time.Time{}
 	}
 
-	return CurrentFixtureGraph().UnifiedResourceSnapshot()
+	unifiedSnapshotMemo.mu.Lock()
+	defer unifiedSnapshotMemo.mu.Unlock()
+
+	// Read the version before fetching the graph: a tick that lands between
+	// the two can only make the cached data newer than its token, which
+	// forces a harmless rebuild on the next call — never a stale serve.
+	version := FixtureDataVersion()
+	if unifiedSnapshotMemo.valid && unifiedSnapshotMemo.version == version {
+		return unifiedSnapshotMemo.resources, unifiedSnapshotMemo.freshness
+	}
+
+	resources, freshness := CurrentFixtureGraph().UnifiedResourceSnapshot()
+	unifiedSnapshotMemo.valid = true
+	unifiedSnapshotMemo.version = version
+	unifiedSnapshotMemo.resources = resources
+	unifiedSnapshotMemo.freshness = freshness
+	return resources, freshness
 }
 
 func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {

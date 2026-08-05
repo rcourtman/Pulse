@@ -23,10 +23,16 @@ var (
 	mockConfig      = DefaultConfig
 	enabled         atomic.Bool
 	fixtureRevision atomic.Uint64
-	updateEveryNS   atomic.Int64
-	updateTicker    *time.Ticker
-	stopUpdatesCh   chan struct{}
-	updateLoopWg    sync.WaitGroup
+	// fixtureDataVersion advances on EVERY observable mock-graph change:
+	// metric ticks as well as the structural changes that bump
+	// fixtureRevision. Caches of snapshots derived from the graph key on
+	// this; fixtureRevision stays structural-only so the expensive seeded
+	// trend history can be reused across monitor restarts within a process.
+	fixtureDataVersion atomic.Uint64
+	updateEveryNS      atomic.Int64
+	updateTicker       *time.Ticker
+	stopUpdatesCh      chan struct{}
+	updateLoopWg       sync.WaitGroup
 )
 
 func init() {
@@ -170,6 +176,7 @@ func enableMockMode(config MockConfig, fromInit bool) {
 	mockConfig = config
 	mockGraph = buildFixtureGraph(config, now)
 	fixtureRevision.Add(1)
+	fixtureDataVersion.Add(1)
 	enabled.Store(true)
 	dataMu.Unlock()
 	startUpdateLoop()
@@ -205,6 +212,7 @@ func disableMockMode() {
 	dataMu.Lock()
 	mockGraph = emptyFixtureGraph()
 	fixtureRevision.Add(1)
+	fixtureDataVersion.Add(1)
 	dataMu.Unlock()
 
 	log.Info().Msg("mock mode disabled")
@@ -270,6 +278,15 @@ func updateMetrics(cfg MockConfig) {
 	defer dataMu.Unlock()
 
 	mockGraph.UpdateMetrics(cfg, time.Now())
+	fixtureDataVersion.Add(1)
+}
+
+// FixtureDataVersion returns a token that advances on every observable
+// mock-graph change (metric ticks and structural changes alike). Derived
+// snapshots cached against this token are current for as long as it is
+// unchanged.
+func FixtureDataVersion() uint64 {
+	return fixtureDataVersion.Load()
 }
 
 // GetConfig returns the current mock configuration.
@@ -478,6 +495,7 @@ func SetMockConfig(cfg MockConfig) {
 	if configChanged && enabled.Load() {
 		mockGraph = buildFixtureGraph(normalized, time.Now())
 		fixtureRevision.Add(1)
+		fixtureDataVersion.Add(1)
 	}
 	dataMu.Unlock()
 
