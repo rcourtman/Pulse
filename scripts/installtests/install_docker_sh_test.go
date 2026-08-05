@@ -133,6 +133,7 @@ func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) 
 		{version: "6.2.0-rc.6", want: "6.1.2"},
 		{version: "6.2.0-rc.7", want: "6.1.2"},
 		{version: "6.2.0-rc.8", want: "6.1.2"},
+		{version: "6.2.0-rc.9", want: "6.1.2"},
 	}
 
 	for _, test := range tests {
@@ -340,7 +341,8 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"is a runtime-resilience and authorization-coherence cut that supersedes `v6.2.0-rc.7`: it aligns Go memory pressure with cgroup limits, hardens WebSocket liveness, corrects TrueNAS and Proxmox protection state, unifies session-admin enforcement, and removes clipping from long operator surfaces",
+		"is an alert-delivery, lifecycle-safety, and read-path efficiency cut that supersedes `v6.2.0-rc.8`: it restores notification transport metadata and state continuity, honors disabled grouping, closes tenant resource stores, completes guest metadata writes before shutdown, and shares generation-bound resource views",
+		"The preceding `v6.2.0-rc.8` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.8`.",
 		"The preceding `v6.2.0-rc.7` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.7`.",
 		"The preceding `v6.2.0-rc.6` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.6`.",
 		"The preceding `v6.2.0-rc.5` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.5`.",
@@ -350,7 +352,7 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 		"The preceding `v6.2.0-rc.1` candidate used the same support-prerelease path with `rollback_version=v6.1.2` and pinned the same four install surfaces to `6.2.0-rc.1`.",
 		"The `v"+version+"` server cut is classified `existing-mobile-build-compatible`.",
 		"Pulse Mobile 1.0.0 iOS build 12 and Android versionCode 9 candidates, both using runtime version 2, remain distributed to the existing beta cohort through TestFlight and Play open testing.",
-		"The changes since RC7 do not alter mobile relay payloads, pairing, approvals, or onboarding contracts; no additional companion upload or public store rollout is part of RC8.",
+		"The changes since RC8 do not alter mobile relay payloads, pairing, approvals, authentication, or onboarding contracts; no additional companion upload or public store rollout is part of RC9.",
 		"Authenticode signing through SignPath is the canonical Windows signing backend for the `v6.2.0` line.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)

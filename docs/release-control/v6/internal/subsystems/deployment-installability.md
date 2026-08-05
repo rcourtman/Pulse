@@ -1169,21 +1169,21 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.8` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.0-rc.9` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.8` release
+fallback, and Helm chart release metadata to the same `6.2.0-rc.9` release
 version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. Stable
 install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The
-eighth `v6.2.0` candidate is a runtime-resilience and authorization-coherence
-cut that supersedes `v6.2.0-rc.7`: it aligns Go memory pressure with cgroup
-limits, hardens WebSocket liveness, corrects TrueNAS and Proxmox protection
-state, unifies session-admin enforcement, and removes clipping from long
-operator surfaces. The exact `main` SHA must pass the integrated release checks
-and immutable-candidate build before the single-build workflow crosses its
-public mutation boundary.
+continues to govern the stable line until this candidate is promoted. The ninth
+`v6.2.0` candidate is an alert-delivery, lifecycle-safety, and read-path
+efficiency cut that supersedes `v6.2.0-rc.8`: it restores notification
+transport metadata and state continuity, honors disabled grouping, closes
+tenant resource stores, completes guest metadata writes before shutdown, and
+shares generation-bound resource views. The exact `main` SHA must pass the
+integrated release checks and immutable-candidate build before the single-build
+workflow crosses its public mutation boundary.
 Every release cut, including a prerelease, now gates that mutation boundary on
 the complete frontend unit suite, frontend type-checking, and a deterministic
 render smoke against the verified frontend bundle. The smoke must render
@@ -1194,13 +1194,18 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The `v6.2.0-rc.8` server cut is classified
+The `v6.2.0-rc.9` server cut is classified
 `existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
 build 12 and Android versionCode 9 candidates, both using runtime version 2,
 remain distributed to the existing beta cohort through TestFlight and Play
-open testing. The changes since RC7 do not alter mobile relay payloads, pairing,
-approvals, or onboarding contracts; no additional companion upload or public
-store rollout is part of RC8.
+open testing. The changes since RC8 do not alter mobile relay payloads, pairing,
+approvals, authentication, or onboarding contracts; no additional companion
+upload or public store rollout is part of RC9.
+The preceding `v6.2.0-rc.8` candidate used the same support-prerelease path
+with `rollback_version=v6.1.2` and pinned the same four install surfaces to
+`6.2.0-rc.8`. It is superseded by this cut and no longer governs the install
+pins; its packet stays in `docs/releases/` as the historical candidate record
+for the `v6.2.0` line.
 The preceding `v6.2.0-rc.7` candidate used the same support-prerelease path
 with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 `6.2.0-rc.7`. It is superseded by this cut and no longer governs the install
@@ -1385,19 +1390,20 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.8` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.8`
+For the active support prerelease `v6.2.0-rc.9` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.9`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release. Each new candidate on the
 `v6.2.0` line moves these two pins together with the repo-root `VERSION` and
 the Helm chart metadata in the same commit; a candidate that leaves any of the
 four on a superseded `6.2.0-rc.*` value is a release-packet blocker.
-The RC8 packet records `54a312bebd97d7cd79004acff54687755d2ab809` as
-the code-backed validation-risk head. That head includes the post-RC7 runtime,
-authorization, protection-state, responsive-layout, telemetry, and release
-proof changes. The metadata-only release-preparation commit may be the workflow
-dispatch head because it does not change that code-backed release-risk range.
+The RC9 packet records `d7f8e98912f89b1636066b52e401a32c7245417e` as
+the code-backed validation-risk head. That head includes the post-RC8
+notification-delivery, tenant resource lifecycle, guest metadata shutdown, and
+resource-read efficiency changes. The CI guardrail alignment and metadata-only
+release-preparation commits may be the workflow dispatch head because they do
+not change that code-backed release-risk range.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server
