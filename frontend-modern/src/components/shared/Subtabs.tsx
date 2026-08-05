@@ -1,4 +1,4 @@
-import { Component, For, JSX, splitProps } from 'solid-js';
+import { Component, createEffect, For, JSX, splitProps } from 'solid-js';
 
 export interface SubtabOption {
   value: string;
@@ -30,6 +30,7 @@ export const subtabButtonClass =
 export const subtabButtonActiveClass = 'border-blue-600 text-base-content';
 export const subtabButtonInactiveClass = 'border-transparent text-muted hover:text-base-content';
 export const Subtabs: Component<SubtabsProps> = (props) => {
+  let tablistRef: HTMLDivElement | undefined;
   const [local, divProps] = splitProps(props, [
     'value',
     'onChange',
@@ -41,8 +42,20 @@ export const Subtabs: Component<SubtabsProps> = (props) => {
     'trailing',
   ]);
 
+  createEffect(() => {
+    // Keep the selected tab discoverable when a narrow, horizontally scrolling
+    // tablist is opened through a deep link or changed programmatically.
+    void local.value;
+    queueMicrotask(() => {
+      tablistRef
+        ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+        ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    });
+  });
+
   const tablist = () => (
     <div
+      ref={tablistRef}
       role="tablist"
       aria-label={local.ariaLabel}
       class={`${subtabsListClass} ${local.listClass ?? ''}`.trim()}

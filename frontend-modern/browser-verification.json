@@ -1,42 +1,45 @@
 {
   "version": 1,
-  "base_sha": "662bb4f1946606e51122bfe06fd2d82aa33c6a15",
-  "verified_at": "2026-08-05T23:44:24Z",
+  "base_sha": "dd49fbd93e2eb573beb08aa442e42b73b0ac04b6",
+  "verified_at": "2026-08-05T23:54:57Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts",
-    "frontend-modern/src/types/api.ts"
+    "frontend-modern/src/components/shared/Subtabs.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "056eb325939f188c6095273441fd3b48c0f02cdfb4dd0a5b044c43b73868301a",
-    "frontend-modern/src/types/api.ts": "895ab5aa5ee5e1162008be6c8da83377169941d25b1655d73a1042d91076697b"
+    "frontend-modern/src/components/shared/Subtabs.tsx": "3570327799b306ee929d3777cf85f85db2d37b062cbb732c0d1c49e5e12f4388"
   },
   "routes": [
-    "/proxmox/overview",
-    "/truenas/overview"
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/docker",
+    "/alerts/thresholds/kubernetes",
+    "/alerts/thresholds/truenas",
+    "/alerts/thresholds/vmware",
+    "/alerts/thresholds/systems",
+    "/actions"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 820
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 320,
+      "height": 820
     }
   ],
   "states": [
-    "full initial WebSocket state hydration",
-    "live resource merge-patch refresh after the initial baseline",
-    "full WebSocket resync after a page reload",
-    "Proxmox node disk-array rendering after a delta refresh",
-    "TrueNAS system and health-alert rendering after desktop and narrow delta refreshes"
+    "direct deep links to every threshold platform",
+    "selected threshold platform at the start, middle, and end of an overflowing tab strip",
+    "desktop threshold tables with adaptive metric columns",
+    "mobile threshold resource cards after the table-to-card breakpoint",
+    "shared Subtabs rendering on the Actions Open and History views"
   ],
   "interactions": [
-    "signed in to the current local build and waited for the initial Proxmox resource workspace to hydrate",
-    "waited through a live refresh and confirmed changing metrics rendered without disconnecting or logging browser errors",
-    "opened the TrueNAS workspace and confirmed its system and alert projections remained intact after delta application",
-    "reloaded the TrueNAS route and confirmed the complete resync restored a connected, populated workspace",
-    "repeated TrueNAS initial hydration and live refresh at 390 by 844 and visually inspected the responsive result"
+    "opened every threshold platform directly at 320 by 820 and measured the selected tab against the visible tablist bounds",
+    "confirmed Kubernetes, TrueNAS, vSphere, and Machines now scroll into view with zero document overflow",
+    "confirmed Proxmox and Docker remain at their natural leading positions without unnecessary scrolling",
+    "visually inspected the fixed Machines threshold strip and its responsive resource content",
+    "rechecked the Actions shared subtab consumer at desktop and mobile widths"
   ]
 }
