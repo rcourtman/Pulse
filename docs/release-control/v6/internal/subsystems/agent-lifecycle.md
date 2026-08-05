@@ -5811,3 +5811,10 @@ coarse activity class (`list`, `export`, `verify`, `summary`); the handler runs
 unchanged whether or not recording succeeds, and a router without persistence
 serves the request rather than failing it
 (`TestWithAuditReadActivity_NilPersistenceIsSafe`).
+### Monitor shutdown drains queued guest metadata writes
+
+`Monitor.Stop` waits for in-flight `GuestMetadataStore` writes before closing
+the metrics store, so a tenant monitor that has been stopped is guaranteed not
+to write into its data directory afterwards. Tenant offboarding and any caller
+that removes a tenant directory can rely on `Stop` having quiesced disk writes,
+rather than racing a detached goroutine.

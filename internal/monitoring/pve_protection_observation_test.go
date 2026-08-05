@@ -2,9 +2,12 @@ package monitoring
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
@@ -154,5 +157,54 @@ func TestIsPVEBackupPermissionError(t *testing.T) {
 	}
 	if isPVEBackupPermissionError(errors.New("connection timed out")) {
 		t.Fatal("transient timeout must not be classified as a permission failure")
+	}
+}
+
+// persistGuestIdentity runs inside the protection/backup read-state walk and
+// must hand its write to the store rather than detaching its own goroutine.
+// A detached write cannot be drained by Monitor.Stop, so it can land after
+// shutdown and after the data directory has started being removed.
+func TestPersistGuestIdentityQueuesADrainableWrite(t *testing.T) {
+	dataPath := t.TempDir()
+	store := config.NewGuestMetadataStore(dataPath, nil)
+
+	persistGuestIdentity(store, "pve1:node1:100", "web-01", "qemu")
+
+	if !store.WaitForPendingWrites(10 * time.Second) {
+		t.Fatal("persistGuestIdentity write was not drainable; the call site detached its own goroutine")
+	}
+	if _, err := os.Stat(filepath.Join(dataPath, "guest_metadata.json")); err != nil {
+		t.Fatalf("guest identity was not persisted after the drain: %v", err)
+	}
+	if meta := store.Get("pve1:node1:100"); meta == nil || meta.LastKnownName != "web-01" || meta.LastKnownType != "qemu" {
+		t.Fatalf("guest identity not recorded: %#v", meta)
+	}
+}
+
+// An unchanged identity must not queue a write at all, so a steady-state poll
+// cycle does no disk work.
+func TestPersistGuestIdentitySkipsUnchangedIdentities(t *testing.T) {
+	dataPath := t.TempDir()
+	store := config.NewGuestMetadataStore(dataPath, nil)
+
+	persistGuestIdentity(store, "pve1:node1:101", "db-01", "lxc")
+	if !store.WaitForPendingWrites(10 * time.Second) {
+		t.Fatal("initial write did not drain")
+	}
+	firstWrite, err := os.Stat(filepath.Join(dataPath, "guest_metadata.json"))
+	if err != nil {
+		t.Fatalf("stat after first write: %v", err)
+	}
+
+	persistGuestIdentity(store, "pve1:node1:101", "db-01", "lxc")
+	if !store.WaitForPendingWrites(10 * time.Second) {
+		t.Fatal("second call did not drain")
+	}
+	secondWrite, err := os.Stat(filepath.Join(dataPath, "guest_metadata.json"))
+	if err != nil {
+		t.Fatalf("stat after second call: %v", err)
+	}
+	if !firstWrite.ModTime().Equal(secondWrite.ModTime()) {
+		t.Error("unchanged identity triggered a redundant write")
 	}
 }

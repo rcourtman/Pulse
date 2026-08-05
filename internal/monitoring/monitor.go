@@ -6782,6 +6782,11 @@ func monitorLastSeenUnix(value time.Time) int64 {
 
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
 // Stop gracefully stops the monitor
+// guestMetadataDrainTimeout bounds how long Stop waits for queued guest
+// metadata writes. It matches tenantMonitorShutdownTimeout so a wedged store
+// cannot hold up tenant teardown indefinitely.
+const guestMetadataDrainTimeout = 2 * time.Second
+
 func (m *Monitor) Stop() {
 	log.Info().Msg("stopping monitor")
 
@@ -6793,6 +6798,13 @@ func (m *Monitor) Stop() {
 	// Stop notification manager
 	if m.notificationMgr != nil {
 		m.notificationMgr.Stop()
+	}
+
+	// Drain background guest-metadata writes before the data directory can be
+	// torn down. Without this a queued write lands after shutdown and leaves a
+	// stray guest_metadata.json.tmp behind.
+	if m.guestMetadataStore != nil {
+		m.guestMetadataStore.WaitForPendingWrites(guestMetadataDrainTimeout)
 	}
 
 	// Close persistent metrics store (flushes buffered data)

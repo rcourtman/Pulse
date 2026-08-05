@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -4902,5 +4903,44 @@ func TestAgentLXCFilesystemsExpireAndRejectAmbiguousNodeLink(t *testing.T) {
 	)
 	if len(monitor.proxmoxLXCFilesystemsCache) != 0 {
 		t.Fatalf("accepted empty inventory did not prune expired entries: %+v", monitor.proxmoxLXCFilesystemsCache)
+	}
+}
+
+// A stopped monitor must not write into its data directory afterwards.
+// Tenant offboarding and any caller that removes a monitor's data directory
+// depends on Stop having quiesced disk writes; before the guest metadata store
+// tracked its own async writes, a queued write could land after Stop and leave
+// a partially-written .tmp behind.
+func TestMonitorStopQuiescesMetadataWritesBeforeReturning(t *testing.T) {
+	dataPath := t.TempDir()
+	monitor := &Monitor{
+		state:              models.NewState(),
+		guestMetadataStore: config.NewGuestMetadataStore(dataPath, nil),
+	}
+
+	for i := range 40 {
+		monitor.guestMetadataStore.SetAsync(fmt.Sprintf("pve1:node1:%d", 100+i), &config.GuestMetadata{
+			ID:            fmt.Sprintf("pve1:node1:%d", 100+i),
+			LastKnownName: fmt.Sprintf("vm-%d", i),
+			LastKnownType: "qemu",
+		})
+	}
+
+	monitor.Stop()
+
+	entries, err := os.ReadDir(dataPath)
+	if err != nil {
+		t.Fatalf("read data dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".tmp") {
+			t.Fatalf("write still in flight after Stop: %q", entry.Name())
+		}
+	}
+
+	// The directory must be removable immediately, which is the property tenant
+	// teardown relies on.
+	if err := os.RemoveAll(dataPath); err != nil {
+		t.Fatalf("data directory not removable after Stop: %v", err)
 	}
 }

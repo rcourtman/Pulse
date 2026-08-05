@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -29,6 +30,48 @@ type GuestMetadataStore struct {
 	metadata map[string]*GuestMetadata // keyed by guest ID
 	dataPath string
 	fs       FileSystem
+
+	// inflight tracks background Set calls started by SetAsync so shutdown can
+	// wait for them. Callers used to spawn their own detached goroutines, which
+	// meant a write could land after the monitor stopped and after the data
+	// directory was being torn down, leaving a stray guest_metadata.json.tmp.
+	inflight sync.WaitGroup
+}
+
+// SetAsync persists metadata without blocking the caller, while keeping the
+// write owned by the store so WaitForPendingWrites can drain it on shutdown.
+func (s *GuestMetadataStore) SetAsync(guestID string, meta *GuestMetadata) {
+	if s == nil {
+		return
+	}
+	s.inflight.Add(1)
+	go func() {
+		defer s.inflight.Done()
+		if err := s.Set(guestID, meta); err != nil {
+			log.Error().Err(err).Str("guestID", guestID).Msg("failed to persist guest metadata")
+		}
+	}()
+}
+
+// WaitForPendingWrites blocks until background writes finish or the timeout
+// elapses. It reports whether the store drained; a false result means a write
+// may still be in flight and the data directory is not safe to remove.
+func (s *GuestMetadataStore) WaitForPendingWrites(timeout time.Duration) bool {
+	if s == nil {
+		return true
+	}
+	done := make(chan struct{})
+	go func() {
+		s.inflight.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		log.Warn().Dur("timeout", timeout).Msg("timed out waiting for guest metadata writes to drain")
+		return false
+	}
 }
 
 func cloneGuestMetadata(meta *GuestMetadata) *GuestMetadata {

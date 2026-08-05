@@ -2767,3 +2767,24 @@ host dataset evidence is copied onto the matching provider-owned ZFS pool;
 provider health, scan, device, and error fields remain authoritative. When the
 provider cannot return pool detail, monitoring may synthesize only a minimal
 `UNKNOWN` pool so valid dataset evidence is still inspectable.
+### Guest metadata writes are owned by the store and drained on shutdown
+
+`persistGuestIdentity` no longer detaches its own goroutine per changed guest.
+It calls `GuestMetadataStore.SetAsync`, which tracks the write on a WaitGroup
+so `GuestMetadataStore.WaitForPendingWrites` can drain it. `Monitor.Stop` drains
+before closing the metrics store, under a bounded timeout matching
+`tenantMonitorShutdownTimeout` so a wedged store cannot hold up tenant teardown.
+
+Untracked writes were observable, not theoretical: a queued write could land
+after the monitor stopped and after a tenant directory was being removed,
+leaving a stray `guest_metadata.json.tmp` from the interrupted atomic write.
+That is what made `TestHostedTenantAgentInstallTokenCannotReportToOtherTenant`
+fail its `t.TempDir` cleanup with "directory not empty".
+`TestGuestMetadataStore_WaitForPendingWritesDrainsQueuedWrites` and
+`TestGuestMetadataStore_DataDirIsRemovableAfterDrain` pin the drain and fail if
+`SetAsync` stops tracking its goroutine.
+
+Known and deliberately unchanged: each changed guest still triggers a full-file
+save, so one poll cycle over N changed guests performs N marshals and N atomic
+writes that serialize on the store mutex. Coalescing them is a behavioural
+change beyond the shutdown defect.

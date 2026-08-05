@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestGuestMetadataStore_Get(t *testing.T) {
@@ -754,5 +755,78 @@ func TestGuestMetadataStore_GetWithLegacyMigration_NodeMigrationDoesNotCrossGues
 	}
 	if store.Get("pve1:node1:101") == nil || store.Get("pve2:node1:100") == nil {
 		t.Error("unrelated entries must remain untouched")
+	}
+}
+
+// A queued async write must be observable on disk once the store reports it has
+// drained. Before the store owned these writes, callers detached their own
+// goroutines, so a write could land after shutdown and after the data directory
+// was being removed, leaving a stray guest_metadata.json.tmp behind.
+func TestGuestMetadataStore_WaitForPendingWritesDrainsQueuedWrites(t *testing.T) {
+	dataDir := t.TempDir()
+	store := NewGuestMetadataStore(dataDir, nil)
+
+	for i := range 25 {
+		store.SetAsync("node:10"+string(rune('a'+i%25)), &GuestMetadata{
+			ID:            "guest",
+			LastKnownName: "vm-" + string(rune('a'+i%25)),
+			LastKnownType: "qemu",
+		})
+	}
+
+	if !store.WaitForPendingWrites(10 * time.Second) {
+		t.Fatal("store did not drain within the timeout")
+	}
+
+	// Nothing may still be writing: a leftover .tmp means an atomic write was
+	// in flight when the store claimed to be drained.
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		t.Fatalf("read data dir: %v", err)
+	}
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".tmp" {
+			t.Fatalf("temporary file %q survived the drain; a write was still in flight", entry.Name())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "guest_metadata.json")); err != nil {
+		t.Fatalf("guest metadata was not persisted: %v", err)
+	}
+}
+
+// The data directory must be removable immediately after a drain. This is the
+// exact property whose absence made TestHostedTenantAgentInstallTokenCannotReportToOtherTenant
+// fail its t.TempDir cleanup with "directory not empty".
+func TestGuestMetadataStore_DataDirIsRemovableAfterDrain(t *testing.T) {
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "orgs", "client-b")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	store := NewGuestMetadataStore(dataDir, nil)
+	for i := range 25 {
+		store.SetAsync("node:20"+string(rune('a'+i%25)), &GuestMetadata{
+			ID:            "guest",
+			LastKnownName: "ct-" + string(rune('a'+i%25)),
+			LastKnownType: "lxc",
+		})
+	}
+
+	if !store.WaitForPendingWrites(10 * time.Second) {
+		t.Fatal("store did not drain within the timeout")
+	}
+	if err := os.RemoveAll(filepath.Join(root, "orgs")); err != nil {
+		t.Fatalf("org directory was not removable after drain: %v", err)
+	}
+}
+
+func TestGuestMetadataStore_WaitOnNilStoreAndIdleStoreReturnTrue(t *testing.T) {
+	var nilStore *GuestMetadataStore
+	if !nilStore.WaitForPendingWrites(time.Second) {
+		t.Fatal("nil store must report drained")
+	}
+	if !NewGuestMetadataStore(t.TempDir(), nil).WaitForPendingWrites(time.Second) {
+		t.Fatal("idle store must report drained")
 	}
 }

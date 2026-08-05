@@ -862,12 +862,10 @@ func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, na
 	if existing.LastKnownName != name || existing.LastKnownType != guestType {
 		existing.LastKnownName = name
 		existing.LastKnownType = guestType
-		// Save asynchronously to avoid blocking the monitor
-		go func() {
-			if err := metadataStore.Set(guestKey, existing); err != nil {
-				log.Error().Err(err).Str("guestKey", guestKey).Msg("failed to persist guest identity")
-			}
-		}()
+		// Save without blocking the monitor. The store owns the goroutine so
+		// Monitor.Stop can drain it; a detached goroutine here could write
+		// after shutdown, into a data directory that was already being removed.
+		metadataStore.SetAsync(guestKey, existing)
 	}
 }
 
