@@ -1,7 +1,7 @@
 export type SelectablePillButtonSize = 'md';
 
 export const SELECTABLE_PILL_BUTTON_BASE_CLASS =
-  'inline-flex items-center justify-center rounded-full border font-semibold transition whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex max-w-full items-center justify-center rounded-full border text-center font-semibold transition whitespace-normal outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
 
 export const SELECTABLE_PILL_BUTTON_SIZE_CLASSES: Record<SelectablePillButtonSize, string> = {
   md: 'min-h-10 px-3 py-2 text-sm sm:min-h-10',

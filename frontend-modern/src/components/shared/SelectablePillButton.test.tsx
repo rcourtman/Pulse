@@ -42,6 +42,9 @@ describe('SelectablePillButton', () => {
     expect(active).toHaveAttribute('aria-pressed', 'true');
     expect(active.className).toContain('border-blue-500');
     expect(active.className).toContain('bg-blue-600');
+    expect(active.className).toContain('max-w-full');
+    expect(active.className).toContain('whitespace-normal');
+    expect(active.className).not.toContain('whitespace-nowrap');
     expect(inactive).toHaveAttribute('aria-pressed', 'false');
     expect(inactive.className).toContain('border-border');
     expect(inactive.className).toContain('bg-surface');

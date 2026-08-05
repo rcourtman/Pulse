@@ -229,7 +229,13 @@ describe('AISettings model loading error states', () => {
     expect(
       screen.getByText('This controls actions started from Assistant chat only', { exact: false }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Chat action mode')).toBeInTheDocument();
+    const chatActionMode = screen.getByLabelText('Chat action mode');
+    expect(chatActionMode).toBeInTheDocument();
+    expect(chatActionMode).toHaveClass('w-full', 'min-w-0', 'sm:flex-1');
+    expect(chatActionMode.parentElement).toHaveClass('flex-col', 'sm:flex-row');
+    expect(
+      screen.getByText('Assistant asks before chat-only actions.', { exact: false }),
+    ).toHaveClass('sm:ml-[7.5rem]');
     expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'External agents' })).toBeInTheDocument();
@@ -1270,9 +1276,7 @@ describe('AISettings provider save failure context', () => {
       await screen.findByText('Provider connected; Patrol capability not verified'),
     ).toBeInTheDocument();
     expect(screen.getByText('Evaluation detail')).toBeInTheDocument();
-    expect(
-      screen.getByText(/expected exactly one tool call, got 0/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/expected exactly one tool call, got 0/)).toBeInTheDocument();
     expect(screen.getByText(/done_reason=length/)).toBeInTheDocument();
     expect(screen.getByText(/nonce did not match/)).toBeInTheDocument();
   });

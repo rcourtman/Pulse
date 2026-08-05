@@ -311,10 +311,10 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
           value={state.form.controlLevel}
           onChange={(e) => state.setForm('controlLevel', e.currentTarget.value as AIControlLevel)}
           disabled={state.saving()}
-          fieldBaseClass="flex"
-          fieldClass="items-center gap-3"
-          labelClass="text-xs font-medium text-muted w-28 flex-shrink-0"
-          selectBaseClass="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
+          fieldBaseClass="flex flex-col gap-2 sm:flex-row"
+          fieldClass="sm:items-center sm:gap-3"
+          labelClass="text-xs font-medium text-muted sm:w-28 sm:flex-shrink-0"
+          selectBaseClass="w-full min-w-0 min-h-10 px-2 py-2 text-sm border border-border rounded bg-surface sm:min-h-9 sm:flex-1"
         >
           <option value="read_only">Observe only - Assistant cannot take chat actions</option>
           <option value="controlled">Ask first - Assistant asks before chat-only actions</option>
@@ -324,7 +324,7 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
             </option>
           </Show>
         </FormSelect>
-        <p class="text-[10px] text-muted ml-[7.5rem]">
+        <p class="text-[10px] text-muted sm:ml-[7.5rem]">
           {getAIControlLevelDescription(state.form.controlLevel)}
         </p>
         <Show when={state.form.controlLevel === 'autonomous'}>
