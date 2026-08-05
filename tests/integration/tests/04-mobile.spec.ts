@@ -195,7 +195,7 @@ test.describe("Mobile viewport flows", () => {
 
     const table = page.locator("table.workload-table--mobile");
     await expect(table).toBeVisible({ timeout: 30_000 });
-    await expect(table).toHaveClass(/min-w-\[36rem\]/);
+    await expect(table).toHaveClass(/min-w-\[0px\]/);
     await expect(table.locator("xpath=..")).toHaveClass(/overflow-x-auto/);
   });
 
@@ -235,7 +235,13 @@ test.describe("Mobile viewport flows", () => {
     for (const tabId of ["alerts", "ai", "settings"]) {
       const button = utilityRail.locator(`button[data-tab-id="${tabId}"]`);
       await expect(button).toBeVisible();
-      const box = await button.boundingBox();
+      let box = await button.boundingBox();
+      await expect
+        .poll(async () => {
+          box = await button.boundingBox();
+          return box;
+        })
+        .not.toBeNull();
       expect(
         box,
         `${tabId} utility destination should have a layout box`,

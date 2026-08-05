@@ -210,7 +210,18 @@ test.describe('Proxmox cluster node display names', () => {
     // Equal display labels are intentionally valid presentation. The write
     // target remains the second member's immutable identity.
     await page.getByLabel('Display name for pve2').fill('Render East');
+    const displayNameUpdate = page.waitForRequest((request) => {
+      if (
+        request.method() !== 'PUT' ||
+        new URL(request.url()).pathname !== '/api/config/nodes/pve-0'
+      ) {
+        return false;
+      }
+      const payload = request.postDataJSON() as Record<string, unknown> | null;
+      return Array.isArray(payload?.clusterNodeDisplayNameOverrides);
+    });
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await displayNameUpdate;
 
     await expect.poll(() => updatePayload).toBeDefined();
     expect(updatePayload?.clusterNodeDisplayNameOverrides).toEqual([
