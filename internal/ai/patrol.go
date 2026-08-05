@@ -150,7 +150,6 @@ type PatrolRunRecord struct {
 	ExistingFindings   int                       `json:"existing_findings"`
 	RejectedFindings   int                       `json:"rejected_findings"`
 	ResolvedFindings   int                       `json:"resolved_findings"`
-	AutoFixCount       int                       `json:"auto_fix_count,omitempty"`
 	FindingsSummary    string                    `json:"findings_summary"` // e.g., "All healthy" or "2 warnings, 1 critical"
 	FindingIDs         []string                  `json:"finding_ids"`      // IDs of findings from this run
 	FindingAssessments []PatrolFindingAssessment `json:"finding_assessments,omitempty"`
@@ -198,7 +197,6 @@ type patrolRunRecordJSON struct {
 	ExistingFindings          int                       `json:"existing_findings"`
 	RejectedFindings          int                       `json:"rejected_findings"`
 	ResolvedFindings          int                       `json:"resolved_findings"`
-	AutoFixCount              int                       `json:"auto_fix_count,omitempty"`
 	FindingsSummary           string                    `json:"findings_summary"`
 	FindingIDs                []string                  `json:"finding_ids"`
 	FindingAssessments        []PatrolFindingAssessment `json:"finding_assessments,omitempty"`
@@ -329,7 +327,6 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		ExistingFindings:          normalized.ExistingFindings,
 		RejectedFindings:          normalized.RejectedFindings,
 		ResolvedFindings:          normalized.ResolvedFindings,
-		AutoFixCount:              normalized.AutoFixCount,
 		FindingsSummary:           normalized.FindingsSummary,
 		FindingIDs:                normalized.FindingIDs,
 		FindingAssessments:        normalized.FindingAssessments,
@@ -382,7 +379,6 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		ExistingFindings:          payload.ExistingFindings,
 		RejectedFindings:          payload.RejectedFindings,
 		ResolvedFindings:          payload.ResolvedFindings,
-		AutoFixCount:              payload.AutoFixCount,
 		FindingsSummary:           payload.FindingsSummary,
 		FindingIDs:                payload.FindingIDs,
 		FindingAssessments:        payload.FindingAssessments,

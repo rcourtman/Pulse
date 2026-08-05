@@ -103,11 +103,20 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Notification failures configuration 7d (schema v5) | `0` | Count terminal failures classified locally as missing or invalid destination configuration without sending configuration values |
 | Notification failures rejected 7d (schema v5) | `0` | Count terminal failures classified locally as destination request or payload rejection without sending response or payload content |
 | Notification failures unknown 7d (schema v5) | `0` | Count terminal failures that do not match another fixed class without sending raw errors |
+| Alert AI enabled | `true`/`false` | See whether AI analysis on alert firing is switched on, without sending alert content, resource identifiers, or analysis text |
 | Relay enabled | `true`/`false` | See whether remote-access features are being used |
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
 | Paid license | `true`/`false` | Distinguish free from paid posture without sending the exact commercial tier |
 | Has API tokens | `true`/`false` | See whether token-based automation/integration is being used without sending token counts |
+| RBAC custom roles | `3` | Count roles created by the operator, excluding the roles that ship built in, without sending role names, permissions, or scopes |
+| RBAC user assignments | `7` | Count user-to-role assignments without sending usernames, role names, or permissions |
+| Audit logging persistent | `true`/`false` | See whether a persistent audit store is active rather than console-only logging, without sending any audit event |
+| Audit events 30d | `41` | Count audit events retained in the current 30-day telemetry window without sending event types, actors, targets, outcomes, or event detail |
+| Report schedules | `5` | Count configured scheduled reports without sending schedule names, report scope, formats, or delivery recipients |
+| Report schedules enabled | `4` | Count scheduled reports that are switched on, without sending schedule names, scope, or recipients |
+| Report schedules run 30d | `2` | Count scheduled reports that last ran inside the current 30-day telemetry window, without sending run times, report contents, or delivery results |
+| Agent profiles | `9` | Count configured agent profiles without sending profile names, targets, or profile contents |
 | Update attempts 30d | `2` | Count update attempts recorded in the current 30-day telemetry window without sending download URLs, logs, or command output |
 | Update successes 30d | `1` | Count successful update attempts in the current 30-day telemetry window |
 | Update failures 30d | `1` | Count failed or rolled-back update attempts in the current 30-day telemetry window without sending raw errors, logs, URLs, or command output |
@@ -152,7 +161,6 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence Patrol new findings 30d | `5` | Count new findings produced by Patrol in the current 30-day telemetry window without sending finding IDs or details |
 | Pulse Intelligence Patrol investigations 30d | `3` | Count findings investigated by Patrol in the current 30-day telemetry window without sending finding IDs, resource IDs, or details |
 | Pulse Intelligence Patrol resolved findings 30d | `2` | Count findings resolved or fix-verified in the current 30-day telemetry window without sending finding IDs, resource IDs, fix details, or verification detail |
-| Pulse Intelligence Patrol autofixes 30d | `1` | Count Patrol autofix records in the current 30-day telemetry window without sending target resources or fix content |
 | Pulse Intelligence external agent enabled | `true`/`false` | See whether at least one token can use the external Pulse Intelligence agent/MCP surface without sending token counts, names, scopes, or values |
 | Pulse Intelligence external agent used 30d | `true`/`false` | See whether an external-agent-capable API token reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, or request details |
 | Pulse Intelligence MCP adapter used 30d | `true`/`false` | See whether the `pulse-mcp` adapter reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, prompts, or request details |

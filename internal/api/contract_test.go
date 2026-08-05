@@ -11921,7 +11921,6 @@ func TestContract_PatrolRunRecordJSONSnapshot(t *testing.T) {
 		ExistingFindings:          2,
 		RejectedFindings:          1,
 		ResolvedFindings:          1,
-		AutoFixCount:              0,
 		FindingsSummary:           "All clear",
 		FindingIDs:                []string{},
 		ErrorCount:                0,

@@ -27,9 +27,9 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 		t.Fatalf("SaveAIUsageHistory: %v", err)
 	}
 	if err := persistence.SavePatrolRunHistory([]config.PatrolRunRecord{
-		{StartedAt: recent.Add(-5 * time.Minute), CompletedAt: recent, NewFindings: 2, AutoFixCount: 1},
+		{StartedAt: recent.Add(-5 * time.Minute), CompletedAt: recent, NewFindings: 2},
 		{StartedAt: recent.Add(-time.Hour), CompletedAt: recent.Add(-30 * time.Minute), NewFindings: 3},
-		{StartedAt: old, CompletedAt: old, NewFindings: 99, AutoFixCount: 99},
+		{StartedAt: old, CompletedAt: old, NewFindings: 99},
 	}); err != nil {
 		t.Fatalf("SavePatrolRunHistory: %v", err)
 	}
@@ -149,9 +149,6 @@ func TestApplyPulseIntelligenceTelemetrySnapshot_AggregatesContentFreeLoopCounts
 	}
 	if snap.PulseIntelligencePatrolResolvedFindings30d != 2 {
 		t.Fatalf("patrol resolved findings = %d, want 2", snap.PulseIntelligencePatrolResolvedFindings30d)
-	}
-	if snap.PulseIntelligencePatrolAutofixes30d != 1 {
-		t.Fatalf("patrol autofixes = %d, want 1", snap.PulseIntelligencePatrolAutofixes30d)
 	}
 	if !snap.PulseIntelligenceExternalAgentEnabled || !snap.PulseIntelligenceExternalAgentUsed30d {
 		t.Fatalf("external-agent booleans = enabled %v used %v, want true/true", snap.PulseIntelligenceExternalAgentEnabled, snap.PulseIntelligenceExternalAgentUsed30d)

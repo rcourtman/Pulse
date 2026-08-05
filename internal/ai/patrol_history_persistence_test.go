@@ -666,7 +666,6 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 			NewFindings:               1,
 			ExistingFindings:          2,
 			ResolvedFindings:          1,
-			AutoFixCount:              0,
 			FindingsSummary:           "summary",
 			FindingIDs:                []string{"f1", "f2"},
 			ErrorCount:                0,

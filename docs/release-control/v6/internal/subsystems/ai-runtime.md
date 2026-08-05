@@ -6863,3 +6863,16 @@ to the same policy as the outer address, so `PULSE_AI_ALLOW_LOOPBACK` and
 `PULSE_AI_ALLOW_PRIVATE_IPS` relax the embedded check exactly as they relax the
 outer one, and a transition address wrapping a permitted public target stays
 permitted.
+### Patrol run records no longer carry a dead auto-fix count
+
+`PatrolRunRecord.AutoFixCount` was removed from `internal/ai/patrol.go`,
+`internal/ai/patrol_run.go`, `internal/ai/patrol_history_persistence.go`,
+`internal/ai/patrol_assistant_handoff.go`, and the persisted mirror in
+`internal/config/persistence.go`. The field was constructed as a literal `0` in
+`buildPatrolRunRecord` and had no increment site anywhere in the tree, so it was
+structurally incapable of holding a non-zero value while still being plumbed
+through run history, the Assistant handoff summary, and outbound telemetry.
+Governed Patrol fixes are delivered through the approved-action pipeline and
+are already counted there (`pulse_intelligence_approved_action_*`), which is the
+signal to read for remediation activity. Existing persisted history files that
+still contain `auto_fix_count` load cleanly; the unknown key is ignored.

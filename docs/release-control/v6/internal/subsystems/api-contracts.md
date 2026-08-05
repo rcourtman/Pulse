@@ -8852,3 +8852,16 @@ optional and additive: older agents omit it, older stored hosts may have no
 dataset collection, and provider ZFS pool responses omit `datasets` when no
 linked host evidence exists. Ingest trims text, rejects invalid counters, and
 bounds rows and field lengths before the data reaches runtime models.
+### Telemetry payload parity spans three surfaces at schema v6
+
+The outbound telemetry contract is defined in exactly three places that must
+move together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
+`var ping struct` receiver in the private license server, and
+`export interface TelemetryPingPreview` in
+`frontend-modern/src/api/settings.ts`. `scripts/check_telemetry_schema_parity.py`
+fails if any field, or any field type, differs between them; only
+`license_tier` and `api_tokens` are allowed to exist receiver-side as legacy
+scrubbed columns. Schema v6 adds nine licensed-feature adoption fields and
+removes `pulse_intelligence_patrol_autofixes_30d`. The frontend interface is
+not decorative: the Settings telemetry preview renders the payload verbatim, so
+a field missing there is a field the user is not shown before it is sent.

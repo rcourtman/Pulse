@@ -30,6 +30,25 @@ func NewTenantRBACProvider(baseDataDir string) *TenantRBACProvider {
 	}
 }
 
+// PeekManager returns an already-initialized RBAC Manager for the given org
+// without creating one. Read-only callers that must not have side effects —
+// notably the usage telemetry snapshot — use this so a background read never
+// provisions an RBAC store for an org that has never used RBAC.
+func (p *TenantRBACProvider) PeekManager(orgID string) (auth.ExtendedManager, bool) {
+	if p == nil {
+		return nil, false
+	}
+	orgID = normalizeOrgID(orgID)
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	manager, exists := p.managers[orgID]
+	if !exists || manager == nil {
+		return nil, false
+	}
+	return manager, true
+}
+
 // GetManager returns the RBAC Manager for the given org, creating it lazily if needed.
 // For "default" org: DataDir = baseDataDir (db at {baseDataDir}/rbac/rbac.db — existing location).
 // For other orgs: DataDir = {baseDataDir}/orgs/{orgID} (db at {baseDataDir}/orgs/{orgID}/rbac/rbac.db).

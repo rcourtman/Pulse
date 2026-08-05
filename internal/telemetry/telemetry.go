@@ -137,7 +137,11 @@ const (
 	// schema v4 adds complete approved-action outcome accounting, fixed
 	// pre-dispatch refusal categories, and verified finding-resolution linkage.
 	// Schema v5 adds bounded, content-free notification failure classes.
-	TelemetrySchemaVersion = 5
+	// Schema v6 adds licensed-feature adoption counts (RBAC, audit logging,
+	// scheduled reporting, agent profiles, alert-triggered AI) and drops
+	// pulse_intelligence_patrol_autofixes_30d, which no code path could ever
+	// set to a non-zero value.
+	TelemetrySchemaVersion = 6
 )
 
 type installIDRecord struct {
@@ -217,15 +221,27 @@ type Ping struct {
 	DiscoveryEnabled     bool `json:"discovery_enabled"`
 	NotificationsEnabled bool `json:"notifications_enabled"`
 	AIActionsEnabled     bool `json:"ai_actions_enabled"`
+	AlertAIEnabled       bool `json:"alert_ai_enabled"`
 	ActiveAlerts         int  `json:"active_alerts"`
 	RelayEnabled         bool `json:"relay_enabled"`
 	SSOEnabled           bool `json:"sso_enabled"`
 	MultiTenant          bool `json:"multi_tenant"`
 	PaidLicense          bool `json:"paid_license"`
 	HasAPITokens         bool `json:"has_api_tokens"`
-	UpdateAttempts30d    int  `json:"update_attempts_30d"`
-	UpdateSuccesses30d   int  `json:"update_successes_30d"`
-	UpdateFailures30d    int  `json:"update_failures_30d"`
+
+	// Licensed-feature adoption. Counts only: no role names, schedule names,
+	// profile names, recipients, report contents, or audit event detail.
+	RBACCustomRoles        int  `json:"rbac_custom_roles"`
+	RBACUserAssignments    int  `json:"rbac_user_assignments"`
+	AuditLoggingPersistent bool `json:"audit_logging_persistent"`
+	AuditEvents30d         int  `json:"audit_events_30d"`
+	ReportSchedules        int  `json:"report_schedules"`
+	ReportSchedulesEnabled int  `json:"report_schedules_enabled"`
+	ReportSchedulesRun30d  int  `json:"report_schedules_run_30d"`
+	AgentProfiles          int  `json:"agent_profiles"`
+	UpdateAttempts30d      int  `json:"update_attempts_30d"`
+	UpdateSuccesses30d     int  `json:"update_successes_30d"`
+	UpdateFailures30d      int  `json:"update_failures_30d"`
 	// Last coarse update failure category; never raw error text.
 	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
 
@@ -288,7 +304,6 @@ type Ping struct {
 	PulseIntelligencePatrolNewFindings30d                          int  `json:"pulse_intelligence_patrol_new_findings_30d"`
 	PulseIntelligencePatrolInvestigations30d                       int  `json:"pulse_intelligence_patrol_investigations_30d"`
 	PulseIntelligencePatrolResolvedFindings30d                     int  `json:"pulse_intelligence_patrol_resolved_findings_30d"`
-	PulseIntelligencePatrolAutofixes30d                            int  `json:"pulse_intelligence_patrol_autofixes_30d"`
 	PulseIntelligenceExternalAgentEnabled                          bool `json:"pulse_intelligence_external_agent_enabled"`
 	PulseIntelligenceExternalAgentUsed30d                          bool `json:"pulse_intelligence_external_agent_used_30d"`
 	PulseIntelligenceMCPAdapterUsed30d                             bool `json:"pulse_intelligence_mcp_adapter_used_30d"`
@@ -356,12 +371,21 @@ type Snapshot struct {
 	DiscoveryEnabled                                               bool
 	NotificationsEnabled                                           bool
 	AIActionsEnabled                                               bool
+	AlertAIEnabled                                                 bool
 	ActiveAlerts                                                   int
 	RelayEnabled                                                   bool
 	SSOEnabled                                                     bool
 	MultiTenant                                                    bool
 	PaidLicense                                                    bool
 	HasAPITokens                                                   bool
+	RBACCustomRoles                                                int
+	RBACUserAssignments                                            int
+	AuditLoggingPersistent                                         bool
+	AuditEvents30d                                                 int
+	ReportSchedules                                                int
+	ReportSchedulesEnabled                                         int
+	ReportSchedulesRun30d                                          int
+	AgentProfiles                                                  int
 	UpdateAttempts30d                                              int
 	UpdateSuccesses30d                                             int
 	UpdateFailures30d                                              int
@@ -421,7 +445,6 @@ type Snapshot struct {
 	PulseIntelligencePatrolNewFindings30d                          int
 	PulseIntelligencePatrolInvestigations30d                       int
 	PulseIntelligencePatrolResolvedFindings30d                     int
-	PulseIntelligencePatrolAutofixes30d                            int
 	PulseIntelligenceExternalAgentEnabled                          bool
 	PulseIntelligenceExternalAgentOperationsLoopReady              bool
 	PulseIntelligenceExternalAgentUsed30d                          bool
@@ -927,12 +950,21 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.DiscoveryEnabled = s.DiscoveryEnabled
 	ping.NotificationsEnabled = s.NotificationsEnabled
 	ping.AIActionsEnabled = s.AIActionsEnabled
+	ping.AlertAIEnabled = s.AlertAIEnabled
 	ping.ActiveAlerts = s.ActiveAlerts
 	ping.RelayEnabled = s.RelayEnabled
 	ping.SSOEnabled = s.SSOEnabled
 	ping.MultiTenant = s.MultiTenant
 	ping.PaidLicense = s.PaidLicense
 	ping.HasAPITokens = s.HasAPITokens
+	ping.RBACCustomRoles = s.RBACCustomRoles
+	ping.RBACUserAssignments = s.RBACUserAssignments
+	ping.AuditLoggingPersistent = s.AuditLoggingPersistent
+	ping.AuditEvents30d = s.AuditEvents30d
+	ping.ReportSchedules = s.ReportSchedules
+	ping.ReportSchedulesEnabled = s.ReportSchedulesEnabled
+	ping.ReportSchedulesRun30d = s.ReportSchedulesRun30d
+	ping.AgentProfiles = s.AgentProfiles
 	ping.UpdateAttempts30d = s.UpdateAttempts30d
 	ping.UpdateSuccesses30d = s.UpdateSuccesses30d
 	ping.UpdateFailures30d = s.UpdateFailures30d
@@ -992,7 +1024,6 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligencePatrolNewFindings30d = s.PulseIntelligencePatrolNewFindings30d
 	ping.PulseIntelligencePatrolInvestigations30d = s.PulseIntelligencePatrolInvestigations30d
 	ping.PulseIntelligencePatrolResolvedFindings30d = s.PulseIntelligencePatrolResolvedFindings30d
-	ping.PulseIntelligencePatrolAutofixes30d = s.PulseIntelligencePatrolAutofixes30d
 	ping.PulseIntelligenceExternalAgentEnabled = s.PulseIntelligenceExternalAgentEnabled
 	ping.PulseIntelligenceExternalAgentUsed30d = s.PulseIntelligenceExternalAgentUsed30d
 	ping.PulseIntelligenceMCPAdapterUsed30d = s.PulseIntelligenceMCPAdapterUsed30d

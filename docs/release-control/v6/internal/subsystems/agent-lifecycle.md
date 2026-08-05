@@ -5791,3 +5791,13 @@ bounded and classified temperature nodes, and leaves the host report intact
 when the helper is absent or incompatible. It does not treat Windows ACPI
 thermal zones as hardware sensor evidence, accept remote provider locations,
 or grant Pulse hardware-control authority.
+### Agent profile adoption is reported as a count only
+
+The usage telemetry snapshot reads `LoadAgentProfiles` and reports
+`agent_profiles`, the number of configured profiles, in the outbound payload.
+Profile names, targets, assignment mappings, and profile contents are not sent.
+The read happens in `applyLicensedFeatureConfigSnapshot`
+(`pkg/server/telemetry_licensed_features.go`) and is pinned by
+`TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`,
+which also asserts an unconfigured install reports zero rather than omitting
+the field.

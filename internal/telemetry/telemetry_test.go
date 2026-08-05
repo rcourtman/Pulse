@@ -352,9 +352,18 @@ func TestApplySnapshot(t *testing.T) {
 			DiscoveryEnabled:                true,
 			NotificationsEnabled:            true,
 			AIActionsEnabled:                true,
+			AlertAIEnabled:                  true,
 			ActiveAlerts:                    2,
 			PaidLicense:                     true,
 			HasAPITokens:                    true,
+			RBACCustomRoles:                 3,
+			RBACUserAssignments:             7,
+			AuditLoggingPersistent:          true,
+			AuditEvents30d:                  41,
+			ReportSchedules:                 5,
+			ReportSchedulesEnabled:          4,
+			ReportSchedulesRun30d:           2,
+			AgentProfiles:                   9,
 			UpdateAttempts30d:               4,
 			UpdateSuccesses30d:              2,
 			UpdateFailures30d:               1,
@@ -399,7 +408,6 @@ func TestApplySnapshot(t *testing.T) {
 			PulseIntelligencePatrolNewFindings30d:                          5,
 			PulseIntelligencePatrolInvestigations30d:                       6,
 			PulseIntelligencePatrolResolvedFindings30d:                     3,
-			PulseIntelligencePatrolAutofixes30d:                            2,
 			PulseIntelligenceExternalAgentEnabled:                          true,
 			PulseIntelligenceExternalAgentUsed30d:                          true,
 			PulseIntelligenceMCPAdapterUsed30d:                             true,
@@ -451,11 +459,26 @@ func TestApplySnapshot(t *testing.T) {
 	if !ping.PatrolEnabled || !ping.DiscoveryEnabled || !ping.NotificationsEnabled || !ping.AIActionsEnabled {
 		t.Fatalf("expanded feature flags not applied: %#v", ping)
 	}
+	if !ping.AlertAIEnabled {
+		t.Fatal("AlertAIEnabled should be true")
+	}
 	if !ping.PaidLicense {
 		t.Fatal("PaidLicense should be true")
 	}
 	if !ping.HasAPITokens {
 		t.Fatal("HasAPITokens should be true")
+	}
+	if ping.RBACCustomRoles != 3 || ping.RBACUserAssignments != 7 {
+		t.Fatalf("RBAC adoption counts not applied: %#v", ping)
+	}
+	if !ping.AuditLoggingPersistent || ping.AuditEvents30d != 41 {
+		t.Fatalf("audit adoption signals not applied: %#v", ping)
+	}
+	if ping.ReportSchedules != 5 || ping.ReportSchedulesEnabled != 4 || ping.ReportSchedulesRun30d != 2 {
+		t.Fatalf("report schedule adoption counts not applied: %#v", ping)
+	}
+	if ping.AgentProfiles != 9 {
+		t.Fatalf("agent profile count not applied: %#v", ping)
 	}
 	if ping.UpdateAttempts30d != 4 || ping.UpdateSuccesses30d != 2 || ping.UpdateFailures30d != 1 ||
 		ping.UpdateLastFailureCategory != "download" {
@@ -502,7 +525,6 @@ func TestApplySnapshot(t *testing.T) {
 		ping.PulseIntelligencePatrolNewFindings30d != 5 ||
 		ping.PulseIntelligencePatrolInvestigations30d != 6 ||
 		ping.PulseIntelligencePatrolResolvedFindings30d != 3 ||
-		ping.PulseIntelligencePatrolAutofixes30d != 2 ||
 		ping.PulseIntelligenceActionPlans30d != 6 ||
 		ping.PulseIntelligenceApprovalRequests30d != 2 ||
 		ping.PulseIntelligenceRejectedActionDecisions30d != 1 ||

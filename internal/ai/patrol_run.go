@@ -748,7 +748,6 @@ func (p *PatrolService) runPatrolWithTriggerStart(ctx context.Context, trigger T
 		ExistingFindings:  runStats.existingFindings,
 		RejectedFindings:  runStats.rejectedFindings,
 		ResolvedFindings:  resolvedCount,
-		AutoFixCount:      0,
 		FindingsSummary:   findingsSummaryStr,
 		FindingIDs:        patrolRunFindingIDs(runStats.findingIDs, assessmentsForRun(runStats.aiAnalysis)),
 		ErrorCount:        runStats.errors,

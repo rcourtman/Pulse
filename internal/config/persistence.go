@@ -2676,7 +2676,6 @@ type PatrolRunRecord struct {
 	ExistingFindings int      `json:"existing_findings"`
 	RejectedFindings int      `json:"rejected_findings"`
 	ResolvedFindings int      `json:"resolved_findings"`
-	AutoFixCount     int      `json:"auto_fix_count,omitempty"`
 	FindingsSummary  string   `json:"findings_summary"`
 	FindingIDs       []string `json:"finding_ids"`
 	ErrorCount       int      `json:"error_count"`
@@ -2723,7 +2722,6 @@ type patrolRunRecordJSON struct {
 	ExistingFindings          int              `json:"existing_findings"`
 	RejectedFindings          int              `json:"rejected_findings"`
 	ResolvedFindings          int              `json:"resolved_findings"`
-	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
 	FindingsSummary           string           `json:"findings_summary"`
 	FindingIDs                []string         `json:"finding_ids"`
 	ErrorCount                int              `json:"error_count"`
@@ -2804,7 +2802,6 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		ExistingFindings:          normalized.ExistingFindings,
 		RejectedFindings:          normalized.RejectedFindings,
 		ResolvedFindings:          normalized.ResolvedFindings,
-		AutoFixCount:              normalized.AutoFixCount,
 		FindingsSummary:           normalized.FindingsSummary,
 		FindingIDs:                normalized.FindingIDs,
 		ErrorCount:                normalized.ErrorCount,
@@ -2856,7 +2853,6 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		ExistingFindings:          payload.ExistingFindings,
 		RejectedFindings:          payload.RejectedFindings,
 		ResolvedFindings:          payload.ResolvedFindings,
-		AutoFixCount:              payload.AutoFixCount,
 		FindingsSummary:           payload.FindingsSummary,
 		FindingIDs:                payload.FindingIDs,
 		ErrorCount:                payload.ErrorCount,

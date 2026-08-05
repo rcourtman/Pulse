@@ -1866,3 +1866,40 @@ server-filtered runtime payload; hiding controls or checking a client-side
 capability is not treated as the authorization boundary.
 `internal/api/runtime_branding_test.go` proves the no-entitlement non-leakage
 and image normalization.
+### Licensed-feature adoption telemetry stays count-only
+
+Schema v6 of the outbound usage payload adds nine licensed-feature adoption
+signals so Pro feature usage is measurable at all: `alert_ai_enabled`,
+`rbac_custom_roles`, `rbac_user_assignments`, `audit_logging_persistent`,
+`audit_events_30d`, `report_schedules`, `report_schedules_enabled`,
+`report_schedules_run_30d`, and `agent_profiles`. Every one is a count or a
+coarse boolean. Role names, permission sets, usernames, schedule names,
+delivery recipients, report scope and contents, profile names, and every audit
+event field (type, actor, target, outcome, detail) stay on the install.
+`audit_logging_persistent` reports only that a persistent store is active
+rather than console logging, and `audit_events_30d` is a retained-row count
+inside the same 30-day window used by the other counters, so it cannot be
+linked to one pseudonymous identifier indefinitely. Config-sourced signals are
+read in `applyLicensedFeatureConfigSnapshot`
+(`pkg/server/telemetry_licensed_features.go`); RBAC and audit are read behind
+the router in `Router.ApplyLicensedFeatureTelemetrySnapshot`
+(`internal/api/telemetry_licensed_features.go`). Both are disclosed in
+`docs/PRIVACY.md` and its `frontend-modern/public/docs/` copy, pinned by
+`TestAllTelemetryFieldsAreDisclosed`, and the counts are pinned by
+`TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`
+and `TestApplyLicensedFeatureTelemetrySnapshot_CountsOnlyOperatorAuthoredRBAC`.
+
+### Telemetry RBAC reads never provision an RBAC store
+
+The usage telemetry snapshot runs on a timer against every known org, so it
+reads RBAC through `TenantRBACProvider.PeekManager`
+(`internal/api/access_tenant_provider.go`), which returns an already-cached
+manager and never creates one. Using the provisioning `GetManager` there would
+have created a SQLite RBAC store for every org that has never used RBAC, as a
+side effect of a background read. A store reporting a migration failure is
+skipped rather than counted, so a degraded store cannot silently understate
+adoption. `TestTenantRBACProvider_PeekManagerDoesNotProvision` and
+`TestTenantRBACProvider_PeekManagerNilProviderIsSafe` in
+`internal/api/rbac_tenant_provider_test.go` pin both properties, and
+`TestApplyLicensedFeatureTelemetrySnapshot_DoesNotCreateRBACStores` pins it
+through the router boundary.

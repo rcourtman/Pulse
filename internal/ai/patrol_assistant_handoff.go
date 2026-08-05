@@ -302,7 +302,6 @@ func patrolRunOutcomeSummary(run PatrolRunRecord) string {
 		countPatrolRunSingularFact(run.ExistingFindings, "existing finding"),
 		countPatrolRunSingularFact(run.ResolvedFindings, "resolved finding"),
 		countPatrolRunSingularFact(run.RejectedFindings, "rejected finding"),
-		countPatrolRunSingularFact(run.AutoFixCount, "auto-remediation"),
 		countPatrolRunSingularFact(run.ErrorCount, "error"),
 	})
 }

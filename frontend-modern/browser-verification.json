@@ -1,32 +1,39 @@
 {
   "version": 1,
-  "base_sha": "364a3f458938a0610eb2a27c1ce81a73d0a0ffa7",
-  "verified_at": "2026-08-05T14:24:00Z",
+  "base_sha": "f271313b3d8d69bb303129f7310f2696d164f40c",
+  "verified_at": "2026-08-05T13:34:22Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx"
+    "frontend-modern/src/api/settings.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/Thresholds/sections/CollapsibleSection.tsx": "4ea1aee30e4c5c0ecc0f07285a2da70f90b234137793d3d6bca1fcb73a9bb108"
+    "frontend-modern/src/api/settings.ts": "ab0bf34f16a18a2d6a4cb0ce7341480ee4d9e961201b2f5290c366fef9c4c26b"
   },
   "routes": [
-    "/alerts/thresholds/proxmox"
+    "/settings"
   ],
   "viewports": [
-    { "width": 600, "height": 900 },
-    { "width": 1440, "height": 1000 }
+    {
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
   ],
   "states": [
-    "Guests section expanded at 1440 wide reporting a 10958px grid row track with computed max-height none and no clipping",
-    "Guests section collapsed at 1440 wide reporting a 0px row track with its content clipped by the inner overflow wrapper",
-    "Guests section expanded at 600 wide reporting a 10810px row track and no clipping",
-    "Nodes section expanded alongside at 2414px, confirming a second CollapsibleSection instance resolves its own track",
-    "Document scroll width equal to client width at both viewports with no console errors"
+    "Settings > General > Usage data and privacy with no telemetry payload loaded yet",
+    "Heartbeat payload rendered on a fresh install: schema_version 6, all nine new licensed-feature fields present, pulse_intelligence_patrol_autofixes_30d absent",
+    "Heartbeat payload after seeding three report schedules (two enabled, one last run inside the window) and two agent profiles: report_schedules 3, report_schedules_enabled 2, report_schedules_run_30d 1, agent_profiles 2",
+    "Audit adoption reported live from the running install: audit_logging_persistent true and audit_events_30d 1 after the sign-in event",
+    "Payload block at the 375px narrow viewport scrolling inside its own overflow-x container with no horizontal page scroll",
+    "Re-verified on parent f271313b3 after that commit reworked CollapsibleSection expansion: payload block renders its full 2949px height at the 375px viewport with no clipping and no horizontal page scroll"
   ],
   "interactions": [
-    "Collapsed and expanded the guests section three times at 1440 wide and confirmed the row track alternates between 0px and the full content height",
-    "Collapsed and expanded the guests section at 600 wide and confirmed the same alternation",
-    "Compared inner scrollHeight against clientHeight in every expanded state to prove the content is no longer truncated at the former 5000px cap",
-    "Confirmed the computed transition-property is opacity, since transition-all pinned grid-template-rows at its pre-toggle pixel value and left the section stuck"
+    "Signed in at /settings with the admin credentials",
+    "Opened Settings > General and clicked Preview payload",
+    "Clicked Refresh payload after seeding report_schedules.json and agent_profiles.json to confirm the counts track real configuration",
+    "Resized to the 375px narrow viewport and scrolled the payload block to confirm it contains its own horizontal overflow"
   ]
 }

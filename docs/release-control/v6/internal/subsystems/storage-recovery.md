@@ -4960,3 +4960,16 @@ The ZFS pool-detail summary has one stable shape: `datasets` is always an
 array, including when the backend reports no dataset inventory. Consumers and
 branch proofs must retain the empty array instead of treating dataset support
 as an optional return-field contract.
+### Scheduled reporting adoption is read from persisted config as counts
+
+The usage telemetry snapshot reads `LoadReportScheduleStore` and reports three
+counts: `report_schedules` (configured), `report_schedules_enabled` (switched
+on), and `report_schedules_run_30d` (schedules whose `LastRunAt` falls inside
+the 30-day telemetry window). Schedule names, cadence, scope, format, delivery
+method, and recipients are never sent, and no report content is read. A
+disabled schedule that last ran inside the window still counts toward
+`report_schedules_run_30d`, because the question the field answers is whether
+reporting actually produced output, not whether it is currently armed. The read
+is in `applyLicensedFeatureConfigSnapshot`
+(`pkg/server/telemetry_licensed_features.go`), pinned by
+`TestApplyLicensedFeatureConfigSnapshot_CountsScheduledReportingAndProfiles`.

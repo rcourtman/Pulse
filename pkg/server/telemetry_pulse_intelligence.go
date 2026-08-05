@@ -74,12 +74,10 @@ func applyPulseIntelligenceAdoptionSnapshot(snap *telemetry.Snapshot) {
 		snap.PulseIntelligencePatrolRuns30d > 0 ||
 		snap.PulseIntelligencePatrolNewFindings30d > 0 ||
 		snap.PulseIntelligencePatrolInvestigations30d > 0 ||
-		snap.PulseIntelligencePatrolResolvedFindings30d > 0 ||
-		snap.PulseIntelligencePatrolAutofixes30d > 0
+		snap.PulseIntelligencePatrolResolvedFindings30d > 0
 	patrolIssueEvidenceCount := snap.PulseIntelligencePatrolNewFindings30d +
 		snap.PulseIntelligencePatrolInvestigations30d +
-		snap.PulseIntelligencePatrolResolvedFindings30d +
-		snap.PulseIntelligencePatrolAutofixes30d
+		snap.PulseIntelligencePatrolResolvedFindings30d
 	patrolIssueEvidenceActive := patrolIssueEvidenceCount > 0
 	assistantCollaborationCount := snap.PulseIntelligenceAssistantContextAICalls30d +
 		snap.PulseIntelligenceAssistantToolCalls30d
@@ -234,9 +232,6 @@ func applyPulseIntelligencePatrolRunSnapshot(snap *telemetry.Snapshot, persisten
 		snap.PulseIntelligencePatrolRuns30d++
 		if run.NewFindings > 0 {
 			snap.PulseIntelligencePatrolNewFindings30d += run.NewFindings
-		}
-		if run.AutoFixCount > 0 {
-			snap.PulseIntelligencePatrolAutofixes30d += run.AutoFixCount
 		}
 	}
 }

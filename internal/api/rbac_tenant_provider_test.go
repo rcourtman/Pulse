@@ -319,3 +319,48 @@ func sqliteManagerPointer(t *testing.T, manager auth.ExtendedManager) *auth.SQLi
 	}
 	return sqliteManager
 }
+
+// PeekManager is the read-only accessor used by background readers such as the
+// usage telemetry snapshot. It must never provision a store, or a periodic read
+// would create RBAC state for every org that has never used RBAC.
+func TestTenantRBACProvider_PeekManagerDoesNotProvision(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		if err := provider.Close(); err != nil {
+			t.Errorf("cleanup close failed: %v", err)
+		}
+	})
+
+	if manager, ok := provider.PeekManager("default"); ok || manager != nil {
+		t.Fatalf("PeekManager returned a manager before one was created: ok=%v manager=%v", ok, manager != nil)
+	}
+	if got := provider.ManagerCount(); got != 0 {
+		t.Fatalf("PeekManager provisioned %d manager(s); it must be side-effect free", got)
+	}
+
+	created, err := provider.GetManager("default")
+	if err != nil {
+		t.Fatalf("GetManager(default) failed: %v", err)
+	}
+
+	peeked, ok := provider.PeekManager("default")
+	if !ok || peeked == nil {
+		t.Fatal("PeekManager did not return the existing manager")
+	}
+	if peeked != created {
+		t.Fatal("PeekManager returned a different manager than GetManager cached")
+	}
+	if got := provider.ManagerCount(); got != 1 {
+		t.Fatalf("manager count = %d, want 1", got)
+	}
+}
+
+// A nil provider must be safe: the telemetry snapshot runs before every
+// dependency is guaranteed to be wired.
+func TestTenantRBACProvider_PeekManagerNilProviderIsSafe(t *testing.T) {
+	var provider *TenantRBACProvider
+	if manager, ok := provider.PeekManager("default"); ok || manager != nil {
+		t.Fatalf("nil provider must report no manager: ok=%v manager=%v", ok, manager != nil)
+	}
+}

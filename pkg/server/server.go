@@ -559,10 +559,13 @@ func Run(ctx context.Context, version string) error {
 				snap.PatrolEnabled = aiCfg.IsPatrolEnabled()
 				snap.DiscoveryEnabled = snap.DiscoveryEnabled || aiCfg.IsDiscoveryEnabled()
 				snap.AIActionsEnabled = aiCfg.IsControlEnabled()
+				snap.AlertAIEnabled = aiCfg.IsAlertTriggeredAnalysisEnabled()
 			}
 			if relayCfg, err := telemetryPersistence.LoadRelayConfig(); err == nil {
 				snap.RelayEnabled = relayCfg.Enabled
 			}
+
+			applyLicensedFeatureConfigSnapshot(&snap, telemetryPersistence, time.Now().UTC())
 
 			// SSO/OIDC status.
 			if ssoCfg, err := telemetryPersistence.LoadSSOConfig(); err == nil && ssoCfg != nil {
@@ -600,6 +603,7 @@ func Run(ctx context.Context, version string) error {
 			now := time.Now().UTC()
 			if router != nil {
 				router.ApplyUpdateTelemetrySnapshot(&snap, now)
+				router.ApplyLicensedFeatureTelemetrySnapshot(&snap, now)
 			}
 			var actionSnapshot telemetry.PulseIntelligenceActionSnapshot
 			if router != nil {
