@@ -22,7 +22,12 @@ artifact is not Authenticode-signed. Detached checksums and Pulse release
 signatures remain mandatory and are not a substitute for Authenticode. The
 `test-signing` policy may be used to validate the integration, but its test
 certificate is untrusted and its output must never be published as a
-production release.
+production release. The manual
+[`SignPath Test Signing Proof`](../.github/workflows/signpath-test-signing.yml)
+workflow is the only test-signing entrypoint: it is restricted to `main`,
+hard-codes the test policy, verifies the exact returned file set, and uploads
+only a non-production JSON evidence record after verification. It never uploads
+the test-signed binaries as a GitHub artifact or assembles a release candidate.
 
 The canonical CI integration uses SignPath's GitHub trusted-build-system
 action. GitHub Actions uploads the three unsigned Windows agent executables as
@@ -50,7 +55,8 @@ Normal stable publication and stable dry runs select `signpath` directly.
   be submitted to the SignPath Foundation project.
 - Third-party or private binaries must never be signed with the community
   project certificate.
-- Every signing request requires approval by an authorised project approver.
+- Every production signing request requires approval by an authorised project
+  approver.
 - Test-signed output must never enter a release candidate or publication path.
 - Production signing must fail closed while the release certificate or signing
   policy is invalid.

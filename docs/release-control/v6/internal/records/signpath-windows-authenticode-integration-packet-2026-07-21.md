@@ -29,14 +29,48 @@ Production signing is not ready. `Release certificate 2026` remains
 Foundation's certificate authority issues and installs the certificate. The
 remaining proof sequence is:
 
-1. Submit a non-publishing request through `test-signing` to validate the CI
-   credentials, origin, artifact configuration, approval, and download path.
+1. The isolated, non-publishing `test-signing` integration proof is complete.
 2. Wait for the production release certificate to become active.
 3. Run the exact-SHA, non-publishing `release-signing` proof described below.
 
 Test-signed files use an untrusted certificate. Do not publish them, include
 them in a production candidate, or mark production Windows signing ready on the
 basis of a test request.
+
+## Test-Signing Integration Proof (2026-08-06)
+
+The canonical non-production integration proof is GitHub Actions run
+[`31114440080`](https://github.com/rcourtman/Pulse/actions/runs/31114440080),
+executed from `main` at
+`0dd9c92cb84548c4f602f9e647150d2ce6de4f14` for version `6.2.0-rc.8`.
+The manually dispatched workflow hard-coded `test-signing`, submitted only the
+three contract executables through artifact configuration `initial`, verified
+the exact returned file set and Authenticode signatures, and retained no signed
+output. Repository policy retains the JSON proof artifact for seven days and
+the unsigned input artifact for one day. The test-signed executables were
+neither uploaded as a GitHub artifact nor published or assembled into a release
+candidate. This record preserves the accepted evidence fields after the
+ephemeral artifacts expire.
+
+SignPath request
+[`88badc79-817f-4a8d-80e9-5ccdbe6d69a1`](https://app.signpath.io/Web/1ecb3261-e389-49c2-a071-e03ff177cc5d/SigningRequests/88badc79-817f-4a8d-80e9-5ccdbe6d69a1)
+used the self-signed test certificate
+`CN=Test certificate for 'Pulse [OSS]'`, thumbprint
+`D24B66B8F6C5F59362DE85C0965F1E4303ADE344`. The accepted signed-file hashes
+are:
+
+- `pulse-agent-windows-386.exe`:
+  `b69ab0ed070e64e459edfe9150f2ad1b9a23bdb22b601bbf7ce480d2ed1dd6eb`
+- `pulse-agent-windows-amd64.exe`:
+  `75d08c411ccd3a98fa406674836e67e824a12a0dac7437fe1fa7ad552791ed6c`
+- `pulse-agent-windows-arm64.exe`:
+  `03ac32e86bc5456ccc23cfd85f3c7df2c23eafe84c74ac77f1e2fb0caa230d8d`
+
+The four diagnostic runs `31110733308`, `31111803643`, `31112661094`, and
+`31113777871` were cancelled or failed without publication while isolating the
+Windows user-certificate-store hangs. The replacement uses bounded,
+non-interactive `certutil` operations against the documented ephemeral machine
+stores and bounds every SignTool verification to 90 seconds.
 
 ## SignPath Project Contract
 

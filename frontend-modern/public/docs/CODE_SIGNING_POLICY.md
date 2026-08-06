@@ -9,14 +9,25 @@ community signing project.
 
 ## Signing service
 
-Pulse is applying to the SignPath Foundation open-source programme. Once the
-application is approved, Windows community release artifacts will use free code
-signing provided by [SignPath.io](https://signpath.io/), with the certificate
-issued by the [SignPath Foundation](https://signpath.org/).
+Pulse was accepted into the SignPath Foundation open-source programme on
+2026-08-06. The SignPath organization `Pulse [OSS]` and project `Pulse` are
+connected only to the public repository through SignPath's GitHub App and
+trusted build system. The production release certificate is still awaiting
+issuance (`CSR PENDING`), so the `release-signing` policy is not yet available
+for production releases.
 
-Until approval and production integration are complete, release notes must say
-when a Windows artifact is not Authenticode-signed. Detached checksums and Pulse
-release signatures remain mandatory and are not a substitute for Authenticode.
+Until the production certificate is active and the exact-commit,
+non-publishing proof run has passed, release notes must say when a Windows
+artifact is not Authenticode-signed. Detached checksums and Pulse release
+signatures remain mandatory and are not a substitute for Authenticode. The
+`test-signing` policy may be used to validate the integration, but its test
+certificate is untrusted and its output must never be published as a
+production release. The manual
+[`SignPath Test Signing Proof`](https://github.com/rcourtman/Pulse/blob/main/.github/workflows/signpath-test-signing.yml)
+workflow is the only test-signing entrypoint: it is restricted to `main`,
+hard-codes the test policy, verifies the exact returned file set, and uploads
+only a non-production JSON evidence record after verification. It never uploads
+the test-signed binaries as a GitHub artifact or assembles a release candidate.
 
 The canonical CI integration uses SignPath's GitHub trusted-build-system
 action. GitHub Actions uploads the three unsigned Windows agent executables as
@@ -25,20 +36,30 @@ completion, downloads the signed result, and verifies every file before
 candidate assembly. A non-secret evidence artifact records the SignPath request
 URL, source SHA, signer identity, and signed-file SHA-256 values.
 
+The artifact configuration accepts exactly these ZIP-root files and no others:
+
+- `pulse-agent-windows-amd64.exe`
+- `pulse-agent-windows-arm64.exe`
+- `pulse-agent-windows-386.exe`
+
 The repository-secret PFX path is an explicitly selected break-glass fallback.
 Normal stable publication and stable dry runs select `signpath` directly.
 
 ## Build and release controls
 
 - Release artifacts are built by GitHub Actions from an exact commit on the
-  protected `main` branch.
+  `main` branch.
 - The release workflow records artifact digests and promotes the same immutable
   candidate without rebuilding it.
 - Only binaries built from the public repository's source and build scripts may
   be submitted to the SignPath Foundation project.
 - Third-party or private binaries must never be signed with the community
   project certificate.
-- Every signing request requires approval by an authorised project approver.
+- Every production signing request requires approval by an authorised project
+  approver.
+- Test-signed output must never enter a release candidate or publication path.
+- Production signing must fail closed while the release certificate or signing
+  policy is invalid.
 - Release checksums and detached signatures are published alongside artifacts
   and verified independently after publication.
 

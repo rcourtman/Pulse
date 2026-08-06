@@ -13,13 +13,14 @@ Pulse offers flexible installation options from Docker to enterprise-ready Kuber
 
 ## Windows code-signing status
 
-Pulse is applying to the SignPath Foundation open-source programme. Once
-approved, Windows community release artifacts will use free code signing
-provided by [SignPath.io](https://signpath.io/), with the certificate issued by
-the [SignPath Foundation](https://signpath.org/). Until that integration is
-complete, release notes identify Windows artifacts that are not
-Authenticode-signed; published checksums and detached Pulse signatures remain
-mandatory.
+Pulse was accepted into the SignPath Foundation open-source programme on
+2026-08-06, and the public repository is connected to its SignPath project. The
+production release certificate is still awaiting issuance (`CSR PENDING`), so
+Windows community release artifacts remain unsigned until the certificate is
+active and the non-publishing production proof run has passed. Release notes
+identify Windows artifacts that are not Authenticode-signed; published
+checksums and detached Pulse signatures remain mandatory. Test-signed artifacts
+use an untrusted certificate and are never published as production releases.
 
 See the [Code Signing Policy](CODE_SIGNING_POLICY.md) for build provenance,
 approval roles, signing scope, and reporting requirements. Release downloads
