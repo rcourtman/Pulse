@@ -529,8 +529,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("signedArtifactsUploadedAsGitHubArtifact = $false", workflow)
         self.assertIn("nonProduction = $true", workflow)
         self.assertIn("WaitForExit(90000)", workflow)
-        self.assertIn("-Confirm:$false", workflow)
+        self.assertIn("X509Store]::new", workflow)
+        self.assertIn("OpenFlags]::ReadWrite", workflow)
+        self.assertNotIn("Import-Certificate", workflow)
         self.assertIn("path: signpath-test-signing-evidence.json", workflow)
+        self.assertEqual(
+            workflow.count(
+                "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
+            ),
+            2,
+        )
+        self.assertNotIn("path: signpath-test-output", workflow)
         self.assertNotIn("gh release", workflow)
         self.assertNotIn("release-candidate", workflow)
         for name in (

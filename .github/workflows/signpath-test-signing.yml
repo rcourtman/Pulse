@@ -158,10 +158,25 @@ jobs:
             $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
           )
 
-          Write-Host "Temporarily trusting test signer $thumbprint on the ephemeral runner."
-          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\Root -Confirm:$false | Out-Null
-          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPublisher -Confirm:$false | Out-Null
+          $trustedStoreNames = @()
           try {
+            foreach ($storeName in @('Root', 'TrustedPublisher')) {
+              Write-Host "Adding test signer $thumbprint to CurrentUser/$storeName on the ephemeral runner."
+              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+                $storeName,
+                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+              )
+              try {
+                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $store.Add($certificate)
+                $trustedStoreNames += $storeName
+              }
+              finally {
+                $store.Close()
+                $store.Dispose()
+              }
+            }
+
             Write-Host 'Locating signtool.exe.'
             $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
               Sort-Object FullName -Descending |
@@ -254,8 +269,20 @@ jobs:
             $evidence | ConvertTo-Json -Depth 6 | Set-Content signpath-test-signing-evidence.json -Encoding utf8NoBOM
           }
           finally {
-            Remove-Item "Cert:\CurrentUser\Root\$thumbprint" -Force -ErrorAction SilentlyContinue
-            Remove-Item "Cert:\CurrentUser\TrustedPublisher\$thumbprint" -Force -ErrorAction SilentlyContinue
+            foreach ($storeName in $trustedStoreNames) {
+              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+                $storeName,
+                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+              )
+              try {
+                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $store.Remove($certificate)
+              }
+              finally {
+                $store.Close()
+                $store.Dispose()
+              }
+            }
           }
 
       - name: Upload non-production evidence
