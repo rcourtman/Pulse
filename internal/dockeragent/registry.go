@@ -35,9 +35,10 @@ type digestCache struct {
 }
 
 type cacheEntry struct {
-	latestDigest string
-	expiresAt    time.Time
-	err          string // cached error message
+	latestDigest      string
+	comparisonDigests string
+	expiresAt         time.Time
+	err               string // cached error message
 }
 
 const (
@@ -169,9 +170,6 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	}
 
 	// Check cache first
-	// internal/dockeragent/registry.go
-	// Check cache first
-	// internal/dockeragent/registry.go
 	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, goos, variant)
 	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
 
@@ -190,7 +188,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 			Image:           image,
 			CurrentDigest:   currentDigest,
 			LatestDigest:    cached.latestDigest,
-			UpdateAvailable: r.digestsDiffer(currentDigest, cached.latestDigest),
+			UpdateAvailable: r.digestsDiffer(currentDigest, cached.comparisonDigests),
 			CheckedAt:       time.Now(),
 		}
 	}
@@ -216,16 +214,22 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 		}
 	}
 
-	// Store both digests in cache (comma separated) to allow matching against either
-	cacheValue := latestDigest
+	// Compare against both digest layers. Docker's RepoDigest identifies the
+	// tag/index while the resolved digest identifies this host's platform
+	// manifest; either one proves that the local image is current.
+	comparisonDigests := latestDigest
 	if headDigest != latestDigest && headDigest != "" {
-		cacheValue = latestDigest + "," + headDigest
+		comparisonDigests = latestDigest + "," + headDigest
+	}
+	publicLatestDigest := latestDigest
+	if headDigest != "" {
+		publicLatestDigest = headDigest
 	}
 
 	// Cache the successful result
-	r.cacheDigest(cacheKey, cacheValue)
+	r.cacheDigestResult(cacheKey, publicLatestDigest, comparisonDigests)
 
-	updateAvailable := r.digestsDiffer(currentDigest, cacheValue)
+	updateAvailable := r.digestsDiffer(currentDigest, comparisonDigests)
 
 	r.logger.Debug().
 		Str("image", image).
@@ -241,7 +245,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	return &ImageUpdateResult{
 		Image:           image,
 		CurrentDigest:   currentDigest,
-		LatestDigest:    latestDigest,
+		LatestDigest:    publicLatestDigest,
 		UpdateAvailable: updateAvailable,
 		CheckedAt:       time.Now(),
 	}
@@ -565,12 +569,17 @@ func (r *RegistryChecker) getCached(key string) *cacheEntry {
 }
 
 func (r *RegistryChecker) cacheDigest(key, digest string) {
+	r.cacheDigestResult(key, digest, digest)
+}
+
+func (r *RegistryChecker) cacheDigestResult(key, latestDigest, comparisonDigests string) {
 	r.cache.mu.Lock()
 	defer r.cache.mu.Unlock()
 
 	r.cache.entries[key] = cacheEntry{
-		latestDigest: digest,
-		expiresAt:    time.Now().Add(defaultCacheTTL),
+		latestDigest:      latestDigest,
+		comparisonDigests: comparisonDigests,
+		expiresAt:         time.Now().Add(defaultCacheTTL),
 	}
 }
 

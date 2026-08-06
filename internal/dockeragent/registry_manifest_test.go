@@ -65,3 +65,51 @@ func TestRegistryChecker_ResolveManifestList(t *testing.T) {
 		}
 	})
 }
+
+func TestRegistryChecker_MultiArchDigestLayersStayConsistentAcrossCache(t *testing.T) {
+	logger := zerolog.Nop()
+	requestCount := 0
+	checker := NewRegistryChecker(logger)
+	checker.httpClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requestCount++
+			if req.Method == http.MethodHead {
+				return newStringResponse(http.StatusOK, map[string]string{
+					"Content-Type":          "application/vnd.oci.image.index.v1+json",
+					"Docker-Content-Digest": "sha256:index",
+				}, ""), nil
+			}
+			return newStringResponse(http.StatusOK, nil, `{
+				"manifests": [{
+					"digest": "sha256:platform",
+					"platform": {"architecture": "amd64", "os": "linux"}
+				}]
+			}`), nil
+		}),
+	}
+
+	currentDigests := []string{"sha256:index", "sha256:platform"}
+	for attempt, currentDigest := range currentDigests {
+		result := checker.CheckImageUpdate(
+			context.Background(),
+			"example.test/repo:tag",
+			currentDigest,
+			"amd64",
+			"linux",
+			"",
+		)
+		if result == nil {
+			t.Fatal("expected an update result")
+		}
+		if result.LatestDigest != "sha256:index" {
+			t.Fatalf("attempt %d: expected index digest, got %q", attempt+1, result.LatestDigest)
+		}
+		if result.UpdateAvailable {
+			t.Fatalf("attempt %d: expected matching digest %q to suppress the update", attempt+1, currentDigest)
+		}
+	}
+
+	if requestCount != 2 {
+		t.Fatalf("expected one HEAD and one GET before the cache hit, got %d requests", requestCount)
+	}
+}
