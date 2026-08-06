@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Pulse Logo</title>
+  <style>
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 0.92; transform: scale(1); }
+      50%      { opacity: 0.55; transform: scale(1.1); }
+    }
+    .pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      transform-box: view-box;
+      transform-origin: center;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pulse-ring { animation: none; }
+    }
+    /* Default (light mode) colors */
+    .pulse-bg { fill: #2563eb; }     /* blue-600 */
+    .pulse-fg { fill: #ffffff; }
+    .pulse-stroke { stroke: #ffffff; }
+    /* Dark mode colors */
+    @media (prefers-color-scheme: dark) {
+      .pulse-bg { fill: #3b82f6; }   /* blue-500 */
+      .pulse-fg { fill: #dbeafe; }   /* blue-100 */
+      .pulse-stroke { stroke: #dbeafe; }
+    }
+  </style>
+  <circle class="pulse-bg" cx="128" cy="128" r="122"/>
+  <circle class="pulse-ring pulse-stroke" cx="128" cy="128" r="84" fill="none" stroke-width="14" opacity="0.92"/>
+  <circle class="pulse-fg" cx="128" cy="128" r="26"/>
+</svg>
