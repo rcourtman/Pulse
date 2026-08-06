@@ -84,6 +84,16 @@ well as the installer, and most sharply there, because restarting through the
 wrapper is the documented runbook step and would otherwise repeat the
 collateral kill on every use.
 
+Exactly one supervisor may own an agent at a time. An install that starts a
+watchdog must first stop any watchdog already supervising that same agent, and
+must stop it before stopping the agent itself, because a watchdog left running
+respawns the agent mid-install with the previous binary and arguments. Two
+surviving supervisors race to own one agent id, which presents as an agent that
+restarts on its own or reverts to superseded arguments rather than as an
+install failure. The supervisor match is subject to the same boundary rule as
+the binary match, so stopping one agent's supervisor never stops a co-installed
+agent's.
+
 Mock mode is a clean room on the report-admission boundary. Mock mode already
 suspends pull-based PVE/PBS/PMG collection by never building those clients, and
 push-based agent reports are held to the same rule: `ApplyHostReport`,

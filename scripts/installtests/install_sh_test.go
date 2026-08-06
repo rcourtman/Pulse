@@ -5147,3 +5147,78 @@ func TestInstallSHAgentKillPatternSparesSiblingAgent(t *testing.T) {
 		t.Error("bounded pattern must not match pulse-agent-prod")
 	}
 }
+
+// TestInstallSHUnraidStopsWatchdogBeforeAgent guards a real incident: the
+// Unraid install path killed the agent but never the wrapper supervising it,
+// then started a second wrapper at the end of the install. The survivor and
+// the newcomer both loop trying to own the same agent id, and because the old
+// wrapper is a watchdog it can respawn the agent during the install window
+// using the previous binary and arguments.
+func TestInstallSHUnraidStopsWatchdogBeforeAgent(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+
+	start := strings.Index(script, "if [[ -f /etc/unraid-version ]]; then")
+	if start < 0 {
+		t.Fatal("could not locate the Unraid install branch")
+	}
+	endOffset := strings.Index(script[start:], "\n# 4.")
+	if endOffset < 0 {
+		endOffset = len(script) - start
+	}
+	unraid := script[start : start+endOffset]
+
+	wrapperKill := strings.Index(unraid, `pkill -f "/start-pulse-agent\.sh`)
+	if wrapperKill < 0 {
+		t.Fatal("Unraid install must stop the existing wrapper supervisor, or its watchdog survives the install and races the new one")
+	}
+	agentKill := strings.Index(unraid, `pkill -f "^${RUNTIME_BINARY}`)
+	if agentKill < 0 {
+		t.Fatal("Unraid install must stop the existing agent")
+	}
+	if wrapperKill > agentKill {
+		t.Error("the wrapper supervisor must be stopped before the agent, otherwise the watchdog respawns the agent during the install")
+	}
+}
+
+// TestInstallSHWatchdogKillPatternSparesSiblingWrapper proves the wrapper
+// pattern discriminates, so stopping this agent's supervisor never stops a
+// co-installed agent's supervisor on the same host.
+func TestInstallSHWatchdogKillPatternSparesSiblingWrapper(t *testing.T) {
+	const (
+		targetCmd  = "bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh"
+		siblingCmd = "bash /boot/config/plugins/pulse-agent-prod/start-pulse-agent-prod.sh"
+	)
+
+	ereMatches := func(t *testing.T, pattern, line string) bool {
+		t.Helper()
+		cmd := exec.Command("grep", "-E", "-q", pattern)
+		cmd.Stdin = strings.NewReader(line + "\n")
+		err := cmd.Run()
+		if err == nil {
+			return true
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false
+		}
+		t.Fatalf("grep -E %q: %v", pattern, err)
+		return false
+	}
+
+	pattern := `/start-pulse-agent\.sh([[:space:]]|$)`
+	if !ereMatches(t, pattern, targetCmd) {
+		t.Error("wrapper pattern must match this agent's own supervisor")
+	}
+	if ereMatches(t, pattern, siblingCmd) {
+		t.Error("wrapper pattern must not match a co-installed agent's supervisor")
+	}
+
+	// Premise check: an unescaped dot is what makes this worth pinning.
+	if !ereMatches(t, "start-pulse-agent.sh", targetCmd) {
+		t.Fatal("premise check failed: the loose pattern is supposed to match the target")
+	}
+}

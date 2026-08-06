@@ -379,6 +379,13 @@ upgrade, update, release, or artifact-selection behavior.
    patterns must therefore terminate at a whitespace-or-end boundary, and a
    deliberately path-agnostic sweep must match the process name exactly rather
    than a bare command-line substring.
+   Platforms whose agent runs under a generated watchdog wrapper rather than an
+   init system must also stop the previous wrapper before starting a new one,
+   and must stop it before the agent it supervises. Killing a supervised agent
+   while its wrapper still loops merely races the respawn, and appending a
+   second wrapper leaves two loops contending for one agent id with no install
+   error to show for it. NAS install paths must be symmetric on this point:
+   every branch that writes and launches a wrapper owes the same teardown.
    FreeBSD-family uninstall must stop the rc.d daemon(8) supervisor before
    removing the binary, then remove service registration, rc.conf enablement,
    boot wrappers, PID files, token/state, and residual processes before it can

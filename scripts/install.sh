@@ -3796,6 +3796,15 @@ if [[ -f /etc/unraid-version ]]; then
 
     # Kill any existing pulse agents.
     log_info "Stopping any existing pulse agents..."
+    # Stop the supervisor before the agent it supervises. The wrapper is a
+    # watchdog loop, so killing the agent while its wrapper is still running
+    # only races the respawn, and leaving that wrapper alive alongside the one
+    # started at the end of this install leaves two loops competing to own the
+    # same agent id. Matching on the trailing path segment catches a wrapper
+    # left behind at an older storage location, while the escaped dot and the
+    # trailing boundary keep a co-installed agent's wrapper
+    # (start-pulse-agent-prod.sh) out of the match.
+    pkill -f "/start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
     # Use process name matching to avoid killing unrelated processes. The
     # trailing boundary keeps a co-installed agent whose binary name starts
     # with this one (pulse-agent vs pulse-agent-prod) out of the match.
