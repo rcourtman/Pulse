@@ -624,6 +624,23 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     control on that page. The migration only fires where the id is already in
     that scope's effective default-hidden set, and it records a marker so a
     column the user deliberately restores is never re-hidden.
+    vSphere additionally default-hides `tags`. The vSphere adapter does not
+    read vCenter's tag/category API; `internal/vmware/provider.go` fills
+    `Resource.Tags` with fixed provenance strings, so the column repeats the
+    same values on every row and filtering on any of them selects the whole
+    estate. The tags stay in the payload because search and facet counts
+    consume them. This hide is a stopgap and must be removed once the adapter
+    ingests real vCenter tags, not treated as the settled contract.
+    Column visibility that depends on whether data exists at all is data-gated
+    rather than preference-gated. `availability` is the current case: the cell
+    renders nothing until an availability check is linked to that workload, so
+    `useWorkloadsState` passes a `hasAvailabilityData` accessor and
+    `useWorkloadsControlsState` drops the column from `relevantColumns` while
+    it is false. That path must never write a hidden preference, because doing
+    so would overwrite the user's own choice the moment the first check
+    appears; the column returns by itself when data arrives. The accessor
+    reads the unfiltered guest set so narrowing the table by search or status
+    never removes the column.
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
     Workload filter option semantics stay workload-owned, but FilterBar chip
     presentation is frontend-primitives-owned: status and runtime leading dots

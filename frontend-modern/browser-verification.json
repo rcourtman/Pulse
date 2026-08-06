@@ -1,83 +1,50 @@
 {
   "version": 1,
-  "base_sha": "dbd353427bafc1a58fc0a999132dcce5976082bd",
-  "verified_at": "2026-08-06T16:26:44Z",
+  "base_sha": "324a6458d5b4972ea47a56ca54ca997af0e05fc0",
+  "verified_at": "2026-08-06T16:26:28Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
-    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts"
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx": "c57ed6aaa87b36cec0568dd3bedd16fad4f75862f81e18cc1a24d87e4b9734c8",
-    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "783b93652b2e17450ca4cf3205bd1706b1aad59c0757d1332042682f76439384",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "33408c8af3eece8604647d6cb7133ef675b50adbc983c0451200f35e99bf7075"
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "e27f9b5fb3f5cc6e65a7e8d465befe45e0f0c8f0479e8b4a43f53b02ffac9d6f",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "14897fd2ae8c79a26b85ac21d42fb86270092ca7c3a084cc087b160f2c2311e5",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "9c37c036b26f32af1f4a973580a221fd35b7c36482ec6efd109e03d6de6b6427"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage?tab=disks&source=proxmox-all",
-    "/docker/overview",
-    "/docker/images",
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/vmware/overview",
-    "/vmware/storage",
-    "/standalone/machines",
-    "/standalone/availability",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/alerts/notifications",
-    "/alerts/schedule",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure",
-    "/settings/security/api",
-    "/settings/security-overview",
-    "/settings/security-data-handling",
-    "/settings/security-auth",
-    "/settings/security-sso",
-    "/settings/security-roles",
-    "/settings/security-users",
-    "/settings/security-audit",
-    "/settings/security-webhooks",
-    "/settings/support/diagnostics",
-    "/settings/support/reporting",
-    "/settings/support/logs"
+    "/vmware",
+    "/proxmox?status=all"
   ],
   "viewports": [
     {
+      "width": 2400,
+      "height": 1300
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
       "width": 390,
-      "height": 900
-    },
-    {
-      "width": 768,
-      "height": 900
-    },
-    {
-      "width": 1440,
-      "height": 900
+      "height": 844
     }
   ],
   "states": [
-    "Mock-data platform tables at the 768px column-priority transition across Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, and Availability",
-    "Security, support, Alerts, Actions, and Patrol pages at 390px, including touch-target and document-overflow scans",
-    "Diagnostics and System Logs phone controls before and after the touch-target correction",
-    "Compact platform filters expanded at phone width and restored to dense tablet sizing",
-    "Docker search-tips popover at phone and tablet widths",
-    "Expanded Machines resource details at tablet width",
-    "Shared wide-shell alignment across Proxmox, Alerts, Actions, Patrol, and Settings"
+    "Baseline before the change, vSphere VM table with every column enabled: Avail rendered an empty cell on all 18 rows and Tags rendered six identical dots on all 18, matching the single provenance tag set the adapter emits",
+    "vSphere VM table for a user with no saved preference: header is Name, ID, CPU, Mem, Disk, Uptime, Net I/O, Disk I/O with Avail and Tags both absent",
+    "vSphere VM table for a user whose saved preference predates the Tags default: the one-time migration adds tags to the hidden list and records it in the default-hidden-applied marker",
+    "vSphere column picker still offers Tags, Backup, AI Context, OS, IP, Disk, Uptime and both I/O columns, and no longer offers Avail while nothing is probed",
+    "Proxmox workload table unaffected: Tags still visible with genuine per-guest counts varying 3 to 7 dots per row, Backup still visible, stored hidden list unchanged at aiContext/os/ip",
+    "Proxmox at 390px and 1280px: no Avail column, no horizontal body overflow, 16 rows render",
+    "vSphere at 390px: narrow stage renders Name, CPU, Mem across 18 rows with no horizontal body overflow"
   ],
   "interactions": [
-    "Scanned 18 Settings, Alerts, Actions, and Patrol routes at 390px for horizontal document overflow, off-screen content, and visible primary controls below a 44px phone target",
-    "Found and corrected 40–42px Diagnostics and System Logs controls, then re-measured the live pages with no remaining undersized controls",
-    "Expanded Docker filters and confirmed the short All chip grows from 35px to 44px on phones while returning to the compact 35px width at 768px",
-    "Confirmed Patrol's only compact visual exception retains its extended 44px hit area and that its filter targets are fully touch-sized",
-    "Measured prioritized visible columns and table shells on 12 platform routes at 768px; every table fit its container without horizontal scrolling",
-    "Opened Machines resource details at 768px and confirmed the inline drawer remains contained without page-level overflow",
-    "Opened Docker search tips and measured fully visible 288px popover bounds at both 390px and 768px",
-    "Measured identical 1362px main shells for Proxmox, Alerts, Actions, Patrol, and Settings at 1440px"
+    "Opened the View preferences popover and the Columns multiselect on /vmware to read the offered toggles",
+    "Cleared the workloadsHiddenColumns scope keys to reproduce a first-time user, then reloaded",
+    "Seeded a pre-migration workloadsHiddenColumns:vmware-vms preference without tags and reloaded to confirm the one-time hide fires",
+    "Navigated between /vmware and /proxmox?status=all at each viewport to compare Avail and Tags across scopes",
+    "Queried /api/resources to confirm all 18 vSphere VMs carry the identical provenance tag set while Proxmox guests carry distinct per-guest tags"
   ]
 }

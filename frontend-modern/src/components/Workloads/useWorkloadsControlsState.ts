@@ -47,6 +47,10 @@ interface WorkloadsControlsStateOptions {
   onMetricHistoryRangeChange?: (value: WorkloadTableMetricHistoryRange) => void;
   columnVisibilityStorageScope?: string;
   additionalDefaultHiddenColumnIds?: string[];
+  // False when no workload in the current set has an availability check
+  // linked, which suppresses the Availability column instead of rendering an
+  // empty cell on every row. Omitted means "assume data exists".
+  hasAvailabilityData?: Accessor<boolean>;
   columnLabelOverrides?: Partial<Record<string, string>>;
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
@@ -192,12 +196,30 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     DEFAULT_WORKLOADS_SORT_DIRECTION,
   );
 
+  // The Availability cell renders nothing at all until an availability check
+  // is linked to that workload, so a table where no row has one shows an empty
+  // column under an "Avail" header and tells the reader nothing. Gate it on the
+  // live data rather than on a persisted preference: dropping it from the
+  // relevant set leaves the user's own show/hide choice untouched, and the
+  // column comes back on its own the first time a check is linked.
+  const hasAvailabilityData = createMemo(() =>
+    options.hasAvailabilityData ? options.hasAvailabilityData() : true,
+  );
+
   const relevantColumns = createMemo(() => {
     const base = VIEW_MODE_COLUMNS[options.viewMode()];
-    if (!base) return null;
-    if (effectiveGroupingMode() === 'grouped' && base.has('node')) {
+    const dropNode = effectiveGroupingMode() === 'grouped';
+    const dropAvailability = !hasAvailabilityData();
+    if (!base) {
+      if (!dropAvailability) return null;
+      const all = new Set(GUEST_COLUMNS.map((column) => column.id));
+      all.delete('availability');
+      return all;
+    }
+    if ((dropNode && base.has('node')) || (dropAvailability && base.has('availability'))) {
       const filtered = new Set(base);
-      filtered.delete('node');
+      if (dropNode) filtered.delete('node');
+      if (dropAvailability) filtered.delete('availability');
       return filtered;
     }
     return base;
@@ -220,11 +242,12 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     relevantColumns,
     {},
     // One-time hides for users who already have a saved column preference for
-    // this scope. `backup` reads exclusively from `resource.proxmox.lastBackup`,
-    // so on scopes that opt into hiding it (vSphere) it renders "None" on every
-    // row forever. The migration only fires where the id is already in that
-    // scope's default-hidden set, so Proxmox keeps the column visible.
-    ['aiContext', 'backup'],
+    // this scope. `backup` reads exclusively from `resource.proxmox.lastBackup`
+    // and `tags` on vSphere carries only adapter provenance strings, so on the
+    // scopes that opt into hiding them those columns say the same thing on
+    // every row forever. The migration only fires where the id is already in
+    // that scope's default-hidden set, so Proxmox keeps both columns visible.
+    ['aiContext', 'backup', 'tags'],
   );
 
   const visibleColumns = columnVisibility.visibleColumns;

@@ -61,7 +61,18 @@ const VMWARE_WORKLOAD_COLUMN_VISIBILITY_SCOPE = 'vmware-vms';
 // PowerProtect) or VMware's separately-licensed Live Recovery / SRM,
 // none of which surface through vCenter's inventory API. Hide the
 // column by default rather than render a permanently blank cell.
-const VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS: readonly string[] = ['backup'];
+//
+// Tags is hidden for a different reason, and this one is a stopgap rather
+// than the canonical fix. vCenter does have a real tag/category system, but
+// the vSphere adapter never reads it: `internal/vmware/provider.go` fills
+// `Resource.Tags` with fixed provenance strings instead (`vmware`, `vsphere`,
+// `vm`, `source:vcenter`, `connection:<name>`, `power:<state>`). Five of those
+// six are identical across an entire estate and the sixth restates the power
+// state the status filter already owns, so the column renders the same dots on
+// every row and filtering on any of them selects everything. The tags stay in
+// the payload because search and facet counts consume them; only the column is
+// suppressed. Drop this hide once the adapter reads vCenter's tagging API.
+const VMWARE_WORKLOAD_DEFAULT_HIDDEN_COLUMN_IDS: readonly string[] = ['backup', 'tags'];
 const VMWARE_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
   { value: 'running', label: 'Powered on' },

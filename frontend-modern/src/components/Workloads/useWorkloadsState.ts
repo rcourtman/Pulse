@@ -198,6 +198,16 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     },
   );
 
+  // Drives the Availability column's presence. Availability checks are opt-in
+  // per resource, so a surface where nothing is probed would otherwise carry a
+  // permanently empty column. Read the unfiltered guest set so narrowing the
+  // table with a search or status filter never makes the column vanish.
+  const hasAvailabilityData = createMemo(() =>
+    allGuests().some(
+      (guest) => Boolean(guest.availability) || (guest.availabilityChecks?.length ?? 0) > 0,
+    ),
+  );
+
   const {
     clusterFilterConfig,
     clusterOptions,
@@ -286,6 +296,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     onMetricHistoryRangeChange: props.onMetricHistoryRangeChange,
     columnVisibilityStorageScope: props.columnVisibilityStorageScope,
     additionalDefaultHiddenColumnIds: props.additionalDefaultHiddenColumnIds,
+    hasAvailabilityData,
     columnLabelOverrides: props.columnLabelOverrides,
     layoutWidth: props.layoutWidth,
     setShowFilters,

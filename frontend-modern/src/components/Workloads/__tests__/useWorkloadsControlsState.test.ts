@@ -313,4 +313,99 @@ describe('useWorkloadsControlsState', () => {
       }
     });
   });
+
+  // vSphere tags are adapter provenance strings that repeat on every row, so
+  // the scope hides the column; Proxmox tags are real per-guest labels.
+  it('retires a stale Tags preference only on scopes that default-hide it', async () => {
+    localStorage.setItem(
+      'workloadsHiddenColumns:vmware-vms',
+      JSON.stringify(['aiContext', 'os', 'ip']),
+    );
+
+    const disposeVmware = createRoot((dispose) => {
+      const [showFilters, setShowFilters] = createSignal(false);
+      const state = useWorkloadsControlsState({
+        viewMode: () => 'all' as ViewMode,
+        showFilters,
+        setShowFilters,
+        columnVisibilityStorageScope: 'vmware-vms',
+        additionalDefaultHiddenColumnIds: ['backup', 'tags'],
+      });
+      expect(state.columnVisibility.hiddenColumns()).toContain('tags');
+      expect(state.visibleColumns().map((column) => column.id)).not.toContain('tags');
+      // Still offered in the column picker for anyone who wants it back.
+      expect(state.columnVisibility.availableToggles().map((column) => column.id)).toContain(
+        'tags',
+      );
+      return dispose;
+    });
+
+    await Promise.resolve();
+    disposeVmware();
+
+    localStorage.setItem('workloadsHiddenColumns', JSON.stringify(['aiContext', 'os', 'ip']));
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+        });
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('tags');
+        expect(state.visibleColumns().map((column) => column.id)).toContain('tags');
+      } finally {
+        dispose();
+      }
+    });
+  });
+
+  // The Availability cell is empty until a check is linked to that workload,
+  // so the column is gated on live data rather than on a stored preference.
+  it('drops the Availability column while nothing is probed and restores it once something is', () => {
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const [probed, setProbed] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+          hasAvailabilityData: probed,
+        });
+
+        expect(state.visibleColumns().map((column) => column.id)).not.toContain('availability');
+        expect(state.columnVisibility.availableToggles().map((column) => column.id)).not.toContain(
+          'availability',
+        );
+        // Gating the column must not write a hidden preference, otherwise the
+        // user's own choice would be overwritten the moment a probe appears.
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('availability');
+
+        setProbed(true);
+        expect(state.visibleColumns().map((column) => column.id)).toContain('availability');
+        expect(state.columnVisibility.availableToggles().map((column) => column.id)).toContain(
+          'availability',
+        );
+      } finally {
+        dispose();
+      }
+    });
+  });
+
+  it('keeps the Availability column when no probe accessor is supplied', () => {
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+        });
+        expect(state.visibleColumns().map((column) => column.id)).toContain('availability');
+      } finally {
+        dispose();
+      }
+    });
+  });
 });
