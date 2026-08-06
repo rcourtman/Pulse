@@ -23,30 +23,17 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
         <div ref={state.registerSection('snapshots')} class="scroll-mt-24">
           <ResourceTable
             title=""
-            resources={[
-              {
-                id: 'snapshots-defaults',
-                name: 'Global Defaults',
-                thresholds: state.snapshotDefaultsRecord(),
-                defaults: state.snapshotDefaultsRecord(),
-                editable: true,
-                editScope: 'snapshot',
-              },
-            ]}
-            columns={['Warning Days', 'Critical Days']}
+            columns={['Warning Days', 'Critical Days', 'Warning Size (GiB)', 'Critical Size (GiB)']}
             activeAlerts={tableProps.activeAlerts}
-            emptyMessage=""
             onEdit={state.startEditing}
             onSaveEdit={state.saveEdit}
             onCancelEdit={state.cancelEdit}
             onRemoveOverride={state.removeOverride}
-            showOfflineAlertsColumn={true}
             editingId={state.editingId}
             editingThresholds={state.editingThresholds}
             setEditingThresholds={state.setEditingThresholds}
             editingNote={state.editingNote}
             setEditingNote={state.setEditingNote}
-            onBulkEdit={(ids) => state.handleBulkEdit(ids, ['Usage %', 'Temperature °C'])}
             formatMetricValue={formatMetricValue}
             hasActiveAlert={state.hasActiveAlert}
             globalDefaults={state.snapshotDefaultsRecord()}
@@ -55,8 +42,8 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
                 const currentRecord = {
                   'warning days': prev.warningDays ?? 0,
                   'critical days': prev.criticalDays ?? 0,
-                  'warning size (gib)': prev.warningSizeGiB ?? 0,
-                  'critical size (gib)': prev.criticalSizeGiB ?? 0,
+                  warningSizeGiB: prev.warningSizeGiB ?? 0,
+                  criticalSizeGiB: prev.criticalSizeGiB ?? 0,
                 };
                 const nextRecord =
                   typeof value === 'function'
@@ -73,12 +60,12 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
                       ? nextRecord['critical days']
                       : prev.criticalDays,
                   warningSizeGiB:
-                    typeof nextRecord['warning size (gib)'] === 'number'
-                      ? nextRecord['warning size (gib)']
+                    typeof nextRecord.warningSizeGiB === 'number'
+                      ? nextRecord.warningSizeGiB
                       : prev.warningSizeGiB,
                   criticalSizeGiB:
-                    typeof nextRecord['critical size (gib)'] === 'number'
-                      ? nextRecord['critical size (gib)']
+                    typeof nextRecord.criticalSizeGiB === 'number'
+                      ? nextRecord.criticalSizeGiB
                       : prev.criticalSizeGiB,
                 };
               });

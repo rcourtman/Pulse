@@ -1,86 +1,57 @@
 {
   "version": 1,
-  "base_sha": "ff97e3943c866ef062d743e6f1da136c13109a26",
-  "verified_at": "2026-08-06T09:05:33Z",
+  "base_sha": "711eed6d695e9008d7c633fbdf985a86d1e6aea9",
+  "verified_at": "2026-08-06T09:12:17Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts",
+    "frontend-modern/src/utils/alertThresholdDefaults.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "dc5b5c79a0ddeb71e38bf2f01fa386f1850dffcf7315d9f697b681ad729b64ca",
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "85b9cac933ab3f5a7aa08f54d5fbcfa1b6e15b24b461eb8c3bea8efbc4e5364f",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "63078dbcaa4ac8b86c94612a3deeb116a72db90b0cdb01a9c997044be2e1750b"
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx": "a5dfeb2bfcc356e23b9ff164ab88782fca74593d8b3e45efea7261d02153a109",
+    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx": "222d2d08ad618fadbd34d5089287c3923a79b172c582203eac7469295b50a97e",
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "4db657570ac209a00c16652a4f07b3be442a406d245766371c07ca2d3d32a1cf",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts": "d4584732f18e15316427e7b3a206978e2ca35d097028aee0e6ab2b11c34ee6f1",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "c285c93a1e3a12f8481e80a8e6778334722055dcd5b885291fb33bed7d4270b0",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts": "4a2deeb37740fe79b627df17abf25bba57f3048fc82a4bc34c7010b3c5058241",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "0178351e2848c42ad085fdbc24e9c84e5810a81d073805070e436d680277cc03",
+    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "90c1910781527b16bbdd509b25a946202956a2616cceac287edb0cafca895c54",
+    "frontend-modern/src/utils/alertThresholdDefaults.ts": "f59d80d26290b0a4d021c4ca093f879659635048042bb374eb0173c0b8fa2691"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage",
-    "/proxmox/replication",
-    "/proxmox/backups",
-    "/proxmox/ceph",
-    "/proxmox/mail",
-    "/docker/overview",
-    "/docker/images",
-    "/docker/storage",
-    "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/kubernetes/nodes",
-    "/kubernetes/workloads",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/truenas/overview",
-    "/truenas/storage",
-    "/truenas/services",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/overview",
-    "/vmware/storage",
-    "/vmware/networks",
-    "/vmware/health",
-    "/vmware/activity",
-    "/standalone/machines",
-    "/standalone/availability"
+    "/alerts/thresholds/proxmox"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 820
+      "width": 1600,
+      "height": 900
     },
     {
-      "width": 768,
-      "height": 820
+      "width": 1000,
+      "height": 900
     },
     {
-      "width": 390,
-      "height": 820
-    },
-    {
-      "width": 320,
-      "height": 820
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "populated mock inventory across every platform workflow",
-    "phone workload layout with identity, availability, CPU, and memory",
-    "similar Proxmox workload names with and without backup posture cues",
-    "small-tablet workload layout with disk restored",
-    "desktop workload and native platform tables with their full responsive column sets",
-    "deep platform navigation tabs selected at the end of horizontally scrollable tab strips"
+    "Recovery section expanded, desktop table layout at 1600px, single Global Defaults editor row",
+    "Recovery and Snapshot Age sections expanded in card layout at 1000px and 375px, single Global Defaults card each",
+    "Snapshot Age section with Warning/Critical Size (GiB) columns visible, factory Off state",
+    "VMs & Containers section expanded, guest cards sorted by display name within node group"
   ],
   "interactions": [
-    "navigated all 32 platform workflow routes and waited for their loaded tables",
-    "scrolled populated Proxmox workload groups at 320 and 390 pixels and visually compared similarly named rows",
-    "changed from phone to 768 pixel tablet width and confirmed the disk column returned without table overflow",
-    "verified Proxmox, Docker, and VMware tables after the final layout-mode change at 320, 390, 768, and 1280 pixels",
-    "measured document, table, and scroll-container widths and found no page-level or table-level horizontal overflow",
-    "confirmed Proxmox, Docker, Kubernetes, TrueNAS, VMware, and Machines share identical desktop content bounds",
-    "opened deep Mail Gateway, Swarm, Events, Protection, Activity, and Availability tabs and confirmed the active tab was fully visible",
-    "checked the affected desktop journeys after the final code change and found no browser console errors"
+    "Enabled snapshot Warning Size via Off overlay, sanitizer mirrored value to Critical Size, Save Changes persisted warningSizeGiB and criticalSizeGiB via PUT /api/alerts/config and GET returned them",
+    "Reloaded page and confirmed persisted snapshot size values load back into the editor",
+    "Toggled snapshot size metrics back Off and saved, GET confirmed sizes cleared",
+    "Expanded and collapsed Recovery, Snapshot Age, and VMs & Containers sections at all three viewports"
   ]
 }

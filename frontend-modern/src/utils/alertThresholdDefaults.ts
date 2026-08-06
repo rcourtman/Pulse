@@ -95,6 +95,9 @@ export const FACTORY_SNAPSHOT_DEFAULTS: SnapshotAlertConfig = {
   enabled: false,
   warningDays: 30,
   criticalDays: 45,
+  // 0 disables size-based snapshot alerts; the engine only fires on sizes > 0.
+  warningSizeGiB: 0,
+  criticalSizeGiB: 0,
 };
 
 export const FACTORY_BACKUP_DEFAULTS: BackupAlertConfig = {

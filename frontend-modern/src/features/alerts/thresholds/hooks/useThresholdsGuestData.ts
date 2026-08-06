@@ -87,10 +87,16 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
       grouped[groupKey].push(guest);
     });
 
+    // Sort by the name the row actually displays; vmid is not rendered here,
+    // so a vmid-first order reads as unsorted (#1680). vmid only breaks ties.
     Object.keys(grouped).forEach((node) => {
       grouped[node].sort((a, b) => {
-        if (a.vmid && b.vmid) return a.vmid - b.vmid;
-        return a.name.localeCompare(b.name);
+        const byName = a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        });
+        if (byName !== 0) return byName;
+        return (a.vmid ?? 0) - (b.vmid ?? 0);
       });
     });
 

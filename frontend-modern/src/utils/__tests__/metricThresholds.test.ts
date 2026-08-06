@@ -14,6 +14,7 @@ import {
 } from '@/utils/metricThresholds';
 import {
   FACTORY_KUBERNETES_DEFAULTS,
+  FACTORY_SNAPSHOT_DEFAULTS,
   FACTORY_TRUENAS_DEFAULTS,
   FACTORY_TRUENAS_DISK_DEFAULTS,
   FACTORY_VMWARE_DEFAULTS,
@@ -405,6 +406,19 @@ describe('metricThresholds', () => {
       expect(resolveMetricDisplayThresholds(config, 'node', 'temperature')).toEqual({
         warning: 80,
         critical: 85,
+      });
+    });
+
+    it('keeps snapshot factory defaults carrying size thresholds disabled at zero', () => {
+      // The size pair must exist on the factory config so the thresholds
+      // editor and the save payload round-trip them; 0 means size-based
+      // snapshot alerts are off until an operator enables them.
+      expect(FACTORY_SNAPSHOT_DEFAULTS).toEqual({
+        enabled: false,
+        warningDays: 30,
+        criticalDays: 45,
+        warningSizeGiB: 0,
+        criticalSizeGiB: 0,
       });
     });
 

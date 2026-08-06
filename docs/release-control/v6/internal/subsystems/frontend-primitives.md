@@ -795,6 +795,13 @@ Alert configuration tables follow the same primitive boundary: the alerts
 owner supplies platform-specific threshold groups and filter catalog values,
 while the shared FilterBar owns the chip, reset, and "+ Filter" interaction
 shape so thresholds do not reintroduce page-local search/tab chrome.
+The shared alert resource table's global-defaults row and card are the single
+editing surface for a section's defaults. A section that supplies
+`globalDefaults` must not also inject a synthetic resource row that mirrors
+the same record; the table renders defaults once, in both desktop table and
+narrow card layouts, and per-section metric columns must resolve to metric
+keys the shared column normalizer produces so the defaults editor reads and
+writes the same record keys the section persists.
 Platform sub-routes that add native provider inventory must stay on the shared
 platform page and table primitives. The vSphere Networks surface routes through
 `/vmware/networks`, the shared platform tab model, the command palette

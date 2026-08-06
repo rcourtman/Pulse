@@ -1,14 +1,6 @@
 import type { Accessor } from 'solid-js';
 
-import type { RawOverrideConfig, BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
-import {
-  DEFAULT_SNAPSHOT_WARNING,
-  DEFAULT_SNAPSHOT_CRITICAL,
-  DEFAULT_SNAPSHOT_WARNING_SIZE,
-  DEFAULT_SNAPSHOT_CRITICAL_SIZE,
-  DEFAULT_BACKUP_WARNING,
-  DEFAULT_BACKUP_CRITICAL,
-} from '@/features/alerts/thresholds/constants';
+import type { RawOverrideConfig } from '@/types/alerts';
 import type {
   Override,
   OverrideType,
@@ -60,12 +52,6 @@ interface ThresholdsOverrideMutationProps {
   editingNote: Accessor<string>;
   bulkEditIds: Accessor<string[]>;
   cancelEdit: () => void;
-  updateBackupDefaults: (
-    updater: BackupAlertConfig | ((prev: BackupAlertConfig) => BackupAlertConfig),
-  ) => void;
-  updateSnapshotDefaults: (
-    updater: SnapshotAlertConfig | ((prev: SnapshotAlertConfig) => SnapshotAlertConfig),
-  ) => void;
 }
 
 export function useThresholdsOverrideMutations({
@@ -75,8 +61,6 @@ export function useThresholdsOverrideMutations({
   editingNote,
   bulkEditIds,
   cancelEdit,
-  updateBackupDefaults,
-  updateSnapshotDefaults,
 }: ThresholdsOverrideMutationProps) {
   const optionalResources = (accessor?: Accessor<TableResource[]>): TableResource[] =>
     accessor?.() ?? [];
@@ -125,48 +109,6 @@ export function useThresholdsOverrideMutations({
     const editedThresholdMap = editingThresholds();
     const trimmedNote = editingNote().trim();
     const noteForOverride = trimmedNote.length > 0 ? trimmedNote : undefined;
-
-    if (resource.editScope === 'backup') {
-      const currentBackupDefaults = props.backupDefaults();
-      updateBackupDefaults({
-        criticalDays:
-          editedThresholdMap['critical days'] ??
-          currentBackupDefaults.criticalDays ??
-          DEFAULT_BACKUP_CRITICAL,
-        enabled: currentBackupDefaults.enabled,
-        warningDays:
-          editedThresholdMap['warning days'] ??
-          currentBackupDefaults.warningDays ??
-          DEFAULT_BACKUP_WARNING,
-      });
-      cancelEdit();
-      return;
-    }
-
-    if (resource.editScope === 'snapshot') {
-      const currentSnapshotDefaults = props.snapshotDefaults();
-      updateSnapshotDefaults({
-        criticalDays:
-          editedThresholdMap['critical days'] ??
-          currentSnapshotDefaults.criticalDays ??
-          DEFAULT_SNAPSHOT_CRITICAL,
-        criticalSizeGiB:
-          editedThresholdMap['critical size (gib)'] ??
-          currentSnapshotDefaults.criticalSizeGiB ??
-          DEFAULT_SNAPSHOT_CRITICAL_SIZE,
-        enabled: currentSnapshotDefaults.enabled,
-        warningDays:
-          editedThresholdMap['warning days'] ??
-          currentSnapshotDefaults.warningDays ??
-          DEFAULT_SNAPSHOT_WARNING,
-        warningSizeGiB:
-          editedThresholdMap['warning size (gib)'] ??
-          currentSnapshotDefaults.warningSizeGiB ??
-          DEFAULT_SNAPSHOT_WARNING_SIZE,
-      });
-      cancelEdit();
-      return;
-    }
 
     const defaultThresholds = (resource.defaults ?? {}) as Record<string, number | undefined>;
     const overrideThresholds: Record<string, number> = {};

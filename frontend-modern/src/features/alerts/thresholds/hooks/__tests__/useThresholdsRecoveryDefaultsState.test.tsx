@@ -106,9 +106,9 @@ describe('useThresholdsRecoveryDefaultsState', () => {
     expect(captured).toBeDefined();
     expect(captured!.snapshotDefaultsRecord()).toEqual({
       'critical days': 10,
-      'critical size (gib)': 18,
+      criticalSizeGiB: 18,
       'warning days': 6,
-      'warning size (gib)': 12,
+      warningSizeGiB: 12,
     });
     expect(captured!.backupFactoryDefaultsRecord()).toEqual({
       'critical days': 7,

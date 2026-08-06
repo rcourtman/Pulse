@@ -106,13 +106,16 @@ export function useThresholdsRecoveryDefaultsState(props: ThresholdsTableProps) 
     };
   };
 
+  // Size keys use the normalized metric key ('warningSizeGiB'), matching what
+  // normalizeAlertResourceMetricKey resolves for the 'Warning Size (GiB)'
+  // column — the global-defaults editor reads and writes through that key.
   const snapshotDefaultsRecord = createMemo(() => {
     const current = props.snapshotDefaults();
     return {
       'warning days': current.warningDays ?? 0,
       'critical days': current.criticalDays ?? 0,
-      'warning size (gib)': current.warningSizeGiB ?? 0,
-      'critical size (gib)': current.criticalSizeGiB ?? 0,
+      warningSizeGiB: current.warningSizeGiB ?? 0,
+      criticalSizeGiB: current.criticalSizeGiB ?? 0,
     };
   });
 
@@ -121,8 +124,8 @@ export function useThresholdsRecoveryDefaultsState(props: ThresholdsTableProps) 
     return {
       'warning days': factory.warningDays ?? DEFAULT_SNAPSHOT_WARNING,
       'critical days': factory.criticalDays ?? DEFAULT_SNAPSHOT_CRITICAL,
-      'warning size (gib)': factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE,
-      'critical size (gib)': factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE,
+      warningSizeGiB: factory.warningSizeGiB ?? DEFAULT_SNAPSHOT_WARNING_SIZE,
+      criticalSizeGiB: factory.criticalSizeGiB ?? DEFAULT_SNAPSHOT_CRITICAL_SIZE,
     };
   });
 

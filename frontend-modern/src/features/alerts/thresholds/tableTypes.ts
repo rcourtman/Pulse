@@ -34,7 +34,6 @@ export interface Resource {
   clusterName?: string;
   isClusterMember?: boolean;
   delaySeconds?: number;
-  editScope?: 'snapshot' | 'backup';
   isEnabled?: boolean;
   toggleEnabled?: () => void;
   toggleTitleEnabled?: string;

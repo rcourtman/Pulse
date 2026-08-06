@@ -156,8 +156,6 @@ describe('TrueNAS threshold persistence identity', () => {
         editingNote,
         bulkEditIds,
         cancelEdit,
-        updateBackupDefaults: vi.fn(),
-        updateSnapshotDefaults: vi.fn(),
       }),
     );
 
@@ -289,8 +287,6 @@ describe('TrueNAS threshold persistence identity', () => {
         editingNote,
         bulkEditIds,
         cancelEdit,
-        updateBackupDefaults: vi.fn(),
-        updateSnapshotDefaults: vi.fn(),
       }),
     );
 

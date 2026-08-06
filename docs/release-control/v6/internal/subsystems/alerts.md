@@ -459,6 +459,24 @@ templates, threshold ignored-prefix input, and incident timeline notes must
 compose `FormTextarea` for label/id/help wiring and textarea chrome instead of
 recreating raw labelled `<textarea>` shells locally. Alert resource row/mobile
 note editors now follow the same primitive contract.
+The Recovery and Snapshot Age threshold sections expose exactly one Global
+Defaults surface: the always-live editor row (table layout) or card (card
+layout) that the shared resource table renders when global defaults are
+supplied. They must not add a synthetic read-only resource row mirroring the
+same record; a second surface invites edits that no override mutation path
+persists, which is how #1680's silently-dropped edits happened. Snapshot size
+thresholds belong to the Snapshot Age section, not Recovery, because
+`BackupAlertConfig` has no size dimension. The recovery-defaults records carry
+the normalized `warningSizeGiB` and `criticalSizeGiB` metric keys that the
+column editor resolves for the size columns, and the configuration snapshot
+layer must round-trip those fields: `applyAlertsConfigToSnapshot` and
+`buildAlertsConfigurationPayload` carry them between the UI snapshot and
+`/api/alerts/config` rather than stripping them. Guests in the VMs &
+Containers section order by display name (numeric-aware, case-insensitive)
+with vmid as tiebreaker, because the rows render the name and an invisible
+sort key reads as an unsorted list. Regression ownership is
+`frontend-modern/src/utils/__tests__/metricThresholds.test.ts` and
+`frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsRecoveryDefaultsState.test.tsx`.
 Guest metric canonical state remains resource-backed and therefore node-scoped
 for Proxmox guests, so node moves must not strand active alert state on the
 previous resource ID. When a guest metric alert survives a node move, alerts

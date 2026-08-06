@@ -86,8 +86,6 @@ describe('useThresholdsOverrideMutations', () => {
         editingNote,
         bulkEditIds,
         cancelEdit,
-        updateBackupDefaults: vi.fn(),
-        updateSnapshotDefaults: vi.fn(),
       }),
     );
 
@@ -150,8 +148,6 @@ describe('useThresholdsOverrideMutations', () => {
         editingNote: () => '',
         bulkEditIds: () => [filesystemResource.id],
         cancelEdit: vi.fn(),
-        updateBackupDefaults: vi.fn(),
-        updateSnapshotDefaults: vi.fn(),
       }),
     );
 

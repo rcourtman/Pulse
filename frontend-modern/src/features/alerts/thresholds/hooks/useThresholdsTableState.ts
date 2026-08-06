@@ -738,8 +738,6 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     editingNote,
     bulkEditIds,
     cancelEdit,
-    updateBackupDefaults,
-    updateSnapshotDefaults,
   });
 
   const { setOfflineState, toggleDisabled, toggleNodeConnectivity } =

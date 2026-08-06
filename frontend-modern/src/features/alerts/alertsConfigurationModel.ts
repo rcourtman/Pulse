@@ -549,10 +549,16 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
       config.snapshotDefaults.warningDays,
       config.snapshotDefaults.criticalDays,
     );
+    const normalizedSizePair = normalizeWarningCriticalPair(
+      config.snapshotDefaults.warningSizeGiB,
+      config.snapshotDefaults.criticalSizeGiB,
+    );
     snapshot.snapshotDefaults = {
       enabled: Boolean(config.snapshotDefaults.enabled),
       warningDays: normalizedPair.warning,
       criticalDays: normalizedPair.critical,
+      warningSizeGiB: normalizedSizePair.warning,
+      criticalSizeGiB: normalizedSizePair.critical,
     };
   }
 
@@ -695,6 +701,10 @@ export function buildAlertsConfigurationPayload({
     snapshot.snapshotDefaults.warningDays,
     snapshot.snapshotDefaults.criticalDays,
   );
+  const normalizedSnapshotSizePair = normalizeWarningCriticalPair(
+    snapshot.snapshotDefaults.warningSizeGiB,
+    snapshot.snapshotDefaults.criticalSizeGiB,
+  );
   const normalizedBackupPair = normalizeWarningCriticalPair(
     snapshot.backupDefaults.warningDays,
     snapshot.backupDefaults.criticalDays,
@@ -830,6 +840,8 @@ export function buildAlertsConfigurationPayload({
         enabled: snapshot.snapshotDefaults.enabled,
         warningDays: normalizedSnapshotPair.warning,
         criticalDays: normalizedSnapshotPair.critical,
+        warningSizeGiB: normalizedSnapshotSizePair.warning,
+        criticalSizeGiB: normalizedSnapshotSizePair.critical,
       },
       backupDefaults: {
         enabled: snapshot.backupDefaults.enabled,

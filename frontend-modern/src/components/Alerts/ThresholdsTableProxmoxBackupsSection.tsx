@@ -30,37 +30,17 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
         <div ref={state.registerSection('backups')} class="scroll-mt-24">
           <ResourceTable
             title=""
-            resources={[
-              {
-                id: 'backups-defaults',
-                name: 'Global Defaults',
-                thresholds: state.backupDefaultsRecord(),
-                defaults: state.backupDefaultsRecord(),
-                editable: true,
-                editScope: 'backup',
-              },
-            ]}
-            columns={[
-              'Fresh Hours',
-              'Stale Hours',
-              'Warning Days',
-              'Critical Days',
-              'Warning Size (GiB)',
-              'Critical Size (GiB)',
-            ]}
+            columns={['Fresh Hours', 'Stale Hours', 'Warning Days', 'Critical Days']}
             activeAlerts={tableProps.activeAlerts}
-            emptyMessage=""
             onEdit={state.startEditing}
             onSaveEdit={state.saveEdit}
             onCancelEdit={state.cancelEdit}
             onRemoveOverride={state.removeOverride}
-            showOfflineAlertsColumn={true}
             editingId={state.editingId}
             editingThresholds={state.editingThresholds}
             setEditingThresholds={state.setEditingThresholds}
             editingNote={state.editingNote}
             setEditingNote={state.setEditingNote}
-            onBulkEdit={(ids) => state.handleBulkEdit(ids, ['Usage %'])}
             formatMetricValue={formatMetricValue}
             hasActiveAlert={state.hasActiveAlert}
             globalDefaults={state.backupDefaultsRecord()}
