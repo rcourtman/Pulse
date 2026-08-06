@@ -338,6 +338,9 @@ describe('ResourceTable', () => {
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableMobileSource).toContain('FormTextarea');
       expect(alertResourceTableMobileSource).toContain('ActionIconButton');
+      expect(alertResourceTableMobileSource).toContain(
+        'min-h-11 w-full rounded border p-1 text-center text-sm sm:min-h-0',
+      );
       expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
       expect(alertResourceTableMobileSource).not.toContain(rawSvgTag);
       expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');

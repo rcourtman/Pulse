@@ -56,7 +56,9 @@ describe('StatusBadge', () => {
 
     render(() => <StatusBadge isEnabled={true} onToggle={onToggle} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Enabled' }));
+    const button = screen.getByRole('button', { name: 'Enabled' });
+    expect(button).toHaveClass('min-h-11', 'sm:min-h-0');
+    fireEvent.click(button);
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 });

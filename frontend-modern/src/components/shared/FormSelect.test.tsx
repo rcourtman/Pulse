@@ -19,6 +19,7 @@ describe('FormSelect', () => {
     const select = screen.getByLabelText('Delivery mode');
     expect(select).toBe(screen.getByTestId('delivery-mode'));
     expect(select).toHaveValue('cli');
+    expect(select).toHaveClass('min-h-11', 'sm:min-h-9');
   });
 
   it('preserves explicit ids and compact styling hooks', () => {

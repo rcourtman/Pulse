@@ -160,6 +160,7 @@ export const DataHandlingPanel: Component = () => {
           type="button"
           variant="outline"
           size="sm"
+          class="min-h-11 sm:min-h-0"
           isLoading={resources.loading()}
           onClick={() => {
             void resources.refetch();

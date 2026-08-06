@@ -507,7 +507,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             type="button"
             onClick={state.loadModels}
             disabled={state.modelsLoading()}
-            class="inline-flex min-h-10 sm:min-h-9 items-center gap-1 rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
+            class="inline-flex min-h-11 sm:min-h-9 items-center gap-1 rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
             title="Refresh model list from all configured providers"
           >
             <svg

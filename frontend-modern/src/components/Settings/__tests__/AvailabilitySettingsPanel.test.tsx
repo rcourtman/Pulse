@@ -110,6 +110,18 @@ describe('AvailabilitySettingsPanel', () => {
     expect(screen.getByText('TCP 1883')).toBeInTheDocument();
     expect(screen.getByText('http://service.local/health')).toBeInTheDocument();
     expect(screen.getByText('Online · 8 ms')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Test' })[0]).toHaveClass(
+      'min-h-11',
+      'sm:min-h-8',
+    );
+    expect(screen.getAllByRole('button', { name: 'Pause' })[0]).toHaveClass(
+      'min-h-11',
+      'sm:min-h-8',
+    );
+    expect(screen.getAllByRole('button', { name: 'Manage' })[0]).toHaveClass(
+      'min-h-11',
+      'sm:min-h-8',
+    );
   });
 
   it('attributes probe-reported checks to the agent host that ran them', async () => {

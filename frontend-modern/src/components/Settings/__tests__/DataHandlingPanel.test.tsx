@@ -56,6 +56,10 @@ describe('DataHandlingPanel', () => {
       '/settings/infrastructure',
     );
     expect(screen.queryByText('Governed Resources')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toHaveClass(
+      'min-h-11',
+      'sm:min-h-0',
+    );
   });
 
   it('shows policy posture metrics once resources exist', () => {

@@ -355,6 +355,7 @@ describe('ThresholdsTable basics', () => {
   it('allows dismissing the help banner', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
     const dismissButton = screen.getByLabelText(/Dismiss tips/i);
+    expect(dismissButton).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
     fireEvent.click(dismissButton);
     expect(screen.queryByText(/Quick tips:/i)).not.toBeInTheDocument();
   });

@@ -158,6 +158,27 @@ describe('FilterButtonGroup', () => {
     expect(inactiveButton.className).toContain('text-muted');
   });
 
+  it('keeps every filter option touch-sized on phones and compact above the phone breakpoint', () => {
+    render(() => (
+      <FilterButtonGroup
+        ariaLabel="Range"
+        options={[
+          { value: '1d', label: '1d' },
+          { value: '7d', label: '7d' },
+        ]}
+        value="1d"
+        onChange={() => undefined}
+        variant="compact"
+      />
+    ));
+
+    const rangeButton = screen.getByRole('button', { name: '1d' });
+    expect(rangeButton).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(filterButtonGroupModelSource).toContain('sm:min-h-9');
+    expect(filterButtonGroupModelSource).toContain('sm:min-h-10');
+    expect(filterButtonGroupModelSource).toContain('sm:min-h-8');
+  });
+
   it('keeps visual icon labels on one compact line', () => {
     render(() => (
       <FilterButtonGroup

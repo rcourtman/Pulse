@@ -203,7 +203,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                 type="button"
                 variant="secondary"
                 size="mdCompact"
-                class="min-h-9 gap-2"
+                class="min-h-11 gap-2 sm:min-h-9"
                 onClick={() => void loadTargets()}
                 disabled={loading()}
               >
@@ -214,7 +214,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                 type="button"
                 variant="primary"
                 size="mdCompact"
-                class="min-h-9 gap-2"
+                class="min-h-11 gap-2 sm:min-h-9"
                 onClick={() => openAddDialog('service')}
               >
                 <Plus class="h-4 w-4" />
@@ -306,7 +306,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                         type="button"
                         variant="outline"
                         size="xs"
-                        class="min-h-8"
+                        class="min-h-11 sm:min-h-8"
                         onClick={() => void testTarget(target)}
                         disabled={pending()}
                       >
@@ -316,7 +316,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                         type="button"
                         variant="outline"
                         size="xs"
-                        class="min-h-8"
+                        class="min-h-11 sm:min-h-8"
                         onClick={() => void toggleTarget(target)}
                         disabled={pending()}
                       >
@@ -326,7 +326,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                         type="button"
                         variant="outline"
                         size="xs"
-                        class="min-h-8"
+                        class="min-h-11 sm:min-h-8"
                         onClick={() => {
                           setDeleteConfirmingId(null);
                           setDialog({ mode: 'edit', target });

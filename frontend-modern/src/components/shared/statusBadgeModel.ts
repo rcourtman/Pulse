@@ -13,7 +13,7 @@ export interface StatusBadgeProps {
 }
 
 const STATUS_BADGE_BASE_CLASS =
-  'inline-flex items-center justify-center text-xs font-medium rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400';
+  'inline-flex min-h-11 items-center justify-center rounded-md text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-400 sm:min-h-0';
 const STATUS_BADGE_PADDING_BY_SIZE: Record<StatusBadgeSize, string> = {
   sm: 'px-2 py-0.5',
   md: 'px-2.5 py-1',

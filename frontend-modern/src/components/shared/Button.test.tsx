@@ -51,9 +51,9 @@ describe('Button', () => {
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain("xs: 'px-2.5 py-1 text-xs'");
     expect(buttonModelSource).toContain("mdCompact: 'px-3 py-2 text-sm'");
-    expect(buttonModelSource).toContain("settingsAction: 'min-h-10 px-3 py-2 text-sm sm:min-h-9'");
+    expect(buttonModelSource).toContain("settingsAction: 'min-h-11 px-3 py-2 text-sm sm:min-h-9'");
     expect(buttonModelSource).toContain(
-      "settingsActionXs: 'min-h-10 px-3 py-2 text-xs sm:min-h-9'",
+      "settingsActionXs: 'min-h-11 px-3 py-2 text-xs sm:min-h-9'",
     );
     expect(buttonModelSource).toContain("chip: 'gap-1 px-1.5 py-0.5 text-[10px]'");
     expect(buttonModelSource).toContain("iconMd: 'h-9 w-9 p-0'");
@@ -128,12 +128,12 @@ describe('Button', () => {
     ));
 
     const saveButton = screen.getByRole('button', { name: 'Save source' });
-    expect(saveButton).toHaveClass('min-h-10');
+    expect(saveButton).toHaveClass('min-h-11');
     expect(saveButton).toHaveClass('sm:min-h-9');
     expect(saveButton).toHaveClass('bg-blue-600');
 
     const removeButton = screen.getByRole('button', { name: 'Remove source' });
-    expect(removeButton).toHaveClass('min-h-10');
+    expect(removeButton).toHaveClass('min-h-11');
     expect(removeButton).toHaveClass('border-rose-300');
     expect(removeButton).toHaveClass('text-rose-700');
 
@@ -164,7 +164,7 @@ describe('Button', () => {
     expect(infoButton).toHaveClass('text-blue-700');
 
     const previewButton = screen.getByRole('button', { name: 'Preview payload' });
-    expect(previewButton).toHaveClass('min-h-10');
+    expect(previewButton).toHaveClass('min-h-11');
     expect(previewButton).toHaveClass('text-xs');
     expect(previewButton).toHaveClass('px-3');
   });

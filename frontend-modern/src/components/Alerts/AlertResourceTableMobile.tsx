@@ -173,7 +173,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                           value={isOff() ? '' : value()}
                           placeholder={getAlertResourceTableMetricPlaceholder(isOff())}
                           disabled={isOff()}
-                          class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
+                          class={`min-h-11 w-full rounded border p-1 text-center text-sm sm:min-h-0 ${isOff() ? 'bg-surface-hover' : ' border-border'}`}
                           onInput={(e) => {
                             const nextValue = parseFloat(e.currentTarget.value);
                             // An empty box is mid-edit, not a disable request:
