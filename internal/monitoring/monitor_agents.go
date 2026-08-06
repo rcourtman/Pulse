@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
@@ -1434,8 +1435,42 @@ func hostFromContinuityEntry(entry config.HostContinuityEntry) models.Host {
 	}
 }
 
+// mockDiscardedHostReportAck echoes the reporting agent's own identity back to
+// it without touching monitor state, so the ingest response keeps its usual
+// shape for a report mock mode deliberately dropped.
+func mockDiscardedHostReportAck(report agentshost.Report) models.Host {
+	hostname := strings.TrimSpace(report.Host.Hostname)
+	if hostname == "" {
+		hostname = strings.TrimSpace(report.Agent.Hostname)
+	}
+	return models.Host{
+		ID:           strings.TrimSpace(report.Agent.ID),
+		Hostname:     hostname,
+		DisplayName:  strings.TrimSpace(report.Host.DisplayName),
+		Platform:     strings.TrimSpace(report.Host.Platform),
+		OSName:       strings.TrimSpace(report.Host.OSName),
+		OSVersion:    strings.TrimSpace(report.Host.OSVersion),
+		AgentVersion: strings.TrimSpace(report.Agent.Version),
+		LastSeen:     report.Timestamp,
+	}
+}
+
 func (m *Monitor) recentStandaloneHostContinuityEntries() []config.HostContinuityEntry {
 	if m == nil || m.hostContinuityStore == nil {
+		return nil
+	}
+	// Mock mode is a clean room. Continuity entries are persisted to disk from
+	// real agent reports and outlive the mock toggle, and every consumer of
+	// this list injects them after the read path has already substituted the
+	// mock snapshot: standalone host continuity lands on Machines, host-offline
+	// alerts fire, and availability probe alerts resolve display names. A real
+	// machine that reported before mock mode was enabled would therefore
+	// resurface by its real hostname inside an otherwise synthetic view.
+	// Unlike the connections ledger there is no real-polling exception here,
+	// because agent ingestion is not gated on PULSE_MOCK_KEEP_REAL_POLLING and
+	// the unified read state is mock-substituted wholesale either way, so
+	// injecting real hosts would only graft them onto mock data.
+	if mock.IsMockEnabled() {
 		return nil
 	}
 	return m.hostContinuityStore.RecentEntries(m.hostContinuitySince(time.Now().UTC()))
@@ -1646,6 +1681,17 @@ func (m *Monitor) supersedeStaleDockerHostDuplicates(current models.DockerHost, 
 
 // ApplyDockerReport ingests a Docker / Podman module report into the shared state.
 func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *config.APITokenRecord) (models.DockerHost, error) {
+	if mock.IsMockEnabled() {
+		// See ApplyHostReport: mock mode drops real push-based reports rather
+		// than mixing real containers into the fixture fabric.
+		return models.DockerHost{
+			ID:          strings.TrimSpace(report.Agent.ID),
+			Hostname:    strings.TrimSpace(report.Host.Hostname),
+			DisplayName: strings.TrimSpace(report.Host.Name),
+			LastSeen:    report.Timestamp,
+		}, nil
+	}
+
 	readState := m.snapshotBackedUnifiedReadState()
 	var dockerHosts []*unifiedresources.DockerHostView
 	if readState != nil {
@@ -2400,6 +2446,17 @@ func (m *Monitor) supersedeStaleHostAgentDuplicates(current models.Host, tokenRe
 
 // ApplyHostReport ingests a host agent report into the shared state.
 func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.APITokenRecord) (models.Host, error) {
+	if mock.IsMockEnabled() {
+		// Mock mode suspends real pull-based collection outright (PVE/PBS/PMG
+		// clients are never built), and push-based agent reports get the same
+		// treatment. Ingesting them would land a real machine in state, where
+		// it raises alerts, persists host continuity, records metrics, and
+		// feeds the online/offline sweep, all beside fixture data. The report
+		// is acknowledged rather than rejected so a real agent does not read a
+		// demo server as an outage and retry-storm it.
+		return mockDiscardedHostReportAck(report), nil
+	}
+
 	m.hostAgentLifecycleMu.RLock()
 	defer m.hostAgentLifecycleMu.RUnlock()
 

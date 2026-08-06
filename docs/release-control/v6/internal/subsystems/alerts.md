@@ -145,6 +145,16 @@ lifecycle when the agent heartbeat is unhealthy, and resolves only when a
 fresh result from the currently assigned agent arrives. Notification delivery,
 acknowledgement, history, and recovery reuse the normal alert pipeline.
 
+Active-alert restore is opt-out at construction. `NewManagerWithDataDir` accepts
+`ManagerOption` values, and `WithoutPersistedAlertRestore` starts the manager
+with an empty active-alert set instead of reading `active-alerts.json`. Mock
+mode selects it: switching the mock toggle already clears active alerts, but a
+process that boots with mock mode already enabled never runs that path and would
+otherwise restore alerts raised against real infrastructure and serve them
+beside fixture data. The option changes startup restore only. Alert evaluation,
+persistence, notification, acknowledgement, and history are unaffected, and the
+default construction path still restores.
+
 ## Canonical Files
 
 1. `internal/alerts/specs/types.go`

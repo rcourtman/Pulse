@@ -19734,3 +19734,54 @@ func TestCheckDiskHealthDoesNotAlertOnAbsentWearoutEvidence(t *testing.T) {
 		})
 	}
 }
+
+// writeActiveAlertsFixture seeds an active-alerts.json holding one alert raised
+// against real infrastructure, the shape a demo data directory inherits when a
+// real agent reported before mock mode was enabled.
+func writeActiveAlertsFixture(t *testing.T, dataDir string) {
+	t.Helper()
+
+	alertsDir := filepath.Join(dataDir, "alerts")
+	if err := os.MkdirAll(alertsDir, 0o755); err != nil {
+		t.Fatalf("create alerts dir: %v", err)
+	}
+	payload, err := json.Marshal([]*Alert{{
+		ID:           "agent:real-host/storage:unraid-array",
+		Type:         "storage-topology",
+		Level:        AlertLevelWarning,
+		ResourceID:   "agent:real-host/storage:unraid-array",
+		ResourceName: "Tower - Unraid Array",
+		Node:         "Tower",
+		StartTime:    time.Now().Add(-time.Hour),
+	}})
+	if err != nil {
+		t.Fatalf("marshal alert fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(alertsDir, "active-alerts.json"), payload, 0o600); err != nil {
+		t.Fatalf("write alert fixture: %v", err)
+	}
+}
+
+func TestManagerRestoresPersistedAlertsByDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	writeActiveAlertsFixture(t, dataDir)
+
+	m := NewManagerWithDataDir(dataDir)
+	t.Cleanup(m.Stop)
+
+	if got := len(m.GetActiveAlerts()); got != 1 {
+		t.Fatalf("default manager must restore persisted alerts, got %d", got)
+	}
+}
+
+func TestManagerSkipsPersistedAlertRestoreForMockMode(t *testing.T) {
+	dataDir := t.TempDir()
+	writeActiveAlertsFixture(t, dataDir)
+
+	m := NewManagerWithDataDir(dataDir, WithoutPersistedAlertRestore())
+	t.Cleanup(m.Stop)
+
+	for _, alert := range m.GetActiveAlerts() {
+		t.Fatalf("mock mode must not resurface real persisted alerts, got %+v", alert)
+	}
+}

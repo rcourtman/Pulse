@@ -72,6 +72,21 @@ generates the operator-facing limit description consumed by server ingress
 and every supported `pulse-agent` release target built from this source.
 
 
+Mock mode is a clean room on the report-admission boundary. Mock mode already
+suspends pull-based PVE/PBS/PMG collection by never building those clients, and
+push-based agent reports are held to the same rule: `ApplyHostReport`,
+`ApplyDockerReport`, and `ApplyKubernetesReport` acknowledge a report with the
+reporting agent's own identity and discard it without touching monitor state.
+Ingesting it would land a real machine in state, where it raises alerts,
+persists host continuity, records metrics, and feeds the online/offline sweep
+beside authored fixtures. Persisted host continuity is suppressed for the same
+reason, because those entries outlive the mock toggle and every consumer injects
+them after the read path has already substituted the mock snapshot. The
+acknowledgement stays a success rather than a rejection so a real agent does not
+read a demo server as an outage and retry-storm it. Tests that assert report
+admission or tenant isolation must therefore not enable mock mode, or the
+assertion passes without exercising the boundary.
+
 Physical-disk evidence collected by a host agent must survive projection back
 into monitoring's models. Absent evidence has to carry its declared sentinel
 rather than a zero value that reads as a real measurement: an absent

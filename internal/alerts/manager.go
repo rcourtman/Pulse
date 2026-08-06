@@ -121,9 +121,35 @@ func NewManager() *Manager {
 	return NewManagerWithDataDir(utils.GetDataDir())
 }
 
+// ManagerOption adjusts how a Manager is constructed.
+type ManagerOption func(*managerOptions)
+
+type managerOptions struct {
+	skipPersistedAlertRestore bool
+}
+
+// WithoutPersistedAlertRestore starts the manager with an empty active-alert
+// set instead of restoring active-alerts.json from disk. Mock mode uses this so
+// a demo session never resurfaces alerts raised against real infrastructure:
+// SetMockMode already clears active alerts when the toggle flips, but a process
+// that starts with mock mode already enabled never runs that path and would
+// otherwise reload the persisted real alerts.
+func WithoutPersistedAlertRestore() ManagerOption {
+	return func(opts *managerOptions) {
+		opts.skipPersistedAlertRestore = true
+	}
+}
+
 // NewManagerWithDataDir creates a new alert manager with a custom data directory.
 // This enables tenant-scoped alert persistence in multi-tenant deployments.
-func NewManagerWithDataDir(dataDir string) *Manager {
+func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
+	opts := managerOptions{}
+	for _, option := range options {
+		if option != nil {
+			option(&opts)
+		}
+	}
+
 	if strings.TrimSpace(dataDir) == "" {
 		dataDir = utils.GetDataDir()
 	}
@@ -176,7 +202,9 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 	}
 
 	// Load saved active alerts
-	if err := m.LoadActiveAlerts(); err != nil {
+	if opts.skipPersistedAlertRestore {
+		log.Info().Msg("skipping persisted active alert restore")
+	} else if err := m.LoadActiveAlerts(); err != nil {
 		log.Error().Err(err).Msg("failed to load active alerts")
 	}
 

@@ -59,6 +59,18 @@ func keepRealPollingInMockMode() bool {
 	}
 }
 
+// alertManagerRestoreOptions keeps mock mode a clean room across process
+// restarts. SetMockMode clears active alerts when the toggle flips, but a
+// process that boots with mock mode already enabled never runs that path, so
+// alerts raised against real infrastructure are restored from disk and served
+// beside fixture data until something clears them.
+func alertManagerRestoreOptions() []alerts.ManagerOption {
+	if mock.IsMockEnabled() {
+		return []alerts.ManagerOption{alerts.WithoutPersistedAlertRestore()}
+	}
+	return nil
+}
+
 // newProxmoxClientFunc is a variable that holds the function to create a new Proxmox client.
 // It is used to allow mocking the client creation in tests.
 var newProxmoxClientFunc = func(cfg proxmox.ClientConfig) (PVEClientInterface, error) {
@@ -1653,7 +1665,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)
 		metricsStore:               metricsStore,                          // Persistent SQLite storage
-		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath),
+		alertManager:               alerts.NewManagerWithDataDir(cfg.DataPath, alertManagerRestoreOptions()...),
 		incidentStore:              incidentStore,
 		notificationMgr:            notifications.NewNotificationManagerWithDataDir(cfg.PublicURL, cfg.DataPath),
 		configPersist:              config.NewConfigPersistence(cfg.DataPath),

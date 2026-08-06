@@ -4944,3 +4944,120 @@ func TestMonitorStopQuiescesMetadataWritesBeforeReturning(t *testing.T) {
 		t.Fatalf("data directory not removable after Stop: %v", err)
 	}
 }
+
+// TestMockModeDropsRealHostContinuity pins the mock-mode clean room on the
+// standalone host continuity path. Continuity entries are persisted to disk
+// from real agent reports and survive the mock toggle, and every consumer
+// injects them after the read path has already substituted the mock snapshot,
+// so without a guard a real machine that reported before mock mode was enabled
+// resurfaces on Machines by its real hostname.
+func TestMockModeDropsRealHostContinuity(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	if err := mock.SetEnabled(true); err != nil {
+		t.Fatalf("enable mock mode: %v", err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+	store := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := store.Upsert(config.HostContinuityEntry{
+		HostID:       "real-host-1",
+		ReportHostID: "real-machine-1",
+		Hostname:     "real-machine.lan",
+		DisplayName:  "Real Machine",
+		MachineID:    "real-machine-1",
+		AgentVersion: "6.2.0",
+		Platform:     "darwin",
+		LastSeen:     time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Upsert continuity: %v", err)
+	}
+
+	m := &Monitor{
+		state:               models.NewState(),
+		resourceStore:       unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+		hostContinuityStore: store,
+	}
+
+	for _, host := range m.HostsSnapshot() {
+		if host.Hostname == "real-machine.lan" || host.ID == "real-host-1" {
+			t.Fatalf("real continuity host leaked into the mock read state: %#v", host)
+		}
+	}
+
+	// The suppression must be mock-scoped, not a removal of continuity itself:
+	// with mock mode off the same store still backs the standalone host.
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatalf("disable mock mode: %v", err)
+	}
+	hosts := m.HostsSnapshot()
+	if len(hosts) != 1 || hosts[0].Hostname != "real-machine.lan" {
+		t.Fatalf("real mode must still restore continuity-backed hosts, got %#v", hosts)
+	}
+}
+
+// TestMockModeDiscardsRealHostReports pins the push-side of the mock clean
+// room. Mock mode already suspends pull-based PVE/PBS/PMG collection, but a
+// real agent keeps POSTing regardless; ingesting those reports lands a real
+// machine in state where it raises alerts and feeds the offline sweep beside
+// fixture data.
+func TestMockModeDiscardsRealHostReports(t *testing.T) {
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "real-agent-1", Version: "6.2.0"},
+		Host: agentshost.HostInfo{
+			ID:       "real-agent-1",
+			Hostname: "real-machine.lan",
+			Platform: "linux",
+			OSName:   "Unraid",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	newMonitor := func(t *testing.T) *Monitor {
+		t.Helper()
+		return &Monitor{
+			state:               models.NewState(),
+			resourceStore:       unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+			hostContinuityStore: config.NewHostContinuityStore(t.TempDir(), nil),
+			rateTracker:         NewRateTracker(),
+		}
+	}
+
+	t.Run("mock mode acknowledges without ingesting", func(t *testing.T) {
+		previous := mock.IsMockEnabled()
+		if err := mock.SetEnabled(true); err != nil {
+			t.Fatalf("enable mock mode: %v", err)
+		}
+		t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+		m := newMonitor(t)
+		host, err := m.ApplyHostReport(report, nil)
+		if err != nil {
+			t.Fatalf("mock mode must acknowledge rather than reject the report: %v", err)
+		}
+		if host.ID != "real-agent-1" || host.Hostname != "real-machine.lan" {
+			t.Fatalf("acknowledgement must echo the reporting agent identity, got %+v", host)
+		}
+		if got := m.GetLiveHostsSnapshot(); len(got) != 0 {
+			t.Fatalf("real host reached monitor state in mock mode: %#v", got)
+		}
+		if got := m.recentStandaloneHostContinuityEntries(); len(got) != 0 {
+			t.Fatalf("real host continuity persisted in mock mode: %#v", got)
+		}
+	})
+
+	t.Run("real mode still ingests", func(t *testing.T) {
+		previous := mock.IsMockEnabled()
+		if err := mock.SetEnabled(false); err != nil {
+			t.Fatalf("disable mock mode: %v", err)
+		}
+		t.Cleanup(func() { _ = mock.SetEnabled(previous) })
+
+		m := newMonitor(t)
+		if _, err := m.ApplyHostReport(report, nil); err != nil {
+			t.Fatalf("ApplyHostReport: %v", err)
+		}
+		if got := m.GetLiveHostsSnapshot(); len(got) != 1 {
+			t.Fatalf("real mode must still ingest host reports, got %#v", got)
+		}
+	})
+}

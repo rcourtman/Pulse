@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
@@ -39,6 +40,15 @@ func normalizeKubernetesClusterIdentifier(report agentsk8s.Report) string {
 
 // ApplyKubernetesReport ingests a Kubernetes agent report into state.
 func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *config.APITokenRecord) (models.KubernetesCluster, error) {
+	if mock.IsMockEnabled() {
+		// See ApplyHostReport: mock mode drops real push-based reports rather
+		// than mixing a real cluster into the fixture fabric.
+		return models.KubernetesCluster{
+			ID:   strings.TrimSpace(report.Cluster.ID),
+			Name: strings.TrimSpace(report.Cluster.Name),
+		}, nil
+	}
+
 	identifier := normalizeKubernetesClusterIdentifier(report)
 	if strings.TrimSpace(identifier) == "" {
 		return models.KubernetesCluster{}, fmt.Errorf("kubernetes report missing cluster identifier")

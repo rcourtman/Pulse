@@ -162,7 +162,11 @@ func TestHostedTenantAgentInstallTokenCannotReportToOtherTenant(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
 	t.Setenv("PULSE_DEV", "true")
-	setMockModeForTest(t, true)
+	// Deliberately NOT mock mode. Mock mode drops real agent reports on the
+	// floor, which would leave both tenants empty and make the isolation
+	// assertion below pass without ever exercising the boundary. The tenants
+	// here have no configured infrastructure, so nothing polls anyway.
+	setMockModeForTest(t, false)
 
 	dataDir := t.TempDir()
 	cfg := &config.Config{

@@ -367,6 +367,17 @@ lifecycle, and treats a fresh result from that same assignment as recovery.
 Assignment trackers are removed with their targets and reset when agent identity
 changes.
 
+Monitoring ingest keeps mock mode hermetic. The unified read path already
+substitutes the mock snapshot wholesale, so anything that runs after that
+substitution has to be suppressed explicitly rather than assumed hidden. Server
+side agent report application discards real reports while mock mode is on, and
+`recentStandaloneHostContinuityEntries` returns nothing, so persisted continuity
+cannot reappear through the standalone host projection, the host online/offline
+sweep, or availability probe display names. There is no real-polling exception
+on this path: agent ingest is not gated on `PULSE_MOCK_KEEP_REAL_POLLING`, and
+the read state is mock-substituted either way, so injecting real hosts would
+only graft them onto fixture data.
+
 ## Canonical Files
 
 1. `internal/monitoring/monitor.go`
