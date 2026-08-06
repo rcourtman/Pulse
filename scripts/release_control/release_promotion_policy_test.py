@@ -528,6 +528,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("signedArtifactsPublished = $false", workflow)
         self.assertIn("signedArtifactsUploadedAsGitHubArtifact = $false", workflow)
         self.assertIn("nonProduction = $true", workflow)
+        self.assertIn("WaitForExit(90000)", workflow)
+        self.assertIn("-Confirm:$false", workflow)
         self.assertIn("path: signpath-test-signing-evidence.json", workflow)
         self.assertNotIn("gh release", workflow)
         self.assertNotIn("release-candidate", workflow)

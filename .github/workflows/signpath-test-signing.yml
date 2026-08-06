@@ -141,8 +141,10 @@ jobs:
           if (Compare-Object $expectedNames $actualNames) {
             throw "SignPath returned an unexpected file set: $($actualNames -join ', ')."
           }
+          Write-Host "Confirmed exact SignPath output file set: $($actualNames -join ', ')."
 
           $probePath = Join-Path $sourceDir $expectedNames[0]
+          Write-Host "Reading the test signer certificate from $($expectedNames[0])."
           $probeSignature = Get-AuthenticodeSignature $probePath
           if ($null -eq $probeSignature.SignerCertificate) {
             throw 'The SignPath test output does not contain an Authenticode signer certificate.'
@@ -156,9 +158,11 @@ jobs:
             $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
           )
 
-          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
-          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+          Write-Host "Temporarily trusting test signer $thumbprint on the ephemeral runner."
+          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\Root -Confirm:$false | Out-Null
+          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPublisher -Confirm:$false | Out-Null
           try {
+            Write-Host 'Locating signtool.exe.'
             $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
               Sort-Object FullName -Descending |
               Select-Object -First 1 -ExpandProperty FullName
@@ -166,11 +170,51 @@ jobs:
               throw 'signtool.exe was not found on the Windows runner.'
             }
 
+            function Invoke-BoundedSignToolVerify {
+              param(
+                [Parameter(Mandatory)] [string] $SignToolPath,
+                [Parameter(Mandatory)] [string] $ArtifactPath
+              )
+
+              $startInfo = [Diagnostics.ProcessStartInfo]::new()
+              $startInfo.FileName = $SignToolPath
+              $startInfo.UseShellExecute = $false
+              $startInfo.RedirectStandardOutput = $true
+              $startInfo.RedirectStandardError = $true
+              foreach ($argument in @('verify', '/pa', '/v', $ArtifactPath)) {
+                [void] $startInfo.ArgumentList.Add($argument)
+              }
+
+              $process = [Diagnostics.Process]::new()
+              $process.StartInfo = $startInfo
+              try {
+                if (-not $process.Start()) {
+                  throw "Failed to start SignTool verification for $ArtifactPath."
+                }
+                $stdout = $process.StandardOutput.ReadToEndAsync()
+                $stderr = $process.StandardError.ReadToEndAsync()
+                if (-not $process.WaitForExit(90000)) {
+                  $process.Kill($true)
+                  throw "SignTool verification timed out after 90 seconds for $ArtifactPath."
+                }
+                $stdoutText = $stdout.GetAwaiter().GetResult()
+                $stderrText = $stderr.GetAwaiter().GetResult()
+                if (-not [string]::IsNullOrWhiteSpace($stdoutText)) { Write-Host $stdoutText.TrimEnd() }
+                if (-not [string]::IsNullOrWhiteSpace($stderrText)) { Write-Warning $stderrText.TrimEnd() }
+                if ($process.ExitCode -ne 0) {
+                  throw "Authenticode verification failed for $ArtifactPath with exit code $($process.ExitCode)."
+                }
+              }
+              finally {
+                $process.Dispose()
+              }
+            }
+
             $files = @()
             foreach ($name in $expectedNames) {
               $path = Join-Path $sourceDir $name
-              & $signtool verify /pa /v $path
-              if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed for $name." }
+              Write-Host "Verifying Authenticode signature for $name."
+              Invoke-BoundedSignToolVerify -SignToolPath $signtool -ArtifactPath $path
               $signature = Get-AuthenticodeSignature $path
               if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
                 throw "Invalid Authenticode status for ${name}: $($signature.Status)."
