@@ -158,23 +158,59 @@ jobs:
             $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
           )
 
+          function Invoke-BoundedCertUtil {
+            param(
+              [Parameter(Mandatory)] [string[]] $Arguments,
+              [Parameter(Mandatory)] [string] $Description
+            )
+
+            $startInfo = [Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = Join-Path $env:SystemRoot 'System32\certutil.exe'
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+            foreach ($argument in $Arguments) {
+              [void] $startInfo.ArgumentList.Add($argument)
+            }
+
+            $process = [Diagnostics.Process]::new()
+            $process.StartInfo = $startInfo
+            try {
+              if (-not $process.Start()) {
+                throw "Failed to start certutil for $Description."
+              }
+              $stdout = $process.StandardOutput.ReadToEndAsync()
+              $stderr = $process.StandardError.ReadToEndAsync()
+              if (-not $process.WaitForExit(30000)) {
+                $process.Kill($true)
+                $process.WaitForExit()
+                throw "certutil timed out after 30 seconds while $Description."
+              }
+              $stdoutText = $stdout.GetAwaiter().GetResult()
+              $stderrText = $stderr.GetAwaiter().GetResult()
+              if (-not [string]::IsNullOrWhiteSpace($stdoutText)) { Write-Host $stdoutText.TrimEnd() }
+              if (-not [string]::IsNullOrWhiteSpace($stderrText)) { Write-Warning $stderrText.TrimEnd() }
+              if ($process.ExitCode -ne 0) {
+                throw "certutil failed while $Description with exit code $($process.ExitCode)."
+              }
+            }
+            finally {
+              $process.Dispose()
+            }
+          }
+
           $trustedStoreNames = @()
           try {
             foreach ($storeName in @('Root', 'TrustedPublisher')) {
               Write-Host "Adding test signer $thumbprint to CurrentUser/$storeName on the ephemeral runner."
-              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+              Invoke-BoundedCertUtil -Arguments @(
+                '-user',
+                '-f',
+                '-addstore',
                 $storeName,
-                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-              )
-              try {
-                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $store.Add($certificate)
-                $trustedStoreNames += $storeName
-              }
-              finally {
-                $store.Close()
-                $store.Dispose()
-              }
+                $certificatePath
+              ) -Description "adding the test signer to CurrentUser/$storeName"
+              $trustedStoreNames += $storeName
             }
 
             Write-Host 'Locating signtool.exe.'
@@ -210,6 +246,7 @@ jobs:
                 $stderr = $process.StandardError.ReadToEndAsync()
                 if (-not $process.WaitForExit(90000)) {
                   $process.Kill($true)
+                  $process.WaitForExit()
                   throw "SignTool verification timed out after 90 seconds for $ArtifactPath."
                 }
                 $stdoutText = $stdout.GetAwaiter().GetResult()
@@ -270,18 +307,13 @@ jobs:
           }
           finally {
             foreach ($storeName in $trustedStoreNames) {
-              $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+              Write-Host "Removing test signer $thumbprint from CurrentUser/$storeName."
+              Invoke-BoundedCertUtil -Arguments @(
+                '-user',
+                '-delstore',
                 $storeName,
-                [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-              )
-              try {
-                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-                $store.Remove($certificate)
-              }
-              finally {
-                $store.Close()
-                $store.Dispose()
-              }
+                $thumbprint
+              ) -Description "removing the test signer from CurrentUser/$storeName"
             }
           }
 
