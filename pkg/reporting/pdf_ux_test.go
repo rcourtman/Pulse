@@ -254,17 +254,44 @@ func renderFleetSummaryText(t *testing.T, data *MultiReportData) string {
 // parenthesised string literals used by Tj operators. fpdf always
 // compresses its content streams, so a substring scan over the raw
 // bytes misses everything visible to a reader.
-var streamRe = regexp.MustCompile(`(?s)stream\r?\n(.*?)\r?\nendstream`)
+//
+// Each stream is sliced by the /Length declared in its object
+// dictionary, the way a real PDF reader does — never by scanning ahead
+// for the "endstream" keyword, because compressed bytes may contain any
+// byte sequence. An earlier version matched `(.*?)\r?\nendstream` and
+// the optional \r swallowed the stream's final Adler-32 checksum byte
+// whenever it happened to be 0x0D (~1 in 256 streams), making the
+// inflate fail and silently dropping that page's text. The compressed
+// bytes are a pure function of the report text, which embeds the report
+// period, so the drop was deterministic for specific date windows and
+// surfaced as a date-dependent CI flake.
+var streamStartRe = regexp.MustCompile(`\nstream\r?\n`)
+var streamLengthRe = regexp.MustCompile(`/Length (\d+)`)
 var literalRe = regexp.MustCompile(`\(([^()\\]*(?:\\.[^()\\]*)*)\)`)
 
 func extractPDFText(t *testing.T, data []byte) string {
 	t.Helper()
 	var out bytes.Buffer
-	for _, m := range streamRe.FindAllSubmatch(data, -1) {
-		raw := m[1]
-		decoded, err := inflateStream(raw)
+	for _, loc := range streamStartRe.FindAllIndex(data, -1) {
+		// The object dictionary immediately precedes the stream keyword;
+		// its /Length is always a direct integer with fpdf. Take the
+		// last match in the window so a preceding object's dictionary
+		// can't shadow this stream's own.
+		dictStart := loc[0] - 400
+		if dictStart < 0 {
+			dictStart = 0
+		}
+		lengths := streamLengthRe.FindAllSubmatch(data[dictStart:loc[0]], -1)
+		if len(lengths) == 0 {
+			continue
+		}
+		n, err := strconv.Atoi(string(lengths[len(lengths)-1][1]))
+		if err != nil || loc[1]+n > len(data) {
+			continue
+		}
+		decoded, err := inflateStream(data[loc[1] : loc[1]+n])
 		if err != nil {
-			// Stream may not be Flate'd (e.g. xref tables) — skip.
+			// Stream may not be Flate'd (e.g. XMP metadata) — skip.
 			continue
 		}
 		for _, lit := range literalRe.FindAllSubmatch(decoded, -1) {
