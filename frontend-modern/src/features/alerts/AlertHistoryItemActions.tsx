@@ -47,6 +47,7 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             void props.state.openResourceIncidentPanel(
               props.alert.resourceId as string,
               props.alert.resourceName,
+              rowKey(),
             );
           }}
         >

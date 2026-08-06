@@ -382,6 +382,25 @@ links to the retired top-level routes, and the supporting
 `buildResolvedResourceSurfaceLinks` helper was deleted from
 `frontend-modern/src/routing/resourceLinks.ts` as part of the same pass.
 
+That panel renders inline under the history row that opened it, in both the
+desktop table (`AlertHistoryTableAlertRow.tsx`) and the phone card list
+(`AlertHistoryMobileList.tsx`). It must not go back to being a page-level
+sibling in `tabs/HistoryTab.tsx`: the alert history is a long scroller, so a
+page-level panel opened thousands of pixels above a reader scrolled into the
+list and the row-level button read as inert (#1687). Because several alerts
+can share one resource, `resourceIncidentPanel` carries the originating
+`rowKey` and each row renders the panel only when that key matches, which also
+keeps exactly one panel open at a time. Re-triggering the same row closes it,
+matching the neighbouring Timeline toggle.
+
+Alert history row timestamps render clock time in the viewer's own locale and
+must carry the absolute date and time as a title. The date otherwise lives
+only in the day group header, which scrolls out of sight, and a hardcoded
+`en-US` format misreported the time of day to everyone outside the US
+(#1687, #1685). `useAlertHistoryState` owns both formatters
+(`formatAlertRowTime`, `formatAlertRowTimestamp`) so the desktop table and the
+mobile list cannot drift apart.
+
 Alert browser surfaces no longer manage their own runtime-capabilities fetch or
 `hasAIAlertsFeature` prop chain. `frontend-modern/src/pages/Alerts.tsx` and the
 shared alert overview surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,

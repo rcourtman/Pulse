@@ -53,8 +53,12 @@ describe('HistoryTab', () => {
 
     expect(screen.getByText('frequency-card')).toBeInTheDocument();
     expect(screen.getByText('filters-card')).toBeInTheDocument();
-    expect(screen.getByText('resource-incidents-panel')).toBeInTheDocument();
     expect(screen.getByText('history-table')).toBeInTheDocument();
     expect(screen.getByText('administration-card')).toBeInTheDocument();
+    // #1687: the resource incidents panel is deliberately NOT a page-level
+    // sibling any more. It renders inside the row that opened it, so that a
+    // reader scrolled deep into the history sees it appear where they clicked
+    // instead of thousands of pixels above the viewport.
+    expect(screen.queryByText('resource-incidents-panel')).not.toBeInTheDocument();
   });
 });

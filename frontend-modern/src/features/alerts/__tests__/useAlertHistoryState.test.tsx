@@ -130,14 +130,23 @@ describe('useAlertHistoryState', () => {
     expect(result.alertData()).toHaveLength(1);
     expect(eventBus.on).toHaveBeenCalledWith('org_switched', expect.any(Function));
 
-    await result.openResourceIncidentPanel('resource-1', 'db-01');
+    await result.openResourceIncidentPanel('resource-1', 'db-01', 'row-1');
 
     expect(AlertsAPI.getIncidentsForResource).toHaveBeenCalledWith('resource-1', 10);
     expect(result.resourceIncidentPanel()).toEqual({
       resourceId: 'resource-1',
       resourceName: 'db-01',
+      rowKey: 'row-1',
     });
     expect(result.resourceIncidents()['resource-1']).toHaveLength(1);
+
+    // Re-opening from the same row closes the panel, the way the neighbouring
+    // Timeline button toggles. A different row re-targets it instead.
+    await result.openResourceIncidentPanel('resource-1', 'db-01', 'row-1');
+    expect(result.resourceIncidentPanel()).toBeNull();
+
+    await result.openResourceIncidentPanel('resource-1', 'db-01', 'row-2');
+    expect(result.resourceIncidentPanel()?.rowKey).toBe('row-2');
 
     result.setTimeFilter('24h');
     await waitFor(() => expect(AlertsAPI.getHistory).toHaveBeenCalledTimes(2));

@@ -145,6 +145,21 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     (typeof navigator !== 'undefined' ? navigator.language : undefined) ||
     'en-US';
 
+  // Row timestamps render clock time only; the date lives in the day group
+  // header, which scrolls out of sight in a long history. Hovering a row gives
+  // the absolute date and time so a reader never has to scroll back up to work
+  // out which day they are looking at (#1687).
+  const formatAlertRowTime = (startTime: string) =>
+    new Date(startTime).toLocaleTimeString(userLocale, {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  const formatAlertRowTimestamp = (startTime: string) =>
+    new Date(startTime).toLocaleString(userLocale, {
+      dateStyle: 'full',
+      timeStyle: 'medium',
+    });
+
   let fetchRequestId = 0;
   const fetchHistory = async (range: AlertHistoryRange) => {
     const requestId = ++fetchRequestId;
@@ -332,6 +347,11 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     toggleIncidentTimeline,
     setIncidentNoteDraft,
     saveIncidentNote,
+    // Exposed so the inline resource panel can resolve a display name without
+    // threading the lookup down through the table and mobile list.
+    getResource: props.getResource,
+    formatAlertRowTime,
+    formatAlertRowTimestamp,
     openResourceIncidentPanel: resourceIncidentsState.openResourceIncidentPanel,
     refreshResourceIncidentPanel: resourceIncidentsState.refreshResourceIncidentPanel,
     toggleResourceIncidentDetails: resourceIncidentsState.toggleResourceIncidentDetails,

@@ -8,6 +8,7 @@ import {
 } from '@/utils/alertIncidentPresentation';
 
 import { AlertHistoryItemActions } from './AlertHistoryItemActions';
+import { AlertResourceIncidentsPanel } from './AlertResourceIncidentsPanel';
 import { getGroupSummaryLabel } from './AlertHistoryTableGroupRow';
 import type { AlertHistoryState } from './useAlertHistoryState';
 
@@ -69,11 +70,11 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
                       <dl class="mt-3 grid grid-cols-3 gap-2 text-[10px] text-muted">
                         <div>
                           <dt class="uppercase tracking-wide">Time</dt>
-                          <dd class="mt-0.5 font-mono text-base-content">
-                            {new Date(alert.startTime).toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                          <dd
+                            class="mt-0.5 font-mono text-base-content"
+                            title={props.state.formatAlertRowTimestamp(alert.startTime)}
+                          >
+                            {props.state.formatAlertRowTime(alert.startTime)}
                           </dd>
                         </div>
                         <div>
@@ -132,6 +133,14 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
                               );
                             }}
                           />
+                        </div>
+                      </Show>
+
+                      {/* Same reasoning as the desktop row: the panel belongs
+                          under the card that asked for it, not at page level. */}
+                      <Show when={props.state.resourceIncidentPanel()?.rowKey === rowKey()}>
+                        <div class="mt-3 border-t border-border pt-3">
+                          <AlertResourceIncidentsPanel state={props.state} />
                         </div>
                       </Show>
                     </article>

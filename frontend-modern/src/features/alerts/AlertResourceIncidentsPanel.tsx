@@ -33,7 +33,7 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 
 interface AlertResourceIncidentsPanelProps {
   state: AlertHistoryState;
-  getResource: (resourceId: string) => Resource | undefined;
+  getResource?: (resourceId: string) => Resource | undefined;
 }
 
 export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelProps) {
@@ -43,7 +43,8 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
         const resourceId = selection().resourceId;
         const incidents = () => props.state.resourceIncidents()[resourceId] || [];
         const isLoading = () => props.state.resourceIncidentLoading()[resourceId];
-        const resource = () => props.getResource(resourceId);
+        const lookupResource = () => props.getResource ?? props.state.getResource;
+        const resource = () => lookupResource()?.(resourceId);
         const resourceDisplayName = () => {
           const current = resource();
           if (current) {

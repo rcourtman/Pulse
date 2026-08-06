@@ -10,6 +10,7 @@ import {
 } from '@/utils/alertIncidentPresentation';
 
 import { AlertHistoryItemActions } from './AlertHistoryItemActions';
+import { AlertResourceIncidentsPanel } from './AlertResourceIncidentsPanel';
 import type { AlertHistoryState } from './useAlertHistoryState';
 
 type AlertHistoryAlert = ReturnType<AlertHistoryState['groupedAlerts']>[number]['alerts'][number];
@@ -30,11 +31,9 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
       >
         <TableCell
           class={`${getPlatformTableCellClassForKind('text')} alert-history-timestamp-column font-mono whitespace-nowrap text-muted`}
+          title={props.state.formatAlertRowTimestamp(props.alert.startTime)}
         >
-          {new Date(props.alert.startTime).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
+          {props.state.formatAlertRowTime(props.alert.startTime)}
         </TableCell>
 
         <TableCell
@@ -118,6 +117,17 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
                 );
               }}
             />
+          </TableCell>
+        </TableRow>
+      </Show>
+
+      {/* The incidents panel opens under the row that asked for it. Rendering
+          it at page level put the panel thousands of pixels above a reader
+          scrolled into the history, so the row button read as inert (#1687). */}
+      <Show when={props.state.resourceIncidentPanel()?.rowKey === rowKey()}>
+        <TableRow class="border-b border-border bg-surface-alt">
+          <TableCell colspan={9} class="p-3">
+            <AlertResourceIncidentsPanel state={props.state} />
           </TableCell>
         </TableRow>
       </Show>

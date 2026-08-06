@@ -12,6 +12,10 @@ export function useAlertResourceIncidentsState() {
   const [resourceIncidentPanel, setResourceIncidentPanel] = createSignal<{
     resourceId: string;
     resourceName: string;
+    // The row that opened the panel. The panel renders inline underneath that
+    // row, and several alerts in the history can share one resource, so keying
+    // on resourceId alone would open a copy under every one of them.
+    rowKey: string;
   } | null>(null);
   const [resourceIncidents, setResourceIncidents] = createSignal<Record<string, Incident[]>>({});
   const [resourceIncidentLoading, setResourceIncidentLoading] = createSignal<
@@ -39,10 +43,22 @@ export function useAlertResourceIncidentsState() {
     }
   };
 
-  const openResourceIncidentPanel = async (resourceId: string, resourceName: string) => {
+  const openResourceIncidentPanel = async (
+    resourceId: string,
+    resourceName: string,
+    rowKey: string,
+  ) => {
     if (!resourceId) return;
 
-    setResourceIncidentPanel({ resourceId, resourceName });
+    // Clicking the same row's button again closes the panel, matching how the
+    // neighbouring Timeline button toggles its own expansion.
+    const current = resourceIncidentPanel();
+    if (current && current.rowKey === rowKey) {
+      setResourceIncidentPanel(null);
+      return;
+    }
+
+    setResourceIncidentPanel({ resourceId, resourceName, rowKey });
     setExpandedResourceIncidentIds(new Set<string>());
     if (!(resourceId in resourceIncidents())) {
       await loadResourceIncidents(resourceId);

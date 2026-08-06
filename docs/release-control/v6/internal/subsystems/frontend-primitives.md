@@ -2394,11 +2394,17 @@ default` instead of fusing provider and badge text such as
     fetch path.
 35. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
-    shared `alertData()` history state instead of reviving deleted aliases, and
-    it must pass unified-resource resolution through to
-    `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
-    the panel can render shared route chips without creating another page-local
-    resource lookup or provider-specific handoff layer.
+    shared `alertData()` history state instead of reviving deleted aliases.
+    Unified-resource resolution reaches
+    `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
+    through the history state rather than a prop chain: `useAlertHistoryState`
+    already receives `getResource` and re-exposes it, so the panel resolves a
+    display name wherever it is mounted. That replaced the previous
+    tab-passes-the-resolver rule, which only worked while the panel was a
+    page-level sibling of the tab; it now mounts inside the history row that
+    opened it (see the alerts contract, #1687) and the tab no longer renders it
+    at all. Neither route may create another page-local resource lookup or a
+    provider-specific handoff layer.
 36. Keep the alert-thresholds containers surface on the canonical shared owner.
     `alertOverridesModel.ts`, `useAlertOverridesState.ts`, and
     `useAlertsConfigurationState.ts` must surface API-backed `app-container`
@@ -5049,12 +5055,18 @@ now route through
 Future alert-history control flow should extend the hook, pure history analytics
 should extend the model, and section rendering should extend those owners
 rather than rebuilding any of those concerns in the tab shell.
-That same feature shell now owns the resource-resolution handoff into the
-resource-incident panel. `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`
-must pass the unified-resource resolver through to
-`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`, and the
-tab shell itself should only react to the current `alertData()` contract rather
-than reviving deleted history-state aliases such as `filteredAlerts()`. The
+The resource-resolution handoff into the resource-incident panel now belongs to
+the history state rather than the tab shell.
+`frontend-modern/src/features/alerts/useAlertHistoryState.ts` re-exposes the
+`getResource` resolver it is already given, and
+`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` reads it
+from there. The panel mounts inside the history row that opened it rather than
+beside the tab's other cards, so a prop chain from
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` would have to thread
+through the table section, the group row, the alert row, and the mobile list to
+reach it. The tab shell itself should still only react to the current
+`alertData()` contract rather than reviving deleted history-state aliases such
+as `filteredAlerts()`. The
 panel may render compact route chips, but it must stay on shared route helpers
 and feature-owned composition instead of growing provider-local routing logic
 or another page-local resource lookup path.

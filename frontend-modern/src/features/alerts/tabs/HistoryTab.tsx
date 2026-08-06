@@ -9,7 +9,6 @@ import { AlertHistoryAdministrationCard } from '../AlertHistoryAdministrationCar
 import { AlertHistoryFiltersCard } from '../AlertHistoryFiltersCard';
 import { AlertHistoryFrequencyCard } from '../AlertHistoryFrequencyCard';
 import { AlertHistoryTableSection } from '../AlertHistoryTableSection';
-import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
 import { useAlertHistoryState } from '../useAlertHistoryState';
 
 export interface HistoryTabProps {
@@ -70,7 +69,6 @@ export function HistoryTab(props: HistoryTabProps) {
     <div class="space-y-4">
       <AlertHistoryFrequencyCard state={historyState} />
       <AlertHistoryFiltersCard state={historyState} isMobile={isMobile()} />
-      <AlertResourceIncidentsPanel state={historyState} getResource={props.getResource} />
       <AlertHistoryTableSection state={historyState} />
       <AlertHistoryAdministrationCard state={historyState} />
     </div>
