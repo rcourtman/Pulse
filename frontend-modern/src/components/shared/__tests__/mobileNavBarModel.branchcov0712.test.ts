@@ -201,7 +201,7 @@ describe('mobileNavBarModel.branchcov2', () => {
 
   describe('getMobileNavTabButtonClass', () => {
     const BASE =
-      'relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors';
+      'relative flex min-h-10 shrink-0 select-none flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors';
     const ACTIVE = 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
     const MUTED = 'text-muted';
 

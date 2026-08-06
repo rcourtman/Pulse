@@ -1,105 +1,49 @@
 {
   "version": 1,
-  "base_sha": "25ba5fd63e284589e63e68de8159b133e803312c",
-  "verified_at": "2026-08-06T16:45:35Z",
+  "base_sha": "4bb0786fbe797a00c8327cfc77a12f04c605bffd",
+  "verified_at": "2026-08-06T16:42:57Z",
   "result": "passed",
   "changed_paths": [
     "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx",
-    "frontend-modern/src/index.css"
+    "frontend-modern/src/components/shared/Subtabs.tsx",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "02e195bba05254631bfa6e6d9411cff37d15ddd2050631088018e42d70d1be04",
-    "frontend-modern/src/components/shared/MobileNavBar.tsx": "4c555f15f3d6e598289a0c097b395b6f9708f05f66d423739acdda6ffa28b661",
-    "frontend-modern/src/index.css": "d7adb9f95f22b490c098eb61d96201847210aca1b913aeb9d6f0668e88ff8366"
+    "frontend-modern/src/AppLayout.tsx": "2052252bcd26738b2d129619c003bb385152e25d2da37a4bbe3872d340766c31",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "2bff774d03e632a71de233c8bcee138d76cdc88d2fcad8cd17bcdb956cf21ebe",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "2c1b0a5fc7c20e04ef8c8d8e42dc07a1c188fff2252d999b0686bbe0862f7e84",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "6c60a03cef2df987ee44c56a2512912285c4ee869f7d63e92e56836f657c06c2"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage?tab=disks&source=proxmox-all",
-    "/proxmox/replication",
-    "/proxmox/backups?view=coverage",
-    "/proxmox/backups?view=date",
-    "/proxmox/ceph",
-    "/proxmox/mail",
+    "/",
+    "/docker",
     "/docker/images",
-    "/docker/storage",
     "/docker/networks",
-    "/docker/swarm",
-    "/kubernetes/overview",
-    "/kubernetes/nodes",
-    "/kubernetes/services",
-    "/kubernetes/storage",
-    "/kubernetes/configuration",
-    "/kubernetes/events",
-    "/truenas/storage",
-    "/truenas/services",
-    "/truenas/apps",
-    "/truenas/vms",
-    "/truenas/shares",
-    "/truenas/protection",
-    "/vmware/overview",
-    "/vmware/networks",
-    "/vmware/health",
-    "/vmware/activity",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/alerts/notifications",
-    "/alerts/schedule",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure",
-    "/settings/security-overview",
-    "/settings/security/api",
-    "/settings/security-auth",
-    "/settings/security-sso",
-    "/settings/security-roles",
-    "/settings/security-users",
-    "/settings/security-audit",
-    "/settings/security-webhooks",
-    "/settings/support/diagnostics",
-    "/settings/support/logs"
+    "/actions"
+  ],
+  "states": [
+    "logged-in workspace via login form (admin)",
+    "Docker overview with hosts and containers tables rendered from live :7655 backend",
+    "Docker platform subtab rail (Overview/Images/Storage/Networks/Swarm)",
+    "Actions page shared Subtabs (Open/History)",
+    "mobile viewport 375x812 with mobile nav bar tablist (12 tabs)",
+    "desktop nav with platform and utility tabs"
+  ],
+  "interactions": [
+    "double-click desktop nav tab Docker: navigated, window.getSelection() empty",
+    "double-click platform subtab rail Images then Networks: navigated to /docker/networks, selection empty",
+    "computed user-select probed 'none' on all 10 desktop role=tab elements, platform rail anchors, Actions Open/History subtab buttons, and 12 mobile nav tabs",
+    "double-click Add filter button: no selection (native button control baseline)"
   ],
   "viewports": [
     {
-      "width": 768,
-      "height": 900
-    },
-    {
-      "width": 1024,
-      "height": 900
-    },
-    {
-      "width": 1120,
-      "height": 900
-    },
-    {
-      "width": 1279,
-      "height": 900
-    },
-    {
       "width": 1280,
-      "height": 900
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
     }
-  ],
-  "states": [
-    "Every remaining mock-data platform table at 768px, including replication, backup coverage and date views, Ceph, mail, Docker storage/networking/Swarm, Kubernetes services/storage/configuration/events, TrueNAS services/apps/VMs/shares/protection, and vSphere networking/health/activity",
-    "Desktop secondary navigation and Settings sidebar transition at 1024px",
-    "Primary navigation with all six platform destinations and all four operator destinations",
-    "Dense Kubernetes Nodes, Events, and Configuration tables immediately below and above the secondary-column container breakpoint",
-    "Dense vSphere Hosts and VM inventory immediately below and above the secondary-column container breakpoint",
-    "Expanded Ceph cluster details and backup coverage inventory",
-    "Exact mobile-to-desktop primary navigation handoff at 1279px and 1280px"
-  ],
-  "interactions": [
-    "Scanned the remaining 22 platform routes at 768px for table-shell overflow, document overflow, and off-screen controls",
-    "Visually inspected the densest Ceph, backup coverage, Kubernetes Events, Kubernetes Nodes, and vSphere Hosts layouts rather than relying only on width measurements",
-    "Found the 1024px desktop primary navigation clipping Patrol and hiding Settings because its 1142px content exceeded the 969px rail",
-    "Kept the stable bottom navigation through 1279px, clicked Settings and Proxmox at 1024px, and confirmed navigation plus focus behavior",
-    "Confirmed the desktop navigation appears at 1280px with all ten destinations visible, no internal scroll, and compact laptop padding",
-    "Measured the exact 1279px/1280px handoff with one and only one primary navigation surface visible at each width",
-    "Found that a 1024px table container restored nine Kubernetes Node columns and eleven vSphere Host columns too early, visibly crushing identity and diagnostic fields",
-    "Raised the shared secondary-column container threshold to 1152px, then confirmed readable core columns at 1120px and the richer operational set returning at 1280px without horizontal scrolling",
-    "Reset the viewport override and finalized the browser session"
   ]
 }

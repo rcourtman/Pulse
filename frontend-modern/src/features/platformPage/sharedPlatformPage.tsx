@@ -90,7 +90,7 @@ export function PlatformSectionTabs<TabId extends string>(props: {
           {(tab) => (
             <A
               href={tab.path}
-              class={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${
+              class={`inline-flex min-h-10 shrink-0 select-none items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${
                 props.active === tab.id
                   ? 'border-blue-500 text-blue-600 dark:text-blue-300'
                   : 'border-transparent text-muted hover:border-border hover:text-base-content'

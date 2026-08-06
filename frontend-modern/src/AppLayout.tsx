@@ -654,7 +654,7 @@ export function AppLayout(props: AppLayoutProps) {
     const disabled = () => !tab.enabled;
     const Icon = tab.icon;
     const baseClasses =
-      'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+      'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none';
 
     const className = () => {
       if (isActive()) {
@@ -882,7 +882,7 @@ export function AppLayout(props: AppLayoutProps) {
                   const isActive = () => getActiveTabDesktop() === tab.id;
                   const Icon = tab.icon;
                   const baseClasses =
-                    'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+                    'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none';
 
                   const className = () => {
                     if (isActive()) {
