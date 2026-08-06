@@ -1864,6 +1864,14 @@ must not treat starter
     data remains inventory-only context and must not be treated as proof of
     restore capability, recovery artifacts, or widened platform recovery
     support.
+    The mock connections ledger composed in
+    `internal/api/platform_mock_connections.go` is bounded the same way: while
+    mock mode is on, real configured TrueNAS and vSphere sources are dropped
+    from the aggregator inputs and only authored fixtures compose the storage
+    source rows, so a demo payload never advertises a real storage appliance
+    that mock mode has suspended from collection. The
+    `PULSE_MOCK_KEEP_REAL_POLLING` opt-in is the single exception, because
+    those sources genuinely do collect under it.
 13. Keep runtime mock platform context derived from one shared fixture graph.
     When shared `internal/api/` and monitoring wiring surface mock
     storage/recovery-adjacent inventory or recovery artifacts, that data must

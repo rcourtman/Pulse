@@ -1971,6 +1971,16 @@ a new API state machine, queue contract, or verification-accounting field.
    only a fetch lifecycle rule; it must not synthesize rows, downgrade backend
    fleet state, or replace the shared connection projection with page-local
    placeholders.
+   In mock mode that ledger is a clean room, composed in
+   `internal/api/platform_mock_connections.go`: real configured PVE, PBS, PMG,
+   vSphere, TrueNAS, and availability sources are dropped from the aggregator
+   inputs and only authored fixtures compose the payload, matching the
+   substitution `/api/config/nodes` already performs. Real clients are never
+   initialised while mock mode is on, so retaining those rows would publish
+   real connection names and addresses through an otherwise synthetic payload
+   and report a collection state that mock mode itself suspended. The single
+   exception is the `PULSE_MOCK_KEEP_REAL_POLLING` opt-in, where the configured
+   sources genuinely do collect and remain in the ledger.
    2b. Route agentless availability target kind changes through
    `internal/api/availability_handlers.go`,
    `internal/api/platform_mock_connections.go`,
