@@ -699,6 +699,38 @@ unused devices: <none>`
 	}
 }
 
+func TestParseMDStatArraysQNAPSystemRAIDRoleBitmap(t *testing.T) {
+	mdstat := `Personalities : [linear] [raid0] [raid1] [raid10] [raid6] [raid5] [raid4] [multipath]
+md1 : active raid1 sdb3[3] sda3[2]
+      3897062912 blocks super 1.0 [2/2] [UU]
+
+md321 : active raid1 sda5[2] sdb5[0]
+      6702656 blocks super 1.0 [2/2] [UU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md13 : active raid1 sdb4[25] sda4[24]
+      458880 blocks super 1.0 [24/2] [UU______________________]
+      bitmap: 1/1 pages [4KB], 65536KB chunk
+
+md9 : active raid1 sdb1[25] sda1[24]
+      530048 blocks super 1.0 [24/2] [UU______________________]
+      bitmap: 1/1 pages [4KB], 65536KB chunk`
+
+	arrays := parseMDStatArrays(mdstat)
+	if len(arrays) != 4 {
+		t.Fatalf("array count = %d, want 4", len(arrays))
+	}
+	for _, index := range []int{2, 3} {
+		array := arrays[index]
+		if array.State != "active" {
+			t.Fatalf("%s state = %q, want active", array.Device, array.State)
+		}
+		if array.TotalDevices != 2 || array.ActiveDevices != 2 || array.WorkingDevices != 2 || array.FailedDevices != 0 {
+			t.Fatalf("unexpected %s device counts: %+v", array.Device, array)
+		}
+	}
+}
+
 func TestListArrayDevicesError(t *testing.T) {
 	withReadProcMDStat(t, func() ([]byte, error) {
 		return nil, errors.New("read failed")

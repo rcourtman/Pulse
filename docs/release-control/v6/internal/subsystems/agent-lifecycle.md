@@ -1658,7 +1658,11 @@ the intentionally sparse public response.
    baseline for Linux md arrays. `mdadm --detail` may enrich level, state,
    member, UUID, and rebuild fields when available, but missing or failing
    mdadm detail probes must not hide a kernel-reported md array from the
-   unified agent report.
+   unified agent report. Vendor fixed-width role maps must not be treated as
+   missing members: a QNAP system RAID1 array that reports `[24/2]` while both
+   active members occupy roles 24 and 25 has two configured members, not 22
+   failed disks; ordinary in-range degraded maps such as `[4/3] [UUU_]` retain
+   their missing-member semantics (#1688).
    Server-side lifecycle admission must preserve that same continuity across
    Pulse restart and upgrade. When a standalone host comes back with the same
    durable machine/report identity and token continuity, the shared admission

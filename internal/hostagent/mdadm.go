@@ -214,9 +214,6 @@ func parseMDStatArraySection(deviceName string, section []string) agentshost.RAI
 			active, _ := strconv.Atoi(matches[2])
 			array.TotalDevices = total
 			array.ActiveDevices = active
-			if total > active && !strings.Contains(array.State, "degraded") {
-				array.State = appendMDStatState(array.State, "degraded")
-			}
 		}
 
 		if array.Operation == "" {
@@ -255,6 +252,15 @@ func parseMDStatArraySection(deviceName string, section []string) agentshost.RAI
 	if array.TotalDevices == 0 {
 		array.TotalDevices = array.ActiveDevices
 	}
+	if mdStatUsesSparseRoleBitmap(array, failedDevices) {
+		// QNAP's system RAID1 arrays expose a fixed-width bay/role bitmap such
+		// as [24/2] [UU______________________], while their active members use
+		// roles 24 and 25. Those unused bitmap positions are not failed disks.
+		array.TotalDevices = array.ActiveDevices
+	}
+	if array.TotalDevices > array.ActiveDevices && !strings.Contains(array.State, "degraded") {
+		array.State = appendMDStatState(array.State, "degraded")
+	}
 	if failedDevices == 0 && array.TotalDevices > array.ActiveDevices {
 		failedDevices = array.TotalDevices - array.ActiveDevices
 	}
@@ -263,6 +269,30 @@ func parseMDStatArraySection(deviceName string, section []string) agentshost.RAI
 	array.SpareDevices = spareDevices
 
 	return array
+}
+
+func mdStatUsesSparseRoleBitmap(array agentshost.RAIDArray, failedDevices int) bool {
+	if !strings.EqualFold(array.State, "active") ||
+		!strings.EqualFold(array.Level, "raid1") ||
+		failedDevices != 0 ||
+		array.TotalDevices <= array.ActiveDevices ||
+		array.ActiveDevices == 0 {
+		return false
+	}
+
+	activeMembers := 0
+	for _, device := range array.Devices {
+		state := strings.ToLower(device.State)
+		if strings.Contains(state, "faulty") || strings.Contains(state, "spare") {
+			continue
+		}
+		activeMembers++
+		if device.Slot < array.TotalDevices {
+			return false
+		}
+	}
+
+	return activeMembers == array.ActiveDevices
 }
 
 func parseMDStatDeviceToken(token string, arrayState string) (agentshost.RAIDDevice, bool) {

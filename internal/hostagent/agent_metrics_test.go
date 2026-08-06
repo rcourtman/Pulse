@@ -251,6 +251,30 @@ func TestBuildReport(t *testing.T) {
 		mc.raidArraysFn = nil
 	})
 
+	t.Run("RAID collection preserves QNAP sparse role map health", func(t *testing.T) {
+		mc.raidArraysFn = func(ctx context.Context) ([]agentshost.RAIDArray, error) {
+			return parseMDStatArrays(`md13 : active raid1 sdb4[25] sda4[24]
+      458880 blocks super 1.0 [24/2] [UU______________________]
+      bitmap: 1/1 pages [4KB], 65536KB chunk`), nil
+		}
+
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatalf("buildReport failed: %v", err)
+		}
+		if len(report.RAID) != 1 {
+			t.Fatalf("expected 1 RAID array, got %d", len(report.RAID))
+		}
+		array := report.RAID[0]
+		if array.Device != "/dev/md13" || array.State != "active" {
+			t.Fatalf("unexpected QNAP RAID array summary: %+v", array)
+		}
+		if array.TotalDevices != 2 || array.ActiveDevices != 2 || array.WorkingDevices != 2 || array.FailedDevices != 0 {
+			t.Fatalf("unexpected QNAP RAID array counts: %+v", array)
+		}
+		mc.raidArraysFn = nil
+	})
+
 	// Test case 4: Ceph collection
 	t.Run("Ceph collection", func(t *testing.T) {
 		mc.cephStatusFn = func(ctx context.Context) (*CephClusterStatus, error) {
