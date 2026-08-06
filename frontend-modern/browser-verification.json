@@ -1,28 +1,45 @@
 {
   "version": 1,
-  "base_sha": "40d29ca44287eb07f1779dd6e549d22d7b606dfd",
-  "verified_at": "2026-08-06T00:09:34Z",
+  "base_sha": "328319a8bcd75e8ee838dd09d7064d72fb22afcb",
+  "verified_at": "2026-08-06T08:25:26Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/ColumnPicker.tsx",
-    "frontend-modern/src/components/shared/columnPickerModel.ts",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+    "frontend-modern/src/components/AI/AICostDashboard.tsx",
+    "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/ColumnPicker.tsx": "ed00597344156850ff0f40b2e4100f307ec82a0019759e4969ca4f8e77cda2c5",
-    "frontend-modern/src/components/shared/columnPickerModel.ts": "bc548f541f916a9ed41c8a7e3f9d52e6a2932364ea7d680b18e908c881d78d6b",
-    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "084b4a4d0a5f37756d167d9f8729d6fdbc59394265401f9c6f480093b6b05df3"
+    "frontend-modern/src/components/AI/AICostDashboard.tsx": "a49cfbaf3d58a5c1425176e43e5b1878c217ba2c863d087c899df446c56cc44b",
+    "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx": "fbdf5dd1a5aed7c9dfbeb14783dfac2ae50397cde7ca48668632c013d6190414",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "8da076ef631f164e01e72760c39bb05864401fcad24f02993635f3ba58412fa8"
   },
   "routes": [
-    "/standalone/machines",
-    "/standalone/availability",
-    "/proxmox/overview"
+    "/settings/infrastructure",
+    "/settings/monitoring/availability",
+    "/settings/pulse-intelligence/provider",
+    "/settings/pulse-intelligence/patrol",
+    "/settings/pulse-intelligence/assistant",
+    "/settings/system-general",
+    "/settings/system-network",
+    "/settings/system-updates",
+    "/settings/system-recovery",
+    "/settings/system-relay",
+    "/settings/support/diagnostics",
+    "/settings/support/logs",
+    "/settings/security-overview",
+    "/settings/security/api",
+    "/settings/security-auth",
+    "/settings/security-sso",
+    "/alerts/overview",
+    "/alerts/history",
+    "/alerts/thresholds/proxmox",
+    "/alerts/thresholds/vmware",
+    "/alerts/notifications",
+    "/alerts/schedule",
+    "/actions",
+    "/patrol"
   ],
   "viewports": [
-    {
-      "width": 1920,
-      "height": 900
-    },
     {
       "width": 1280,
       "height": 820
@@ -33,7 +50,7 @@
     },
     {
       "width": 390,
-      "height": 844
+      "height": 820
     },
     {
       "width": 320,
@@ -41,20 +58,21 @@
     }
   ],
   "states": [
-    "Machines with the default column set",
-    "Machines with every optional diagnostic column enabled",
-    "Workloads with a compact custom column set and then restored defaults",
-    "Machines immediately below and at the 640 pixel disk-column breakpoint",
-    "expanded machine detail row at the narrowest viewport",
-    "mobile View and Columns controls with responsive-column guidance visible"
+    "every visible Settings destination reached through the real mobile settings navigator",
+    "Provider Usage and Spend with all five cost ranges visible",
+    "General Docker and Podman update setting with its environment-variable hint",
+    "mobile Settings page label before and after client-side navigation",
+    "Alerts top-level and threshold tab strips with beginning, middle, and final selections",
+    "Actions Open and History views",
+    "Patrol attention workbench"
   ],
   "interactions": [
-    "added and removed real Machines columns and confirmed lower-priority diagnostics appear only when table space allows",
-    "enabled all sixteen Machines columns at 1920 pixels and confirmed every heading remained readable without horizontal overflow",
-    "changed the real Workloads column set on Proxmox Overview across desktop, tablet, and mobile widths, then restored it",
-    "checked the 639-to-640 pixel transition and confirmed Disk is withheld below the breakpoint and restored at it",
-    "expanded and closed Apollo-114 at 320 pixels, confirmed the detail row matched the table width, and verified focus returned to its trigger",
-    "confirmed zero document and table overflow at every tested viewport",
-    "opened the mobile Columns panel and confirmed the responsive-column explanation fits without overflow"
+    "navigated every visible Settings destination through the 320 pixel sidebar and checked interactive controls for clipped bounds",
+    "selected 1 year, 1 day, and 30 day provider cost ranges and confirmed each remained fully visible with zero document overflow",
+    "confirmed the mobile Settings active-page label updates from Provider and Models to General without retaining the previous destination",
+    "visually inspected the reflowed provider usage header and verified its five buttons exactly fit the available card width",
+    "visually inspected the General update setting and confirmed its title, toggle, description, and long environment token remain inside the card",
+    "checked Settings at 320, 390, 768, and 1280 pixels with zero page overflow",
+    "checked Alerts, Actions, and Patrol at 320 pixels for hidden filters or actions and exercised Action History"
   ]
 }

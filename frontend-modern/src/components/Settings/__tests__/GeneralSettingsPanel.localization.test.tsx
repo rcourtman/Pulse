@@ -87,7 +87,7 @@ describe('GeneralSettingsPanel localization', () => {
     expect(screen.getByText('Monitoring cadence')).toBeInTheDocument();
     expect(screen.getByText('Current cadence: 30 seconds (under a minute)')).toBeInTheDocument();
     expect(screen.getByText('Docker / Podman updates')).toBeInTheDocument();
-    expect(screen.getByText('PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true')).toBeInTheDocument();
+    expect(screen.getByText('PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true')).toHaveClass('break-all');
     expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Deutsch' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Español' })).toBeInTheDocument();

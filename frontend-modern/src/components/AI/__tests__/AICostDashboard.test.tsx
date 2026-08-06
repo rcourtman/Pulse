@@ -188,6 +188,19 @@ describe('AICostDashboard', () => {
     });
   });
 
+  it('gives the full cost range control its own narrow-screen row', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: 'Cost range' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('group', { name: 'Cost range' })).toHaveClass(
+      'w-full',
+      'justify-between',
+      'sm:w-auto',
+    );
+  });
+
   // ---- summary cards ----
 
   it('displays estimated spend in USD', async () => {

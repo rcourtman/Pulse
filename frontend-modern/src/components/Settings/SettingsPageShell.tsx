@@ -252,8 +252,8 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 {shellCopy().mobileBackLabel}
               </button>
               <div class="ml-auto font-semibold text-base-content pr-3">
-                <Show when={props.flatTabs().find((tab) => tab.id === props.activeTab())}>
-                  {(tab) => tab().label}
+                <Show keyed when={props.flatTabs().find((tab) => tab.id === props.activeTab())}>
+                  {(tab) => tab.label}
                 </Show>
               </div>
             </div>

@@ -286,45 +286,50 @@ export const AICostDashboard: Component = () => {
 
   return (
     <Card padding="none" class="overflow-hidden border border-border" border={false}>
-      <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-border">
-        <div class="flex items-center gap-3">
-          <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
-            <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z"
-              />
-            </svg>
+      <div class="bg-blue-50 dark:bg-blue-900 px-4 py-4 border-b border-border sm:px-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div class="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
+            <div class="shrink-0 p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+              <svg
+                class="w-5 h-5 text-blue-600 dark:text-blue-300"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z"
+                />
+              </svg>
+            </div>
+            <SectionHeader
+              title={AI_COST_PANEL_TITLE}
+              description={AI_COST_PANEL_DESCRIPTION}
+              size="sm"
+              class="min-w-0 flex-1"
+            />
           </div>
-          <SectionHeader
-            title={AI_COST_PANEL_TITLE}
-            description={AI_COST_PANEL_DESCRIPTION}
-            size="sm"
-            class="flex-1"
-          />
-          <Show when={loading()}>
-            <div class="text-xs text-muted">Loading…</div>
-          </Show>
-          <FilterSegmentedControl
-            aria-label="Cost range"
-            value={String(days())}
-            disabled={loading()}
-            onChange={(value) => handleRangeClick(Number(value))}
-            options={[
-              { value: '1', label: '1d' },
-              { value: '7', label: '7d' },
-              { value: '30', label: '30d' },
-              { value: '90', label: '90d' },
-              { value: '365', label: '1y' },
-            ]}
-          />
+          <div class="flex min-w-0 items-center gap-2 sm:shrink-0">
+            <Show when={loading()}>
+              <div class="shrink-0 text-xs text-muted">Loading…</div>
+            </Show>
+            <FilterSegmentedControl
+              aria-label="Cost range"
+              class="w-full justify-between sm:w-auto sm:justify-start"
+              value={String(days())}
+              disabled={loading()}
+              onChange={(value) => handleRangeClick(Number(value))}
+              options={[
+                { value: '1', label: '1d' },
+                { value: '7', label: '7d' },
+                { value: '30', label: '30d' },
+                { value: '90', label: '90d' },
+                { value: '365', label: '1y' },
+              ]}
+            />
+          </div>
         </div>
       </div>
 
