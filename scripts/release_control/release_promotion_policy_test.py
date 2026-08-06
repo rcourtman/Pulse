@@ -501,6 +501,43 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("docs/releases/RELEASE_NOTES_v6.md", demo_copy)
         self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", demo_copy)
 
+    def test_signpath_test_signing_workflow_is_non_publishing_and_test_only(self) -> None:
+        workflow = read(".github/workflows/signpath-test-signing.yml")
+
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("pull_request:", workflow)
+        self.assertNotIn("schedule:", workflow)
+        self.assertNotIn("push:", workflow)
+        self.assertIn("SignPath Test Signing Proof (Never Publish)", workflow)
+        self.assertIn("if ($env:GITHUB_REF_NAME -ne 'main')", workflow)
+        self.assertNotIn("'${{ inputs.version }}'", workflow)
+        self.assertIn("does not match repository VERSION", workflow)
+        self.assertIn("signing-policy-slug: test-signing", workflow)
+        self.assertNotIn(
+            "signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}",
+            workflow,
+        )
+        self.assertIn(
+            "The canonical SIGNPATH_SIGNING_POLICY_SLUG must remain release-signing.",
+            workflow,
+        )
+        self.assertIn(
+            "signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2",
+            workflow,
+        )
+        self.assertIn("signedArtifactsPublished = $false", workflow)
+        self.assertIn("signedArtifactsUploadedAsGitHubArtifact = $false", workflow)
+        self.assertIn("nonProduction = $true", workflow)
+        self.assertIn("path: signpath-test-signing-evidence.json", workflow)
+        self.assertNotIn("gh release", workflow)
+        self.assertNotIn("release-candidate", workflow)
+        for name in (
+            "pulse-agent-windows-amd64.exe",
+            "pulse-agent-windows-arm64.exe",
+            "pulse-agent-windows-386.exe",
+        ):
+            self.assertIn(name, workflow)
+
     def test_update_demo_server_workflow_uses_stable_tag_example(self) -> None:
         workflow = read(".github/workflows/update-demo-server.yml")
         self.assertIn("Stable release tag to deploy (e.g., v6.0.0)", workflow)

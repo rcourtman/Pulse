@@ -1,0 +1,237 @@
+name: SignPath Test Signing Proof
+run-name: SignPath test-signing proof for v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label embedded in the test binaries (without leading v)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signpath-test-signing-proof
+  cancel-in-progress: false
+
+jobs:
+  test-signing-proof:
+    name: SignPath Test Signing Proof (Never Publish)
+    runs-on: windows-2025
+    timeout-minutes: 50
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify isolated test-signing configuration
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          SIGNPATH_RELEASE_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          TEST_VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_REF_NAME -ne 'main') {
+            throw "SignPath test proof must run from main, not $env:GITHUB_REF_NAME."
+          }
+          foreach ($name in @(
+            'SIGNPATH_API_TOKEN',
+            'SIGNPATH_ORGANIZATION_ID',
+            'SIGNPATH_PROJECT_SLUG',
+            'SIGNPATH_ARTIFACT_CONFIGURATION_SLUG'
+          )) {
+            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
+              throw "Missing required $name."
+            }
+          }
+          if ($env:SIGNPATH_RELEASE_POLICY_SLUG -ne 'release-signing') {
+            throw 'The canonical SIGNPATH_SIGNING_POLICY_SLUG must remain release-signing.'
+          }
+          if ($env:TEST_VERSION -notmatch '^6\.[0-9]+\.[0-9]+(?:-(?:rc|alpha|beta)\.[0-9]+)?$') {
+            throw 'Version must be a valid Pulse v6 release or prerelease version without a leading v.'
+          }
+          $repositoryVersion = (Get-Content VERSION -Raw).Trim()
+          if ($env:TEST_VERSION -ne $repositoryVersion) {
+            throw "Test version $env:TEST_VERSION does not match repository VERSION $repositoryVersion."
+          }
+
+      - name: Build unsigned Windows agent binaries
+        shell: pwsh
+        env:
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          TEST_VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:PULSE_UPDATE_SIGNING_PUBLIC_KEY)) {
+            throw 'Missing required PULSE_UPDATE_SIGNING_PUBLIC_KEY.'
+          }
+          New-Item -ItemType Directory -Path unsigned-native-agent-binaries -Force | Out-Null
+          $ldflags = & bash ./scripts/release_ldflags.sh agent --version "v$env:TEST_VERSION" --update-public-keys $env:PULSE_UPDATE_SIGNING_PUBLIC_KEY
+          foreach ($arch in @('amd64', 'arm64', '386')) {
+            $env:GOOS = 'windows'
+            $env:GOARCH = $arch
+            $env:CGO_ENABLED = '0'
+            $output = "unsigned-native-agent-binaries/pulse-agent-windows-$arch.exe"
+            go build -buildvcs=false -trimpath -ldflags="$ldflags" -o $output ./cmd/pulse-agent
+            if ($LASTEXITCODE -ne 0) { throw "Go build failed for Windows $arch." }
+          }
+
+      - name: Upload unsigned SignPath test input
+        id: upload-unsigned-windows
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-signpath-test-${{ github.sha }}-${{ inputs.version }}
+          path: unsigned-native-agent-binaries/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Submit SignPath test-signing request
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: test-signing
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 2400
+          output-artifact-directory: signpath-test-output
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+
+      - name: Verify test signatures and write non-production evidence
+        shell: pwsh
+        env:
+          SIGNPATH_SIGNING_REQUEST_ID: ${{ steps.signpath.outputs.signing-request-id }}
+          SIGNPATH_SIGNING_REQUEST_URL: ${{ steps.signpath.outputs.signing-request-web-url }}
+          SIGNPATH_INPUT_ARTIFACT_ID: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          TEST_VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceDir = (Resolve-Path 'signpath-test-output').Path
+          $expectedNames = @(
+            'pulse-agent-windows-386.exe',
+            'pulse-agent-windows-amd64.exe',
+            'pulse-agent-windows-arm64.exe'
+          )
+          $actualNames = @(
+            Get-ChildItem $sourceDir -File -Recurse |
+              ForEach-Object { [IO.Path]::GetRelativePath($sourceDir, $_.FullName).Replace('\', '/') } |
+              Sort-Object
+          )
+          if (Compare-Object $expectedNames $actualNames) {
+            throw "SignPath returned an unexpected file set: $($actualNames -join ', ')."
+          }
+
+          $probePath = Join-Path $sourceDir $expectedNames[0]
+          $probeSignature = Get-AuthenticodeSignature $probePath
+          if ($null -eq $probeSignature.SignerCertificate) {
+            throw 'The SignPath test output does not contain an Authenticode signer certificate.'
+          }
+
+          $certificate = $probeSignature.SignerCertificate
+          $thumbprint = $certificate.Thumbprint
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'signpath-test-signer.cer'
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            $certificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          )
+
+          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+          Import-Certificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+          try {
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+            if ([string]::IsNullOrWhiteSpace($signtool)) {
+              throw 'signtool.exe was not found on the Windows runner.'
+            }
+
+            $files = @()
+            foreach ($name in $expectedNames) {
+              $path = Join-Path $sourceDir $name
+              & $signtool verify /pa /v $path
+              if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed for $name." }
+              $signature = Get-AuthenticodeSignature $path
+              if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
+                throw "Invalid Authenticode status for ${name}: $($signature.Status)."
+              }
+              if ($signature.SignerCertificate.Thumbprint -ne $thumbprint) {
+                throw "SignPath test output used inconsistent signer certificates for $name."
+              }
+              $files += [ordered]@{
+                name = $name
+                sha256 = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+              }
+            }
+
+            $evidence = [ordered]@{
+              schemaVersion = 1
+              nonProduction = $true
+              signedArtifactsPublished = $false
+              signedArtifactsUploadedAsGitHubArtifact = $false
+              signingPolicy = 'test-signing'
+              artifactConfiguration = $env:SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+              version = $env:TEST_VERSION
+              sourceSha = $env:GITHUB_SHA
+              sourceRef = $env:GITHUB_REF
+              workflowRunUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+              signPathSigningRequestId = $env:SIGNPATH_SIGNING_REQUEST_ID
+              signPathSigningRequestUrl = $env:SIGNPATH_SIGNING_REQUEST_URL
+              githubInputArtifactId = $env:SIGNPATH_INPUT_ARTIFACT_ID
+              signer = [ordered]@{
+                subject = $certificate.Subject
+                issuer = $certificate.Issuer
+                thumbprint = $thumbprint
+                notBefore = $certificate.NotBefore.ToUniversalTime().ToString('o')
+                notAfter = $certificate.NotAfter.ToUniversalTime().ToString('o')
+              }
+              files = $files
+            }
+            $evidence | ConvertTo-Json -Depth 6 | Set-Content signpath-test-signing-evidence.json -Encoding utf8NoBOM
+          }
+          finally {
+            Remove-Item "Cert:\CurrentUser\Root\$thumbprint" -Force -ErrorAction SilentlyContinue
+            Remove-Item "Cert:\CurrentUser\TrustedPublisher\$thumbprint" -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload non-production evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signpath-test-signing-evidence-${{ github.sha }}-${{ inputs.version }}
+          path: signpath-test-signing-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record non-production boundary
+        shell: pwsh
+        run: |
+          @"
+          ### SignPath test-signing proof
+
+          - Source: ``$env:GITHUB_SHA`` on ``main``
+          - Policy: ``test-signing``
+          - Result: signature verification passed for the three expected Windows agents
+          - Publication: test-signed binaries were not uploaded as a GitHub artifact or published
+
+          The test certificate is untrusted and this run is not production-signing evidence.
+          "@ | Add-Content $env:GITHUB_STEP_SUMMARY
