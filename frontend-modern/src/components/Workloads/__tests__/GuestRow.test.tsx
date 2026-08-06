@@ -1037,22 +1037,37 @@ describe('GUEST_COLUMNS', () => {
 
   it('derives mobile overrides from the canonical guest column model', () => {
     expect(getGuestColumnStyle('name', true)).toEqual({
-      width: '40%',
-      'max-width': '40%',
+      width: '62%',
+      'max-width': '62%',
     });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '17%',
-      'max-width': '17%',
+      width: '15%',
+      'max-width': '15%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '40%' });
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '62%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 
   it('derives normalized tablet and compact widths from the visible workload columns', () => {
     const allModeColumns = GUEST_COLUMNS.filter((column) => VIEW_MODE_COLUMNS.all!.has(column.id));
+    const phoneColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'phone');
+    const mobileColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'mobile');
     const tabletColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'tablet');
     const compactColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'compact');
 
+    expect(phoneColumns.map((column) => column.id)).toEqual([
+      'name',
+      'availability',
+      'cpu',
+      'memory',
+    ]);
+    expect(mobileColumns.map((column) => column.id)).toEqual([
+      'name',
+      'availability',
+      'cpu',
+      'memory',
+      'disk',
+    ]);
     expect(tabletColumns.map((column) => column.id)).toEqual([
       'name',
       'availability',
@@ -1132,6 +1147,8 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('maps workload table layout modes to viewport width stages', () => {
+    expect(getWorkloadTableLayoutMode(479)).toBe('phone');
+    expect(getWorkloadTableLayoutMode(480)).toBe('mobile');
     expect(getWorkloadTableLayoutMode(767)).toBe('mobile');
     expect(getWorkloadTableLayoutMode(768)).toBe('tablet');
     expect(getWorkloadTableLayoutMode(899)).toBe('tablet');
@@ -1144,6 +1161,8 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('maps workload table layout modes to the actual table container', () => {
+    expect(getWorkloadTableLayoutModeForContainer(439)).toBe('phone');
+    expect(getWorkloadTableLayoutModeForContainer(440)).toBe('mobile');
     expect(getWorkloadTableLayoutModeForContainer(719)).toBe('mobile');
     expect(getWorkloadTableLayoutModeForContainer(720)).toBe('tablet');
     expect(getWorkloadTableLayoutModeForContainer(899)).toBe('tablet');

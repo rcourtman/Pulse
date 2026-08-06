@@ -1,25 +1,51 @@
 {
   "version": 1,
-  "base_sha": "2be0ec649487512d61a09b743e88cc82973e0d04",
-  "verified_at": "2026-08-06T08:40:31Z",
+  "base_sha": "ff97e3943c866ef062d743e6f1da136c13109a26",
+  "verified_at": "2026-08-06T09:05:33Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/availabilityTargets.ts",
-    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
-    "frontend-modern/src/types/resource.ts"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/availabilityTargets.ts": "8a748f332a76b2cfa4a3a3dfc0e400fe9593ec7f410ad1388927fd769126b409",
-    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "29c97f569f6ba677d954f4045a870f3166761dcd852a20e2e4460d8c30861602",
-    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "5e270c80ef9b1b1a6f6fbd8241c81ad5e710dbc02115f846809278322c160307",
-    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "39778a7e90a10fead774d71cc5eab26e0d9232047cde2484b7588ce6c04f8611",
-    "frontend-modern/src/types/resource.ts": "39c5b13dae6642932c68bb31de77297272228a8ca7c72d115fa8b84eace9e157"
+    "frontend-modern/src/components/Workloads/guestRowModel.tsx": "dc5b5c79a0ddeb71e38bf2f01fa386f1850dffcf7315d9f697b681ad729b64ca",
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "85b9cac933ab3f5a7aa08f54d5fbcfa1b6e15b24b461eb8c3bea8efbc4e5364f",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "63078dbcaa4ac8b86c94612a3deeb116a72db90b0cdb01a9c997044be2e1750b"
   },
   "routes": [
-    "/settings/monitoring/availability",
-    "/docker/swarm"
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/replication",
+    "/proxmox/backups",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability"
   ],
   "viewports": [
     {
@@ -27,22 +53,34 @@
       "height": 820
     },
     {
+      "width": 768,
+      "height": 820
+    },
+    {
       "width": 390,
-      "height": 844
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 820
     }
   ],
   "states": [
-    "HTTPS availability target editor with certificate monitoring enabled by default",
-    "certificate expiry warning window at its 30 day default",
-    "certificate monitoring opted out with the warning input disabled",
-    "linked HTTPS availability target in the Docker Swarm resource journey"
+    "populated mock inventory across every platform workflow",
+    "phone workload layout with identity, availability, CPU, and memory",
+    "similar Proxmox workload names with and without backup posture cues",
+    "small-tablet workload layout with disk restored",
+    "desktop workload and native platform tables with their full responsive column sets",
+    "deep platform navigation tabs selected at the end of horizontally scrollable tab strips"
   ],
   "interactions": [
-    "opened the add availability check dialog and selected HTTPS",
-    "toggled certificate monitoring off and on and confirmed the expiry input disabled and re-enabled",
-    "inspected the desktop dialog at 1280 by 820 pixels",
-    "inspected the narrow dialog and TLS controls at 390 by 844 pixels with zero horizontal overflow",
-    "navigated to the linked Docker Swarm service journey and confirmed the HTTPS availability target projection",
-    "checked the browser console after the changed journeys and found no errors"
+    "navigated all 32 platform workflow routes and waited for their loaded tables",
+    "scrolled populated Proxmox workload groups at 320 and 390 pixels and visually compared similarly named rows",
+    "changed from phone to 768 pixel tablet width and confirmed the disk column returned without table overflow",
+    "verified Proxmox, Docker, and VMware tables after the final layout-mode change at 320, 390, 768, and 1280 pixels",
+    "measured document, table, and scroll-container widths and found no page-level or table-level horizontal overflow",
+    "confirmed Proxmox, Docker, Kubernetes, TrueNAS, VMware, and Machines share identical desktop content bounds",
+    "opened deep Mail Gateway, Swarm, Events, Protection, Activity, and Availability tabs and confirmed the active tab was fully visible",
+    "checked the affected desktop journeys after the final code change and found no browser console errors"
   ]
 }

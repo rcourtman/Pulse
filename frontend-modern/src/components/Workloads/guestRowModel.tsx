@@ -11,8 +11,9 @@ import type {
 import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import type { WorkloadsMemoryDisplayBasis } from './workloadsFilterModel';
 
-export type WorkloadTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
+export type WorkloadTableLayoutMode = 'phone' | 'mobile' | 'tablet' | 'compact' | 'wide';
 
+export const WORKLOAD_TABLE_PHONE_LAYOUT_WIDTH = 480;
 export const WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH = 768;
 export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
 // Layout stages key off the viewport, but the table renders inside a shell
@@ -22,23 +23,29 @@ export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
 // relying on horizontal scroll, so wide waits until the shell can actually
 // hold the full set.
 export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1536;
+export const WORKLOAD_TABLE_CONTAINER_PHONE_WIDTH = 440;
 export const WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH = 720;
 export const WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH = 900;
 export const WORKLOAD_TABLE_CONTAINER_WIDE_WIDTH = 1440;
 
 const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
-  mobile: 0,
-  tablet: 1,
-  compact: 2,
-  wide: 3,
+  phone: 0,
+  mobile: 1,
+  tablet: 2,
+  compact: 3,
+  wide: 4,
 };
 
 const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
-  name: 'mobile',
-  availability: 'mobile',
+  name: 'phone',
+  availability: 'phone',
   runtime: 'tablet',
-  cpu: 'mobile',
-  memory: 'mobile',
+  cpu: 'phone',
+  memory: 'phone',
+  // A phone-width row needs enough identity space to distinguish similarly
+  // named workloads. Disk remains available in the row details and returns in
+  // the wider mobile layout; keeping it beside CPU and memory on phones reduced the
+  // name to a handful of characters once the status and backup cues rendered.
   disk: 'mobile',
   type: 'tablet',
   info: 'tablet',
@@ -437,6 +444,15 @@ const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Record<string, number>
 > = {
+  phone: {
+    // Identity is the primary mobile task. Availability stays visible because
+    // it can disagree with runtime health, while CPU and memory retain useful
+    // bar widths. Disk rejoins this set at the wider-mobile breakpoint above.
+    name: 62,
+    availability: 8,
+    cpu: 15,
+    memory: 15,
+  },
   mobile: {
     name: 40,
     availability: 8,
@@ -494,7 +510,7 @@ const getResponsiveColumnOverride = (
 const getGuestColumnSizing = (
   columnId: string,
   isMobile = false,
-  layoutMode: WorkloadTableLayoutMode = isMobile ? 'mobile' : 'wide',
+  layoutMode: WorkloadTableLayoutMode = isMobile ? 'phone' : 'wide',
   visibleColumnIds?: readonly string[],
 ): Pick<ColumnDef, 'width' | 'minWidth' | 'maxWidth'> | undefined => {
   const column = GUEST_COLUMN_BY_ID.get(columnId);
@@ -546,14 +562,16 @@ export const getGuestColumnWidthStyle = (
 };
 
 export const getWorkloadTableLayoutMode = (width: number): WorkloadTableLayoutMode => {
-  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH) return 'mobile';
+  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_PHONE_LAYOUT_WIDTH) return 'phone';
+  if (width < WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH) return 'mobile';
   if (width < WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH) return 'tablet';
   if (width < WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH) return 'compact';
   return 'wide';
 };
 
 export const getWorkloadTableLayoutModeForContainer = (width: number): WorkloadTableLayoutMode => {
-  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH) return 'mobile';
+  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_CONTAINER_PHONE_WIDTH) return 'phone';
+  if (width < WORKLOAD_TABLE_CONTAINER_MOBILE_WIDTH) return 'mobile';
   if (width < WORKLOAD_TABLE_CONTAINER_TABLET_WIDTH) return 'tablet';
   if (width < WORKLOAD_TABLE_CONTAINER_WIDE_WIDTH) return 'compact';
   return 'wide';

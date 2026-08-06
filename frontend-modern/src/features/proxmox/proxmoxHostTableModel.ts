@@ -14,17 +14,18 @@ export type ProxmoxHostTableColumn = {
 };
 
 const HOST_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
-  mobile: 0,
-  tablet: 1,
-  compact: 2,
-  wide: 3,
+  phone: 0,
+  mobile: 1,
+  tablet: 2,
+  compact: 3,
+  wide: 4,
 };
 
 const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayoutMode> = {
-  node: 'mobile',
-  cpu: 'mobile',
-  memory: 'mobile',
-  disk: 'mobile',
+  node: 'phone',
+  cpu: 'phone',
+  memory: 'phone',
+  disk: 'phone',
   temp: 'tablet',
   uptime: 'tablet',
   cluster: 'tablet',
@@ -56,6 +57,12 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Partial<Record<ProxmoxHostTableColumnId, number>>
 > = {
+  phone: {
+    node: 40,
+    cpu: 20,
+    memory: 20,
+    disk: 20,
+  },
   mobile: {
     node: 40,
     cpu: 20,
@@ -138,7 +145,7 @@ export const getProxmoxHostColumnWidthStyle = (
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
 ): 'min-w-[0px]' | 'min-w-[50rem]' | 'min-w-[64rem]' | 'min-w-[1240px]' => {
-  if (layoutMode === 'mobile') return 'min-w-[0px]';
+  if (layoutMode === 'phone' || layoutMode === 'mobile') return 'min-w-[0px]';
   if (layoutMode === 'tablet') return 'min-w-[50rem]';
   if (layoutMode === 'compact') return 'min-w-[64rem]';
   return 'min-w-[1240px]';

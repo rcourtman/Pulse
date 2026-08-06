@@ -50,22 +50,23 @@ export const getDockerContainerSortKey = (
     : undefined;
 
 const DOCKER_CONTAINER_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
-  mobile: 0,
-  tablet: 1,
-  compact: 2,
-  wide: 3,
+  phone: 0,
+  mobile: 1,
+  tablet: 2,
+  compact: 3,
+  wide: 4,
 };
 
 const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   DockerContainerTableColumnId,
   WorkloadTableLayoutMode
 > = {
-  container: 'mobile',
-  state: 'mobile',
-  cpu: 'mobile',
-  memory: 'mobile',
-  updates: 'mobile',
-  actions: 'mobile',
+  container: 'phone',
+  state: 'phone',
+  cpu: 'phone',
+  memory: 'phone',
+  updates: 'phone',
+  actions: 'phone',
   host: 'tablet',
   restarts: 'tablet',
   image: 'compact',
@@ -111,6 +112,14 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   Exclude<WorkloadTableLayoutMode, 'wide'>,
   Partial<Record<DockerContainerTableColumnId, number>>
 > = {
+  phone: {
+    container: 30,
+    state: 14,
+    cpu: 18,
+    memory: 21,
+    updates: 17,
+    actions: 14,
+  },
   mobile: {
     container: 30,
     state: 14,
