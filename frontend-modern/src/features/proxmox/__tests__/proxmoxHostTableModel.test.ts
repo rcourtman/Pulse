@@ -8,6 +8,15 @@ import {
 } from '../proxmoxHostTableModel';
 
 describe('proxmoxHostTableModel', () => {
+  it('reserves phone space for an identifying node label and the two fastest health signals', () => {
+    const columns = getProxmoxHostVisibleColumnsForLayout('phone');
+    const ids = columns.map((column) => column.id);
+
+    expect(ids).toEqual(['node', 'cpu', 'memory']);
+    expect(getProxmoxHostTableMinWidthClass('phone')).toBe('min-w-[0px]');
+    expect(getProxmoxHostColumnWidthStyle('node', 'phone', ids)).toEqual({ width: '60%' });
+  });
+
   it('prioritizes live utilization columns in the mobile host table', () => {
     const columns = getProxmoxHostVisibleColumnsForLayout('mobile');
     const ids = columns.map((column) => column.id);
@@ -65,6 +74,8 @@ describe('proxmoxHostTableModel', () => {
   });
 
   it('chooses host columns from available container width', () => {
+    expect(getProxmoxHostTableLayoutModeForContainer(439)).toBe('phone');
+    expect(getProxmoxHostTableLayoutModeForContainer(440)).toBe('mobile');
     expect(getProxmoxHostTableLayoutModeForContainer(799)).toBe('mobile');
     expect(getProxmoxHostTableLayoutModeForContainer(800)).toBe('tablet');
     expect(getProxmoxHostTableLayoutModeForContainer(1039)).toBe('tablet');

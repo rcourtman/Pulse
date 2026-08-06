@@ -1,57 +1,70 @@
 {
   "version": 1,
-  "base_sha": "711eed6d695e9008d7c633fbdf985a86d1e6aea9",
-  "verified_at": "2026-08-06T09:12:17Z",
+  "base_sha": "80d4558b424e58a18eb6bc1780bdbb6dc8461098",
+  "verified_at": "2026-08-06T09:32:58Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx",
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx",
-    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts",
-    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts",
-    "frontend-modern/src/utils/alertThresholdDefaults.ts"
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx": "a5dfeb2bfcc356e23b9ff164ab88782fca74593d8b3e45efea7261d02153a109",
-    "frontend-modern/src/components/Alerts/ThresholdsTableProxmoxSnapshotsSection.tsx": "222d2d08ad618fadbd34d5089287c3923a79b172c582203eac7469295b50a97e",
-    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "4db657570ac209a00c16652a4f07b3be442a406d245766371c07ca2d3d32a1cf",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsGuestData.ts": "d4584732f18e15316427e7b3a206978e2ca35d097028aee0e6ab2b11c34ee6f1",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsOverrideMutations.ts": "c285c93a1e3a12f8481e80a8e6778334722055dcd5b885291fb33bed7d4270b0",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsRecoveryDefaultsState.ts": "4a2deeb37740fe79b627df17abf25bba57f3048fc82a4bc34c7010b3c5058241",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts": "0178351e2848c42ad085fdbc24e9c84e5810a81d073805070e436d680277cc03",
-    "frontend-modern/src/features/alerts/thresholds/tableTypes.ts": "90c1910781527b16bbdd509b25a946202956a2616cceac287edb0cafca895c54",
-    "frontend-modern/src/utils/alertThresholdDefaults.ts": "f59d80d26290b0a4d021c4ca093f879659635048042bb374eb0173c0b8fa2691"
+    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "85169f1fa44410390f11bcec933c0b70ed1448d5e57acd2406cf579a4d43c2a0",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "ef0bd10e3027e4c5768320d75bc9f367009c34a298d00f2a7372157489b4ebad",
+    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "75a7fd0059c334ac0aacead564d59829489d055a6d5bb445cec87bc72b4c78c6"
   },
   "routes": [
-    "/alerts/thresholds/proxmox"
+    "/proxmox/overview",
+    "/docker/overview",
+    "/alerts/overview",
+    "/actions",
+    "/patrol",
+    "/settings/infrastructure",
+    "/settings/pulse-intelligence/billing/plan",
+    "/docs",
+    "/docs/CONFIGURATION",
+    "/docs/API",
+    "/docs/KUBERNETES",
+    "/docs/SECURITY",
+    "/preview/setup-complete",
+    "/not-a-real-route"
   ],
   "viewports": [
     {
-      "width": 1600,
+      "width": 1280,
+      "height": 820
+    },
+    {
+      "width": 768,
       "height": 900
     },
     {
-      "width": 1000,
-      "height": 900
+      "width": 390,
+      "height": 844
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 320,
+      "height": 720
     }
   ],
   "states": [
-    "Recovery section expanded, desktop table layout at 1600px, single Global Defaults editor row",
-    "Recovery and Snapshot Age sections expanded in card layout at 1000px and 375px, single Global Defaults card each",
-    "Snapshot Age section with Warning/Critical Size (GiB) columns visible, factory Off state",
-    "VMs & Containers section expanded, guest cards sorted by display name within node group"
+    "Proxmox overview with all default workload columns, then Uptime and Backup disabled, persisted through reload, and restored to the original selection",
+    "Proxmox workload table at 390px and 320px with Name, Availability, CPU, and Memory, plus checkout-web-01 expanded to its complete guest drawer",
+    "Proxmox node table at 390px and 320px with Node, CPU, and Memory and provider-native pve1, pve2, and pve3 identifiers visible below truncated friendly names",
+    "Proxmox overview at 768px with Disk restored and at 1280px with the full compact desktop column set",
+    "Docker overview in list and grouped modes with the grouped choice persisted through reload and the original list choice restored afterward",
+    "Docker container table at 390px and 320px with complete container names prioritized beside CPU and Memory, and at 768px with Update and Actions restored",
+    "Docker customer-portal and backup-coordinator resource drawers with lifecycle actions and image-update detail available after phone table columns are suppressed",
+    "Alerts, Actions, Patrol, and Settings workspaces at desktop, tablet, and phone widths with shell geometry matched to platform pages",
+    "Documentation index and dense configuration, API, Kubernetes, and security documents at desktop and phone widths",
+    "Setup completion preview, in-product pricing handoff, and unknown-route recovery at desktop and phone widths"
   ],
   "interactions": [
-    "Enabled snapshot Warning Size via Off overlay, sanitizer mirrored value to Critical Size, Save Changes persisted warningSizeGiB and criticalSizeGiB via PUT /api/alerts/config and GET returned them",
-    "Reloaded page and confirmed persisted snapshot size values load back into the editor",
-    "Toggled snapshot size metrics back Off and saved, GET confirmed sizes cleared",
-    "Expanded and collapsed Recovery, Snapshot Age, and VMs & Containers sections at all three viewports"
+    "Opened Proxmox View preferences and Columns, disabled Uptime and Backup, verified immediate reflow and persistence after reload, resized to phone widths, then restored both choices and confirmed the full header set after reload",
+    "Expanded checkout-web-01 on a 390px viewport, verified hidden disk, uptime, backup, and filesystem information in the drawer, closed it, and confirmed focus returned to the same row disclosure",
+    "Switched Docker from List to Grouped, reloaded to confirm persistence, inspected grouped phone rows, then restored List and reloaded to confirm the original preference",
+    "Expanded Docker resources to verify image-update state and governed lifecycle actions remain available when their quick columns are removed from the phone table",
+    "Resized live Proxmox and Docker pages through 1280px, 768px, 390px, and 320px and inspected rendered pixels, header priority, name distinguishability, table bounds, and document overflow",
+    "Navigated system, documentation, setup, pricing-handoff, and not-found routes across the same viewport matrix and checked visible controls, shell alignment, and containment"
   ]
 }

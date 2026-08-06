@@ -175,6 +175,34 @@ describe('ProxmoxNodesTable', () => {
     expect(link).toHaveAttribute('href', 'https://pve1:8006');
   });
 
+  it('keeps the provider-native node name visible beside a friendly name on phones', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            id: 'production-pve1',
+            name: 'West Production A',
+            displayName: 'West Production A',
+            proxmox: {
+              clusterName: 'production',
+              nodeIdentity: 'production-pve1',
+              nodeName: 'pve1',
+              nodeDisplayName: 'West Production A',
+            },
+          }),
+        ]}
+        guests={[]}
+        layoutWidth={() => 390}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getByText('West Production A')).toBeInTheDocument();
+    expect(screen.getByText('pve1')).toBeInTheDocument();
+  });
+
   it('passes alert-backed temperature thresholds into the node temperature gauge', () => {
     render(() => (
       <ProxmoxNodesTable

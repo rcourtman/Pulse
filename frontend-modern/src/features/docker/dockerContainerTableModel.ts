@@ -65,8 +65,8 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   state: 'phone',
   cpu: 'phone',
   memory: 'phone',
-  updates: 'phone',
-  actions: 'phone',
+  updates: 'mobile',
+  actions: 'mobile',
   host: 'tablet',
   restarts: 'tablet',
   image: 'compact',
@@ -113,12 +113,10 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   Partial<Record<DockerContainerTableColumnId, number>>
 > = {
   phone: {
-    container: 30,
+    container: 50,
     state: 14,
     cpu: 18,
-    memory: 21,
-    updates: 17,
-    actions: 14,
+    memory: 18,
   },
   mobile: {
     container: 30,

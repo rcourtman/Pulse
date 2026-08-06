@@ -25,7 +25,7 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
   node: 'phone',
   cpu: 'phone',
   memory: 'phone',
-  disk: 'phone',
+  disk: 'mobile',
   temp: 'tablet',
   uptime: 'tablet',
   cluster: 'tablet',
@@ -58,10 +58,9 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   Partial<Record<ProxmoxHostTableColumnId, number>>
 > = {
   phone: {
-    node: 40,
+    node: 60,
     cpu: 20,
     memory: 20,
-    disk: 20,
   },
   mobile: {
     node: 40,
@@ -94,6 +93,7 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
 export const getProxmoxHostTableLayoutModeForContainer = (
   width: number,
 ): WorkloadTableLayoutMode => {
+  if (Number.isFinite(width) && width < 440) return 'phone';
   if (!Number.isFinite(width) || width < 800) return 'mobile';
   if (width < 1040) return 'tablet';
   if (width < 1320) return 'compact';

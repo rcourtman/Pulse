@@ -257,7 +257,9 @@ export const ProxmoxNodesTable: Component<{
           <For each={visibleColumns()}>
             {(column) => (
               <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
-                {layoutMode() === 'mobile' && column.id === 'memory' ? 'Mem' : column.label}
+                {(layoutMode() === 'phone' || layoutMode() === 'mobile') && column.id === 'memory'
+                  ? 'Mem'
+                  : column.label}
               </PlatformSortableTableHead>
             )}
           </For>
@@ -266,6 +268,11 @@ export const ProxmoxNodesTable: Component<{
           <For each={sortedNodes()}>
             {(node) => {
               const name = () => asTrimmedString(node.name) || node.id;
+              const nativeNodeName = () => asTrimmedString(node.proxmox?.nodeName) ?? '';
+              const showNativeNodeName = () =>
+                layoutMode() === 'phone' &&
+                nativeNodeName().length > 0 &&
+                nativeNodeName() !== name();
               const drawerNode = createMemo(() => nodeFromResource(node));
               const detailRowId = () => `proxmox-host-drawer-${node.id}`;
               const isSelected = () => selectedNodeId() === node.id;
@@ -382,13 +389,20 @@ export const ProxmoxNodesTable: Component<{
                             title={node.status || 'unknown'}
                             ariaHidden
                           />
-                          <ResourceNameWithWebInterfaceLink
-                            name={name()}
-                            url={externalUrl()}
-                            class="min-w-0"
-                            nameClass="truncate font-semibold text-base-content"
-                            title={`Open ${name()} web interface`}
-                          />
+                          <div class="flex min-w-0 flex-1 flex-col">
+                            <ResourceNameWithWebInterfaceLink
+                              name={name()}
+                              url={externalUrl()}
+                              class="min-w-0"
+                              nameClass="truncate font-semibold text-base-content"
+                              title={`Open ${name()} web interface`}
+                            />
+                            <Show when={showNativeNodeName()}>
+                              <span class="-mt-0.5 truncate text-[10px] text-muted">
+                                {nativeNodeName()}
+                              </span>
+                            </Show>
+                          </div>
                           <Show when={!isOnline()}>
                             <span class="hidden rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
                               {availabilityLabel()}

@@ -7,6 +7,16 @@ import {
 } from '../dockerContainerTableModel';
 
 describe('dockerContainerTableModel', () => {
+  it('keeps phone rows focused on container identity and live health signals', () => {
+    const columns = getDockerContainerVisibleColumnsForLayout('phone', true, true, true);
+    const ids = columns.map((column) => column.id);
+
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory']);
+    expect(getDockerContainerColumnWidthStyle('container', 'phone', ids)).toEqual({
+      width: '50%',
+    });
+  });
+
   it('keeps the mobile container table on identity, state, live metrics, and governed actions', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('mobile', true, true, true);
     const ids = columns.map((column) => column.id);
