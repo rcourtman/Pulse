@@ -4,6 +4,7 @@ import { showError, showSuccess } from '@/utils/toast';
 import { apiFetch } from '@/utils/apiClient';
 import { copyToClipboard } from '@/utils/clipboard';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
+import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 import { Copy, Check, Terminal, ShieldCheck } from 'lucide-solid';
 
@@ -125,11 +126,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   return (
     <div class="text-center relative">
       <div class="mb-8 relative z-10">
-        <img
-          src="/logo.svg"
-          alt="Pulse Logo"
-          class="w-20 h-20 rounded-md mb-6 mx-auto dark:shadow-none"
-        />
+        <PulseBrandMark class="w-20 h-20 mb-6 mx-auto" />
         <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-base-content mb-3">
           {t('setup.welcome.hero.title')}
         </h1>

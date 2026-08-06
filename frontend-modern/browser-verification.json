@@ -1,88 +1,46 @@
 {
   "version": 1,
-  "base_sha": "d7d6753d057297d7d831164aab319711c2239b80",
-  "verified_at": "2026-08-06T13:37:38Z",
+  "base_sha": "c25d393fff818067d9e75f2fed01ad5f47f41ec2",
+  "verified_at": "2026-08-06T14:51:21Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
-    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx",
-    "frontend-modern/src/components/Alerts/WebhookConfig.tsx",
-    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx",
-    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx",
-    "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
-    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
-    "frontend-modern/src/components/Settings/RolesPanel.tsx",
-    "frontend-modern/src/components/Settings/UpdateHistorySection.tsx",
-    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
-    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
-    "frontend-modern/src/utils/auditLogPresentation.ts"
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Brand/PulseBrandMark.tsx",
+    "frontend-modern/src/components/Login.tsx",
+    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "687007ab434f7b27e9c3af8e664f96bbd3e172a825507ac3f21467cd77b288ce",
-    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx": "f1d8c262c3ac223bfb00457dbefb20d955a9e4883b33e665dc17a0042f143a9f",
-    "frontend-modern/src/components/Alerts/WebhookConfig.tsx": "f2c61c113f86f91503b3b4ad0442fbeb3fe4ed3df500fa8a39ad4e6e8c6c5b47",
-    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "be1a8eea8fcaf063ea6fd8c524cbd63e3d2fcf582f9f1cb5e0ced5a66a045507",
-    "frontend-modern/src/components/Alerts/WebhookConfigList.tsx": "fb1800d98b061fd13111ab2ebbd580cf3769ff119573a5ecd59462eded72c5b4",
-    "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx": "3819b05f9acc775396caf1d577aa0b7f07943b3c9838b538742f65c07e10bcd1",
-    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "90c2ec742561002b15a2aabd23a0e72218d4f5c162a1dc8363b60090ee1dcff4",
-    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "bbfefc0956593ebf0d0ae8fa4bd188d1a85874d4d01c113dd5b94bd81882c003",
-    "frontend-modern/src/components/Settings/RolesPanel.tsx": "0e5b75e037d940548891aaef4574cacb80b179579cfa1870178704ba668fd24c",
-    "frontend-modern/src/components/Settings/UpdateHistorySection.tsx": "bd4d707d991927b63b32b921fbf49960538fc036dd35f9d942c203a1a21568ad",
-    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "27f39aae68f57d77ad0e92e4ffd8f6742b03647d7ae22b3bbfb77e44f8c61cfd",
-    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx": "4b225a77d3267780f8cee9cab1a64bc0d0504c2ea813f9648fe0e1ea955795c8",
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "e596788a606a0a69d23ed4c33b0c696054e35031ae168f32d7537bd3c3ea8688",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "5a03e1ba946d9e43c562b74c92e42eeb9e61080ad68e253827b489e4e3d8053a",
-    "frontend-modern/src/utils/auditLogPresentation.ts": "dcf1c0c732a7b37d56a583b9b5171b40f5e757a3cb47a7106bdb75e0f5847834"
+    "frontend-modern/src/AppLayout.tsx": "5f0ee2909e3c08840af0c5b8eac78cd6c833aeb60f12250d770aea9fc319ce68",
+    "frontend-modern/src/components/Brand/PulseBrandMark.tsx": "af8766f84e628b00f22cfc2c5b786a0e0914b8555f2796748e8634265d8b7f0b",
+    "frontend-modern/src/components/Login.tsx": "c81e3c29a7e59f1217945bb373dced6aa28b047c6d6a7929e46681994eb9305f",
+    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx": "f3f77aebdc6c26291a731506da5d1a40184dc485079fc60f7b5c57795557bb03"
   },
   "routes": [
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/alerts/notifications",
-    "/alerts/schedule",
-    "/settings/infrastructure",
-    "/settings/security-roles",
-    "/settings/security-users",
-    "/settings/security-audit",
-    "/settings/system-updates",
-    "/settings/support/reporting"
+    "/",
+    "/proxmox/overview"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 900
+      "height": 720
     },
     {
-      "width": 768,
-      "height": 900
-    },
-    {
-      "width": 390,
-      "height": 844
-    },
-    {
-      "width": 320,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Alert History mock-data cards and desktop history presentation, including Timeline, Resource, and Assistant actions",
-    "Alert Thresholds read and edit modes for Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines, plus the desktop table",
-    "Alert Notifications email and Apprise sections, webhook list, add-webhook form, and custom-header editor without saving",
-    "Alert Schedule default state with quiet hours and escalation policy expanded, then reverted",
-    "Settings Infrastructure ten-system card and table layouts, source actions, Manage dialog, and closed-dialog focus restoration",
-    "Settings roles, users, audit, reporting, and update-history states, including legitimate locked and empty presentations in the current mock entitlement"
+    "Login screen brand mark in app-dark theme, computed disc #3b82f6 with ring stroke and centre fill both #dbeafe",
+    "Login screen brand mark in app-light theme while the OS colour scheme was dark, computed disc #2563eb with ring stroke and centre fill both #ffffff, confirming the mark follows the app theme class rather than the OS preference",
+    "Authenticated header brand lockup in app-light and app-dark themes at 1280x720, ring stroke and centre fill matching in both",
+    "Authenticated header brand lockup at 375x812 mobile, mark visible at 20x20 with dark palette intact",
+    "SetupWizard WelcomeStep was NOT exercised live: it renders only when the instance has no authentication configured, and the dev backend is configured. Covered by WelcomeStep.test.tsx and by the shared PulseBrandMark component verified on the other two surfaces"
   ],
   "interactions": [
-    "Measured Alert History actions at 320px and 390px; all three actions remain on one row at 44px high with zero document overflow",
-    "Edited a threshold at 320px, verified the active editor switches to one readable column with 44px inputs and actions, cancelled without persisting, and checked every platform tab plus the 1280px desktop table",
-    "Opened Add Webhook at 320px and 390px, added a custom-header row, verified full-width stacked key and value fields with 44px controls, cancelled without saving, and confirmed the compact single-row layout returns at 768px and 1280px",
-    "Expanded quiet hours and escalation policy at 320px, checked contained time, day, category, and toggle controls, and reverted all preview changes",
-    "Measured Settings Infrastructure actions across 320px, 390px, 768px, and 1280px; card controls remain 44px through tablet while the denser table returns only at desktop width, with no horizontal page overflow",
-    "Opened and dismissed the Infrastructure Manage dialog at phone and desktop widths; the close target is 44px on phone and compact on desktop, and keyboard focus returns to the exact originating connection Manage button",
-    "Inspected locked roles, users, audit, and reporting surfaces plus empty update history; changed unlocked inventory actions are covered by component tests because the current mock entitlement correctly withholds those inventories",
-    "Verified the mobile audit toolbar actions render at 44px while preserving the compact desktop treatment"
+    "Signed in with local credentials from the login form to move from the unauthenticated to the authenticated header surface",
+    "Toggled pulseThemePreference between light and dark in localStorage and reloaded, reading getComputedStyle fill and stroke off .pulse-bg, .pulse-ring and .pulse-center each time",
+    "Held the OS colour scheme at dark while forcing the app theme to light to prove the inline mark tracks the app theme, the divergence an <img src=\"/logo.svg\"> cannot represent",
+    "Read getAnimations() on the extracted mark and confirmed pulse-brand-logo, pulse-brand-bg, pulse-brand-ring and pulse-brand-center are all running, proving the .animate-pulse-brand descendant selectors still reach the circles after the SVG moved into a component",
+    "Resized from 1280x720 to 375x812 and re-measured the header mark bounding box and computed ring stroke"
   ]
 }

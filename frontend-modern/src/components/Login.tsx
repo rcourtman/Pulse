@@ -1,5 +1,6 @@
 import { Component, createSignal, Show, For, onMount, lazy, Suspense } from 'solid-js';
 import { logger } from '@/utils/logger';
+import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import Globe from 'lucide-solid/icons/globe';
@@ -430,11 +431,7 @@ const LoginForm: Component<{
         <div class="animate-fade-in">
           <div class="flex justify-center mb-8">
             <div class="relative group">
-              <img
-                src="/logo.svg"
-                alt="Pulse Logo"
-                class="relative w-24 h-24 rounded-md shadow-sm"
-              />
+              <PulseBrandMark class="relative w-24 h-24" />
             </div>
           </div>
 

@@ -23,6 +23,7 @@ import {
 } from '@/features/platformNavigation/platformNavigationModel';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
+import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { MONITORING_READ_SCOPE, SETTINGS_READ_SCOPE } from '@/constants/apiScopes';
 import type { Organization } from '@/api/orgs';
@@ -778,38 +779,7 @@ export function AppLayout(props: AppLayoutProps) {
               class={`pulse-brand-lockup flex items-center gap-2 ${!customBrandLogo() && brandMotionActive() ? 'animate-pulse-brand' : ''}`}
               data-testid="pulse-brand-lockup"
             >
-              <Show
-                when={customBrandLogo()}
-                fallback={
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 256 256"
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="pulse-brand-logo"
-                  >
-                    <title>Pulse Logo</title>
-                    <circle
-                      class="pulse-bg fill-blue-600 dark:fill-blue-500"
-                      cx="128"
-                      cy="128"
-                      r="122"
-                    />
-                    <circle
-                      class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
-                      cx="128"
-                      cy="128"
-                      r="84"
-                    />
-                    <circle
-                      class="pulse-center fill-white dark:fill-[#dbeafe]"
-                      cx="128"
-                      cy="128"
-                      r="26"
-                    />
-                  </svg>
-                }
-              >
+              <Show when={customBrandLogo()} fallback={<PulseBrandMark class="h-5 w-5" />}>
                 {(logoDataUrl) => (
                   <img
                     src={logoDataUrl()}
