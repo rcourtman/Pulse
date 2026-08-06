@@ -308,7 +308,8 @@ describe('FilterBar', () => {
     const select = screen.getByRole('combobox', { name: 'Filter' });
     const label = document.querySelector(`label[for="${select.id}"]`);
     expect(label).toHaveClass('sr-only');
-    expect(select).toHaveClass('h-7');
+    expect(select).toHaveClass('min-h-11');
+    expect(select).toHaveClass('sm:h-7');
     expect(select).toHaveClass('w-[7.5rem]');
     expect(select).not.toHaveClass('min-w-[7.5rem]');
     expect(select.parentElement).not.toHaveClass('p-0.5');
