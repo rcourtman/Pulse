@@ -1940,7 +1940,12 @@ retry may enrich an earlier smartctl attempt but must not erase earlier model,
 serial, failure, or counter evidence. SMART temperature selection accepts only
 plausible readings, prefers ATA attribute 194 over 190 when higher-level
 temperature fields are invalid, and preserves reported zero counters as known
-values while leaving omitted counters unknown.
+values while leaving omitted counters unknown. Plausibility is decided at the
+full 64-bit width of the raw attribute, before any narrowing to the reported
+`int` temperature. `int` is 32 bits wide on the 386 and arm agent builds, so a
+raw value whose low 32 bits happen to land in the plausible band, such as
+4294967316 truncating to 20, must be rejected as the out-of-range value it is
+rather than published as a real reading.
 
 Disk identity, temperature, I/O, controller association, and pool membership
 also carry typed collection state from `pkg/diskinventory`: `available`,

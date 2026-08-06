@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -36,6 +37,8 @@ const (
 	PatrolModeNotAssessed = "not_assessed"
 
 	patrolModelReadinessCacheFilename = "ai_patrol_model_readiness.json"
+	patrolModelReadinessSaltFilename  = "ai_patrol_model_readiness.salt"
+	patrolModelReadinessSaltBytes     = 32
 	patrolReadinessObservationTool    = "readiness_record_observation"
 	patrolReadinessInventoryTool      = "readiness_list_inventory"
 	patrolReadinessChangeTool         = "readiness_apply_change"
@@ -138,6 +141,13 @@ type patrolModelReadinessCache struct {
 	mu         sync.RWMutex
 	result     *PatrolModelReadinessResult
 	recordedAt time.Time
+
+	// salt keys the credential fingerprint inside the cache key. It is
+	// resolved lazily from disk so the key stays reproducible across
+	// restarts without the persisted evidence committing to the
+	// credentials themselves.
+	saltMu sync.Mutex
+	salt   []byte
 }
 
 type persistedPatrolModelReadiness struct {
@@ -217,7 +227,7 @@ func (s *Service) CachedPatrolModelReadiness() (*PatrolModelReadinessResult, tim
 	}
 	selectedProvider, selectedModel := config.ParseModelString(cfg.GetPatrolModel())
 	if !strings.EqualFold(selectedProvider, result.Provider) || selectedModel != result.Model ||
-		result.CacheKey != patrolModelReadinessCacheKey(cfg, result.Provider, result.Model) {
+		result.CacheKey != s.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model) {
 		return nil, time.Time{}
 	}
 	return result, recordedAt
@@ -314,8 +324,57 @@ func (s *Service) loadPatrolModelReadiness() {
 	s.patrolModelReadinessCache.recordedAt = persisted.RecordedAt
 }
 
-func patrolModelReadinessCacheKey(cfg *config.AIConfig, providerName, model string) string {
+// patrolModelReadinessSalt returns the per-install secret that keys the
+// credential fingerprint in the cache key. It is generated once and stored
+// beside the evidence file so the key survives a restart. When there is no
+// persistence to store it in, a process-local salt is used instead: the
+// fingerprint stays unguessable and the cache simply does not outlive the
+// process, which is the safe way to degrade.
+func (s *Service) patrolModelReadinessSalt() []byte {
+	if s == nil {
+		return nil
+	}
+	s.patrolModelReadinessCache.saltMu.Lock()
+	defer s.patrolModelReadinessCache.saltMu.Unlock()
+	if len(s.patrolModelReadinessCache.salt) > 0 {
+		return s.patrolModelReadinessCache.salt
+	}
+
+	saltPath := ""
+	if s.persistence != nil {
+		saltPath = filepath.Join(s.persistence.DataDir(), patrolModelReadinessSaltFilename)
+	}
+	if saltPath != "" {
+		if existing, err := os.ReadFile(saltPath); err == nil && len(existing) == patrolModelReadinessSaltBytes {
+			s.patrolModelReadinessCache.salt = existing
+			return existing
+		}
+	}
+
+	salt := make([]byte, patrolModelReadinessSaltBytes)
+	if _, err := rand.Read(salt); err != nil {
+		// Without entropy there is no safe fingerprint to publish, so
+		// return nil and let the caller fall back to an empty cache key,
+		// which forces a fresh readiness probe rather than trusting
+		// stale evidence.
+		log.Warn().Err(err).Msg("failed to generate Patrol model readiness salt")
+		return nil
+	}
+	if saltPath != "" {
+		if err := os.WriteFile(saltPath, salt, 0o600); err != nil {
+			log.Warn().Err(err).Msg("failed to persist Patrol model readiness salt; readiness evidence will not survive restart")
+		}
+	}
+	s.patrolModelReadinessCache.salt = salt
+	return salt
+}
+
+func (s *Service) patrolModelReadinessCacheKey(cfg *config.AIConfig, providerName, model string) string {
 	if cfg == nil {
+		return ""
+	}
+	salt := s.patrolModelReadinessSalt()
+	if len(salt) == 0 {
 		return ""
 	}
 	providerName = strings.ToLower(strings.TrimSpace(providerName))
@@ -332,7 +391,13 @@ func patrolModelReadinessCacheKey(cfg *config.AIConfig, providerName, model stri
 	if providerName == config.AIProviderOllama {
 		credentialMaterial = cfg.OllamaUsername + "\n" + cfg.OllamaPassword
 	}
-	credentialFingerprint := sha256.Sum256([]byte(credentialMaterial))
+	// Keyed with the per-install salt rather than hashed bare. The cache key
+	// is written to disk, and an Ollama Basic Auth password is low enough
+	// entropy that an unkeyed SHA-256 of it would be recoverable offline by
+	// anyone who obtained the evidence file.
+	credentialMAC := hmac.New(sha256.New, salt)
+	credentialMAC.Write([]byte(credentialMaterial))
+	credentialFingerprint := credentialMAC.Sum(nil)
 	material := fmt.Sprintf("%s\n%s\n%s\n%x\n%d\n%d\n%d",
 		providerName,
 		strings.TrimSpace(model),
@@ -359,7 +424,7 @@ func (s *Service) RunPatrolModelReadiness(ctx context.Context, providerName, mod
 	finish := func() PatrolModelReadinessResult {
 		result.DurationMs = time.Since(started).Milliseconds()
 		if cfg != nil && result.Provider != "" && result.Model != "" {
-			result.CacheKey = patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+			result.CacheKey = s.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
 		}
 		// Cancellation is an operator action or request-budget boundary, not new
 		// evidence about the model. Preserve the last completed evaluation.

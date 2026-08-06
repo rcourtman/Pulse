@@ -1013,7 +1013,10 @@ func cleanProviderMSPArchiveName(raw string) (string, error) {
 	}
 	name = strings.TrimPrefix(name, "./")
 	cleaned := path.Clean(name)
-	if cleaned == "." || strings.HasPrefix(cleaned, "../") || path.IsAbs(cleaned) {
+	// ".." must be rejected on its own, not just as a "../" prefix: an entry
+	// named ".." or "a/../.." cleans to exactly ".." and would otherwise pass
+	// this gate and resolve to the parent of the restore target.
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || path.IsAbs(cleaned) {
 		return "", fmt.Errorf("backup archive contains unsafe entry name %q", raw)
 	}
 	return cleaned, nil

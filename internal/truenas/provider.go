@@ -1643,15 +1643,32 @@ func zfsPoolFromPool(pool Pool) models.ZFSPool {
 	}
 }
 
+// devicePath renders a vdev's device node as an absolute path. The input comes
+// from the appliance's own API and is published verbatim on ZFSDevice.Path, so
+// it is normalised here rather than trusted: a traversal segment or a backslash
+// has no place in a ZFS device node, and a leading "//" would let the value
+// present as a protocol-relative reference to whatever consumes it.
 func devicePath(device string) string {
 	device = strings.TrimSpace(device)
 	if device == "" {
 		return ""
 	}
+	if strings.Contains(device, `\`) || hasTraversalSegment(device) {
+		return ""
+	}
 	if strings.HasPrefix(device, "/") {
-		return device
+		return "/" + strings.TrimLeft(device, "/")
 	}
 	return "/dev/" + device
+}
+
+func hasTraversalSegment(value string) bool {
+	for _, segment := range strings.Split(value, "/") {
+		if segment == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func poolScanSummary(pool Pool) string {

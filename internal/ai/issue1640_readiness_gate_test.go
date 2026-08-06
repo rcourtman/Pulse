@@ -65,7 +65,7 @@ func TestIssue1640InterruptedRunKeepsToolPassWithoutAVerdict(t *testing.T) {
 	// interrupted check may not claim readiness, and may not block the run.
 	service := NewService(config.NewConfigPersistence(t.TempDir()), nil)
 	service.cfg = cfg
-	result.CacheKey = patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
 	service.recordPatrolModelReadiness(result, time.Now())
 
 	readiness := service.PatrolRuntimeReadiness()

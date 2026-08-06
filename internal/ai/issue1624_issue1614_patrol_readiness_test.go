@@ -166,7 +166,7 @@ func TestIssue1624ReadinessDetailsSurviveCacheCloneAndPersistence(t *testing.T) 
 	result.Provider = config.AIProviderOllama
 	result.Model = "test-model"
 	result.Details = []string{`Scenario "typed-tool" tool protocol: nonce did not match`}
-	result.CacheKey = patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
 	service.recordPatrolModelReadiness(result, time.Now())
 
 	reloaded := NewService(persistence, nil)

@@ -1893,7 +1893,11 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 					continue
 				}
 				temp := parseRawValue(attr.Raw.String, attr.Raw.Value)
-				if validSMARTTemperature(int(temp)) {
+				// Range-check in int64 before narrowing: parseRawValue
+				// returns a full 64-bit value and int is 32 bits on the
+				// 386/arm builds, so converting first would let a raw
+				// value such as 1<<32+20 truncate into the valid band.
+				if validSMARTTemperature64(temp) {
 					result.Temperature = int(temp)
 					break
 				}
@@ -1939,6 +1943,13 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 }
 
 func validSMARTTemperature(value int) bool {
+	return validSMARTTemperature64(int64(value))
+}
+
+// validSMARTTemperature64 is the authoritative range check. Callers holding a
+// 64-bit raw SMART value must use it before narrowing to int, which is only
+// 32 bits wide on the 386 and arm release builds.
+func validSMARTTemperature64(value int64) bool {
 	return value > 0 && value < 150
 }
 

@@ -297,7 +297,7 @@ func TestPatrolModelReadinessCachePersistsAndInvalidates(t *testing.T) {
 	result.Model = "test-model"
 	result.Success = true
 	result.Status = PatrolModelReadinessPass
-	result.CacheKey = patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	result.CacheKey = first.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
 	first.recordPatrolModelReadiness(result, time.Now())
 
 	reloaded := NewService(persistence, nil)
@@ -336,7 +336,7 @@ func TestRunPatrolModelReadinessCancellationPreservesCompletedEvidence(t *testin
 	completed.Success = true
 	completed.Status = PatrolModelReadinessPass
 	completed.Summary = "completed evidence"
-	completed.CacheKey = patrolModelReadinessCacheKey(cfg, completed.Provider, completed.Model)
+	completed.CacheKey = service.patrolModelReadinessCacheKey(cfg, completed.Provider, completed.Model)
 	service.recordPatrolModelReadiness(completed, time.Now())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -382,7 +382,7 @@ func TestPatrolRuntimeReadinessUsesAdvisorForSelectedAutonomyMode(t *testing.T) 
 	result.Provider = config.AIProviderOllama
 	result.Model = "test-model"
 	result.Cause = PatrolFailureCauseModelToolSupportUnverified
-	result.CacheKey = patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
 	result.Modes.Monitor = PatrolModeSuitability{Status: PatrolModeVerified, Summary: "Watch only verified."}
 	result.Modes.Approval = PatrolModeSuitability{Status: PatrolModeNotSuitable, Summary: "Continuation failed."}
 	service.recordPatrolModelReadiness(result, time.Now())
@@ -393,7 +393,7 @@ func TestPatrolRuntimeReadinessUsesAdvisorForSelectedAutonomyMode(t *testing.T) 
 	}
 
 	cfg.PatrolAutonomyLevel = config.PatrolAutonomyAssisted
-	result.CacheKey = patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
+	result.CacheKey = service.patrolModelReadinessCacheKey(cfg, result.Provider, result.Model)
 	service.recordPatrolModelReadiness(result, time.Now().Add(time.Millisecond))
 	readiness = service.PatrolRuntimeReadiness()
 	if !readiness.Ready || readiness.Status != PatrolReadinessWarning {
