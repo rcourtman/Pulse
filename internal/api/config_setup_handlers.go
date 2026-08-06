@@ -914,6 +914,103 @@ func shouldPreserveExistingAutoRegisterHost(existingHost string, candidateHosts 
 	return true
 }
 
+// canonicalAutoRegisterCandidate is the identity view of an already-configured
+// instance that canonical auto-registration matches an incoming registration
+// against. PVE and PBS instances are projected onto this shape so one matcher
+// serves both node types.
+type canonicalAutoRegisterCandidate struct {
+	Host        string
+	Name        string
+	Fingerprint string
+	TokenName   string
+}
+
+// canonicalAutoRegisterIdentity is the identity of the incoming registration.
+// candidateHosts is the agent's preference-ordered address list, used to decide
+// whether an identity-matched node keeps its stored host.
+type canonicalAutoRegisterIdentity struct {
+	host           string
+	serverName     string
+	fingerprint    string
+	tokenName      string
+	candidateHosts []string
+}
+
+func pveAutoRegisterCandidate(instance config.PVEInstance) canonicalAutoRegisterCandidate {
+	return canonicalAutoRegisterCandidate{
+		Host:        instance.Host,
+		Name:        instance.Name,
+		Fingerprint: instance.Fingerprint,
+		TokenName:   instance.TokenName,
+	}
+}
+
+func pbsAutoRegisterCandidate(instance config.PBSInstance) canonicalAutoRegisterCandidate {
+	return canonicalAutoRegisterCandidate{
+		Host:        instance.Host,
+		Name:        instance.Name,
+		Fingerprint: instance.Fingerprint,
+		TokenName:   instance.TokenName,
+	}
+}
+
+// autoRegisterCandidates projects configured instances onto the identity view
+// findCanonicalAutoRegisterMatch compares against.
+func autoRegisterCandidates[T any](instances []T, view func(T) canonicalAutoRegisterCandidate) []canonicalAutoRegisterCandidate {
+	candidates := make([]canonicalAutoRegisterCandidate, len(instances))
+	for i, instance := range instances {
+		candidates[i] = view(instance)
+	}
+	return candidates
+}
+
+// findCanonicalAutoRegisterMatch reports which configured instance an incoming
+// canonical auto-registration should update in place, and whether that instance
+// keeps its stored host. It returns (-1, false) when the registration belongs to
+// a node Pulse has not seen, which is the caller's signal to create one.
+//
+// The ladder, in order: exact host match, then — only for candidates whose TLS
+// fingerprint does not conflict with the incoming one — resolved host identity
+// (the same box reached by a different address), then DHCP continuity by node
+// name plus token identity. nodeType ("pve"/"pbs") is log attribution only.
+func findCanonicalAutoRegisterMatch(nodeType string, incoming canonicalAutoRegisterIdentity, candidates []canonicalAutoRegisterCandidate) (int, bool) {
+	for i, node := range candidates {
+		if node.Host == incoming.host {
+			return i, false
+		}
+		if config.ProxmoxFingerprintsConflict(node.Fingerprint, incoming.fingerprint) {
+			log.Warn().
+				Str("existingHost", node.Host).
+				Str("newHost", incoming.host).
+				Str("type", nodeType).
+				Msg("Canonical auto-register rejected inferred node match because TLS fingerprints conflict")
+			continue
+		}
+		if hostsShareResolvedIdentity(node.Host, incoming.host) {
+			preserveHost := shouldPreserveExistingAutoRegisterHost(node.Host, incoming.candidateHosts)
+			log.Info().
+				Str("existingHost", node.Host).
+				Str("newHost", incoming.host).
+				Bool("preserveHost", preserveHost).
+				Str("type", nodeType).
+				Msg(canonicalAutoRegisterMatchMessage("resolved host identity"))
+			return i, preserveHost
+		}
+		if incoming.serverName != "" &&
+			strings.EqualFold(strings.TrimSpace(node.Name), incoming.serverName) &&
+			node.TokenName == incoming.tokenName {
+			log.Info().
+				Str("existingHost", node.Host).
+				Str("newHost", incoming.host).
+				Str("type", nodeType).
+				Str("node", incoming.serverName).
+				Msg(canonicalAutoRegisterMatchMessage("DHCP continuity token identity"))
+			return i, false
+		}
+	}
+	return -1, false
+}
+
 // clusterMemberOverrideIdentity canonicalizes a connection address (bare
 // host, host:port, or URL) to lowercase host:port for comparisons, defaulting
 // to the PVE API port. Mirrors config's cluster endpoint identity
@@ -2052,6 +2149,14 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	preCfg := h.getConfig(r.Context())
 	beforeFingerprint := nodesConfigFingerprint(preCfg.PVEInstances, preCfg.PBSInstances, preCfg.PMGInstances)
 
+	incomingIdentity := canonicalAutoRegisterIdentity{
+		host:           host,
+		serverName:     serverName,
+		fingerprint:    fingerprint,
+		tokenName:      fullTokenID,
+		candidateHosts: candidateHosts,
+	}
+
 	// Add the node to configuration
 	created := false
 	if req.Type == "pve" {
@@ -2070,45 +2175,8 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			Source:            registrationSource,
 		}
 		// Deduplicate by host to keep canonical auto-registration idempotent on reruns.
-		existingIndex := -1
-		preserveHost := false
-		for i, node := range h.getConfig(r.Context()).PVEInstances {
-			if node.Host == host {
-				existingIndex = i
-				break
-			}
-			if config.ProxmoxFingerprintsConflict(node.Fingerprint, fingerprint) {
-				log.Warn().
-					Str("existingHost", node.Host).
-					Str("newHost", host).
-					Str("type", "pve").
-					Msg("Canonical auto-register rejected inferred node match because TLS fingerprints conflict")
-				continue
-			}
-			if hostsShareResolvedIdentity(node.Host, host) {
-				existingIndex = i
-				preserveHost = shouldPreserveExistingAutoRegisterHost(node.Host, candidateHosts)
-				log.Info().
-					Str("existingHost", node.Host).
-					Str("newHost", host).
-					Bool("preserveHost", preserveHost).
-					Str("type", "pve").
-					Msg(canonicalAutoRegisterMatchMessage("resolved host identity"))
-				break
-			}
-			if serverName != "" &&
-				strings.EqualFold(strings.TrimSpace(node.Name), serverName) &&
-				node.TokenName == pveNode.TokenName {
-				existingIndex = i
-				log.Info().
-					Str("existingHost", node.Host).
-					Str("newHost", host).
-					Str("type", "pve").
-					Str("node", serverName).
-					Msg(canonicalAutoRegisterMatchMessage("DHCP continuity token identity"))
-				break
-			}
-		}
+		existingIndex, preserveHost := findCanonicalAutoRegisterMatch("pve", incomingIdentity,
+			autoRegisterCandidates(h.getConfig(r.Context()).PVEInstances, pveAutoRegisterCandidate))
 		if existingIndex >= 0 {
 			instance := &h.getConfig(r.Context()).PVEInstances[existingIndex]
 			if !preserveHost {
@@ -2161,45 +2229,8 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			Source:            registrationSource,
 		}
 		// Deduplicate by host to keep canonical auto-registration idempotent on reruns.
-		existingIndex := -1
-		preserveHost := false
-		for i, node := range h.getConfig(r.Context()).PBSInstances {
-			if node.Host == host {
-				existingIndex = i
-				break
-			}
-			if config.ProxmoxFingerprintsConflict(node.Fingerprint, fingerprint) {
-				log.Warn().
-					Str("existingHost", node.Host).
-					Str("newHost", host).
-					Str("type", "pbs").
-					Msg("Canonical auto-register rejected inferred node match because TLS fingerprints conflict")
-				continue
-			}
-			if hostsShareResolvedIdentity(node.Host, host) {
-				existingIndex = i
-				preserveHost = shouldPreserveExistingAutoRegisterHost(node.Host, candidateHosts)
-				log.Info().
-					Str("existingHost", node.Host).
-					Str("newHost", host).
-					Bool("preserveHost", preserveHost).
-					Str("type", "pbs").
-					Msg(canonicalAutoRegisterMatchMessage("resolved host identity"))
-				break
-			}
-			if serverName != "" &&
-				strings.EqualFold(strings.TrimSpace(node.Name), serverName) &&
-				node.TokenName == pbsNode.TokenName {
-				existingIndex = i
-				log.Info().
-					Str("existingHost", node.Host).
-					Str("newHost", host).
-					Str("type", "pbs").
-					Str("node", serverName).
-					Msg(canonicalAutoRegisterMatchMessage("DHCP continuity token identity"))
-				break
-			}
-		}
+		existingIndex, preserveHost := findCanonicalAutoRegisterMatch("pbs", incomingIdentity,
+			autoRegisterCandidates(h.getConfig(r.Context()).PBSInstances, pbsAutoRegisterCandidate))
 		if existingIndex >= 0 {
 			instance := &h.getConfig(r.Context()).PBSInstances[existingIndex]
 			if !preserveHost {
