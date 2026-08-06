@@ -1,27 +1,17 @@
 {
   "version": 1,
-  "base_sha": "98a87864a0dac4c5436de379c9a8307e4f42cb14",
-  "verified_at": "2026-08-06T10:32:00Z",
+  "base_sha": "716c7c7335dd2f15dca6039067bf2cac35983ada",
+  "verified_at": "2026-08-06T10:50:22Z",
   "result": "passed",
-  "changed_paths": [
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
-    "frontend-modern/src/pages/Actions.tsx"
-  ],
+  "changed_paths": ["frontend-modern/src/features/standalone/StandalonePageSurface.tsx"],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "caad8a27e18602cdd0311c10587c6ed3da3e5f6227cd827c7642bcd6250d72ad",
-    "frontend-modern/src/pages/Actions.tsx": "2cc8c8b31691f9765405692b88f4f70c171d5309028a19d2f5c51bc85f322858"
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "70f1f22cd61ed8822aa91cb3bb513fffd794316c6536e00d8bd0403fa9aecbdd"
   },
   "routes": [
-    "/proxmox/overview",
-    "/docker/overview",
-    "/kubernetes/overview",
-    "/truenas/overview",
-    "/vmware/overview",
     "/standalone/machines",
-    "/alerts/overview",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure"
+    "/standalone/availability",
+    "/docker/overview",
+    "/proxmox/overview"
   ],
   "viewports": [
     {
@@ -34,17 +24,14 @@
     }
   ],
   "states": [
-    "Actions inbox on the Open subtab with three queued actions, the read-only demo banner, the queue summary trailing the subtab row, and the Refresh action in the header",
-    "Settings Infrastructure workspace with its page header above the settings card",
-    "Alerts Overview and Patrol workspaces used as the page-header alignment reference",
-    "Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines overviews used as the platform-page alignment reference",
-    "Actions inbox at phone width where the shared panel padding replaces the page-level padding"
+    "Machines section with the agent machine table below the platform section tabs",
+    "Availability checks section with its posture card, search field, status filter chips, and checks table",
+    "Docker and Proxmox overviews used as the platform-rhythm reference"
   ],
   "interactions": [
-    "Signed in as admin and clicked every top-level tab in sequence, reading getBoundingClientRect for main, the page header, the h1, and the first content block on each route",
-    "Recorded the pre-change drift: Actions rendered its h1 at top 153 left 67 and its content 40px narrower, Settings rendered its h1 at left 51, every other tab sat at top 137 left 47 width 1175",
-    "Re-ran the same ten-tab sweep after removing the duplicated page padding and confirmed all ten routes report top 137 left 47 width 1175 at 1280x720",
-    "Repeated the ten-tab sweep at 375x812 and confirmed all routes report top 80 left 22 width 332",
-    "Screenshotted Actions and Alerts at both viewports to confirm the queue rows, subtabs, header action, and vertical rhythm still read correctly"
+    "Clicked the Machines tab and both of its section tabs, measuring the platform surface origin and the top of the block below the section-tab strip on each",
+    "Compared those measurements against the Docker and Proxmox overviews, which put their first content block at top 190",
+    "Confirmed Machines and Availability checks now report the same top 190 as the other platform pages, against top 194 before the change",
+    "Screenshotted the Availability checks section to confirm the posture card, filters, and table still read correctly at the tighter rhythm"
   ]
 }
