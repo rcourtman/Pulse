@@ -1,37 +1,59 @@
 {
   "version": 1,
-  "base_sha": "716c7c7335dd2f15dca6039067bf2cac35983ada",
-  "verified_at": "2026-08-06T10:50:22Z",
+  "base_sha": "e6e1767b602c8ac7ee7dab3e24ddead6c5ae7afe",
+  "verified_at": "2026-08-06T10:57:07Z",
   "result": "passed",
-  "changed_paths": ["frontend-modern/src/features/standalone/StandalonePageSurface.tsx"],
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
   "content_sha256": {
-    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "70f1f22cd61ed8822aa91cb3bb513fffd794316c6536e00d8bd0403fa9aecbdd"
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "d8f56c6b5efff223133924966ebccc142b383342875ae2c788c22bab2a7b9bd9",
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "2b3d556d02ca367d4e9b76061a3a00fce33fd55308b344b56344864042cff28e",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "70c15f235bfa19e087925ebceb82a6d5fd95fde70ef658c3aff69012cac86711"
   },
   "routes": [
-    "/standalone/machines",
-    "/standalone/availability",
-    "/docker/overview",
-    "/proxmox/overview"
+    "/proxmox/overview",
+    "/alerts/overview",
+    "/alerts/schedule",
+    "/actions",
+    "/patrol",
+    "/settings",
+    "/settings/security/overview",
+    "/settings/security/api"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 900
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
     }
   ],
   "states": [
-    "Machines section with the agent machine table below the platform section tabs",
-    "Availability checks section with its posture card, search field, status filter chips, and checks table",
-    "Docker and Proxmox overviews used as the platform-rhythm reference"
+    "Patrol active attention queue with the first issue detail open, temporary-suppression form expanded, and older evidence available",
+    "Alerts Overview with the first incident timeline expanded and the split alert-actions menu open",
+    "Actions Open and History subtabs, including the governed action review dialog",
+    "Settings Infrastructure navigation drawer, Security Overview, API token inventory and create form, and edit-scopes dialog",
+    "Proxmox, Alerts, Actions, Patrol, and Settings top-level pages used for the final desktop canvas-width comparison"
   ],
   "interactions": [
-    "Clicked the Machines tab and both of its section tabs, measuring the platform surface origin and the top of the block below the section-tab strip on each",
-    "Compared those measurements against the Docker and Proxmox overviews, which put their first content block at top 190",
-    "Confirmed Machines and Availability checks now report the same top 190 as the other platform pages, against top 194 before the change",
-    "Screenshotted the Availability checks section to confirm the posture card, filters, and table still read correctly at the tighter rhythm"
+    "Measured every visible Patrol detail action at 390px and 320px; close, lifecycle, suppression, resource, Assistant, and evidence controls are at least 44px on phones with zero page or panel overflow",
+    "Confirmed Patrol reverts to the compact 24px close and 30px action controls at 768px, remains contained at 1280px, and restores focus to the exact queue item after closing detail",
+    "Expanded an alert timeline, opened the split alert-actions menu, verified the menu remained in-bounds, and measured its phone actions at 44px before confirming the original 26px desktop sizing at 768px",
+    "Opened Settings navigation, Security Overview, API Access, the token-create section, and the edit-scopes dialog without saving; confirmed zero overflow and correct focus restoration after Cancel",
+    "Verified the API token create header stacks with a full-width 44px Generate action at 320px and returns to the horizontal 40px desktop treatment at 768px",
+    "Compared Proxmox, Alerts, Actions, Patrol, and Settings at 1280px; every main canvas rendered from x=29 to x=1240 at 1211px wide with zero document overflow"
   ]
 }

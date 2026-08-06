@@ -268,6 +268,17 @@ describe('PatrolAttentionWorkbench', () => {
     ).toBeInTheDocument();
     expect(within(detailRegion).getByText('Proxmox VE')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Observing to Open')).toBeInTheDocument();
+    expect(
+      within(detailRegion).getByRole('button', { name: 'Close attention detail' }),
+    ).toHaveClass('h-11', 'w-11', 'sm:h-6', 'sm:w-6');
+    expect(within(detailRegion).getByRole('button', { name: 'Acknowledge' })).toHaveClass(
+      'min-h-11',
+      'sm:min-h-0',
+    );
+    expect(within(detailRegion).getByRole('link', { name: 'Open resource' })).toHaveClass(
+      'min-h-11',
+      'sm:min-h-0',
+    );
     expect(window.location.search).toBe('?attention=record-1');
   });
 
@@ -379,6 +390,13 @@ describe('PatrolAttentionWorkbench', () => {
 
     const submit = screen.getByRole('button', { name: 'Suppress temporarily' });
     expect(submit).toBeDisabled();
+    expect(submit).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(
+      screen.getByRole('combobox', {
+        name: 'Return it to active attention after',
+      }),
+    ).toHaveClass('min-h-11', 'sm:min-h-9');
     fireEvent.input(
       screen.getByRole('textbox', {
         name: 'Why is this safe to hide from active attention?',

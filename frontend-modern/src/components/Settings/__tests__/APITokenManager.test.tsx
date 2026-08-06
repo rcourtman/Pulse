@@ -164,6 +164,11 @@ describe('APITokenManager security surface', () => {
     expect(apiTokenManagerSource).not.toContain('<Dialog');
     expect(apiTokenManagerDialogsSource).toContain('ariaLabel="Edit API token scopes"');
     expect(apiTokenManagerDialogsSource).toContain('ariaLabel="Revoke API token"');
+    expect(apiTokenManagerSource).toContain(
+      'flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between',
+    );
+    expect(apiTokenManagerSource).toContain('min-h-11 w-full items-center justify-center');
+    expect(apiTokenManagerSource).toContain('sm:min-h-10 sm:w-auto');
   });
 });
 

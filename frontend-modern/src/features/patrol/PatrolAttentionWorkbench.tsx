@@ -554,7 +554,7 @@ function AttentionDetail(props: {
         </div>
         <button
           type="button"
-          class="rounded p-1 text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-6 sm:w-6"
           aria-label="Close attention detail"
           onClick={props.onClose}
         >
@@ -647,7 +647,7 @@ function AttentionDetail(props: {
                         <Button
                           variant="primary"
                           size="sm"
-                          class="mt-3 gap-1.5"
+                          class="mt-3 min-h-11 gap-1.5 sm:min-h-0"
                           data-patrol-action-trigger
                           isLoading={props.actionBusy}
                           onClick={(event) =>
@@ -686,7 +686,7 @@ function AttentionDetail(props: {
                 </ul>
                 <Show when={olderEvidence().length > 0}>
                   <details class="mt-2 rounded-md border border-border-subtle bg-surface-alt/30">
-                    <summary class="cursor-pointer px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
+                    <summary class="flex min-h-11 cursor-pointer items-center px-3 py-2 text-xs font-medium text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:min-h-0">
                       Show {olderEvidence().length} older{' '}
                       {olderEvidence().length === 1 ? 'observation' : 'observations'}
                     </summary>
@@ -767,12 +767,22 @@ function AttentionDetail(props: {
             </DetailSection>
 
             <div class="flex flex-wrap gap-2 border-t border-border pt-4">
-              <ButtonLink href={resourceHref()} variant="secondary" size="sm" class="gap-1.5">
+              <ButtonLink
+                href={resourceHref()}
+                variant="secondary"
+                size="sm"
+                class="min-h-11 gap-1.5 sm:min-h-0"
+              >
                 <ExternalLinkIcon class="h-4 w-4" aria-hidden="true" />
                 Open resource
               </ButtonLink>
               <Show when={aiChatStore.enabled === true}>
-                <Button variant="secondary" size="sm" class="gap-1.5" onClick={openAssistant}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="min-h-11 gap-1.5 sm:min-h-0"
+                  onClick={openAssistant}
+                >
                   <SparklesIcon class="h-4 w-4" aria-hidden="true" />
                   Explain with Assistant
                 </Button>
@@ -853,6 +863,7 @@ function AttentionLifecycleControls(props: {
             <Button
               variant="primary"
               size="sm"
+              class="min-h-11 sm:min-h-0"
               isLoading={props.busy}
               onClick={() => void props.onAcknowledge(props.detail.item.id)}
             >
@@ -863,6 +874,7 @@ function AttentionLifecycleControls(props: {
             <Button
               variant="secondary"
               size="sm"
+              class="min-h-11 sm:min-h-0"
               isLoading={props.busy}
               onClick={() => void props.onUnacknowledge(props.detail.item.id)}
             >
@@ -873,6 +885,7 @@ function AttentionLifecycleControls(props: {
             <Button
               variant="secondary"
               size="sm"
+              class="min-h-11 sm:min-h-0"
               isLoading={props.busy}
               onClick={() => void props.onUnsuppress(props.detail.item.id)}
             >
@@ -883,7 +896,7 @@ function AttentionLifecycleControls(props: {
             <Button
               variant="secondary"
               size="sm"
-              class="gap-1.5"
+              class="min-h-11 gap-1.5 sm:min-h-0"
               disabled={props.busy}
               onClick={() => setShowSuppression(true)}
             >
@@ -923,7 +936,7 @@ function AttentionLifecycleControls(props: {
               </label>
               <select
                 id={`attention-suppression-duration-${props.detail.item.id}`}
-                class="mt-1 block min-h-9 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="mt-1 block min-h-11 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500 sm:min-h-9"
                 value={String(durationMs())}
                 disabled={props.busy}
                 onChange={(event) => setDurationMs(Number(event.currentTarget.value))}
@@ -937,6 +950,7 @@ function AttentionLifecycleControls(props: {
               <Button
                 variant="warning"
                 size="sm"
+                class="min-h-11 sm:min-h-0"
                 isLoading={props.busy}
                 disabled={!reason().trim()}
                 type="submit"
@@ -946,6 +960,7 @@ function AttentionLifecycleControls(props: {
               <Button
                 variant="ghost"
                 size="sm"
+                class="min-h-11 sm:min-h-0"
                 disabled={props.busy}
                 onClick={() => setShowSuppression(false)}
               >

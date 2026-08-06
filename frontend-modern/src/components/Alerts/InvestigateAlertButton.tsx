@@ -249,7 +249,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           onClick={handleClick}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          class={`${baseButtonClass} px-2 py-1
+          class={`${baseButtonClass} min-h-11 px-2 py-1 sm:min-h-0
             bg-surface
             hover:bg-surface-hover
             text-blue-600 dark:text-blue-400
@@ -284,7 +284,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           </span>
         </button>
         {SecondaryActionMenu(
-          `px-1.5 py-1 rounded-l-none border border-border border-l-0 bg-surface hover:bg-surface-hover text-blue-600 dark:text-blue-400 ${
+          `min-h-11 min-w-11 px-1.5 py-1 sm:min-h-0 sm:min-w-0 rounded-l-none border border-border border-l-0 bg-surface hover:bg-surface-hover text-blue-600 dark:text-blue-400 ${
             isLocked() ? 'opacity-60 cursor-not-allowed' : ''
           }`,
           'w-3 h-3',

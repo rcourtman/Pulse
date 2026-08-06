@@ -723,6 +723,11 @@ describe('InvestigateAlertButton patrolOption', () => {
     expect(screen.getByRole('button', { name: /Have Patrol investigate/i })).toBeInTheDocument();
     const toggle = screen.getByRole('button', { name: 'More alert actions' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
+    expect(screen.getByRole('button', { name: /Have Patrol investigate/i })).toHaveClass(
+      'min-h-11',
+      'sm:min-h-0',
+    );
   });
 
   it('omits the split when the alert has no resource', () => {

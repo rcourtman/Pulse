@@ -585,7 +585,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         ref={setCreateSectionRef}
       >
         <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
-          <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between">
             <SectionHeader
               size="sm"
               title="Create token"
@@ -600,7 +600,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   ? undefined
                   : 'Choose a scope preset or custom scope before generating a token.'
               }
-              class="inline-flex min-h-10 sm:min-h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
+              class="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-10 sm:w-auto dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {isGenerating() ? 'Generating…' : 'Generate'}
             </button>
