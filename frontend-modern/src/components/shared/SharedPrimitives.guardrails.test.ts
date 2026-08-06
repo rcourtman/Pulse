@@ -8275,13 +8275,15 @@ describe('shared primitive guardrails', () => {
 
     expect(savedViewsMenuSource).toContain("from './useSavedViews';");
     expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
+    expect(filterToolbarSource).toContain('export const filterBottomNavAwarePanelClass');
     expect(filterToolbarSource).toContain(
       "'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0'",
     );
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
     expect(viewOptionsMenuSource).toContain('class="static ml-auto shrink-0 sm:relative sm:ml-0"');
-    expect(viewOptionsMenuSource).toContain('class="left-auto right-0');
+    expect(viewOptionsMenuSource).toContain('filterBottomNavAwarePanelClass');
     expect(savedViewsMenuSource).toContain('<FilterPopoverTrigger');
+    expect(savedViewsMenuSource).toContain('filterBottomNavAwarePanelClass');
     expect(filterCatalogSource).toContain('leadingControls?: JSX.Element;');
     expect(filterCatalogSource).toContain('viewOptions?: JSX.Element;');
     expect(filterCatalogSource).toContain('trailingControls?: JSX.Element;');
@@ -8310,9 +8312,7 @@ describe('shared primitive guardrails', () => {
     expect(savedViewsMenuSource).toContain('queueMicrotask(() => nameInputRef?.focus())');
     expect(savedViewsMenuSource).toContain('queueMicrotask(() => triggerRef?.focus())');
     expect(savedViewsMenuSource).toContain('for={nameInputId}');
-    expect(savedViewsMenuSource).toContain(
-      'class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 p-0 md:left-auto md:right-0"',
-    );
+    expect(savedViewsMenuSource).toContain('class={`${filterBottomNavAwarePanelClass} z-50 p-0`}');
     expect(savedViewsMenuSource).toContain('opacity-100 transition-opacity');
     expect(savedViewsMenuSource).toContain('sm:opacity-0');
 

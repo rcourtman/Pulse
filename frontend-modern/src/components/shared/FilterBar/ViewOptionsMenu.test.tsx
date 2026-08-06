@@ -19,8 +19,7 @@ describe('ViewOptionsMenu', () => {
 
     expect(screen.getByRole('dialog', { name: 'View preferences' })).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'View preferences' })).toHaveClass(
-      'left-auto',
-      'right-0',
+      'filter-bottom-nav-aware-panel',
     );
     expect(screen.getByRole('button', { name: 'View' }).parentElement).toHaveClass(
       'static',

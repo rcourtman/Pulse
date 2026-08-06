@@ -11,7 +11,11 @@ import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import PlusIcon from 'lucide-solid/icons/plus';
 import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
-import { FilterPopoverTrigger, FilterToolbarPanel } from '@/components/shared/FilterToolbar';
+import {
+  FilterPopoverTrigger,
+  FilterToolbarPanel,
+  filterBottomNavAwarePanelClass,
+} from '@/components/shared/FilterToolbar';
 import { useSavedViews, type SavedView } from './useSavedViews';
 
 interface SavedViewsMenuProps {
@@ -124,7 +128,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
           role="dialog"
           aria-label="Saved views"
           widthClass="w-64 max-w-[calc(100vw-2rem)]"
-          class="left-0 right-auto top-[calc(100%+0.25rem)] z-50 p-0 md:left-auto md:right-0"
+          class={`${filterBottomNavAwarePanelClass} z-50 p-0`}
         >
           <Show
             when={savePromptOpen()}

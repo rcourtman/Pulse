@@ -18,7 +18,7 @@ export interface SearchTipsPopoverProps {
 }
 
 export function getSearchTipsPopoverPositionClass(align?: 'left' | 'right'): string {
-  return align === 'left' ? 'sm:left-0' : 'sm:right-0';
+  return align === 'left' ? 'xl:left-0' : 'xl:right-0';
 }
 
 export function getSearchTipsPopoverId(popoverId?: string): string {

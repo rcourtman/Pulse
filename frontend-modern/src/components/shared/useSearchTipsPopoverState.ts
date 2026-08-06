@@ -30,7 +30,7 @@ export function useSearchTipsPopoverState(
 
   const close = () => setOpen(false);
   const updatePopoverPosition = () => {
-    if (!triggerRef || !popoverRef || window.innerWidth >= 640) {
+    if (!triggerRef || !popoverRef || (window.innerWidth >= 1280 && window.innerHeight >= 768)) {
       setPopoverStyle(undefined);
       return;
     }
@@ -39,18 +39,29 @@ export function useSearchTipsPopoverState(
     const triggerGap = 8;
     const width = Math.min(288, window.innerWidth - viewportMargin * 2);
     const triggerRect = triggerRef.getBoundingClientRect();
-    const popoverHeight = popoverRef.getBoundingClientRect().height;
+    const mobileNavRect = document
+      .querySelector<HTMLElement>('nav[aria-label="Mobile navigation"]')
+      ?.getBoundingClientRect();
+    const mobileNavTop = mobileNavRect && mobileNavRect.height > 0 ? mobileNavRect.top : undefined;
+    const availableBottom = Math.min(
+      window.innerHeight - viewportMargin,
+      mobileNavTop == null ? Number.POSITIVE_INFINITY : mobileNavTop - viewportMargin,
+    );
+    const availableHeight = Math.max(96, availableBottom - viewportMargin);
+    const popoverHeight = Math.min(popoverRef.getBoundingClientRect().height, availableHeight);
     const left = Math.min(
       Math.max(triggerRect.right - width, viewportMargin),
       window.innerWidth - viewportMargin - width,
     );
     const belowTop = triggerRect.bottom + triggerGap;
     const top =
-      belowTop + popoverHeight <= window.innerHeight - viewportMargin
+      belowTop + popoverHeight <= availableBottom
         ? belowTop
         : Math.max(viewportMargin, triggerRect.top - triggerGap - popoverHeight);
 
-    setPopoverStyle(`left:${left}px;top:${top}px;width:${width}px`);
+    setPopoverStyle(
+      `position:fixed !important;left:${left}px;top:${top}px;width:${width}px;max-height:${availableHeight}px`,
+    );
   };
 
   createEffect(() => {

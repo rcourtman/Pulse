@@ -381,6 +381,38 @@
     scrollbar-gutter: stable;
   }
 
+  /*
+    Filter utility panels must stay reachable in short windows as well as
+    narrow ones. While the bottom navigation is present they sit above it;
+    short desktop windows use the viewport edge, and roomy desktop windows
+    return to the trigger-anchored dropdown.
+  */
+  .filter-bottom-nav-aware-panel {
+    position: fixed !important;
+    inset-inline: auto 1rem !important;
+    top: auto !important;
+    bottom: 1rem !important;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+  }
+
+  @media (max-width: 79.999rem) {
+    .filter-bottom-nav-aware-panel {
+      bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+      max-height: calc(100dvh - 6rem - env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (min-width: 80rem) and (min-height: 48rem) {
+    .filter-bottom-nav-aware-panel {
+      position: absolute !important;
+      inset-inline: auto 0 !important;
+      top: calc(100% + 0.25rem) !important;
+      bottom: auto !important;
+      max-height: min(38rem, calc(100vh - 8rem));
+    }
+  }
+
   .pulse-shell {
     width: 100%;
     max-width: var(--pulse-shell-max-width);

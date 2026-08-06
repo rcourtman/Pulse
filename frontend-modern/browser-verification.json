@@ -1,49 +1,81 @@
 {
   "version": 1,
-  "base_sha": "ed0f3613aeda63f41248cd1ef981b5ca2639bd8b",
-  "verified_at": "2026-08-06T21:47:15Z",
+  "base_sha": "b7651974260b3bccb8085754b002bd3727040832",
+  "verified_at": "2026-08-06T20:28:35Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/alertOverridesModel.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts",
-    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts",
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
-    "frontend-modern/src/utils/alertThresholdsPresentation.ts"
+    "frontend-modern/src/components/shared/FilterToolbar.tsx",
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx",
+    "frontend-modern/src/components/shared/SearchTipsPopover.tsx",
+    "frontend-modern/src/components/shared/searchTipsPopoverModel.ts",
+    "frontend-modern/src/components/shared/useSearchTipsPopoverState.ts",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/alertOverridesModel.ts": "9729ff9ad413c3b9ece2a1ab3449939cba563bf80acd16e678b52d668751ed63",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts": "b8b89dd3d756b13dc730f6cc7e0c3fe2f4a79525753eeaa6fa203766c7e592ba",
-    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts": "92b0fd9836d86930cae26e5ccecb3dc56babdba2170a454e820a12dd27549f2b",
-    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "e71f230e5fb8ad5f970cf9385afa31b18221aedd81453febbce64a0d0f60783c",
-    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "45b125474f0d5058e9861c44fab0a33cf93b4a82952001d7f9010f18419dac4e",
-    "frontend-modern/src/utils/alertThresholdsPresentation.ts": "6605976a9b561c26578f1eb78785ccd5d6739c2a0a3b91246e23828c8433a49c"
+    "frontend-modern/src/components/shared/FilterToolbar.tsx": "e866a9276b5ab6a901ffea4adab59f9f1438376295017e4290a1e58f47e775f0",
+    "frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx": "0266c7abf8ab90941d53b977f0fd1af7cd1f795d0c5849fdabe425a01d6cb02b",
+    "frontend-modern/src/components/shared/FilterBar/ViewOptionsMenu.tsx": "877570b2fbdbd7378a0cd94bb3c65a9edb0a22348dd8ab9a106b0f15b92f0aa8",
+    "frontend-modern/src/components/shared/SearchTipsPopover.tsx": "d570941c7f089dad7805c514b51c6f7a21647c91d6409f3b85f71f91e8b73d6a",
+    "frontend-modern/src/components/shared/searchTipsPopoverModel.ts": "b558ce94eea59a645fd2878bc6bd2fd1f0184cc86cfd649ac6991f303f888131",
+    "frontend-modern/src/components/shared/useSearchTipsPopoverState.ts": "be3c9840f580d1e975096a98f94da6ca6a0e554b9d93b1d0e2aac77403eb5b60",
+    "frontend-modern/src/index.css": "ac6b159890d180e044153555e6e9299d02d7775991f9aab3f15a6a31f113c509"
   },
-  "routes": [
-    "/alerts/thresholds/docker",
-    "/docker"
-  ],
+  "routes": ["/proxmox/overview", "/standalone/machines"],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 390,
+      "height": 844
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 568,
+      "height": 320
+    },
+    {
+      "width": 844,
+      "height": 390
+    },
+    {
+      "width": 1180,
+      "height": 650
+    },
+    {
+      "width": 1279,
+      "height": 650
+    },
+    {
+      "width": 1280,
+      "height": 500
+    },
+    {
+      "width": 1280,
+      "height": 650
+    },
+    {
+      "width": 1280,
+      "height": 768
     }
   ],
   "states": [
-    "Docker thresholds tab with mock container rows grouped by host, ignored-container-patterns card showing the new wildcard copy",
-    "loki container rows rendering the persisted docker:orion-2-mock/loki name-keyed override as disabled after a full page reload",
-    "alerts.json converged to name-keyed overrides after live monitor-sync migration re-homed a seeded legacy container-ID key and a unified-hash key and pruned an orphaned 12-hex key",
-    "Docker page containers table with CPU/memory meters resolving thresholds through the new name-first candidate chain",
-    "mobile 375px docker thresholds view rendering the wildcard copy and container sections"
+    "Short-height landscape platform tables with fixed bottom navigation",
+    "Expanded Proxmox node details and mobile filter actions",
+    "View preferences with the inline Proxmox column picker expanded",
+    "View preferences with all eleven Machine column choices expanded",
+    "Saved Views empty state and save-name form",
+    "Search Tips with content taller than the available landscape space",
+    "Exact bottom-navigation to desktop-navigation transition at 1279px and 1280px",
+    "Short desktop windows below the safe anchored-popover height"
   ],
   "interactions": [
-    "searched containers for 'loki' in the thresholds table",
-    "toggled the per-container alert disable switch on 'loki' and clicked Save Changes; verified alerts.json stored docker:orion-2-mock/loki (host+name key)",
-    "reloaded /alerts/thresholds/docker and confirmed the saved override re-bound to the container rows via the name candidate",
-    "seeded legacy docker:{host}/{containerID}, docker:{host}/{unified-hash} and orphan hex overrides via PUT /api/alerts/config and watched the monitor sync migrate all of them to the name key on disk"
+    "Verified the horizontally scrollable mobile platform rail keeps Machines reachable and centres it after activation",
+    "Expanded a Proxmox node at 568x320 and confirmed the table shell and detail row create no horizontal document overflow",
+    "Opened View preferences at 568x320, 844x390, 1180x650, 1279x650, 1280x500, and 1280x768",
+    "Expanded the Machine column picker, scrolled internally to Kernel, toggled it, and reset the saved preference",
+    "Removed and restored the Proxmox Disk column through the compact View panel",
+    "Opened Saved Views and its save-name form at compact mobile and short desktop sizes",
+    "Confirmed View and Saved Views remain fully above the bottom navigation and entirely inside the viewport",
+    "Confirmed short desktop windows use a viewport-fixed panel while 1280x768 returns to the toolbar anchor",
+    "Opened Search Tips at 568x320, 844x390, 1280x500, and 1280x768 and verified collision-aware height, internal scrolling, and desktop anchoring",
+    "Measured zero document overflow throughout the interaction pass"
   ]
 }
