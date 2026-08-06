@@ -34,7 +34,7 @@ export const SystemLogsPanel: Component = () => {
               fieldBaseClass="flex"
               fieldClass="items-center space-x-3"
               labelClass="text-sm font-medium text-base-content"
-              selectBaseClass="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
+              selectBaseClass="form-select min-h-11 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
             >
               <For each={SYSTEM_LOG_LEVEL_OPTIONS}>
                 {(option) => <option value={option.value}>{option.label}</option>}
@@ -44,7 +44,7 @@ export const SystemLogsPanel: Component = () => {
             <div class="flex items-center space-x-2">
               <button
                 onClick={state.togglePaused}
-                class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${
+                class={`min-h-11 sm:min-h-9 min-w-11 sm:min-w-9 p-2.5 rounded transition-colors ${
                   streamPresentation().pauseButtonClass
                 }`}
                 title={streamPresentation().toggleTitle}
@@ -53,7 +53,7 @@ export const SystemLogsPanel: Component = () => {
               </button>
               <button
                 onClick={state.clearLogs}
-                class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded hover:bg-surface-hover text-muted transition-colors"
+                class="min-h-11 sm:min-h-9 min-w-11 sm:min-w-9 p-2.5 rounded hover:bg-surface-hover text-muted transition-colors"
                 title={SYSTEM_LOGS_PANEL_COPY.clearTitle}
               >
                 <Trash2 size={18} />
@@ -61,7 +61,7 @@ export const SystemLogsPanel: Component = () => {
               <div class="h-6 w-px bg-surface-hover mx-2"></div>
               <button
                 onClick={state.handleDownload}
-                class="min-h-10 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors"
+                class="min-h-11 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors"
               >
                 <Download size={16} />
                 <span>{SYSTEM_LOGS_PANEL_COPY.downloadLabel}</span>

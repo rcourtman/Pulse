@@ -32,7 +32,7 @@ export const DiagnosticsPanel: Component = () => {
               type="button"
               onClick={runDiagnostics}
               disabled={loading()}
-              class="flex min-h-10 sm:min-h-9 min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
+              class="flex min-h-11 sm:min-h-9 min-w-11 sm:min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
             >
               <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
               <span class="sm:hidden">
@@ -57,7 +57,7 @@ export const DiagnosticsPanel: Component = () => {
                 type="button"
                 onClick={() => exportDiagnostics(false)}
                 disabled={exportLoading()}
-                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover transition-colors"
+                class="flex min-h-11 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover transition-colors"
               >
                 <Download class="w-3.5 h-3.5" />
                 {DIAGNOSTICS_PANEL_COPY.exportFullLabel}
@@ -66,7 +66,7 @@ export const DiagnosticsPanel: Component = () => {
                 type="button"
                 onClick={() => exportDiagnostics(true)}
                 disabled={exportLoading()}
-                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors"
+                class="flex min-h-11 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors"
               >
                 <Download class="w-3.5 h-3.5" />
                 {DIAGNOSTICS_PANEL_COPY.exportGithubLabel}

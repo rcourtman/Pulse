@@ -173,7 +173,7 @@ describe('FilterButtonGroup', () => {
     ));
 
     const rangeButton = screen.getByRole('button', { name: '1d' });
-    expect(rangeButton).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(rangeButton).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
     expect(filterButtonGroupModelSource).toContain('sm:min-h-9');
     expect(filterButtonGroupModelSource).toContain('sm:min-h-10');
     expect(filterButtonGroupModelSource).toContain('sm:min-h-8');

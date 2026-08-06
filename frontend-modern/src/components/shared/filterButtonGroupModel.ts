@@ -99,7 +99,7 @@ export function getFilterButtonGroupButtonClass(
 
   if (variant === 'compact') {
     return [
-      'inline-flex min-h-11 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0',
+      'inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-0 sm:min-w-0',
       active
         ? `bg-surface shadow-sm ring-1 ${activeToneClassByOptionTone[tone]}`
         : 'text-muted hover:bg-surface-hover hover:text-base-content',
