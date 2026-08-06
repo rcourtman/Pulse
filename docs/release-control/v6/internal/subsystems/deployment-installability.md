@@ -369,6 +369,16 @@ upgrade, update, release, or artifact-selection behavior.
    must preserve quoted argument values without evaluating service-file shell
    content, and the rewritten rc.d service must use `--token-file` rather than
    retaining a recovered raw token.
+   Every process-termination step the installer performs, and every one it
+   writes into a generated boot or watchdog wrapper, must match only the agent
+   that installer instance owns. `pkill -f` applies its pattern to the whole
+   command line and a leading `^` anchors only the start, so a pattern that
+   does not bound its far end also matches a co-installed agent whose binary
+   name extends the same prefix, and installs, upgrades, and wrapper restarts
+   then take that second agent down with no diagnostic. Binary-anchored
+   patterns must therefore terminate at a whitespace-or-end boundary, and a
+   deliberately path-agnostic sweep must match the process name exactly rather
+   than a bare command-line substring.
    FreeBSD-family uninstall must stop the rc.d daemon(8) supervisor before
    removing the binary, then remove service registration, rc.conf enablement,
    boot wrappers, PID files, token/state, and residual processes before it can

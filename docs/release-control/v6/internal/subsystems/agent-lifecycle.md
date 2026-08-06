@@ -72,6 +72,18 @@ generates the operator-facing limit description consumed by server ingress
 and every supported `pulse-agent` release target built from this source.
 
 
+An agent's lifecycle operations are scoped to that agent. Installing,
+upgrading, restarting, or uninstalling one agent must never terminate a
+co-installed agent that happens to share a binary-name prefix, which is how a
+host runs a development agent beside a production one. Process matching by
+whole command line is prefix matching unless the pattern bounds its far end, so
+every such pattern must be terminated (`pulse-agent` must not match
+`pulse-agent-prod`); where the intent is genuinely path-agnostic, match the
+process name exactly instead. This binds the generated NAS wrapper scripts as
+well as the installer, and most sharply there, because restarting through the
+wrapper is the documented runbook step and would otherwise repeat the
+collateral kill on every use.
+
 Mock mode is a clean room on the report-admission boundary. Mock mode already
 suspends pull-based PVE/PBS/PMG collection by never building those clients, and
 push-based agent reports are held to the same rule: `ApplyHostReport`,

@@ -3645,8 +3645,12 @@ if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
         # Stop the existing agent service gracefully through the installer-owned helper.
         stop_existing_agent_service || true
         
-        # Also kill any running process in case it was started manually
-        pkill -f "^${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        # Also kill any running process in case it was started manually.
+        # The trailing boundary matters: pkill -f matches the whole command
+        # line and "^" only anchors the start, so an unbounded pattern also
+        # matches a co-installed agent whose binary name merely starts with
+        # this one (pulse-agent matching pulse-agent-prod).
+        pkill -f "^${INSTALL_DIR}/${BINARY_NAME}([[:space:]]|$)" 2>/dev/null || true
         sleep 1
     fi
 elif command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "${AGENT_NAME}" 2>/dev/null; then
@@ -3792,8 +3796,10 @@ if [[ -f /etc/unraid-version ]]; then
 
     # Kill any existing pulse agents.
     log_info "Stopping any existing pulse agents..."
-    # Use process name matching to avoid killing unrelated processes
-    pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
+    # Use process name matching to avoid killing unrelated processes. The
+    # trailing boundary keeps a co-installed agent whose binary name starts
+    # with this one (pulse-agent vs pulse-agent-prod) out of the match.
+    pkill -f "^${RUNTIME_BINARY}([[:space:]]|$)" 2>/dev/null || true
     sleep 2
 
     # Create a wrapper script that will be called from /boot/config/go
@@ -3819,8 +3825,13 @@ trim_watchdog_log() {
     fi
 }
 
-# Kill any existing pulse-agent processes
-pkill -f "^${RUNTIME_BINARY}" 2>/dev/null || true
+# Kill any existing pulse-agent processes.
+# The trailing boundary is required: pkill -f matches the whole command line
+# and "^" only anchors the start, so without it this also kills a co-installed
+# agent whose binary name starts with this one (pulse-agent vs
+# pulse-agent-prod), which on a host running both takes down the other agent
+# every time this wrapper restarts.
+pkill -f "^${RUNTIME_BINARY}([[:space:]]|\$)" 2>/dev/null || true
 sleep 2
 
 # Copy binary from persistent storage to RAM disk (needed after reboot)
@@ -3992,8 +4003,11 @@ if [[ "$TRUENAS" == true ]]; then
             sleep 2
         fi
     fi
-    # Kill any remaining pulse-agent processes (may be running from different paths)
-    pkill -9 -f "pulse-agent" 2>/dev/null || true
+    # Kill any remaining pulse-agent processes (may be running from different
+    # paths). -x matches the process name exactly, which keeps the
+    # path-agnostic intent while excluding a co-installed agent whose name
+    # merely starts with this one (pulse-agent-prod).
+    pkill -9 -x "${BINARY_NAME}" 2>/dev/null || true
     sleep 1
     # Remove old runtime binaries that may be "text file busy"
     rm -f /root/bin/pulse-agent 2>/dev/null || true

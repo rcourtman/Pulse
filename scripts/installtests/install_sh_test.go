@@ -5079,3 +5079,71 @@ func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
 		}
 	}
 }
+
+// TestInstallSHAgentKillPatternsExcludeSiblingAgents guards a real incident:
+// the installer and the Unraid wrapper it generates both killed agents with
+// pkill -f "^<binary>". pkill -f matches the whole command line and "^" only
+// anchors the start, so on a host running a second, co-installed agent whose
+// binary name merely starts with the same prefix (pulse-agent alongside
+// pulse-agent-prod) every install, upgrade, and wrapper restart silently took
+// down the other agent too.
+func TestInstallSHAgentKillPatternsExcludeSiblingAgents(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	// Every pkill -f whose pattern is anchored at the agent binary must also
+	// bound the far end, or it matches the sibling agent.
+	unbounded := regexp.MustCompile(`pkill[^\n]*-f "\^\$\{(?:RUNTIME_BINARY|INSTALL_DIR)\}[^"\n]*"`)
+	for _, match := range unbounded.FindAllString(string(content), -1) {
+		if !strings.Contains(match, "[[:space:]]") {
+			t.Errorf("unbounded agent pkill pattern would also match a sibling agent: %s", match)
+		}
+	}
+
+	// A bare substring kill is worse still: it needs no prefix anchor at all.
+	if strings.Contains(string(content), `pkill -9 -f "pulse-agent"`) {
+		t.Error(`pkill -9 -f "pulse-agent" matches pulse-agent-prod; use -x on the exact process name`)
+	}
+}
+
+// TestInstallSHAgentKillPatternSparesSiblingAgent proves the pattern semantics
+// rather than its spelling. pkill -f applies a POSIX ERE to the whole command
+// line, so the same engine is exercised here against the two command lines a
+// dual-agent host actually presents.
+func TestInstallSHAgentKillPatternSparesSiblingAgent(t *testing.T) {
+	const (
+		targetCmd  = "/usr/local/bin/pulse-agent --url http://192.168.0.113:7655 --interval 30s"
+		siblingCmd = "/usr/local/bin/pulse-agent-prod --url http://192.168.0.220:7655 --interval 30s"
+	)
+
+	ereMatches := func(t *testing.T, pattern, line string) bool {
+		t.Helper()
+		cmd := exec.Command("grep", "-E", "-q", pattern)
+		cmd.Stdin = strings.NewReader(line + "\n")
+		err := cmd.Run()
+		if err == nil {
+			return true
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return false
+		}
+		t.Fatalf("grep -E %q: %v", pattern, err)
+		return false
+	}
+
+	unbounded := "^/usr/local/bin/pulse-agent"
+	if !ereMatches(t, unbounded, siblingCmd) {
+		t.Fatal("premise check failed: the unbounded pattern is supposed to match the sibling agent")
+	}
+
+	bounded := "^/usr/local/bin/pulse-agent([[:space:]]|$)"
+	if !ereMatches(t, bounded, targetCmd) {
+		t.Error("bounded pattern must still match its own agent")
+	}
+	if ereMatches(t, bounded, siblingCmd) {
+		t.Error("bounded pattern must not match pulse-agent-prod")
+	}
+}
