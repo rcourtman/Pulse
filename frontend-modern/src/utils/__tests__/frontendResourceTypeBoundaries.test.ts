@@ -333,6 +333,7 @@ import alertHistoryAdministrationCardSource from '@/features/alerts/AlertHistory
 import alertHistoryFiltersCardSource from '@/features/alerts/AlertHistoryFiltersCard.tsx?raw';
 import alertHistoryFrequencyCardSource from '@/features/alerts/AlertHistoryFrequencyCard.tsx?raw';
 import alertHistoryItemActionsSource from '@/features/alerts/AlertHistoryItemActions.tsx?raw';
+import alertHistoryMobileListSource from '@/features/alerts/AlertHistoryMobileList.tsx?raw';
 import alertHistoryTableAlertRowSource from '@/features/alerts/AlertHistoryTableAlertRow.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
@@ -2793,7 +2794,13 @@ describe('frontend resource type boundaries', () => {
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
     expect(alertHistoryTabSource).toContain('AlertHistoryFrequencyCard');
     expect(alertHistoryTabSource).toContain('AlertHistoryFiltersCard');
-    expect(alertHistoryTabSource).toContain('AlertResourceIncidentsPanel');
+    expect(alertHistoryTabSource).not.toContain('AlertResourceIncidentsPanel');
+    expect(alertHistoryTableAlertRowSource).toContain(
+      '<AlertResourceIncidentsPanel state={props.state} />',
+    );
+    expect(alertHistoryMobileListSource).toContain(
+      '<AlertResourceIncidentsPanel state={props.state} />',
+    );
     expect(alertHistoryTabSource).toContain('AlertHistoryTableSection');
     expect(alertHistoryTabSource).toContain('AlertHistoryAdministrationCard');
     expect(alertsPageSource).toContain('getAlertsPageHeaderMeta');
