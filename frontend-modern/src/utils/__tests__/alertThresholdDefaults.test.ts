@@ -204,6 +204,8 @@ describe('alertThresholdDefaults', () => {
         enabled: false,
         warningDays: 30,
         criticalDays: 45,
+        warningSizeGiB: 0,
+        criticalSizeGiB: 0,
       });
     });
 

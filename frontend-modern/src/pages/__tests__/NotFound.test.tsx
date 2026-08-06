@@ -16,7 +16,7 @@ describe('NotFound', () => {
 
     expect(screen.getByText('No route matched /missing?from=test.')).toBeInTheDocument();
     const action = screen.getByRole('button', { name: 'Go to workspace' });
-    expect(action).toHaveClass('min-h-10');
+    expect(action).toHaveClass('min-h-11');
 
     action.click();
     expect(navigate).toHaveBeenCalledWith('/');

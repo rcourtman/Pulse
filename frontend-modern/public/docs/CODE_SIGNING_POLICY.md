@@ -23,7 +23,7 @@ signatures remain mandatory and are not a substitute for Authenticode. The
 `test-signing` policy may be used to validate the integration, but its test
 certificate is untrusted and its output must never be published as a
 production release. The manual
-[`SignPath Test Signing Proof`](https://github.com/rcourtman/Pulse/blob/main/.github/workflows/signpath-test-signing.yml)
+[`SignPath Test Signing Proof`](../.github/workflows/signpath-test-signing.yml)
 workflow is the only test-signing entrypoint: it is restricted to `main`,
 hard-codes the test policy, verifies the exact returned file set, and uploads
 only a non-production JSON evidence record after verification. It never uploads
