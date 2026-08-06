@@ -416,6 +416,12 @@ avoids a cloud-control-plane report data path across clients.
     output, restore must recover that license as an explicit operator artifact,
     and the archive must stay Stripe-free so provider-hosted MSP recovery does
     not inherit Pulse-hosted SaaS billing assumptions.
+    Restore is the point where an untrusted archive becomes provider state, so
+    it must stay bounded and all-or-nothing. Extraction must cap what it writes
+    per entry and across the whole restore, measured on the bytes actually
+    copied rather than the size the archive declares for itself, and a restore
+    that fails partway must clear the license, control-plane, and tenant state
+    it wrote instead of leaving a partial provider identity behind.
 14. `internal/cloudcp/provider_msp_recovery.go` shared with `deployment-installability`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     Provider-hosted MSP recovery must require the signed provider MSP license
     source by default, preserve the client workspace boundary, refuse to start

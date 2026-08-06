@@ -5,12 +5,14 @@ import (
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -223,6 +225,169 @@ func TestProviderMSPBackupRestoreRequiresReplaceForExistingState(t *testing.T) {
 		t.Fatalf("replace should remove stale file, stat err=%v", err)
 	}
 	assertProviderMSPBackupRestoredTenantCount(t, filepath.Join(targetDataDir, "control-plane", "tenants.db"), 2)
+}
+
+// restoreProviderMSPArchiveFile writes archive-supplied bytes straight to disk,
+// and the tar header's declared size cannot bound that write: the header comes
+// from the archive, so a gzip bomb, a sparse entry declaring a huge logical
+// size, or a corrupt stream can all deliver far more than it claims. These
+// tests pin the bound to the bytes actually copied.
+func TestRestoreProviderMSPArchiveFileRejectsDeclaredOversize(t *testing.T) {
+	destPath := filepath.Join(t.TempDir(), "oversized.db")
+	budget := &providerMSPRestoreBudget{entryCap: 64, totalCap: 1 << 20, remaining: 1 << 20}
+	header := &tar.Header{Name: "control-plane/oversized.db", Typeflag: tar.TypeReg, Size: 65, Mode: 0o600}
+
+	err := restoreProviderMSPArchiveFile(strings.NewReader("ignored"), header, destPath, budget)
+	if err == nil {
+		t.Fatal("expected an oversized declared entry size to be rejected")
+	}
+	if !strings.Contains(err.Error(), "per-entry limit") {
+		t.Fatalf("error = %v", err)
+	}
+	if _, statErr := os.Stat(destPath); !os.IsNotExist(statErr) {
+		t.Fatalf("rejected entry should not touch the disk, stat err=%v", statErr)
+	}
+}
+
+func TestRestoreProviderMSPArchiveFileBoundsUnderdeclaredEntry(t *testing.T) {
+	destPath := filepath.Join(t.TempDir(), "bomb.db")
+	budget := &providerMSPRestoreBudget{entryCap: 64, totalCap: 1 << 20, remaining: 1 << 20}
+	// The header understates the payload the way a bomb does: 8 bytes declared,
+	// 4 KiB delivered. Trusting the declaration writes all 4 KiB.
+	header := &tar.Header{Name: "control-plane/bomb.db", Typeflag: tar.TypeReg, Size: 8, Mode: 0o600}
+
+	err := restoreProviderMSPArchiveFile(strings.NewReader(strings.Repeat("x", 4096)), header, destPath, budget)
+	if err == nil {
+		t.Fatal("expected an entry over the per-entry limit to fail the restore")
+	}
+	if !strings.Contains(err.Error(), "per-entry limit") {
+		t.Fatalf("error = %v", err)
+	}
+	if _, statErr := os.Stat(destPath); !os.IsNotExist(statErr) {
+		t.Fatalf("failed entry should not leave a partial file, stat err=%v", statErr)
+	}
+	if budget.remaining != 1<<20 {
+		t.Fatalf("failed entry should not consume budget, remaining = %d", budget.remaining)
+	}
+}
+
+func TestRestoreProviderMSPArchiveFileBoundsTotalRestore(t *testing.T) {
+	dir := t.TempDir()
+	budget := &providerMSPRestoreBudget{entryCap: 1 << 20, totalCap: 24, remaining: 24}
+	header := func(name string) *tar.Header {
+		return &tar.Header{Name: name, Typeflag: tar.TypeReg, Size: 16, Mode: 0o600}
+	}
+
+	firstPath := filepath.Join(dir, "first.db")
+	if err := restoreProviderMSPArchiveFile(strings.NewReader(strings.Repeat("a", 16)), header("control-plane/first.db"), firstPath, budget); err != nil {
+		t.Fatalf("first entry is within budget: %v", err)
+	}
+	if budget.remaining != 8 {
+		t.Fatalf("remaining after first entry = %d, want 8", budget.remaining)
+	}
+
+	// Each entry is under the per-entry cap; only the running total catches it.
+	secondPath := filepath.Join(dir, "second.db")
+	err := restoreProviderMSPArchiveFile(strings.NewReader(strings.Repeat("b", 16)), header("control-plane/second.db"), secondPath, budget)
+	if err == nil {
+		t.Fatal("expected the cumulative restore limit to fail the second entry")
+	}
+	if !strings.Contains(err.Error(), "total restore limit") {
+		t.Fatalf("error = %v", err)
+	}
+	if _, statErr := os.Stat(secondPath); !os.IsNotExist(statErr) {
+		t.Fatalf("failed entry should not leave a partial file, stat err=%v", statErr)
+	}
+	if got, readErr := os.ReadFile(firstPath); readErr != nil || string(got) != strings.Repeat("a", 16) {
+		t.Fatalf("first entry = %q, err=%v", got, readErr)
+	}
+}
+
+// A restore that fails partway has already removed whatever it replaced, so
+// leaving the half-written tree behind hands the operator a control plane that
+// looks bootable and forces the retry to use replace.
+func TestProviderMSPBackupRestoreRollsBackPartialRestore(t *testing.T) {
+	archivePath := writeProviderMSPBackupArchiveFailingMidExtract(t)
+	targetDataDir := filepath.Join(t.TempDir(), "restore-rollback")
+
+	_, err := RestoreProviderMSPBackup(context.Background(), ProviderMSPBackupRestoreOptions{
+		ArchivePath:   archivePath,
+		TargetDataDir: targetDataDir,
+	})
+	if err == nil {
+		t.Fatal("expected the unsupported entry to fail the restore")
+	}
+	if !strings.Contains(err.Error(), "unsupported backup restore entry type") {
+		t.Fatalf("error = %v", err)
+	}
+	if !strings.Contains(err.Error(), "rolled back") {
+		t.Fatalf("error should report the rollback, got %v", err)
+	}
+	for _, dir := range []string{providerMSPBackupControlPlaneDir, providerMSPBackupTenantsDir} {
+		if _, statErr := os.Stat(filepath.Join(targetDataDir, dir)); !os.IsNotExist(statErr) {
+			t.Fatalf("failed restore should not leave %s behind, stat err=%v", dir, statErr)
+		}
+	}
+}
+
+// writeProviderMSPBackupArchiveFailingMidExtract builds an archive that passes
+// verification and then fails during extraction, after a real file has already
+// landed in the target.
+func writeProviderMSPBackupArchiveFailingMidExtract(t *testing.T) string {
+	t.Helper()
+	manifestBytes, err := json.Marshal(ProviderMSPBackupManifest{
+		Version:               ProviderMSPBackupManifestVersion,
+		CreatedAt:             time.Now().UTC(),
+		ControlPlaneMode:      string(ControlPlaneModeProviderHostedMSP),
+		Environment:           "production",
+		BaseURL:               "https://msp.example.com",
+		PlanVersion:           "msp_growth",
+		PlanSource:            ProviderMSPPlanSourceLicenseFile,
+		ControlPlaneDir:       providerMSPBackupControlPlaneDir,
+		TenantsDir:            providerMSPBackupTenantsDir,
+		ControlPlaneDBBackups: []string{providerMSPBackupControlPlaneDir + "/tenants.db"},
+	})
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "partial-restore.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create archive: %v", err)
+	}
+	defer file.Close()
+	gz := gzip.NewWriter(file)
+	tw := tar.NewWriter(gz)
+
+	writeHeader := func(header *tar.Header) {
+		if err := tw.WriteHeader(header); err != nil {
+			t.Fatalf("write header %s: %v", header.Name, err)
+		}
+	}
+	writeFile := func(name string, content []byte) {
+		writeHeader(&tar.Header{Name: name, Typeflag: tar.TypeReg, Mode: 0o600, Size: int64(len(content))})
+		if _, err := tw.Write(content); err != nil {
+			t.Fatalf("write entry %s: %v", name, err)
+		}
+	}
+
+	writeFile(providerMSPBackupManifestName, manifestBytes)
+	writeHeader(&tar.Header{Name: providerMSPBackupControlPlaneDir + "/", Typeflag: tar.TypeDir, Mode: 0o755})
+	writeFile(providerMSPBackupControlPlaneDir+"/tenants.db", []byte("restored-before-the-failure"))
+	writeHeader(&tar.Header{Name: providerMSPBackupTenantsDir + "/", Typeflag: tar.TypeDir, Mode: 0o755})
+	writeHeader(&tar.Header{Name: providerMSPBackupTenantsDir + "/t-ACTIVE001/", Typeflag: tar.TypeDir, Mode: 0o755})
+	// Restore only handles regular files and directories, so this aborts the
+	// extraction with tenants.db already written.
+	writeHeader(&tar.Header{Name: providerMSPBackupControlPlaneDir + "/link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd", Mode: 0o777})
+
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	return archivePath
 }
 
 func TestProviderMSPBackupManifestAcceptsMSPControlPlaneModes(t *testing.T) {

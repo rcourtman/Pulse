@@ -285,6 +285,19 @@ upgrade, update, release, or artifact-selection behavior.
    snapshot, license artifact, and tenant runtime directories, and fail closed
    on restore when target provider MSP state already exists unless the operator
    explicitly uses the replace gate after stopping the control plane.
+   Restore must also fail closed on the size of what it writes. Archive entries
+   are attacker-influenced, so the size a tar header declares is a hint used
+   only for an early reject, never the bound: extraction must enforce a
+   per-entry cap and a cumulative whole-restore cap against the bytes actually
+   copied, so a decompression bomb, a sparse entry declaring a huge logical
+   size, or a corrupt stream cannot fill the target volume. An entry that
+   overruns either cap must fail the restore and remove its partial file rather
+   than truncate it into a file that looks complete.
+   A restore that fails partway must roll the target back to an empty state.
+   The replace gate has already deleted whatever it replaced, so leaving the
+   half-written tree behind hands the operator a control plane that looks
+   bootable and forces the retry through the replace gate again; the failure
+   must instead clear the restore targets it wrote and say so in the error.
 6. `internal/cloudcp/provider_msp_recovery.go` shared with `cloud-paid`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
    `pulse-control-plane provider-msp recover` must offer a dry-run plan and an
    explicit execution path for failed, stuck provisioning, and unhealthy active

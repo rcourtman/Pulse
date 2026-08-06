@@ -29,6 +29,13 @@ const (
 	providerMSPBackupLicenseDir      = "license"
 	providerMSPBackupLicenseName     = "provider-msp-license.jwt"
 	maxProviderMSPBackupManifestSize = 1024 * 1024
+	// Restore writes archive-supplied data straight to disk, so a single entry
+	// and the restore as a whole are both bounded. Without this a gzip bomb, a
+	// sparse entry declaring a huge logical size, or a corrupt stream can fill
+	// the target volume. The limits are far above any plausible provider MSP
+	// backup; they exist to make the write bounded, not to size-check backups.
+	maxProviderMSPBackupRestoreEntryBytes = 8 << 30  // 8 GiB per restored entry
+	maxProviderMSPBackupRestoreTotalBytes = 64 << 30 // 64 GiB per restore
 )
 
 // ProviderMSPBackupManifest is the recovery contract stored inside every
@@ -301,12 +308,44 @@ func RestoreProviderMSPBackup(ctx context.Context, opts ProviderMSPBackupRestore
 		return nil, fmt.Errorf("create restore target data dir: %w", err)
 	}
 	if err := extractProviderMSPBackupArchive(ctx, verified.ArchivePath, targetDataDir, licenseOutputPath, result); err != nil {
-		return nil, err
+		return nil, failProviderMSPRestore(result, err)
 	}
 	if err := validateRestoredProviderMSPBackup(result); err != nil {
-		return nil, err
+		return nil, failProviderMSPRestore(result, err)
 	}
 	return result, nil
+}
+
+// failProviderMSPRestore rolls a half-finished restore back to an empty target.
+// Everything under the restore paths was written by this call: the conflict
+// check refuses to overwrite pre-existing state, and replace clears it up
+// front. So removing them is safe, and it leaves a clean slate that a retry can
+// use without needing replace, rather than a partial control plane that looks
+// bootable. It cannot bring back state that replace already deleted, so the
+// error says so.
+func failProviderMSPRestore(result *ProviderMSPBackupRestoreResult, cause error) error {
+	if err := removeProviderMSPPartialRestore(result); err != nil {
+		return fmt.Errorf("%w (rolling back the partial restore also failed: %v)", cause, err)
+	}
+	if result.ReplaceExisting {
+		return fmt.Errorf("%w (the partial restore was rolled back, and the state it replaced was already deleted)", cause)
+	}
+	return fmt.Errorf("%w (the partial restore was rolled back)", cause)
+}
+
+func removeProviderMSPPartialRestore(result *ProviderMSPBackupRestoreResult) error {
+	for _, dir := range []string{result.ControlPlaneDir, result.TenantsDir} {
+		if err := os.RemoveAll(dir); err != nil {
+			return fmt.Errorf("remove partial restore target %s: %w", dir, err)
+		}
+	}
+	// Only the license this restore wrote is ours to remove.
+	if result.LicenseEntriesRestored > 0 {
+		if err := os.Remove(result.LicenseOutputPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove partial restored provider MSP license: %w", err)
+		}
+	}
+	return nil
 }
 
 // VerifyProviderMSPBackup validates that a provider MSP backup contains the
@@ -522,6 +561,7 @@ func extractProviderMSPBackupArchive(ctx context.Context, archivePath, targetDat
 	}
 	defer gz.Close()
 
+	budget := newProviderMSPRestoreBudget()
 	tr := tar.NewReader(gz)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -542,19 +582,19 @@ func extractProviderMSPBackupArchive(ctx context.Context, archivePath, targetDat
 		case name == providerMSPBackupManifestName:
 			continue
 		case name == providerMSPBackupControlPlaneDir || strings.HasPrefix(name, providerMSPBackupControlPlaneDir+"/"):
-			if err := restoreProviderMSPArchiveEntry(tr, header, targetDataDir, name); err != nil {
+			if err := restoreProviderMSPArchiveEntry(tr, header, targetDataDir, name, budget); err != nil {
 				return err
 			}
 			result.ControlPlaneEntriesRestored++
 		case name == providerMSPBackupTenantsDir || strings.HasPrefix(name, providerMSPBackupTenantsDir+"/"):
-			if err := restoreProviderMSPArchiveEntry(tr, header, targetDataDir, name); err != nil {
+			if err := restoreProviderMSPArchiveEntry(tr, header, targetDataDir, name, budget); err != nil {
 				return err
 			}
 			result.TenantEntriesRestored++
 		case name == providerMSPBackupLicenseDir:
 			continue
 		case name == providerMSPBackupLicenseDir+"/"+providerMSPBackupLicenseName:
-			if err := restoreProviderMSPArchiveFile(tr, header, licenseOutputPath); err != nil {
+			if err := restoreProviderMSPArchiveFile(tr, header, licenseOutputPath, budget); err != nil {
 				return err
 			}
 			result.LicenseEntriesRestored++
@@ -565,7 +605,46 @@ func extractProviderMSPBackupArchive(ctx context.Context, archivePath, targetDat
 	return nil
 }
 
-func restoreProviderMSPArchiveEntry(reader io.Reader, header *tar.Header, targetDataDir, archiveName string) error {
+// providerMSPRestoreBudget bounds how many bytes a restore may write to disk,
+// per entry and across the whole archive. Both bounds are enforced against the
+// bytes actually copied rather than the size the tar header declares, because
+// that header comes from the archive and is therefore attacker-influenced.
+type providerMSPRestoreBudget struct {
+	entryCap  int64
+	totalCap  int64
+	remaining int64
+}
+
+func newProviderMSPRestoreBudget() *providerMSPRestoreBudget {
+	return &providerMSPRestoreBudget{
+		entryCap:  maxProviderMSPBackupRestoreEntryBytes,
+		totalCap:  maxProviderMSPBackupRestoreTotalBytes,
+		remaining: maxProviderMSPBackupRestoreTotalBytes,
+	}
+}
+
+// entryLimit is the most the next entry may write: the per-entry cap, or
+// whatever is left of the whole-restore budget when that is smaller.
+func (b *providerMSPRestoreBudget) entryLimit() int64 {
+	if b.remaining < b.entryCap {
+		return b.remaining
+	}
+	return b.entryCap
+}
+
+func (b *providerMSPRestoreBudget) consume(n int64) {
+	b.remaining -= n
+}
+
+// overrunError names whichever bound the entry just crossed.
+func (b *providerMSPRestoreBudget) overrunError() error {
+	if b.remaining < b.entryCap {
+		return fmt.Errorf("backup restore exceeds the %d byte total restore limit", b.totalCap)
+	}
+	return fmt.Errorf("backup restore entry exceeds the %d byte per-entry limit", b.entryCap)
+}
+
+func restoreProviderMSPArchiveEntry(reader io.Reader, header *tar.Header, targetDataDir, archiveName string, budget *providerMSPRestoreBudget) error {
 	destPath := filepath.Join(targetDataDir, filepath.FromSlash(archiveName))
 	if !pathIsInside(destPath, targetDataDir) {
 		return fmt.Errorf("backup restore entry escapes target data dir: %s", archiveName)
@@ -574,7 +653,7 @@ func restoreProviderMSPArchiveEntry(reader io.Reader, header *tar.Header, target
 	case tar.TypeDir:
 		return restoreProviderMSPArchiveDir(header, destPath)
 	case tar.TypeReg, tar.TypeRegA:
-		return restoreProviderMSPArchiveFile(reader, header, destPath)
+		return restoreProviderMSPArchiveFile(reader, header, destPath, budget)
 	default:
 		return fmt.Errorf("unsupported backup restore entry type for %s", archiveName)
 	}
@@ -591,9 +670,15 @@ func restoreProviderMSPArchiveDir(header *tar.Header, destPath string) error {
 	return nil
 }
 
-func restoreProviderMSPArchiveFile(reader io.Reader, header *tar.Header, destPath string) error {
+func restoreProviderMSPArchiveFile(reader io.Reader, header *tar.Header, destPath string, budget *providerMSPRestoreBudget) error {
 	if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
 		return fmt.Errorf("backup restore expected regular file at %s", header.Name)
+	}
+	// The declared size is a hint, not a bound: it comes from the archive, so
+	// it can lie in either direction. Reject an absurd declaration up front to
+	// avoid touching the disk at all, then bound the copy itself below.
+	if header.Size < 0 || header.Size > budget.entryCap {
+		return fmt.Errorf("backup restore entry %s declares %d bytes, above the %d byte per-entry limit", header.Name, header.Size, budget.entryCap)
 	}
 	mode := os.FileMode(header.Mode) & 0o777
 	if mode == 0 {
@@ -606,14 +691,25 @@ func restoreProviderMSPArchiveFile(reader io.Reader, header *tar.Header, destPat
 	if err != nil {
 		return fmt.Errorf("create restored file %s: %w", destPath, err)
 	}
-	_, copyErr := io.Copy(file, reader)
+	// Read one byte past the limit so an overrun is detected rather than
+	// silently truncated into a file that looks complete.
+	limit := budget.entryLimit()
+	written, writeErr := io.Copy(file, io.LimitReader(reader, limit+1))
 	closeErr := file.Close()
-	if copyErr != nil {
-		return fmt.Errorf("restore file %s: %w", destPath, copyErr)
+	if writeErr == nil && written > limit {
+		writeErr = budget.overrunError()
 	}
-	if closeErr != nil {
-		return fmt.Errorf("close restored file %s: %w", destPath, closeErr)
+	if writeErr == nil {
+		writeErr = closeErr
 	}
+	if writeErr != nil {
+		// Fail the restore instead of leaving a partial file behind.
+		if removeErr := os.Remove(destPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("restore file %s: %w (removing the partial file also failed: %v)", destPath, writeErr, removeErr)
+		}
+		return fmt.Errorf("restore file %s: %w", destPath, writeErr)
+	}
+	budget.consume(written)
 	return nil
 }
 
