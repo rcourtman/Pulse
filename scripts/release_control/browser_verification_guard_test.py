@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 from io import StringIO
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from browser_verification_guard import (
     RECEIPT_PATH,
+    formatting_only_paths,
     frontend_runtime_paths,
     main,
     validate_receipt,
 )
+from format_staged_frontend_test import REAL_PRETTIER
+from repo_file_io import strip_local_git_env
 
 
 BASE_SHA = "a" * 40
@@ -114,6 +121,66 @@ class BrowserVerificationGuardTest(unittest.TestCase):
         )
 
         self.assertTrue(any("content_sha256" in error for error in errors))
+
+
+class FormattingOnlyExemptionTest(unittest.TestCase):
+    """A prettier sweep has no visual delta, but a real edit must still block."""
+
+    def build_repo(self, tmpdir: str, old: str, new: str) -> Path:
+        repo_root = Path(tmpdir)
+        source = repo_root / CHANGED_PATH
+        source.parent.mkdir(parents=True)
+        source.write_text(old, encoding="utf-8")
+        env = strip_local_git_env(os.environ.copy())
+
+        def git(*args: str) -> None:
+            subprocess.run(
+                ["git", *args], cwd=repo_root, check=True, capture_output=True, env=env
+            )
+
+        git("init")
+        git("add", CHANGED_PATH)
+        git("-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-m", "seed")
+        source.write_text(new, encoding="utf-8")
+        git("add", CHANGED_PATH)
+        return repo_root
+
+    def resolve(self, repo_root: Path) -> set[str]:
+        # Under the pre-commit hook, GIT_DIR and GIT_INDEX_FILE are exported
+        # and would point this temp repo's plumbing at the real repository.
+        with patch.dict("os.environ", strip_local_git_env(os.environ.copy()), clear=True):
+            with patch("browser_verification_guard.REPO_ROOT", repo_root):
+                return formatting_only_paths([CHANGED_PATH], commit=None, repo_root=repo_root)
+
+    @unittest.skipUnless(REAL_PRETTIER.exists(), "prettier not installed under frontend-modern")
+    def test_exempts_a_pure_reformat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = self.build_repo(tmpdir, "const x = {a:1}\n", "const x = { a: 1 };\n")
+            with patch.dict(
+                "os.environ", {"PULSE_PRETTIER_BIN": str(REAL_PRETTIER)}, clear=False
+            ):
+                self.assertEqual(self.resolve(repo_root), {CHANGED_PATH})
+
+    @unittest.skipUnless(REAL_PRETTIER.exists(), "prettier not installed under frontend-modern")
+    def test_still_requires_proof_when_a_reformat_also_changes_a_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Formatted exactly as prettier would, but 1 became 2. The guard
+            # must not treat a semantic edit as a cosmetic one.
+            repo_root = self.build_repo(tmpdir, "const x = {a:1}\n", "const x = { a: 2 };\n")
+            with patch.dict(
+                "os.environ", {"PULSE_PRETTIER_BIN": str(REAL_PRETTIER)}, clear=False
+            ):
+                self.assertEqual(self.resolve(repo_root), set())
+
+    def test_fails_closed_when_prettier_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = self.build_repo(tmpdir, "const x = {a:1}\n", "const x = { a: 1 };\n")
+            with patch.dict(
+                "os.environ",
+                {"PULSE_PRETTIER_BIN": str(repo_root / "missing-prettier")},
+                clear=False,
+            ):
+                self.assertEqual(self.resolve(repo_root), set())
 
 
 if __name__ == "__main__":

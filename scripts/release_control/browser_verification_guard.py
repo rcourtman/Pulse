@@ -12,6 +12,8 @@ import subprocess
 import sys
 from typing import Iterable, Sequence
 
+import format_staged_frontend
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECEIPT_PATH = "frontend-modern/browser-verification.json"
@@ -77,6 +79,62 @@ def is_user_visible_frontend_source(path: str) -> bool:
 
 def frontend_runtime_paths(paths: Iterable[str]) -> list[str]:
     return sorted({path for path in paths if is_user_visible_frontend_source(path)})
+
+
+def prettier_format(
+    prettier: Path,
+    path: str,
+    content: bytes,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> bytes | None:
+    # --stdin-filepath drives parser selection and config resolution, so this
+    # matches what `prettier --write <path>` would produce.
+    try:
+        result = subprocess.run(
+            [str(prettier), "--stdin-filepath", str(repo_root / path)],
+            cwd=repo_root / "frontend-modern",
+            check=True,
+            capture_output=True,
+            input=content,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return result.stdout
+
+
+def formatting_only_paths(
+    paths: Sequence[str],
+    *,
+    commit: str | None,
+    repo_root: Path = REPO_ROOT,
+) -> set[str]:
+    """Paths whose new content is exactly prettier's output for the old content.
+
+    A `make format` sweep re-lays-out already-committed files without changing
+    a single token, so it cannot change what renders. Demanding fresh browser
+    proof for that would mean recording a receipt describing an interaction
+    matrix nobody exercised, for a diff with no visual delta.
+
+    This fails closed: an added or deleted file, an unreadable blob, a prettier
+    that will not run, or any output that is not byte-identical all fall
+    through and still require the receipt.
+    """
+    prettier = format_staged_frontend.prettier_bin()
+    if prettier is None:
+        return set()
+
+    base_revision = f"{commit}^" if commit else "HEAD"
+    formatting_only: set[str] = set()
+    for path in paths:
+        new_object = f"{commit}:{path}" if commit else f":{path}"
+        new_content = git_blob_bytes(new_object, repo_root=repo_root)
+        old_content = git_blob_bytes(f"{base_revision}:{path}", repo_root=repo_root)
+        if new_content is None or old_content is None or new_content == old_content:
+            continue
+        if prettier_format(prettier, path, old_content, repo_root=repo_root) == new_content:
+            formatting_only.add(path)
+    return formatting_only
 
 
 def load_receipt_text(
@@ -233,6 +291,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     changed_frontend_paths = frontend_runtime_paths(paths)
+    if changed_frontend_paths:
+        reformatted = formatting_only_paths(changed_frontend_paths, commit=args.commit)
+        if reformatted:
+            print(
+                f"Browser verification guard: {len(reformatted)} path(s) are prettier-only "
+                "reformats of their committed content, with no visual delta to verify."
+            )
+            changed_frontend_paths = [
+                path for path in changed_frontend_paths if path not in reformatted
+            ]
+
     if not changed_frontend_paths:
         print("Browser verification guard skipped (no user-visible frontend source changes).")
         return 0
