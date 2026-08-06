@@ -202,14 +202,13 @@ jobs:
           $trustedStoreNames = @()
           try {
             foreach ($storeName in @('Root', 'TrustedPublisher')) {
-              Write-Host "Adding test signer $thumbprint to CurrentUser/$storeName on the ephemeral runner."
+              Write-Host "Adding test signer $thumbprint to LocalMachine/$storeName on the ephemeral runner."
               Invoke-BoundedCertUtil -Arguments @(
-                '-user',
                 '-f',
                 '-addstore',
                 $storeName,
                 $certificatePath
-              ) -Description "adding the test signer to CurrentUser/$storeName"
+              ) -Description "adding the test signer to LocalMachine/$storeName"
               $trustedStoreNames += $storeName
             }
 
@@ -287,6 +286,7 @@ jobs:
               signedArtifactsUploadedAsGitHubArtifact = $false
               signingPolicy = 'test-signing'
               artifactConfiguration = $env:SIGNPATH_ARTIFACT_CONFIGURATION_SLUG
+              ephemeralTestTrustScope = 'LocalMachine/Root and LocalMachine/TrustedPublisher'
               version = $env:TEST_VERSION
               sourceSha = $env:GITHUB_SHA
               sourceRef = $env:GITHUB_REF
@@ -307,13 +307,12 @@ jobs:
           }
           finally {
             foreach ($storeName in $trustedStoreNames) {
-              Write-Host "Removing test signer $thumbprint from CurrentUser/$storeName."
+              Write-Host "Removing test signer $thumbprint from LocalMachine/$storeName."
               Invoke-BoundedCertUtil -Arguments @(
-                '-user',
                 '-delstore',
                 $storeName,
                 $thumbprint
-              ) -Description "removing the test signer from CurrentUser/$storeName"
+              ) -Description "removing the test signer from LocalMachine/$storeName"
             }
           }
 

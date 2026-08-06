@@ -534,6 +534,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("certutil timed out after 30 seconds", workflow)
         self.assertIn("'-addstore'", workflow)
         self.assertIn("'-delstore'", workflow)
+        self.assertNotIn("'-user'", workflow)
+        self.assertIn(
+            "ephemeralTestTrustScope = 'LocalMachine/Root and LocalMachine/TrustedPublisher'",
+            workflow,
+        )
         self.assertNotIn("X509Store]::new", workflow)
         self.assertNotIn("Import-Certificate", workflow)
         self.assertIn("path: signpath-test-signing-evidence.json", workflow)
