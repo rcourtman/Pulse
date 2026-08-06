@@ -134,6 +134,7 @@ volume. See the [runtime-aligned capability reference](docs/PULSE_PRO.md) and
 - [Platform and agent guides](docs/README.md#platforms-and-agents)
 - [Pulse Intelligence](docs/AI.md)
 - [Security](SECURITY.md) and [privacy](docs/PRIVACY.md)
+- [Code signing policy](docs/CODE_SIGNING_POLICY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [API reference](docs/API.md) and [architecture](ARCHITECTURE.md)
 

@@ -10,7 +10,12 @@ community signing project.
 ## Signing service
 
 Pulse was accepted into the SignPath Foundation open-source programme on
-2026-08-06. The SignPath organization `Pulse [OSS]` and project `Pulse` are
+2026-08-06.
+
+> Free code signing provided by [SignPath.io](https://signpath.io/), certificate
+> by [SignPath Foundation](https://signpath.org/).
+
+The SignPath organization `Pulse [OSS]` and project `Pulse` are
 connected only to the public repository through SignPath's GitHub App and
 trusted build system. The production release certificate is still awaiting
 issuance (`CSR PENDING`), so the `release-signing` policy is not yet available
