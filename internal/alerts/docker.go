@@ -164,6 +164,11 @@ func dockerServiceResourceID(hostID, serviceID, serviceName string) string {
 	return fmt.Sprintf("docker:%s/service/%s", hostID, normalizedServiceID)
 }
 
+// matchesDockerIgnoredPrefix reports whether a container name or ID matches
+// any entry in the ignore list. A bare entry keeps its historical
+// prefix-match semantics. Entries may also use the wildcard forms shared
+// with the other ignore lists: "*token" matches a suffix, "*token*" a
+// substring, "token*" an explicit prefix.
 func matchesDockerIgnoredPrefix(name, id string, prefixes []string) bool {
 	if len(prefixes) == 0 {
 		return false
@@ -173,19 +178,36 @@ func matchesDockerIgnoredPrefix(name, id string, prefixes []string) bool {
 	id = strings.ToLower(strings.TrimSpace(id))
 
 	for _, raw := range prefixes {
-		prefix := strings.ToLower(strings.TrimSpace(raw))
-		if prefix == "" {
+		pattern := strings.ToLower(strings.TrimSpace(raw))
+		// A pattern that is nothing but wildcards would ignore every
+		// container, which is what DisableAllDockerContainers is for.
+		if pattern == "" || strings.Trim(pattern, "*") == "" {
 			continue
 		}
-		if name != "" && strings.HasPrefix(name, prefix) {
-			return true
-		}
-		if id != "" && strings.HasPrefix(id, prefix) {
+		if matchesIgnoredContainerPattern(name, pattern) || matchesIgnoredContainerPattern(id, pattern) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func matchesIgnoredContainerPattern(value, pattern string) bool {
+	if value == "" {
+		return false
+	}
+	leading := strings.HasPrefix(pattern, "*")
+	trailing := strings.HasSuffix(pattern, "*")
+	switch {
+	case leading && trailing:
+		return strings.Contains(value, pattern[1:len(pattern)-1])
+	case leading:
+		return strings.HasSuffix(value, pattern[1:])
+	case trailing:
+		return strings.HasPrefix(value, pattern[:len(pattern)-1])
+	default:
+		return strings.HasPrefix(value, pattern)
+	}
 }
 
 // CheckDockerHost evaluates Docker host telemetry and container metrics for alerts.

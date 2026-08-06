@@ -3639,6 +3639,16 @@ func TestMatchesDockerIgnoredPrefix(t *testing.T) {
 		{name: "empty name matches id", containerName: "", containerID: "runner-123", prefixes: []string{"runner-"}, want: true},
 		{name: "empty id matches name", containerName: "runner-job", containerID: "", prefixes: []string{"runner-"}, want: true},
 		{name: "both empty no match", containerName: "", containerID: "", prefixes: []string{"runner-"}, want: false},
+		{name: "suffix wildcard matches name", containerName: "worker-dev", containerID: "abc", prefixes: []string{"*-dev"}, want: true},
+		{name: "suffix wildcard rejects prefix position", containerName: "dev-worker", containerID: "abc", prefixes: []string{"*-dev"}, want: false},
+		{name: "suffix wildcard case insensitive", containerName: "Worker-DEV", containerID: "abc", prefixes: []string{"*-dev"}, want: true},
+		{name: "contains wildcard matches middle", containerName: "app-staging-eu", containerID: "abc", prefixes: []string{"*staging*"}, want: true},
+		{name: "contains wildcard no match", containerName: "app-prod-eu", containerID: "abc", prefixes: []string{"*staging*"}, want: false},
+		{name: "explicit prefix wildcard", containerName: "runner-job", containerID: "abc", prefixes: []string{"runner-*"}, want: true},
+		{name: "bare token still prefix only", containerName: "job-runner", containerID: "abc", prefixes: []string{"runner"}, want: false},
+		{name: "suffix wildcard matches id", containerName: "app", containerID: "abc123-dev", prefixes: []string{"*-dev"}, want: true},
+		{name: "lone star ignored", containerName: "anything", containerID: "abc", prefixes: []string{"*"}, want: false},
+		{name: "double star ignored", containerName: "anything", containerID: "abc", prefixes: []string{"**"}, want: false},
 	}
 
 	for _, tc := range tests {
