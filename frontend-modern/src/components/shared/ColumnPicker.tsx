@@ -11,6 +11,7 @@ import {
   COLUMN_PICKER_BUTTON_TITLE,
   COLUMN_PICKER_EMPTY_LABEL,
   COLUMN_PICKER_PANEL_TITLE,
+  COLUMN_PICKER_RESPONSIVE_NOTE,
   COLUMN_PICKER_RESET_LABEL,
   getColumnPickerOptionTextClass,
 } from '@/components/shared/columnPickerModel';
@@ -38,6 +39,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
             </button>
           </Show>
         </div>
+        <p class="mt-1 text-[10px] leading-4 text-muted">{COLUMN_PICKER_RESPONSIVE_NOTE}</p>
       </div>
 
       <div class="max-h-64 overflow-y-auto py-1">

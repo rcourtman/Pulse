@@ -3,6 +3,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 export const COLUMN_PICKER_BUTTON_LABEL = 'Columns';
 export const COLUMN_PICKER_BUTTON_TITLE = 'Choose which columns to display';
 export const COLUMN_PICKER_PANEL_TITLE = 'Show Columns';
+export const COLUMN_PICKER_RESPONSIVE_NOTE = 'Enabled columns appear when table space allows.';
 export const COLUMN_PICKER_RESET_LABEL = 'Reset';
 export const COLUMN_PICKER_EMPTY_LABEL = 'No columns available to toggle';
 

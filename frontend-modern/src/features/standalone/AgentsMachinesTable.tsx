@@ -1052,15 +1052,16 @@ const agentRemovalIdFor = (machine: Resource): string => {
 const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
   switch (columnId) {
     case 'machine':
-      return 'w-[28%] md:w-[15%]';
+      return 'w-[52%] sm:w-[28%] md:w-[15%]';
     case 'system':
       return 'hidden md:table-cell md:w-[12%]';
     case 'agent':
       return 'hidden md:table-cell md:w-[6%]';
     case 'cpu':
     case 'memory':
+      return 'w-[18%] sm:w-[20%] md:w-[8%]';
     case 'disk':
-      return 'w-[20%] md:w-[8%]';
+      return 'hidden sm:table-cell sm:w-[20%] md:w-[8%]';
     case 'gpu':
       return 'hidden md:table-cell md:w-[8%]';
     case 'network':

@@ -53,6 +53,7 @@ describe('ColumnPicker', () => {
     fireEvent.click(button);
 
     expect(await screen.findByText('Show Columns')).toBeInTheDocument();
+    expect(screen.getByText('Enabled columns appear when table space allows.')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Subject'));
     expect(onToggle).toHaveBeenCalledWith('subject');
   });

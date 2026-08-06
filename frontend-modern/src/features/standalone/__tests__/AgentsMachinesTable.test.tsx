@@ -197,6 +197,27 @@ describe('AgentsMachinesTable', () => {
     expect(screen.queryByRole('button', { name: 'Sort by GPU' })).not.toBeInTheDocument();
   });
 
+  it('prioritizes machine identity over disk usage on narrow screens', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[resource({ id: 'tower', name: 'Tower' })]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const machineHead = screen.getByRole('button', { name: 'Sort by Machine' }).closest('th');
+    const diskHead = screen.getByRole('button', { name: 'Sort by Disk' }).closest('th');
+
+    expect(machineHead).toHaveClass('w-[52%]', 'sm:w-[28%]');
+    expect(diskHead).toHaveClass('hidden', 'sm:table-cell');
+    expect(screen.getByRole('button', { name: 'Sort by CPU' }).closest('th')).toHaveClass(
+      'w-[18%]',
+      'sm:w-[20%]',
+    );
+  });
+
   it('surfaces machine-native monitoring columns for agent machines', async () => {
     render(() => (
       <AgentsMachinesTable

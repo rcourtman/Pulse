@@ -1,27 +1,39 @@
 {
   "version": 1,
-  "base_sha": "dd49fbd93e2eb573beb08aa442e42b73b0ac04b6",
-  "verified_at": "2026-08-05T23:54:57Z",
+  "base_sha": "40d29ca44287eb07f1779dd6e549d22d7b606dfd",
+  "verified_at": "2026-08-06T00:09:34Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/shared/Subtabs.tsx"
+    "frontend-modern/src/components/shared/ColumnPicker.tsx",
+    "frontend-modern/src/components/shared/columnPickerModel.ts",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/shared/Subtabs.tsx": "3570327799b306ee929d3777cf85f85db2d37b062cbb732c0d1c49e5e12f4388"
+    "frontend-modern/src/components/shared/ColumnPicker.tsx": "ed00597344156850ff0f40b2e4100f307ec82a0019759e4969ca4f8e77cda2c5",
+    "frontend-modern/src/components/shared/columnPickerModel.ts": "bc548f541f916a9ed41c8a7e3f9d52e6a2932364ea7d680b18e908c881d78d6b",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "084b4a4d0a5f37756d167d9f8729d6fdbc59394265401f9c6f480093b6b05df3"
   },
   "routes": [
-    "/alerts/thresholds/proxmox",
-    "/alerts/thresholds/docker",
-    "/alerts/thresholds/kubernetes",
-    "/alerts/thresholds/truenas",
-    "/alerts/thresholds/vmware",
-    "/alerts/thresholds/systems",
-    "/actions"
+    "/standalone/machines",
+    "/standalone/availability",
+    "/proxmox/overview"
   ],
   "viewports": [
     {
+      "width": 1920,
+      "height": 900
+    },
+    {
       "width": 1280,
       "height": 820
+    },
+    {
+      "width": 768,
+      "height": 820
+    },
+    {
+      "width": 390,
+      "height": 844
     },
     {
       "width": 320,
@@ -29,17 +41,20 @@
     }
   ],
   "states": [
-    "direct deep links to every threshold platform",
-    "selected threshold platform at the start, middle, and end of an overflowing tab strip",
-    "desktop threshold tables with adaptive metric columns",
-    "mobile threshold resource cards after the table-to-card breakpoint",
-    "shared Subtabs rendering on the Actions Open and History views"
+    "Machines with the default column set",
+    "Machines with every optional diagnostic column enabled",
+    "Workloads with a compact custom column set and then restored defaults",
+    "Machines immediately below and at the 640 pixel disk-column breakpoint",
+    "expanded machine detail row at the narrowest viewport",
+    "mobile View and Columns controls with responsive-column guidance visible"
   ],
   "interactions": [
-    "opened every threshold platform directly at 320 by 820 and measured the selected tab against the visible tablist bounds",
-    "confirmed Kubernetes, TrueNAS, vSphere, and Machines now scroll into view with zero document overflow",
-    "confirmed Proxmox and Docker remain at their natural leading positions without unnecessary scrolling",
-    "visually inspected the fixed Machines threshold strip and its responsive resource content",
-    "rechecked the Actions shared subtab consumer at desktop and mobile widths"
+    "added and removed real Machines columns and confirmed lower-priority diagnostics appear only when table space allows",
+    "enabled all sixteen Machines columns at 1920 pixels and confirmed every heading remained readable without horizontal overflow",
+    "changed the real Workloads column set on Proxmox Overview across desktop, tablet, and mobile widths, then restored it",
+    "checked the 639-to-640 pixel transition and confirmed Disk is withheld below the breakpoint and restored at it",
+    "expanded and closed Apollo-114 at 320 pixels, confirmed the detail row matched the table width, and verified focus returned to its trigger",
+    "confirmed zero document and table overflow at every tested viewport",
+    "opened the mobile Columns panel and confirmed the responsive-column explanation fits without overflow"
   ]
 }
