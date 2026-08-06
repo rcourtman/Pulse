@@ -242,12 +242,14 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     relevantColumns,
     {},
     // One-time hides for users who already have a saved column preference for
-    // this scope. `backup` reads exclusively from `resource.proxmox.lastBackup`
-    // and `tags` on vSphere carries only adapter provenance strings, so on the
-    // scopes that opt into hiding them those columns say the same thing on
-    // every row forever. The migration only fires where the id is already in
-    // that scope's default-hidden set, so Proxmox keeps both columns visible.
-    ['aiContext', 'backup', 'tags'],
+    // this scope. `backup` reads exclusively from `resource.proxmox.lastBackup`,
+    // so on the scopes that opt into hiding it the column says the same thing
+    // on every row forever. The migration only fires where the id is already in
+    // that scope's default-hidden set, so Proxmox keeps the column visible.
+    // `tags` was on this list while vSphere shipped adapter provenance strings
+    // in place of real tags; the adapter now reads vCenter's tagging API, so no
+    // scope default-hides it and retiring the preference would be wrong.
+    ['aiContext', 'backup'],
   );
 
   const visibleColumns = columnVisibility.visibleColumns;

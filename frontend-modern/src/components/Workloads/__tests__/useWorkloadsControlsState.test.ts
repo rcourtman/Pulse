@@ -314,9 +314,11 @@ describe('useWorkloadsControlsState', () => {
     });
   });
 
-  // vSphere tags are adapter provenance strings that repeat on every row, so
-  // the scope hides the column; Proxmox tags are real per-guest labels.
-  it('retires a stale Tags preference only on scopes that default-hide it', async () => {
+  // vSphere briefly default-hid Tags while the adapter shipped provenance
+  // strings in place of real vCenter tags. The adapter now reads vCenter's
+  // tagging API, so no scope default-hides the column and none retires a saved
+  // preference for it — a scoped hide must not outlive the reason for it.
+  it('keeps the Tags column on every scope now that vSphere carries real vCenter tags', async () => {
     localStorage.setItem(
       'workloadsHiddenColumns:vmware-vms',
       JSON.stringify(['aiContext', 'os', 'ip']),
@@ -329,14 +331,13 @@ describe('useWorkloadsControlsState', () => {
         showFilters,
         setShowFilters,
         columnVisibilityStorageScope: 'vmware-vms',
-        additionalDefaultHiddenColumnIds: ['backup', 'tags'],
+        // The vSphere scope's live default-hidden set: Backup only.
+        additionalDefaultHiddenColumnIds: ['backup'],
       });
-      expect(state.columnVisibility.hiddenColumns()).toContain('tags');
-      expect(state.visibleColumns().map((column) => column.id)).not.toContain('tags');
-      // Still offered in the column picker for anyone who wants it back.
-      expect(state.columnVisibility.availableToggles().map((column) => column.id)).toContain(
-        'tags',
-      );
+      expect(state.columnVisibility.hiddenColumns()).not.toContain('tags');
+      expect(state.visibleColumns().map((column) => column.id)).toContain('tags');
+      // The Backup hide is unrelated and still stands.
+      expect(state.columnVisibility.hiddenColumns()).toContain('backup');
       return dispose;
     });
 

@@ -524,6 +524,42 @@ describe('Resource Helper Functions', () => {
       expect(vmware.hardware?.memoryHotAddLimitMib).toBe(16384);
       expect(vmware.snapshotTree?.[0]?.children?.[0]?.current).toBe(true);
     });
+
+    // Operator-authored vCenter tags ride their own facet rather than the flat
+    // `Resource.tags` keyword set, which also carries adapter provenance
+    // strings identical on every vSphere resource. Per-row tag presentation
+    // reads this facet, so its shape is part of the consumer contract.
+    it('carries operator-authored vCenter tags with their category', () => {
+      const vmware: ResourceVMwareMeta = {
+        entityType: 'vm',
+        managedObjectId: 'vm-201',
+        tags: [
+          {
+            tagId: 'urn:vmomi:InventoryServiceTag:env-prod:GLOBAL',
+            name: 'Production',
+            categoryId: 'urn:vmomi:InventoryServiceCategory:environment:GLOBAL',
+            category: 'Environment',
+            description: 'Customer-facing workloads',
+            label: 'Environment:Production',
+          },
+          { name: 'Nightly', category: 'Backup', label: 'Backup:Nightly' },
+        ],
+      };
+
+      expect(vmware.tags).toHaveLength(2);
+      expect(vmware.tags?.[0]?.category).toBe('Environment');
+      expect(vmware.tags?.[0]?.name).toBe('Production');
+      // vCenter tag names are unique only inside their category, so the flat
+      // label a consumer renders has to carry both.
+      expect(vmware.tags?.[0]?.label).toBe('Environment:Production');
+      expect(vmware.tags?.[1]?.label).toBe('Backup:Nightly');
+      expect(vmware.tags?.[1]?.tagId).toBeUndefined();
+    });
+
+    it('treats vCenter tags as optional so untagged estates stay valid', () => {
+      const vmware: ResourceVMwareMeta = { entityType: 'vm', managedObjectId: 'vm-202' };
+      expect(vmware.tags).toBeUndefined();
+    });
   });
 
   describe('getPreferredResourceDisplayName', () => {

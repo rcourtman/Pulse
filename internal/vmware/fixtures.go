@@ -2,6 +2,7 @@ package vmware
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -14,7 +15,68 @@ func DefaultFixtures() InventorySnapshot {
 	snapshot := defaultFixturesPrimaryCluster(collectedAt, accessible, multipleHostAccess)
 	appendEdgeClusterFixtures(&snapshot, collectedAt, accessible, multipleHostAccess)
 	applyInventoryClusterServices(&snapshot)
+	applyFixtureTags(&snapshot)
 	return snapshot
+}
+
+// applyFixtureTags attaches the mock estate's vCenter tags. Real estates are
+// tagged unevenly — some objects carry several categories, some carry one, and
+// some were never tagged at all — so the fixture keeps that shape rather than
+// giving every object an identical set. A uniform set would hide exactly the
+// bug this data is meant to exercise: a Tags column that repeats itself on
+// every row.
+func applyFixtureTags(snapshot *InventorySnapshot) {
+	if snapshot == nil {
+		return
+	}
+
+	tag := func(category, name string) InventoryTag {
+		return InventoryTag{
+			TagID:      fmt.Sprintf("urn:vmomi:InventoryServiceTag:mock-%s-%s:GLOBAL", strings.ToLower(category), strings.ToLower(name)),
+			Name:       name,
+			CategoryID: fmt.Sprintf("urn:vmomi:InventoryServiceCategory:mock-%s:GLOBAL", strings.ToLower(category)),
+			Category:   category,
+		}
+	}
+
+	hostTags := map[string][]InventoryTag{
+		"host-101": {tag("Environment", "Production"), tag("Rack", "R1")},
+		"host-102": {tag("Environment", "Production"), tag("Rack", "R1")},
+		"host-103": {tag("Environment", "Production"), tag("Rack", "R2")},
+		"host-104": {tag("Environment", "Staging"), tag("Rack", "R2")},
+		"host-201": {tag("Environment", "Production"), tag("Site", "Edge")},
+		"host-202": {tag("Environment", "Production"), tag("Site", "Edge")},
+	}
+	vmTags := map[string][]InventoryTag{
+		"vm-201": {tag("Environment", "Production"), tag("Owner", "Platform"), tag("Backup", "Nightly")},
+		"vm-202": {tag("Environment", "Production"), tag("Owner", "Data"), tag("Backup", "Nightly"), tag("Compliance", "PCI")},
+		"vm-203": {tag("Environment", "Production"), tag("Owner", "AppDev")},
+		"vm-204": {tag("Environment", "Staging"), tag("Owner", "AppDev")},
+		"vm-205": {tag("Environment", "Production"), tag("Owner", "Platform"), tag("Backup", "Weekly")},
+		"vm-301": {tag("Environment", "Production"), tag("Owner", "AppDev"), tag("Site", "Edge")},
+		"vm-302": {tag("Environment", "Production"), tag("Owner", "AppDev"), tag("Site", "Edge")},
+		"vm-303": {tag("Environment", "Production"), tag("Owner", "Data"), tag("Backup", "Nightly")},
+		"vm-304": {tag("Owner", "Platform"), tag("Backup", "None")},
+		"vm-305": {tag("Owner", "Platform"), tag("Backup", "None")},
+		"vm-306": {tag("Environment", "Production"), tag("Owner", "Platform")},
+		"vm-308": {tag("Environment", "Production"), tag("Owner", "Desktop"), tag("Compliance", "PCI")},
+		"vm-309": {tag("Environment", "Production"), tag("Owner", "Desktop")},
+		"vm-310": {tag("Owner", "Platform"), tag("Site", "Edge")},
+		"vm-311": {tag("Owner", "Platform"), tag("Site", "Edge")},
+	}
+
+	for i := range snapshot.Hosts {
+		if tags, ok := hostTags[snapshot.Hosts[i].Host]; ok {
+			sortInventoryTags(tags)
+			snapshot.Hosts[i].Tags = tags
+		}
+	}
+	for i := range snapshot.VMs {
+		if tags, ok := vmTags[snapshot.VMs[i].VM]; ok {
+			sortInventoryTags(tags)
+			snapshot.VMs[i].Tags = tags
+		}
+	}
 }
 
 func defaultFixturesPrimaryCluster(

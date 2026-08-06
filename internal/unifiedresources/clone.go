@@ -443,7 +443,17 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 	out.VirtualDisks = cloneVMwareVirtualDiskDataSlice(in.VirtualDisks)
 	out.Tools = cloneVMwareToolsData(in.Tools)
 	out.Hardware = cloneVMwareVMHardwareData(in.Hardware)
+	out.Tags = cloneVMwareTagDataSlice(in.Tags)
 	return &out
+}
+
+func cloneVMwareTagDataSlice(in []VMwareTagData) []VMwareTagData {
+	if in == nil {
+		return nil
+	}
+	out := make([]VMwareTagData, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneVMwareSnapshotDataSlice(in []VMwareSnapshotData) []VMwareSnapshotData {

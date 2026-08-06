@@ -585,6 +585,79 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('renders vSphere row tags from the vCenter facet, never the provenance keyword set', async () => {
+    // `Resource.Tags` on vSphere is a mixed keyword set: adapter provenance
+    // strings (kept so resource search and the `?tags=` filter keep matching)
+    // plus the operator's real vCenter tags. A per-row Tags cell must show
+    // only the vCenter tags, and a vSphere VM nobody tagged must show nothing
+    // rather than falling back to six identical provenance dots.
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'vmware-vm-tagged',
+          name: 'tagged-app-01',
+          sources: ['vmware'],
+          proxmox: undefined,
+          tags: [
+            'vmware',
+            'vsphere',
+            'vm',
+            'source:vcenter',
+            'Environment:Production',
+            'Owner:Data',
+          ],
+          vmware: {
+            managedObjectId: 'vm-902',
+            powerState: 'poweredOn',
+            tags: [
+              { name: 'Production', category: 'Environment', label: 'Environment:Production' },
+              { name: 'Data', category: 'Owner', label: 'Owner:Data' },
+            ],
+          },
+        },
+        {
+          ...sampleResource,
+          id: 'vmware-vm-untagged',
+          name: 'untagged-app-01',
+          sources: ['vmware'],
+          proxmox: undefined,
+          tags: ['vmware', 'vsphere', 'vm', 'source:vcenter'],
+          vmware: {
+            managedObjectId: 'vm-903',
+            powerState: 'poweredOn',
+          },
+        },
+        {
+          ...sampleResource,
+          id: 'proxmox-vm-tagged',
+          name: 'pve-app-01',
+          tags: ['production', 'web'],
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 3);
+
+    const byName = (name: string) => result!.workloads().find((workload) => workload.name === name);
+    expect(byName('tagged-app-01')?.tags).toEqual(['Environment:Production', 'Owner:Data']);
+    expect(byName('untagged-app-01')?.tags).toEqual([]);
+    // Platforms whose flat tags are already real labels are untouched.
+    expect(byName('pve-app-01')?.tags).toEqual(['production', 'web']);
+
+    dispose();
+  });
+
   it('preserves canonical discovery targets for workloads instead of inferring them from platform type', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [

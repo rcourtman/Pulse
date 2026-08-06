@@ -189,6 +189,19 @@ type InventoryEnrichmentIssue struct {
 	Message    string `json:"message,omitempty"`
 }
 
+// InventoryTag is one operator-authored vCenter tag attached to an inventory
+// object, read from the CIS tagging service. vCenter tags always belong to a
+// category ("Environment", "Owner", ...), so the category travels with the tag
+// name: two categories may each hold a tag called "Production", and dropping
+// the category would merge them into one meaningless label.
+type InventoryTag struct {
+	TagID       string `json:"tag_id,omitempty"`
+	Name        string `json:"name"`
+	CategoryID  string `json:"category_id,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 // InventoryCluster is the vCenter Automation API cluster summary. Pulse keeps
 // clusters as read-only topology metadata on hosts and VMs, not top-level
 // resources.
@@ -241,6 +254,7 @@ type InventoryHost struct {
 	DatastoreIDs        []string          `json:"datastore_ids,omitempty"`
 	DatastoreNames      []string          `json:"datastore_names,omitempty"`
 	OverallStatus       string            `json:"overall_status,omitempty"`
+	Tags                []InventoryTag    `json:"tags,omitempty"`
 	TriggeredAlarms     []InventoryAlarm  `json:"triggered_alarms,omitempty"`
 	RecentTasks         []InventoryTask   `json:"recent_tasks,omitempty"`
 	RecentEvents        []InventoryEvent  `json:"recent_events,omitempty"`
@@ -277,6 +291,7 @@ type InventoryVM struct {
 	GuestHostname       string                      `json:"guest_hostname,omitempty"`
 	GuestIPAddresses    []string                    `json:"guest_ip_addresses,omitempty"`
 	OverallStatus       string                      `json:"overall_status,omitempty"`
+	Tags                []InventoryTag              `json:"tags,omitempty"`
 	TriggeredAlarms     []InventoryAlarm            `json:"triggered_alarms,omitempty"`
 	RecentTasks         []InventoryTask             `json:"recent_tasks,omitempty"`
 	RecentEvents        []InventoryEvent            `json:"recent_events,omitempty"`
@@ -560,8 +575,9 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				ActiveAlarmSummary:  vmwareAlarmSummary(host.TriggeredAlarms),
 				RecentTaskCount:     len(host.RecentTasks),
 				RecentTaskSummary:   vmwareRecentTaskSummary(host.RecentTasks),
+				Tags:                vmwareTagsData(host.Tags),
 			},
-			Tags: filterNonEmptyStrings(
+			Tags: vmwareResourceTags([]string{
 				"vmware",
 				"vsphere",
 				"host",
@@ -569,7 +585,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				tagWithValue("connection", strings.ToLower(connectionName)),
 				tagWithValue("power", strings.ToLower(strings.TrimSpace(host.PowerState))),
 				tagWithValue("state", strings.ToLower(strings.TrimSpace(host.ConnectionState))),
-			),
+			}, host.Tags),
 		}
 		identity := unifiedresources.ResourceIdentity{
 			DMIUUID:     strings.TrimSpace(host.HostUUID),
@@ -642,15 +658,16 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 				VirtualDisks:        vmwareVirtualDisksData(vm.VirtualDisks),
 				Tools:               vmwareToolsData(vm.Tools),
 				Hardware:            vmwareVMHardwareData(vm.Hardware),
+				Tags:                vmwareTagsData(vm.Tags),
 			},
-			Tags: filterNonEmptyStrings(
+			Tags: vmwareResourceTags([]string{
 				"vmware",
 				"vsphere",
 				"vm",
 				"source:vcenter",
 				tagWithValue("connection", strings.ToLower(connectionName)),
 				tagWithValue("power", strings.ToLower(strings.TrimSpace(vm.PowerState))),
-			),
+			}, vm.Tags),
 		}
 		identity := unifiedresources.ResourceIdentity{
 			MachineID:    firstNonEmptyTrimmed(vm.InstanceUUID, vm.BIOSUUID),
@@ -1710,6 +1727,54 @@ func filterNonEmptyStrings(values ...string) []string {
 		}
 		seen[key] = struct{}{}
 		out = append(out, trimmed)
+	}
+	return out
+}
+
+// vmwareResourceTags merges the adapter's provenance keywords with the
+// operator's real vCenter tag labels into the flat searchable keyword set.
+//
+// The provenance strings stay. `Resource.Tags` is the only keyword set
+// `resourceSearchMatch.ts`, the `?tags=` resources filter, and saved report
+// schedules read, so dropping "vmware"/"vsphere"/"source:vcenter" would
+// silently stop matching searches and saved filters that rely on them. Real
+// vCenter tags are appended to that set, never substituted for it.
+//
+// Because the set is deliberately mixed, it is not what a per-row Tags cell
+// should render — surfaces that show the operator's own labels read the
+// `VMware.Tags` facet instead.
+func vmwareResourceTags(provenance []string, tags []InventoryTag) []string {
+	values := make([]string, 0, len(provenance)+len(tags))
+	values = append(values, provenance...)
+	for _, tag := range tags {
+		values = append(values, InventoryTagLabel(tag))
+	}
+	return filterNonEmptyStrings(values...)
+}
+
+// vmwareTagsData projects vCenter tags onto the canonical VMware facet. Tags
+// without a resolvable name are dropped rather than rendered as empty chips.
+func vmwareTagsData(tags []InventoryTag) []unifiedresources.VMwareTagData {
+	if len(tags) == 0 {
+		return nil
+	}
+	out := make([]unifiedresources.VMwareTagData, 0, len(tags))
+	for _, tag := range tags {
+		label := InventoryTagLabel(tag)
+		if label == "" {
+			continue
+		}
+		out = append(out, unifiedresources.VMwareTagData{
+			TagID:       strings.TrimSpace(tag.TagID),
+			Name:        strings.TrimSpace(tag.Name),
+			CategoryID:  strings.TrimSpace(tag.CategoryID),
+			Category:    strings.TrimSpace(tag.Category),
+			Description: strings.TrimSpace(tag.Description),
+			Label:       label,
+		})
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

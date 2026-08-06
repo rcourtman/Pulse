@@ -624,13 +624,33 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     control on that page. The migration only fires where the id is already in
     that scope's effective default-hidden set, and it records a marker so a
     column the user deliberately restores is never re-hidden.
-    vSphere additionally default-hides `tags`. The vSphere adapter does not
-    read vCenter's tag/category API; `internal/vmware/provider.go` fills
-    `Resource.Tags` with fixed provenance strings, so the column repeats the
-    same values on every row and filtering on any of them selects the whole
-    estate. The tags stay in the payload because search and facet counts
-    consume them. This hide is a stopgap and must be removed once the adapter
-    ingests real vCenter tags, not treated as the settled contract.
+    vSphere previously default-hid `tags` as well, because the adapter filled
+    `Resource.Tags` with fixed provenance strings and never read vCenter's own
+    tag/category system. That stopgap is retired: `internal/vmware/client_tags.go`
+    reads the CIS tagging service and `internal/vmware/provider.go` projects the
+    result onto both the flat `Resource.Tags` keyword set and the canonical
+    `VMware.Tags` facet, so `tags` is default-visible on every workload scope
+    again.
+    The two tag surfaces have distinct contracts and must not be collapsed.
+    `Resource.Tags` is the flat keyword set that resource search, the `?tags=`
+    resources filter, and saved report-schedule tag filters read, so the
+    adapter's provenance strings stay in it and real vCenter labels are
+    appended, never substituted. `VMware.Tags` carries only the operator's own
+    tags with their vCenter category, and is what per-row presentation reads:
+    `useWorkloads.ts` maps `WorkloadGuest.tags` from that facet for any
+    resource carrying VMware metadata, including the empty case, so an untagged
+    vSphere VM renders an empty cell rather than falling back to six identical
+    provenance dots. A future adapter that mixes provenance into `Resource.Tags`
+    owes the same facet split rather than a column hide.
+    Tag reads are optional enrichment on the collection hot path and are
+    bounded accordingly. Associations come from one batched
+    `list-attached-tags-on-objects` POST per bounded object batch, never a
+    per-object request; tag and category names resolve at most once per client
+    TTL through the client-scoped catalog, so a steady-state refresh of a
+    tagged estate costs only the association reads. A vCenter without the
+    tagging service, or an account without the tag read privilege, must degrade
+    into an `InventoryEnrichmentIssue` on the `tags` stage and leave the
+    inventory untagged; it must never fail the refresh.
     Column visibility that depends on whether data exists at all is data-gated
     rather than preference-gated. `availability` is the current case: the cell
     renders nothing until an availability check is linked to that workload, so

@@ -1,33 +1,28 @@
 {
   "version": 1,
-  "base_sha": "a959d50dcec61c90128b90516b209bfe2a21b0e7",
-  "verified_at": "2026-08-06T16:57:33Z",
+  "base_sha": "9615b5f2b0e461809399a7ea101a4e75c082e202",
+  "verified_at": "2026-08-06T19:55:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx",
-    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
-    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx",
-    "frontend-modern/src/features/alerts/tabs/HistoryTab.tsx",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts",
-    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts"
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "4855ab08d2455ef16a5e41ad722646f7e2a53a1a93e3da13feb405bc1f98898f",
-    "frontend-modern/src/features/alerts/AlertHistoryMobileList.tsx": "ad2d9c41b11e414f4c54177ba4fb6e4f3bb0ce8c0831e0eaf95a09904ce95e51",
-    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "a400738ec0054729c25506edc23b4aff4b92fa6de80b4ea94c82f673ae786939",
-    "frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx": "1f24d6d8523b3976906d01f47167b0389334df629473bfc98e3d26cbee76b905",
-    "frontend-modern/src/features/alerts/tabs/HistoryTab.tsx": "bf14cbca7e0f79aeb503a8062c890474e39722503b15f13febf97cc889efd2a1",
-    "frontend-modern/src/features/alerts/useAlertHistoryState.ts": "89f038b0d5335774dda21312b9e04a9b02ae37c661e640a58c9edbb1b45c9b2c",
-    "frontend-modern/src/features/alerts/useAlertResourceIncidentsState.ts": "6a39b8d2cdec5f751992077bb2129ad3310d648a18a8e891209de12adc7d528b"
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "ad066cb0146c00f5d4e4763a80152dfbcfcb85643f69ed416897309e0e0733ee",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "5525ce1b10c753bc56dd0fddb53a089fc2052fa5dcc271884a86619af1896c6e",
+    "frontend-modern/src/hooks/useWorkloads.ts": "b49585f16a65ef30d4a6dd27358674ca912f9313fd6c73919150b86ee6e404b7",
+    "frontend-modern/src/types/resource.ts": "1618f592fae6d13ef4f366f3b60f6049293f41493292024903884115ce423d5e"
   },
   "routes": [
-    "/alerts/history"
+    "/vmware/overview",
+    "/proxmox?status=all"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1680,
+      "height": 1000
     },
     {
       "width": 390,
@@ -35,17 +30,26 @@
     }
   ],
   "states": [
-    "Baseline reproduction of #1687 at 1280px: scrolled 3200px into the history and clicked a row's Resource button; the panel opened 2595px above the viewport top, so the only visible effect was the row list shifting down under the cursor",
-    "After the fix at 1280px: the same click renders the panel in the row immediately below the button, showing 'Resource incidents, pve1, 2 incidents' with the event filter chips and two incident cards carrying full absolute timestamps",
-    "Desktop row timestamps render in the browser locale (23:50 rather than the previously hardcoded en-US 11:50 PM) and every timestamp cell carries a full absolute date-time title, verified across all 98 rendered rows",
-    "Mobile card list at 390px: tapping Resource on a card scrolled 2600px down opens the panel inside that same card at y=550, fully in view, with no horizontal document overflow",
-    "A row that does not own the panel renders no incidents block, so only one panel is open at a time even when several alerts share one resource",
-    "Resource button re-clicked on the same row closes the panel, matching the neighbouring Timeline toggle"
+    "vSphere VM table for a user with no saved preference at 1680px: header is Name, ID, CPU, Mem, Disk, Uptime, Tags, Net I/O, Disk I/O, so Tags is default-visible again on the scope that used to hide it",
+    "vSphere Tags cells now vary per row instead of repeating: warehouse-api-01 3 dots, warehouse-db-01 4, client-portal-01 2, finance-jump-01 3, ops-observability-01 2, edge-api-01 3, and 38 dots across the whole table",
+    "vSphere VMs that carry no vCenter tags render an empty Tags cell rather than falling back to the provenance keyword set: etl-batch-01 and ingress-proxy-02 show 0 dots",
+    "vSphere host group-header rows carry no tag dots, so host tags do not leak into the VM rows grouped beneath them",
+    "vSphere VM table for a user whose saved preference predates this change (seeded workloadsHiddenColumns:vmware-vms of aiContext/os/ip): the one-time migration adds only backup, the applied marker records aiContext/backup, and Tags stays visible",
+    "vSphere column picker reports 4 hidden and offers Tags checked, Backup unchecked, AI Context unchecked, OS unchecked, IP unchecked, Disk/Uptime/Net I/O/Disk I/O checked",
+    "vSphere at 390px: the phone stage renders Name, CPU, Mem across 25 rows with Tags dropped by the responsive stage as the wide-only contract requires, and no horizontal body overflow (table scrollWidth within container clientWidth for both tables)",
+    "Proxmox workload table unaffected at 1680px: Tags and Backup both still visible with genuine per-guest counts varying 3 to 7 dots per row, and the stored hidden list unchanged at aiContext/os/ip",
+    "Tag tooltip on a vSphere dot reads the real vCenter label Backup:Nightly rather than a provenance string",
+    "Filtered state after clicking that dot: search reads tags:Backup:Nightly and the table narrows from 18 VMs to the 3 that carry the tag (warehouse-api-01, warehouse-db-01, mariadb-replica-01) plus their host group headers"
   ],
   "interactions": [
-    "Scrolled the app-scroll-shell container to 3200px and clicked a row-level Resource button before and after the change, measuring the panel's viewport offset each time",
-    "Read the rendered timestamp cells' text and title attributes directly from the DOM to confirm locale formatting and the absolute date-time tooltip",
-    "Resized to 390px, reloaded, scrolled to 2600px and tapped a card's Resource button, then measured the panel position relative to its own card",
-    "Checked document scrollWidth against the viewport at 390px for horizontal overflow"
+    "Built this worktree's frontend and backend and ran a mock-mode scratch instance on port 7712 so the page exercised this branch's adapter rather than the shared dev instance",
+    "Cleared every workloadsHiddenColumns scope key to reproduce a first-time user, then reloaded /vmware/overview",
+    "Seeded a pre-change workloadsHiddenColumns:vmware-vms preference of aiContext/os/ip and reloaded to confirm the migration now retires only backup and leaves tags alone",
+    "Opened the View preferences popover and the Columns multiselect on /vmware/overview to read the offered toggles and their checked state",
+    "Hovered a vSphere tag dot to read its tooltip, then clicked it to drive the tag filter and counted the surviving rows",
+    "Resized between 1680x1000 and 390x844 with a reload at each stage, and measured documentElement scrollWidth against clientWidth plus per-table scrollWidth against container clientWidth",
+    "Navigated to /proxmox?status=all at 1680px to confirm Proxmox tag counts and stored preferences are untouched",
+    "Queried /api/resources?source=vmware-vsphere&type=vm to confirm the flat tags array keeps the six provenance strings and appends real labels, while vmware.tags carries only the operator's labels and is empty for untagged VMs",
+    "Re-verified after rebasing onto main 9615b5f2b: rebuilt frontend and backend from the rebased tree, reloaded /vmware/overview at 1680x1000 and reproduced the same 38 tag dots with the same per-row counts, the same Backup:Nightly tooltip, and the same tags:Backup:Nightly filter narrowing to 3 VMs"
   ]
 }

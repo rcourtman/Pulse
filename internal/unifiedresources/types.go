@@ -1436,6 +1436,24 @@ type VMwareData struct {
 	VirtualDisks        []VMwareVirtualDiskData    `json:"virtualDisks,omitempty"`
 	Tools               *VMwareToolsData           `json:"tools,omitempty"`
 	Hardware            *VMwareVMHardwareData      `json:"hardware,omitempty"`
+	Tags                []VMwareTagData            `json:"tags,omitempty"`
+}
+
+// VMwareTagData is one operator-authored vCenter tag attached to a host or VM.
+//
+// The flat `Resource.Tags` keyword set carries these too, but it also carries
+// adapter provenance strings that are identical for every vSphere resource.
+// Presentation surfaces that show a per-row tag list read this facet so they
+// render what the operator actually tagged in vCenter and nothing else.
+type VMwareTagData struct {
+	TagID       string `json:"tagId,omitempty"`
+	Name        string `json:"name"`
+	CategoryID  string `json:"categoryId,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Label is the flat `category:name` form used by tag search and tag
+	// filters, so consumers do not each re-derive it.
+	Label string `json:"label,omitempty"`
 }
 
 // VMwareSnapshotData contains one node in the vSphere VM snapshot tree. It is

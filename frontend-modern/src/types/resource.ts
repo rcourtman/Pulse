@@ -1443,6 +1443,25 @@ export interface ResourceVMwareMeta {
   virtualDisks?: ResourceVMwareVirtualDisk[];
   tools?: ResourceVMwareTools;
   hardware?: ResourceVMwareHardware;
+  tags?: ResourceVMwareTag[];
+}
+
+/**
+ * One operator-authored vCenter tag.
+ *
+ * The flat `Resource.tags` keyword set carries these labels too, but it also
+ * carries adapter provenance strings that are identical on every vSphere
+ * resource. Per-row tag presentation reads this facet so it renders only what
+ * the operator actually tagged in vCenter.
+ */
+export interface ResourceVMwareTag {
+  tagId?: string;
+  name: string;
+  categoryId?: string;
+  category?: string;
+  description?: string;
+  /** Flat `category:name` form used by tag search and tag filters. */
+  label?: string;
 }
 
 export interface ResourceAvailabilityMeta {

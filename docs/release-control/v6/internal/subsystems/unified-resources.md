@@ -554,6 +554,21 @@ The same split applies to VMware vSphere detail sections: unified-resource
 VMware metadata owns the vCenter-specific row selection, but the section/row
 shape and renderer must be the shared frontend-primitives detail-section
 contract instead of a VMware-local row model or custom vSphere detail shell.
+Resource tags carry two distinct contracts that must not be collapsed into
+one another. The flat `Resource.Tags` string set is the searchable keyword
+union: it is what `resourceSearchMatch.ts`, the `?tags=` resources filter, and
+saved report-schedule tag filters read, and an adapter may put provenance
+keywords in it that repeat across every resource it emits — the vSphere
+adapter does exactly that. `VMware.Tags` (`VMwareTagData`, cloned through
+`cloneVMwareData`) is the narrower facet: operator-authored vCenter tags only,
+each carrying the vCenter category alongside the name because tag names are
+unique only inside their category, plus the flat `category:name` label so
+consumers do not each re-derive it. Any surface that renders a per-row tag
+list must read the facet, not the keyword union, and must treat a present-but-
+empty facet as "this resource has no operator tags" rather than falling back
+to the union. An adapter that needs provenance keywords in `Resource.Tags`
+owes the same facet split rather than asking presentation to pattern-match
+the union.
 The split also applies to web-interface launch affordances. Unified-resource
 tables own whether a row has a saved, inferred, or source-native web-interface
 URL and how that URL is derived, but the visible launch affordance belongs on

@@ -1,6 +1,7 @@
 package vmware
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -103,6 +104,10 @@ type Client struct {
 	httpClient *http.Client
 	username   string
 	password   string
+	// tagCatalog memoizes CIS tag and category names across refreshes. The
+	// poller keeps one client per vCenter connection, so the cache spans the
+	// whole poll loop rather than one collection.
+	tagCatalog vmwareTagCatalog
 }
 
 type viJSONServiceContentRefs struct {
@@ -213,10 +218,15 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err != nil {
 		return nil, err
 	}
+	tagIssues, err := c.enrichInventoryTags(ctx, automationSessionID, inventory)
+	if err != nil {
+		return nil, err
+	}
 	inventory.VIRelease = strings.TrimSpace(release)
 	inventory.CollectedAt = time.Now().UTC()
 	inventory.EnrichmentIssues = append(inventory.EnrichmentIssues, signalIssues...)
 	inventory.EnrichmentIssues = append(inventory.EnrichmentIssues, topologyIssues...)
+	inventory.EnrichmentIssues = append(inventory.EnrichmentIssues, tagIssues...)
 	return inventory, nil
 }
 
@@ -404,6 +414,47 @@ func (c *Client) getSessionScopedJSON(
 		return classifyReadStatusCode(label, resp.StatusCode)
 	}
 	if err := json.Unmarshal(body, target); err != nil {
+		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
+	}
+	return nil
+}
+
+// postSessionScopedJSON posts a JSON body to a session-authenticated vCenter
+// endpoint and decodes the response into target. The vSphere Automation API
+// models several reads as POST actions — CIS tag association lookups are the
+// current case — so they cannot go through getSessionScopedJSON.
+func (c *Client) postSessionScopedJSON(
+	ctx context.Context,
+	sessionID string,
+	path string,
+	label string,
+	payload any,
+	target any,
+) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal %s request: %w", label, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL.String()+path, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build %s request: %w", label, err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("vmware-api-session-id", sessionID)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return classifyTransportError(label, err)
+	}
+	defer resp.Body.Close()
+	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, inventoryResponseLimitByte))
+	if readErr != nil {
+		return fmt.Errorf("read %s response: %w", label, readErr)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return classifyReadStatusCode(label, resp.StatusCode)
+	}
+	if err := json.Unmarshal(responseBody, target); err != nil {
 		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
 	}
 	return nil

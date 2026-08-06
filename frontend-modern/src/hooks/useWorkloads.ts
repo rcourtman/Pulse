@@ -24,6 +24,7 @@ import type {
   ResourceAvailabilityMeta,
   ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
+  ResourceVMwareTag,
 } from '@/types/resource';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
@@ -153,6 +154,7 @@ type APIResource = {
     managedObjectId?: string;
     powerState?: string;
     guestOsFamily?: string;
+    tags?: ResourceVMwareTag[];
   };
   discoveryTarget?: {
     resourceType?: string;
@@ -353,6 +355,24 @@ const resolveWorkloadDiscoveryTarget = (
   }
 };
 
+/**
+ * vCenter tag labels for one resource, or undefined when the resource is not
+ * a vSphere workload at all.
+ *
+ * A vSphere workload the operator never tagged returns an empty array on
+ * purpose. Falling through to the flat `resource.tags` there would put the
+ * adapter's provenance strings back in the cell, which is the whole reason the
+ * column was worth nothing before.
+ */
+const vmwareRowTags = (resource: APIResource): string[] | undefined => {
+  if (!resource.vmware) return undefined;
+  const tags = resource.vmware.tags;
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .map((tag) => (tag?.label || tag?.name || '').trim())
+    .filter((label) => label.length > 0);
+};
+
 const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
@@ -524,7 +544,13 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       // Go zero time "0001-01-01T00:00:00Z" parses to a large negative number
       return parsed > 0 ? parsed : 0;
     })(),
-    tags: resource.tags ?? [],
+    // vSphere's flat `resource.tags` is a mixed keyword set: the adapter keeps
+    // provenance strings there (`vmware`, `vsphere`, `source:vcenter`, ...) so
+    // resource search and the `?tags=` filter keep matching, and appends the
+    // operator's real vCenter tags. Only the latter belong in a per-row Tags
+    // cell, so the vSphere facet wins for every vSphere workload — including
+    // the untagged ones, which must render empty rather than fall back.
+    tags: vmwareRowTags(resource) ?? resource.tags ?? [],
     lock: '',
     lastSeen: toIsoString(resource.lastSeen),
     isOci: workloadType === 'system-container' ? (resource.proxmox?.isOci ?? false) : false,

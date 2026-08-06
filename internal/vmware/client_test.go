@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -208,6 +209,7 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 		denyHostOverallStatus:  true,
 		unavailableVMGuestInfo: true,
 		denyClusterInventory:   true,
+		denyTagAssociations:    true,
 	})
 	defer server.Close()
 
@@ -235,9 +237,10 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 	// The unavailableVMGuestInfo knob now degrades two REST reads: the
 	// guest identity endpoint (topology stage) and the guest local
 	// filesystem endpoint (signals stage). That plus the per-stage
-	// permission denials gives four issues.
-	if len(snapshot.EnrichmentIssues) != 4 {
-		t.Fatalf("expected 4 enrichment issues, got %+v", snapshot.EnrichmentIssues)
+	// permission denials and the denied tag-association read gives five
+	// issues.
+	if len(snapshot.EnrichmentIssues) != 5 {
+		t.Fatalf("expected 5 enrichment issues, got %+v", snapshot.EnrichmentIssues)
 	}
 	seen := make(map[string]InventoryEnrichmentIssue, len(snapshot.EnrichmentIssues))
 	for _, issue := range snapshot.EnrichmentIssues {
@@ -263,6 +266,17 @@ func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegra
 		t.Fatalf("expected topology/vm unavailable issue for guest identity, got %+v", snapshot.EnrichmentIssues)
 	} else if !strings.Contains(issue.Message, "guest identity") {
 		t.Fatalf("unexpected topology/vm unavailable message: %+v", issue)
+	}
+	// A vCenter without the tagging service, or an account without the tag
+	// read privilege, must degrade to untagged inventory rather than failing
+	// the whole refresh.
+	if issue, ok := seen["tags/tag/not_found"]; !ok {
+		t.Fatalf("expected tags/tag not_found issue, got %+v", snapshot.EnrichmentIssues)
+	} else if !strings.Contains(issue.Message, "tag associations") {
+		t.Fatalf("unexpected tags/tag message: %+v", issue)
+	}
+	if len(snapshot.Hosts[0].Tags) != 0 || len(snapshot.VMs[0].Tags) != 0 {
+		t.Fatalf("expected untagged inventory after degraded tag read, got host=%+v vm=%+v", snapshot.Hosts[0].Tags, snapshot.VMs[0].Tags)
 	}
 
 	host := snapshot.Hosts[0]
@@ -516,6 +530,9 @@ type vmwareTestServerConfig struct {
 	unauthorizedHostOverallStatus bool
 	denyClusterInventory          bool
 	unavailableVMGuestInfo        bool
+	denyTagAssociations           bool
+	tagRequestCounts              map[string]int
+	tagRequestCountsMu            *sync.Mutex
 }
 
 func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Server {
@@ -588,6 +605,84 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			"ha_enabled":  true,
 			"drs_enabled": false,
 		}})
+	})
+	countTagRequest := func(path string) {
+		if cfg.tagRequestCounts == nil || cfg.tagRequestCountsMu == nil {
+			return
+		}
+		cfg.tagRequestCountsMu.Lock()
+		defer cfg.tagRequestCountsMu.Unlock()
+		cfg.tagRequestCounts[path]++
+	}
+	mux.HandleFunc("/api/cis/tagging/tag-association", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		countTagRequest("tag-association")
+		if cfg.denyTagAssociations {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if got := r.URL.Query().Get("action"); got != "list-attached-tags-on-objects" {
+			t.Fatalf("tag association action = %q, want list-attached-tags-on-objects", got)
+		}
+		var payload struct {
+			ObjectIDs []cisObjectID `json:"object_ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode tag association request: %v", err)
+		}
+		associations := make([]cisTagAssociation, 0, len(payload.ObjectIDs))
+		for _, object := range payload.ObjectIDs {
+			switch object.ID {
+			case "host-101":
+				associations = append(associations, cisTagAssociation{
+					ObjectID: object,
+					TagIDs:   []string{"urn:tag:rack-r1"},
+				})
+			case "vm-201":
+				associations = append(associations, cisTagAssociation{
+					ObjectID: object,
+					// Deliberately unsorted, and one id the catalog cannot
+					// resolve, so the client's ordering and skip behaviour
+					// both get exercised.
+					TagIDs: []string{"urn:tag:owner-platform", "urn:tag:env-production", "urn:tag:orphan"},
+				})
+			}
+		}
+		writeJSON(w, associations)
+	})
+	mux.HandleFunc("/api/cis/tagging/tag/", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		tagID := strings.TrimPrefix(r.URL.Path, "/api/cis/tagging/tag/")
+		countTagRequest("tag:" + tagID)
+		switch tagID {
+		case "urn:tag:env-production":
+			writeJSON(w, cisTagInfo{ID: tagID, Name: "Production", CategoryID: "urn:category:environment"})
+		case "urn:tag:owner-platform":
+			writeJSON(w, cisTagInfo{ID: tagID, Name: "Platform", CategoryID: "urn:category:owner"})
+		case "urn:tag:rack-r1":
+			writeJSON(w, cisTagInfo{ID: tagID, Name: "R1", CategoryID: "urn:category:rack"})
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	})
+	mux.HandleFunc("/api/cis/tagging/category/", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		categoryID := strings.TrimPrefix(r.URL.Path, "/api/cis/tagging/category/")
+		countTagRequest("category:" + categoryID)
+		switch categoryID {
+		case "urn:category:environment":
+			writeJSON(w, cisCategoryInfo{ID: categoryID, Name: "Environment"})
+		case "urn:category:owner":
+			writeJSON(w, cisCategoryInfo{ID: categoryID, Name: "Owner"})
+		case "urn:category:rack":
+			writeJSON(w, cisCategoryInfo{ID: categoryID, Name: "Rack"})
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
 	})
 	mux.HandleFunc("/api/vcenter/vm/vm-201", func(w http.ResponseWriter, r *http.Request) {
 		requireAutomationSession(t, r)

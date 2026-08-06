@@ -303,10 +303,19 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 				CPUCoresPerSocket:     &coresPerSocket,
 				MemoryHotAddLimitMiB:  &memoryHotAddLimitMiB,
 			},
+			Tags: []VMwareTagData{{
+				TagID:      "urn:vmomi:InventoryServiceTag:env-prod:GLOBAL",
+				Name:       "Production",
+				CategoryID: "urn:vmomi:InventoryServiceCategory:environment:GLOBAL",
+				Category:   "Environment",
+				Label:      "Environment:Production",
+			}},
 		},
 	}
 
 	cloned := cloneResource(original)
+	cloned.VMware.Tags[0].Name = "mutated"
+	cloned.VMware.Tags[0].Label = "mutated"
 	cloned.VMware.SnapshotTree[0].Name = "mutated"
 	cloned.VMware.SnapshotTree[0].Children[0].Name = "mutated-child"
 	*cloned.VMware.SnapshotTree[0].CreatedAt = createdAt.Add(time.Hour)
@@ -327,6 +336,12 @@ func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	cloned.VMware.Hardware.BootDevices[0].Disks[0] = "mutated"
 	*cloned.VMware.Hardware.MemoryHotAddLimitMiB = 1
 
+	// vCenter tags are operator-authored labels the presentation layer renders
+	// per row, so a cloned snapshot must never write back onto the registry's
+	// copy of them.
+	if original.VMware.Tags[0].Name != "Production" || original.VMware.Tags[0].Label != "Environment:Production" {
+		t.Fatalf("mutating cloned VMware tags should not affect original: %+v", original.VMware.Tags)
+	}
 	if original.VMware.SnapshotTree[0].Name != "pre-upgrade" {
 		t.Fatalf("mutating cloned VMware snapshot should not affect original: %+v", original.VMware.SnapshotTree)
 	}
