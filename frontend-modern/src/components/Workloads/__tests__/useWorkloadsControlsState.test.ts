@@ -237,4 +237,80 @@ describe('useWorkloadsControlsState', () => {
       }
     });
   });
+
+  // The Backup column reads only `resource.proxmox.lastBackup`, so scopes that
+  // opt into hiding it (vSphere) rendered "None" on every row for anyone whose
+  // saved preference predates that default. The one-time migration retires that
+  // state without touching Proxmox, where the column has real data.
+  it('retires a stale Backup preference on scopes that default-hide it, and leaves Proxmox alone', async () => {
+    localStorage.setItem(
+      'workloadsHiddenColumns:vmware-vms',
+      JSON.stringify(['aiContext', 'os', 'ip']),
+    );
+
+    const disposeVmware = createRoot((dispose) => {
+      const [showFilters, setShowFilters] = createSignal(false);
+      const state = useWorkloadsControlsState({
+        viewMode: () => 'all' as ViewMode,
+        showFilters,
+        setShowFilters,
+        columnVisibilityStorageScope: 'vmware-vms',
+        additionalDefaultHiddenColumnIds: ['backup'],
+      });
+      expect(state.columnVisibility.hiddenColumns()).toContain('backup');
+      expect(state.visibleColumns().map((column) => column.id)).not.toContain('backup');
+      return dispose;
+    });
+
+    await Promise.resolve();
+    disposeVmware();
+
+    expect(JSON.parse(localStorage.getItem('workloadsHiddenColumns:vmware-vms') ?? '[]')).toContain(
+      'backup',
+    );
+    expect(
+      JSON.parse(
+        localStorage.getItem('workloadsHiddenColumns:vmware-vms:default-hidden-applied') ?? '[]',
+      ),
+    ).toContain('backup');
+
+    // Showing it again sticks: the migration marker stops the next mount from
+    // re-hiding a column the user deliberately restored.
+    localStorage.setItem(
+      'workloadsHiddenColumns:vmware-vms',
+      JSON.stringify(['aiContext', 'os', 'ip']),
+    );
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+          columnVisibilityStorageScope: 'vmware-vms',
+          additionalDefaultHiddenColumnIds: ['backup'],
+        });
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('backup');
+      } finally {
+        dispose();
+      }
+    });
+
+    // Proxmox never opts into hiding Backup, so the migration must not fire there.
+    localStorage.setItem('workloadsHiddenColumns', JSON.stringify(['aiContext', 'os', 'ip']));
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+        });
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('backup');
+        expect(state.visibleColumns().map((column) => column.id)).toContain('backup');
+      } finally {
+        dispose();
+      }
+    });
+  });
 });

@@ -1,103 +1,46 @@
 {
   "version": 1,
-  "base_sha": "bbd6910f490f01035cfc13dd5717078e4427f8c6",
-  "verified_at": "2026-08-06T15:20:24Z",
+  "base_sha": "93e4b764ffae445e3b501d4bce17c50a9e5ec4fb",
+  "verified_at": "2026-08-06T15:37:44Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx",
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx",
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
-    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
-    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
-    "frontend-modern/src/components/shared/Form.ts",
-    "frontend-modern/src/components/shared/buttonModel.ts",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts",
-    "frontend-modern/src/components/shared/statusBadgeModel.ts"
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Alerts/AlertResourceTableMobile.tsx": "84616766c7196430a7a1995442a9ea0ffefae0e0ca4abda7f0dc268904b008d2",
-    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "d6e93e46de34fb9755c4826aa89e358cf395dd3073907fd39440e6b9b1d8ff21",
-    "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx": "beefb76f9aaa62222e0e2ff77f178de29358503fe69d3f9418aa3e40efb8b15c",
-    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "9223a9bdd37dc51919d39139cbcc468c16fcbb8342c8e34f1eace9a4003e0d20",
-    "frontend-modern/src/components/Settings/DataHandlingPanel.tsx": "01c01935c2d018dd9887333fa764bdf47d1d4bebcdee9cad0d30f1441c7ac21f",
-    "frontend-modern/src/components/shared/Form.ts": "aa51b7534812bea0b48f4a9f4eb43d213afd22d0553f0aa253da66b959429e6b",
-    "frontend-modern/src/components/shared/buttonModel.ts": "2a87957549fc36abf67f7c51c3f45728e40f5fdb023081bd683ba3b7e172dac4",
-    "frontend-modern/src/components/shared/filterButtonGroupModel.ts": "5807252b9ee47e8d9844643cb9029c774a8916588a3baf965c1b1e52ff5d91c4",
-    "frontend-modern/src/components/shared/statusBadgeModel.ts": "a8df2b2feb02d865bec69563a9d6a2bb5ac57f82bd84f675fbb4a5d7a5d95344"
+    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "d64a38fee5fef5c62b04814738e7d9342123114d63c0b7559268dbf1d8df98ef"
   },
   "routes": [
-    "/proxmox/overview",
-    "/proxmox/storage?tab=disks&source=proxmox-all",
-    "/proxmox/replication",
-    "/proxmox/backups?view=coverage",
-    "/proxmox/backups?view=date",
-    "/proxmox/ceph",
-    "/proxmox/mail",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds",
-    "/alerts/notifications",
-    "/alerts/schedule",
-    "/actions",
-    "/patrol",
-    "/settings/infrastructure",
-    "/settings/monitoring/availability",
-    "/settings/pulse-intelligence/provider",
-    "/settings/pulse-intelligence/patrol",
-    "/settings/pulse-intelligence/assistant",
-    "/settings/system-general",
-    "/settings/system-network",
-    "/settings/system-updates",
-    "/settings/system-recovery",
-    "/settings/system-relay",
-    "/settings/support/diagnostics",
-    "/settings/support/reporting",
-    "/settings/support/logs",
-    "/settings/security/api",
-    "/settings/security-overview",
-    "/settings/security-data-handling",
-    "/settings/security-auth",
-    "/settings/security-sso",
-    "/settings/security-roles",
-    "/settings/security-users",
-    "/settings/security-audit",
-    "/settings/security-webhooks"
+    "/vmware",
+    "/proxmox?status=all"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 900
+      "width": 1900,
+      "height": 1100
     },
     {
-      "width": 768,
-      "height": 900
+      "width": 1280,
+      "height": 800
     },
     {
       "width": 390,
-      "height": 900
-    },
-    {
-      "width": 320,
-      "height": 900
+      "height": 844
     }
   ],
   "states": [
-    "Mock-data Proxmox overview, storage, replication, backup coverage, backup date, Ceph, and mail tables with dense inventories and query-state variants",
-    "Alerts overview, history, thresholds, notifications, and schedule plus Actions and Patrol at phone and desktop widths",
-    "All available Settings routes under mock entitlements, including expected organization-route redirects to Infrastructure",
-    "Phone layouts prioritizing operator identity, status, health, capacity, and recency while progressively restoring secondary context at tablet and desktop widths",
-    "Availability checks list and manage dialog with populated form controls, status badges, and row actions",
-    "Provider and model configuration with cost time-range controls, refresh action, API-key fields, and provider configuration",
-    "Threshold quick tips, expanded resource groups, global defaults, row overrides, status toggles, and dense mocked resource inventories",
-    "Consistent full-width main content across platform, Alerts, Actions, Patrol, and Settings surfaces"
+    "vSphere VM table with a saved workloadsHiddenColumns:vmware-vms preference that predates the Backup default-hide: before the fix the Backup column rendered on all 18 VM rows, every cell reading None",
+    "vSphere VM table after the one-time migration: Backup absent from the header, zero Backup cells, hidden list carries backup and the default-hidden-applied marker records it",
+    "vSphere VM table with Backup manually re-shown from the Columns control: 18 rows, every cell None",
+    "vSphere VM table reloaded after the manual re-show: Backup still visible, marker stops the migration re-hiding a column the user restored",
+    "Proxmox workload table unaffected at desktop width: Backup column still visible with real ages (1d, 9d, 12d, 15d, 21d) alongside fresh and None cells",
+    "Proxmox workload table at 390px: hidden list unchanged, backup never added to the Proxmox scope",
+    "vSphere VM table at 390px: 32 rows render, Backup hidden, no horizontal body overflow"
   ],
   "interactions": [
-    "Navigated every listed route and inspected visible information priority, clipping, document overflow, and page-width stability across 320px, 390px, 768px, and 1280px viewports",
-    "Added responsive context progressively instead of scaling the application or relying on horizontal table scrolling",
-    "Opened the Availability manage dialog at 320px, measured its bounds and all form and action controls, then closed it and confirmed focus returned to the exact originating Manage button",
-    "Selected the 7-day AI cost range and confirmed pressed state, 44px phone controls, and compact desktop density",
-    "Measured Availability Refresh, Test, Pause, and Manage actions at phone and desktop widths and confirmed the dialog remains inside the 320px viewport",
-    "Measured Provider Refresh, Threshold dismiss, expand, collapse, numeric input, toggle, and edit controls at phone widths and retained compact desktop sizing",
-    "Confirmed no horizontal document overflow on the audited routes and interactive states, then reset the viewport and finalized the browser session"
+    "Opened the View preferences popover on /vmware and read the Columns control reporting 4 hidden",
+    "Opened the Columns multiselect and clicked the Backup toggle to re-show the column",
+    "Reloaded /vmware after the manual re-show to confirm the migration marker holds",
+    "Seeded and cleared the workloadsHiddenColumns:vmware-vms scope keys to reproduce the pre-migration state at each viewport",
+    "Navigated between /vmware and /proxmox?status=all to compare the Backup column across scopes"
   ]
 }

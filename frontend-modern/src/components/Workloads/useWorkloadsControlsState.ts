@@ -219,7 +219,12 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     defaultHiddenColumnIds,
     relevantColumns,
     {},
-    ['aiContext'],
+    // One-time hides for users who already have a saved column preference for
+    // this scope. `backup` reads exclusively from `resource.proxmox.lastBackup`,
+    // so on scopes that opt into hiding it (vSphere) it renders "None" on every
+    // row forever. The migration only fires where the id is already in that
+    // scope's default-hidden set, so Proxmox keeps the column visible.
+    ['aiContext', 'backup'],
   );
 
   const visibleColumns = columnVisibility.visibleColumns;

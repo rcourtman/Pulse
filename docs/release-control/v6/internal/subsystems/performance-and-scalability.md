@@ -615,6 +615,15 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     as column-picker options without creating blank default columns.
     Non-Docker Workloads surfaces keep the global `disk` default unless they
     declare their own scoped contract.
+    A scoped default-hide only reaches users who have no saved preference for
+    that storage scope, so every column a scope newly default-hides must also
+    be listed in the `defaultHiddenMigrationIds` argument
+    `useWorkloadsControlsState` passes to `useColumnVisibility`. That list is
+    the one-time retirement path for stale preferences; without it the column
+    stays visible forever for anyone who had already touched the Columns
+    control on that page. The migration only fires where the id is already in
+    that scope's effective default-hidden set, and it records a marker so a
+    column the user deliberately restores is never re-hidden.
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. The Add filter control inherits FilterBar's compact accessible-only label by default instead of paying for a page-local labelled-field shell. Durable presentation controls pass only their panel content through `FilterBar.viewOptions`; the shared FilterBar owns the single View trigger and popover. Contextual actions use `leadingControls`, while frequently changed analytical orientation such as the active trend range uses `trailingControls`.
     Workload filter option semantics stay workload-owned, but FilterBar chip
     presentation is frontend-primitives-owned: status and runtime leading dots
