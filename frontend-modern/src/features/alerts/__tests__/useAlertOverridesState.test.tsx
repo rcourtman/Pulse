@@ -63,7 +63,7 @@ describe('useAlertOverridesState', () => {
     expect(overviewOverrides()).toEqual(result.overrides());
   });
 
-  it('keeps standalone agent machines out of the virtualization host list while retaining provider-owned nodes', () => {
+  it('keeps non-Proxmox systems out of the virtualization host threshold scope', () => {
     const [hasUnsavedChanges] = createSignal(false);
     const [, setOverviewOverrides] = createSignal([]);
     const resources = [
@@ -90,6 +90,30 @@ describe('useAlertOverridesState', () => {
         platformData: {
           proxmox: { node: 'pve01', instance: 'cluster-a' },
         },
+      }),
+      // TrueNAS systems are canonical `agent` resources too, but their row must
+      // use TrueNAS defaults. If this ID also enters Virtualization Hosts, a 95%
+      // memory edit collides with the PVE node default and is stripped (#1593).
+      makeResource({
+        id: 'agent-truenas-01',
+        name: 'strawberrynas',
+        type: 'agent',
+        platformType: 'truenas',
+        sourceType: 'api',
+        sources: ['truenas'],
+        truenas: { hostname: 'strawberrynas' },
+        proxmox: { node: 'strawberrynas' },
+      }),
+      // vSphere hosts also own a dedicated platform threshold section.
+      makeResource({
+        id: 'agent-vsphere-01',
+        name: 'esxi-01',
+        type: 'agent',
+        platformType: 'vmware-vsphere',
+        sourceType: 'api',
+        sources: ['vmware'],
+        vmware: { runtimeHostName: 'esxi-01' },
+        proxmox: { node: 'esxi-01' },
       }),
     ];
 

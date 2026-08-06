@@ -3,11 +3,10 @@ import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js'
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { Resource, ResourceType } from '@/types/resource';
-import {
-  isAgentFacetInfrastructureResource,
-  isPulseAgentPlatformResource,
-} from '@/utils/agentResources';
+import { resolveProxmoxPlatformScope } from '@/features/proxmox/proxmoxPageModel';
+import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
+import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 import {
   buildContainerRuntimeResources,
@@ -23,6 +22,12 @@ export interface AlertOverridesStateProps {
   hasUnsavedChanges: Accessor<boolean>;
   setOverviewOverrides: (value: Override[]) => void;
 }
+
+const isVirtualizationHostResource = (resource: Resource): boolean => {
+  const platformType = resolveResourcePlatformType(resource);
+  if (platformType) return platformType === 'proxmox-pve';
+  return resolveProxmoxPlatformScope(resource) === 'proxmox-pve';
+};
 
 export function useAlertOverridesState(props: AlertOverridesStateProps) {
   const [overrides, setOverrides] = createSignal<Override[]>([]);
@@ -51,13 +56,14 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
     props.allResources().filter((resource) => isAgentFacetInfrastructureResource(resource)),
   );
 
-  // Standalone Pulse-agent machines are not virtualization hosts. They own a row
-  // in the Machines tab, which resolves overrides by agent identity. Leaving them
-  // in the Virtualization Hosts list gave the same machine a second row that saved
-  // overrides under the bare resource id, an identity agent alerting never reads,
-  // so the override silently did nothing.
+  // Virtualization Hosts is the Proxmox PVE threshold scope. Other canonical
+  // `agent` resources have their own identity-aware sections: Pulse agents use
+  // Systems, while TrueNAS and vSphere use their platform tabs. Letting any of
+  // those resources into this list duplicates the same resource ID with node
+  // defaults, so the shared save path can normalize a platform override against
+  // the wrong defaults (for example, TrueNAS memory 95% against PVE's 95%).
   const virtualizationHostResources = createMemo(() =>
-    props.byType('agent').filter((resource) => !isPulseAgentPlatformResource(resource)),
+    props.byType('agent').filter(isVirtualizationHostResource),
   );
 
   const pbsInstances = createMemo<PBSInstance[]>(() =>

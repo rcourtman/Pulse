@@ -2429,6 +2429,12 @@ default` instead of fusing provider and badge text such as
     props that can collapse functions on the live Solid surface. Docker-only
     controls in `ThresholdsTableDockerTab.tsx` must remain gated to real
     `docker-host` resources instead of leaking onto platform-managed runtimes.
+    Threshold host selectors follow the same single-owner rule: canonical
+    `platformType` wins over secondary discovery facets, so TrueNAS and vSphere
+    `agent` resources remain in their platform threshold tabs even when they
+    retain Proxmox evidence, and only Proxmox PVE-owned hosts enter
+    `Virtualization Hosts`. A missing canonical owner may use the legacy
+    Proxmox scope resolver as a compatibility fallback.
 37. Keep shared commercial upgrade navigation typed and destination-aware.
     Shared paywall shells and upgrade actions must route internal billing or
     cloud destinations through `frontend-modern/src/utils/upgradeNavigation.ts`,

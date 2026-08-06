@@ -100,7 +100,12 @@ alerting never reads it, leaving the machine on the global default with nothing
 on screen to explain it. A resource must appear in exactly one threshold section,
 the one whose identity alerting honours. Standalone Pulse-agent machines belong
 to Machines, so the Virtualization Hosts section is fed by provider-owned
-virtualization nodes rather than by every resource of type `agent`.
+Proxmox PVE nodes rather than by every resource of type `agent`. Canonical
+TrueNAS and vSphere hosts are also represented as `agent` resources, but they
+belong only to their platform threshold sections; admitting either to
+Virtualization Hosts would normalize edits against Proxmox node defaults and
+could silently discard a valid platform override whose value happens to equal
+the Proxmox default.
 
 QEMU guest-agent filesystems have their own threshold identity:
 `guest-disk:<stable-guest-key>/disk:<mount-device-key>`. The stable guest key
