@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -195,6 +196,94 @@ func TestHelmChartShipsOpenShiftProfile(t *testing.T) {
 
 func shieldsBadgeMessage(value string) string {
 	return strings.ReplaceAll(value, "-", "--")
+}
+
+// TestAgentBuildCacheDoesNotResurrectPulseAgentPackage guards the repository's
+// GHCR package list, which is a user-facing surface. A registry cache ref
+// creates the package it points at, so pointing the agent_runtime build cache
+// at ghcr.io/<owner>/pulse-agent recreated an empty package on every release.
+// It then sat in the repo's Packages sidebar beside pulse, pulse-control-plane
+// and pulse-chart/pulse, reading like a pullable agent image even though no
+// workflow publishes it. Only images a release workflow actually pushes may
+// own a package; the unified agent ships inside the main pulse image.
+func TestAgentBuildCacheDoesNotResurrectPulseAgentPackage(t *testing.T) {
+	workflowDir := repoFile(".github", "workflows")
+	entries, err := os.ReadDir(workflowDir)
+	if err != nil {
+		t.Fatalf("read workflow dir: %v", err)
+	}
+
+	// Registry-qualified refs only: the release binaries are legitimately named
+	// pulse-agent-<os>-<arch> and must keep matching nothing here. Workflow
+	// expressions are collapsed first so an owner interpolated as
+	// ${{ github.repository_owner }} cannot hide the ref behind its spaces.
+	workflowExpr := regexp.MustCompile(`\$\{\{[^}]*\}\}`)
+	packageRef := regexp.MustCompile(`(?:ghcr\.io|docker\.io)/[^\s"']*/pulse-agent\b|(?:^|\s)rcourtman/pulse-agent\b`)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || (!strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml")) {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(workflowDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for i, line := range strings.Split(string(content), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				continue
+			}
+			if match := packageRef.FindString(workflowExpr.ReplaceAllString(line, "EXPR")); match != "" {
+				t.Fatalf("%s:%d targets the unpublished pulse-agent package (%q); no workflow may reference it, buildcache refs included", name, i+1, strings.TrimSpace(match))
+			}
+		}
+	}
+
+	release, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	for _, required := range []string{
+		`cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:agent-buildcache`,
+		`cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:agent-buildcache,mode=max`,
+	} {
+		if !strings.Contains(string(release), required) {
+			t.Fatalf("create-release.yml must cache the agent_runtime build under the published pulse package; missing %q", required)
+		}
+	}
+
+	values, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "values.yaml"))
+	if err != nil {
+		t.Fatalf("read values.yaml: %v", err)
+	}
+	agentBlock := topLevelYAMLBlock(t, string(values), "agent")
+	if !strings.Contains(agentBlock, "repository: rcourtman/pulse\n") {
+		t.Fatal("chart agent.image.repository must default to the published rcourtman/pulse image")
+	}
+}
+
+// topLevelYAMLBlock returns the lines of a top-level mapping key, from the key
+// itself up to the next unindented key.
+func topLevelYAMLBlock(t *testing.T, doc string, key string) string {
+	t.Helper()
+	lines := strings.Split(doc, "\n")
+	start := -1
+	for i, line := range lines {
+		if line == key+":" {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		t.Fatalf("values.yaml missing top-level %q key", key)
+	}
+	for i := start + 1; i < len(lines); i++ {
+		line := lines[i]
+		if line == "" || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "#") {
+			continue
+		}
+		return strings.Join(lines[start:i], "\n")
+	}
+	return strings.Join(lines[start:], "\n")
 }
 
 func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {

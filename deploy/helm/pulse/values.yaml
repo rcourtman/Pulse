@@ -133,7 +133,8 @@ agent:
     # Defaults to the main Pulse image; the runtime stage now ships an arch-
     # resolved /usr/local/bin/pulse-agent symlink so the same image can serve
     # both server and agent workloads. The previous default
-    # (ghcr.io/rcourtman/pulse-agent) was an image that was never published.
+    # (ghcr.io/rcourtman/pulse-agent) is not a maintained image: no release
+    # workflow pushes it, and the only tag it ever carried was v6.0.0-rc.3.
     repository: rcourtman/pulse
     tag: ""
     pullPolicy: IfNotPresent

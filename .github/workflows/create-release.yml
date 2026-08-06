@@ -429,8 +429,13 @@ jobs:
           push: false
           provenance: mode=max
           sbom: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache,mode=max
+          # Cache under the published pulse package, not a pulse-agent package.
+          # No workflow pushes a pulse-agent image, so a buildcache ref there
+          # resurrects an empty package in the repo's Packages sidebar that
+          # reads like a pullable agent image. Blobs are also shared with the
+          # runtime build, which uses the same backend-builder layers.
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:agent-buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:agent-buildcache,mode=max
           build-args: |
             VERSION=${{ needs.prepare.outputs.tag }}
             PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}

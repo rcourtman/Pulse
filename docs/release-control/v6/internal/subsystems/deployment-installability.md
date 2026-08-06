@@ -940,14 +940,22 @@ upgrade, update, release, or artifact-selection behavior.
    from whatever branch GitHub happened to check out.
    The chart's `agent.enabled=true` workload must point at an image that is
    actually published. The default `agent.image.repository` must be the main
-   `rcourtman/pulse` image (which is the only image `publish-docker.yml`
-   pushes); the agent template must override the server ENTRYPOINT via
+   `rcourtman/pulse` image (the only agent-capable image `publish-docker.yml`
+   pushes; the same workflow also pushes the MSP `pulse-control-plane` image,
+   which is not an agent runtime); the agent template must override the server
+   ENTRYPOINT via
    `agent.command` so the pod runs as a unified agent; and the runtime stage
    of `Dockerfile` must ship an arch-resolved `/usr/local/bin/pulse-agent`
    symlink that picks `pulse-agent-linux-{amd64,arm64,armv7}` per `TARGETARCH`
-   so a single command default works across multi-arch nodes. The
-   never-published `ghcr.io/rcourtman/pulse-agent` is forbidden as a chart
-   default. `scripts/validate-release.sh` must assert the
+   so a single command default works across multi-arch nodes. The unmaintained
+   `ghcr.io/rcourtman/pulse-agent` is forbidden as a chart default: no release
+   workflow publishes it, and the only release tag it ever carried is a stray
+   `v6.0.0-rc.3`. No workflow may reference that package at all, buildcache
+   refs included — a `cache-to` there recreates an empty package in the
+   repository's Packages sidebar that reads like a pullable agent image. The
+   `agent_runtime` build cache belongs at
+   `ghcr.io/<owner>/pulse:agent-buildcache`, alongside the runtime stage's own
+   `pulse:buildcache` tag. `scripts/validate-release.sh` must assert the
    `/usr/local/bin/pulse-agent` symlink exists, points at one of the
    supported Linux arch binaries, and is executable in the published image.
    `create-release.yml` must trigger `publish-helm-chart.yml` via an explicit
