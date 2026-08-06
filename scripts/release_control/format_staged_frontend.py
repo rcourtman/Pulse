@@ -54,13 +54,48 @@ def git(*args: str, text: bool, input_data: str | bytes | None = None) -> subpro
     )
 
 
+def primary_worktree_root() -> Path | None:
+    """Resolve the primary worktree's root, or None when that fails.
+
+    Linked worktrees (the Claude and Codex agent checkouts under
+    .claude/worktrees and ~/.codex/worktrees) never run `npm install`, so
+    frontend-modern/node_modules only ever exists in the primary checkout.
+    --git-common-dir points at the shared .git directory from anywhere in the
+    repository, and its parent is the primary worktree root.
+    """
+    try:
+        common = git("rev-parse", "--git-common-dir", text=True).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    if not common:
+        return None
+    common_dir = Path(common)
+    if not common_dir.is_absolute():
+        common_dir = (REPO_ROOT / common_dir).resolve()
+    # A bare or otherwise unusual layout has no worktree to fall back to.
+    if common_dir.name != ".git":
+        return None
+    return common_dir.parent
+
+
+def prettier_search_roots() -> list[Path]:
+    roots = [REPO_ROOT]
+    primary = primary_worktree_root()
+    if primary is not None and primary != REPO_ROOT:
+        roots.append(primary)
+    return roots
+
+
 def prettier_bin() -> Path | None:
     override = os.environ.get("PULSE_PRETTIER_BIN")
     if override:
         candidate = Path(override)
         return candidate if candidate.exists() else None
-    candidate = REPO_ROOT / FRONTEND_DIR / "node_modules" / ".bin" / "prettier"
-    return candidate if candidate.exists() else None
+    for root in prettier_search_roots():
+        candidate = root / FRONTEND_DIR / "node_modules" / ".bin" / "prettier"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def staged_frontend_files() -> list[str]:
@@ -142,11 +177,18 @@ def format_staged_frontend_files() -> int:
 
     prettier = prettier_bin()
     if prettier is None:
-        # Fresh clones and linked worktrees may not have node_modules; skip
-        # gracefully like the golangci-lint availability check does. CI's
-        # prettier check still catches drift that slips through here.
+        # A fresh clone that has never run `npm install` has no prettier
+        # anywhere, so skip gracefully like the golangci-lint availability
+        # check does. The "Check frontend formatting" step in the frontend CI
+        # job is the backstop that catches anything skipped here.
         print("Skipping frontend formatter (prettier not installed under frontend-modern/node_modules).")
         return 0
+
+    if not prettier.is_relative_to(REPO_ROOT):
+        # Linked worktrees borrow the primary checkout's prettier. Say so, so a
+        # version mismatch between the two is visible in the hook output rather
+        # than silently reformatting against the wrong prettier.
+        print(f"Using prettier from the primary worktree: {prettier}")
 
     print("Running prettier on staged frontend files...")
     formatted_count = 0

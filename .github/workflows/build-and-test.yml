@@ -122,6 +122,13 @@ jobs:
         working-directory: frontend-modern
         run: npm ci
 
+      # Whole-tree, not staged-only: the pre-commit formatter only ever sees
+      # staged files, so drift in untouched files is invisible to it. This is
+      # the backstop that keeps `make format` a no-op on a clean tree.
+      - name: Check frontend formatting
+        working-directory: frontend-modern
+        run: npm run format:check
+
       - name: Lint frontend
         working-directory: frontend-modern
         run: npm run lint

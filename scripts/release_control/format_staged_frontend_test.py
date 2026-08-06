@@ -10,13 +10,24 @@ from format_staged_frontend import format_staged_frontend_files
 from repo_file_io import strip_local_git_env
 
 
-REAL_PRETTIER = (
-    Path(format_staged_frontend.DEFAULT_REPO_ROOT)
-    / "frontend-modern"
-    / "node_modules"
-    / ".bin"
-    / "prettier"
-)
+def _resolve_real_prettier() -> Path:
+    # Linked worktrees have no node_modules of their own. Without this the
+    # tests below silently skip in exactly the checkouts where the formatter's
+    # worktree fallback matters.
+    for root in format_staged_frontend.prettier_search_roots():
+        candidate = root / "frontend-modern" / "node_modules" / ".bin" / "prettier"
+        if candidate.exists():
+            return candidate
+    return (
+        Path(format_staged_frontend.DEFAULT_REPO_ROOT)
+        / "frontend-modern"
+        / "node_modules"
+        / ".bin"
+        / "prettier"
+    )
+
+
+REAL_PRETTIER = _resolve_real_prettier()
 
 
 class FormatStagedFrontendTest(unittest.TestCase):
@@ -98,6 +109,46 @@ class FormatStagedFrontendTest(unittest.TestCase):
             )
             staged = self.git(repo_root, "show", ":frontend-modern/src/sample.ts").stdout
             self.assertEqual(staged, "const x = { a: 1 };\n")
+
+    def test_linked_worktree_falls_back_to_primary_checkout_prettier(self) -> None:
+        # Regression: prettier resolved only under REPO_ROOT, so every frontend
+        # commit made from a Claude or Codex worktree silently skipped
+        # formatting and let drift accumulate in already-committed files.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            primary = Path(tmpdir) / "primary"
+            primary.mkdir()
+            self.git(primary, "init")
+            (primary / "seed.txt").write_text("seed\n", encoding="utf-8")
+            self.git(primary, "add", "seed.txt")
+            self.git(
+                primary,
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                "user.name=test",
+                "commit",
+                "-m",
+                "seed",
+            )
+
+            installed = primary / "frontend-modern" / "node_modules" / ".bin" / "prettier"
+            installed.parent.mkdir(parents=True)
+            installed.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            installed.chmod(0o755)
+
+            linked = Path(tmpdir) / "linked"
+            self.git(primary, "worktree", "add", str(linked))
+            self.assertFalse((linked / "frontend-modern" / "node_modules").exists())
+
+            with patch.dict("os.environ", {}, clear=False):
+                os.environ.pop("PULSE_PRETTIER_BIN", None)
+                with patch("format_staged_frontend.REPO_ROOT", linked):
+                    resolved = format_staged_frontend.prettier_bin()
+
+            # --git-common-dir comes back resolved, so compare resolved paths:
+            # on macOS the temp dir is /var -> /private/var.
+            self.assertIsNotNone(resolved)
+            self.assertEqual(resolved.resolve(), installed.resolve())
 
 
 if __name__ == "__main__":
