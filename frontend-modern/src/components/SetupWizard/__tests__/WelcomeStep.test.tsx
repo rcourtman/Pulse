@@ -116,7 +116,12 @@ describe('WelcomeStep', () => {
     expect(
       screen.getByText('docker exec <pulse-container> /app/pulse bootstrap-token'),
     ).toBeInTheDocument();
-    expect(screen.getByText('pct exec <ctid> -- pulse bootstrap-token')).toBeInTheDocument();
+    // Absolute path, because pct exec runs with
+    // PATH=/sbin:/bin:/usr/sbin:/usr/bin and cannot resolve /usr/local/bin.
+    expect(
+      screen.getByText('pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('pct exec <ctid> -- pulse bootstrap-token')).not.toBeInTheDocument();
     expect(screen.queryByText(/pulse-main/)).not.toBeInTheDocument();
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
   });

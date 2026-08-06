@@ -39,7 +39,9 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     {
       id: 'lxc',
       label: t('setup.welcome.deploymentLabel.lxc'),
-      command: 'pct exec <ctid> -- pulse bootstrap-token',
+      // pct exec runs with PATH=/sbin:/bin:/usr/sbin:/usr/bin, which excludes
+      // /usr/local/bin, so a bare `pulse` here fails with exit 127.
+      command: 'pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token',
     },
   ];
 
