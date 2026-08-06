@@ -461,13 +461,13 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
-    // Overrides are keyed as docker:<hostId>/<shortId>; without the backing
-    // host resource only the docker-scope defaults can apply.
+    // Overrides key on docker:<hostId>/<containerName> with legacy ID forms
+    // as fallbacks; without the backing host resource only the docker-scope
+    // defaults can apply.
     const alertResourceIds = () => {
       const hostResource = hostResourceByName().get(host());
       if (!hostResource) return [];
-      const shortId = resource.id.includes('/') ? resource.id.split('/').pop()! : resource.id;
-      return dockerContainerOverrideIdCandidates(hostResource, shortId);
+      return dockerContainerOverrideIdCandidates(hostResource, resource);
     };
     const cpuThresholds = () =>
       alertsActivation.getMetricThresholds('docker', 'cpu', alertResourceIds());

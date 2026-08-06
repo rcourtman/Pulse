@@ -139,9 +139,9 @@ describe('alertThresholdsPresentation', () => {
       ignoreVmidsPlaceholder: '100, 200, 10*',
     });
     expect(getAlertThresholdsDockerIgnoredPrefixesPresentation()).toEqual({
-      title: 'Ignored container prefixes',
+      title: 'Ignored container patterns',
       description:
-        'Containers whose name or ID starts with any prefix below are skipped for container alerts. Enter one prefix per line; matching is case-insensitive.',
+        'Containers whose name or ID matches any pattern below are skipped for container alerts. A bare entry matches as a prefix; use * as a wildcard (runner-*, *-dev, *staging*). Enter one pattern per line; matching is case-insensitive.',
       resetLabel: 'Reset',
       placeholder: 'runner-',
     });

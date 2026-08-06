@@ -436,17 +436,21 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			containerName := strings.ToLower(strings.TrimSpace(alert.ResourceName))
+			containerName := strings.TrimSpace(alert.ResourceName)
 			containerID := ""
+			hostID := ""
 			if alert.Metadata != nil {
 				if val, ok := alert.Metadata["containerId"].(string); ok {
 					containerID = strings.ToLower(strings.TrimSpace(val))
 				}
 				if val, ok := alert.Metadata["containerName"].(string); ok && containerName == "" {
-					containerName = strings.ToLower(strings.TrimSpace(val))
+					containerName = strings.TrimSpace(val)
+				}
+				if val, ok := alert.Metadata["hostId"].(string); ok {
+					hostID = val
 				}
 			}
-			if matchesDockerIgnoredPrefix(containerName, containerID, m.config.DockerIgnoredContainerPrefixes) {
+			if matchesDockerIgnoredPrefix(strings.ToLower(containerName), containerID, m.config.DockerIgnoredContainerPrefixes) {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
@@ -455,7 +459,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				Memory: cloneThreshold(&m.config.DockerDefaults.Memory),
 				Disk:   cloneThreshold(&m.config.DockerDefaults.Disk),
 			}
-			if override, exists := m.config.Overrides[resourceID]; exists {
+			if override, exists := m.lookupDockerContainerOverrideNoLock(hostID, containerName, resourceID); exists {
 				if override.Disabled {
 					alertsToResolve = append(alertsToResolve, alertID)
 					continue

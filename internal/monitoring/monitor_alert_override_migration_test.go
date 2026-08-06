@@ -302,3 +302,77 @@ func TestMigrateAvailabilityLinkedResourcesFailsClosedOnAmbiguity(t *testing.T) 
 		t.Fatalf("ambiguous claims must not migrate, got %+v", migrated)
 	}
 }
+
+func TestSyncUnifiedResourceAlertsMigratesDockerContainerOverrideKeys(t *testing.T) {
+	dockerApp := func(id, hostID, containerID, name string) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID:   id,
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: name,
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: hostID,
+				ContainerID:  containerID,
+			},
+		}
+	}
+
+	dataDir := t.TempDir()
+	persistence := config.NewConfigPersistence(dataDir)
+	manager := alerts.NewManagerWithDataDir(dataDir)
+	t.Cleanup(manager.Stop)
+
+	alertConfig := manager.GetConfig()
+	alertConfig.Enabled = true
+	alertConfig.ActivationState = alerts.ActivationActive
+	alertConfig.Overrides = map[string]alerts.ThresholdConfig{
+		// Container IDs change on every recreate; the sync loop must re-home
+		// this live legacy key onto docker:{host}/{name} (#1601).
+		"docker:host-1/aaaaaaaaaaaa": {Disabled: true},
+		// The v6 UI keyed overrides by the unified hash id; re-homed too.
+		"docker:host-1/app-container-0011223344556677": {Disabled: true},
+		// Orphan from a past recreate: pruned.
+		"docker:host-1/bbbbbbbbbbbb": {Disabled: true},
+	}
+	manager.UpdateConfig(alertConfig)
+	if err := persistence.SaveAlertConfig(manager.GetConfig()); err != nil {
+		t.Fatalf("seed legacy alert config: %v", err)
+	}
+
+	monitor := &Monitor{
+		alertManager:  manager,
+		configPersist: persistence,
+		state:         models.NewState(),
+	}
+	monitor.syncUnifiedResourceAlertsToState([]unifiedresources.Resource{
+		dockerApp("app-container-1111111111111111", "host-1", "aaaaaaaaaaaa", "media-server"),
+		dockerApp("app-container-0011223344556677", "host-1", "cccccccccccc", "proxy"),
+	})
+
+	inMemory := manager.GetConfig()
+	for _, gone := range []string{
+		"docker:host-1/aaaaaaaaaaaa",
+		"docker:host-1/app-container-0011223344556677",
+		"docker:host-1/bbbbbbbbbbbb",
+	} {
+		if _, exists := inMemory.Overrides[gone]; exists {
+			t.Fatalf("in-memory override remained under retired docker key %s", gone)
+		}
+	}
+	if override := inMemory.Overrides["docker:host-1/media-server"]; !override.Disabled {
+		t.Fatalf("legacy container-ID override did not re-home onto the name key: %+v", inMemory.Overrides)
+	}
+	if override := inMemory.Overrides["docker:host-1/proxy"]; !override.Disabled {
+		t.Fatalf("unified-hash override did not re-home onto the name key: %+v", inMemory.Overrides)
+	}
+
+	reloaded, err := config.NewConfigPersistence(dataDir).LoadAlertConfig()
+	if err != nil {
+		t.Fatalf("reload migrated alert config: %v", err)
+	}
+	if _, exists := reloaded.Overrides["docker:host-1/aaaaaaaaaaaa"]; exists {
+		t.Fatalf("persisted override remained under the retired container-ID key")
+	}
+	if override := reloaded.Overrides["docker:host-1/media-server"]; !override.Disabled {
+		t.Fatalf("persisted config missing the re-homed name-keyed override: %+v", reloaded.Overrides)
+	}
+}

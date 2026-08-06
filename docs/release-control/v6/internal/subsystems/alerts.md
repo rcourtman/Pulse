@@ -603,6 +603,21 @@ and identity first-seen tracking. Generic threshold reevaluation must not keep
 or resurrect image-update alerts after their owning Docker alert configuration
 has disabled them.
 
+Docker container alert overrides key on stable container identity. The
+canonical override key is `docker:{hostID}/{containerName}`; container IDs
+change on every recreate, so runtime-ID keys orphaned each image update and
+accumulated dead entries in alerts.json (#1601). The evaluator resolves the
+name key first and falls back to the legacy `docker:{hostID}/{containerID}`
+key for pre-migration entries, `MigrateDockerContainerOverrideKeys`
+(`internal/alerts/docker_override_migration.go`) re-homes live legacy and
+unified-hash keys onto the name key on the monitor sync cadence and prunes
+orphaned ID-shaped entries while keeping name-keyed overrides for absent
+containers, and the UI writes only the name key while binding rows through the
+shared `dockerContainerOverrideIdCandidates` chain (name first; container-ID,
+short-ID, unified-hash, and slash-tail forms as trailing lookup candidates).
+Container override work must not reintroduce a runtime-container-ID
+persistence key.
+
 Backup orphan evaluation is also inventory-scoped. The alerts runtime may
 evaluate recovery rollups for backup age, but unresolved Proxmox PVE backup
 subjects must not be treated as orphaned until monitoring has supplied the

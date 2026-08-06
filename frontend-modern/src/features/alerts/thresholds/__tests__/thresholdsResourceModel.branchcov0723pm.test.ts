@@ -71,50 +71,54 @@ describe('thresholdsResourceModel branch coverage 0723pm', () => {
   });
 
   describe('dockerContainerOverrideIdCandidates', () => {
-    it('prefixes every host candidate as docker:<hostId>/<shortId>, preserving order', () => {
+    const fullContainerId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+    const makeContainer = (overrides: Partial<Resource> = {}): Resource =>
+      makeAgent({
+        id: 'app-container-0011223344556677',
+        type: 'app-container',
+        name: 'media-server',
+        docker: { containerId: fullContainerId },
+        ...overrides,
+      });
+
+    it('keys on the container name first, then the legacy ID forms, per host candidate', () => {
       const host = makeAgent({
         id: 'runtime-1',
-        discoveryTarget: {
-          resourceType: 'app-container',
-          resourceId: 'container-123',
-          agentId: 'agent-7',
-        },
-        platformData: {
-          docker: { hostSourceId: 'docker-platform' },
-          hostSourceId: 'host-platform',
-        },
+        platformData: { docker: { hostSourceId: 'docker-platform' } },
       });
-      expect(dockerContainerOverrideIdCandidates(host, 'a1b2c3d4e5f6')).toEqual([
-        'docker:container-123/a1b2c3d4e5f6',
-        'docker:docker-platform/a1b2c3d4e5f6',
-        'docker:host-platform/a1b2c3d4e5f6',
-        'docker:agent-7/a1b2c3d4e5f6',
-        'docker:runtime-1/a1b2c3d4e5f6',
+      expect(dockerContainerOverrideIdCandidates(host, makeContainer())).toEqual([
+        `docker:docker-platform/media-server`,
+        `docker:runtime-1/media-server`,
+        `docker:docker-platform/${fullContainerId}`,
+        `docker:runtime-1/${fullContainerId}`,
+        `docker:docker-platform/${fullContainerId.slice(0, 12)}`,
+        `docker:runtime-1/${fullContainerId.slice(0, 12)}`,
+        `docker:docker-platform/app-container-0011223344556677`,
+        `docker:runtime-1/app-container-0011223344556677`,
       ]);
     });
 
-    it('produces a single prefixed entry when the host exposes only its resource id', () => {
+    it('strips a leading slash from the container name and skips absent ID forms', () => {
       const host = makeAgent({ id: 'lone-host' });
-      expect(dockerContainerOverrideIdCandidates(host, 'deadbeef')).toEqual([
-        'docker:lone-host/deadbeef',
+      const container = makeContainer({ name: '/proxy', docker: undefined });
+      expect(dockerContainerOverrideIdCandidates(host, container)).toEqual([
+        'docker:lone-host/proxy',
+        'docker:lone-host/app-container-0011223344556677',
       ]);
     });
 
-    it('falls back to platformData.docker.hostSourceId when discoveryTarget is absent', () => {
-      const host = makeAgent({
-        id: 'host-1',
-        platformData: { docker: { hostSourceId: 'docker-src' } },
-      });
-      expect(dockerContainerOverrideIdCandidates(host, 'cid')).toEqual([
-        'docker:docker-src/cid',
-        'docker:host-1/cid',
+    it('falls back to the unified resource id when the container carries no name', () => {
+      const host = makeAgent({ id: 'host-1' });
+      const container = makeContainer({ name: undefined, docker: undefined });
+      expect(dockerContainerOverrideIdCandidates(host, container)).toEqual([
+        'docker:host-1/app-container-0011223344556677',
       ]);
     });
 
     it('returns an empty array when the host has no usable id signal at all', () => {
-      // resource.id is whitespace -> readString drops it -> uniqueIds yields [].
+      // resource.id is whitespace -> asString drops it -> uniqueIds yields [].
       const host = makeAgent({ id: '   ' });
-      expect(dockerContainerOverrideIdCandidates(host, 'cid')).toEqual([]);
+      expect(dockerContainerOverrideIdCandidates(host, makeContainer())).toEqual([]);
     });
   });
 

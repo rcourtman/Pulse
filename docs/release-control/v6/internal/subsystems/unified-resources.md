@@ -2045,6 +2045,12 @@ lifecycle controls from runtime-shaped metadata alone. After a governed request
 completes, the owning surface may ask its existing `useUnifiedResources` query
 to refetch the resource snapshot, but refresh is not an alternate execution,
 verification, or provider-control path.
+Alert-threshold identity on those Docker rows is also resource-facet backed:
+`DockerContainersTable.tsx` resolves per-container alert thresholds by handing
+the full app-container resource (name plus `docker.containerId` facet) to the
+shared `dockerContainerOverrideIdCandidates` chain, so override identity keys
+on `docker:{host}/{containerName}` (#1601) rather than on parsed unified
+resource-id tails.
 Proxmox VM and LXC lifecycle affordances follow the same resource-owned rule:
 the backend advertises only status-appropriate `start`, `shutdown`, `reboot`,
 and `stop` capabilities for non-template, unlocked Proxmox guests, filters them

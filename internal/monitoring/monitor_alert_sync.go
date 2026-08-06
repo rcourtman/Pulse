@@ -97,7 +97,11 @@ func (m *Monitor) syncUnifiedResourceAlertsToState(resources []unifiedresources.
 	}
 
 	config := m.alertManager.GetConfig()
-	if alerts.MigrateCanonicalOverrideKeys(&config, resources) {
+	migrated := alerts.MigrateCanonicalOverrideKeys(&config, resources)
+	if alerts.MigrateDockerContainerOverrideKeys(&config, resources) {
+		migrated = true
+	}
+	if migrated {
 		if m.configPersist == nil {
 			log.Warn().Msg("cannot persist canonical alert override migration without config persistence")
 		} else if err := m.configPersist.SaveAlertConfig(config); err != nil {

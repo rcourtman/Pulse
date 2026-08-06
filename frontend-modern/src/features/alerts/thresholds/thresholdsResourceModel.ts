@@ -88,8 +88,9 @@ export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => 
   );
 };
 
-export const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
-  uniqueIds(...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`));
+// Single implementation shared with the overrides projection so the lookup
+// chain (stable name key first, legacy ID forms trailing) cannot drift.
+export { dockerContainerOverrideIdCandidates } from '../alertOverridesModel';
 
 export const findOverrideByCandidates = (
   overridesMap: Map<string, Override>,

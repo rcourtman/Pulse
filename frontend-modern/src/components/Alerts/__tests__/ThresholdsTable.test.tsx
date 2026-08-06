@@ -687,17 +687,17 @@ describe('ThresholdsTable Resource Rendering', () => {
       />
     ));
 
+    // Rows key on the stable docker:{host}/{containerName} override id, which
+    // survives container recreates (#1601).
     await waitFor(() => {
-      expect(
-        screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
-      ).toBeTruthy();
+      expect(screen.getByTestId('resource-name-docker:docker-host-1/secret-nginx')).toBeTruthy();
     });
 
+    expect(screen.getByTestId('resource-name-docker:docker-host-1/secret-nginx')).toHaveTextContent(
+      'Secret Nginx',
+    );
     expect(
-      screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
-    ).toHaveTextContent('Secret Nginx');
-    expect(
-      screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
+      screen.getByTestId('resource-name-docker:docker-host-1/secret-nginx'),
     ).not.toHaveTextContent('redacted by policy');
   });
 
@@ -740,10 +740,10 @@ describe('ThresholdsTable Resource Rendering', () => {
     });
 
     expect(screen.getByTestId('resource-name-truenas-resource')).toHaveTextContent('TrueNAS');
-    expect(
-      screen.getByTestId('resource-name-docker:truenas-resource/ix-nextcloud'),
-    ).toHaveTextContent('Nextcloud');
-    expect(screen.queryByText('Ignored container prefixes')).not.toBeInTheDocument();
+    expect(screen.getByTestId('resource-name-docker:truenas-resource/nextcloud')).toHaveTextContent(
+      'Nextcloud',
+    );
+    expect(screen.queryByText('Ignored container patterns')).not.toBeInTheDocument();
     expect(screen.queryByText('Swarm service alerts')).not.toBeInTheDocument();
   });
 

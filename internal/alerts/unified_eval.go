@@ -21,7 +21,9 @@ import (
 //	Storage:           storage.ID          e.g. "local-lvm"
 //	PBS:               pbs.ID              e.g. "pbs-1"
 //	PMG:               pmg.ID              e.g. "pmg-1"
-//	Docker Container:  "docker:{hostID}/{containerID}"
+//	Docker Container:  "docker:{hostID}/{containerName}" (stable across
+//	                   container recreates; legacy "docker:{hostID}/{containerID}"
+//	                   entries are still honoured and migrated, #1601)
 //	Kubernetes:        canonical unified resource ID for cluster/node/namespace/deployment/pod
 //	TrueNAS System:    canonical unified agent resource ID
 //	TrueNAS Storage:   canonical unified storage resource ID for pool/dataset

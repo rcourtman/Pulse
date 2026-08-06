@@ -198,8 +198,32 @@ export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => 
   );
 };
 
-export const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
-  uniqueIds(...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`));
+// Container override keys must survive container recreates: the durable key
+// is docker:{hostId}/{containerName}, which is what the backend evaluator
+// resolves first. ID-based forms trail as lookup candidates so overrides
+// written under the runtime container ID (the legacy backend key) or the
+// unified hash id (what this UI keyed on before #1601) still bind to the row
+// and re-home onto the stable name key on the next save.
+export const dockerContainerOverrideIdCandidates = (
+  host: Resource,
+  container: Resource,
+): string[] => {
+  const containerId =
+    asString(container.docker?.containerId) ?? asString(platformData(container)?.containerId);
+  const keyParts = uniqueIds(
+    asString(container.name)?.replace(/^\/+/, ''),
+    containerId,
+    containerId && containerId.length > 12 ? containerId.slice(0, 12) : undefined,
+    container.id,
+    // Historical slash-form resource ids stored their tail as the key part.
+    container.id.includes('/') ? container.id.split('/').pop() : undefined,
+  );
+  return uniqueIds(
+    ...keyParts.flatMap((part) =>
+      dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${part}`),
+    ),
+  );
+};
 
 // Kubernetes / TrueNAS / VMware resources are keyed by their unified resource
 // IDs in the overrides map (the same candidates buildProjectedOverrides
@@ -404,8 +428,9 @@ export const buildProjectedOverrides = ({
     const containers = getChildren(host.id).filter((resource) => resource.type === 'app-container');
 
     containers.forEach((container) => {
-      const shortId = container.id.includes('/') ? container.id.split('/').pop()! : container.id;
-      dockerContainerOverrideIdCandidates(host, shortId).forEach((resourceId) => {
+      const containerId = asString(container.docker?.containerId);
+      const shortId = containerId ? containerId.slice(0, 12) : container.id;
+      dockerContainerOverrideIdCandidates(host, container).forEach((resourceId) => {
         dockerContainerMap.set(resourceId, { host, container, containerShortId: shortId });
       });
     });

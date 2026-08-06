@@ -1492,3 +1492,29 @@ func TestCheckPMGAnomalyAnnotatesCanonicalSpecMetadata(t *testing.T) {
 		t.Fatalf("canonicalSpecID = %v, want pmg-1-anomaly-spamIn", got)
 	}
 }
+
+func TestUnifiedResourceInputExcludesDockerAppContainers(t *testing.T) {
+	// Docker containers are evaluated by CheckDockerHost against the
+	// docker:{host}/{containerName} override key (#1601); unified eval must
+	// not double-evaluate them under a second identity.
+	resource := unifiedresources.Resource{
+		ID:   "app-container-1234567890abcdef",
+		Type: unifiedresources.ResourceTypeAppContainer,
+		Name: "media-server",
+		Docker: &unifiedresources.DockerData{
+			HostSourceID: "host-1",
+			ContainerID:  "aaaaaaaaaaaa",
+		},
+	}
+	if input, ok := UnifiedResourceInputFromResource(resource); ok {
+		t.Fatalf("docker app-containers must stay owned by CheckDockerHost, got unified input %+v", input)
+	}
+
+	// TrueNAS apps remain unified-eval owned.
+	resource.Docker = nil
+	resource.TrueNAS = &unifiedresources.TrueNASData{}
+	input, ok := UnifiedResourceInputFromResource(resource)
+	if !ok || input.Type != "truenas-app" {
+		t.Fatalf("truenas app containers must stay unified-eval owned, got %+v ok=%v", input, ok)
+	}
+}

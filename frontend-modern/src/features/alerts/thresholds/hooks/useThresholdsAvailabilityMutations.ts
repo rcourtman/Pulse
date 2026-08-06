@@ -181,9 +181,14 @@ export function useThresholdsAvailabilityMutations({
             (matchesAlertIdentifier(alert, offlineId) || alert.type === 'offline'),
         );
       } else if (resource.type === 'dockerContainer') {
+        // Active docker alerts are keyed by the runtime container ID, which
+        // may differ from the stable row id; match any known candidate.
+        const alertResourceIds = resource.overrideIdCandidates?.length
+          ? resource.overrideIdCandidates
+          : [resourceId];
         props.removeAlerts(
           (alert) =>
-            alert.resourceId === resourceId &&
+            alertResourceIds.includes(alert.resourceId) &&
             (alert.type === 'docker-container-state' || alert.type === 'docker-container-health'),
         );
       }
@@ -353,9 +358,12 @@ export function useThresholdsAvailabilityMutations({
           (alert) => alert.resourceId === resourceId && alert.type === 'powered-off',
         );
       } else if (resource.type === 'dockerContainer') {
+        const alertResourceIds = resource.overrideIdCandidates?.length
+          ? resource.overrideIdCandidates
+          : [resourceId];
         props.removeAlerts(
           (alert) =>
-            alert.resourceId === resourceId &&
+            alertResourceIds.includes(alert.resourceId) &&
             (alert.type === 'docker-container-state' || alert.type === 'docker-container-health'),
         );
       }

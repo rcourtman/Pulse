@@ -2837,6 +2837,18 @@ storage rows onto the storage metrics target id before the thresholds table
 derives rows, so old Ceph override records and newly projected Ceph pool
 overrides survive the v6 feature-shell path instead of silently disappearing
 from the live editor.
+Docker container override identity follows the same single-owner rule.
+`dockerContainerOverrideIdCandidates` in
+`frontend-modern/src/features/alerts/alertOverridesModel.ts` is the only
+builder of container override keys (re-exported by
+`thresholdsResourceModel.ts`): it leads with the stable
+`docker:{host}/{containerName}` key that survives container recreates (#1601)
+and trails the legacy container-ID, short-ID, unified-hash, and slash-tail
+forms as lookup candidates. Threshold rows carry that chain as
+`overrideIdCandidates`/`overrideStorageId` so every mutation path (toggle,
+connectivity, offline state, edit, remove) strips the historical keys and
+writes only the name key; docker surfaces must not derive container override
+keys locally from resource-id parsing.
 
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage

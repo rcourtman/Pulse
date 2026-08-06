@@ -49,9 +49,9 @@ export const ALERT_THRESHOLDS_BACKUP_IGNORE_VMIDS_LABEL = 'Ignore VMIDs';
 export const ALERT_THRESHOLDS_BACKUP_IGNORE_VMIDS_DESCRIPTION =
   'One per line. Use a trailing * to match a prefix (example: 10*).';
 export const ALERT_THRESHOLDS_BACKUP_IGNORE_VMIDS_PLACEHOLDER = '100, 200, 10*';
-export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_TITLE = 'Ignored container prefixes';
+export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_TITLE = 'Ignored container patterns';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_DESCRIPTION =
-  'Containers whose name or ID starts with any prefix below are skipped for container alerts. Enter one prefix per line; matching is case-insensitive.';
+  'Containers whose name or ID matches any pattern below are skipped for container alerts. A bare entry matches as a prefix; use * as a wildcard (runner-*, *-dev, *staging*). Enter one pattern per line; matching is case-insensitive.';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_RESET_LABEL = 'Reset';
 export const ALERT_THRESHOLDS_DOCKER_IGNORED_PREFIXES_PLACEHOLDER = 'runner-';
 export const ALERT_THRESHOLDS_DOCKER_SERVICES_TITLE = 'Swarm service alerts';

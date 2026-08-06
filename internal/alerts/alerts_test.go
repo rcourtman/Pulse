@@ -19795,3 +19795,87 @@ func TestManagerSkipsPersistedAlertRestoreForMockMode(t *testing.T) {
 		t.Fatalf("mock mode must not resurface real persisted alerts, got %+v", alert)
 	}
 }
+
+func TestDockerContainerOverrideSurvivesContainerRecreate(t *testing.T) {
+	// #1601: the disable toggle must key on host+name, not the container ID,
+	// because the ID changes on every recreate (image update, compose up).
+	exitedContainer := func(id string) models.DockerContainer {
+		return models.DockerContainer{
+			ID:     id,
+			Name:   "media-server",
+			State:  "exited",
+			Status: "Exited (1) seconds ago",
+		}
+	}
+	hostWith := func(ct models.DockerContainer) models.DockerHost {
+		return models.DockerHost{
+			ID:          "host-1",
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers:  []models.DockerContainer{ct},
+		}
+	}
+	stateAlertID := func(hostID, containerID string) string {
+		return fmt.Sprintf("docker-container-state-%s", dockerResourceID(hostID, containerID))
+	}
+
+	// Subtests keep the two managers in separate lifetimes: newTestManager
+	// holds a process-wide env mutex until its test cleanup runs.
+	t.Run("control alert without override", func(t *testing.T) {
+		control := newTestManager(t)
+		control.CheckDockerHost(hostWith(exitedContainer("aaaaaaaaaaaa")))
+		control.CheckDockerHost(hostWith(exitedContainer("aaaaaaaaaaaa")))
+		if !testHasActiveAlert(t, control, stateAlertID("host-1", "aaaaaaaaaaaa")) {
+			t.Fatalf("control: expected state alert for exited container without override")
+		}
+	})
+
+	t.Run("name-keyed override survives recreate", func(t *testing.T) {
+		m := newTestManager(t)
+		m.mu.Lock()
+		m.config.Overrides[dockerContainerOverrideKey("host-1", "media-server")] = ThresholdConfig{Disabled: true}
+		m.mu.Unlock()
+
+		m.CheckDockerHost(hostWith(exitedContainer("aaaaaaaaaaaa")))
+		m.CheckDockerHost(hostWith(exitedContainer("aaaaaaaaaaaa")))
+		if testHasActiveAlert(t, m, stateAlertID("host-1", "aaaaaaaaaaaa")) {
+			t.Fatalf("expected name-keyed override to disable alerts for the original container")
+		}
+
+		// Recreate: same name, new container ID.
+		m.CheckDockerHost(hostWith(exitedContainer("bbbbbbbbbbbb")))
+		m.CheckDockerHost(hostWith(exitedContainer("bbbbbbbbbbbb")))
+		if testHasActiveAlert(t, m, stateAlertID("host-1", "bbbbbbbbbbbb")) {
+			t.Fatalf("expected name-keyed override to survive the container recreate")
+		}
+	})
+}
+
+func TestDockerContainerOverrideLegacyIDKeyStillHonoured(t *testing.T) {
+	m := newTestManager(t)
+
+	container := models.DockerContainer{
+		ID:     "cccccccccccc",
+		Name:   "batch-worker",
+		State:  "exited",
+		Status: "Exited (0) seconds ago",
+	}
+	host := models.DockerHost{
+		ID:          "host-legacy",
+		DisplayName: "Docker Host",
+		Hostname:    "docker.legacy",
+		Containers:  []models.DockerContainer{container},
+	}
+
+	m.mu.Lock()
+	m.config.Overrides[dockerResourceID(host.ID, container.ID)] = ThresholdConfig{Disabled: true}
+	m.mu.Unlock()
+
+	m.CheckDockerHost(host)
+	m.CheckDockerHost(host)
+
+	alertID := fmt.Sprintf("docker-container-state-%s", dockerResourceID(host.ID, container.ID))
+	if testHasActiveAlert(t, m, alertID) {
+		t.Fatalf("expected legacy ID-keyed override to still disable container alerts")
+	}
+}

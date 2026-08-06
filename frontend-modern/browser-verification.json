@@ -1,18 +1,27 @@
 {
   "version": 1,
-  "base_sha": "eac9ffcabf8f2c108c0c2d67f43c91ac4db5023a",
-  "verified_at": "2026-08-06T19:54:45Z",
+  "base_sha": "ed0f3613aeda63f41248cd1ef981b5ca2639bd8b",
+  "verified_at": "2026-08-06T21:47:15Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/alertHistoryModel.ts",
-    "frontend-modern/src/useAppRuntimeState.ts"
+    "frontend-modern/src/features/alerts/alertOverridesModel.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/utils/alertThresholdsPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/alertHistoryModel.ts": "71c9123482dcbbeb2dc319063f3e00e56e6a7ec7fdae4df6c0e9aa78aac8ea6d",
-    "frontend-modern/src/useAppRuntimeState.ts": "7061dbfc8aed3b569526af9018e4f70034c6dee02752295fc449d19283df7753"
+    "frontend-modern/src/features/alerts/alertOverridesModel.ts": "9729ff9ad413c3b9ece2a1ab3449939cba563bf80acd16e678b52d668751ed63",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts": "b8b89dd3d756b13dc730f6cc7e0c3fe2f4a79525753eeaa6fa203766c7e592ba",
+    "frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsDockerData.ts": "92b0fd9836d86930cae26e5ccecb3dc56babdba2170a454e820a12dd27549f2b",
+    "frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts": "e71f230e5fb8ad5f970cf9385afa31b18221aedd81453febbce64a0d0f60783c",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "45b125474f0d5058e9861c44fab0a33cf93b4a82952001d7f9010f18419dac4e",
+    "frontend-modern/src/utils/alertThresholdsPresentation.ts": "6605976a9b561c26578f1eb78785ccd5d6739c2a0a3b91246e23828c8433a49c"
   },
   "routes": [
-    "/alerts/history"
+    "/alerts/thresholds/docker",
+    "/docker"
   ],
   "viewports": [
     {
@@ -20,22 +29,21 @@
       "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Browser locale resolved as en-GB for the whole check, so a hardcoded en-US format is visibly distinguishable from the viewer's own",
-    "Last refresh footer renders 20:52:55 on a 24 hour clock; the previous hardcoded en-US with hour12 true produced 8:52:55 PM for the same instant",
-    "Alert history day group header carries the full-date title 'Thursday, 6 August 2026' in UK day-month order rather than the previous 'Thursday, August 6, 2026'",
-    "Alert history page renders normally at 1280px and 390px with the reformatted labels and no horizontal document overflow",
-    "Canonical platform audit passes clean across src with the new locale rule active",
-    "Reintroducing a hardcoded en-US locale into useAppRuntimeState.ts makes the audit fail at that exact line, then passes again once reverted"
+    "Docker thresholds tab with mock container rows grouped by host, ignored-container-patterns card showing the new wildcard copy",
+    "loki container rows rendering the persisted docker:orion-2-mock/loki name-keyed override as disabled after a full page reload",
+    "alerts.json converged to name-keyed overrides after live monitor-sync migration re-homed a seeded legacy container-ID key and a unified-hash key and pruned an orphaned 12-hex key",
+    "Docker page containers table with CPU/memory meters resolving thresholds through the new name-first candidate chain",
+    "mobile 375px docker thresholds view rendering the wildcard copy and container sections"
   ],
   "interactions": [
-    "Read the rendered Last refresh footer text and the day group header title attribute directly from the DOM in an en-GB browser",
-    "Swept the whole of frontend-modern/src with the audit's own regex to confirm no remaining hardcoded locale literals before adding the rule",
-    "Temporarily reverted one fix to confirm the new audit rule fires on the regression, then restored it and re-ran the audit clean",
-    "Reloaded the history route at both viewports after the change"
+    "searched containers for 'loki' in the thresholds table",
+    "toggled the per-container alert disable switch on 'loki' and clicked Save Changes; verified alerts.json stored docker:orion-2-mock/loki (host+name key)",
+    "reloaded /alerts/thresholds/docker and confirmed the saved override re-bound to the container rows via the name candidate",
+    "seeded legacy docker:{host}/{containerID}, docker:{host}/{unified-hash} and orphan hex overrides via PUT /api/alerts/config and watched the monitor sync migrate all of them to the name key on disk"
   ]
 }

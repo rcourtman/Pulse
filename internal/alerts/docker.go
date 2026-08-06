@@ -47,6 +47,38 @@ func dockerContainerDisplayName(container models.DockerContainer) string {
 	return name
 }
 
+// dockerContainerOverrideKey builds the durable override key for a container:
+// host + container *name*. Container IDs change on every recreate (image
+// update, compose up), so ID-keyed overrides orphan the moment a container is
+// updated; the name is the identity that survives (#1601). Returns "" when
+// either part is missing so callers fall back to the legacy ID key.
+func dockerContainerOverrideKey(hostID, containerName string) string {
+	hostID = strings.TrimSpace(hostID)
+	name := strings.TrimLeft(strings.TrimSpace(containerName), "/")
+	if hostID == "" || name == "" {
+		return ""
+	}
+	return fmt.Sprintf("docker:%s/%s", hostID, name)
+}
+
+// lookupDockerContainerOverrideNoLock resolves a container override,
+// preferring the stable host+name key and falling back to the legacy
+// container-ID resource ID so pre-migration entries keep working.
+// Callers must hold m.mu.
+func (m *Manager) lookupDockerContainerOverrideNoLock(hostID, containerName, legacyResourceID string) (ThresholdConfig, bool) {
+	if stableKey := dockerContainerOverrideKey(hostID, containerName); stableKey != "" {
+		if override, ok := m.config.Overrides[stableKey]; ok {
+			return override, true
+		}
+	}
+	if legacyResourceID != "" {
+		if override, ok := m.config.Overrides[legacyResourceID]; ok {
+			return override, true
+		}
+	}
+	return ThresholdConfig{}, false
+}
+
 // dockerResourceID builds a stable identifier for Docker container alerts.
 func dockerResourceID(hostID, containerID string) string {
 	hostID = strings.TrimSpace(hostID)
@@ -285,7 +317,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 	containerTags := dockerLabelTags(container.Labels)
 
 	m.mu.RLock()
-	overrideConfig, hasOverride := m.config.Overrides[resourceID]
+	overrideConfig, hasOverride := m.lookupDockerContainerOverrideNoLock(host.ID, container.Name, resourceID)
 	m.mu.RUnlock()
 	if hasOverride && overrideConfig.Disabled {
 		// Alerts disabled via override; clear any existing alerts and skip evaluation.
@@ -749,7 +781,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 	stateKey := resourceID
 
 	m.mu.RLock()
-	override, hasOverride := m.config.Overrides[resourceID]
+	override, hasOverride := m.lookupDockerContainerOverrideNoLock(host.ID, container.Name, resourceID)
 	defaultDisable := m.config.DockerDefaults.StateDisableConnectivity
 	defaultSeverity := NormalizePoweredOffSeverity(m.config.DockerDefaults.StatePoweredOffSeverity)
 	m.mu.RUnlock()
@@ -1242,13 +1274,9 @@ func (m *Manager) shouldResolveDockerContainerUpdateAlertLocked(alert *Alert) bo
 		return true
 	}
 
-	if override, exists := m.config.Overrides[alert.ResourceID]; exists && override.Disabled {
-		m.clearDockerContainerUpdateStateLocked(alert)
-		return true
-	}
-
 	containerName := strings.TrimSpace(alert.ResourceName)
 	containerID := ""
+	hostID := ""
 	if alert.Metadata != nil {
 		if value, ok := alert.Metadata["containerName"].(string); ok && containerName == "" {
 			containerName = value
@@ -1256,6 +1284,14 @@ func (m *Manager) shouldResolveDockerContainerUpdateAlertLocked(alert *Alert) bo
 		if value, ok := alert.Metadata["containerId"].(string); ok {
 			containerID = value
 		}
+		if value, ok := alert.Metadata["hostId"].(string); ok {
+			hostID = value
+		}
+	}
+
+	if override, exists := m.lookupDockerContainerOverrideNoLock(hostID, containerName, alert.ResourceID); exists && override.Disabled {
+		m.clearDockerContainerUpdateStateLocked(alert)
+		return true
 	}
 	if matchesDockerIgnoredPrefix(containerName, containerID, m.config.DockerIgnoredContainerPrefixes) {
 		m.clearDockerContainerUpdateStateLocked(alert)

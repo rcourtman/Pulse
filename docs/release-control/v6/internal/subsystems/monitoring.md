@@ -1150,6 +1150,17 @@ that correlation outcome; monitoring never substitutes a matched host or
 service identity for the configured check. Monitoring does not perform the
 correlation decision itself; it only forwards the link hint for the registry
 to resolve.
+The monitor sync cadence also keeps Docker container alert-override keys on
+stable identity. Alongside `MigrateCanonicalOverrideKeys`,
+`syncUnifiedResourceAlertsToState` runs
+`alerts.MigrateDockerContainerOverrideKeys` over the unified resource
+snapshot, re-homing container overrides stored under runtime container IDs or
+v6 unified hash ids onto the durable `docker:{host}/{containerName}` key and
+pruning ID-shaped orphans left by past container recreates (#1601); a changed
+config persists through `SaveAlertConfig` before `UpdateConfig` republishes
+it. Regression coverage:
+`TestSyncUnifiedResourceAlertsMigratesDockerContainerOverrideKeys` in
+`internal/monitoring/monitor_alert_override_migration_test.go`.
 Monitoring does own keeping that stored link hint current across canonical-ID
 eras. On the same cadence as the alert-override migration,
 `migrateAvailabilityLinksToCanonicalIDs`

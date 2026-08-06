@@ -121,13 +121,15 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
       const containers = dockerContainersByHostId().get(host.id) ?? [];
 
       containers.forEach((container) => {
-        const shortId = container.id.includes('/')
-          ? (container.id.split('/').pop() ?? container.id)
-          : container.id;
-        const resourceIdCandidates = dockerContainerOverrideIdCandidates(host, shortId);
+        const containerId = container.docker?.containerId?.trim();
+        const shortId = containerId ? containerId.slice(0, 12) : container.id;
+        const resourceIdCandidates = dockerContainerOverrideIdCandidates(host, container);
         const override = findOverrideByCandidates(overridesMap, resourceIdCandidates);
-        const resourceId =
-          override?.id || resourceIdCandidates[0] || `docker:${dockerHostIdForActions}/${shortId}`;
+        // The row keys on the stable name-based candidate so it survives
+        // container recreates; every candidate is marked seen so an override
+        // still stored under a legacy ID key doesn't also surface as an
+        // "Unassigned Containers" duplicate.
+        const resourceId = resourceIdCandidates[0] || `docker:${dockerHostIdForActions}/${shortId}`;
         const overrideSeverity = override?.poweredOffSeverity;
         const hasCustomThresholds = hasThresholdDiff(
           override,
@@ -166,12 +168,15 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
           hostId: dockerHostIdForActions,
           image,
           poweredOffSeverity: overrideSeverity,
+          overrideIdCandidates: resourceIdCandidates,
+          overrideStorageId: resourceId,
         };
 
         if (!groups[groupKey]) {
           groups[groupKey] = [];
         }
         groups[groupKey].push(resource);
+        resourceIdCandidates.forEach((candidate) => seen.add(candidate));
         seen.add(resourceId);
       });
     });
