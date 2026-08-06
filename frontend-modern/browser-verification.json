@@ -1,46 +1,113 @@
 {
   "version": 1,
-  "base_sha": "93e4b764ffae445e3b501d4bce17c50a9e5ec4fb",
-  "verified_at": "2026-08-06T15:37:44Z",
+  "base_sha": "a94980797bba025285cb7fcb793a7866c4c62e0b",
+  "verified_at": "2026-08-06T16:01:54Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+    "frontend-modern/src/components/shared/FilterToolbar.tsx",
+    "frontend-modern/src/components/shared/SearchField.tsx",
+    "frontend-modern/src/components/shared/SearchTipsPopover.tsx",
+    "frontend-modern/src/components/shared/Subtabs.tsx",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
+    "frontend-modern/src/components/shared/buttonModel.ts",
+    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts",
+    "frontend-modern/src/components/shared/searchTipsPopoverModel.ts",
+    "frontend-modern/src/components/shared/toggleModel.ts",
+    "frontend-modern/src/components/shared/useSearchTipsPopoverState.ts",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "d64a38fee5fef5c62b04814738e7d9342123114d63c0b7559268dbf1d8df98ef"
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "fa76f7946c15b42e529338419dae5bc33395ae91440c404d3f50afb243050ed8",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "cee289c0db5a36bbac8d323cf0435cd0b3ff75384c6e04818ebc71a357a29147",
+    "frontend-modern/src/components/shared/FilterToolbar.tsx": "7b18839d12aba7cef74d934d98658a56bcc26ad46d728f86207d2d0dc25c7dd0",
+    "frontend-modern/src/components/shared/SearchField.tsx": "9dab6fb6e8f35a8633a7777796df272263d375ee08ab6cf039c380c868fcdfd3",
+    "frontend-modern/src/components/shared/SearchTipsPopover.tsx": "22a8dfa12f5ac98c0dd4886d72f9d384805169d2b712cde9f2c8448b6387f1ad",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "cebd908970f3512001f96ea065d24624496f2ed93182b52b8a4b615a35d3735d",
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "e35943a58467e4fadc9c6d06fd6a484c0179b653c2d03851ee5bc51d988132a3",
+    "frontend-modern/src/components/shared/buttonModel.ts": "d6847c1d6e41165165c1a8617b7a5ea63d61fdc0ecc30c876d745949d551c7bd",
+    "frontend-modern/src/components/shared/searchInputEnhancementsModel.ts": "f1fc385fa542e59c14142d2eec6e5e5309b7f747341480de9c35d7c96240ce18",
+    "frontend-modern/src/components/shared/searchTipsPopoverModel.ts": "bd8e76fcdbf74c4111603729901b57f4e4ffff5d8b0660b17a4acb77338b4262",
+    "frontend-modern/src/components/shared/toggleModel.ts": "2f587b9f3bc2d2bf7c57ce4ed5406075bc4a856fd64262e674fa7507c86c3f85",
+    "frontend-modern/src/components/shared/useSearchTipsPopoverState.ts": "155d7479e39171f9f6c4dc324de2349a24b81b5a5c24989150dc6fc1b1b9b51d",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx": "de74125176e6d7421cec5717c963cd8e992f0ef0f11bf9304bb7b75c6f844658"
   },
   "routes": [
-    "/vmware",
-    "/proxmox?status=all"
+    "/proxmox/overview",
+    "/proxmox/storage?tab=disks&source=proxmox-all",
+    "/proxmox/replication",
+    "/proxmox/backups?view=coverage",
+    "/proxmox/backups?view=date",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability",
+    "/alerts/thresholds",
+    "/actions",
+    "/patrol",
+    "/settings/monitoring/availability",
+    "/settings/pulse-intelligence/provider",
+    "/docs",
+    "/preview/setup-complete",
+    "/this-route-does-not-exist"
   ],
   "viewports": [
     {
-      "width": 1900,
-      "height": 1100
+      "width": 320,
+      "height": 900
     },
     {
       "width": 1280,
-      "height": 800
+      "height": 900
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 1920,
+      "height": 1080
     }
   ],
   "states": [
-    "vSphere VM table with a saved workloadsHiddenColumns:vmware-vms preference that predates the Backup default-hide: before the fix the Backup column rendered on all 18 VM rows, every cell reading None",
-    "vSphere VM table after the one-time migration: Backup absent from the header, zero Backup cells, hidden list carries backup and the default-hidden-applied marker records it",
-    "vSphere VM table with Backup manually re-shown from the Columns control: 18 rows, every cell None",
-    "vSphere VM table reloaded after the manual re-show: Backup still visible, marker stops the migration re-hiding a column the user restored",
-    "Proxmox workload table unaffected at desktop width: Backup column still visible with real ages (1d, 9d, 12d, 15d, 21d) alongside fresh and None cells",
-    "Proxmox workload table at 390px: hidden list unchanged, backup never added to the Proxmox scope",
-    "vSphere VM table at 390px: 32 rows render, Backup hidden, no horizontal body overflow"
+    "Mock-data tables across every Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, and Availability route",
+    "Phone inventory controls with table expanders, search history, search tips, filters, saved views, sort controls, and row action menus",
+    "Actions Open and History states plus a governed action review dialog with populated approval evidence",
+    "Patrol runtime controls, attention filters, findings sort controls, issue review buttons, and compact toggle hit area",
+    "Settings Availability and Provider controls plus the compact Settings return action",
+    "Search tips popover at phone and desktop widths, including viewport-edge and page-scroll positioning",
+    "Machines table with default columns, every optional column enabled, responsive column priority, and restored user choices",
+    "Documentation, setup-complete preview, and not-found utility routes"
   ],
   "interactions": [
-    "Opened the View preferences popover on /vmware and read the Columns control reporting 4 hidden",
-    "Opened the Columns multiselect and clicked the Backup toggle to re-show the column",
-    "Reloaded /vmware after the manual re-show to confirm the migration marker holds",
-    "Seeded and cleared the workloadsHiddenColumns:vmware-vms scope keys to reproduce the pre-migration state at each viewport",
-    "Navigated between /vmware and /proxmox?status=all to compare the Backup column across scopes"
+    "Scanned every listed local route at 320px for horizontal document overflow and visible primary controls below a 44px phone target",
+    "Opened and closed Docker and Machines search-tips popovers, measured their viewport bounds, and confirmed phone and desktop positioning remains fully visible",
+    "Opened Docker filters and confirmed the add-filter selector is 44px tall and remains inside the phone viewport",
+    "Expanded and collapsed Docker host details and confirmed the disclosure control is 44px without introducing document overflow",
+    "Switched Actions between Open and History, opened a populated action review dialog, measured its 288px phone bounds and 44px controls, and confirmed close restores focus to the originating action",
+    "Measured Patrol phone actions, filters, selects, findings review controls, and the compact switch's extended hit area, then confirmed compact desktop density remains unchanged",
+    "Enabled all optional Machines columns, confirmed priority columns only at 320px, useful operational columns at 1280px, all 16 columns at 1920px, and no horizontal document scrolling at any width",
+    "Restored the original Machines column choices after the stress test, reset the viewport override, and finalized the browser session"
   ]
 }

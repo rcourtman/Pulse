@@ -382,7 +382,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         <Show when={!state.shouldShowPatrolSetupOnly()}>
           <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
             {renderRunControl(
-              'sm:hidden flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors',
+              'flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted sm:hidden',
             )}
 
             <Show when={!runBlockedByProviderSetup()}>
@@ -390,7 +390,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                 href={settingsTabPath('system-ai-patrol')}
                 aria-label="Open Patrol settings"
                 title="Open Patrol settings"
-                class="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt"
+                class="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt sm:min-h-0"
               >
                 <SettingsIcon class="w-4 h-4" />
                 <span class="sr-only sm:not-sr-only">Settings</span>

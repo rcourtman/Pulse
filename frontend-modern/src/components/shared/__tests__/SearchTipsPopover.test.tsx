@@ -23,12 +23,18 @@ describe('SearchTipsPopover', () => {
     expect(searchTipsPopoverStateSource).toContain('createEffect');
     expect(searchTipsPopoverStateSource).toContain('window.addEventListener');
     expect(searchTipsPopoverStateSource).toContain('pointerInside');
+    expect(searchTipsPopoverStateSource).toContain('window.innerWidth >= 640');
+    expect(searchTipsPopoverStateSource).toContain('window.innerWidth - viewportMargin - width');
+    expect(searchTipsPopoverStateSource).toContain("window.addEventListener('scroll', updatePopoverPosition, true)");
+    expect(searchTipsPopoverSource).toContain('style={state.popoverStyle()}');
+    expect(searchTipsPopoverSource).toContain('fixed ${positionClass()}');
+    expect(searchTipsPopoverSource).toContain('sm:absolute sm:mt-2 sm:w-72');
 
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
     expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
-    expect(searchTipsPopoverModelSource).toContain('h-10 w-10');
+    expect(searchTipsPopoverModelSource).toContain('h-11 w-11');
     expect(searchTipsPopoverModelSource).toContain('sm:h-5 sm:w-5');
   });
 

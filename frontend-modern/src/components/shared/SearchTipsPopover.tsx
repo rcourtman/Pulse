@@ -66,7 +66,8 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           id={popoverId()}
           role="dialog"
           aria-label={title()}
-          class={`absolute ${positionClass()} z-50 mt-2 w-72 overflow-hidden rounded-md border bg-surface text-left shadow-sm`}
+          style={state.popoverStyle()}
+          class={`fixed ${positionClass()} z-50 w-auto overflow-hidden rounded-md border bg-surface text-left shadow-sm sm:absolute sm:mt-2 sm:w-72`}
         >
           <div class="flex items-center justify-between border-b border-border-subtle px-3 py-2">
             <span class="text-sm font-semibold text-base-content">{title()}</span>

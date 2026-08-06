@@ -49,14 +49,18 @@ describe('Button', () => {
     );
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
-    expect(buttonModelSource).toContain("xs: 'px-2.5 py-1 text-xs'");
-    expect(buttonModelSource).toContain("mdCompact: 'px-3 py-2 text-sm'");
+    expect(buttonModelSource).toContain("xs: 'min-h-11 px-2.5 py-1 text-xs sm:min-h-0'");
+    expect(buttonModelSource).toContain(
+      "mdCompact: 'min-h-11 px-3 py-2 text-sm sm:min-h-0'",
+    );
     expect(buttonModelSource).toContain("settingsAction: 'min-h-11 px-3 py-2 text-sm sm:min-h-9'");
     expect(buttonModelSource).toContain(
       "settingsActionXs: 'min-h-11 px-3 py-2 text-xs sm:min-h-9'",
     );
     expect(buttonModelSource).toContain("chip: 'gap-1 px-1.5 py-0.5 text-[10px]'");
-    expect(buttonModelSource).toContain("iconMd: 'h-9 w-9 p-0'");
+    expect(buttonModelSource).toContain(
+      "iconMd: 'h-9 w-9 min-h-11 min-w-11 p-0 sm:min-h-0 sm:min-w-0'",
+    );
     expect(buttonModelSource).toContain('DRAWER_HEADER_ACTION_BUTTON_CLASS');
     expect(buttonModelSource).toContain('DRAWER_HEADER_ICON_BUTTON_CLASS');
     expect(buttonModelSource).toContain('getDrawerHeaderActionButtonClass');
@@ -76,6 +80,8 @@ describe('Button', () => {
     expect(button).toHaveClass('bg-surface');
     expect(button).toHaveClass('border-border');
     expect(button).toHaveClass('px-3');
+    expect(button).toHaveClass('min-h-11');
+    expect(button).toHaveClass('sm:min-h-0');
 
     button.click();
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -157,6 +163,7 @@ describe('Button', () => {
     expect(removeMemberButton).toHaveClass('border-transparent');
     expect(removeMemberButton).toHaveClass('text-red-600');
     expect(removeMemberButton).toHaveClass('text-xs');
+    expect(removeMemberButton).toHaveClass('min-h-11');
 
     const infoButton = screen.getByRole('button', { name: 'View reference' });
     expect(infoButton).toHaveClass('border-blue-200');

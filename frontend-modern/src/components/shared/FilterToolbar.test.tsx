@@ -256,7 +256,8 @@ describe('FilterHeader', () => {
     expect(filterPanelClass).toContain('z-[80]');
     expect(filterPanelClass).not.toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterPanelDefaultWidthClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
-    expect(filterToolbarSource).toContain("'flex min-h-10 items-center gap-1.5");
+    expect(filterToolbarSource).toContain("'flex min-h-11 items-center gap-1.5");
+    expect(filterToolbarSource).toContain('sm:h-7 sm:min-h-0');
   });
 
   it('keeps peer popover triggers aligned and exposes their disclosure state', () => {
@@ -273,7 +274,9 @@ describe('FilterHeader', () => {
 
     const trigger = screen.getByRole('button', { name: 'Saved' });
     const chevron = trigger.querySelector('svg');
-    expect(trigger).toHaveClass('h-7');
+    expect(trigger).toHaveClass('min-h-11');
+    expect(trigger).toHaveClass('sm:h-7');
+    expect(trigger).toHaveClass('sm:min-h-0');
     expect(trigger).toHaveClass('text-base-content');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(chevron).not.toHaveClass('rotate-180');

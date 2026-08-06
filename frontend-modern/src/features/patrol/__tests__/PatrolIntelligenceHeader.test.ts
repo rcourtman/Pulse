@@ -91,6 +91,14 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).not.toContain('Refresh Patrol');
   });
 
+  it('keeps primary Patrol actions touch-sized on phones without inflating desktop chrome', () => {
+    expect(headerSource).toContain('flex min-h-11 items-center gap-2 rounded-md bg-blue-600');
+    expect(headerSource).toContain(
+      'flex min-h-11 items-center gap-2 rounded-md border border-border',
+    );
+    expect(headerSource).toContain('sm:min-h-0');
+  });
+
   it('makes Patrol mode a simple four-level choice without rendering plan-locked paid modes', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {

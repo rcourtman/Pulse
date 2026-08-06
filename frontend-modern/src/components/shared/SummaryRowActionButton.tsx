@@ -26,7 +26,7 @@ type SummaryRowActionButtonProps =
     };
 
 const DISCLOSURE_BUTTON_CLASS = [
-  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted transition-colors sm:h-6 sm:w-6',
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted transition-colors sm:h-6 sm:w-6',
   'hover:bg-surface hover:text-base-content',
   SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS,
 ].join(' ');

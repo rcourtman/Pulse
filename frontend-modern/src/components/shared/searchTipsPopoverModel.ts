@@ -18,7 +18,7 @@ export interface SearchTipsPopoverProps {
 }
 
 export function getSearchTipsPopoverPositionClass(align?: 'left' | 'right'): string {
-  return align === 'left' ? 'left-0' : 'right-0';
+  return align === 'left' ? 'sm:left-0' : 'sm:right-0';
 }
 
 export function getSearchTipsPopoverId(popoverId?: string): string {
@@ -57,5 +57,5 @@ export function getSearchTipsPopoverTriggerClass(
     return `rounded px-1 py-0.5 underline decoration-dotted underline-offset-4 transition-colors hover:text-base-content ${triggerBaseClasses}`;
   }
 
-  return `flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${triggerBaseClasses}`;
+  return `flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${triggerBaseClasses}`;
 }

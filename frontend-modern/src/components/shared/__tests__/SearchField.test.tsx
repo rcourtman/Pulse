@@ -38,7 +38,8 @@ describe('SearchField', () => {
     ));
 
     expect(screen.getByText('Cmd+K')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search field')).toHaveClass('min-h-10');
+    expect(screen.getByPlaceholderText('Search field')).toHaveClass('min-h-11');
+    expect(screen.getByPlaceholderText('Search field')).toHaveClass('sm:min-h-10');
   });
 
   it('reserves mobile input space for every visible trailing action', () => {
@@ -109,8 +110,8 @@ describe('SearchField', () => {
     ));
 
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('h-10');
-    expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('w-10');
+    expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('h-11');
+    expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('w-11');
     expect(screen.getByRole('button', { name: 'Extra' })).toBeInTheDocument();
   });
 

@@ -17,10 +17,12 @@ export const filterGroupClass =
   'inline-flex items-center gap-1 rounded-md bg-surface-hover p-0.5 ring-1 ring-border-subtle';
 export const filterLabelClass =
   'px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted';
-export const filterToolbarControlClass = 'h-7 rounded-md text-xs font-medium';
+export const filterToolbarControlClass =
+  'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0';
 export const filterActionButtonClass = `inline-flex items-center gap-1.5 ${filterToolbarControlClass} bg-surface-hover px-2.5 text-muted ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content`;
 export const filterActionButtonActiveClass = 'bg-surface text-base-content shadow-sm';
-export const filterSelectClass = `${filterToolbarControlClass} border border-border bg-surface px-2 text-base-content outline-none focus:border-blue-500`;
+export const filterSelectClass =
+  'min-h-11 rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content outline-none focus:border-blue-500 sm:h-7 sm:min-h-0';
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
 export const filterPanelClass =
   'absolute right-0 top-[calc(100%+0.5rem)] z-[80] rounded-md border border-border bg-surface p-3 shadow-lg';
@@ -28,7 +30,7 @@ export const filterPanelDefaultWidthClass = 'w-[min(40rem,calc(100vw-2rem))]';
 export const filterPanelTitleClass = 'text-sm font-medium text-base-content';
 export const filterPanelDescriptionClass = 'text-xs text-muted';
 export const mobileFiltersButtonClass =
-  'flex min-h-10 items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted';
+  'flex min-h-11 items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted sm:min-h-10';
 export const filterCountBadgeClass =
   'ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white';
 export const filterUtilityBadgeClass =

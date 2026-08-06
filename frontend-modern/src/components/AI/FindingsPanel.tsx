@@ -1336,7 +1336,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               aria-expanded={expandedId() === finding.id}
               aria-controls={`finding-${finding.id}-details`}
               onClick={toggleExpanded}
-              class="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              class="inline-flex min-h-11 items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0"
               title={
                 isPatrolFindingsSource()
                   ? expandedId() === finding.id
@@ -2049,7 +2049,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               fieldBaseClass="contents"
               value={sortBy()}
               onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
-              selectBaseClass="text-xs px-2 py-1 rounded border border-border bg-surface"
+              selectBaseClass="min-h-11 rounded border border-border bg-surface px-2 py-1 text-xs sm:min-h-0"
             >
               <option value="severity">By Severity</option>
               <option value="time">By Time</option>

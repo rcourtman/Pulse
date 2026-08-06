@@ -49,7 +49,7 @@ export function getToggleTrackClass(
   className?: string,
 ): string {
   const config = toggleSizeConfig[size];
-  return `relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus:outline-none focus:ring-0 ${
+  return `relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] after:absolute after:-inset-y-2.5 after:inset-x-0 after:content-[''] focus:outline-none focus:ring-0 ${
     disabled ? TOGGLE_DISABLED_CLASS : checked ? TOGGLE_CHECKED_CLASS : TOGGLE_UNCHECKED_CLASS
   } ${className ?? ''}`.trim();
 }

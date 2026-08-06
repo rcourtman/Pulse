@@ -236,7 +236,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
               <button
                 type="button"
                 onClick={() => props.setIsMobileMenuOpen(true)}
-                class="flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 font-medium text-blue-600 transition-colors active:bg-blue-50 dark:text-blue-400 dark:active:bg-blue-900"
+                class="flex min-h-11 items-center gap-1.5 rounded-md px-2 py-1.5 font-medium text-blue-600 transition-colors active:bg-blue-50 dark:text-blue-400 dark:active:bg-blue-900"
               >
                 <svg
                   class="h-5 w-5 -ml-1 flex-shrink-0"

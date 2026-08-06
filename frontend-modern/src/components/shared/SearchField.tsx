@@ -19,7 +19,7 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         onKeyDown={search.handleKeyDown}
         onBlur={search.handleBlur}
         aria-label={props.title ?? props.placeholder ?? 'Search'}
-        class={`min-h-10 w-full pl-8 sm:pl-9 ${search.inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
+        class={`min-h-11 w-full pl-8 sm:min-h-10 sm:pl-9 ${search.inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-border rounded-md
  bg-surface text-base-content placeholder-muted
  focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${props.inputClass ?? ''}`}
         title={props.title}
@@ -46,7 +46,7 @@ export const SearchField: Component<SearchFieldProps> = (props) => {
         <Show when={search.showClearButton()}>
           <button
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-hover text-muted transition-all duration-150 hover:bg-red-100 hover:text-red-600 active:scale-90 sm:h-6 sm:w-6 dark:hover:bg-red-900 dark:hover:text-red-400"
+            class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-surface-hover text-muted transition-all duration-150 hover:bg-red-100 hover:text-red-600 active:scale-90 sm:h-6 sm:w-6 dark:hover:bg-red-900 dark:hover:text-red-400"
             onClick={() => props.onChange('')}
             onMouseDown={props.onClearMouseDown}
             aria-label="Clear search"

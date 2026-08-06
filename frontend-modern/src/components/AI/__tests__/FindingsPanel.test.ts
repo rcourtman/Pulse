@@ -942,6 +942,16 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).not.toContain('<select');
     });
 
+    it('keeps Patrol review and sort controls touch-sized on phones', () => {
+      expect(findingsPanelSource).toContain(
+        'class="inline-flex min-h-11 items-center gap-1 rounded border border-border',
+      );
+      expect(findingsPanelSource).toContain(
+        'selectBaseClass="min-h-11 rounded border border-border',
+      );
+      expect(findingsPanelSource).toContain('sm:min-h-0');
+    });
+
     it('hides the filter bar when there are no Patrol findings or special buckets to navigate', () => {
       expect(findingsPanelSource).toContain('const showFilterControls = createMemo(');
       expect(findingsPanelSource).toContain('const hasUnknownRunSnapshot = createMemo(');

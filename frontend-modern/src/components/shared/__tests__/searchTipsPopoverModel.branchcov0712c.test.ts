@@ -13,15 +13,15 @@ const TRIGGER_BASE_CLASSES =
 describe('searchTipsPopoverModel.branchcov0712c', () => {
   describe('getSearchTipsPopoverPositionClass', () => {
     it("returns 'left-0' when align === 'left' (truthy ternary arm)", () => {
-      expect(getSearchTipsPopoverPositionClass('left')).toBe('left-0');
+      expect(getSearchTipsPopoverPositionClass('left')).toBe('sm:left-0');
     });
 
     it("returns 'right-0' when align === 'right' (falsy ternary arm)", () => {
-      expect(getSearchTipsPopoverPositionClass('right')).toBe('right-0');
+      expect(getSearchTipsPopoverPositionClass('right')).toBe('sm:right-0');
     });
 
     it("returns 'right-0' when align is omitted (undefined -> falsy ternary arm)", () => {
-      expect(getSearchTipsPopoverPositionClass()).toBe('right-0');
+      expect(getSearchTipsPopoverPositionClass()).toBe('sm:right-0');
     });
 
     it('returns the else-arm value for an unexpected align value (defensive)', () => {
@@ -29,7 +29,7 @@ describe('searchTipsPopoverModel.branchcov0712c', () => {
       // wrong-typed value that slips past the union at runtime) must fall to
       // the 'right-0' arm.
       const bogus = 'center' as unknown as Parameters<typeof getSearchTipsPopoverPositionClass>[0];
-      expect(getSearchTipsPopoverPositionClass(bogus)).toBe('right-0');
+      expect(getSearchTipsPopoverPositionClass(bogus)).toBe('sm:right-0');
     });
   });
 
@@ -48,7 +48,7 @@ describe('searchTipsPopoverModel.branchcov0712c', () => {
 
     it("returns the icon variant classes when triggerVariant === 'icon' (both ifs false -> default return)", () => {
       expect(getSearchTipsPopoverTriggerClass('icon')).toBe(
-        `flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${TRIGGER_BASE_CLASSES}`,
+        `flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${TRIGGER_BASE_CLASSES}`,
       );
     });
 
@@ -57,7 +57,7 @@ describe('searchTipsPopoverModel.branchcov0712c', () => {
       // the trailing default (the icon) return.
       const bogus = 'ghost' as unknown as Parameters<typeof getSearchTipsPopoverTriggerClass>[0];
       expect(getSearchTipsPopoverTriggerClass(bogus)).toBe(
-        `flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${TRIGGER_BASE_CLASSES}`,
+        `flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${TRIGGER_BASE_CLASSES}`,
       );
     });
 

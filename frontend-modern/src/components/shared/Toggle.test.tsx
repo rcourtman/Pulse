@@ -27,6 +27,7 @@ describe('Toggle', () => {
     expect(toggleModelSource).toContain('toggleSizeConfig');
     expect(toggleModelSource).toContain('resolveToggleSize');
     expect(toggleModelSource).toContain('getToggleTrackClass');
+    expect(toggleModelSource).toContain("after:-inset-y-2.5 after:inset-x-0 after:content-['']");
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
   });

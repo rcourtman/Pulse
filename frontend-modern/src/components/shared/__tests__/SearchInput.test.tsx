@@ -81,7 +81,7 @@ describe('SearchInput', () => {
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
     expect(searchInputEnhancementsModelSource).toContain('w-full max-w-lg');
     expect(searchInputEnhancementsModelSource).not.toContain('left-0 right-0 top-full');
-    expect(searchInputEnhancementsModelSource).toContain('h-10 w-10');
+    expect(searchInputEnhancementsModelSource).toContain('h-11 w-11');
     expect(searchInputEnhancementsModelSource).toContain('sm:h-7 sm:w-7');
   });
 

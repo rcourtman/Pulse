@@ -45,6 +45,7 @@ describe('SettingsPageShell mobile navigation', () => {
 
     expect(screen.getAllByText('Infrastructure')).toHaveLength(2);
     expect(screen.getAllByText('API Access')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Settings' })).toHaveClass('min-h-11');
 
     setActiveTab('api');
 

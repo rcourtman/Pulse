@@ -8275,7 +8275,7 @@ describe('shared primitive guardrails', () => {
 
     expect(savedViewsMenuSource).toContain("from './useSavedViews';");
     expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
-    expect(filterToolbarSource).toContain("filterToolbarControlClass = 'h-7");
+    expect(filterToolbarSource).toContain("'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0'");
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
     expect(viewOptionsMenuSource).toContain('class="static ml-auto shrink-0 sm:relative sm:ml-0"');
     expect(viewOptionsMenuSource).toContain('class="left-auto right-0');
@@ -8427,10 +8427,11 @@ describe('shared primitive guardrails', () => {
   it('keeps shared navigation and row actions usable at phone widths', () => {
     expect(subtabsSource).toContain('overflow-x-auto');
     expect(subtabsSource).toContain('whitespace-nowrap');
-    expect(subtabsSource).toContain('min-h-10');
-    expect(summaryRowActionButtonSource).toContain('h-10 w-10');
-    expect(searchFieldSource).toContain('min-h-10');
-    expect(filterToolbarSource).toContain('min-h-10');
+    expect(subtabsSource).toContain('min-h-11');
+    expect(subtabsSource).toContain('sm:min-h-10');
+    expect(summaryRowActionButtonSource).toContain('h-11 w-11');
+    expect(searchFieldSource).toContain('min-h-11');
+    expect(filterToolbarSource).toContain('min-h-11');
     expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');
   });
 });
