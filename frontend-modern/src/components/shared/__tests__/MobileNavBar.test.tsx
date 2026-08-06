@@ -1,12 +1,20 @@
 import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import type { Component } from 'solid-js';
+import { createSignal, type Component } from 'solid-js';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
 import { MobileNavBar } from '@/components/shared/MobileNavBar';
 
-HTMLElement.prototype.scrollIntoView = vi.fn();
+// Records the element each call landed on, so tests can assert the rail centred
+// the ACTIVE tab rather than merely that scrollIntoView was called at all.
+const scrollIntoViewCalls: Array<{ element: HTMLElement; options: unknown }> = [];
+HTMLElement.prototype.scrollIntoView = vi.fn(function (
+  this: HTMLElement,
+  options?: boolean | ScrollIntoViewOptions,
+) {
+  scrollIntoViewCalls.push({ element: this, options });
+});
 window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
   callback(0);
   return 1;
@@ -233,6 +241,97 @@ describe('MobileNavBar', () => {
     buttons.forEach((button) => {
       expect(button).not.toHaveClass('bg-blue-50');
       expect(button).not.toHaveClass('text-blue-700');
+    });
+  });
+
+  it('brings the active platform tab into view on mount', () => {
+    scrollIntoViewCalls.length = 0;
+
+    const { container } = render(() => (
+      <MobileNavBar
+        activeTab={() => 'standalone'}
+        primaryTabs={() => [
+          {
+            id: 'proxmox',
+            label: 'Proxmox',
+            route: '/proxmox/overview',
+            settingsRoute: '/settings/infrastructure',
+            tooltip: 'Proxmox',
+            enabled: true,
+            live: true,
+            icon: ProxmoxIcon,
+            alwaysShow: true,
+          },
+          {
+            id: 'standalone',
+            label: 'Machines',
+            route: '/standalone/machines',
+            settingsRoute: '/settings/infrastructure',
+            tooltip: 'Machines',
+            enabled: true,
+            live: true,
+            icon: StandaloneIcon,
+            alwaysShow: true,
+          },
+        ]}
+        utilityTabs={() => []}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const activeButton = container.querySelector('button[data-tab-id="standalone"]');
+    expect(activeButton).toBeTruthy();
+    expect(scrollIntoViewCalls.map((call) => call.element)).toContain(activeButton);
+    expect(scrollIntoViewCalls.at(-1)?.options).toEqual(
+      expect.objectContaining({ inline: 'center' }),
+    );
+  });
+
+  it('re-centres the rail when the active platform tab changes', async () => {
+    scrollIntoViewCalls.length = 0;
+    const [activeTab, setActiveTab] = createSignal<string | null>('proxmox');
+
+    const { container } = render(() => (
+      <MobileNavBar
+        activeTab={activeTab}
+        primaryTabs={() => [
+          {
+            id: 'proxmox',
+            label: 'Proxmox',
+            route: '/proxmox/overview',
+            settingsRoute: '/settings/infrastructure',
+            tooltip: 'Proxmox',
+            enabled: true,
+            live: true,
+            icon: ProxmoxIcon,
+            alwaysShow: true,
+          },
+          {
+            id: 'standalone',
+            label: 'Machines',
+            route: '/standalone/machines',
+            settingsRoute: '/settings/infrastructure',
+            tooltip: 'Machines',
+            enabled: true,
+            live: true,
+            icon: StandaloneIcon,
+            alwaysShow: true,
+          },
+        ]}
+        utilityTabs={() => []}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const machinesButton = container.querySelector('button[data-tab-id="standalone"]');
+    expect(scrollIntoViewCalls.map((call) => call.element)).not.toContain(machinesButton);
+
+    setActiveTab('standalone');
+
+    await waitFor(() => {
+      expect(scrollIntoViewCalls.map((call) => call.element)).toContain(machinesButton);
     });
   });
 
