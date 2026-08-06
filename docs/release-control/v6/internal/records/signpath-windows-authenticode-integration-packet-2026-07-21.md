@@ -8,14 +8,45 @@ exact-SHA stable candidate without publishing it. It covers only public
 community agent executables from `rcourtman/Pulse`, never private Pulse Pro,
 Relay, Enterprise, or service binaries.
 
+## Current Status (2026-08-06)
+
+The SignPath Foundation application has been approved. The following setup is
+complete:
+
+- the interactive organization invitation was accepted for `Pulse [OSS]`;
+- project `Pulse` is connected to the public `rcourtman/Pulse` repository;
+- the official SignPath GitHub App is installed only for that repository;
+- the `CI builds` user is active, its notification address is confirmed, and
+  its API token is stored as the repository secret `SIGNPATH_API_TOKEN`;
+- all required `SIGNPATH_*` repository variables are configured;
+- the GitHub trusted build system and governed `main` origin are active;
+- `release-signing` requires one approval from the project owner; and
+- artifact configuration `initial` requires `version` and permits only the
+  three ZIP-root executables in the contract below.
+
+Production signing is not ready. `Release certificate 2026` remains
+`CSR PENDING`, which leaves the `release-signing` policy invalid until SignPath
+Foundation's certificate authority issues and installs the certificate. The
+remaining proof sequence is:
+
+1. Submit a non-publishing request through `test-signing` to validate the CI
+   credentials, origin, artifact configuration, approval, and download path.
+2. Wait for the production release certificate to become active.
+3. Run the exact-SHA, non-publishing `release-signing` proof described below.
+
+Test-signed files use an untrusted certificate. Do not publish them, include
+them in a production candidate, or mark production Windows signing ready on the
+basis of a test request.
+
 ## SignPath Project Contract
 
-1. Approve the existing Pulse Monitoring Ltd open-source application.
-2. Authorize the SignPath GitHub App for `rcourtman/Pulse`.
-3. Bind the project to `https://github.com/rcourtman/Pulse` through the GitHub
-   trusted build system.
-4. Require an authorised Pulse approver and governed `main` origin.
-5. Configure a required `version` parameter and this exact ZIP-root artifact:
+The approved project must continue to satisfy this contract:
+
+1. Keep the SignPath GitHub App restricted to `rcourtman/Pulse`.
+2. Keep the project bound to `https://github.com/rcourtman/Pulse` through the
+   GitHub trusted build system.
+3. Require an authorised Pulse approver and governed `main` origin.
+4. Keep the required `version` parameter and this exact ZIP-root artifact:
 
 ```xml
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
