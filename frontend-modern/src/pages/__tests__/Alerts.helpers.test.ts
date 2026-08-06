@@ -426,13 +426,20 @@ describe('tab path helpers', () => {
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
     expect(alertHistoryTabSource).toContain('AlertHistoryFrequencyCard');
     expect(alertHistoryTabSource).toContain('AlertHistoryFiltersCard');
-    expect(alertHistoryTabSource).toContain('AlertResourceIncidentsPanel');
     expect(alertHistoryTabSource).toContain('AlertHistoryTableSection');
     expect(alertHistoryTabSource).toContain('AlertHistoryAdministrationCard');
     expect(alertHistoryTabSource).toContain('historyState.alertData().length');
     expect(alertHistoryTabSource).not.toContain('historyState.filteredAlerts().length');
-    expect(alertHistoryTabSource).toContain(
-      '<AlertResourceIncidentsPanel state={historyState} getResource={props.getResource} />',
+    // The resource incidents panel used to render as a page-level sibling here,
+    // which put it far above a reader scrolled into the history, so the per-row
+    // Resource button read as inert (#1687). It now mounts under the row that
+    // asked for it, gated on that row owning the open request.
+    expect(alertHistoryTabSource).not.toContain('AlertResourceIncidentsPanel');
+    expect(alertHistoryTableAlertRowSource).toContain(
+      '<AlertResourceIncidentsPanel state={props.state} />',
+    );
+    expect(alertHistoryTableAlertRowSource).toContain(
+      'props.state.resourceIncidentPanel()?.rowKey === rowKey()',
     );
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadingState');

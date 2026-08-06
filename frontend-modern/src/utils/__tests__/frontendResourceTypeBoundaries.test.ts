@@ -2793,10 +2793,13 @@ describe('frontend resource type boundaries', () => {
     expect(alertHistoryTabSource).toContain('useAlertHistoryState');
     expect(alertHistoryTabSource).toContain('AlertHistoryFrequencyCard');
     expect(alertHistoryTabSource).toContain('AlertHistoryFiltersCard');
-    expect(alertHistoryTabSource).toContain('AlertResourceIncidentsPanel');
     expect(alertHistoryTabSource).toContain('AlertHistoryTableSection');
     expect(alertHistoryTabSource).toContain('AlertHistoryAdministrationCard');
     expect(alertsPageSource).toContain('getAlertsPageHeaderMeta');
+    // The resource incidents panel mounts under the row that asked for it, not
+    // as a page-level sibling here: at page level it opened far above a reader
+    // scrolled into the history, so the row button read as inert (#1687).
+    expect(alertHistoryTabSource).not.toContain('AlertResourceIncidentsPanel');
     expect(alertHistoryTabSource).not.toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getHistory');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getIncidentsForResource');
@@ -2840,6 +2843,12 @@ describe('frontend resource type boundaries', () => {
     expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryResourceTypeBadgeClass');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTableAlertRowSource).toContain('AlertHistoryItemActions');
+    expect(alertHistoryTableAlertRowSource).toContain('AlertResourceIncidentsPanel');
+    // Several alerts can share one resource, so the row renders the panel only
+    // when it owns the open request. That keeps exactly one panel open.
+    expect(alertHistoryTableAlertRowSource).toContain(
+      'props.state.resourceIncidentPanel()?.rowKey === rowKey()',
+    );
     expect(alertHistoryItemActionsSource).toContain('InvestigateAlertButton');
     expect(alertHistoryAdministrationCardSource).toContain('getAlertAdministrationSectionTitle');
     expect(alertHistoryAdministrationCardSource).toContain(
