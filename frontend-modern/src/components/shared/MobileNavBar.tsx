@@ -19,7 +19,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
   return (
     <>
       <nav
-        class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe lg:hidden"
+        class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe xl:hidden"
         role="tablist"
         aria-label="Mobile navigation"
       >

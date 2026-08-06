@@ -1,50 +1,105 @@
 {
   "version": 1,
-  "base_sha": "324a6458d5b4972ea47a56ca54ca997af0e05fc0",
-  "verified_at": "2026-08-06T16:26:28Z",
+  "base_sha": "25ba5fd63e284589e63e68de8159b133e803312c",
+  "verified_at": "2026-08-06T16:45:35Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx"
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/index.css"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Workloads/useWorkloadsControlsState.ts": "e27f9b5fb3f5cc6e65a7e8d465befe45e0f0c8f0479e8b4a43f53b02ffac9d6f",
-    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "14897fd2ae8c79a26b85ac21d42fb86270092ca7c3a084cc087b160f2c2311e5",
-    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "9c37c036b26f32af1f4a973580a221fd35b7c36482ec6efd109e03d6de6b6427"
+    "frontend-modern/src/AppLayout.tsx": "02e195bba05254631bfa6e6d9411cff37d15ddd2050631088018e42d70d1be04",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "4c555f15f3d6e598289a0c097b395b6f9708f05f66d423739acdda6ffa28b661",
+    "frontend-modern/src/index.css": "d7adb9f95f22b490c098eb61d96201847210aca1b913aeb9d6f0668e88ff8366"
   },
   "routes": [
-    "/vmware",
-    "/proxmox?status=all"
+    "/proxmox/overview",
+    "/proxmox/storage?tab=disks&source=proxmox-all",
+    "/proxmox/replication",
+    "/proxmox/backups?view=coverage",
+    "/proxmox/backups?view=date",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/alerts/overview",
+    "/alerts/history",
+    "/alerts/thresholds",
+    "/alerts/notifications",
+    "/alerts/schedule",
+    "/actions",
+    "/patrol",
+    "/settings/infrastructure",
+    "/settings/security-overview",
+    "/settings/security/api",
+    "/settings/security-auth",
+    "/settings/security-sso",
+    "/settings/security-roles",
+    "/settings/security-users",
+    "/settings/security-audit",
+    "/settings/security-webhooks",
+    "/settings/support/diagnostics",
+    "/settings/support/logs"
   ],
   "viewports": [
     {
-      "width": 2400,
-      "height": 1300
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 1120,
+      "height": 900
+    },
+    {
+      "width": 1279,
+      "height": 900
     },
     {
       "width": 1280,
-      "height": 800
-    },
-    {
-      "width": 390,
-      "height": 844
+      "height": 900
     }
   ],
   "states": [
-    "Baseline before the change, vSphere VM table with every column enabled: Avail rendered an empty cell on all 18 rows and Tags rendered six identical dots on all 18, matching the single provenance tag set the adapter emits",
-    "vSphere VM table for a user with no saved preference: header is Name, ID, CPU, Mem, Disk, Uptime, Net I/O, Disk I/O with Avail and Tags both absent",
-    "vSphere VM table for a user whose saved preference predates the Tags default: the one-time migration adds tags to the hidden list and records it in the default-hidden-applied marker",
-    "vSphere column picker still offers Tags, Backup, AI Context, OS, IP, Disk, Uptime and both I/O columns, and no longer offers Avail while nothing is probed",
-    "Proxmox workload table unaffected: Tags still visible with genuine per-guest counts varying 3 to 7 dots per row, Backup still visible, stored hidden list unchanged at aiContext/os/ip",
-    "Proxmox at 390px and 1280px: no Avail column, no horizontal body overflow, 16 rows render",
-    "vSphere at 390px: narrow stage renders Name, CPU, Mem across 18 rows with no horizontal body overflow"
+    "Every remaining mock-data platform table at 768px, including replication, backup coverage and date views, Ceph, mail, Docker storage/networking/Swarm, Kubernetes services/storage/configuration/events, TrueNAS services/apps/VMs/shares/protection, and vSphere networking/health/activity",
+    "Desktop secondary navigation and Settings sidebar transition at 1024px",
+    "Primary navigation with all six platform destinations and all four operator destinations",
+    "Dense Kubernetes Nodes, Events, and Configuration tables immediately below and above the secondary-column container breakpoint",
+    "Dense vSphere Hosts and VM inventory immediately below and above the secondary-column container breakpoint",
+    "Expanded Ceph cluster details and backup coverage inventory",
+    "Exact mobile-to-desktop primary navigation handoff at 1279px and 1280px"
   ],
   "interactions": [
-    "Opened the View preferences popover and the Columns multiselect on /vmware to read the offered toggles",
-    "Cleared the workloadsHiddenColumns scope keys to reproduce a first-time user, then reloaded",
-    "Seeded a pre-migration workloadsHiddenColumns:vmware-vms preference without tags and reloaded to confirm the one-time hide fires",
-    "Navigated between /vmware and /proxmox?status=all at each viewport to compare Avail and Tags across scopes",
-    "Queried /api/resources to confirm all 18 vSphere VMs carry the identical provenance tag set while Proxmox guests carry distinct per-guest tags"
+    "Scanned the remaining 22 platform routes at 768px for table-shell overflow, document overflow, and off-screen controls",
+    "Visually inspected the densest Ceph, backup coverage, Kubernetes Events, Kubernetes Nodes, and vSphere Hosts layouts rather than relying only on width measurements",
+    "Found the 1024px desktop primary navigation clipping Patrol and hiding Settings because its 1142px content exceeded the 969px rail",
+    "Kept the stable bottom navigation through 1279px, clicked Settings and Proxmox at 1024px, and confirmed navigation plus focus behavior",
+    "Confirmed the desktop navigation appears at 1280px with all ten destinations visible, no internal scroll, and compact laptop padding",
+    "Measured the exact 1279px/1280px handoff with one and only one primary navigation surface visible at each width",
+    "Found that a 1024px table container restored nine Kubernetes Node columns and eleven vSphere Host columns too early, visibly crushing identity and diagnostic fields",
+    "Raised the shared secondary-column container threshold to 1152px, then confirmed readable core columns at 1120px and the richer operational set returning at 1280px without horizontal scrolling",
+    "Reset the viewport override and finalized the browser session"
   ]
 }

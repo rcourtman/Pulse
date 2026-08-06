@@ -408,6 +408,11 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('pulse-brand-lockup');
     expect(appLayoutSource).toContain('animate-pulse-brand');
     expect(appLayoutSource).toContain('pulse-brand-wordmark');
+    expect(appLayoutSource).toContain("'pb-safe-or-20 xl:pb-0'");
+    expect(appLayoutSource).toContain('tabs mb-2 hidden xl:flex');
+    expect(appLayoutSource).toContain('xl:px-2 2xl:px-3');
+    expect(appLayoutSource).toContain('gap-1 2xl:gap-1.5');
+    expect(appLayoutSource).not.toContain('tabs mb-2 hidden lg:flex');
     expect(appLayoutSource).not.toContain('dataUpdated: () => boolean');
     expect(appLayoutSource).not.toContain('animate-pulse-logo');
     expect(appRuntimeStateSource).not.toContain('dataUpdated');
@@ -432,7 +437,7 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('--color-grouped-table-row-bg: rgba(51, 65, 85, 0.58);');
     expect(appStylesSource).toContain('.table-scroll-shell');
     expect(appStylesSource).toContain('container-type: inline-size');
-    expect(appStylesSource).toContain('@container (min-width: 64rem)');
+    expect(appStylesSource).toContain('@container (min-width: 72rem)');
     expect(appStylesSource).toContain('.hidden.md\\:table-cell');
     expect(appStylesSource).toContain('contain: paint');
     expect(appStylesSource).toContain('overscroll-behavior-x: contain');

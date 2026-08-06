@@ -38,6 +38,8 @@ describe('MobileNavBar', () => {
   it('keeps the mobile nav on shell, runtime, and model owners', () => {
     expect(mobileNavBarSource).toContain('useMobileNavBarState');
     expect(mobileNavBarSource).toContain('getMobileNavTabButtonClass');
+    expect(mobileNavBarSource).toContain('pb-safe xl:hidden');
+    expect(mobileNavBarSource).not.toContain('pb-safe lg:hidden');
     expect(mobileNavBarSource).not.toContain('createSignal');
     expect(mobileNavBarSource).not.toContain('requestAnimationFrame');
     expect(mobileNavBarSource).not.toContain('new Set(priority)');

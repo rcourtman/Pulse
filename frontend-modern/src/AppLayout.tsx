@@ -654,7 +654,7 @@ export function AppLayout(props: AppLayoutProps) {
     const disabled = () => !tab.enabled;
     const Icon = tab.icon;
     const baseClasses =
-      'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+      'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
     const className = () => {
       if (isActive()) {
@@ -704,7 +704,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   return (
     <div
-      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 lg:pb-0' : ''}`}
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 xl:pb-0' : ''}`}
     >
       {/* Skip-to-content link: visually hidden until focused, then
           appears as a button at the top-left. Lets keyboard users
@@ -868,7 +868,7 @@ export function AppLayout(props: AppLayoutProps) {
 
       <Show when={!kioskMode()}>
         <div
-          class="tabs mb-2 hidden lg:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
+          class="tabs mb-2 hidden xl:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
           role="tablist"
           aria-label="Primary navigation"
         >
@@ -882,7 +882,7 @@ export function AppLayout(props: AppLayoutProps) {
                   const isActive = () => getActiveTabDesktop() === tab.id;
                   const Icon = tab.icon;
                   const baseClasses =
-                    'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
+                    'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
                   const className = () => {
                     if (isActive()) {

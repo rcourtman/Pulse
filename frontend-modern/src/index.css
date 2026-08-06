@@ -213,7 +213,7 @@
     }
   }
 
-  @container (min-width: 64rem) {
+  @container (min-width: 72rem) {
     .table-scroll-shell :is(th, td).hidden.md\:table-cell {
       display: table-cell;
     }
