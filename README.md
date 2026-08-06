@@ -86,6 +86,22 @@ not need the Docker socket.
 - [Docker Compose](docs/INSTALL.md#docker-compose)
 - [Kubernetes and Helm](docs/KUBERNETES.md)
 
+The installer is signed. Verify `install.sh` against the pinned
+`pulse-installer` key before running it:
+
+```bash
+export PULSE_VERSION=vX.Y.Z
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+ssh-keygen -Y verify \
+  -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
+  -I pulse-installer \
+  -n pulse-install \
+  -s install.sh.sshsig < install.sh
+bash install.sh --version "${PULSE_VERSION}"
+rm -f install.sh install.sh.sshsig
+```
+
 The GitHub installer installs the Pulse server. Install and upgrade agents with
 the per-host command generated under **Settings → Infrastructure → Install on a
 host**.
@@ -121,8 +137,8 @@ volume. See the [runtime-aligned capability reference](docs/PULSE_PRO.md) and
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [API reference](docs/API.md) and [architecture](ARCHITECTURE.md)
 
-Localized getting started guides are available in
-[German](docs/i18n/de/README.md) and [Spanish](docs/i18n/es/README.md).
+Localized getting started guides:
+[Deutsch](docs/i18n/de/README.md) · [Español](docs/i18n/es/README.md)
 
 ## Development
 

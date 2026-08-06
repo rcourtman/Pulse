@@ -1,106 +1,103 @@
-# 📚 Pulse Documentation
+# Pulse documentation
 
-Welcome to the Pulse documentation portal. Here you'll find everything you need to install, configure, and master Pulse.
+Start here for installation, platform setup, security, operations, and Pulse
+Intelligence. Commands, configuration keys, image names, API fields, and
+product identifiers remain untranslated in localized guides.
 
----
+## Start here
 
-## 🚀 Getting Started
+- [Install Pulse](INSTALL.md) — signed Proxmox/Linux installation, Docker,
+  Docker Compose, Kubernetes, and first-run setup.
+- [Upgrade from Pulse v5](UPGRADE_v6.md) — migration prerequisites, rollback,
+  agent continuity, and post-upgrade checks.
+- [Configure Pulse](CONFIGURATION.md) — authentication, notifications,
+  discovery, retention, and system settings.
+- [Deployment models](DEPLOYMENT_MODELS.md) — data locations, lifecycle, and
+  differences between supported deployment paths.
+- [Troubleshooting](TROUBLESHOOTING.md) and [FAQ](FAQ.md) — common failures,
+  diagnostics, and operator questions.
 
-- **Localized getting started**:
-  [Deutsch](i18n/de/README.md) • [Español](i18n/es/README.md).
-  These first-wave pages cover the public install path and preserve commands,
-  config keys, image names, activation keys, and product identifiers exactly.
-- **[Installation Guide](INSTALL.md)**
-  Step-by-step guides for Docker, Kubernetes, and bare metal.
-- **[Configuration](CONFIGURATION.md)**  
-  Learn how to configure authentication, notifications (Email, Discord, etc.), and system settings.
-- **[Deployment Models](DEPLOYMENT_MODELS.md)**  
-  Where config lives, how updates work, and what differs per deployment.
-- **[Migration Guide](MIGRATION.md)**  
-  Moving to a new server? Here's how to export and import your data safely.
-- **[Upgrade to v6](UPGRADE_v6.md)**  
-  Practical upgrade guidance and post-upgrade checks for Pulse v6.
-- **[FAQ](FAQ.md)**
-  Common questions and quick answers.
+Localized getting started guides: [Deutsch](i18n/de/README.md) ·
+[Español](i18n/es/README.md)
 
-## 🛠️ Deployment & Operations
+## Platforms and agents
 
-- **[Docker Guide](DOCKER.md)** – Advanced Docker & Compose configurations.
-- **[Kubernetes](KUBERNETES.md)** – Helm charts, ingress, and HA setups.
-- **[Reverse Proxy](REVERSE_PROXY.md)** – Nginx, Caddy, Traefik, and Cloudflare Tunnel recipes.
-- **[Troubleshooting](TROUBLESHOOTING.md)** – Deep dive into common issues and logs.
+- [Proxmox Backup Server](PBS.md)
+- [Proxmox Mail Gateway](MAIL_GATEWAY.md)
+- [Docker and Podman](DOCKER.md)
+- [Kubernetes and Helm](KUBERNETES.md)
+- [TrueNAS SCALE and CORE](TRUENAS.md)
+- [Unified Agent](UNIFIED_AGENT.md)
+- [Agent security](AGENT_SECURITY.md)
+- [VM disk monitoring](VM_DISK_MONITORING.md)
+- [ZFS monitoring](ZFS_MONITORING.md)
+- [Temperature monitoring](TEMPERATURE_MONITORING.md)
 
-## 🔐 Security
+VMware vSphere support is early access. Current builds expose dedicated
+vSphere inventory and recovery context, but operators should validate the
+integration against their own vCenter before production use.
 
-- **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
-- **[Privacy](PRIVACY.md)** – What leaves your network (and what doesn’t).
-- **[OIDC / SSO](OIDC.md)** – OIDC Single Sign-On configuration (Authentik, Keycloak, Azure AD, etc.).
-- **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
-- **[Agent Security](AGENT_SECURITY.md)** – Agent privilege model, Proxmox API-only choices, and self-update verification.
+## Monitoring and operations
 
-## 📖 Advanced Topics (Relay / Pro / legacy Pro+ / Cloud)
+- [Metrics history](METRICS_HISTORY.md)
+- [Recovery data](RECOVERY.md)
+- [Webhooks](WEBHOOKS.md)
+- [Automatic updates](AUTO_UPDATE.md)
+- [Centralized agent management](CENTRALIZED_MANAGEMENT.md) (Pro)
+- [Operational trust model](OPERATIONAL_TRUST.md)
+- [Current product screenshots](SCREENSHOTS.md)
 
-- **[AI Modes & Safety](AI_AUTONOMY.md)** – Configure Patrol mode, assistant control levels, investigation tuning, and safety guardrails.
-- **[Role-Based Access Control (RBAC)](RBAC.md)** – Define custom roles, assign permissions, and integrate with OIDC group mapping.
-- **[Audit Logging](AUDIT_LOGGING.md)** – Tamper-evident event logging for compliance, with query, export, and signature verification.
+## Pulse Intelligence
 
-## ✨ New in 6.0
+- [Assistant, Patrol, and external-agent overview](AI.md)
+- [Patrol modes and safety](AI_AUTONOMY.md)
+- [Assistant safety model](ASSISTANT_SAFETY.md)
+- [External agent HTTP and MCP substrate](AGENT_SUBSTRATE.md)
 
-- **[Unified Resource Model](UNIFIED_RESOURCES.md)** – How all platforms merge into one model with task-based navigation.
-- **[Unified Navigation Migration](MIGRATION_UNIFIED_NAV.md)** – Upgrading from platform-specific tabs to v6 navigation.
-- **[TrueNAS Integration](TRUENAS.md)** – First-class TrueNAS SCALE/CORE monitoring (pools, datasets, disks, snapshots, replication).
-- **[Relay / Pulse Mobile Handoff](RELAY.md)** – End-to-end encrypted relay for supported Pulse Mobile clients (Relay and above).
-- **[Recovery Central](RECOVERY.md)** – Unified backup, snapshot, and replication view across all providers.
-- **[Pulse Cloud (Hosted)](CLOUD.md)** – Fully managed hosting with automatic updates and backups.
-- **[Pulse Intelligence](AI.md)** – Pulse Assistant, Patrol findings, alert analysis, governed actions, and forecasts.
-- **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
-- **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
-- **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
-- **[Multi-Tenant Organizations](MULTI_TENANT.md)** – Isolate infrastructure by organization (Enterprise, opt-in).
-- **[Pulse for MSPs](MSP.md)** – Provider operations guide: per-client isolation, split ingress, alert routing, branded reports.
-- **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Relay/Pro/Cloud, with legacy Pro+ continuity still supported.
+Patrol watch-only analysis is available on Community with a local model or the
+operator's own provider. Investigation and governed fixes require the relevant
+Pulse Pro capabilities.
 
-## 💳 Plans (Community / Relay / Pro / Cloud)
+## Security, privacy, and access
 
-Pulse is available in three self-hosted tiers plus hosted Cloud:
+- [Security guide](../SECURITY.md)
+- [Privacy and telemetry disclosure](PRIVACY.md)
+- [OIDC and SSO](OIDC.md)
+- [Proxy authentication](PROXY_AUTH.md)
+- [Role-based access control](RBAC.md) (Pro)
+- [Audit logging](AUDIT_LOGGING.md) (Pro)
+- [Reverse proxy configuration](REVERSE_PROXY.md)
+- [Code-signing policy](CODE_SIGNING_POLICY.md)
 
-- **Community**: Free self-hosted monitoring with core monitoring included and 7-day history.
-- **Relay**: Adds secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff, push notifications, and 14-day history.
-- **Pro**: Adds hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, operations tooling, governance features, and 90-day history.
-- **Cloud**: Hosted Pulse with Pro-level capabilities; hosted pricing is unchanged by the self-hosted model lock.
+## Plans and managed access
 
-- **[Learn more at pulserelay.pro](https://pulserelay.pro)**
-- **[Plans and entitlements](PULSE_PRO.md)** (includes the Community/Relay/Pro/Cloud matrix)
-- **[AI deep dive](AI.md)**
-- **[Multi-Tenant Organizations (Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
+- [Community, Relay, and Pro capabilities](PULSE_PRO.md)
+- [Relay and Pulse Mobile handoff](RELAY.md)
+- [Multi-tenant organizations](MULTI_TENANT.md) (Enterprise/custom)
+- [Provider-hosted MSP operations](MSP.md) (request-assisted)
 
-## 📡 Monitoring & Agents
+Pulse Cloud is not generally available. Ordinary self-hosted Pulse remains the
+primary installation path; MSP and Enterprise access are explicit commercial
+paths rather than defaults in self-hosted setup.
 
-- **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for host, Docker, and Kubernetes monitoring.
-- **[Centralized Agent Management (Pro/Cloud)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
-- **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
-- **[TrueNAS](TRUENAS.md)** – TrueNAS SCALE/CORE integration.
-- **[ZFS Monitoring](ZFS_MONITORING.md)** – Proxmox-native ZFS pool monitoring.
-- **[Storage Architecture](STORAGE_ARCHITECTURE.md)** – Proposed canonical storage, disk, S.M.A.R.T., and topology model for making storage genuinely operator-useful.
-- **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
-- **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy has been removed.
-- **[Webhooks](WEBHOOKS.md)** – Custom notification payloads.
+## Development and reference
 
-## 💻 Development
+- [REST API](API.md)
+- [Architecture](../ARCHITECTURE.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Release notes index](RELEASE_NOTES.md)
+- [Development transparency disclosure](AI_TRANSPARENCY.md)
 
-- **[API Reference](API.md)** – Complete REST API documentation.
-- **[Architecture](../ARCHITECTURE.md)** – System design and component interaction.
-- **[Contributing](../CONTRIBUTING.md)** – How to contribute to Pulse.
-- **[AI-Assisted Development](AI_TRANSPARENCY.md)** – How AI tools are used to build and maintain Pulse, and where their output is labelled.
+Detailed design notes and dated migration specifications may remain in this
+directory for maintainers, but they are not operator setup guides unless they
+are linked from the sections above.
 
-## 📁 Previous Versions
+## Previous versions and migrations
 
-- **[Upgrade to v5](UPGRADE_v5.md)** – Upgrade guidance for v4 → v5 migrations.
-- **[v6 Release Promotion Policy](release-control/v6/internal/RELEASE_PROMOTION_POLICY.md)** – Canonical stable-vs-prerelease promotion rules and rollback expectations.
-- **[v6 Prerelease Runbook](releases/V6_PRERELEASE_RUNBOOK.md)** – Internal release operations used during the v6 prerelease period.
+- [Upgrade from v4 to v5](UPGRADE_v5.md)
+- [Retired unified-navigation migration](MIGRATION_UNIFIED_NAV.md) — historical
+  context only; current Pulse uses platform-shaped navigation.
+- [Move a Pulse installation](MIGRATION.md)
 
----
-
-Found a bug or have a suggestion?
-
-[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-green)](https://github.com/rcourtman/Pulse/issues)
+Found a bug? Use the [issue forms](https://github.com/rcourtman/Pulse/issues/new/choose).
+For setup questions, use [GitHub Discussions](https://github.com/rcourtman/Pulse/discussions).

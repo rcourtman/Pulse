@@ -1,6 +1,10 @@
 # Pulse Architecture
 
-Pulse is a real-time infrastructure monitoring platform for **Proxmox VE**, **Proxmox Backup Server**, **Proxmox Mail Gateway**, **Docker**, **Host** systems, **Kubernetes**, and **TrueNAS**. It is built with a **Go 1.25+** backend and a **SolidJS / TypeScript** frontend, focusing on low latency, high concurrency, and a premium user experience.
+Pulse is a real-time infrastructure monitoring platform for **Proxmox VE**,
+**Proxmox Backup Server**, **Proxmox Mail Gateway**, **Docker**, **machine
+agents**, **Kubernetes**, **TrueNAS**, and early-access **VMware vSphere**
+environments. It uses a **Go 1.26** backend and a **SolidJS / TypeScript**
+frontend.
 
 ## 🏗 High-Level Overview
 
@@ -27,6 +31,7 @@ flowchart TD
     Pulse -->|HTTPS :8007| PBS[Proxmox Backup Server]
     Pulse -->|HTTPS| PMG[Proxmox Mail Gateway]
     Pulse -->|HTTPS| TrueNAS[TrueNAS SCALE/CORE]
+    Pulse -->|HTTPS| vSphere[VMware vCenter]
     DockerAgent[Docker Agent] -->|HTTPS POST| API
     HostAgent[Host Agent] -->|HTTPS POST| API
     K8sAgent[Kubernetes Agent] -->|HTTPS POST| API
@@ -50,7 +55,9 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - Supports graceful hot-reload via `SIGHUP` and `.env` file watching.
 
 2. **Unified Resource Registry (`internal/unifiedresources`)**
-   - Central data model that normalises resources from **7 data sources** (`proxmox`, `pbs`, `pmg`, `docker`, `agent`, `kubernetes`, `truenas`) into a single `Resource` struct.
+   - Central data model that normalises resources from Proxmox, PBS, PMG,
+     Docker, machine agents, Kubernetes, TrueNAS, and VMware providers into a
+     shared `Resource` contract.
    - **Canonical v6 resource types**: `agent`, `vm`, `system-container`, `app-container`, `docker-host`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `storage`, `pbs`, `pmg`, `ceph`, `physical_disk`.
    - Identity-matching engine: merges resources across sources using machine IDs, DMI UUIDs, hostnames, IPs, and MAC addresses.
    - Provides typed **views** (`NodeView`, `K8sClusterView`, etc.) for consumer-specific queries.
@@ -90,10 +97,14 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - **Intelligence Services**: Patterns, correlations, anomalies, baselines, forecasts, and incident recording. All surfaced via `/api/ai/intelligence/*`.
    - **Safety gates**: Command execution disabled by default (`--enable-commands` opt-in); circuit breakers and scoped permissions at every layer.
 
-8. **Entitlements & Licensing (`internal/license`)**
+8. **Entitlements & Licensing (`pkg/licensing`)**
    - Capability-key based gating: `ai_autofix`, `rbac`, `multi_tenant`, `relay`, `agent_profiles`, `kubernetes_ai`, `ai_alerts`, etc.
-   - Core tiers include **Community** (free), **Relay**, **Pro**, hosted **Cloud**, request-assisted **MSP**, and Enterprise/custom entitlements.
-   - Trial lifecycle with activation, renewal, and expiry. All state exposed via `/api/license/*`.
+   - Core tiers include **Community** (free), **Relay**, **Pro**, a reserved
+     hosted **Cloud** capability tier, request-assisted **MSP**, and
+     Enterprise/custom entitlements. The Cloud service is not generally
+     available.
+   - Activation, grant refresh, renewal, expiry, and legacy-license migration.
+     Active state is exposed through `/api/license/*`.
 
 9. **Provider-hosted MSP control plane (`internal/cloudcp`)**
    - A Stripe-free provider control plane can run one isolated Pulse runtime/container per client workspace.
@@ -134,20 +145,26 @@ The frontend is a modern SPA in `frontend-modern/`, built with **SolidJS** and *
 
 ### Routing & Navigation
 
-Navigation is organised by **task**, not by platform:
+Navigation is organised around platform-shaped pages with cross-platform
+operational surfaces:
 
 | Route | Page | Purpose |
 |---|---|---|
-| `/infrastructure` | Infrastructure | Hosts, nodes, clusters across all platforms |
-| `/workloads` | Workloads | VMs, LXCs, containers, K8s pods |
-| `/storage` | Storage | Proxmox storage, ZFS pools, Ceph |
-| `/recovery` | Recovery | Backups, snapshots, replication |
-| `/ceph` | Ceph | Detailed Ceph cluster view |
+| `/` and `/infrastructure` | Runtime home | Monitor-first authenticated entry point |
+| `/proxmox/*` | Proxmox | PVE, PBS, PMG, guests, storage, recovery, and Ceph |
+| `/docker/*` | Docker | Hosts, containers, Compose projects, Swarm, images, and storage |
+| `/kubernetes/*` | Kubernetes | Clusters, workloads, networking, storage, and events |
+| `/truenas/*` | TrueNAS | Systems, pools, datasets, disks, apps, VMs, and recovery |
+| `/vmware/*` | vSphere | Early-access vCenter, host, cluster, VM, datastore, and network views |
+| `/standalone/*` | Machines | Agent-backed machines and availability checks |
 | `/alerts/*` | Alerts | Alert rules, active alerts, history |
-| `/ai/*` | AI Intelligence | Patrol findings, investigations, forecasts |
-| `/settings/*` | Settings | Configuration, security, diagnostics, reporting, AI, relay |
+| `/actions/*` | Actions | Governed action proposals, approvals, delivery, and audit state |
+| `/patrol/*` | Patrol | Attention queue, findings, investigations, and run history |
+| `/settings/*` | Settings | Infrastructure, security, notifications, plans, and Intelligence |
 
-Canonical v6 task surfaces live on the routes above; legacy aliases redirect into those canonical settings and patrol paths.
+The retired aggregate `/workloads`, `/storage`, and `/recovery` top-level
+routes are not canonical navigation. Shared resource, storage, and recovery
+contracts remain backend building blocks consumed inside platform pages.
 
 ### State Management
 - **WebSocket store** (`stores/websocket.ts`): Manages the live connection, reactive `State` object, reconnection logic, and per-org switching.
@@ -161,7 +178,9 @@ Canonical v6 task surfaces live on the routes above; legacy aliases redirect int
 - **Lazy-loaded pages**: All top-level pages are loaded via `lazy()` with optional preloading after initial render.
 - **Virtual table windowing**: Large resource lists use virtualised rendering for smooth scrolling at scale.
 - **Command Palette** (`Cmd/Ctrl+K`): Quick-access command launcher.
-- **Keyboard shortcuts**: `g i` → Infrastructure, `g w` → Workloads, `g s` → Storage, `g b` → Recovery, `g a` → Alerts, `g t` → Settings, `/` → Search.
+- **Keyboard shortcuts**: `g p` → Proxmox, `g d` → Docker, `g k` →
+  Kubernetes, `g n` → TrueNAS, `g v` → vSphere, `g s` → Machines, `g a` →
+  Alerts, `g r` → Patrol, `g t` → Settings, `/` → Search.
 
 ### Mobile Experience
 - **MobileNavBar** component: Bottom tab bar for touch navigation.

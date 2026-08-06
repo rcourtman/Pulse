@@ -652,7 +652,7 @@ For unattended displays (wall monitors, dashboards), use a kiosk token to avoid 
 
 ---
 
-## TrueNAS Integration {#truenas}
+## TrueNAS
 
 Pulse v6 supports first-class TrueNAS SCALE and CORE monitoring.
 
@@ -687,7 +687,7 @@ TrueNAS connections are stored encrypted in `truenas.enc`.
 
 ---
 
-## Relay / Mobile Remote Access (Relay and Above) {#relay}
+## Relay
 
 The relay protocol provides end-to-end encrypted remote access foundations for Pulse mobile connectivity.
 
