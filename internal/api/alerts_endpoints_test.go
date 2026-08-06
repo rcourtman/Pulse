@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -76,6 +77,36 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 		if got := srv.monitor.GetNotificationManager().GetInitialNotifyTarget(); got != "apprise" {
 			t.Errorf("expected live initial target apprise, got %q", got)
+		}
+	})
+
+	// A fleet with a few hundred per-resource toggles produces a config well
+	// past the old 64KB body cap, which rejected legitimate saves (#1601).
+	t.Run("UpdateAlertConfigLargeFleet", func(t *testing.T) {
+		overrides := make(map[string]alerts.ThresholdConfig, 5000)
+		for i := 0; i < 5000; i++ {
+			key := fmt.Sprintf("docker:integration-host-%04d/container:web-frontend-replica-%04d", i, i)
+			overrides[key] = alerts.ThresholdConfig{}
+		}
+		body, _ := json.Marshal(alerts.AlertConfig{Overrides: overrides})
+		if len(body) <= 64*1024 {
+			t.Fatalf("fixture too small to exercise the old 64KB cap: %d bytes", len(body))
+		}
+
+		req, err := http.NewRequest(http.MethodPut, srv.server.URL+"/api/alerts/config", bytes.NewBuffer(body))
+		if err != nil {
+			t.Fatalf("create request failed: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("status code = %d, want %d", res.StatusCode, http.StatusOK)
 		}
 	})
 
@@ -303,6 +334,35 @@ func TestAlertsEndpoints(t *testing.T) {
 			"alertIdentifiers": []string{"alert-1", "alert-2"},
 		}
 		jsonBody, _ := json.Marshal(body)
+
+		req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/bulk/acknowledge", bytes.NewBuffer(jsonBody))
+		if err != nil {
+			t.Fatalf("create request failed: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("status code = %d, want %d", res.StatusCode, http.StatusOK)
+		}
+	})
+
+	// Identifier lists scale with active alert count. The old 32KB cap made
+	// ack-all fail during exactly the floods it exists to recover from (#1601).
+	t.Run("BulkAcknowledgeLargeList", func(t *testing.T) {
+		identifiers := make([]string, 2000)
+		for i := range identifiers {
+			identifiers[i] = fmt.Sprintf("docker:host-%04d/container:app-%04d-cpu", i, i)
+		}
+		jsonBody, _ := json.Marshal(map[string]interface{}{"alertIdentifiers": identifiers})
+		if len(jsonBody) <= 32*1024 {
+			t.Fatalf("fixture too small to exercise the old 32KB cap: %d bytes", len(jsonBody))
+		}
 
 		req, err := http.NewRequest(http.MethodPost, srv.server.URL+"/api/alerts/bulk/acknowledge", bytes.NewBuffer(jsonBody))
 		if err != nil {

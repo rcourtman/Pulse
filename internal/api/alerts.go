@@ -195,8 +195,10 @@ func (h *AlertHandlers) GetAlertConfig(w http.ResponseWriter, r *http.Request) {
 
 // UpdateAlertConfig updates the alert configuration
 func (h *AlertHandlers) UpdateAlertConfig(w http.ResponseWriter, r *http.Request) {
-	// Limit request body to 64KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	// Config size scales with the fleet: every per-resource toggle adds an
+	// Overrides entry keyed by a long resource ID, so 64KB rejected saves
+	// from instances with a few hundred disabled containers (#1601).
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var config alerts.AlertConfig
 	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
@@ -327,7 +329,9 @@ func (h *AlertHandlers) GetAlertIntentPolicies(w http.ResponseWriter, r *http.Re
 }
 
 func (h *AlertHandlers) UpdateAlertIntentPolicies(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+	// Per-resource policy rules scale with the fleet the same way alert
+	// config overrides do, so this shares their 1MB bound.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var document alerts.AlertIntentPolicyDocument
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -1018,8 +1022,10 @@ func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request)
 
 // BulkAcknowledgeAlerts acknowledges multiple alerts at once
 func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Request) {
-	// Limit request body to 32KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	// Identifier lists scale with active alert count, and an alert flood is
+	// exactly when ack-all gets used, so 32KB starved the one path meant to
+	// recover from it (#1601).
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var request alertIdentifiersRequest
 
@@ -1082,8 +1088,8 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 
 // BulkClearAlerts clears multiple alerts at once
 func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) {
-	// Limit request body to 32KB to prevent memory exhaustion
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	// Same fleet-scaling bound as BulkAcknowledgeAlerts.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var request alertIdentifiersRequest
 
