@@ -111,6 +111,7 @@ export const RolesPanel: Component = () => {
                         label="Edit role"
                         tone="accent"
                         size="sm"
+                        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                         onClick={() => state.openEditRole(role)}
                       >
                         <Pencil class="w-4 h-4" />
@@ -119,6 +120,7 @@ export const RolesPanel: Component = () => {
                         label="Delete role"
                         tone="danger"
                         size="sm"
+                        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                         onClick={() => state.handleDeleteRole(role)}
                       >
                         <Trash2 class="w-4 h-4" />

@@ -713,6 +713,11 @@ describe('EmailProviderSelect', () => {
     const button = screen.getByRole('button', { name: 'Send test email' });
     expect(button).toBeInTheDocument();
     expect(button).not.toBeDisabled();
+    expect(button).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(screen.getByRole('button', { name: 'Show advanced options' })).toHaveClass(
+      'min-h-11',
+      'sm:min-h-0',
+    );
   });
 
   it('calls onTest when test button is clicked', async () => {

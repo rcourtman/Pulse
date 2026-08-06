@@ -64,7 +64,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
       <Show when={!state.adding()}>
         <button
           onClick={state.openAddForm}
-          class="w-full border border-dashed border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover"
+          class="min-h-11 w-full border border-dashed border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover sm:min-h-0"
         >
           + {ALERT_WEBHOOK_ADD_LABEL}
         </button>

@@ -293,6 +293,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             label={`Edit thresholds for ${getAlertResourceLabel(resource)}`}
                             tone="accent"
                             size="sm"
+                            class="min-h-11 min-w-11"
                           >
                             <Pencil class="w-4 h-4" aria-hidden="true" />
                           </ActionIconButton>
@@ -315,6 +316,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             title="Configure individual alert delay"
                             tone="neutral"
                             size="sm"
+                            class="min-h-11 min-w-11"
                           >
                             <Timer class="w-4 h-4" aria-hidden="true" />
                           </ActionIconButton>
@@ -325,6 +327,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             label="Cancel threshold edits"
                             tone="muted"
                             size="sm"
+                            class="min-h-11 min-w-11"
                           >
                             <X class="w-4 h-4" aria-hidden="true" />
                           </ActionIconButton>
@@ -333,6 +336,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
                             tone="success"
                             size="sm"
+                            class="min-h-11 min-w-11"
                           >
                             <Check class="w-4 h-4" aria-hidden="true" />
                           </ActionIconButton>
@@ -349,6 +353,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             title={getAlertResourceTableRevertToDefaultsLabel()}
                             tone="neutral"
                             size="sm"
+                            class="min-h-11 min-w-11"
                           >
                             <RotateCcw class="w-4 h-4" aria-hidden="true" />
                           </ActionIconButton>
@@ -369,7 +374,9 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                       />
                     </Show>
 
-                    <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2">
+                    <div
+                      class={`grid gap-2 text-sm border-t pt-2 ${isEditing() ? 'grid-cols-1' : 'grid-cols-2'}`}
+                    >
                       <For each={props.table.columns}>
                         {(column) => {
                           const metric = normalizeAlertResourceMetricKey(column);
@@ -391,7 +398,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                                   <button
                                     type="button"
                                     onClick={(e) => startEditing(resource, metric, e)}
-                                    class="font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                    class="min-h-11 min-w-11 font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                                     aria-label={`Edit ${column} threshold for ${getAlertResourceLabel(resource)}`}
                                   >
                                     <MetricValueWithHeat
@@ -403,7 +410,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                                   </button>
                                 }
                               >
-                                <div class="flex items-center gap-1.5">
+                                <div class="flex items-center gap-1.5 [&_button]:min-h-11">
                                   <input
                                     type="number"
                                     min={bounds.min}
@@ -412,7 +419,7 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                                     placeholder={getAlertResourceTableMetricPlaceholder(
                                       isDisabled(),
                                     )}
-                                    class="w-16 text-right text-xs p-1 rounded border border-border bg-surface"
+                                    class="min-h-11 w-16 text-right text-xs p-1 rounded border border-border bg-surface"
                                     onInput={(e) => {
                                       const nextValue = parseFloat(e.currentTarget.value);
                                       props.table.setEditingThresholds({

@@ -11,6 +11,7 @@ interface AlertHistoryItemActionsProps {
   alert: AlertHistoryAlert;
   state: AlertHistoryState;
   class?: string;
+  touchSized?: boolean;
 }
 
 export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
@@ -21,7 +22,9 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
       <Show when={props.alert.source === 'alert'}>
         <button
           type="button"
-          class="rounded-md border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover"
+          class={`rounded-md border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover ${
+            props.touchSized ? 'min-h-11' : ''
+          }`}
           onClick={() => {
             void props.state.toggleIncidentTimeline(
               rowKey(),
@@ -36,7 +39,9 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
       <Show when={props.alert.source === 'alert' && props.alert.resourceId}>
         <button
           type="button"
-          class="rounded-md border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover"
+          class={`rounded-md border border-border px-2 py-1 text-[10px] text-muted hover:bg-surface-hover ${
+            props.touchSized ? 'min-h-11' : ''
+          }`}
           title={getAlertResourceIncidentViewTitle()}
           onClick={() => {
             void props.state.openResourceIncidentPanel(
@@ -74,6 +79,7 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
           resourceType={props.alert.resourceType}
           variant="icon"
           size="sm"
+          class={props.touchSized ? 'min-h-11 min-w-11' : undefined}
         />
       </Show>
     </div>

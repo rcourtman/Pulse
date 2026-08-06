@@ -91,7 +91,12 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
                         </div>
                       </dl>
 
-                      <AlertHistoryItemActions alert={alert} state={props.state} class="mt-3" />
+                      <AlertHistoryItemActions
+                        alert={alert}
+                        state={props.state}
+                        class="mt-3"
+                        touchSized
+                      />
 
                       <Show
                         when={

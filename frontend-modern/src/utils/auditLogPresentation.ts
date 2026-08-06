@@ -31,12 +31,12 @@ type AuditLogFetchErrorLike = {
 };
 
 export const AUDIT_TOOLBAR_BUTTON_CLASS =
-  'flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
+  'flex min-h-11 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
 export const AUDIT_REFRESH_BUTTON_CLASS = `${AUDIT_TOOLBAR_BUTTON_CLASS} text-base-content`;
 export const AUDIT_VERIFY_ALL_BUTTON_CLASS =
-  'flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50';
+  'flex min-h-11 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800 disabled:opacity-50';
 export const AUDIT_VERIFY_ROW_BUTTON_CLASS =
-  'inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50';
+  'inline-flex min-h-11 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50';
 export const AUDIT_EVENT_FILTER_ALL_LABEL = getAllFilterOptionLabel('events');
 export const AUDIT_EVENT_CONFIG_CHANGE_LABEL = 'Config change';
 export const AUDIT_SUCCESS_FILTER_SUCCESS_ONLY_LABEL = 'Success only';

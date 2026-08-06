@@ -161,6 +161,29 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('button', { name: 'New Role' })).not.toBeDisabled();
   });
 
+  it('keeps editable role actions touch-sized on mobile', async () => {
+    getRolesMock.mockResolvedValueOnce([
+      {
+        id: 'operator',
+        name: 'Operator',
+        description: 'Operational access',
+        permissions: [{ action: 'read', resource: 'alerts' }],
+        isBuiltIn: false,
+      },
+    ]);
+
+    render(() => <RolesPanel />);
+
+    const edit = await screen.findByRole('button', { name: 'Edit role' });
+    expect(edit).toHaveClass('min-h-11', 'min-w-11', 'sm:min-h-0', 'sm:min-w-0');
+    expect(screen.getByRole('button', { name: 'Delete role' })).toHaveClass(
+      'min-h-11',
+      'min-w-11',
+      'sm:min-h-0',
+      'sm:min-w-0',
+    );
+  });
+
   it('fails closed with a persistent retry notice when roles cannot be read', async () => {
     getRolesMock.mockRejectedValueOnce(
       Object.assign(new Error('RBAC data could not be loaded'), {
@@ -213,6 +236,10 @@ describe('RBAC paywall settings panels', () => {
     expect(getUsersMock).toHaveBeenCalled();
     expect(getRolesMock).toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Search users...')).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Manage Access' })).toHaveClass(
+      'min-h-11',
+      'sm:min-h-9',
+    );
   });
 
   it('does not render stale user data when assignment storage is unavailable', async () => {

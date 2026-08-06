@@ -74,7 +74,7 @@ interface InfrastructureSourceManagerProps {
 // dominant. They retain the 1-click shortcut for users adding another node
 // to an existing platform without competing with the primary CTA.
 const addSectionButtonClass =
-  'inline-flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30';
+  'inline-flex min-h-11 items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 lg:min-h-0 dark:text-blue-300 dark:hover:bg-blue-950/30';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
 const discoveryScanTargetLabel = 'Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs';
@@ -681,7 +681,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 type="button"
                 variant="primary"
                 size="mdCompact"
-                class="min-h-9 gap-2"
+                class="min-h-11 gap-2 lg:min-h-9"
                 onClick={() => props.onReviewDiscoveredSource?.(props.discoveredNodes()[0])}
               >
                 <Search class="h-4 w-4" aria-hidden="true" />
@@ -693,7 +693,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 type="button"
                 variant={discoveredCandidateCount() > 0 ? 'secondary' : 'primary'}
                 size="mdCompact"
-                class="min-h-9 gap-2"
+                class="min-h-11 gap-2 lg:min-h-9"
                 onClick={props.onRunDiscovery}
                 disabled={props.discoveryScanStatus().scanning}
                 title={`Scan configured networks for reachable ${discoveryScanTargetLabel}. Discovered candidates appear here for review before they are added.`}
@@ -710,7 +710,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 type="button"
                 variant="secondary"
                 size="mdCompact"
-                class="min-h-9 gap-2"
+                class="min-h-11 gap-2 lg:min-h-9"
                 onClick={props.onOpenDiscoverySettings}
                 title={`Configure which networks Pulse scans for ${discoveryScanTargetLabel}.`}
               >
@@ -767,7 +767,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 variant={fleetAttentionSystemCount() > 0 ? 'primary' : 'secondary'}
                 size="mdCompact"
                 onClick={() => props.onOpenAgentDoctor?.()}
-                class="min-h-9"
+                class="min-h-11 lg:min-h-9"
               >
                 Open Agent Doctor
               </Button>
@@ -779,7 +779,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 size="mdCompact"
                 onClick={() => setupConfidenceAction().onClick?.()}
                 disabled={setupConfidenceAction().disabled}
-                class="min-h-9 gap-2"
+                class="min-h-11 gap-2 lg:min-h-9"
               >
                 {setupConfidenceActionIcon(setupConfidenceAction().kind)}
                 {setupConfidenceAction().label}
@@ -814,7 +814,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               type="button"
               variant="primary"
               size="mdCompact"
-              class="min-h-9 w-full gap-2 sm:w-auto"
+              class="min-h-11 w-full gap-2 sm:w-auto lg:min-h-9"
               onClick={props.onAddInfrastructure}
             >
               <Plus class="h-4 w-4" />
@@ -1081,6 +1081,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 size="xs"
                                                 class="min-w-[4.5rem]"
                                                 onClick={() => props.onOpenConnection?.(row)}
+                                                data-infrastructure-manage-id={row.id}
                                               >
                                                 Manage
                                               </Button>
@@ -1408,7 +1409,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     <Show when={row.members.length > 0}>
                                       <button
                                         type="button"
-                                        class="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                                        class="mt-1 inline-flex min-h-11 items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content lg:min-h-0"
                                         aria-expanded={membersExpanded(row)}
                                         aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, row.ownerType === 'vmware' ? 'host' : 'node')} for ${row.name}`}
                                         onClick={() => toggleMembers(row)}
@@ -1559,7 +1560,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         >
                                           <button
                                             type="button"
-                                            class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800"
+                                            class="inline-flex min-h-11 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 lg:min-h-0 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-800"
                                             onClick={() =>
                                               props.onOpenAgentDoctor?.(
                                                 agentConnectionIDsForInfrastructureRow(row, true),
@@ -1598,7 +1599,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             type="button"
                                             variant="outline"
                                             size="xs"
-                                            class="gap-1.5"
+                                            class="min-h-11 gap-1.5 lg:min-h-0"
                                             onClick={handleInstallAgentShortcut}
                                           >
                                             <Cpu class="h-3.5 w-3.5" />
@@ -1609,8 +1610,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           type="button"
                                           variant="outline"
                                           size="xs"
-                                          class="min-w-[4.5rem] flex-shrink-0"
+                                          class="min-h-11 min-w-[4.5rem] flex-shrink-0 lg:min-h-0"
                                           onClick={() => props.onOpenConnection?.(row)}
+                                          data-infrastructure-manage-id={row.id}
                                         >
                                           Manage
                                         </Button>
@@ -1690,7 +1692,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       type="button"
                                       variant="outline"
                                       size="xs"
-                                      class="min-w-[4.5rem] flex-shrink-0"
+                                      class="min-h-11 min-w-[4.5rem] flex-shrink-0 lg:min-h-0"
                                       onClick={() => props.onReviewDiscoveredSource?.(server)}
                                     >
                                       Review

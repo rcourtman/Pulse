@@ -142,6 +142,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const [selectedProbeCandidate, setSelectedProbeCandidate] = createSignal<ProbeCandidate | null>(
     null,
   );
+  const [editFocusReturnConnectionId, setEditFocusReturnConnectionId] = createSignal<string | null>(
+    null,
+  );
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
   const routeStep = createMemo<InfrastructurePanelStep | null>(() => {
     if (readOnly()) return null;
@@ -265,6 +268,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     navigate(buildInfrastructureOnboardingPath(server.type), { scroll: false });
   };
 
+  const openEditFlow = (row: InfrastructureSystemRow) => {
+    setEditFocusReturnConnectionId(row.id);
+    setEditingRowSource(row);
+  };
+
   const closeAddFlow = () => {
     resetInlineEditorState();
     setSelectedDiscoveredSource(null);
@@ -273,6 +281,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const closeEditFlow = () => {
+    const focusReturnConnectionId = editFocusReturnConnectionId();
     const connection = editingConnection();
     if (connection) {
       rowActions.cancelRemove(connection.id);
@@ -282,6 +291,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
     resetInlineEditorState();
     setEditingRowSource(null);
+    setEditFocusReturnConnectionId(null);
+    if (focusReturnConnectionId && typeof document !== 'undefined') {
+      window.setTimeout(() => {
+        const focusTarget = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-infrastructure-manage-id]'),
+        ).find(
+          (element) =>
+            element.getAttribute('data-infrastructure-manage-id') === focusReturnConnectionId,
+        );
+        focusTarget?.focus();
+      }, 250);
+    }
   };
 
   const handleAddSaved = () => {
@@ -932,7 +953,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 }
           }
           onOpenDiscoverySettings={readOnly() ? undefined : () => setShowDiscoverySettings(true)}
-          onOpenConnection={readOnly() ? undefined : (row) => setEditingRowSource(row)}
+          onOpenConnection={readOnly() ? undefined : openEditFlow}
           onOpenAgentDoctor={
             readOnly()
               ? undefined
@@ -1056,6 +1077,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                       size="iconMd"
                       onClick={closeEditFlow}
                       aria-label="Close edit infrastructure dialog"
+                      class="min-h-11 min-w-11 shrink-0 lg:min-h-9 lg:min-w-9"
                     >
                       <X class="h-4 w-4" />
                     </Button>

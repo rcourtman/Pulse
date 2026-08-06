@@ -276,6 +276,10 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
   it('keeps the Ideas button tooltip product-first instead of AI-branded', () => {
     expect(agentProfilesPanelSource).toContain('title="Suggest profiles for your estate"');
     expect(agentProfilesPanelSource).not.toContain('title="Get AI-powered profile suggestions"');
+    expect(agentProfilesPanelSource).toContain('hiddenOnMobile: true');
+    expect(agentProfilesPanelSource).toContain(
+      'inline-flex min-h-11 min-w-11 items-center justify-center',
+    );
   });
 
   it('maps assignments using actionable V6 agent ID instead of resource hash ID', async () => {

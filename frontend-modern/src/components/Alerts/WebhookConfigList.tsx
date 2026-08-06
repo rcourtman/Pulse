@@ -39,14 +39,14 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
           <button
             onClick={() => props.toggleAllWebhooks(false)}
             disabled={!props.someEnabled()}
-            class="w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:w-auto"
+            class="min-h-11 w-full rounded border px-3 py-1 text-xs transition-colors hover:bg-surface-hover sm:min-h-0 sm:w-auto"
           >
             {getAlertWebhookToggleAllLabel(false)}
           </button>
           <button
             onClick={() => props.toggleAllWebhooks(true)}
             disabled={props.allEnabled()}
-            class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900 sm:w-auto"
+            class="min-h-11 w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 sm:min-h-0 sm:w-auto dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900"
           >
             {getAlertWebhookToggleAllLabel(true)}
           </button>
@@ -60,7 +60,7 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               <span class="font-medium text-base-content">{webhook.name}</span>
               <button
                 onClick={() => props.onToggleWebhook(webhook)}
-                class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900' : 'border-border text-muted hover:bg-surface-hover'}`}
+                class={`min-h-11 rounded border px-3 py-1 text-xs font-medium transition-colors sm:min-h-0 ${webhook.enabled ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900' : 'border-border text-muted hover:bg-surface-hover'}`}
               >
                 {getAlertWebhookToggleLabel(webhook.enabled)}
               </button>
@@ -93,19 +93,19 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
               <button
                 onClick={() => props.onTestWebhook(webhook)}
                 disabled={props.testing === webhook.id || !webhook.enabled}
-                class="rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50"
+                class="min-h-11 rounded border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 {getAlertWebhookTestLabel(props.testing === webhook.id)}
               </button>
               <button
                 onClick={() => props.onEditWebhook(webhook)}
-                class="rounded border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900"
+                class="min-h-11 rounded border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 sm:min-h-0 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900"
               >
                 {ALERT_WEBHOOK_EDIT_LABEL}
               </button>
               <button
                 onClick={() => props.onDeleteWebhook(webhook)}
-                class="rounded border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900"
+                class="min-h-11 rounded border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900"
               >
                 {ALERT_WEBHOOK_DELETE_LABEL}
               </button>

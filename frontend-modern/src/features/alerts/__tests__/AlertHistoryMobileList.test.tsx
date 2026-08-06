@@ -67,6 +67,9 @@ describe('AlertHistoryMobileList', () => {
     expect(screen.getByText('warning')).toBeVisible();
     expect(screen.getByText('resolved')).toBeVisible();
 
+    expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('min-h-11');
+    expect(screen.getByRole('button', { name: 'Resource' })).toHaveClass('min-h-11');
+
     await fireEvent.click(screen.getByRole('button', { name: 'Timeline' }));
     expect(toggleIncidentTimeline).toHaveBeenCalledWith(
       'alert-1-row',

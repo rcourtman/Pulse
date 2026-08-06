@@ -152,6 +152,7 @@ export const UpdateHistorySection: Component = () => {
                               variant="dangerOutline"
                               size="xs"
                               type="button"
+                              class="min-h-11 sm:min-h-0"
                               onClick={() => setConfirmEntry(entry)}
                             >
                               Roll back

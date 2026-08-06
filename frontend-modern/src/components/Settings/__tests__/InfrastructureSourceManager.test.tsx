@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import {
   InfrastructureSourceManager,
   agentConnectionIDsForInfrastructureRow,
@@ -127,8 +128,46 @@ describe('InfrastructureSourceManager setup summary', () => {
     fireEvent.click(within(discovery).getByRole('button', { name: /^Run discovery$/i }));
     expect(onRunDiscovery).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(within(discovery).getByRole('button', { name: /^Settings$/i }));
+    expect(within(discovery).getByRole('button', { name: /^Run discovery$/i })).toHaveClass(
+      'min-h-11',
+      'lg:min-h-9',
+    );
+    const discoverySettings = within(discovery).getByRole('button', { name: /^Settings$/i });
+    expect(discoverySettings).toHaveClass('min-h-11', 'lg:min-h-9');
+    fireEvent.click(discoverySettings);
     expect(onOpenDiscoverySettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps phone inventory actions touch-sized without changing desktop density', () => {
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [row()]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSource={vi.fn()}
+        onAddInfrastructure={vi.fn()}
+        onOpenConnection={vi.fn()}
+        onOpenAgentDoctor={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toHaveClass(
+      'min-h-11',
+      'lg:min-h-9',
+    );
+    expect(screen.getByRole('button', { name: /^Open Agent Doctor$/i })).toHaveClass(
+      'min-h-11',
+      'lg:min-h-9',
+    );
+    expect(screen.getByRole('button', { name: /^Install Pulse Agent$/i })).toHaveClass(
+      'min-h-11',
+      'lg:min-h-0',
+    );
+    expect(infrastructureSourceManagerSource).toContain(
+      'class="min-h-11 min-w-[4.5rem] flex-shrink-0 lg:min-h-0"',
+    );
   });
 
   it('keeps manual discovery observable while a scan is running', () => {

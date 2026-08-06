@@ -976,11 +976,16 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /^Manage$/i })).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
+    const manageButton = screen.getByRole('button', { name: /^Manage$/i });
+    manageButton.focus();
+    fireEvent.click(manageButton);
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getByText('Manage zeus')).toBeInTheDocument();
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close edit infrastructure dialog' }));
+    await waitFor(() => expect(manageButton).toHaveFocus());
   });
 
   it('shows standalone agent identity in the landing row and the agent detail drawer', async () => {

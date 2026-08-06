@@ -1451,6 +1451,41 @@ describe('ResourceTable', () => {
       expect(onEdit).toHaveBeenCalled();
     });
 
+    it('keeps mobile threshold actions touch-sized', () => {
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'Mobile VM' })],
+        onConfigureResourceIntent: vi.fn(),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      expect(screen.getByLabelText('Edit thresholds for Mobile VM')).toHaveClass(
+        'min-h-11',
+        'min-w-11',
+      );
+      expect(screen.getByLabelText('Configure alert delay for Mobile VM')).toHaveClass(
+        'min-h-11',
+        'min-w-11',
+      );
+      expect(screen.getByLabelText('Edit CPU % threshold for Mobile VM')).toHaveClass(
+        'min-h-11',
+        'min-w-11',
+      );
+    });
+
+    it('uses a single metric column while editing on mobile', () => {
+      const props = makeProps({
+        resources: [makeResource({ id: 'vm-1', name: 'Mobile VM' })],
+        editingId: () => 'vm-1',
+        editingThresholds: () => ({ cpu: 80, memory: 85 }),
+      });
+      render(() => <ResourceTable {...props} />);
+
+      const metricGrid = screen.getAllByRole('spinbutton')[0]?.closest('.grid');
+      expect(metricGrid).toHaveClass('grid-cols-1');
+      expect(metricGrid).not.toHaveClass('grid-cols-2');
+      expect(screen.getByLabelText('Cancel threshold edits')).toHaveClass('min-h-11', 'min-w-11');
+    });
+
     it('renders subtitle when present', () => {
       const props = makeProps({
         resources: [makeResource({ id: 'vm-1', name: 'VM', subtitle: 'Running on pve1' })],

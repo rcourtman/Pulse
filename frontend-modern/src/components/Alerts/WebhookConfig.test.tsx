@@ -152,7 +152,29 @@ describe('WebhookConfig', () => {
       />
     ));
 
-    expect(screen.getByText('+ Add Webhook')).toBeInTheDocument();
+    expect(screen.getByText('+ Add Webhook')).toHaveClass('min-h-11', 'sm:min-h-0');
+  });
+
+  it('stacks webhook header fields and keeps form actions touch-sized on mobile', async () => {
+    render(() => (
+      <WebhookConfig
+        webhooks={[]}
+        onAdd={onAddMock}
+        onUpdate={onUpdateMock}
+        onDelete={onDeleteMock}
+        onTest={onTestMock}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('+ Add Webhook'));
+
+    const headerName = screen.getByLabelText('Custom header 1 name');
+    const headerValue = screen.getByLabelText('Custom header 1 value');
+    expect(headerName.parentElement).toHaveClass('flex-col', 'sm:flex-row');
+    expect(headerName).toHaveClass('w-full');
+    expect(headerValue).toHaveClass('w-full');
+    expect(screen.getByRole('button', { name: 'Remove' })).toHaveClass('min-h-11', 'sm:min-h-0');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('min-h-11', 'sm:min-h-0');
   });
 
   it('renders webhook list with names, services, methods, and URLs', () => {

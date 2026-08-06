@@ -71,9 +71,12 @@ describe('auditLogPresentation', () => {
 
   it('exposes canonical audit action button classes', () => {
     expect(AUDIT_TOOLBAR_BUTTON_CLASS).toContain('border border-border');
+    expect(AUDIT_TOOLBAR_BUTTON_CLASS).toContain('min-h-11 sm:min-h-10');
     expect(AUDIT_REFRESH_BUTTON_CLASS).toContain('text-base-content');
     expect(AUDIT_VERIFY_ALL_BUTTON_CLASS).toContain('text-blue-700');
+    expect(AUDIT_VERIFY_ALL_BUTTON_CLASS).toContain('min-h-11 sm:min-h-10');
     expect(AUDIT_VERIFY_ROW_BUTTON_CLASS).toContain('text-blue-600');
+    expect(AUDIT_VERIFY_ROW_BUTTON_CLASS).toContain('min-h-11 sm:min-h-10');
   });
 
   it('exposes canonical audit filter option labels', () => {

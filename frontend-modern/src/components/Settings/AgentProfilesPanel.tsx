@@ -174,6 +174,7 @@ export const AgentProfilesPanel: Component = () => {
                   {
                     key: 'settings',
                     label: 'Settings',
+                    hiddenOnMobile: true,
                     render: (profile) => (
                       <span class="text-muted">{getSettingsCount(profile)}</span>
                     ),
@@ -197,7 +198,7 @@ export const AgentProfilesPanel: Component = () => {
                         <button
                           type="button"
                           onClick={() => handleEdit(profile)}
-                          class="p-1.5 rounded-md hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
+                          class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-blue-600 hover:bg-blue-50 sm:min-h-0 sm:min-w-0 dark:hover:text-blue-400 dark:hover:bg-blue-900"
                           title="Edit profile"
                         >
                           <Pencil class="w-4 h-4" />
@@ -205,7 +206,7 @@ export const AgentProfilesPanel: Component = () => {
                         <button
                           type="button"
                           onClick={() => handleDelete(profile)}
-                          class="p-1.5 rounded-md hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+                          class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-red-600 hover:bg-red-50 sm:min-h-0 sm:min-w-0 dark:hover:text-red-400 dark:hover:bg-red-900"
                           title="Delete profile"
                         >
                           <Trash2 class="w-4 h-4" />

@@ -83,7 +83,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <button
             type="button"
             onClick={() => props.setShowServiceDropdown((open) => !open)}
-            class="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+            class="min-h-11 text-sm text-blue-600 hover:text-blue-700 sm:min-h-0 dark:text-blue-400"
           >
             {getAlertWebhookServiceLabelFromTemplates(props.formData().service, props.templates())}{' '}
             →
@@ -97,7 +97,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                 <button
                   type="button"
                   onClick={() => props.selectService(service.id)}
-                  class={`px-2 py-1.5 text-left border transition-colors text-xs ${
+                  class={`min-h-11 px-2 py-1.5 text-left border transition-colors text-xs sm:min-h-0 ${
                     props.formData().service === service.id
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                       : 'border-border hover:bg-surface-hover'
@@ -275,7 +275,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <div class="space-y-2 text-xs">
             <Index each={props.customFieldInputs()}>
               {(field, index) => (
-                <div class="flex gap-2 text-xs">
+                <div class="flex flex-col gap-2 text-xs sm:flex-row">
                   <div class="flex flex-1 flex-col gap-1">
                     <Show when={field().label}>
                       <span class="text-[11px] text-muted">{field().label}</span>
@@ -289,7 +289,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                       }
                       placeholder={ALERT_WEBHOOK_CUSTOM_FIELD_KEY_PLACEHOLDER}
                       aria-label={`Custom field ${index + 1} key`}
-                      class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
+                      class={controlClass('w-full flex-1 px-2 py-1.5 text-xs font-mono')}
                     />
                   </div>
                   <input
@@ -302,13 +302,13 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                       field().placeholder || ALERT_WEBHOOK_CUSTOM_FIELD_VALUE_PLACEHOLDER
                     }
                     aria-label={`Custom field ${index + 1} value`}
-                    class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
+                    class={controlClass('w-full flex-1 px-2 py-1.5 text-xs font-mono')}
                   />
                   <Show when={!field().required}>
                     <button
                       type="button"
                       onClick={() => props.removeCustomFieldInput(index)}
-                      class="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400"
+                      class="min-h-11 self-end px-2 py-1 text-xs text-red-600 hover:underline sm:min-h-0 dark:text-red-400"
                     >
                       {ALERT_WEBHOOK_CUSTOM_FIELD_REMOVE_LABEL}
                     </button>
@@ -319,7 +319,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
             <button
               type="button"
               onClick={props.addCustomFieldInput}
-              class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
+              class="min-h-11 w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover sm:min-h-0"
             >
               {ALERT_WEBHOOK_CUSTOM_FIELD_ADD_LABEL}
             </button>
@@ -336,14 +336,14 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         <div class="space-y-2 text-xs">
           <Index each={props.headerInputs()}>
             {(header, index) => (
-              <div class="flex gap-2 text-xs">
+              <div class="flex flex-col gap-2 text-xs sm:flex-row">
                 <input
                   type="text"
                   value={header().key}
                   onInput={(e) => props.updateHeaderInput(index, { key: e.currentTarget.value })}
                   placeholder={ALERT_WEBHOOK_HEADER_KEY_PLACEHOLDER}
                   aria-label={`Custom header ${index + 1} name`}
-                  class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
+                  class={controlClass('w-full flex-1 px-2 py-1.5 text-xs font-mono')}
                 />
                 <input
                   type="text"
@@ -351,12 +351,12 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
                   onInput={(e) => props.updateHeaderInput(index, { value: e.currentTarget.value })}
                   placeholder={ALERT_WEBHOOK_HEADER_VALUE_PLACEHOLDER}
                   aria-label={`Custom header ${index + 1} value`}
-                  class={controlClass('flex-1 px-2 py-1.5 text-xs font-mono')}
+                  class={controlClass('w-full flex-1 px-2 py-1.5 text-xs font-mono')}
                 />
                 <button
                   type="button"
                   onClick={() => props.removeHeaderInput(index)}
-                  class="px-2 py-1 text-xs text-red-600 hover:underline dark:text-red-400"
+                  class="min-h-11 self-end px-2 py-1 text-xs text-red-600 hover:underline sm:min-h-0 dark:text-red-400"
                 >
                   {ALERT_WEBHOOK_HEADER_REMOVE_LABEL}
                 </button>
@@ -366,7 +366,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <button
             type="button"
             onClick={props.addHeaderInput}
-            class="w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover"
+            class="min-h-11 w-full border border-dashed border-border px-2 py-1 text-xs hover:bg-surface-hover sm:min-h-0"
           >
             {ALERT_WEBHOOK_HEADER_ADD_LABEL}
           </button>
@@ -391,7 +391,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
       <div class="flex justify-end gap-2 text-xs">
         <button
           onClick={props.cancelForm}
-          class="px-3 py-1.5 border border-border rounded text-xs hover:bg-surface-hover"
+          class="min-h-11 px-3 py-1.5 border border-border rounded text-xs hover:bg-surface-hover sm:min-h-0"
         >
           {ALERT_WEBHOOK_CANCEL_LABEL}
         </button>
@@ -399,7 +399,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <button
             onClick={props.testWebhookForm}
             disabled={props.testing === (props.editingId() || 'temp-new-webhook')}
-            class="px-3 py-1.5 border border-border rounded text-xs hover:bg-slate-100"
+            class="min-h-11 px-3 py-1.5 border border-border rounded text-xs hover:bg-slate-100 sm:min-h-0"
           >
             {getAlertWebhookTestLabel(
               props.testing === (props.editingId() || 'temp-new-webhook'),
@@ -410,7 +410,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
         <button
           onClick={props.saveWebhook}
           disabled={!props.formData().name || !props.formData().url}
-          class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="min-h-11 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0"
         >
           {getAlertWebhookSubmitLabel(Boolean(props.editingId()))}
         </button>

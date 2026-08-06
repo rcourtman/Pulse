@@ -87,7 +87,9 @@ describe('UpdateHistorySection', () => {
     render(() => <UpdateHistorySection />);
 
     await screen.findByText('Failed');
-    expect(screen.getAllByRole('button', { name: 'Roll back' })).toHaveLength(1);
+    const rollbackButtons = screen.getAllByRole('button', { name: 'Roll back' });
+    expect(rollbackButtons).toHaveLength(1);
+    expect(rollbackButtons[0]).toHaveClass('min-h-11', 'sm:min-h-0');
     expect(screen.getByText('Rollback')).toBeInTheDocument();
   });
 

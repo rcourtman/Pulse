@@ -91,7 +91,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
                 const provider = state.currentProvider();
                 if (provider) state.applyProviderDefaults(provider);
               }}
-              class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              class="min-h-11 text-xs font-medium text-blue-600 hover:underline sm:min-h-0 dark:text-blue-400"
             >
               {ALERT_EMAIL_REAPPLY_DEFAULTS_LABEL}
             </button>
@@ -104,7 +104,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           <button
             type="button"
             onClick={state.toggleShowInstructions}
-            class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-300"
+            class="min-h-11 text-xs font-medium text-blue-600 hover:underline sm:min-h-0 dark:text-blue-300"
           >
             {getAlertEmailSetupInstructionsToggleLabel(state.showInstructions())}
           </button>
@@ -274,7 +274,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         <button
           type="button"
           onClick={state.toggleShowAdvanced}
-          class="text-xs font-semibold uppercase tracking-wide transition-colors hover:text-muted"
+          class="min-h-11 text-xs font-semibold uppercase tracking-wide transition-colors hover:text-muted sm:min-h-0"
         >
           {getAlertEmailAdvancedToggleLabel(state.showAdvanced())}
         </button>
@@ -374,7 +374,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           type="button"
           onClick={props.onTest}
           disabled={props.testing || !props.config.enabled}
-          class="rounded border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900"
+          class="min-h-11 rounded border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900"
         >
           {getAlertEmailTestButtonLabel(Boolean(props.testing))}
         </button>

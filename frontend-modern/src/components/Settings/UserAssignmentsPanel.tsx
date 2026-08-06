@@ -133,7 +133,7 @@ export const UserAssignmentsPanel: Component = () => {
                   <Button
                     variant="ghost"
                     size="settingsAction"
-                    class="gap-2"
+                    class="min-h-11 gap-2 sm:min-h-9"
                     onClick={() => state.openManageAccess(assignment)}
                   >
                     <Pencil class="w-4 h-4" />
