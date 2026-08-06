@@ -47,7 +47,7 @@ and installer tooling.
 
 ## Project Overview
 
-- **Backend (`cmd/`, `internal/`, `pkg/`)** – Go 1.25+ web server that embeds
+- **Backend (`cmd/`, `internal/`, `pkg/`)** – Go 1.26 web server that embeds
   the built frontend and exposes REST + WebSocket APIs.
 - **Architecture (`ARCHITECTURE.md`)** – High-level system design diagrams and explanations.
 - **Frontend (`frontend-modern/`)** – Vite + SolidJS app built with TypeScript.
@@ -66,13 +66,11 @@ and installer tooling.
 git clone https://github.com/rcourtman/Pulse.git
 cd Pulse
 
-# Install dependencies
-brew install go node npm # or use your distro equivalents
+# Install Go 1.26 and Node.js 20 with your preferred package manager.
 
-# Install JS deps
-cd frontend-modern
-npm install
-cd ..
+# Install the repository and frontend dependencies exactly from their locks
+npm ci
+npm --prefix frontend-modern ci
 ```
 
 ### Hot Reload Dev Loop
@@ -127,9 +125,10 @@ examples where possible.
 - Browser proof pack: `npm run dev:verify`
 - Foreground managed launcher: `npm run dev:foreground`
 - Frontend-only escape hatch: `cd frontend-modern && npm run dev:frontend-only`
-- Tests: `npm run test`
-- Lint: `npm run lint`
-- Format: `npm run format`
+- Tests: `npm --prefix frontend-modern test`
+- Type check: `npm --prefix frontend-modern run type-check`
+- Lint: `npm --prefix frontend-modern run lint`
+- Format check: `npm --prefix frontend-modern run format:check`
 
 The same managed runtime wrappers are available from `frontend-modern/` if you
 start there by habit, so `npm run dev`, `npm run dev:status`, and
@@ -167,14 +166,16 @@ Document rollout plans and kill switches in `MIGRATION_SCAFFOLDING.md` so future
 - Keep instructions evergreen; put release-specific notes in
   `docs/RELEASE_NOTES.md`.
 
-Run a quick link check (`npm run lint-docs` if available, or `markdownlint`)
-before submitting large doc updates.
+Run `python3 scripts/check_public_docs.py` before submitting public
+documentation updates. It verifies local links and rejects retired navigation
+claims on the current documentation surface.
 
 ---
 
 ## Testing Expectations
 
-- Every PR should note the tests run (`go test`, `npm test`, `scripts/tests/run.sh`).
+- Every requested PR should note the tests run (`go test`, frontend tests, or
+  `scripts/tests/run.sh`, as applicable).
 - Add regression coverage when fixing bugs.
 - Mention manual verification steps (e.g., “Proxmox LXC installer tested on
   PVE 8.1”) if automated coverage is not feasible.
@@ -197,9 +198,9 @@ For maintainer-requested code help on a tracked issue:
 
 1. Link the issue where the maintainer requested the patch.
 2. Fork + branch (`git checkout -b feature/my-change`).
-2. Make your edits and run relevant tests.
-3. Update docs and changelog entries as needed.
-4. Open a PR describing:
+3. Make your edits and run relevant tests.
+4. Update docs and changelog entries as needed.
+5. Open a PR describing:
    - What changed
    - Why it changed
    - Testing performed

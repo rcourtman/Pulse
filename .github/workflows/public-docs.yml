@@ -1,0 +1,36 @@
+name: Public docs
+
+on:
+  pull_request:
+    paths:
+      - "*.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "scripts/check_public_docs.py"
+      - ".github/workflows/public-docs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "*.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "scripts/check_public_docs.py"
+      - ".github/workflows/public-docs.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Validate public documentation
+        run: python3 scripts/check_public_docs.py

@@ -1,20 +1,30 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: 'enhancement'
-assignees: ''
-
+about: Describe an operator problem or workflow Pulse could improve
+title: "[Feature]: "
+labels: enhancement
+assignees: ""
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Problem
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+What are you trying to accomplish, and what makes it difficult today?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+## Current workflow
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+Describe how you handle this now. Include the relevant platform, Pulse page,
+deployment type, and constraints.
+
+## Desired outcome
+
+What would a successful Pulse workflow let you do? Focus on the outcome rather
+than prescribing an implementation when possible.
+
+## Alternatives considered
+
+What workarounds, other tools, or different approaches have you tried?
+
+## Additional context
+
+Add screenshots, examples, or related issues. Do not include credentials,
+tokens, private keys, or unsanitized configuration files.

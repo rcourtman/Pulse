@@ -123,5 +123,5 @@ Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own en
 ## See Also
 
 - [Configuration Guide](CONFIGURATION.md#relay) — environment variables
-- [Security](../SECURITY.md#relay-security-pro) — relay security details
+- [Security](../SECURITY.md#relay-security-relay-and-above) — relay security details
 - [Plans & Entitlements](PULSE_PRO.md) — feature availability by plan

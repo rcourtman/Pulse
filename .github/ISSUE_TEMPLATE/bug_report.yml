@@ -46,7 +46,7 @@ body:
     attributes:
       label: Pulse version
       description: Exact version shown in the UI or logs.
-      placeholder: v6.0.0
+      placeholder: v6.x.y
     validations:
       required: true
 
@@ -55,7 +55,7 @@ body:
     attributes:
       label: Agent version
       description: Exact agent version (or "none" if no agents are involved).
-      placeholder: v6.0.0
+      placeholder: v6.x.y or none
     validations:
       required: true
 
@@ -64,7 +64,7 @@ body:
     attributes:
       label: Image tag or digest
       description: For container installs, the exact image reference used by the running container. Leave blank for LXC, bare metal, and other non-container installs.
-      placeholder: rcourtman/pulse:v6.0.0 or rcourtman/pulse@sha256:...
+      placeholder: rcourtman/pulse:v6.x.y or rcourtman/pulse@sha256:...
     validations:
       required: false
 

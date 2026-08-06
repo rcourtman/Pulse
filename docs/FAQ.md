@@ -58,16 +58,26 @@ See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.
 Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
 
 ### Does Pulse monitor TrueNAS?
-Yes. Pulse v6 includes first-class TrueNAS SCALE/CORE integration. Add your TrueNAS server in **Settings → TrueNAS** with the URL and API key. Pulse monitors the appliance, native VMs, apps, pools, datasets, disks, ZFS snapshots, replication tasks, and alerts. TrueNAS resources appear in the TrueNAS, Infrastructure, Storage, and Recovery views.
+Yes. Pulse includes first-class TrueNAS SCALE/CORE integration. Add your
+TrueNAS server under **Settings → Infrastructure → Platform connections** with
+the URL and API key. Pulse monitors the appliance, native VMs, apps, pools,
+datasets, disks, ZFS snapshots, replication tasks, and alerts. Those resources
+appear on the dedicated TrueNAS page.
 
-### Where did my pages go? (Unified Navigation)
-Pulse v6 organises the UI by **task** instead of **platform**:
-- **Infrastructure** → all hosts (Proxmox, Docker, K8s, TrueNAS)
-- **Workloads** → VMs, LXCs, containers, pods
-- **Storage** → all storage pools
-- **Recovery** → backups, snapshots, replication
+### How is navigation organised in Pulse v6?
+Pulse uses platform-shaped top-level pages:
 
-Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) redirect automatically. See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the full mapping.
+- **Proxmox**, **Docker**, **Kubernetes**, **TrueNAS**, **vSphere**, and
+  **Machines** keep platform-specific inventory and workflows together.
+- Storage, snapshots, backups, and replication appear inside the platform page
+  they belong to.
+- **Alerts**, **Actions**, and **Patrol** provide cross-platform operational
+  views.
+
+The short-lived unified `/workloads`, `/storage`, and `/recovery` top-level
+navigation was retired during the v6 prerelease cycle. See the
+[historical migration note](MIGRATION_UNIFIED_NAV.md) if you are comparing an
+older release candidate.
 
 ### Can I disable alerts for specific metrics?
 Yes. Go to **Alerts → Thresholds** and use the On/Off toggle next to any metric while editing, or set the value to `-1`. You can do this globally or per-resource (VM/Node).
@@ -111,7 +121,7 @@ pct exec <ctid> -- pulse bootstrap-token
 If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.
 
 ### How do I enable HTTPS?
-Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#https--tls).
+Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#-https--tls).
 
 ### Can I use Single Sign-On (SSO)?
 Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider support (multiple IdPs active simultaneously). Configure in **Settings → Security → SSO Providers**. Pulse also supports Proxy Auth (Authentik, Authelia, Cloudflare). See [Proxy Auth Guide](PROXY_AUTH.md).
