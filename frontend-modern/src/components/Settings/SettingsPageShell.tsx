@@ -42,9 +42,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
 
   return (
     <div class="space-y-6">
-      <div class="px-1">
-        <PageHeader title={props.headerMeta().title} description={props.headerMeta().description} />
-      </div>
+      <PageHeader title={props.headerMeta().title} description={props.headerMeta().description} />
 
       <Show when={props.hasUnsavedChanges() && props.activeTabSaveBehavior() === 'system'}>
         <div class="bg-amber-50 dark:bg-amber-900 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">

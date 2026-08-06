@@ -1,70 +1,50 @@
 {
   "version": 1,
-  "base_sha": "80d4558b424e58a18eb6bc1780bdbb6dc8461098",
-  "verified_at": "2026-08-06T09:32:58Z",
+  "base_sha": "98a87864a0dac4c5436de379c9a8307e4f42cb14",
+  "verified_at": "2026-08-06T10:32:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts"
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+    "frontend-modern/src/pages/Actions.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/docker/dockerContainerTableModel.ts": "85169f1fa44410390f11bcec933c0b70ed1448d5e57acd2406cf579a4d43c2a0",
-    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "ef0bd10e3027e4c5768320d75bc9f367009c34a298d00f2a7372157489b4ebad",
-    "frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts": "75a7fd0059c334ac0aacead564d59829489d055a6d5bb445cec87bc72b4c78c6"
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "caad8a27e18602cdd0311c10587c6ed3da3e5f6227cd827c7642bcd6250d72ad",
+    "frontend-modern/src/pages/Actions.tsx": "2cc8c8b31691f9765405692b88f4f70c171d5309028a19d2f5c51bc85f322858"
   },
   "routes": [
     "/proxmox/overview",
     "/docker/overview",
+    "/kubernetes/overview",
+    "/truenas/overview",
+    "/vmware/overview",
+    "/standalone/machines",
     "/alerts/overview",
     "/actions",
     "/patrol",
-    "/settings/infrastructure",
-    "/settings/pulse-intelligence/billing/plan",
-    "/docs",
-    "/docs/CONFIGURATION",
-    "/docs/API",
-    "/docs/KUBERNETES",
-    "/docs/SECURITY",
-    "/preview/setup-complete",
-    "/not-a-real-route"
+    "/settings/infrastructure"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 820
-    },
-    {
-      "width": 768,
-      "height": 900
-    },
-    {
-      "width": 390,
-      "height": 844
-    },
-    {
-      "width": 320,
       "height": 720
+    },
+    {
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Proxmox overview with all default workload columns, then Uptime and Backup disabled, persisted through reload, and restored to the original selection",
-    "Proxmox workload table at 390px and 320px with Name, Availability, CPU, and Memory, plus checkout-web-01 expanded to its complete guest drawer",
-    "Proxmox node table at 390px and 320px with Node, CPU, and Memory and provider-native pve1, pve2, and pve3 identifiers visible below truncated friendly names",
-    "Proxmox overview at 768px with Disk restored and at 1280px with the full compact desktop column set",
-    "Docker overview in list and grouped modes with the grouped choice persisted through reload and the original list choice restored afterward",
-    "Docker container table at 390px and 320px with complete container names prioritized beside CPU and Memory, and at 768px with Update and Actions restored",
-    "Docker customer-portal and backup-coordinator resource drawers with lifecycle actions and image-update detail available after phone table columns are suppressed",
-    "Alerts, Actions, Patrol, and Settings workspaces at desktop, tablet, and phone widths with shell geometry matched to platform pages",
-    "Documentation index and dense configuration, API, Kubernetes, and security documents at desktop and phone widths",
-    "Setup completion preview, in-product pricing handoff, and unknown-route recovery at desktop and phone widths"
+    "Actions inbox on the Open subtab with three queued actions, the read-only demo banner, the queue summary trailing the subtab row, and the Refresh action in the header",
+    "Settings Infrastructure workspace with its page header above the settings card",
+    "Alerts Overview and Patrol workspaces used as the page-header alignment reference",
+    "Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines overviews used as the platform-page alignment reference",
+    "Actions inbox at phone width where the shared panel padding replaces the page-level padding"
   ],
   "interactions": [
-    "Opened Proxmox View preferences and Columns, disabled Uptime and Backup, verified immediate reflow and persistence after reload, resized to phone widths, then restored both choices and confirmed the full header set after reload",
-    "Expanded checkout-web-01 on a 390px viewport, verified hidden disk, uptime, backup, and filesystem information in the drawer, closed it, and confirmed focus returned to the same row disclosure",
-    "Switched Docker from List to Grouped, reloaded to confirm persistence, inspected grouped phone rows, then restored List and reloaded to confirm the original preference",
-    "Expanded Docker resources to verify image-update state and governed lifecycle actions remain available when their quick columns are removed from the phone table",
-    "Resized live Proxmox and Docker pages through 1280px, 768px, 390px, and 320px and inspected rendered pixels, header priority, name distinguishability, table bounds, and document overflow",
-    "Navigated system, documentation, setup, pricing-handoff, and not-found routes across the same viewport matrix and checked visible controls, shell alignment, and containment"
+    "Signed in as admin and clicked every top-level tab in sequence, reading getBoundingClientRect for main, the page header, the h1, and the first content block on each route",
+    "Recorded the pre-change drift: Actions rendered its h1 at top 153 left 67 and its content 40px narrower, Settings rendered its h1 at left 51, every other tab sat at top 137 left 47 width 1175",
+    "Re-ran the same ten-tab sweep after removing the duplicated page padding and confirmed all ten routes report top 137 left 47 width 1175 at 1280x720",
+    "Repeated the ten-tab sweep at 375x812 and confirmed all routes report top 80 left 22 width 332",
+    "Screenshotted Actions and Alerts at both viewports to confirm the queue rows, subtabs, header action, and vertical rhythm still read correctly"
   ]
 }

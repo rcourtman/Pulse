@@ -137,7 +137,7 @@ export function Actions() {
   });
 
   return (
-    <div class="w-full space-y-4 px-3 py-4 sm:px-5">
+    <div class="space-y-6">
       <PageHeader
         title="Actions"
         description="Review proposed infrastructure changes and track their outcomes."
