@@ -18,12 +18,12 @@ Delete `/etc/pulse/.env` and restart the service. Pulse will require a bootstrap
 sudo pulse bootstrap-token
 ```
 **Proxmox LXC** (installed from the Proxmox shell):
-Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host:
+Pulse runs inside the container, so run the same steps through `pct exec` on the Proxmox host. The binary needs its absolute path here, because `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin` and that does not include `/usr/local/bin`:
 
 ```bash
 pct exec <ctid> -- rm /etc/pulse/.env
 pct exec <ctid> -- systemctl restart pulse
-pct exec <ctid> -- pulse bootstrap-token
+pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token
 ```
 
 If you only missed the token during a fresh install (no password set yet), skip the first two commands and just read it back with the last one.

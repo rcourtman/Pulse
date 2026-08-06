@@ -2600,6 +2600,12 @@ first-session setup instructions must also route operators through
 `pulse bootstrap-token` with the correct runtime data directory instead of
 printing or instructing users to `cat` `.bootstrap_token`, because the file is
 an encrypted persistence artifact rather than the raw setup token.
+Any such instruction that an operator runs through `pct exec` must additionally
+name the binary by absolute path. `pct exec` runs with
+`PATH=/sbin:/bin:/usr/sbin:/usr/bin`, which excludes the `/usr/local/bin` link
+the installer creates, so a bare command name fails with exit 127 at the
+operator's very first step. Routing an operator to a correct but unresolvable
+command does not satisfy this contract.
 That same bootstrap artifact contract must now be backend-owned as one
 canonical install artifact model rather than a handler-local bootstrap struct
 plus a second response envelope. Shell downloads, setup-script-url responses,

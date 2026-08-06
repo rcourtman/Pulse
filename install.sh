@@ -2062,11 +2062,13 @@ create_lxc_container() {
     echo "  First-time setup:"
     local QUOTED_CONFIG_DIR
     printf -v QUOTED_CONFIG_DIR '%q' "$CONFIG_DIR"
-    echo "    pct exec $CTID -- env PULSE_DATA_DIR=$QUOTED_CONFIG_DIR pulse bootstrap-token"
+    # pct exec runs with PATH=/sbin:/bin:/usr/sbin:/usr/bin, which excludes
+    # /usr/local/bin where the binary is linked, so these must be absolute.
+    echo "    pct exec $CTID -- env PULSE_DATA_DIR=$QUOTED_CONFIG_DIR $BINARY_LINK_PATH bootstrap-token"
     echo
     echo "  Common commands:"
     echo "    pct enter $CTID              # Enter container"
-    echo "    pct exec $CTID -- $(basename "$UPDATE_HELPER_PATH")     # Update Pulse"
+    echo "    pct exec $CTID -- $UPDATE_HELPER_PATH     # Update Pulse"
     echo
     
     CONTAINER_CREATED_FOR_CLEANUP=false

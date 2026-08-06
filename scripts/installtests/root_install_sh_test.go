@@ -2272,3 +2272,57 @@ func TestRootInstallScriptAutoUpdateConfigDirGuardRunsBeforeStateChanges(t *test
 		}
 	}
 }
+
+// pct exec runs with PATH=/sbin:/bin:/usr/sbin:/usr/bin. Anything installed to
+// /usr/local/bin, which is where BINARY_LINK_PATH and the non-default update
+// helper live, is therefore unreachable by bare name and fails with exit 127.
+// Every pct exec invocation the installer runs or prints must name a command
+// that is either absolute or genuinely resolvable on that PATH.
+func TestRootInstallPctExecCommandsResolveOnPctExecPath(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	// Commands that really do live on the pct exec PATH.
+	resolvable := map[string]bool{
+		"bash":      true,
+		"sh":        true,
+		"rm":        true,
+		"hostname":  true,
+		"systemctl": true,
+		"env":       true,
+	}
+
+	pctExec := regexp.MustCompile(`pct exec [^\n]*? -- (.+)`)
+	for i, line := range strings.Split(string(content), "\n") {
+		match := pctExec.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		fields := strings.Fields(match[1])
+		// Skip any leading `env KEY=VALUE` prefix to reach the real command.
+		for len(fields) > 1 && (fields[0] == "env" || strings.Contains(fields[0], "=")) {
+			fields = fields[1:]
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		command := strings.Trim(fields[0], `"'`)
+		if strings.HasPrefix(command, "$") || strings.HasPrefix(command, "${") {
+			// A variable reference is fine as long as it is not wrapped in
+			// basename, which is what strips the directory off an absolute path.
+			if strings.Contains(match[1], "basename") {
+				t.Fatalf("install.sh:%d passes a basename to pct exec, which drops the directory and breaks PATH resolution: %s", i+1, strings.TrimSpace(line))
+			}
+			continue
+		}
+		if strings.HasPrefix(command, "/") {
+			continue
+		}
+		if resolvable[command] {
+			continue
+		}
+		t.Fatalf("install.sh:%d runs %q through pct exec by bare name, which is not on PATH=/sbin:/bin:/usr/sbin:/usr/bin: %s", i+1, command, strings.TrimSpace(line))
+	}
+}

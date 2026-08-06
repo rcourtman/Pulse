@@ -174,7 +174,9 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 | **Docker** | `docker exec pulse /app/pulse bootstrap-token` |
 | **Kubernetes** | `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
 | **Systemd** | `sudo pulse bootstrap-token` |
-| **Proxmox LXC** | `pct exec <ctid> -- pulse bootstrap-token` (run on the Proxmox host; the installer prints this command with your container ID at the end of the install) |
+| **Proxmox LXC** | `pct exec <ctid> -- /usr/local/bin/pulse bootstrap-token` (run on the Proxmox host; the installer prints this command with your container ID at the end of the install) |
+
+The Proxmox path must be absolute. `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin`, which does not include `/usr/local/bin`, so a bare `pulse` fails with `No such file or directory`.
 
 > **Important**: Paste the token string printed by the command above. Do not paste the raw `.bootstrap_token` file contents directly. In v6 that file may contain an encrypted JSON snapshot rather than the usable setup token.
 
