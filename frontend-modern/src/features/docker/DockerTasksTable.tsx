@@ -133,7 +133,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                   kind="text"
                   sort={sort}
                   sortKey="service"
-                  class="hidden md:table-cell md:w-[18%]"
+                  class="hidden sm:table-cell md:w-[18%]"
                 >
                   Service
                 </PlatformSortableTableHead>
@@ -165,7 +165,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                   kind="text"
                   sort={sort}
                   sortKey="node"
-                  class="hidden md:table-cell md:w-[16%]"
+                  class="hidden sm:table-cell md:w-[16%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -189,7 +189,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                         indicator={mapDockerTaskStatus(resource)}
                       />
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                       >
                         {dockerTextValue(resource.docker?.serviceName)}
                       </TableCell>
@@ -218,7 +218,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                         </span>
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                       >
                         {dockerTextValue(resource.docker?.nodeName || resource.docker?.nodeId)}
                       </TableCell>

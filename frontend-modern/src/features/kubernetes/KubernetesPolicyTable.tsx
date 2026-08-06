@@ -246,7 +246,7 @@ export const KubernetesPolicyTable: Component<{
                   Kind
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]`}
                 >
                   Scope
                 </TableHead>
@@ -318,7 +318,7 @@ export const KubernetesPolicyTable: Component<{
                             {policyKind(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="inline-block max-w-[13rem] truncate" title={scope()}>
                               {scope()}

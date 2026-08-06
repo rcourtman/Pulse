@@ -758,6 +758,7 @@ const AgentMachineActionsCell: Component<{
         label={`Machine actions for ${props.name}`}
         tone="muted"
         size="sm"
+        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
         aria-haspopup="menu"
         aria-expanded={props.menuOpen ? 'true' : 'false'}
         onClick={(event) => {
@@ -790,7 +791,7 @@ const AgentMachineActionsCell: Component<{
             <button
               type="button"
               role="menuitem"
-              class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950"
+              class="flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:text-red-400 dark:hover:bg-red-950"
               aria-label={props.confirmingRemoval ? confirmLabel() : removeLabel()}
               disabled={props.removing || !props.agentId}
               onClick={(event) => {
@@ -1137,7 +1138,7 @@ const AgentMachineSortableHead: Component<{
         {(sortKey) => (
           <button
             type="button"
-            class="inline-flex max-w-full items-center gap-1 truncate hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+            class="-my-3 inline-flex min-h-11 max-w-full items-center gap-1 truncate py-3 hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 sm:my-0 sm:min-h-0 sm:py-0"
             onClick={() => props.onSort(sortKey())}
             aria-label={`Sort by ${props.column.label}`}
           >

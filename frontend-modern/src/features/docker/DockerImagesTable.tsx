@@ -162,7 +162,7 @@ export const DockerImagesTable: Component<
                   kind="numeric-value"
                   sort={sort}
                   sortKey="size"
-                  class="md:w-[12%]"
+                  class="hidden sm:table-cell md:w-[12%]"
                 >
                   Size
                 </PlatformSortableTableHead>
@@ -225,7 +225,7 @@ export const DockerImagesTable: Component<
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
                           >
                             {dockerByteValue(resource.docker?.sizeBytes)}
                           </TableCell>

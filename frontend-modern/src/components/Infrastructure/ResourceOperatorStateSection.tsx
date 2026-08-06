@@ -508,7 +508,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             value={criticality()}
             onChange={(e) => setCriticality(e.currentTarget.value as ResourceCriticality)}
             disabled={saving()}
-            class="mt-1 block w-full text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+            class="mt-1 block min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 sm:min-h-0"
           >
             <option value="">Default</option>
             <option value="high">High</option>
@@ -552,7 +552,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleOpenScheduler}
                 disabled={saving()}
-                class="px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded hover:bg-surface-hover disabled:opacity-50"
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 Schedule window
               </button>
@@ -563,7 +563,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleOpenScheduler}
                 disabled={saving()}
-                class="px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded hover:bg-surface-hover disabled:opacity-50"
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 Edit window
               </button>
@@ -571,7 +571,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="button"
                 onClick={handleClearMaintenanceWindow}
                 disabled={saving()}
-                class="px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200 rounded hover:bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900 disabled:opacity-50"
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200 rounded hover:bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900 disabled:opacity-50 sm:min-h-0"
               >
                 Cancel window
               </button>
@@ -590,7 +590,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="datetime-local"
                 value={scheduleStart()}
                 onInput={(e) => setScheduleStart(e.currentTarget.value)}
-                class="mt-0.5 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400"
+                class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
                 disabled={saving()}
               />
             </label>
@@ -600,7 +600,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
                 type="datetime-local"
                 value={scheduleEnd()}
                 onInput={(e) => setScheduleEnd(e.currentTarget.value)}
-                class="mt-0.5 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400"
+                class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
                 disabled={saving()}
               />
             </label>
@@ -612,7 +612,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={() => applyPresetDuration(1)}
               disabled={saving()}
-              class="px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50"
+              class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
             >
               1h
             </button>
@@ -620,7 +620,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={() => applyPresetDuration(4)}
               disabled={saving()}
-              class="px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50"
+              class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
             >
               4h
             </button>
@@ -628,7 +628,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={() => applyPresetDuration(24)}
               disabled={saving()}
-              class="px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50"
+              class="min-h-11 min-w-11 px-1.5 py-0.5 rounded border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
             >
               24h
             </button>
@@ -641,7 +641,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               value={scheduleReason()}
               onInput={(e) => setScheduleReason(e.currentTarget.value)}
               placeholder="e.g. Q3 storage upgrade, kernel patch reboot"
-              class="mt-0.5 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400"
+              class="mt-0.5 min-h-11 w-full text-xs rounded border border-border bg-surface px-2 py-1 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 sm:min-h-0"
               disabled={saving()}
               maxLength={200}
             />
@@ -656,7 +656,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={() => setSchedulerOpen(false)}
               disabled={saving()}
-              class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50"
+              class="min-h-11 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors disabled:opacity-50 sm:min-h-0"
             >
               Cancel
             </button>
@@ -664,7 +664,7 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
               type="button"
               onClick={handleScheduleSave}
               disabled={saving() || Boolean(scheduleValidationError())}
-              class="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded transition-colors"
+              class="min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded transition-colors sm:min-h-0"
             >
               {saving() ? 'Saving…' : 'Save window'}
             </button>

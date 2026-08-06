@@ -212,7 +212,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden md:table-cell md:w-[13%]"
+                  class="hidden sm:table-cell md:w-[13%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -220,7 +220,7 @@ export const KubernetesPodsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="node"
-                  class="hidden md:table-cell md:w-[13%]"
+                  class="hidden sm:table-cell md:w-[13%]"
                 >
                   Node
                 </PlatformSortableTableHead>
@@ -322,14 +322,14 @@ export const KubernetesPodsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="block max-w-full truncate" title={scope()}>
                               {scope()}
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="block max-w-full truncate" title={node()}>
                               {node()}

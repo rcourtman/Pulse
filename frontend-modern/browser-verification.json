@@ -1,46 +1,115 @@
 {
   "version": 1,
-  "base_sha": "c25d393fff818067d9e75f2fed01ad5f47f41ec2",
-  "verified_at": "2026-08-06T14:51:21Z",
+  "base_sha": "2d9ba270651ed5e1028ae4aa15843ab34303c7c9",
+  "verified_at": "2026-08-06T14:52:48Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/AppLayout.tsx",
-    "frontend-modern/src/components/Brand/PulseBrandMark.tsx",
-    "frontend-modern/src/components/Login.tsx",
-    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/buttonModel.ts",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/AppLayout.tsx": "5f0ee2909e3c08840af0c5b8eac78cd6c833aeb60f12250d770aea9fc319ce68",
-    "frontend-modern/src/components/Brand/PulseBrandMark.tsx": "af8766f84e628b00f22cfc2c5b786a0e0914b8555f2796748e8634265d8b7f0b",
-    "frontend-modern/src/components/Login.tsx": "c81e3c29a7e59f1217945bb373dced6aa28b047c6d6a7929e46681994eb9305f",
-    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx": "f3f77aebdc6c26291a731506da5d1a40184dc485079fc60f7b5c57795557bb03"
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx": "c51b9e1530cd64dfe119adf16ec37e0ac1014be8ce52593c34735776ccaf7fbc",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "35e44d398281f05e48a770801ece59ef120150bc613e2f17d3bed0f30e349b34",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "3bfcbffa02f3e1b2512e925e3f33a9ff490b269fffb6b946e0211f31d31854e2",
+    "frontend-modern/src/components/shared/buttonModel.ts": "bd672d8673cab1b467afc72b932a1b1ef62bd25eac28d7c2e40e74477da71e04",
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "dc37ef6b662b2fbbecce312894fa5e8c19d2224cf1895683e63fdaca930d6301",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "5e793d307797c96b2496b7c5cef4807890f480fc5fb22cc1c4bc9a506f85383e",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx": "bb0b23679387945dd5bab4a86231754549419d0e2350fa1a1aca7f26ee317403",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "201200a74d8da6bcf246e5ec5de1e8df018c05833f5fae66f4f6435768a27cb4",
+    "frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx": "c50271a335b9008196ce832f5ab18f90b93996ee0516570f731ec036377e84f0",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "ce3bd1d75937b4d8a914e09385f71b32ef3e0ac7b898680f2d31c1aab6dd043e",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx": "237338df289a7fddbf3b6c8b889e55e8357fc2c43b8e9195ffd7ddf1c8e78f13",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx": "348fd5f8c7b76de1dd971328b7622d46314f2c8c995110883ffb278aab7d26bb",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "9dab059b7f6375ece604b760cbf05db93b7bfedd20a1e1e0f345b80e4188c5f3",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx": "fba4eb11395cac6aa8555807bd92f07b15b1013a1d19606b1b70eddffa143813",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx": "b486880d9147a3af212ba9c1b570959242900d4fd8c7b4c2c7a72d30046e5edb",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "2ba5c960a276a25b34992c2c8f59b783220e84852f60b0c6069b277cd9e89efb",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx": "f09c277ca2ee298d585207acf4e1d50fae4a7472b818233df69842a772f53a58",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "3ede12e55a4975563f9f4c7c4db7e9ffced3d4aae9ff79c9806eb443e78da58c",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "d85fc6739a235a295b483044b9250b2e59a542a875ae3c8b6b46bb507091385c",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx": "219fe6f2a4726b9bff7f5b8fdd51ef05b622a931743a3fecf9541de9894f2020"
   },
   "routes": [
-    "/",
-    "/proxmox/overview"
+    "/docker/overview",
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks",
+    "/docker/swarm",
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/storage",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/storage",
+    "/vmware/networks",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/machines",
+    "/standalone/availability"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 900
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
     }
   ],
   "states": [
-    "Login screen brand mark in app-dark theme, computed disc #3b82f6 with ring stroke and centre fill both #dbeafe",
-    "Login screen brand mark in app-light theme while the OS colour scheme was dark, computed disc #2563eb with ring stroke and centre fill both #ffffff, confirming the mark follows the app theme class rather than the OS preference",
-    "Authenticated header brand lockup in app-light and app-dark themes at 1280x720, ring stroke and centre fill matching in both",
-    "Authenticated header brand lockup at 375x812 mobile, mark visible at 20x20 with dark palette intact",
-    "SetupWizard WelcomeStep was NOT exercised live: it renders only when the instance has no authentication configured, and the dev backend is configured. Covered by WelcomeStep.test.tsx and by the shared PulseBrandMark component verified on the other two surfaces"
+    "Mock-data inventory tables across Docker, Kubernetes, TrueNAS, vSphere, and standalone Machines and Availability routes",
+    "Phone layouts with operator-priority identity, health, capacity, state, and update columns while secondary context is hidden",
+    "Tablet layouts with namespace, scope, role, host, mode, address, class, kind, disk, and node context restored where space permits",
+    "Desktop layouts with the complete field set and stable platform-page width",
+    "TrueNAS nested storage topology at multiple depths with long resource names and usage and health values",
+    "Expanded machine and Docker image resource drawers with overview, history, discovery, support disclosure, and operator override sections",
+    "Operator maintenance scheduler open and cancelled without saving, plus machine action menu open and closed"
   ],
   "interactions": [
-    "Signed in with local credentials from the login form to move from the unauthenticated to the authenticated header surface",
-    "Toggled pulseThemePreference between light and dark in localStorage and reloaded, reading getComputedStyle fill and stroke off .pulse-bg, .pulse-ring and .pulse-center each time",
-    "Held the OS colour scheme at dark while forcing the app theme to light to prove the inline mark tracks the app theme, the divergence an <img src=\"/logo.svg\"> cannot represent",
-    "Read getAnimations() on the extracted mark and confirmed pulse-brand-logo, pulse-brand-bg, pulse-brand-ring and pulse-brand-center are all running, proving the .animate-pulse-brand descendant selectors still reach the circles after the SVG moved into a component",
-    "Resized from 1280x720 to 375x812 and re-measured the header mark bounding box and computed ring stroke"
+    "Navigated every listed platform route and inspected table headers, visible information priority, truncation, and document overflow at phone, tablet, and desktop widths",
+    "Added responsive context progressively between 320px, 390px, 768px, and 1280px instead of scaling the application or forcing horizontal table scrolling",
+    "Expanded and collapsed resource rows, switched drawer tabs, opened support and detail disclosures, and measured drawer header, select, schedule, preset, form, and history-range controls",
+    "Verified changed phone controls meet a 44px touch target while returning to the compact treatment above the phone breakpoint",
+    "Opened the machine row action menu at 320px and confirmed its bounds stay inside the viewport",
+    "Pressed Escape on the open machine action menu and confirmed it closes and restores focus to the originating action button",
+    "Closed an expanded machine detail drawer at 320px and confirmed focus returns to the exact row expand button",
+    "Confirmed no horizontal document overflow on the audited pages, including expanded drawer states, then reset the viewport and finalized the browser session"
   ]
 }

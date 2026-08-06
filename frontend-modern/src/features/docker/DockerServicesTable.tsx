@@ -187,12 +187,13 @@ export const DockerServicesTable: Component<{
             header={
               <>
                 {/*
-                    Desktop widths: Service and Image take the lion's share
+                    Wide desktop widths: Service and Image take the lion's share
                     because their content is long (registry refs, fully
                     qualified service names). Mode / Desired / Running trim
                     to short text and 1-2 digit counts. Update, Ports, and
                     Host get middle slices for rollout state, port lists, and
-                    hostnames. Mobile widths are unchanged.
+                    hostnames. Phones keep the decision-making replica pair;
+                    the basic container tier restores mode, update, and host.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
@@ -218,14 +219,19 @@ export const DockerServicesTable: Component<{
                 >
                   Image
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="mode" class="md:w-[8%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="mode"
+                  class="hidden sm:table-cell md:w-[8%]"
+                >
                   Mode
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
                   sortKey="desired"
-                  class="hidden md:table-cell md:w-[8%]"
+                  class="md:w-[8%]"
                 >
                   Desired
                 </PlatformSortableTableHead>
@@ -241,7 +247,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="update"
-                  class="hidden md:table-cell md:w-[12%]"
+                  class="hidden sm:table-cell md:w-[12%]"
                 >
                   Update
                 </PlatformSortableTableHead>
@@ -256,7 +262,7 @@ export const DockerServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="host"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -303,12 +309,12 @@ export const DockerServicesTable: Component<{
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                         >
                           {mode()}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           <PlatformTableNumberValue value={service.docker?.desiredTasks ?? 0} />
                         </TableCell>
@@ -318,7 +324,7 @@ export const DockerServicesTable: Component<{
                           <PlatformTableNumberValue value={service.docker?.runningTasks ?? 0} />
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                         >
                           <span class="truncate inline-block max-w-[10rem]" title={update().title}>
                             {update().label}
@@ -332,7 +338,7 @@ export const DockerServicesTable: Component<{
                           </span>
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                         >
                           {host()}
                         </TableCell>

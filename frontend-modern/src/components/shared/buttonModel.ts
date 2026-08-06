@@ -183,10 +183,10 @@ export const getActionIconButtonClass = (options: ActionIconButtonClassOptions =
 export const DRAWER_HEADER_ACTION_GROUP_CLASS = 'flex shrink-0 items-center gap-1.5';
 
 export const DRAWER_HEADER_ACTION_BUTTON_CLASS =
-  'inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60';
+  'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60 sm:min-h-0 sm:min-w-0';
 
 export const DRAWER_HEADER_ICON_BUTTON_CLASS =
-  'inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
+  'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0 sm:min-w-0';
 
 export const getDrawerHeaderActionGroupClass = (className?: string): string =>
   [DRAWER_HEADER_ACTION_GROUP_CLASS, className].filter(Boolean).join(' ');

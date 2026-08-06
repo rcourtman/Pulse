@@ -1425,6 +1425,7 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerSource).not.toContain('Open related infrastructure');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
+      expect(guestDrawerHistorySource).toContain('h-7 min-h-11 py-0 text-[11px] sm:min-h-0');
       expect(guestDrawerHistorySource).toContain('onPointerMove={handleHoverMove}');
       expect(guestDrawerHistorySource).toContain('fallbackMetrics');
       expect(guestDrawerHistorySource).toContain('props.groups ?? GUEST_DRAWER_HISTORY_GROUPS');

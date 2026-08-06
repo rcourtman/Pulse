@@ -3815,7 +3815,7 @@ describe('shared primitive guardrails', () => {
     expect(drawerHeaderActionGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(drawerHeaderActionGuard?.canonical?.export).toBe('DrawerHeaderActionButton');
     expect(drawerHeaderActionGuard?.allPatterns).toEqual([
-      'inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+      'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
     ]);
     expect(drawerHeaderActionGuard?.scopes).toEqual([
       'src/components',
@@ -3829,7 +3829,7 @@ describe('shared primitive guardrails', () => {
     expect(drawerHeaderIconGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(drawerHeaderIconGuard?.canonical?.export).toBe('DrawerHeaderIconButton');
     expect(drawerHeaderIconGuard?.allPatterns).toEqual([
-      'inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+      'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
     ]);
     expect(drawerHeaderIconGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
     expect(drawerHeaderIconGuard?.allowedPaths ?? []).toHaveLength(0);
@@ -4147,10 +4147,10 @@ describe('shared primitive guardrails', () => {
       expect(drawerSource).toContain('DrawerHeaderActionButton');
       expect(drawerSource).toContain('DrawerHeaderIconButton');
       expect(drawerSource).not.toContain(
-        'inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+        'inline-flex h-8 min-h-11 min-w-11 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
       );
       expect(drawerSource).not.toContain(
-        'inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+        'inline-flex h-8 w-8 min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
       );
     }
     expect(chatMessagesSource).toContain('@/components/shared/Button');

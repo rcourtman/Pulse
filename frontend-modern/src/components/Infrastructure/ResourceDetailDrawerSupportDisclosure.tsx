@@ -46,7 +46,7 @@ export const ResourceDetailDrawerSupportDisclosure: Component<
             onClick={props.onToggle}
             class={
               props.buttonClass ??
-              'inline-flex shrink-0 items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base'
+              'inline-flex min-h-11 shrink-0 items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base sm:min-h-0'
             }
           >
             {props.expanded ? props.hideLabel : props.showLabel}

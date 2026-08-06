@@ -167,7 +167,8 @@ export const KubernetesDeploymentsTable: Component<{
                     the biggest shares because their content can be long.
                     The integer-count columns (Desired / Updated / Ready /
                     Available) trim to what their headers plus 1-2 digit
-                    values need. Mobile widths are unchanged.
+                    values need. The basic tier restores namespace context
+                    without crowding the phone tier.
                   */}
                 <PlatformSortableTableHead
                   kind="name"
@@ -181,7 +182,7 @@ export const KubernetesDeploymentsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="namespace"
-                  class="hidden md:table-cell md:w-[20%]"
+                  class="hidden sm:table-cell md:w-[20%]"
                 >
                   Namespace
                 </PlatformSortableTableHead>
@@ -279,7 +280,7 @@ export const KubernetesDeploymentsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             {ns()}
                           </TableCell>

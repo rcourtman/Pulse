@@ -104,7 +104,7 @@ export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSel
     label="History range"
     labelClass="sr-only"
     fieldBaseClass="contents"
-    selectBaseClass={`${filterSelectClass} h-7 py-0 text-[11px]`}
+    selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
     data-testid="guest-history-range-control"
     value={props.range}
     onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}

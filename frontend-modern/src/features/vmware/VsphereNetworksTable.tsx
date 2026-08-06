@@ -173,7 +173,7 @@ export const VsphereNetworksTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="network"
-                  class="w-[45%] md:w-[24%]"
+                  class="w-[80%] sm:w-[45%] md:w-[24%]"
                 >
                   Network
                 </PlatformSortableTableHead>
@@ -181,7 +181,7 @@ export const VsphereNetworksTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="type"
-                  class="w-[35%] md:w-[13%]"
+                  class="hidden sm:table-cell sm:w-[35%] md:w-[13%]"
                 >
                   Type
                 </PlatformSortableTableHead>
@@ -268,7 +268,9 @@ export const VsphereNetworksTable: Component<{
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
+                          >
                             <span class="font-mono text-[11px] text-base-content">
                               {networkType(network)}
                             </span>

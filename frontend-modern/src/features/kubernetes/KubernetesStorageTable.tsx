@@ -288,7 +288,7 @@ export const KubernetesStorageTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden md:table-cell md:w-[13%]"
+                  class="hidden sm:table-cell md:w-[13%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -304,7 +304,7 @@ export const KubernetesStorageTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="class"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Class
                 </PlatformSortableTableHead>
@@ -382,7 +382,7 @@ export const KubernetesStorageTable: Component<{
                             {kind()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={scope()}>
                               {scope()}
@@ -394,7 +394,7 @@ export const KubernetesStorageTable: Component<{
                             {bindingOrPhase(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             {storageClass(resource)}
                           </TableCell>

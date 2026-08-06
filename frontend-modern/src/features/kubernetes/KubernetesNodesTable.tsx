@@ -210,7 +210,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="cluster"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Cluster
                 </PlatformSortableTableHead>
@@ -218,7 +218,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="roles"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Roles
                 </PlatformSortableTableHead>
@@ -266,7 +266,7 @@ export const KubernetesNodesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="capacity"
-                  class="md:w-[14%]"
+                  class="hidden sm:table-cell md:w-[14%]"
                 >
                   Capacity
                 </PlatformSortableTableHead>
@@ -366,12 +366,12 @@ export const KubernetesNodesTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             {cluster()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             {formatRoles(meta()?.roles)}
                           </TableCell>
@@ -421,7 +421,7 @@ export const KubernetesNodesTable: Component<{
                             {formatPlatformTableUptimeValue(node.uptime)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums sm:table-cell`}
                           >
                             <span class="md:hidden">{compactCapacityLabel()}</span>
                             <span class="hidden md:inline">{capacityLabel()}</span>

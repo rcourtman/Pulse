@@ -315,7 +315,7 @@ export const KubernetesClustersTable: Component<{
                                 <Show when={props.onSelectCluster} fallback={name()}>
                                   <button
                                     type="button"
-                                    class={`truncate rounded-sm text-left font-semibold underline-offset-2 hover:text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:text-blue-400 ${
+                                    class={`-my-3 inline-flex min-h-11 items-center truncate rounded-sm py-3 text-left font-semibold underline-offset-2 hover:text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:my-0 sm:min-h-0 sm:py-0 dark:hover:text-blue-400 ${
                                       props.selectedClusterId === clusterScopeId()
                                         ? 'text-blue-600 dark:text-blue-400'
                                         : 'text-base-content'

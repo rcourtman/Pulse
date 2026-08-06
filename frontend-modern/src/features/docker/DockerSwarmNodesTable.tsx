@@ -166,7 +166,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="reachability"
-                  class="hidden md:table-cell md:w-[14%]"
+                  class="md:w-[14%]"
                 >
                   Reachability
                 </PlatformSortableTableHead>
@@ -190,7 +190,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="numeric-value"
                   sort={sort}
                   sortKey="memory"
-                  class="md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -198,7 +198,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                   kind="text"
                   sort={sort}
                   sortKey="address"
-                  class="hidden md:table-cell md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Address
                 </PlatformSortableTableHead>
@@ -233,7 +233,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                           {dockerTextValue(resource.docker?.availability)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
                           {managerReachability()}
                         </TableCell>
@@ -250,12 +250,12 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                           {dockerCpuValue(resource.docker?.nanoCpus)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
                         >
                           {dockerByteValue(resource.docker?.memoryBytes)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                         >
                           {dockerTextValue(
                             resource.docker?.address || resource.docker?.managerAddress,

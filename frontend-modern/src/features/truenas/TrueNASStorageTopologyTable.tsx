@@ -242,9 +242,9 @@ const sortTrueNASStorageTopologyRows = (
 
 export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   if (depth <= 0) return '';
-  if (depth === 1) return 'pl-5 sm:pl-7';
-  if (depth === 2) return 'pl-9 sm:pl-11';
-  return 'pl-12 sm:pl-16';
+  if (depth === 1) return 'pl-3 sm:pl-7';
+  if (depth === 2) return 'pl-6 sm:pl-11';
+  return 'pl-8 sm:pl-16';
 };
 
 const ResourceCell: Component<{ row: TrueNASStorageTopologyRow; detailToggle?: JSX.Element }> = (
@@ -342,7 +342,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="resource"
-                  class="md:w-[32%]"
+                  class="w-[47%] md:w-[32%]"
                 >
                   Resource
                 </PlatformSortableTableHead>
@@ -350,7 +350,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="kind"
-                  class="md:w-[10%]"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Kind
                 </PlatformSortableTableHead>
@@ -358,7 +358,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="usage"
-                  class="md:w-[28%]"
+                  class="w-[28%] md:w-[28%]"
                 >
                   <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
                 </PlatformSortableTableHead>
@@ -382,7 +382,7 @@ export const TrueNASStorageTopologyTable: Component<{
                   kind="badge"
                   sort={sort}
                   sortKey="health"
-                  class="md:w-[14%]"
+                  class="w-[25%] md:w-[14%]"
                 >
                   Health
                 </PlatformSortableTableHead>
@@ -422,7 +422,9 @@ export const TrueNASStorageTopologyTable: Component<{
                               }
                             />
                           </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden sm:table-cell`}
+                          >
                             <span class="text-base-content">{kindLabel(row.kind)}</span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>

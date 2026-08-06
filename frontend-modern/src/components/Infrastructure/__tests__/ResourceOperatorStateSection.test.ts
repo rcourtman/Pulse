@@ -12,6 +12,11 @@ const overviewTabSource = readFileSync(
   'utf-8',
 );
 
+const supportDisclosureSource = readFileSync(
+  resolve(__dirname, '..', 'ResourceDetailDrawerSupportDisclosure.tsx'),
+  'utf-8',
+);
+
 describe('ResourceOperatorStateSection', () => {
   it('exposes operator-set controls bound to the canonical API client', () => {
     // The section is the operator's window into the per-resource state
@@ -158,6 +163,16 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('neverAutoRemediate: neverAutoRemediate()');
     expect(sectionSource).toContain('maintenanceStartAt: undefined,');
     expect(sectionSource).toContain('maintenanceEndAt: undefined,');
+  });
+
+  it('keeps drawer disclosure and operator controls touch-safe on phones', () => {
+    expect(supportDisclosureSource).toContain('inline-flex min-h-11 shrink-0 items-center');
+    expect(sectionSource).toContain('min-h-11 w-full text-xs rounded');
+    expect(sectionSource).toContain('min-h-11 min-w-11 px-1.5 py-0.5');
+    expect(sectionSource).toContain('min-h-11 px-2.5 py-1 text-xs font-medium text-base-content');
+    expect(sectionSource).toContain(
+      'min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600',
+    );
   });
 
   it('renders a maintenance-window-active badge when the persisted window covers now', () => {

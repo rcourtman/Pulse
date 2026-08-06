@@ -168,7 +168,7 @@ export const KubernetesServicesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="scope"
-                  class="hidden md:table-cell md:w-[15%]"
+                  class="hidden sm:table-cell md:w-[15%]"
                 >
                   Scope
                 </PlatformSortableTableHead>
@@ -262,7 +262,7 @@ export const KubernetesServicesTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
                           >
                             <span class="inline-block max-w-[12rem] truncate" title={scope()}>
                               {scope()}

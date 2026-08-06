@@ -282,6 +282,88 @@ describe('platform overview layout guardrails', () => {
     expect(dockerHostsTableSource).toContain('md:w-[10%]');
   });
 
+  it('prioritizes Docker phone decisions and restores context at the basic table tier', () => {
+    expect(dockerImagesTableSource).toMatch(
+      /sortKey="size"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[12%\]"/,
+    );
+    expect(dockerServicesTableSource).toMatch(
+      /sortKey="mode"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[8%\]"/,
+    );
+    expect(dockerServicesTableSource).toMatch(/sortKey="desired"[\s\S]{0,120}?class="md:w-\[8%\]"/);
+    expect(dockerServicesTableSource).toMatch(
+      /sortKey="update"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[12%\]"/,
+    );
+    expect(dockerTasksTableSource).toMatch(
+      /sortKey="service"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[18%\]"/,
+    );
+    expect(dockerTasksTableSource).toMatch(
+      /sortKey="node"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[16%\]"/,
+    );
+    expect(dockerSwarmNodesTableSource).toMatch(
+      /sortKey="reachability"[\s\S]{0,120}?class="md:w-\[14%\]"/,
+    );
+    expect(dockerSwarmNodesTableSource).toMatch(
+      /sortKey="memory"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+    );
+  });
+
+  it('keeps Kubernetes phone identity readable and restores scope at the basic table tier', () => {
+    expect(kubernetesClustersTableSource).toContain(
+      '-my-3 inline-flex min-h-11 items-center truncate',
+    );
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="roles"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+    );
+    expect(kubernetesNodesTableSource).toMatch(
+      /sortKey="capacity"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[14%\]"/,
+    );
+    expect(kubernetesDeploymentsTableSource).toMatch(
+      /sortKey="namespace"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[20%\]"/,
+    );
+    expect(kubernetesPodsTableSource).toMatch(
+      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[13%\]"/,
+    );
+    expect(kubernetesPodsTableSource).toMatch(
+      /sortKey="node"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[13%\]"/,
+    );
+    expect(kubernetesServicesTableSource).toMatch(
+      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[15%\]"/,
+    );
+    expect(kubernetesNetworkingTableSource).toMatch(
+      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[14%\]"/,
+    );
+    expect(kubernetesStorageTableSource).toMatch(
+      /sortKey="class"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+    );
+    expect(kubernetesConfigTableSource).toMatch(
+      /sortKey="scope"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[16%\]"/,
+    );
+    expect(kubernetesPolicyTableSource).toContain(
+      "getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[15%]",
+    );
+  });
+
+  it('keeps remaining platform phone identity and actions usable', () => {
+    expect(truenasStorageTopologyTableSource).toMatch(
+      /sortKey="kind"[\s\S]{0,120}?class="hidden sm:table-cell md:w-\[10%\]"/,
+    );
+    expect(truenasStorageTopologyTableSource).toContain("return 'pl-6 sm:pl-11'");
+    expect(truenasStorageTopologyTableSource).toMatch(
+      /sortKey="resource"[\s\S]{0,120}?class="w-\[47%\] md:w-\[32%\]"/,
+    );
+    expect(vsphereNetworksTableSource).toMatch(
+      /sortKey="network"[\s\S]{0,120}?class="w-\[80%\] sm:w-\[45%\] md:w-\[24%\]"/,
+    );
+    expect(vsphereNetworksTableSource).toMatch(
+      /sortKey="type"[\s\S]{0,120}?class="hidden sm:table-cell sm:w-\[35%\] md:w-\[13%\]"/,
+    );
+    expect(agentsMachinesTableSource).toContain('class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"');
+    expect(agentsMachinesTableSource).toContain(
+      '-my-3 inline-flex min-h-11 max-w-full items-center',
+    );
+    expect(agentsMachinesTableSource).toContain('flex min-h-11 w-full items-center gap-2 rounded');
+  });
+
   it('keeps provider overview pages in the parent-table plus child-inventory stack', () => {
     for (const source of overviewSurfaceSources) {
       expect(source).toMatch(/<div[^>]*class="[^"]*\bspace-y-4\b[^"]*"/);

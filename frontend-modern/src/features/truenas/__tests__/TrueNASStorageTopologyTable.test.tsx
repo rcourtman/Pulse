@@ -71,23 +71,23 @@ describe('TrueNASStorageTopologyTable', () => {
     expect(
       mediaRow
         ?.querySelector('[data-truenas-storage-indent-depth="1"]')
-        ?.classList.contains('pl-5'),
+        ?.classList.contains('pl-3'),
     ).toBe(true);
     expect(
       photosRow
         ?.querySelector('[data-truenas-storage-indent-depth="2"]')
-        ?.classList.contains('pl-9'),
+        ?.classList.contains('pl-6'),
     ).toBe(true);
     expect(
-      rawRow?.querySelector('[data-truenas-storage-indent-depth="3"]')?.classList.contains('pl-12'),
+      rawRow?.querySelector('[data-truenas-storage-indent-depth="3"]')?.classList.contains('pl-8'),
     ).toBe(true);
   });
 
   it('caps deep indentation at the table-safe depth class', () => {
     expect(getTrueNASStorageTopologyIndentClass(0)).toBe('');
-    expect(getTrueNASStorageTopologyIndentClass(1)).toBe('pl-5 sm:pl-7');
-    expect(getTrueNASStorageTopologyIndentClass(2)).toBe('pl-9 sm:pl-11');
-    expect(getTrueNASStorageTopologyIndentClass(3)).toBe('pl-12 sm:pl-16');
-    expect(getTrueNASStorageTopologyIndentClass(8)).toBe('pl-12 sm:pl-16');
+    expect(getTrueNASStorageTopologyIndentClass(1)).toBe('pl-3 sm:pl-7');
+    expect(getTrueNASStorageTopologyIndentClass(2)).toBe('pl-6 sm:pl-11');
+    expect(getTrueNASStorageTopologyIndentClass(3)).toBe('pl-8 sm:pl-16');
+    expect(getTrueNASStorageTopologyIndentClass(8)).toBe('pl-8 sm:pl-16');
   });
 });
