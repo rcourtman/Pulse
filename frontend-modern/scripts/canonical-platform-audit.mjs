@@ -327,6 +327,20 @@ function pushMatch(relativePath, content, index, rule, message) {
 
 const HELPER_RULES = [
   {
+    // Date and number formatting must resolve the viewer's locale, which means
+    // passing undefined rather than a literal tag. A hardcoded 'en-US' shows a
+    // 12 hour clock and US date order to everyone, wherever they are. This has
+    // regressed once already: #1279 fixed the "Last refresh" clock in App.tsx
+    // and the v6 rewrite of that state hook reinstated the hardcoded form
+    // (#1685). If a call genuinely needs a fixed locale, such as a stable
+    // machine-readable export, add the file to this rule's allowFiles.
+    rule: 'canonical-shared/no-hardcoded-format-locale',
+    regex:
+      /(?:toLocale(?:Date|Time)?String|Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat|ListFormat))\(\s*['"][A-Za-z]{2}(?:-[A-Za-z0-9]+)*['"]/g,
+    message:
+      "Do not hardcode a locale in date or number formatting. Pass undefined so the viewer's own locale and clock convention are used.",
+  },
+  {
     rule: 'canonical-infrastructure/no-local-empty-state-copy',
     regex:
       /No infrastructure resources yet|No resources match filters|Add Proxmox VE nodes or install the Pulse agent on your infrastructure to start monitoring\.|Try adjusting the search, source, or status filters\.|Unable to load infrastructure|We couldn’t fetch unified resources\. Check connectivity or retry\./g,

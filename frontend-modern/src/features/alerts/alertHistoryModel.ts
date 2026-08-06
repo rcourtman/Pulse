@@ -455,7 +455,9 @@ export function groupAlertHistoryItems(alertData: HistoryItem[]) {
       groups.set(dateKey, {
         date: dateOnly,
         label: formatAlertHistoryGroupLabel(dateOnly, todayStart, yesterdayStart),
-        fullLabel: dateOnly.toLocaleDateString('en-US', {
+        // Viewer's locale, not en-US: this is the day header a reader scrolls
+        // past in the history, so it has to read in their own date order.
+        fullLabel: dateOnly.toLocaleDateString(undefined, {
           weekday: 'long',
           year: 'numeric',
           month: 'long',

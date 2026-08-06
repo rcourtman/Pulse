@@ -399,7 +399,12 @@ only in the day group header, which scrolls out of sight, and a hardcoded
 `en-US` format misreported the time of day to everyone outside the US
 (#1687, #1685). `useAlertHistoryState` owns both formatters
 (`formatAlertRowTime`, `formatAlertRowTimestamp`) so the desktop table and the
-mobile list cannot drift apart.
+mobile list cannot drift apart. The day group `fullLabel` built in
+`frontend-modern/src/features/alerts/alertHistoryModel.ts` follows the same
+rule, because a header reading "Thursday, August 6, 2026" to a reader whose
+rows are ordered day-month is the same defect one level up. See the
+localization boundary in the frontend-primitives contract for the shared
+formatting rule and the audit that enforces it.
 
 Alert browser surfaces no longer manage their own runtime-capabilities fetch or
 `hasAIAlertsFeature` prop chain. `frontend-modern/src/pages/Alerts.tsx` and the

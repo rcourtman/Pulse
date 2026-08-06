@@ -252,6 +252,21 @@ wizard shell, or page-local preview renderer for monitored-system impact.
 Frontend localization is a shared primitive boundary. Locale support must flow
 through typed message catalogs with an English fallback and explicit seed
 locale coverage rather than page-local string switches.
+
+Date and number formatting is part of that boundary and is separate from the
+message catalog. Every `toLocaleString`, `toLocaleDateString`,
+`toLocaleTimeString`, and `Intl.*` constructor must pass `undefined` as the
+locale so the runtime resolves the viewer's own locale, including whether they
+expect a 12 or 24 hour clock and which order the date parts go in. A literal
+tag such as `'en-US'` shows US conventions to every reader everywhere. The
+`canonical-shared/no-hardcoded-format-locale` rule in
+`frontend-modern/scripts/canonical-platform-audit.mjs` blocks new occurrences;
+a call that genuinely needs a fixed locale, such as a stable machine-readable
+export, belongs in that rule's `allowFiles` with a reason rather than as a bare
+literal. The rule exists because this regressed silently once already: #1279
+delocalized the "Last refresh" clock in `App.tsx`, and the v6 rewrite that
+moved that logic into `frontend-modern/src/useAppRuntimeState.ts` reinstated
+the hardcoded form, which shipped through v6 GA until #1685.
 `frontend-modern/src/i18n/locales.ts` owns locale normalization, the supported
 locale registry, and fallback chains; `frontend-modern/src/i18n/messages.ts`
 owns the typed catalog shape; and `frontend-modern/src/i18n/policy.ts` owns the

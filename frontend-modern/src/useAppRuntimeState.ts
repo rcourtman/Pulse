@@ -499,11 +499,13 @@ export const useAppRuntimeState = () => {
   const formatLastUpdate = (timestamp: number) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
+    // Passing undefined lets the runtime pick the viewer's locale, including
+    // whether it wants a 12 or 24 hour clock. #1279 made this change once; the
+    // v6 rewrite of this state hook reinstated the hardcoded form (#1685).
+    return date.toLocaleTimeString(undefined, {
       hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true,
     });
   };
 
