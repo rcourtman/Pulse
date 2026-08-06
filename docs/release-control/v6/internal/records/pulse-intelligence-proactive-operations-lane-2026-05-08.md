@@ -1,7 +1,7 @@
 # Pulse Intelligence Proactive Operations Lane
 
 Date: 2026-05-08
-Owner: L23 Pulse Intelligence proactive operations
+Owner: L23 Monitor-first Patrol operations
 Evidence tier: local-rehearsal
 
 ## Decision
@@ -34,4 +34,9 @@ The current floor is carried across the existing subsystem contracts and proof s
 
 ## Result
 
-`status.json` now models Pulse Intelligence proactive operations as L23 instead of leaving it in the candidate-lane queue. Future agents should pick concrete L23 slices directly when they are strengthening the Patrol-to-Assistant investigation, explanation, approval, or governed-action contract.
+`status.json` now models monitor-first Patrol operations as L23 instead of
+leaving either the proactive-operations floor or the completed Operational
+Trust workbench expansion in candidate queues. Future agents should pick
+concrete L23 slices directly when strengthening the attention lifecycle,
+Patrol-to-Assistant explanation boundary, approval, governed action, or
+verification contract.

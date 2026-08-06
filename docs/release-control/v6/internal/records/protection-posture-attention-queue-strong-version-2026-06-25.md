@@ -165,5 +165,6 @@ loop, and routes the operator from real findings/evidence to safe action.
 - Proxmox now has a monitor-context coverage posture. Additional monitor
   surfaces should reuse the same Patrol gating and monitor-label boundary
   before showing coverage or protection summaries.
-- The status coverage gap `protection-posture-attention-queue` tracks the
-  remaining product-surface work.
+- The completed `protection-posture-attention-queue` expansion is now owned by
+  L23 `Monitor-first Patrol operations`; its planning-only coverage gap and
+  candidate queue entry have been retired from live status.

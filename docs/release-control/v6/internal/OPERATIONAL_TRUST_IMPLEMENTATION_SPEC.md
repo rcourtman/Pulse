@@ -1,9 +1,9 @@
 # Pulse v6 Operational Trust Implementation Spec
 
 Last updated: 2026-07-19
-Status: ACTIVE
+Status: COMPLETE
 Primary governance surface:
-- `status.json.candidate_lanes.protection-posture-attention-queue`
+- `status.json.lanes.L23` (`Monitor-first Patrol operations`)
 
 Resolved related governed surface:
 - `internal/records/operational-trust-availability-resource-facet-2026-07-19.md`
@@ -870,8 +870,9 @@ true:
 12. no temporary compatibility path remains in the primary runtime
 13. all implementation slices are committed with scoped proof and no unrelated
     workspace changes
-14. the governing candidate lanes and coverage gaps are resolved or normalized
-    to an explicit remaining decision owned outside this specification
+14. the governing candidate lanes and coverage gaps are resolved into the
+    first-class owning lane or normalized to an explicit remaining decision
+    owned outside this specification
 
 Passing one phase does not satisfy the overall goal. The goal closes only after
 the full completion criteria pass.
@@ -887,19 +888,21 @@ Primary lane and subsystem ownership:
 5. L22: product trust, Assistant boundaries, policy-shaped context
 6. L23: proactive operations and Patrol workbench
 
-Primary candidate:
+Resolved lane expansion:
 
-- `protection-posture-attention-queue`
+- `protection-posture-attention-queue`, absorbed into L23 after every
+  completion criterion passed
 
 Resolved sequential related candidate:
 
 - `availability-as-resource-facet`, closed by
   `internal/records/operational-trust-availability-resource-facet-2026-07-19.md`
 
-The primary candidate's subsystem mapping must include the canonical owners
-that this implementation touches, including alerts, notifications, storage and
-recovery, Patrol intelligence, monitoring, unified resources, API contracts,
-frontend primitives, action governance, and policy-shaped Assistant context.
+L23 evidence and the referenced subsystem contracts retain the canonical
+owners this implementation touches, including alerts, notifications, storage
+and recovery, Patrol intelligence, monitoring, unified resources, API
+contracts, frontend primitives, action governance, and policy-shaped Assistant
+context.
 
 ## Direction Captured
 

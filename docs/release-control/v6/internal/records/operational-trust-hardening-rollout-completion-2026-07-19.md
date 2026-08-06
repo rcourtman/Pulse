@@ -360,10 +360,11 @@ available without turning the monitor into an object browser.
 
 ## Governance Decision
 
-Accept candidate lane `protection-posture-attention-queue`. Its planned
-coverage gap remains the typed historical reason for the lane expansion and is
-normalized by the accepted candidate plus this completion record. There is no
-remaining Operational Trust decision to move outside this specification.
+Candidate lane `protection-posture-attention-queue` is accepted and absorbed
+into L23, now named `Monitor-first Patrol operations`. The completed candidate
+and its planning-only coverage gap are removed from live queue state; this
+record remains the historical acceptance evidence. There is no remaining
+Operational Trust decision to move outside this specification.
 
 This record satisfies the specification's release gate:
 
