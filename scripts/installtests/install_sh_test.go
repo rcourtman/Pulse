@@ -5288,3 +5288,55 @@ func TestInstallSHStopsWrapperBeforeAgentInEveryBranch(t *testing.T) {
 		}
 	}
 }
+
+// TestInstallSHVersionMismatchWarningIgnoresBuildMetadata pins the comparison
+// behind the "Downloaded agent version does not match" warning. A server built
+// from a working tree reports build metadata the agent it serves never carries,
+// so a raw comparison fired on every correct development install. That is not a
+// cosmetic annoyance: the warning is the only client-side signal that a stale
+// agent was downloaded, and one that cries wolf gets skipped the time it counts.
+func TestInstallSHVersionMismatchWarningIgnoresBuildMetadata(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+
+	for _, required := range []string{
+		`NEW_VERSION_NORMALIZED="${NEW_VERSION_NORMALIZED%%+*}"`,
+		`SERVER_VERSION_NORMALIZED="${SERVER_VERSION_NORMALIZED%%+*}"`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("version comparison must strip semver build metadata, missing: %s", required)
+		}
+	}
+
+	// Exercise the same normalisation the installer performs.
+	normalize := func(v string) string {
+		v = strings.TrimPrefix(v, "v")
+		if idx := strings.Index(v, "+"); idx >= 0 {
+			v = v[:idx]
+		}
+		return v
+	}
+	cases := []struct {
+		agent  string
+		server string
+		warns  bool
+	}{
+		// The shape that fired on every correct dev install.
+		{"v6.2.0-rc.8", "6.2.0-rc.8+git.46.g98a638e00.dirty", false},
+		{"v6.2.0-rc.8", "6.2.0-rc.8", false},
+		// The stale download this warning exists to catch.
+		{"v6.0.5-54-gc862fb0ca0", "6.2.0-rc.8+git.46.g98a638e00.dirty", true},
+		// A prerelease is genuinely not its release.
+		{"v6.2.0", "6.2.0-rc.8+git.46.gabc.dirty", true},
+		{"v6.1.2", "6.2.0-rc.8", true},
+	}
+	for _, tc := range cases {
+		got := normalize(tc.agent) != normalize(tc.server)
+		if got != tc.warns {
+			t.Errorf("agent %q vs server %q: warns=%v, want %v", tc.agent, tc.server, got, tc.warns)
+		}
+	}
+}

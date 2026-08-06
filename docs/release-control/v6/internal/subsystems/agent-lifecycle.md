@@ -110,6 +110,16 @@ server's own agent version, and resolves that expected version from the same
 source the agent build stamps in rather than from a compiled-in build
 placeholder, because development builds carry placeholders no version parser
 accepts and those are precisely the builds whose local artifacts go stale.
+One definition of "same agent version" governs both ends of that exchange. It
+is the release identity: a leading `v` and semver build metadata are not part
+of it, the prerelease suffix is. The server applies it when deciding whether a
+local artifact is fresh enough to serve, and the installer applies it when
+reporting whether the agent it downloaded matches the server that served it.
+Letting the two ends disagree costs more than a redundant check, because the
+installer's report is the only signal a human sees: when it compared raw
+strings it contradicted a correct server on every development install, and a
+contradiction that appears every time is read as noise rather than as the one
+warning that mattered.
 
 Mock mode is a clean room on the report-admission boundary. Mock mode already
 suspends pull-based PVE/PBS/PMG collection by never building those clients, and

@@ -2809,7 +2809,16 @@ placeholders that no version parser accepts and those are exactly the builds
 whose artifacts go stale. Refusal is loud rather than silent: a development
 server answers 404 naming the stale path and the build command, and a published
 release falls through to the release-asset proxy and fetches the matching
-version. Token-bearing
+version.
+The installer's own version diagnostics answer to the same identity. When it
+compares the agent it downloaded against the server that served it, it compares
+release identity, stripping a leading `v` and semver build metadata while
+keeping the prerelease suffix, because a server built from a working tree
+reports metadata the agent never carries. Comparing raw strings made the
+mismatch warning fire on every correct development install, and a warning that
+fires when nothing is wrong is worse than no warning: it is the only
+client-side signal that a stale agent was downloaded, and one that cries wolf
+gets skipped the time it is real. Token-bearing
 copy-paste commands must pass credentials through ephemeral `--token-file`
 transport and leave the installed service configured with the persistent
 runtime token file, never a raw `--token` process argument.

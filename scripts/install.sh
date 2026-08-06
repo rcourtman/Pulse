@@ -3628,8 +3628,18 @@ NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
 # Compare versions with any leading "v" stripped so the agent binary's "v6.0.4"
 # and the server /api/version "6.0.4" are treated as equal. Only a genuine
 # version difference (e.g. 6.0.3 vs 6.0.4) should raise the mismatch warning.
+#
+# Semver build metadata is stripped for the same reason. A server built from a
+# working tree reports "6.2.0-rc.8+git.46.g98a638e00.dirty" while the agent it
+# serves carries the release identity "v6.2.0-rc.8"; those are the same release,
+# and comparing them raw made this warning fire on every correct development
+# install. A warning that fires when nothing is wrong is worse than no warning,
+# because it trains the reader to skip the one time it is real. The prerelease
+# suffix is deliberately kept: 6.2.0-rc.8 and 6.2.0 are genuinely different.
 NEW_VERSION_NORMALIZED="${NEW_VERSION#v}"
+NEW_VERSION_NORMALIZED="${NEW_VERSION_NORMALIZED%%+*}"
 SERVER_VERSION_NORMALIZED="${SERVER_VERSION#v}"
+SERVER_VERSION_NORMALIZED="${SERVER_VERSION_NORMALIZED%%+*}"
 
 if [[ -n "$SERVER_VERSION" && -n "$NEW_VERSION" && "$NEW_VERSION" != "unknown" && "$NEW_VERSION_NORMALIZED" != "$SERVER_VERSION_NORMALIZED" ]]; then
     log_warn "Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION}). Check that Pulse is upgraded and that any reverse proxy is not serving a stale cached binary."
