@@ -100,6 +100,17 @@ looser about location than an install's, but never about the far end of the
 name: a backup copy of a wrapper script, or an editor holding one open, is not
 a supervisor and must never be a termination target.
 
+An agent and the wrapper that starts it are one unit, so a server must never
+hand out an agent older than the wrapper template it will be launched by. The
+installer renders that wrapper from the server's current template, and an agent
+predating a flag the template now passes exits on startup and crash-loops under
+its supervisor, which reads as a broken host rather than a version mismatch.
+The download path therefore refuses an agent binary that does not carry the
+server's own agent version, and resolves that expected version from the same
+source the agent build stamps in rather than from a compiled-in build
+placeholder, because development builds carry placeholders no version parser
+accepts and those are precisely the builds whose local artifacts go stale.
+
 Mock mode is a clean room on the report-admission boundary. Mock mode already
 suspends pull-based PVE/PBS/PMG collection by never building those clients, and
 push-based agent reports are held to the same rule: `ApplyHostReport`,

@@ -199,6 +199,7 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		)
 	}
 
+	expectedAgentVersion := expectedAgentBinaryVersion(r.resolveAgentBinaryVersionSource())
 	invalidCandidates := make([]string, 0, len(searchPaths))
 
 	for _, candidate := range searchPaths {
@@ -211,7 +212,7 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 			continue
 		}
 
-		if err := validateUnifiedAgentBinary(candidate); err != nil {
+		if err := validateUnifiedAgentBinary(candidate, expectedAgentVersion); err != nil {
 			log.Warn().Err(err).Str("path", candidate).Msg("Skipping incompatible local unified agent binary")
 			invalidCandidates = append(invalidCandidates, fmt.Sprintf("%s (%v)", candidate, err))
 			continue
@@ -284,14 +285,25 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 	http.Error(w, "Agent binary not found. Specify ?arch=linux-amd64 (or your architecture)", http.StatusNotFound)
 }
 
-func validateUnifiedAgentBinary(path string) error {
+// validateUnifiedAgentBinary rejects a local agent binary that this server must
+// not hand out. The endpoint checks catch a binary built against a superseded
+// report contract; the version check catches one that is merely old.
+//
+// Staleness is not cosmetic. The installer generates its wrapper from this
+// server's current template, so a binary predating a flag that template now
+// passes fails to start and crash-loops under the watchdog. `bin/` is a
+// gitignored build output that nothing refreshes on its own, so it goes stale
+// silently. Refusing here turns that into a loud failure at the point of
+// download: a dev server answers 404 with the build command, and a published
+// release falls through to the GitHub proxy and fetches the correct version.
+func validateUnifiedAgentBinary(path string, expectedVersion string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open binary: %w", err)
 	}
 	defer file.Close()
 
-	hasCanonical, hasLegacy, err := scanUnifiedAgentBinaryContract(file)
+	hasCanonical, hasLegacy, hasVersion, err := scanUnifiedAgentBinaryContract(file, expectedVersion)
 	if err != nil {
 		return fmt.Errorf("scan binary contract: %w", err)
 	}
@@ -301,15 +313,68 @@ func validateUnifiedAgentBinary(path string) error {
 	if !hasCanonical {
 		return fmt.Errorf("missing canonical host endpoint %s", canonicalUnifiedAgentReportPath)
 	}
+	if !hasVersion {
+		return fmt.Errorf("stale build: does not carry this server's agent version %s", expectedVersion)
+	}
 	return nil
 }
 
-func scanUnifiedAgentBinaryContract(r io.Reader) (hasCanonical bool, hasLegacy bool, err error) {
+// resolveAgentBinaryVersionSource picks the version this server should expect
+// its agent binaries to carry.
+//
+// It deliberately prefers updates.GetCurrentVersion over the compiled-in
+// serverVersion. A development server is exactly where agent binaries go stale,
+// and there the compiled-in value is a placeholder ("dev", "dev-pro") that no
+// version parser accepts, which would silently disable the freshness check on
+// the only builds that need it. GetCurrentVersion resolves the VERSION file,
+// the same source `make build-agents` stamps into the agent, so dev and release
+// builds compare against one identity. IsDevelopment is intentionally not
+// consulted: a dev build still knows which agent it expects.
+func (r *Router) resolveAgentBinaryVersionSource() string {
+	if versionInfo, err := updates.GetCurrentVersion(); err == nil && versionInfo != nil {
+		if resolved := strings.TrimSpace(versionInfo.Version); resolved != "" {
+			return resolved
+		}
+	}
+	return r.serverVersion
+}
+
+// expectedAgentBinaryVersion reduces a server version to the release-identity
+// string that `make build-agents` stamps into the agent through
+// -X main.Version, i.e. "v6.2.0-rc.8" for a server reporting
+// "6.2.0-rc.8+git.44.gdd72bd149.dirty". Build metadata is dropped because it
+// records how the server itself was built and never appears in the agent.
+// Returns "" when the version cannot be parsed, which disables the freshness
+// check rather than rejecting every candidate.
+func expectedAgentBinaryVersion(rawVersion string) string {
+	rawVersion = strings.TrimSpace(rawVersion)
+	if rawVersion == "" || strings.EqualFold(rawVersion, "dev") {
+		return ""
+	}
+	version, err := updates.ParseVersion(rawVersion)
+	if err != nil {
+		return ""
+	}
+	identity := fmt.Sprintf("v%d.%d.%d", version.Major, version.Minor, version.Patch)
+	if prerelease := strings.TrimSpace(version.Prerelease); prerelease != "" {
+		identity += "-" + prerelease
+	}
+	return identity
+}
+
+func scanUnifiedAgentBinaryContract(r io.Reader, versionNeedle string) (hasCanonical bool, hasLegacy bool, hasVersion bool, err error) {
 	canonicalNeedle := []byte(canonicalUnifiedAgentReportPath)
 	legacyNeedle := []byte(legacyUnifiedAgentReportPath)
+	versionBytes := []byte(versionNeedle)
+	// An empty needle would match everything, so treat "no expected version"
+	// as "already satisfied" and skip the comparison entirely.
+	hasVersion = len(versionBytes) == 0
 	maxNeedleLen := len(canonicalNeedle)
 	if len(legacyNeedle) > maxNeedleLen {
 		maxNeedleLen = len(legacyNeedle)
+	}
+	if len(versionBytes) > maxNeedleLen {
+		maxNeedleLen = len(versionBytes)
 	}
 	overlap := maxNeedleLen - 1
 	if overlap < 0 {
@@ -328,8 +393,11 @@ func scanUnifiedAgentBinaryContract(r io.Reader) (hasCanonical bool, hasLegacy b
 			if bytes.Contains(window, legacyNeedle) {
 				hasLegacy = true
 			}
-			if hasCanonical && hasLegacy {
-				return true, true, nil
+			if !hasVersion && bytes.Contains(window, versionBytes) {
+				hasVersion = true
+			}
+			if hasCanonical && hasLegacy && hasVersion {
+				return true, true, true, nil
 			}
 			if len(window) > overlap {
 				window = append(window[:0], window[len(window)-overlap:]...)
@@ -339,10 +407,10 @@ func scanUnifiedAgentBinaryContract(r io.Reader) (hasCanonical bool, hasLegacy b
 			break
 		}
 		if readErr != nil {
-			return false, false, readErr
+			return false, false, false, readErr
 		}
 	}
-	return hasCanonical, hasLegacy, nil
+	return hasCanonical, hasLegacy, hasVersion, nil
 }
 
 // proxyAgentBinaryFromGitHub downloads an agent binary from GitHub releases and serves

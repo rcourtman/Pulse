@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,8 +37,20 @@ func setupUnifiedAgentRouter(t *testing.T) (*Router, string) {
 	return router, tempDir
 }
 
+// expectedAgentVersionForTest mirrors what the download handler will look for,
+// so fixtures that stand in for a healthy agent carry the version a real build
+// would. Without it every "valid" fixture reads as a stale build.
+func expectedAgentVersionForTest() string {
+	versionInfo, err := updates.GetCurrentVersion()
+	if err != nil || versionInfo == nil {
+		return ""
+	}
+	return expectedAgentBinaryVersion(versionInfo.Version)
+}
+
 func validTestUnifiedAgentBinary(suffix string) []byte {
-	return []byte("ELF test binary " + canonicalUnifiedAgentReportPath + " " + suffix)
+	return []byte("ELF test binary " + canonicalUnifiedAgentReportPath + " " +
+		expectedAgentVersionForTest() + " " + suffix)
 }
 
 func staleTestUnifiedAgentBinary(suffix string) []byte {
@@ -561,4 +574,75 @@ func buildTestTarGz(t *testing.T, name string, payload []byte) []byte {
 	require.NoError(t, tw.Close())
 	require.NoError(t, gzw.Close())
 	return buf.Bytes()
+}
+
+// writeAgentBinaryFixture builds a stand-in for a compiled agent. The real
+// validator is a byte scan, so a file carrying the same needles exercises it
+// faithfully without shipping a multi-megabyte binary into the test tree.
+func writeAgentBinaryFixture(t *testing.T, reportPath string, versionString string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "pulse-agent")
+	body := "\x7fELF padding " + reportPath + " more padding " + versionString + " trailing\n"
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatalf("write agent fixture: %v", err)
+	}
+	return path
+}
+
+func TestExpectedAgentBinaryVersionDropsBuildMetadata(t *testing.T) {
+	cases := map[string]string{
+		// A dev server carries git metadata the agent never has.
+		"6.2.0-rc.8+git.44.gdd72bd149.dirty": "v6.2.0-rc.8",
+		"6.2.0-rc.8":                         "v6.2.0-rc.8",
+		"v6.1.2":                             "v6.1.2",
+		// Unknown versions disable the check rather than rejecting everything.
+		// "dev-pro" is the enterprise build's compiled-in placeholder: it is
+		// why the caller resolves the version through updates.GetCurrentVersion
+		// instead of the compiled-in serverVersion, because a dev server is
+		// exactly where agent binaries go stale and this value would silently
+		// switch the freshness check off there.
+		"dev":           "",
+		"dev-pro":       "",
+		"":              "",
+		"not-a-version": "",
+	}
+	for input, want := range cases {
+		if got := expectedAgentBinaryVersion(input); got != want {
+			t.Errorf("expectedAgentBinaryVersion(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestValidateUnifiedAgentBinaryRejectsStaleBuild(t *testing.T) {
+	// The shape that broke a live host: a binary on the canonical report
+	// contract, so every existing check passes, but built weeks earlier.
+	stale := writeAgentBinaryFixture(t, canonicalUnifiedAgentReportPath, "v6.0.5-54-gc862fb0ca0")
+
+	if err := validateUnifiedAgentBinary(stale, "v6.2.0-rc.8"); err == nil {
+		t.Fatal("a binary that does not carry this server's agent version must be refused")
+	} else if !strings.Contains(err.Error(), "stale build") {
+		t.Fatalf("error should name staleness, got %v", err)
+	}
+
+	// Premise check: without the version guard this same binary is accepted,
+	// which is exactly how it reached a host in the first place.
+	if err := validateUnifiedAgentBinary(stale, ""); err != nil {
+		t.Fatalf("premise check failed: the stale binary is supposed to pass every other check, got %v", err)
+	}
+}
+
+func TestValidateUnifiedAgentBinaryAcceptsMatchingBuild(t *testing.T) {
+	current := writeAgentBinaryFixture(t, canonicalUnifiedAgentReportPath, "v6.2.0-rc.8")
+	if err := validateUnifiedAgentBinary(current, "v6.2.0-rc.8"); err != nil {
+		t.Fatalf("a binary carrying this server's agent version must be served: %v", err)
+	}
+}
+
+func TestValidateUnifiedAgentBinaryStillRejectsLegacyContract(t *testing.T) {
+	// The version guard must not displace the endpoint guard: a correctly
+	// versioned binary on the deprecated report path is still refused.
+	legacy := writeAgentBinaryFixture(t, legacyUnifiedAgentReportPath, "v6.2.0-rc.8")
+	if err := validateUnifiedAgentBinary(legacy, "v6.2.0-rc.8"); err == nil {
+		t.Fatal("a binary on the deprecated report endpoint must still be refused")
+	}
 }

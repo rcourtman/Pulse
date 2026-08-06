@@ -2795,7 +2795,21 @@ For Unix-family copied host installs, the deployment-owned shell installer must
 support preflight before privilege escalation: `--preflight-only` may run
 without root, must check both `/api/health` and the exact
 `/download/pulse-agent?arch=...` artifact for checksum metadata, and must fail
-before installation if the server cannot provide that binary. Token-bearing
+before installation if the server cannot provide that binary.
+A server may only hand out an agent binary that carries its own agent version.
+Local agent artifacts are build outputs that nothing refreshes on their own, so
+they go stale silently, and staleness is not cosmetic: the installer renders its
+service wrapper from this server's current template, so a binary predating a
+flag that template now passes fails to start and crash-loops under its
+supervisor. The download path therefore refuses a binary that does not carry the
+expected version, alongside the existing report-contract and signature checks.
+The expected version resolves from the same source the agent build stamps in,
+never from a compiled-in placeholder, because development builds carry
+placeholders that no version parser accepts and those are exactly the builds
+whose artifacts go stale. Refusal is loud rather than silent: a development
+server answers 404 naming the stale path and the build command, and a published
+release falls through to the release-asset proxy and fetches the matching
+version. Token-bearing
 copy-paste commands must pass credentials through ephemeral `--token-file`
 transport and leave the installed service configured with the persistent
 runtime token file, never a raw `--token` process argument.

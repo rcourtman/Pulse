@@ -6872,6 +6872,15 @@ download the shared installer into an ephemeral directory, run
 `/download/pulse-agent?arch=...` is reachable with checksum metadata, and
 pass selected tokens to the installer through an ephemeral `--token-file`
 instead of a raw `--token` service argument.
+`/download/pulse-agent` serves only an agent binary carrying this server's own
+agent version. A local artifact that satisfies the report-contract and
+signature checks but predates the running server is refused the same way an
+incompatible one is, because the installer renders its wrapper from the current
+template and an older agent rejects flags that template now passes. Callers
+must treat the resulting 404 as a build or packaging fault to be surfaced, not
+as an absent architecture to be worked around; on published releases the route
+falls through to the release-asset proxy and returns the matching version
+instead.
 The loopback-originated install and setup payloads now also preserve the full
 configured `PublicURL` when that URL is the canonical external route, instead
 of rewriting only the host and inheriting an `http://` request-local scheme
