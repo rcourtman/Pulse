@@ -386,6 +386,13 @@ upgrade, update, release, or artifact-selection behavior.
    second wrapper leaves two loops contending for one agent id with no install
    error to show for it. NAS install paths must be symmetric on this point:
    every branch that writes and launches a wrapper owes the same teardown.
+   Uninstall and teardown carry the same ordering obligation for the same
+   reason: a wrapper left looping while its agent is removed simply restarts
+   the agent that was just stopped. Teardown may match wrappers more broadly
+   than install, because it must also reach a wrapper invoked by a relative
+   path or stranded at a superseded location, but it stays bound at the far end
+   so a backup copy of a wrapper, or an editor holding one open, is never a
+   termination target.
    FreeBSD-family uninstall must stop the rc.d daemon(8) supervisor before
    removing the binary, then remove service registration, rc.conf enablement,
    boot wrappers, PID files, token/state, and residual processes before it can

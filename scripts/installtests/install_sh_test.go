@@ -5222,3 +5222,69 @@ func TestInstallSHWatchdogKillPatternSparesSiblingWrapper(t *testing.T) {
 		t.Fatal("premise check failed: the loose pattern is supposed to match the target")
 	}
 }
+
+// TestInstallSHWrapperKillsAreBoundedEverywhere pins every wrapper kill in the
+// installer, not just the Unraid install branch. A bare "start-pulse-agent.sh"
+// pattern leaves the dot as a wildcard and the far end unbounded, so it also
+// matches a .bak copy of the wrapper or an editor session holding it open.
+func TestInstallSHWrapperKillsAreBoundedEverywhere(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	script := string(content)
+
+	if strings.Contains(script, `pkill -f "start-pulse-agent.sh"`) {
+		t.Error(`bare pkill -f "start-pulse-agent.sh" leaves the dot as a wildcard and the tail unbounded`)
+	}
+
+	wrapperKill := regexp.MustCompile(`pkill -f "[^"\n]*start-pulse-agent[^"\n]*"`)
+	found := wrapperKill.FindAllString(script, -1)
+	if len(found) == 0 {
+		t.Fatal("expected the installer to stop wrapper supervisors somewhere")
+	}
+	for _, match := range found {
+		if !strings.Contains(match, `\.sh`) {
+			t.Errorf("wrapper kill must escape the dot: %s", match)
+		}
+		if !strings.Contains(match, "[[:space:]]") {
+			t.Errorf("wrapper kill must bound its far end: %s", match)
+		}
+	}
+}
+
+// TestInstallSHStopsWrapperBeforeAgentInEveryBranch pins the ordering rule the
+// agent-lifecycle and deployment-installability contracts now carry: a wrapper
+// is a watchdog, so stopping the agent while its wrapper still loops merely
+// races the respawn. Every branch that stops both must stop the wrapper first.
+func TestInstallSHStopsWrapperBeforeAgentInEveryBranch(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+	lines := strings.Split(string(content), "\n")
+
+	// Walk the file and, for each wrapper kill, confirm the nearest agent kill
+	// that shares its stop block does not precede it.
+	for i, line := range lines {
+		if !strings.Contains(line, "pkill") || !strings.Contains(line, "start-pulse-agent") {
+			continue
+		}
+		// Look back a short window for an agent kill in the same block.
+		for back := i - 1; back >= 0 && back > i-12; back-- {
+			prev := lines[back]
+			if !strings.Contains(prev, "pkill") {
+				continue
+			}
+			if strings.Contains(prev, "start-pulse-agent") {
+				break
+			}
+			if strings.Contains(prev, `-x "pulse-agent"`) || strings.Contains(prev, "${RUNTIME_BINARY}") ||
+				strings.Contains(prev, "${BINARY_NAME}") || strings.Contains(prev, "${INSTALL_DIR}") {
+				t.Errorf("line %d stops the agent before its wrapper at line %d; the watchdog will respawn it:\n  %s\n  %s",
+					back+1, i+1, strings.TrimSpace(prev), strings.TrimSpace(line))
+			}
+			break
+		}
+	}
+}

@@ -3201,13 +3201,17 @@ if [[ "$UNINSTALL" == "true" ]]; then
         fi
     fi
 
-    # Kill any running agent processes first.
+    # Kill wrapper scripts first: they are watchdogs, so stopping the agent
+    # while its wrapper still loops only races the respawn. No leading path
+    # separator here, unlike the install paths, so a wrapper invoked by a
+    # relative path or left at an older location is still caught. The dot is
+    # escaped and the far end bounded so an editor session or a .bak copy of
+    # the wrapper is not swept up with it.
+    pkill -f "start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
+    # Then the agent itself.
     # Use -x (exact process name match) to avoid killing THIS uninstall script,
     # whose command line path contains "pulse-agent" (e.g. /boot/config/plugins/pulse-agent/install.sh).
     pkill -x "pulse-agent" 2>/dev/null || true
-    # Kill Unraid wrapper scripts — both current (start-pulse-agent.sh) and
-    # legacy naming conventions.
-    pkill -f "start-pulse-agent.sh" 2>/dev/null || true
     sleep 1
 
     # Systemd - unified agent
@@ -3248,9 +3252,11 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Unraid
     if [[ -f /etc/unraid-version ]] || [[ -d /boot/config/plugins/pulse-agent ]]; then
         log_info "Removing Unraid installation..."
-        # Stop running agents and their wrapper scripts.
+        # Stop the wrapper watchdogs before the agents they supervise, and keep
+        # the match bounded so a .bak copy or an editor session on the wrapper
+        # is not swept up.
+        pkill -f "start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
         pkill -x "pulse-agent" 2>/dev/null || true
-        pkill -f "start-pulse-agent.sh" 2>/dev/null || true
         sleep 1
         
         # Remove from /boot/config/go - all pulse-related entries
@@ -3943,8 +3949,12 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     build_exec_args
 
     log_info "Stopping any existing pulse agents..."
+    # Supervisor before the agent it supervises: the wrapper is a watchdog, so
+    # stopping the agent first only races the respawn. The dot is escaped and
+    # the far end bounded so an editor session or a .bak copy of the wrapper is
+    # not swept up with it.
+    pkill -f "/start-pulse-agent\.sh([[:space:]]|$)" 2>/dev/null || true
     pkill -x "pulse-agent" 2>/dev/null || true
-    pkill -f "start-pulse-agent.sh" 2>/dev/null || true
     sleep 2
 
     write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY" "$QNAP_LOG_DIR" "$STATE_DIR"

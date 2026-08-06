@@ -92,7 +92,13 @@ surviving supervisors race to own one agent id, which presents as an agent that
 restarts on its own or reverts to superseded arguments rather than as an
 install failure. The supervisor match is subject to the same boundary rule as
 the binary match, so stopping one agent's supervisor never stops a co-installed
-agent's.
+agent's. Removing an agent inherits the same ordering: a supervisor left
+looping while its agent is torn down restarts the agent that was just stopped,
+so uninstall stops the supervisor first as well. Because removal must also
+reach a supervisor that a superseded install left behind, its match may be
+looser about location than an install's, but never about the far end of the
+name: a backup copy of a wrapper script, or an editor holding one open, is not
+a supervisor and must never be a termination target.
 
 Mock mode is a clean room on the report-admission boundary. Mock mode already
 suspends pull-based PVE/PBS/PMG collection by never building those clients, and
