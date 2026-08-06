@@ -521,7 +521,8 @@ const formatCustomSensorValue = (value: number, unit?: string): string => {
   }).format(value);
   const normalizedUnit = (unit || '').trim();
   if (!normalizedUnit) return formatted;
-  if (normalizedUnit === '%' || normalizedUnit.startsWith('°')) return `${formatted}${normalizedUnit}`;
+  if (normalizedUnit === '%' || normalizedUnit.startsWith('°'))
+    return `${formatted}${normalizedUnit}`;
   return `${formatted} ${normalizedUnit}`;
 };
 
@@ -541,9 +542,7 @@ export const buildCustomSensorRows = (sensors?: HostSensorSummary) =>
         .map((part) => part?.trim() ?? '')
         .join('\u0000')
         .localeCompare(
-          [b.group, b.subgroup, b.name]
-            .map((part) => part?.trim() ?? '')
-            .join('\u0000'),
+          [b.group, b.subgroup, b.name].map((part) => part?.trim() ?? '').join('\u0000'),
         ),
     )
     .map((metric) => {

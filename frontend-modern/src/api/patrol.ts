@@ -419,10 +419,9 @@ export async function dismissFinding(
 export async function reopenFinding(
   findingId: string,
 ): Promise<{ success: boolean; message: string }> {
-  return apiFetchJSON(
-    `/api/ai/patrol/suppressions/${encodeURIComponent(`finding_${findingId}`)}`,
-    { method: 'DELETE' },
-  );
+  return apiFetchJSON(`/api/ai/patrol/suppressions/${encodeURIComponent(`finding_${findingId}`)}`, {
+    method: 'DELETE',
+  });
 }
 
 /**

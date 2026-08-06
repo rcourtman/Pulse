@@ -21,10 +21,7 @@ const endpoint = (nodeName: string, ipOverride?: string): ClusterEndpoint => ({
 
 describe('cluster node display-name overrides', () => {
   it('writes immutable identities, permits duplicate labels, and sends an empty clear', () => {
-    const endpoints = [
-      { ...endpoint('pve1'), displayName: 'Compute' },
-      endpoint('pve2'),
-    ];
+    const endpoints = [{ ...endpoint('pve1'), displayName: 'Compute' }, endpoint('pve2')];
     expect(
       buildClusterNodeDisplayNameOverridesPayload(endpoints, {
         'cluster-pve1': '',

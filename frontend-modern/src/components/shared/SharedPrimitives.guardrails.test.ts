@@ -8275,7 +8275,9 @@ describe('shared primitive guardrails', () => {
 
     expect(savedViewsMenuSource).toContain("from './useSavedViews';");
     expect(filterToolbarSource).toContain('export const FilterPopoverTrigger');
-    expect(filterToolbarSource).toContain("'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0'");
+    expect(filterToolbarSource).toContain(
+      "'min-h-11 rounded-md text-xs font-medium sm:h-7 sm:min-h-0'",
+    );
     expect(viewOptionsMenuSource).toContain('<FilterPopoverTrigger');
     expect(viewOptionsMenuSource).toContain('class="static ml-auto shrink-0 sm:relative sm:ml-0"');
     expect(viewOptionsMenuSource).toContain('class="left-auto right-0');

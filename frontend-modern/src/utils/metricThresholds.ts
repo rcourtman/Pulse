@@ -30,15 +30,7 @@ export type MetricType = 'cpu' | 'memory' | 'disk';
 export type DisplayMetricType = MetricType | 'temperature' | 'diskTemperature' | 'usage';
 export type DisplayMetricBarType = MetricType | 'generic';
 export type AlertThresholdScope =
-  | 'guest'
-  | 'node'
-  | 'pbs'
-  | 'agent'
-  | 'docker'
-  | 'storage'
-  | 'kubernetes'
-  | 'truenas'
-  | 'vmware';
+  'guest' | 'node' | 'pbs' | 'agent' | 'docker' | 'storage' | 'kubernetes' | 'truenas' | 'vmware';
 
 export interface MetricDisplayThresholds {
   warning: number;

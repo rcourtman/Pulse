@@ -97,19 +97,19 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                   </label>
                   <label class="grid gap-1 text-xs text-muted">
                     Connection address override
-                  <input
-                    type="text"
-                    value={state.formData().clusterEndpointOverrides[endpoint.nodeName] ?? ''}
-                    onInput={(event) =>
-                      state.updateClusterEndpointOverride(
-                        endpoint.nodeName,
-                        event.currentTarget.value,
-                      )
-                    }
-                    placeholder={endpoint.ip || 'IP or hostname'}
-                    aria-label={`Connection address for ${endpoint.nodeName}`}
-                    class={controlClass()}
-                  />
+                    <input
+                      type="text"
+                      value={state.formData().clusterEndpointOverrides[endpoint.nodeName] ?? ''}
+                      onInput={(event) =>
+                        state.updateClusterEndpointOverride(
+                          endpoint.nodeName,
+                          event.currentTarget.value,
+                        )
+                      }
+                      placeholder={endpoint.ip || 'IP or hostname'}
+                      aria-label={`Connection address for ${endpoint.nodeName}`}
+                      class={controlClass()}
+                    />
                   </label>
                 </div>
               </div>

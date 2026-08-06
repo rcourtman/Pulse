@@ -55,9 +55,7 @@ describe('AlertDeliveryHealthCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Recoverable retry attempts do not trigger this warning',
     );
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'classified as authentication (2)',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('classified as authentication (2)');
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Check destination credentials, tokens, and account permissions',
     );

@@ -163,9 +163,7 @@ describe('createNonSuspendingQuery', () => {
     // patrol-status) the panel emptied and stayed empty until remount.
     const fetcher = vi.fn(async (key: string) => `value-for-${key}`);
 
-    render(() => (
-      <QueryProbe cacheNamespace={`org-refetch-${Date.now()}`} fetcher={fetcher} />
-    ));
+    render(() => <QueryProbe cacheNamespace={`org-refetch-${Date.now()}`} fetcher={fetcher} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('query-probe').textContent).toContain('value-for-stable-key');

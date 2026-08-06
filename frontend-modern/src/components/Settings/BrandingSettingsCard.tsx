@@ -36,10 +36,7 @@ export function brandLogoFormatForFile(file: Pick<File, 'type' | 'name'>): Brand
   return null;
 }
 
-export function brandingLogoPreview(
-  logoBase64: string,
-  logoFormat: BrandLogoFormat,
-): string {
+export function brandingLogoPreview(logoBase64: string, logoFormat: BrandLogoFormat): string {
   const value = logoBase64.trim();
   if (!value) return '';
   if (value.startsWith('data:image/')) return value;

@@ -50,9 +50,7 @@ describe('Button', () => {
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain("xs: 'min-h-11 px-2.5 py-1 text-xs sm:min-h-0'");
-    expect(buttonModelSource).toContain(
-      "mdCompact: 'min-h-11 px-3 py-2 text-sm sm:min-h-0'",
-    );
+    expect(buttonModelSource).toContain("mdCompact: 'min-h-11 px-3 py-2 text-sm sm:min-h-0'");
     expect(buttonModelSource).toContain("settingsAction: 'min-h-11 px-3 py-2 text-sm sm:min-h-9'");
     expect(buttonModelSource).toContain(
       "settingsActionXs: 'min-h-11 px-3 py-2 text-xs sm:min-h-9'",

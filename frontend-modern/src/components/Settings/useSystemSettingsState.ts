@@ -6,10 +6,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
 import { copyToClipboard } from '@/utils/clipboard';
-import {
-  loadRuntimeBranding,
-  updateDockerUpdateActionsSetting,
-} from '@/stores/systemSettings';
+import { loadRuntimeBranding, updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
 import type { ReportBrandSettings } from '@/types/config';
 import {
   BACKUP_INTERVAL_OPTIONS,
