@@ -231,3 +231,38 @@ func TestAvailabilityTargetProbeAgentIDRoundTripsThroughPersistence(t *testing.T
 		t.Fatalf("local target ProbeAgentID = %q, want empty", got)
 	}
 }
+
+func TestAvailabilityTargetCertificateMonitoringDefaultsAndValidation(t *testing.T) {
+	httpsTarget := AvailabilityTarget{
+		Address:  "https://pulse.example.test",
+		Protocol: AvailabilityProbeHTTPS,
+		Enabled:  true,
+	}
+	if !httpsTarget.CertificateMonitoringEnabled() {
+		t.Fatal("HTTPS certificate monitoring should be enabled by default")
+	}
+	if got := httpsTarget.EffectiveCertificateExpiryWarningDays(); got != DefaultCertificateExpiryWarningDays {
+		t.Fatalf("warning days = %d, want %d", got, DefaultCertificateExpiryWarningDays)
+	}
+
+	httpsTarget.CertificateMonitoringDisabled = true
+	if httpsTarget.CertificateMonitoringEnabled() {
+		t.Fatal("explicit certificate monitoring opt-out was ignored")
+	}
+
+	httpTarget := AvailabilityTarget{
+		Address:                      "http://pulse.example.test",
+		Protocol:                     AvailabilityProbeHTTP,
+		Enabled:                      true,
+		CertificateExpiryWarningDays: 14,
+	}
+	if err := httpTarget.Validate(); err == nil {
+		t.Fatal("non-HTTPS target accepted certificate monitoring settings")
+	}
+
+	httpsTarget.CertificateMonitoringDisabled = false
+	httpsTarget.CertificateExpiryWarningDays = 3651
+	if err := httpsTarget.Validate(); err == nil {
+		t.Fatal("HTTPS target accepted an excessive certificate warning window")
+	}
+}

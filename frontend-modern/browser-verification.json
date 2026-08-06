@@ -1,43 +1,25 @@
 {
   "version": 1,
-  "base_sha": "328319a8bcd75e8ee838dd09d7064d72fb22afcb",
-  "verified_at": "2026-08-06T08:25:26Z",
+  "base_sha": "2be0ec649487512d61a09b743e88cc82973e0d04",
+  "verified_at": "2026-08-06T08:40:31Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/AI/AICostDashboard.tsx",
-    "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx"
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/types/resource.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/AI/AICostDashboard.tsx": "a49cfbaf3d58a5c1425176e43e5b1878c217ba2c863d087c899df446c56cc44b",
-    "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx": "fbdf5dd1a5aed7c9dfbeb14783dfac2ae50397cde7ca48668632c013d6190414",
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "8da076ef631f164e01e72760c39bb05864401fcad24f02993635f3ba58412fa8"
+    "frontend-modern/src/api/availabilityTargets.ts": "8a748f332a76b2cfa4a3a3dfc0e400fe9593ec7f410ad1388927fd769126b409",
+    "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx": "29c97f569f6ba677d954f4045a870f3166761dcd852a20e2e4460d8c30861602",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "5e270c80ef9b1b1a6f6fbd8241c81ad5e710dbc02115f846809278322c160307",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "39778a7e90a10fead774d71cc5eab26e0d9232047cde2484b7588ce6c04f8611",
+    "frontend-modern/src/types/resource.ts": "39c5b13dae6642932c68bb31de77297272228a8ca7c72d115fa8b84eace9e157"
   },
   "routes": [
-    "/settings/infrastructure",
     "/settings/monitoring/availability",
-    "/settings/pulse-intelligence/provider",
-    "/settings/pulse-intelligence/patrol",
-    "/settings/pulse-intelligence/assistant",
-    "/settings/system-general",
-    "/settings/system-network",
-    "/settings/system-updates",
-    "/settings/system-recovery",
-    "/settings/system-relay",
-    "/settings/support/diagnostics",
-    "/settings/support/logs",
-    "/settings/security-overview",
-    "/settings/security/api",
-    "/settings/security-auth",
-    "/settings/security-sso",
-    "/alerts/overview",
-    "/alerts/history",
-    "/alerts/thresholds/proxmox",
-    "/alerts/thresholds/vmware",
-    "/alerts/notifications",
-    "/alerts/schedule",
-    "/actions",
-    "/patrol"
+    "/docker/swarm"
   ],
   "viewports": [
     {
@@ -45,34 +27,22 @@
       "height": 820
     },
     {
-      "width": 768,
-      "height": 820
-    },
-    {
       "width": 390,
-      "height": 820
-    },
-    {
-      "width": 320,
-      "height": 820
+      "height": 844
     }
   ],
   "states": [
-    "every visible Settings destination reached through the real mobile settings navigator",
-    "Provider Usage and Spend with all five cost ranges visible",
-    "General Docker and Podman update setting with its environment-variable hint",
-    "mobile Settings page label before and after client-side navigation",
-    "Alerts top-level and threshold tab strips with beginning, middle, and final selections",
-    "Actions Open and History views",
-    "Patrol attention workbench"
+    "HTTPS availability target editor with certificate monitoring enabled by default",
+    "certificate expiry warning window at its 30 day default",
+    "certificate monitoring opted out with the warning input disabled",
+    "linked HTTPS availability target in the Docker Swarm resource journey"
   ],
   "interactions": [
-    "navigated every visible Settings destination through the 320 pixel sidebar and checked interactive controls for clipped bounds",
-    "selected 1 year, 1 day, and 30 day provider cost ranges and confirmed each remained fully visible with zero document overflow",
-    "confirmed the mobile Settings active-page label updates from Provider and Models to General without retaining the previous destination",
-    "visually inspected the reflowed provider usage header and verified its five buttons exactly fit the available card width",
-    "visually inspected the General update setting and confirmed its title, toggle, description, and long environment token remain inside the card",
-    "checked Settings at 320, 390, 768, and 1280 pixels with zero page overflow",
-    "checked Alerts, Actions, and Patrol at 320 pixels for hidden filters or actions and exercised Action History"
+    "opened the add availability check dialog and selected HTTPS",
+    "toggled certificate monitoring off and on and confirmed the expiry input disabled and re-enabled",
+    "inspected the desktop dialog at 1280 by 820 pixels",
+    "inspected the narrow dialog and TLS controls at 390 by 844 pixels with zero horizontal overflow",
+    "navigated to the linked Docker Swarm service journey and confirmed the HTTPS availability target projection",
+    "checked the browser console after the changed journeys and found no errors"
   ]
 }

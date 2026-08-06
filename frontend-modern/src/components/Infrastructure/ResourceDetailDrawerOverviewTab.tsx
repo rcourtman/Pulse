@@ -48,6 +48,7 @@ import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
+import { AvailabilityProbeStatusCards } from './AvailabilityProbeStatusCard';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
@@ -438,6 +439,15 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </Show>
           </div>
         </details>
+      </Show>
+
+      <Show when={resource.availability || (resource.availabilityChecks?.length ?? 0) > 0}>
+        <div class="flex flex-wrap gap-3 [&>*]:min-w-[240px] [&>*]:flex-1">
+          <AvailabilityProbeStatusCards
+            availability={resource.availability}
+            checks={resource.availabilityChecks}
+          />
+        </div>
       </Show>
 
       <div data-testid="resource-secondary-sections" class="space-y-3">

@@ -60,9 +60,10 @@ type pendingAvailabilityResult struct {
 // this agent and queues their results for the next host report. It owns its
 // scheduling entirely: the server sends assignments, never a schedule.
 type availabilityProbeModule struct {
-	logger zerolog.Logger
-	now    func() time.Time
-	probe  func(context.Context, config.AvailabilityTarget) (availabilityprobe.Outcome, error)
+	logger        zerolog.Logger
+	now           func() time.Time
+	probe         func(context.Context, config.AvailabilityTarget) (availabilityprobe.Outcome, error)
+	detailedProbe func(context.Context, config.AvailabilityTarget) (availabilityprobe.ProbeResult, error)
 
 	mu        sync.Mutex
 	targets   []config.AvailabilityTarget
@@ -77,11 +78,11 @@ type availabilityProbeModule struct {
 
 func newAvailabilityProbeModule(logger zerolog.Logger, targets []config.AvailabilityTarget) *availabilityProbeModule {
 	module := &availabilityProbeModule{
-		logger:  logger.With().Str("module", availabilityModuleName).Logger(),
-		now:     time.Now,
-		probe:   availabilityprobe.Result,
-		pending: utils.New[pendingAvailabilityResult](availabilityPendingCapacity),
-		reload:  make(chan struct{}, 1),
+		logger:        logger.With().Str("module", availabilityModuleName).Logger(),
+		now:           time.Now,
+		detailedProbe: availabilityprobe.DetailedResult,
+		pending:       utils.New[pendingAvailabilityResult](availabilityPendingCapacity),
+		reload:        make(chan struct{}, 1),
 	}
 	module.applyTargets(targets)
 	return module
@@ -227,7 +228,7 @@ func (m *availabilityProbeModule) check(ctx context.Context, target config.Avail
 	timeout := time.Duration(target.EffectiveTimeoutMillis()) * time.Millisecond
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	start := m.now()
-	outcome, err := m.probe(probeCtx, target)
+	probeResult, err := m.runProbe(probeCtx, target)
 	latency := m.now().Sub(start)
 	cancel()
 
@@ -242,9 +243,10 @@ func (m *availabilityProbeModule) check(ctx context.Context, target config.Avail
 
 	result := agentshost.AvailabilityProbeResult{
 		TargetID:      target.ID,
-		Outcome:       string(outcome),
+		Outcome:       string(probeResult.Outcome),
 		LatencyMillis: latency.Milliseconds(),
 		CheckedAt:     m.now().UTC(),
+		Certificate:   probeResult.Certificate.Clone(),
 	}
 	if err != nil {
 		message := strings.TrimSpace(err.Error())
@@ -261,6 +263,17 @@ func (m *availabilityProbeModule) check(ctx context.Context, target config.Avail
 		Str("outcome", result.Outcome).
 		Int64("latencyMillis", result.LatencyMillis).
 		Msg("Completed assigned availability check")
+}
+
+func (m *availabilityProbeModule) runProbe(ctx context.Context, target config.AvailabilityTarget) (availabilityprobe.ProbeResult, error) {
+	if m.probe != nil {
+		outcome, err := m.probe(ctx, target)
+		return availabilityprobe.ProbeResult{Outcome: outcome}, err
+	}
+	if m.detailedProbe != nil {
+		return m.detailedProbe(ctx, target)
+	}
+	return availabilityprobe.DetailedResult(ctx, target)
 }
 
 // enqueue queues one completed observation for the next report. The queue is

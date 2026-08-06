@@ -77,7 +77,7 @@ func TestBranchcov0723pm_AvailabilityFixtures(t *testing.T) {
 		seenIDs := make(map[string]int, len(fixtures))
 		sawAvailable, sawUnavailable := false, false
 		validKinds := map[string]bool{"machine": true, "service": true, "device": true}
-		validProtocols := map[string]bool{"icmp": true, "tcp": true, "http": true}
+		validProtocols := map[string]bool{"icmp": true, "tcp": true, "http": true, "https": true}
 
 		for i, f := range fixtures {
 			target := f.Target
@@ -126,8 +126,8 @@ func TestBranchcov0723pm_AvailabilityFixtures(t *testing.T) {
 			}
 
 			// Documented protocol/field relationships.
-			if target.Protocol == "http" && strings.TrimSpace(target.Path) == "" {
-				t.Fatalf("fixture[%d] %q: http probe must carry a Path", i, target.ID)
+			if (target.Protocol == "http" || target.Protocol == "https") && strings.TrimSpace(target.Path) == "" {
+				t.Fatalf("fixture[%d] %q: HTTP probe must carry a Path", i, target.ID)
 			}
 			if target.Protocol == "tcp" && target.Port <= 0 {
 				t.Fatalf("fixture[%d] %q: tcp probe must carry a Port > 0", i, target.ID)

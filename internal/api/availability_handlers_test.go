@@ -140,7 +140,7 @@ func TestAvailabilityHandlersCreateNormalizesPingAlias(t *testing.T) {
 }
 
 func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
@@ -150,7 +150,7 @@ func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
 		ID:            "status-page",
 		Name:          "Status page",
 		Address:       server.URL,
-		Protocol:      config.AvailabilityProbeHTTP,
+		Protocol:      config.AvailabilityProbeHTTPS,
 		Enabled:       true,
 		TimeoutMillis: 1000,
 	})
@@ -177,6 +177,9 @@ func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
 	}
 	if !response.Success {
 		t.Fatalf("response = %+v, want success", response)
+	}
+	if response.Certificate == nil || response.Certificate.TrustStatus != "self-signed" {
+		t.Fatalf("certificate = %+v, want self-signed test-server certificate", response.Certificate)
 	}
 }
 

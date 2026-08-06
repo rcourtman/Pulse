@@ -13,6 +13,7 @@ const (
 	DefaultAvailabilityPollIntervalSecs = 60
 	DefaultAvailabilityTimeoutMillis    = 2000
 	DefaultAvailabilityFailureThreshold = 2
+	DefaultCertificateExpiryWarningDays = 30
 )
 
 type AvailabilityProbeProtocol string
@@ -64,6 +65,11 @@ type AvailabilityTarget struct {
 	TimeoutMillis    int                       `json:"timeoutMillis,omitempty"`
 	FailureThreshold int                       `json:"failureThreshold,omitempty"`
 	LinkedResourceID string                    `json:"linkedResourceId,omitempty"`
+	// CertificateMonitoringDisabled is an explicit opt-out. HTTPS targets
+	// monitor certificate validity by default so existing saved targets gain
+	// the 30-day warning without a migration rewrite.
+	CertificateMonitoringDisabled bool `json:"certificateMonitoringDisabled,omitempty"`
+	CertificateExpiryWarningDays  int  `json:"certificateExpiryWarningDays,omitempty"`
 	// ProbeAgentID assigns execution to a remote host agent. Empty means the
 	// check runs from the local Pulse instance. Agent existence is validated at
 	// the API layer, not here, because config has no view of monitor state.
@@ -136,6 +142,17 @@ func (t AvailabilityTarget) EffectiveFailureThreshold() int {
 	return DefaultAvailabilityFailureThreshold
 }
 
+func (t AvailabilityTarget) CertificateMonitoringEnabled() bool {
+	return normalizeAvailabilityProbeProtocol(t.Protocol) == AvailabilityProbeHTTPS && !t.CertificateMonitoringDisabled
+}
+
+func (t AvailabilityTarget) EffectiveCertificateExpiryWarningDays() int {
+	if t.CertificateExpiryWarningDays > 0 {
+		return t.CertificateExpiryWarningDays
+	}
+	return DefaultCertificateExpiryWarningDays
+}
+
 func (t AvailabilityTarget) DisplayName() string {
 	if name := strings.TrimSpace(t.Name); name != "" {
 		return name
@@ -191,6 +208,12 @@ func (t AvailabilityTarget) Validate() error {
 		}
 	} else if t.UDPMode != "" || t.UDPRequest != "" || t.UDPExpected != "" {
 		return fmt.Errorf("UDP settings may only be used with UDP availability targets")
+	}
+	if protocol != AvailabilityProbeHTTPS && (t.CertificateMonitoringDisabled || t.CertificateExpiryWarningDays != 0) {
+		return fmt.Errorf("certificate monitoring settings may only be used with HTTPS availability targets")
+	}
+	if t.CertificateExpiryWarningDays < 0 || t.CertificateExpiryWarningDays > 3650 {
+		return fmt.Errorf("certificate expiry warning must be between 0 and 3650 days")
 	}
 	if t.PollIntervalSecs > 0 && t.PollIntervalSecs < 10 {
 		return fmt.Errorf("availability poll interval must be at least 10 seconds")

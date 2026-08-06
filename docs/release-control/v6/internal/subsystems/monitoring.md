@@ -403,6 +403,9 @@ changes.
 29. `internal/monitoring/mock_metrics_history.go`
 30. `internal/monitoring/mock_chart_history.go`
 31. `internal/monitoring/availability_poller.go`
+31a. `internal/availabilityprobe/probe.go`
+31b. `internal/config/availability.go`
+31c. `pkg/tlsutil/certificate.go`
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
 34. `internal/monitoring/monitor_polling_containers.go`
@@ -1116,6 +1119,18 @@ load from the config persistence boundary, schedule through
 the default low-overhead check, while TCP and HTTP are canonical fallbacks for
 devices or runtimes where ICMP is unavailable or the useful signal is a port or
 web interface.
+HTTPS checks also author one canonical certificate observation from the same
+probe execution. `internal/availabilityprobe` captures the presented leaf and
+`pkg/tlsutil/certificate.go` derives subject, issuer, SANs, SHA-256 fingerprint,
+validity bounds, hostname match, chain validity, and the bounded trust status.
+Monitoring is enabled by default for HTTPS targets, may be explicitly disabled,
+and uses a configurable expiry-warning window that defaults to 30 days. Expired,
+not-yet-valid, and otherwise untrusted certificates produce critical provider
+incidents. Certificates inside the warning window produce a warning incident.
+A verified self-signed leaf is identified as `self-signed` and is exempt from
+the untrusted-chain incident, while its identity and expiry remain visible.
+These certificate incidents stay owned by the source `network-endpoint` and
+enter the normal unified-incident alert pipeline rather than a second notifier.
 Supplemental records carry the saved target's optional `LinkedResourceID`
 forward into `AvailabilityData` so the unified-resource registry can correlate
 and project the probe facet onto the referenced resource. Every saved target
@@ -1165,7 +1180,10 @@ the frontend-primitives-owned Standalone surface may read the same
 `network-endpoint` projection to show current reachability, latency, check age,
 and failure state without creating another monitoring provider or top-level
 availability route.
-Availability targets may also be assigned to a remote host agent. While the
+Availability targets may also be assigned to a remote host agent. Reachability
+outcome and the optional certificate observation travel in the same bounded
+report entry, and the server clones that observation before status and resource
+projection so report buffers cannot alias live state. While the
 `external_probe` entitlement is active, a probe-assigned target is executed
 exclusively by its assigned agent: monitoring must not schedule or run it
 locally, so the check never executes twice. The assignment is effective only for

@@ -4208,6 +4208,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/monitoring/monitor_host_agents_test.go",
                 "internal/monitoring/monitor_package_updates_test.go",
                 "internal/unifiedresources/code_standards_test.go",
+                "pkg/agents/host/report_test.go",
             ],
         )
 

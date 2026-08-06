@@ -400,6 +400,7 @@ func cloneAvailabilityData(in *AvailabilityData) *AvailabilityData {
 	out := *in
 	out.LastChecked = cloneTimePtr(in.LastChecked)
 	out.LastSuccess = cloneTimePtr(in.LastSuccess)
+	out.Certificate = in.Certificate.Clone()
 	if in.Evidence != nil {
 		evidence := in.Evidence.Clone()
 		out.Evidence = &evidence

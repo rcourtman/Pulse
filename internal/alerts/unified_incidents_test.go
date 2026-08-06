@@ -404,6 +404,14 @@ func TestSyncUnifiedResourceIncidentsSupportsVMwareVMs(t *testing.T) {
 	}
 }
 
+func TestUnifiedIncidentAlertTypeClassifiesCertificateIncidents(t *testing.T) {
+	resource := unifiedresources.Resource{Type: unifiedresources.ResourceTypeNetworkEndpoint}
+	incident := unifiedresources.ResourceIncident{Code: "certificate_expiring"}
+	if got := unifiedIncidentAlertType(resource, incident); got != "certificate" {
+		t.Fatalf("alert type = %q, want certificate", got)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

@@ -525,6 +525,9 @@ func unifiedIncidentInstance(resource unifiedresources.Resource) string {
 
 func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {
 	code := strings.ToLower(strings.TrimSpace(incident.Code))
+	if strings.HasPrefix(code, "certificate_") {
+		return "certificate"
+	}
 	switch resource.Type {
 	case unifiedresources.ResourceTypePhysicalDisk:
 		if strings.Contains(code, "wear") {

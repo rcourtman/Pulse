@@ -1245,6 +1245,14 @@ payload shape change when the portal presents compact client rows.
     frontend-primitives' `CalloutCard` for shared settings callout chrome;
     API contracts own the target CRUD/test payload semantics and endpoint
     routing, not local colored alert shells.
+    HTTPS target payloads additively carry
+    `certificateMonitoringDisabled` and `certificateExpiryWarningDays`.
+    Monitoring is on by default when the explicit opt-out is absent, and the
+    effective warning window defaults to 30 days. Certificate settings are
+    invalid on non-HTTPS targets. Saved and unsaved test responses may include
+    the same secret-free `certificate` observation returned by the runtime
+    probe, while reachability success remains independent from trust posture so
+    an operator can diagnose an untrusted but reachable endpoint.
     Availability target protocol vocabulary is canonicalized at the API/config
     boundary: clients may submit `ping` as a user-facing alias for the ICMP
     check, but saved targets, API reads, probe status, connections rows, and
@@ -1264,10 +1272,11 @@ payload shape change when the portal presents compact client rows.
     the canonical API contract rather than a frontend-only fixture.
     Availability target payloads carry an optional `linkedResourceId` field
     that, when set to a known resource id, requests the unified-resource
-    registry to attach the probe facet onto that resource instead of minting
-    a standalone `network-endpoint`. The field is advisory: the registry
-    still applies IP-correlation when no explicit link is provided, and a
-    link that would overwrite a different target's facet is ignored.
+    registry to attach the probe facet onto that resource while retaining the
+    source-owned `network-endpoint`. The field is authoritative and
+    fail-closed: invalid or ambiguous explicit references remain unresolved and
+    do not fall back to address correlation. Address correlation applies only
+    when no explicit link is present.
 20. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 21. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 22. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.

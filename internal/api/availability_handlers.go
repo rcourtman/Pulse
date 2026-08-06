@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 const availabilityTargetsPathPrefix = "/api/availability-targets/"
@@ -26,10 +27,11 @@ type availabilityTargetResponse struct {
 }
 
 type availabilityTestResponse struct {
-	Success       bool   `json:"success"`
-	LatencyMillis int64  `json:"latencyMillis"`
-	Outcome       string `json:"outcome,omitempty"`
-	Error         string `json:"error,omitempty"`
+	Success       bool                            `json:"success"`
+	LatencyMillis int64                           `json:"latencyMillis"`
+	Outcome       string                          `json:"outcome,omitempty"`
+	Error         string                          `json:"error,omitempty"`
+	Certificate   *tlsutil.CertificateObservation `json:"certificate,omitempty"`
 }
 
 func NewAvailabilityHandlers(
@@ -317,7 +319,7 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 		return
 	}
 	start := time.Now()
-	outcome, err := monitoring.ProbeAvailabilityTargetResult(r.Context(), target)
+	result, err := monitoring.ProbeAvailabilityTargetDetailedResult(r.Context(), target)
 	latencyMs := time.Since(start).Milliseconds()
 	if err == nil && latencyMs == 0 {
 		latencyMs = 1
@@ -325,7 +327,8 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 	response := availabilityTestResponse{
 		Success:       err == nil,
 		LatencyMillis: latencyMs,
-		Outcome:       string(outcome),
+		Outcome:       string(result.Outcome),
+		Certificate:   result.Certificate.Clone(),
 	}
 	if err != nil {
 		response.Error = err.Error()

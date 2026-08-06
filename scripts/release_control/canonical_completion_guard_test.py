@@ -249,6 +249,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         self.assertEqual(
             policy_ids,
             [
+                "availability-certificate-runtime",
                 "discovery-provider-runtime",
                 "host-agent-ingest-runtime",
                 "truenas-runtime",
@@ -442,6 +443,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/monitoring/monitor_host_agents_test.go",
                         "internal/monitoring/monitor_package_updates_test.go",
                         "internal/unifiedresources/code_standards_test.go",
+                        "pkg/agents/host/report_test.go",
                     ],
                 }
             ],
@@ -1172,6 +1174,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/ai_handlers_more_test.go",
                         "internal/api/ai_handlers_patrol_actions_additional_test.go",
                         "internal/api/audit_handlers_test.go",
+                        "internal/api/availability_handlers_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/docker_agents_report_size_test.go",
                         "internal/api/external_probe_notifications_test.go",

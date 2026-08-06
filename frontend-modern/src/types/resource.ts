@@ -1466,6 +1466,9 @@ export interface ResourceAvailabilityMeta {
   failureThreshold?: number;
   pollIntervalSeconds?: number;
   timeoutMillis?: number;
+  certificateMonitoring?: boolean;
+  certificateExpiryWarningDays?: number;
+  certificate?: ResourceCertificateObservation;
   /**
    * Host agent that produced the latest observation. Absent when the check ran
    * on the Pulse server itself.
@@ -1476,6 +1479,25 @@ export interface ResourceAvailabilityMeta {
   correlationReason?: string;
   correlationCandidates?: number;
   evidence?: EvidenceEnvelope;
+}
+
+export type ResourceCertificateTrustStatus =
+  'trusted' | 'self-signed' | 'untrusted' | 'expired' | 'not-yet-valid';
+
+export interface ResourceCertificateObservation {
+  subject?: string;
+  issuer?: string;
+  serialNumber?: string;
+  dnsNames?: string[];
+  observedAt: string;
+  notBefore: string;
+  notAfter: string;
+  fingerprintSha256: string;
+  trustStatus: ResourceCertificateTrustStatus;
+  chainValid: boolean;
+  hostnameValid: boolean;
+  selfSigned: boolean;
+  trustError?: string;
 }
 
 /**

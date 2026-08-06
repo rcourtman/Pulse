@@ -90,6 +90,12 @@ agent-authored check time as observation metadata. That receipt timestamp is
 probe-result liveness only: lifecycle consumers must not reinterpret it as a
 host heartbeat, enrollment renewal, command-channel readiness, or fleet-update
 observation.
+An HTTPS probe result may carry a secret-free certificate observation alongside
+the outcome. The host agent must use the shared availability probe and report
+shape so local and remote checks derive identical trust vocabulary. Certificate
+identity, validity, and trust are observation payloads only. They do not renew
+the target lease, agent enrollment, host heartbeat, or command readiness beyond
+the accepted report's existing server-receipt evidence.
 
 ## Canonical Files
 

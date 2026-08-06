@@ -56,4 +56,41 @@ describe('AvailabilityProbeStatusCard', () => {
     expect(screen.getByText('Resource link is unresolved')).toBeInTheDocument();
     expect(screen.queryByText('Responding normally')).not.toBeInTheDocument();
   });
+
+  it('shows certificate trust, expiry, hostname, issuer, and fingerprint', () => {
+    render(() => (
+      <AvailabilityProbeStatusCard
+        availability={{
+          targetId: 'probe-pulse',
+          address: 'pulse.example.test',
+          protocol: 'https',
+          enabled: true,
+          available: true,
+          lastChecked: new Date().toISOString(),
+          certificateExpiryWarningDays: 30,
+          certificate: {
+            subject: 'pulse.example.test',
+            issuer: 'Example CA',
+            dnsNames: ['pulse.example.test'],
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: '2027-01-01T00:00:00Z',
+            fingerprintSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            chainValid: true,
+            hostnameValid: true,
+            selfSigned: false,
+            trustStatus: 'trusted',
+            observedAt: '2026-08-06T12:00:00Z',
+          },
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Trusted')).toBeInTheDocument();
+    expect(screen.getAllByText('pulse.example.test')).toHaveLength(2);
+    expect(screen.getByText('Example CA')).toBeInTheDocument();
+    expect(screen.getByText('Matches')).toBeInTheDocument();
+    expect(screen.getByText('SHA-256')).toBeInTheDocument();
+    expect(screen.getByTitle(/0123456789abcdef/)).toHaveTextContent('0123456789abcdef…');
+    expect(screen.getByTitle('Warning window: 30 days')).toHaveTextContent('2027');
+  });
 });

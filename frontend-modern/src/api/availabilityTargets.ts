@@ -1,4 +1,5 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import type { ResourceCertificateObservation } from '@/types/resource';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
@@ -26,6 +27,7 @@ export interface AvailabilityProbeStatus {
    * Absent (omitempty) when the local Pulse server ran the check.
    */
   probeAgentId?: string;
+  certificate?: ResourceCertificateObservation;
 }
 
 export interface AvailabilityTarget {
@@ -44,6 +46,8 @@ export interface AvailabilityTarget {
   pollIntervalSeconds?: number;
   timeoutMillis?: number;
   failureThreshold?: number;
+  certificateMonitoringDisabled?: boolean;
+  certificateExpiryWarningDays?: number;
   /**
    * Host agent that runs this check. Empty string means the local Pulse
    * server. Assigning a non-empty value requires the `external_probe`
@@ -59,6 +63,7 @@ export interface AvailabilityTestResponse {
   latencyMillis: number;
   outcome?: 'reachable' | 'unreachable' | 'indeterminate' | string;
   error?: string;
+  certificate?: ResourceCertificateObservation;
 }
 
 export class AvailabilityTargetsAPI {

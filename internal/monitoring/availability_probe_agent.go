@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -28,6 +29,7 @@ type ProbeAvailabilityResult struct {
 	LatencyMillis int64
 	CheckedAt     time.Time
 	Error         string
+	Certificate   *tlsutil.CertificateObservation
 }
 
 // availabilityProbeAssignmentTracker provides a grace reference for a newly
@@ -60,6 +62,7 @@ func probeAvailabilityResultsFromReport(reported []agentshost.AvailabilityProbeR
 			LatencyMillis: entry.LatencyMillis,
 			CheckedAt:     entry.CheckedAt,
 			Error:         strings.TrimSpace(entry.Error),
+			Certificate:   entry.Certificate.Clone(),
 		})
 	}
 	return results
@@ -135,7 +138,7 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 			latency = 0
 		}
 		outcome, probeErr := probeResultOutcome(result)
-		m.applyAvailabilityObservation(target, checkedAt.UTC(), latency, outcome, probeErr, hostID, receivedAt)
+		m.applyAvailabilityObservation(target, checkedAt.UTC(), latency, outcome, probeErr, result.Certificate, hostID, receivedAt)
 		applied++
 	}
 

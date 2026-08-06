@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 func TestProbeAvailabilityTargetHTTPFallsBackToGETWhenHeadNotAllowed(t *testing.T) {
@@ -234,5 +235,84 @@ func TestAvailabilityResourceFromTargetPreservesProbeTimes(t *testing.T) {
 	}
 	if resource.Availability.LastSuccess == nil || !resource.Availability.LastSuccess.Equal(succeededAt) {
 		t.Fatalf("last success = %v, want %v", resource.Availability.LastSuccess, succeededAt)
+	}
+}
+
+func TestAvailabilityResourceProjectsCertificateAndDefaultExpiryIncident(t *testing.T) {
+	checkedAt := time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC)
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:       "pulse-ui",
+		Name:     "Pulse UI",
+		Address:  "https://pulse.example.test",
+		Protocol: config.AvailabilityProbeHTTPS,
+		Enabled:  true,
+	})
+	status := availabilityStatusFromTarget(target)
+	status.Available = true
+	status.LastChecked = checkedAt
+	status.CertificateCurrent = true
+	status.Certificate = &tlsutil.CertificateObservation{
+		Subject:           "pulse.example.test",
+		Issuer:            "Example CA",
+		NotBefore:         checkedAt.Add(-300 * 24 * time.Hour),
+		NotAfter:          checkedAt.Add(20 * 24 * time.Hour),
+		ObservedAt:        checkedAt,
+		FingerprintSHA256: "abcdef",
+		ChainValid:        true,
+		HostnameValid:     true,
+		TrustStatus:       tlsutil.CertificateTrustTrusted,
+	}
+
+	resource, _ := availabilityResourceFromTarget(target, status, "org-a", checkedAt.Add(time.Second))
+	if resource.Availability == nil || resource.Availability.Certificate == nil {
+		t.Fatalf("availability certificate = %+v", resource.Availability)
+	}
+	if !resource.Availability.CertificateMonitoring || resource.Availability.CertificateExpiryWarningDays != 30 {
+		t.Fatalf("certificate monitoring projection = %+v", resource.Availability)
+	}
+	if len(resource.Incidents) != 1 || resource.Incidents[0].Code != "certificate_expiring" {
+		t.Fatalf("incidents = %+v, want certificate_expiring", resource.Incidents)
+	}
+	if resource.Incidents[0].Summary != "Pulse UI certificate expires in 20 days on 26 Aug 2026" {
+		t.Fatalf("summary = %q", resource.Incidents[0].Summary)
+	}
+
+	resource.Availability.Certificate.DNSNames = append(resource.Availability.Certificate.DNSNames, "changed")
+	if len(status.Certificate.DNSNames) != 0 {
+		t.Fatal("resource projection shares certificate slices with status")
+	}
+}
+
+func TestAvailabilityCertificateTrustIncidentsRespectSelfSignedExemptionAndOptOut(t *testing.T) {
+	checkedAt := time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC)
+	target := config.AvailabilityTarget{
+		ID:       "endpoint",
+		Name:     "Endpoint",
+		Address:  "https://endpoint.example.test",
+		Protocol: config.AvailabilityProbeHTTPS,
+		Enabled:  true,
+	}
+	status := AvailabilityProbeStatus{
+		CertificateCurrent: true,
+		Certificate: &tlsutil.CertificateObservation{
+			ObservedAt:  checkedAt,
+			NotAfter:    checkedAt.Add(180 * 24 * time.Hour),
+			TrustStatus: tlsutil.CertificateTrustSelfSigned,
+			SelfSigned:  true,
+		},
+	}
+	if incidents := availabilityCertificateIncidents(target, status); len(incidents) != 0 {
+		t.Fatalf("self-signed incidents = %+v, want none", incidents)
+	}
+
+	status.Certificate.TrustStatus = tlsutil.CertificateTrustUntrusted
+	status.Certificate.SelfSigned = false
+	if incidents := availabilityCertificateIncidents(target, status); len(incidents) != 1 || incidents[0].Code != "certificate_untrusted" {
+		t.Fatalf("untrusted incidents = %+v", incidents)
+	}
+
+	target.CertificateMonitoringDisabled = true
+	if incidents := availabilityCertificateIncidents(target, status); len(incidents) != 0 {
+		t.Fatalf("disabled monitoring incidents = %+v, want none", incidents)
 	}
 }

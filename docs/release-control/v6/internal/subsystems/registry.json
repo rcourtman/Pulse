@@ -2882,6 +2882,7 @@
               "internal/api/ai_handlers_more_test.go",
               "internal/api/ai_handlers_patrol_actions_additional_test.go",
               "internal/api/audit_handlers_test.go",
+              "internal/api/availability_handlers_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
               "internal/api/external_probe_notifications_test.go",
@@ -5199,6 +5200,7 @@
       "lane": "L13",
       "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
       "owned_prefixes": [
+        "internal/availabilityprobe/",
         "internal/fleethealth/",
         "internal/monitoring/",
         "internal/storagehealth/",
@@ -5207,6 +5209,7 @@
       ],
       "owned_files": [
         "docker-entrypoint.sh",
+        "internal/config/availability.go",
         "internal/config/docker_metadata.go",
         "internal/config/guest_metadata.go",
         "internal/config/host_continuity.go",
@@ -5235,7 +5238,8 @@
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/io_counters.go",
-        "pkg/proxmox/zfs.go"
+        "pkg/proxmox/zfs.go",
+        "pkg/tlsutil/certificate.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -5245,6 +5249,27 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "availability-certificate-runtime",
+            "label": "availability and certificate monitoring proof",
+            "match_prefixes": [
+              "internal/availabilityprobe/"
+            ],
+            "match_files": [
+              "internal/config/availability.go",
+              "pkg/tlsutil/certificate.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/availabilityprobe/probe_test.go",
+              "internal/config/availability_test.go",
+              "internal/monitoring/availability_poller_test.go",
+              "internal/monitoring/availability_probe_agent_test.go",
+              "pkg/agents/host/report_test.go",
+              "pkg/tlsutil/certificate_test.go"
+            ]
+          },
           {
             "id": "discovery-provider-runtime",
             "label": "monitoring discovery provider proof",
@@ -5287,7 +5312,8 @@
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_package_updates_test.go",
-              "internal/unifiedresources/code_standards_test.go"
+              "internal/unifiedresources/code_standards_test.go",
+              "pkg/agents/host/report_test.go"
             ]
           },
           {
@@ -7192,6 +7218,7 @@
               "internal/unifiedresources/canonical_identity_test.go",
               "internal/unifiedresources/canonical_ids_types_test.go",
               "internal/unifiedresources/ceph_pool_health_contract_test.go",
+              "internal/unifiedresources/clone_test.go",
               "internal/unifiedresources/code_standards_test.go",
               "internal/unifiedresources/identity_test.go",
               "internal/unifiedresources/ids_test.go",
@@ -7338,6 +7365,7 @@
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceCorrelationSummary.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.discovery.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx",
+              "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.service-cards.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerIdentityModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerOperationalModel.test.ts",
               "frontend-modern/src/components/Infrastructure/__tests__/resourceDetailDrawerTrueNASModel.test.ts",

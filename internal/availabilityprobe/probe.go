@@ -39,6 +39,13 @@ const (
 	OutcomeIndeterminate Outcome = "indeterminate"
 )
 
+// ProbeResult carries the reachability outcome plus HTTPS certificate posture
+// when the target completed a TLS handshake.
+type ProbeResult struct {
+	Outcome     Outcome                         `json:"outcome"`
+	Certificate *tlsutil.CertificateObservation `json:"certificate,omitempty"`
+}
+
 // Run executes one agentless availability check.
 func Run(ctx context.Context, target config.AvailabilityTarget) error {
 	_, err := Result(ctx, target)
@@ -48,9 +55,16 @@ func Run(ctx context.Context, target config.AvailabilityTarget) error {
 // Result preserves UDP's open-or-filtered state rather than incorrectly
 // claiming that a silent UDP endpoint was proven reachable.
 func Result(ctx context.Context, target config.AvailabilityTarget) (Outcome, error) {
+	result, err := DetailedResult(ctx, target)
+	return result.Outcome, err
+}
+
+// DetailedResult preserves the legacy reachability result while publishing
+// certificate posture for HTTPS checks through the same probe execution path.
+func DetailedResult(ctx context.Context, target config.AvailabilityTarget) (ProbeResult, error) {
 	target = config.NormalizeAvailabilityTarget(target)
 	if err := target.Validate(); err != nil {
-		return OutcomeUnreachable, err
+		return ProbeResult{Outcome: OutcomeUnreachable}, err
 	}
 
 	timeout := time.Duration(target.EffectiveTimeoutMillis()) * time.Millisecond
@@ -62,15 +76,20 @@ func Result(ctx context.Context, target config.AvailabilityTarget) (Outcome, err
 
 	switch target.Protocol {
 	case config.AvailabilityProbeICMP:
-		return outcomeFromError(probeICMP(probeCtx, target))
+		outcome, err := outcomeFromError(probeICMP(probeCtx, target))
+		return ProbeResult{Outcome: outcome}, err
 	case config.AvailabilityProbeTCP:
-		return outcomeFromError(probeTCP(probeCtx, target))
+		outcome, err := outcomeFromError(probeTCP(probeCtx, target))
+		return ProbeResult{Outcome: outcome}, err
 	case config.AvailabilityProbeUDP:
-		return probeUDP(probeCtx, target)
+		outcome, err := probeUDP(probeCtx, target)
+		return ProbeResult{Outcome: outcome}, err
 	case config.AvailabilityProbeHTTP, config.AvailabilityProbeHTTPS:
-		return outcomeFromError(probeHTTP(probeCtx, target, timeout))
+		certificate, err := probeHTTP(probeCtx, target, timeout)
+		outcome, probeErr := outcomeFromError(err)
+		return ProbeResult{Outcome: outcome, Certificate: certificate}, probeErr
 	default:
-		return OutcomeUnreachable, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
+		return ProbeResult{Outcome: OutcomeUnreachable}, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
 	}
 }
 
@@ -243,38 +262,39 @@ func probeTCPViaSystem(ctx context.Context, host string, port, timeoutMillis int
 	return fmt.Errorf("tcp probe failed: %s", details)
 }
 
-func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout time.Duration) error {
+func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout time.Duration) (*tlsutil.CertificateObservation, error) {
 	u, err := target.HTTPURL()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts := httpOutboundOptions()
 	u, err = securityutil.ValidateOutboundFetchURL(ctx, u.String(), opts)
 	if err != nil {
-		return fmt.Errorf("http availability target URL validation failed: %w", err)
+		return nil, fmt.Errorf("http availability target URL validation failed: %w", err)
 	}
 	client := securityutil.NewRestrictedOutboundHTTPClient(timeout, opts)
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
 	if err != nil {
-		return fmt.Errorf("build http availability request: %w", err)
+		return nil, fmt.Errorf("build http availability request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Pulse availability probe")
 	resp, err := client.Do(req)
 	if err == nil {
 		defer resp.Body.Close()
+		certificate := certificateObservationFromResponse(resp)
 		if resp.StatusCode == http.StatusMethodNotAllowed {
 			return probeHTTPGet(ctx, client, u)
 		}
 		if resp.StatusCode >= http.StatusInternalServerError {
-			return fmt.Errorf("http probe returned %s", resp.Status)
+			return certificate, fmt.Errorf("http probe returned %s", resp.Status)
 		}
-		return nil
+		return certificate, nil
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return ctxErr
+		return nil, ctxErr
 	}
 
-	return fmt.Errorf("http probe failed: %w", err)
+	return nil, fmt.Errorf("http probe failed: %w", err)
 }
 
 func httpOutboundOptions() securityutil.RestrictedOutboundHTTPOptions {
@@ -286,22 +306,34 @@ func httpOutboundOptions() securityutil.RestrictedOutboundHTTPOptions {
 	}
 }
 
-func probeHTTPGet(ctx context.Context, client *http.Client, u *url.URL) error {
+func probeHTTPGet(ctx context.Context, client *http.Client, u *url.URL) (*tlsutil.CertificateObservation, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return fmt.Errorf("build http availability fallback request: %w", err)
+		return nil, fmt.Errorf("build http availability fallback request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Pulse availability probe")
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
+			return nil, ctxErr
 		}
-		return fmt.Errorf("http probe failed: %w", err)
+		return nil, fmt.Errorf("http probe failed: %w", err)
 	}
 	defer resp.Body.Close()
+	certificate := certificateObservationFromResponse(resp)
 	if resp.StatusCode >= http.StatusInternalServerError {
-		return fmt.Errorf("http probe returned %s", resp.Status)
+		return certificate, fmt.Errorf("http probe returned %s", resp.Status)
 	}
-	return nil
+	return certificate, nil
+}
+
+func certificateObservationFromResponse(response *http.Response) *tlsutil.CertificateObservation {
+	if response == nil || response.TLS == nil {
+		return nil
+	}
+	serverName := ""
+	if response.Request != nil && response.Request.URL != nil {
+		serverName = response.Request.URL.Hostname()
+	}
+	return tlsutil.ObservePeerCertificate(response.TLS, serverName, time.Now().UTC())
 }

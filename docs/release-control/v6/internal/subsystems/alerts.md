@@ -61,6 +61,12 @@ Availability incident and alert identity belongs to the source-owned
 machine, but it must not copy the check incident onto that machine or create a
 second alert lifecycle. Failure, recovery, history, acknowledgement, and
 notification routing therefore remain stable under relinking and restart.
+Certificate validity uses that same source-owned incident lifecycle. Codes
+prefixed `certificate_` map to alert type `certificate`: expiry-window incidents
+are warning, while expired, not-yet-valid, and untrusted incidents are critical.
+A self-signed certificate is not an untrusted-chain alert. Certificate alerts
+reuse canonical confirmation, acknowledgement, history, recovery, schedule,
+intent, and notification routing and must not create a parallel delivery path.
 Linux memory thresholds consume only canonical cache-aware usage. An explicit
 usage-unavailable sample, a non-finite percentage, or contradictory
 used/free/total evidence must not open or clear a memory alert. If such a

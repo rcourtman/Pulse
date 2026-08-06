@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 func newProbeAgentTestMonitor(t *testing.T, targets ...config.AvailabilityTarget) *Monitor {
@@ -701,8 +702,9 @@ func TestProbeAvailabilityResultsFromReportNormalizesOutcomes(t *testing.T) {
 	}
 
 	checkedAt := time.Now().UTC()
+	reportedCertificate := &tlsutil.CertificateObservation{Subject: "pulse.example.test", DNSNames: []string{"pulse.example.test"}}
 	results := probeAvailabilityResultsFromReport([]agentshost.AvailabilityProbeResult{
-		{TargetID: " padded ", Outcome: " REACHABLE ", LatencyMillis: 4, CheckedAt: checkedAt},
+		{TargetID: " padded ", Outcome: " REACHABLE ", LatencyMillis: 4, CheckedAt: checkedAt, Certificate: reportedCertificate},
 		{TargetID: "b", Outcome: "unreachable", Error: " icmp probe timed out "},
 		{TargetID: "c", Outcome: "who-knows"},
 		{TargetID: "d", Outcome: ""},
@@ -712,6 +714,13 @@ func TestProbeAvailabilityResultsFromReportNormalizesOutcomes(t *testing.T) {
 	}
 	if results[0].TargetID != "padded" || results[0].Outcome != AvailabilityProbeReachable {
 		t.Fatalf("first result = %+v", results[0])
+	}
+	if results[0].Certificate == nil || results[0].Certificate.Subject != "pulse.example.test" {
+		t.Fatalf("first certificate = %+v", results[0].Certificate)
+	}
+	results[0].Certificate.DNSNames[0] = "changed.example.test"
+	if reportedCertificate.DNSNames[0] != "pulse.example.test" {
+		t.Fatal("wire certificate was not cloned")
 	}
 	if results[1].Error != "icmp probe timed out" || results[1].Outcome != AvailabilityProbeUnreachable {
 		t.Fatalf("second result = %+v", results[1])

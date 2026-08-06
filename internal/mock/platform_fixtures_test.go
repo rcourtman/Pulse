@@ -308,13 +308,18 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 		t.Fatalf("Docker service metadata = %+v, want service id svc-frontend-0", dockerService.Docker)
 	}
 	if dockerService.Availability.TargetKind != "service" ||
-		dockerService.Availability.Protocol != "http" ||
+		dockerService.Availability.Protocol != "https" ||
 		dockerService.Availability.Path != "/health" ||
 		dockerService.Availability.LatencyMillis != 9 {
 		t.Fatalf("unexpected Docker service availability facet: %+v", dockerService.Availability)
 	}
 	if !slices.Contains(dockerService.Sources, unifiedresources.SourceAvailability) {
 		t.Fatalf("expected Docker service sources to include availability, got %+v", dockerService.Sources)
+	}
+	if dockerService.Availability.Certificate == nil ||
+		dockerService.Availability.Certificate.TrustStatus != "trusted" ||
+		dockerService.Availability.CertificateExpiryWarningDays != 30 {
+		t.Fatalf("Docker service certificate posture = %+v", dockerService.Availability)
 	}
 	if dockerService.Availability.CorrelationState != unifiedresources.AvailabilityCorrelationAttached ||
 		dockerService.Availability.Evidence == nil ||

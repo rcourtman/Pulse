@@ -2116,6 +2116,13 @@ The owning detail renders protocol, full target, latest result, latency,
 freshness, and last observation for every attached check. Expired successful
 evidence is `stale`, not `Up` or `Responding normally`; an unobserved check is
 `Not checked`, not `Down`.
+For HTTPS checks the same availability facet additively preserves certificate
+monitoring policy and the canonical certificate observation. Resource clones
+must deep-copy certificate SAN slices. The owning availability card on both the
+source endpoint and any linked resource overview renders trust, subject, expiry,
+hostname match, issuer, and a bounded SHA-256 fingerprint preview. Certificate
+incidents remain on the source-owned endpoint and are not duplicated onto the
+linked resource during projection.
 Frontend primitives owns Machines as the operational presentation for those
 same agentless checks; unified resources owns the projection contract consumed
 there. `StandalonePageSurface.tsx` must fetch both `agent` and

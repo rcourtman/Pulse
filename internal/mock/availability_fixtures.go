@@ -10,12 +10,14 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 const (
-	mockAvailabilityProbeICMP = "icmp"
-	mockAvailabilityProbeTCP  = "tcp"
-	mockAvailabilityProbeHTTP = "http"
+	mockAvailabilityProbeICMP  = "icmp"
+	mockAvailabilityProbeTCP   = "tcp"
+	mockAvailabilityProbeHTTP  = "http"
+	mockAvailabilityProbeHTTPS = "https"
 
 	mockAvailabilityTargetMachine = "machine"
 	mockAvailabilityTargetService = "service"
@@ -75,7 +77,7 @@ func normalizeAvailabilityTargetFixture(target AvailabilityTargetFixture) Availa
 	if target.Protocol == "" {
 		target.Protocol = mockAvailabilityProbeICMP
 	}
-	if target.Protocol == mockAvailabilityProbeHTTP {
+	if target.Protocol == mockAvailabilityProbeHTTP || target.Protocol == mockAvailabilityProbeHTTPS {
 		target.Address = strings.TrimSpace(target.Address)
 	} else {
 		target.Address = normalizeAvailabilityFixtureAddress(target.Address)
@@ -151,7 +153,7 @@ func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 				TargetKind:       mockAvailabilityTargetService,
 				LinkedResourceID: "mock-swarm-cluster-1:service:svc-frontend-0",
 				Address:          "https://frontend.demo.pulse.local",
-				Protocol:         mockAvailabilityProbeHTTP,
+				Protocol:         mockAvailabilityProbeHTTPS,
 				Path:             "/health",
 				Enabled:          true,
 				PollIntervalSecs: 30,
@@ -348,6 +350,22 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		TimeoutMillis:       target.effectiveTimeoutMillis(),
 	}
 	data.Evidence = mockAvailabilityEvidence(target, fixture, lastSeen, now)
+	if target.Protocol == mockAvailabilityProbeHTTPS {
+		data.CertificateMonitoring = true
+		data.CertificateExpiryWarningDays = 30
+		data.Certificate = &tlsutil.CertificateObservation{
+			Subject:           "frontend.demo.pulse.local",
+			Issuer:            "Pulse Demo CA",
+			DNSNames:          []string{"frontend.demo.pulse.local"},
+			ObservedAt:        lastSeen,
+			NotBefore:         lastSeen.Add(-90 * 24 * time.Hour),
+			NotAfter:          lastSeen.Add(84 * 24 * time.Hour),
+			FingerprintSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			TrustStatus:       tlsutil.CertificateTrustTrusted,
+			ChainValid:        true,
+			HostnameValid:     true,
+		}
+	}
 	resource := unifiedresources.Resource{
 		Type:         unifiedresources.ResourceTypeNetworkEndpoint,
 		Technology:   string(target.Protocol),
@@ -488,7 +506,7 @@ func availabilityFixtureTags(target AvailabilityTargetFixture) []string {
 		tags = append(tags, target.TargetKind)
 	}
 	switch target.Protocol {
-	case mockAvailabilityProbeHTTP:
+	case mockAvailabilityProbeHTTP, mockAvailabilityProbeHTTPS:
 		tags = append(tags, "web-interface")
 	case mockAvailabilityProbeTCP:
 		if target.Port == 1883 {

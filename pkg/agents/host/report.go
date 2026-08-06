@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 const reportSequenceVersion = "v1"
@@ -135,11 +136,12 @@ type ProxmoxLXCContainer struct {
 // ("reachable", "unreachable", "indeterminate"); anything else is treated as
 // indeterminate by the server.
 type AvailabilityProbeResult struct {
-	TargetID      string    `json:"targetId"`
-	Outcome       string    `json:"outcome"`
-	LatencyMillis int64     `json:"latencyMillis"`
-	CheckedAt     time.Time `json:"checkedAt"`
-	Error         string    `json:"error,omitempty"`
+	TargetID      string                          `json:"targetId"`
+	Outcome       string                          `json:"outcome"`
+	LatencyMillis int64                           `json:"latencyMillis"`
+	CheckedAt     time.Time                       `json:"checkedAt"`
+	Error         string                          `json:"error,omitempty"`
+	Certificate   *tlsutil.CertificateObservation `json:"certificate,omitempty"`
 }
 
 // ClusterNodeSensors contains temperature sensor data collected from a Proxmox

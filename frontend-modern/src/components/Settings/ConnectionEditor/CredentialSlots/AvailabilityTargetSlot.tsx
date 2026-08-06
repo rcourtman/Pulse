@@ -61,6 +61,8 @@ interface AvailabilityForm {
   pollIntervalSeconds: string;
   timeoutMillis: string;
   failureThreshold: string;
+  monitorCertificate: boolean;
+  certificateExpiryWarningDays: string;
 }
 
 export interface AvailabilityTargetSlotProps {
@@ -96,6 +98,8 @@ const newAvailabilityForm = (
   pollIntervalSeconds: '60',
   timeoutMillis: '2000',
   failureThreshold: '2',
+  monitorCertificate: true,
+  certificateExpiryWarningDays: '30',
 });
 
 const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
@@ -115,11 +119,29 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
   pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
   timeoutMillis: String(target.timeoutMillis ?? 2000),
   failureThreshold: String(target.failureThreshold ?? 2),
+  monitorCertificate: target.certificateMonitoringDisabled !== true,
+  certificateExpiryWarningDays: String(target.certificateExpiryWarningDays ?? 30),
 });
 
 const parsePositiveInt = (value: string): number | undefined => {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const availabilityTestSuccessDescription = (result: AvailabilityTestResponse): string => {
+  const base = `Probe reached the target in ${result.latencyMillis} ms.`;
+  const certificate = result.certificate;
+  if (!certificate) return base;
+  const trust = certificate.trustStatus.replace('-', ' ');
+  const expiry = new Date(certificate.notAfter);
+  if (!Number.isFinite(expiry.getTime())) {
+    return `${base} Certificate: ${trust}.`;
+  }
+  return `${base} Certificate: ${trust}, expires ${expiry.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })}.`;
 };
 
 const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
@@ -144,6 +166,9 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     pollIntervalSeconds: parsePositiveInt(form.pollIntervalSeconds),
     timeoutMillis: parsePositiveInt(form.timeoutMillis),
     failureThreshold: parsePositiveInt(form.failureThreshold),
+    certificateMonitoringDisabled: form.protocol === 'https' ? !form.monitorCertificate : false,
+    certificateExpiryWarningDays:
+      form.protocol === 'https' ? parsePositiveInt(form.certificateExpiryWarningDays) : 0,
   };
 };
 
@@ -500,6 +525,38 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             />
           </label>
         </Show>
+        <Show when={form().protocol === 'https'}>
+          <div class="flex items-center rounded-md border border-border bg-surface-alt px-4 py-3">
+            <label class="flex items-center gap-3">
+              <input
+                type="checkbox"
+                class={formCheckbox}
+                checked={form().monitorCertificate}
+                onChange={(event) =>
+                  updateForm({ monitorCertificate: event.currentTarget.checked })
+                }
+              />
+              <span class="text-sm text-base-content">Monitor TLS certificate validity</span>
+            </label>
+          </div>
+          <label class={formField}>
+            <span class={formLabel}>Expiry warning (days)</span>
+            <input
+              class={formControl}
+              aria-label="Expiry warning (days)"
+              inputMode="numeric"
+              value={form().certificateExpiryWarningDays}
+              disabled={!form().monitorCertificate}
+              onInput={(event) =>
+                updateForm({ certificateExpiryWarningDays: event.currentTarget.value })
+              }
+              placeholder="30"
+            />
+            <span class={formHelpText}>
+              Raise an alert when the certificate enters this expiry window.
+            </span>
+          </label>
+        </Show>
         <Show when={form().protocol === 'udp'}>
           <FormSelect
             label="UDP result policy"
@@ -598,7 +655,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               result().outcome === 'indeterminate'
                 ? `No UDP rejection was received in ${result().latencyMillis} ms; the port is open or filtered, not proven reachable.`
                 : result().success
-                  ? `Probe reached the target in ${result().latencyMillis} ms.`
+                  ? availabilityTestSuccessDescription(result())
                   : result().error || 'Probe failed.'
             }
           />

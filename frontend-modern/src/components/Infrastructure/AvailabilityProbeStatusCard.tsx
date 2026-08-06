@@ -73,6 +73,38 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
     if (/refused|unreachable|no route/i.test(err)) return 'Unreachable';
     return err.length > 40 ? `${err.slice(0, 40)}…` : err;
   };
+  const certificate = () => props.availability.certificate;
+  const certificateTrust = () => {
+    switch (certificate()?.trustStatus) {
+      case 'trusted':
+        return { label: 'Trusted', tone: 'success' as const };
+      case 'self-signed':
+        return { label: 'Self-signed', tone: 'neutral' as const };
+      case 'expired':
+        return { label: 'Expired', tone: 'danger' as const };
+      case 'not-yet-valid':
+        return { label: 'Not yet valid', tone: 'danger' as const };
+      case 'untrusted':
+        return { label: 'Untrusted', tone: 'danger' as const };
+      default:
+        return { label: 'Unknown', tone: 'neutral' as const };
+    }
+  };
+  const certificateExpiry = () => {
+    const value = certificate()?.notAfter;
+    if (!value) return null;
+    const expiry = new Date(value);
+    if (!Number.isFinite(expiry.getTime())) return null;
+    const days = Math.ceil((expiry.getTime() - Date.now()) / 86_400_000);
+    const date = expiry.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    if (days < 0) return `${date} (${Math.abs(days)}d ago)`;
+    if (days === 0) return `${date} (today)`;
+    return `${date} (${days}d)`;
+  };
 
   return (
     <InfoCardFrame data-testid="availability-probe-status">
@@ -149,6 +181,80 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
             <div class="flex items-start justify-between gap-2">
               <span class="text-muted">Resource</span>
               <span class="text-right text-amber-600 dark:text-amber-300">{label()}</span>
+            </div>
+          )}
+        </Show>
+        <Show when={certificate()}>
+          {(cert) => (
+            <div class="mt-1.5 space-y-1.5 border-t border-base-200 pt-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Certificate</span>
+                <span
+                  class="font-medium"
+                  classList={{
+                    'text-emerald-600 dark:text-emerald-300': certificateTrust().tone === 'success',
+                    'text-red-600 dark:text-red-300': certificateTrust().tone === 'danger',
+                    'text-base-content': certificateTrust().tone === 'neutral',
+                  }}
+                  title={cert().trustError || undefined}
+                >
+                  {certificateTrust().label}
+                </span>
+              </div>
+              <Show when={cert().subject}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Subject</span>
+                  <span class="ml-2 truncate font-medium text-base-content" title={cert().subject}>
+                    {cert().subject}
+                  </span>
+                </div>
+              </Show>
+              <Show when={certificateExpiry()}>
+                {(expiry) => (
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Expires</span>
+                    <span
+                      class="font-medium text-base-content"
+                      title={`Warning window: ${props.availability.certificateExpiryWarningDays ?? 30} days`}
+                    >
+                      {expiry()}
+                    </span>
+                  </div>
+                )}
+              </Show>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-muted">Hostname</span>
+                <span
+                  class="font-medium"
+                  classList={{
+                    'text-emerald-600 dark:text-emerald-300': cert().hostnameValid,
+                    'text-red-600 dark:text-red-300': !cert().hostnameValid,
+                  }}
+                >
+                  {cert().hostnameValid ? 'Matches' : 'Mismatch'}
+                </span>
+              </div>
+              <Show when={cert().issuer}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">Issuer</span>
+                  <span class="ml-2 truncate text-base-content" title={cert().issuer}>
+                    {cert().issuer}
+                  </span>
+                </div>
+              </Show>
+              <Show when={cert().fingerprintSha256}>
+                {(fingerprint) => (
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">SHA-256</span>
+                    <span
+                      class="ml-2 truncate font-mono text-[10px] text-base-content"
+                      title={fingerprint()}
+                    >
+                      {fingerprint().slice(0, 16)}…
+                    </span>
+                  </div>
+                )}
+              </Show>
             </div>
           )}
         </Show>

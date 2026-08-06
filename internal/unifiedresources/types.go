@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // Resource represents a unified resource aggregated across multiple data sources.
@@ -1742,6 +1743,10 @@ type AvailabilityData struct {
 	CorrelationReason     string                             `json:"correlationReason,omitempty"`
 	CorrelationCandidates int                                `json:"correlationCandidates,omitempty"`
 	Evidence              *operationaltrust.EvidenceEnvelope `json:"evidence,omitempty"`
+
+	CertificateMonitoring        bool                            `json:"certificateMonitoring,omitempty"`
+	CertificateExpiryWarningDays int                             `json:"certificateExpiryWarningDays,omitempty"`
+	Certificate                  *tlsutil.CertificateObservation `json:"certificate,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

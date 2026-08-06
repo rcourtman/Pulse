@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 func TestLegacyReportJSONDefaultsOperationReceiptProtocolUnsupported(t *testing.T) {
@@ -589,7 +591,13 @@ func TestReportAvailabilityResultsJSONRoundTrip(t *testing.T) {
 		Agent: AgentInfo{ID: "probe-agent"},
 		Host:  HostInfo{Hostname: "probe-agent.local"},
 		AvailabilityResults: []AvailabilityProbeResult{
-			{TargetID: "target-1", Outcome: "reachable", LatencyMillis: 12, CheckedAt: checkedAt},
+			{
+				TargetID: "target-1", Outcome: "reachable", LatencyMillis: 12, CheckedAt: checkedAt,
+				Certificate: &tlsutil.CertificateObservation{
+					Subject: "pulse.example.test", TrustStatus: tlsutil.CertificateTrustTrusted,
+					ObservedAt: checkedAt, DNSNames: []string{"pulse.example.test"},
+				},
+			},
 			{TargetID: "target-2", Outcome: "unreachable", CheckedAt: checkedAt, Error: "icmp probe timed out"},
 		},
 		Timestamp: checkedAt,
@@ -619,6 +627,9 @@ func TestReportAvailabilityResultsJSONRoundTrip(t *testing.T) {
 	}
 	if !first.CheckedAt.Equal(checkedAt) {
 		t.Fatalf("checkedAt = %v, want %v", first.CheckedAt, checkedAt)
+	}
+	if first.Certificate == nil || first.Certificate.TrustStatus != tlsutil.CertificateTrustTrusted || len(first.Certificate.DNSNames) != 1 {
+		t.Fatalf("certificate = %+v", first.Certificate)
 	}
 	if decoded.AvailabilityResults[1].Error != "icmp probe timed out" {
 		t.Fatalf("second result = %+v", decoded.AvailabilityResults[1])

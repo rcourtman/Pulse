@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"sort"
 	"strings"
@@ -13,7 +14,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
+
+type tlsCert = tlsutil.CertificateObservation
 
 // AvailabilityProbeStatus captures the last observed state of an agentless
 // endpoint probe.
@@ -33,6 +37,8 @@ type AvailabilityProbeStatus struct {
 	LastError           string    `json:"lastError,omitempty"`
 	FailureThreshold    int       `json:"failureThreshold,omitempty"`
 	ProbeAgentID        string    `json:"probeAgentId,omitempty"`
+	Certificate         *tlsCert  `json:"certificate,omitempty"`
+	CertificateCurrent  bool      `json:"-"`
 	// ProbeReportReceivedAt is server-authored freshness evidence for a remote
 	// observation. Keep it off the wire: LastChecked remains the agent's
 	// observation time, while disconnect detection must not trust agent clock
@@ -320,10 +326,10 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) {
 	target = config.NormalizeAvailabilityTarget(target)
 	start := time.Now()
-	outcome, err := ProbeAvailabilityTargetResult(ctx, target)
+	result, err := ProbeAvailabilityTargetDetailedResult(ctx, target)
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.applyAvailabilityObservation(target, checkedAt, latency, outcome, err, "", time.Time{})
+	m.applyAvailabilityObservation(target, checkedAt, latency, result.Outcome, err, result.Certificate, "", time.Time{})
 	m.updateResourceStore(m.GetState())
 }
 
@@ -336,10 +342,11 @@ func (m *Monitor) applyAvailabilityObservation(
 	latency time.Duration,
 	outcome AvailabilityProbeOutcome,
 	probeErr error,
+	certificate *tlsutil.CertificateObservation,
 	probeAgentID string,
 	probeReportReceivedAt time.Time,
 ) {
-	m.setAvailabilityStatus(target, checkedAt, latency, outcome, probeErr, probeAgentID, probeReportReceivedAt)
+	m.setAvailabilityStatusWithCertificate(target, checkedAt, latency, outcome, probeErr, certificate, probeAgentID, probeReportReceivedAt)
 
 	if probeErr == nil {
 		if m.stalenessTracker != nil {
@@ -364,12 +371,27 @@ func (m *Monitor) setAvailabilityStatus(
 	probeAgentID string,
 	probeReportReceivedAt time.Time,
 ) {
+	m.setAvailabilityStatusWithCertificate(target, checkedAt, latency, outcome, probeErr, nil, probeAgentID, probeReportReceivedAt)
+}
+
+func (m *Monitor) setAvailabilityStatusWithCertificate(
+	target config.AvailabilityTarget,
+	checkedAt time.Time,
+	latency time.Duration,
+	outcome AvailabilityProbeOutcome,
+	probeErr error,
+	certificate *tlsutil.CertificateObservation,
+	probeAgentID string,
+	probeReportReceivedAt time.Time,
+) {
 	if m == nil {
 		return
 	}
 	status := availabilityStatusFromTarget(target)
 	status.Outcome = string(outcome)
 	status.LastChecked = checkedAt
+	status.Certificate = certificate.Clone()
+	status.CertificateCurrent = status.Certificate != nil
 	status.ProbeAgentID = strings.TrimSpace(probeAgentID)
 	if status.ProbeAgentID != "" {
 		status.ProbeReportReceivedAt = probeReportReceivedAt.UTC()
@@ -398,6 +420,9 @@ func (m *Monitor) setAvailabilityStatus(
 	}
 	if previous, ok := m.availabilityStatuses[target.ID]; ok {
 		status.LastSuccess = previous.LastSuccess
+		if status.Certificate == nil {
+			status.Certificate = previous.Certificate.Clone()
+		}
 		if probeErr == nil {
 			status.ConsecutiveFailures = 0
 			status.LastError = ""
@@ -426,6 +451,12 @@ func ProbeAvailabilityTarget(ctx context.Context, target config.AvailabilityTarg
 // than incorrectly claiming that a silent UDP endpoint was proven reachable.
 func ProbeAvailabilityTargetResult(ctx context.Context, target config.AvailabilityTarget) (AvailabilityProbeOutcome, error) {
 	return availabilityprobe.Result(ctx, target)
+}
+
+// ProbeAvailabilityTargetDetailedResult adds HTTPS certificate posture while
+// preserving the shared reachability vocabulary.
+func ProbeAvailabilityTargetDetailedResult(ctx context.Context, target config.AvailabilityTarget) (availabilityprobe.ProbeResult, error) {
+	return availabilityprobe.DetailedResult(ctx, target)
 }
 
 func availabilityStatusFromTarget(target config.AvailabilityTarget) AvailabilityProbeStatus {
@@ -469,6 +500,9 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		PollIntervalSeconds: target.EffectivePollIntervalSecs(),
 		TimeoutMillis:       target.EffectiveTimeoutMillis(),
 	}
+	data.CertificateMonitoring = target.CertificateMonitoringEnabled()
+	data.CertificateExpiryWarningDays = target.EffectiveCertificateExpiryWarningDays()
+	data.Certificate = status.Certificate.Clone()
 	observedAt := status.LastChecked
 	if observedAt.IsZero() {
 		observedAt = lastSeen
@@ -494,8 +528,9 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		Availability: data,
 	}
 	if incident := availabilityIncident(target, status, lastSeen); incident != nil {
-		resource.Incidents = []unifiedresources.ResourceIncident{*incident}
+		resource.Incidents = append(resource.Incidents, *incident)
 	}
+	resource.Incidents = append(resource.Incidents, availabilityCertificateIncidents(target, status)...)
 
 	identity := unifiedresources.ResourceIdentity{}
 	if ip := net.ParseIP(target.ProbeAddress()); ip != nil {
@@ -635,6 +670,74 @@ func availabilityIncident(target config.AvailabilityTarget, status AvailabilityP
 		Summary:   summary,
 		StartedAt: startedAt,
 	}
+}
+
+func availabilityCertificateIncidents(target config.AvailabilityTarget, status AvailabilityProbeStatus) []unifiedresources.ResourceIncident {
+	certificate := status.Certificate
+	if !target.Enabled || !target.CertificateMonitoringEnabled() || certificate == nil {
+		return nil
+	}
+	// A retained observation remains useful in the UI during a later endpoint
+	// outage, but it must not keep authoring current certificate incidents.
+	if !status.CertificateCurrent || certificate.ObservedAt.IsZero() {
+		return nil
+	}
+	observedAt := status.FreshnessTime()
+	if observedAt.IsZero() {
+		observedAt = certificate.ObservedAt
+	}
+	startedAt := observedAt
+	base := target.DisplayName()
+	incident := func(code string, severity storagehealth.RiskLevel, summary string) unifiedresources.ResourceIncident {
+		return unifiedresources.ResourceIncident{
+			Provider:  string(unifiedresources.SourceAvailability),
+			NativeID:  target.ID,
+			Code:      code,
+			Severity:  severity,
+			Source:    string(unifiedresources.SourceAvailability),
+			Summary:   summary,
+			StartedAt: startedAt,
+		}
+	}
+
+	switch certificate.TrustStatus {
+	case tlsutil.CertificateTrustExpired:
+		return []unifiedresources.ResourceIncident{incident(
+			"certificate_expired",
+			storagehealth.RiskCritical,
+			fmt.Sprintf("%s certificate expired on %s", base, certificate.NotAfter.Format("2 Jan 2006")),
+		)}
+	case tlsutil.CertificateTrustNotYetValid:
+		return []unifiedresources.ResourceIncident{incident(
+			"certificate_not_yet_valid",
+			storagehealth.RiskCritical,
+			fmt.Sprintf("%s certificate is not valid until %s", base, certificate.NotBefore.Format("2 Jan 2006")),
+		)}
+	case tlsutil.CertificateTrustUntrusted:
+		summary := fmt.Sprintf("%s certificate is not trusted", base)
+		if detail := strings.TrimSpace(certificate.TrustError); detail != "" {
+			summary += ": " + detail
+		}
+		return []unifiedresources.ResourceIncident{incident("certificate_untrusted", storagehealth.RiskCritical, summary)}
+	}
+	if certificate.NotAfter.IsZero() {
+		return nil
+	}
+
+	warningWindow := time.Duration(target.EffectiveCertificateExpiryWarningDays()) * 24 * time.Hour
+	remaining := certificate.NotAfter.Sub(observedAt)
+	if remaining > warningWindow {
+		return nil
+	}
+	days := int(math.Ceil(remaining.Hours() / 24))
+	if days < 0 {
+		days = 0
+	}
+	return []unifiedresources.ResourceIncident{incident(
+		"certificate_expiring",
+		storagehealth.RiskWarning,
+		fmt.Sprintf("%s certificate expires in %d days on %s", base, days, certificate.NotAfter.Format("2 Jan 2006")),
+	)}
 }
 
 func availabilityConnectionKey(targetID string) string {

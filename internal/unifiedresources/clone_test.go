@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // --- cloneResource: top-level isolation ---
@@ -202,6 +203,7 @@ func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
 		Availability: &AvailabilityData{
 			LastChecked: &checkedAt,
 			LastSuccess: &succeededAt,
+			Certificate: &tlsutil.CertificateObservation{DNSNames: []string{"pulse.example.test"}},
 		},
 		AvailabilityChecks: []AvailabilityData{{
 			TargetID:    "probe-1",
@@ -213,12 +215,16 @@ func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
 
 	*cloned.Availability.LastChecked = checkedAt.Add(time.Hour)
 	*cloned.Availability.LastSuccess = succeededAt.Add(time.Hour)
+	cloned.Availability.Certificate.DNSNames[0] = "changed.example.test"
 	*cloned.AvailabilityChecks[0].LastChecked = checkedAt.Add(2 * time.Hour)
 	if !original.Availability.LastChecked.Equal(checkedAt) {
 		t.Error("mutating cloned availability LastChecked should not affect original")
 	}
 	if !original.Availability.LastSuccess.Equal(succeededAt) {
 		t.Error("mutating cloned availability LastSuccess should not affect original")
+	}
+	if original.Availability.Certificate.DNSNames[0] != "pulse.example.test" {
+		t.Error("mutating cloned availability certificate should not affect original")
 	}
 	if !original.AvailabilityChecks[0].LastChecked.Equal(checkedAt) {
 		t.Error("mutating cloned AvailabilityChecks should not affect original")

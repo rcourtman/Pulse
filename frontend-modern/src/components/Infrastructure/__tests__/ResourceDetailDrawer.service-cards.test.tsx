@@ -327,4 +327,39 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(queryByText('Updates Available')).toBeNull();
     expect(queryByText('Last Check')).toBeNull();
   });
+
+  it('renders linked HTTPS certificate posture in the resource overview', () => {
+    const resource = baseResource({
+      availabilityChecks: [
+        {
+          targetId: 'pulse-ui',
+          address: 'pulse.example.test',
+          protocol: 'https',
+          enabled: true,
+          available: true,
+          lastChecked: new Date().toISOString(),
+          certificateExpiryWarningDays: 30,
+          certificate: {
+            subject: 'pulse.example.test',
+            issuer: 'Example CA',
+            dnsNames: ['pulse.example.test'],
+            notBefore: '2026-01-01T00:00:00Z',
+            notAfter: '2027-01-01T00:00:00Z',
+            fingerprintSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            chainValid: true,
+            hostnameValid: true,
+            selfSigned: false,
+            trustStatus: 'trusted',
+            observedAt: '2026-08-06T12:00:00Z',
+          },
+        },
+      ],
+    });
+
+    const { getByTestId, getByText } = render(() => <ResourceDetailDrawer resource={resource} />);
+
+    expect(getByTestId('availability-probe-status')).toBeInTheDocument();
+    expect(getByText('Trusted')).toBeInTheDocument();
+    expect(getByText('Example CA')).toBeInTheDocument();
+  });
 });

@@ -217,6 +217,33 @@ describe('AvailabilityTargetSlot', () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
+  it('enables HTTPS certificate monitoring with a 30-day warning by default', async () => {
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'https' } });
+    expect(screen.getByLabelText('Monitor TLS certificate validity')).toBeChecked();
+    expect(screen.getByLabelText('Expiry warning (days)')).toHaveValue('30');
+
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Pulse UI' } });
+    fireEvent.input(screen.getByPlaceholderText('https://service.local/status'), {
+      target: { value: 'pulse.example.test' },
+    });
+    fireEvent.input(screen.getByLabelText('Expiry warning (days)'), {
+      target: { value: '45' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          protocol: 'https',
+          certificateMonitoringDisabled: false,
+          certificateExpiryWarningDays: 45,
+        }),
+      ),
+    );
+  });
+
   describe('external probe assignment', () => {
     it('offers connected agent hosts and saves the assignment when licensed', async () => {
       resourceMocks.resources = [agentHostResource('host-edge-01', 'Edge 01')];
