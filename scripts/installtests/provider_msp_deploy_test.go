@@ -78,6 +78,7 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		// asserted in TestProviderMSPSetupScriptSupportsUnlicensedEvaluation.
 		"CP_PROVIDER_MSP_LICENSE_FILE=",
 		"CP_ENTITLEMENT_SIGNING_PRIVATE_KEY=",
+		"ACME_DNS_PROVIDER=cloudflare",
 		"sudo -E ./setup.sh",
 		"docker compose run --rm control-plane provider-msp bootstrap",
 		"docker compose run --rm control-plane provider-msp portal-link",
@@ -393,5 +394,75 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		if !strings.Contains(env, "\n"+key+"=\n") {
 			t.Fatalf(".env.example must ship %s blank so setup.sh resolves its digest", key)
 		}
+	}
+}
+
+// Traefik terminates TLS at the internet edge. Handing it the whole operator
+// .env put CP_ADMIN_KEY and the entitlement signing private key one edge CVE
+// away from disclosure, so the compose contract pins the minimal wiring: only
+// ACME/DNS material reaches the traefik container, and the DNS-01 provider is
+// overridable for operators whose DNS is not on Cloudflare.
+func TestProviderMSPTraefikEnvIsMinimalAndDNSProviderOverridable(t *testing.T) {
+	composeBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read provider MSP compose: %v", err)
+	}
+	var compose struct {
+		Services map[string]struct {
+			EnvFile any `yaml:"env_file"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(composeBytes, &compose); err != nil {
+		t.Fatalf("provider MSP compose must be valid YAML: %v", err)
+	}
+	traefik, ok := compose.Services["traefik"]
+	if !ok {
+		t.Fatal("compose must define a traefik service")
+	}
+	var envFiles []string
+	switch v := traefik.EnvFile.(type) {
+	case nil:
+	case string:
+		envFiles = append(envFiles, v)
+	case []any:
+		for _, entry := range v {
+			switch e := entry.(type) {
+			case string:
+				envFiles = append(envFiles, e)
+			case map[string]any:
+				if p, _ := e["path"].(string); p != "" {
+					envFiles = append(envFiles, p)
+				}
+			}
+		}
+	}
+	for _, f := range envFiles {
+		if strings.HasSuffix(f, ".env") && !strings.HasSuffix(f, "dns-credentials.env") {
+			t.Fatalf("traefik env_file %q would leak the operator .env (CP_ADMIN_KEY, entitlement signing key) into the edge container", f)
+		}
+	}
+
+	text := string(composeBytes)
+	assertContainsAll(t, text,
+		"TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}",
+		"TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}",
+		"CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}",
+		"path: ./dns-credentials.env",
+		"required: false",
+	)
+
+	scriptBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "setup.sh"))
+	if err != nil {
+		t.Fatalf("read provider MSP setup: %v", err)
+	}
+	assertContainsAll(t, string(scriptBytes),
+		"ensure_dns_credentials_file",
+		"CF_DNS_API_TOKEN is required with the default ACME_DNS_PROVIDER=cloudflare",
+		"put that provider's credential variables in",
+	)
+	// CF_DNS_API_TOKEN must not return to the unconditional required list; it
+	// is only required when ACME_DNS_PROVIDER resolves to cloudflare.
+	if strings.Contains(string(scriptBytes), "ACME_EMAIL CF_DNS_API_TOKEN CP_ENV") {
+		t.Fatal("CF_DNS_API_TOKEN is back in the unconditional required-env list; it must be required only when ACME_DNS_PROVIDER is cloudflare")
 	}
 }

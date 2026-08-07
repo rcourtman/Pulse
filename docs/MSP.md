@@ -274,9 +274,11 @@ cd Pulse-main/deploy/provider-msp
 sudo -E ./setup.sh
 ```
 
-The host needs Ubuntu 24.04 or similar, a domain whose DNS is managed through
-Cloudflare (the wildcard certificate uses a Cloudflare DNS token), and ports
-80 and 443 free.
+The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
+ports 80 and 443 free. The wildcard certificate is issued over DNS-01 with
+Cloudflare as the default provider (`CF_DNS_API_TOKEN`); any other Traefik
+dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env` and
+putting that provider's credential variables in `dns-credentials.env`.
 
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
 2-client evaluation licence for you. It sends only the public half of the

@@ -504,7 +504,9 @@ Created ${env_path} from .env.example.
 Edit it now and set required values:
   - DOMAIN
   - ACME_EMAIL
-  - CF_DNS_API_TOKEN
+  - CF_DNS_API_TOKEN (with the default ACME_DNS_PROVIDER=cloudflare; for any
+    other Traefik dnsChallenge provider, set ACME_DNS_PROVIDER and put that
+    provider's credential variables in dns-credentials.env)
   - TRAEFIK_IMAGE (digest pinned)
   - DOCKER_SOCKET_PROXY_IMAGE (digest pinned)
   - CONTROL_PLANE_IMAGE (digest pinned)
@@ -529,6 +531,29 @@ EOF
   fi
 }
 
+# Traefik is the only container that needs DNS-01 credentials, and it must not
+# receive the operator .env (that holds CP_ADMIN_KEY and the entitlement
+# signing private key). Non-Cloudflare providers put their credential
+# variables here; compose injects the file into the traefik container alone.
+ensure_dns_credentials_file() {
+  local creds_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/dns-credentials.env"
+  if [[ -f "${creds_path}" ]]; then
+    chmod 0600 "${creds_path}" || true
+    return 0
+  fi
+  cat > "${creds_path}" <<'EOF'
+# Credential variables for the ACME DNS-01 provider, injected only into the
+# traefik container. With the default ACME_DNS_PROVIDER=cloudflare this file
+# stays empty; CF_DNS_API_TOKEN in .env is passed through directly. For any
+# other provider, set ACME_DNS_PROVIDER in .env to the Traefik dnsChallenge
+# provider name and put that provider's variables here, e.g. for route53:
+#   AWS_ACCESS_KEY_ID=...
+#   AWS_SECRET_ACCESS_KEY=...
+#   AWS_REGION=...
+EOF
+  chmod 0600 "${creds_path}"
+}
+
 validate_env_file() {
   local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   [[ -f "${env_path}" ]] || die "missing ${env_path}"
@@ -542,7 +567,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL CF_DNS_API_TOKEN CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_ENTITLEMENT_SIGNING_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
+  for k in DOMAIN ACME_EMAIL CP_ENV TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_ADMIN_KEY CP_PULSE_IMAGE PULSE_PROVIDER_MSP_DATA_DIR PULSE_PROVIDER_MSP_DOCKER_NETWORK PULSE_PROVIDER_MSP_DOCKER_SUBNET PULSE_PROVIDER_MSP_DOCKER_SOCKET PULSE_PROVIDER_MSP_ROOT_SPACECHECK_DIR PULSE_PROVIDER_MSP_DOCKER_SPACECHECK_DIR CP_TRUSTED_PROXY_CIDRS CP_ENTITLEMENT_SIGNING_PRIVATE_KEY CP_TENANT_MEMORY_LIMIT CP_ALLOW_DOCKERLESS_PROVISIONING CP_STORAGE_GUARDRAILS_ENABLED CP_STORAGE_MIN_ROOT_AVAILABLE CP_STORAGE_MIN_DATA_AVAILABLE CP_STORAGE_MIN_DOCKER_AVAILABLE CP_STORAGE_MAX_DOCKER_BUILD_CACHE CP_PROOF_TENANT_MAX_AGE CP_PROOF_TENANT_MATCHERS CP_REQUIRE_EMAIL_PROVIDER PULSE_EMAIL_FROM PULSE_EMAIL_REPLY_TO; do
     v="$(env_value "${k}" "${env_path}")"
     if [[ -z "${v}" ]]; then
       missing+=("${k}")
@@ -550,6 +575,20 @@ validate_env_file() {
   done
   if [[ "${#missing[@]}" -ne 0 ]]; then
     die "missing required values in ${env_path}: ${missing[*]}"
+  fi
+
+  local dns_provider creds_path
+  dns_provider="$(env_value ACME_DNS_PROVIDER "${env_path}")"
+  dns_provider="${dns_provider:-cloudflare}"
+  if [[ "${dns_provider}" == "cloudflare" ]]; then
+    if [[ -z "$(env_value CF_DNS_API_TOKEN "${env_path}")" ]]; then
+      die "CF_DNS_API_TOKEN is required with the default ACME_DNS_PROVIDER=cloudflare; for another provider set ACME_DNS_PROVIDER to a Traefik dnsChallenge provider name and put its credential variables in dns-credentials.env"
+    fi
+  else
+    creds_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/dns-credentials.env"
+    if [[ ! -f "${creds_path}" ]] || ! grep -Eq '^[A-Za-z_][A-Za-z0-9_]*=.+' "${creds_path}"; then
+      die "ACME_DNS_PROVIDER=${dns_provider}: put that provider's credential variables in ${creds_path} (see Traefik's dnsChallenge provider table for the variable names)"
+    fi
   fi
 
   cp_env="$(env_value CP_ENV "${env_path}" | tr '[:upper:]' '[:lower:]')"
@@ -752,6 +791,7 @@ main() {
   install_ops_tools
   install_deploy_bundle
   ensure_env_file
+  ensure_dns_credentials_file
   ensure_generated_secrets
   # After the signing key exists, since the license binds its public half.
   ensure_eval_license

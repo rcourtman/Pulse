@@ -247,6 +247,15 @@ upgrade, update, release, or artifact-selection behavior.
    Docker subnet, create the storage-admission marker directories, and install a
    host-level `DOCKER-USER` rule blocking `169.254.169.254` from tenant
    containers when iptables is available.
+   The packaged edge wiring must keep the operator `.env` out of the Traefik
+   container: Traefik's environment carries only ACME/DNS material (the
+   Cloudflare token passthrough plus the `dns-credentials.env` file that
+   `setup.sh` creates with 0600 permissions), never `CP_ADMIN_KEY` or
+   `CP_ENTITLEMENT_SIGNING_PRIVATE_KEY`. The wildcard-TLS DNS-01 provider is
+   operator-configurable through `ACME_DNS_PROVIDER` (default `cloudflare`):
+   with the default provider `CF_DNS_API_TOKEN` is required; with any other
+   Traefik dnsChallenge provider, setup must fail closed until that provider's
+   credential variables are present in `dns-credentials.env`.
    The setup summary must leave the operator on a working next step, not a
    dead end: it must print the `provider-msp bootstrap` command that creates
    the operator account and portal sign-in link, and the day-2 sign-in

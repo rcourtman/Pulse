@@ -9,10 +9,16 @@ services:
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik-dynamic.yml:/etc/traefik/traefik-dynamic.yml:ro
       - acme-data:/etc/traefik/acme
+    # The edge container gets only ACME/DNS material, never the operator .env:
+    # CP_ADMIN_KEY and the entitlement signing key must not sit in the
+    # internet-facing container's environment.
     env_file:
-      - .env
+      - path: ./dns-credentials.env
+        required: false
     environment:
-      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN:-}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_DNSCHALLENGE_PROVIDER=${ACME_DNS_PROVIDER:-cloudflare}
       - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
       - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${ACME_EMAIL}
     networks:
