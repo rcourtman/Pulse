@@ -103,6 +103,13 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		strings.TrimSpace(resource.ID),
 	)
 	values = append(values, resource.Identity.Hostnames...)
+	// Alert evaluation references host-agent resources as "agent:{hostID}"
+	// (see alerts.hostResourceID). A merged PVE-node + pulse-agent resource
+	// takes "node:..." as its primary ID, so the prefixed agent ref must be
+	// indexed explicitly or per-resource policy lookups miss (#1497).
+	if agentID := strings.TrimSpace(canonicalAgentID(resource)); agentID != "" {
+		values = append(values, "agent:"+agentID)
+	}
 	if resource.Proxmox != nil {
 		values = append(
 			values,

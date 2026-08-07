@@ -194,6 +194,53 @@ func TestResourceRegistry_GetByReferenceResolvesSourceIDAndCanonicalAlias(t *tes
 	if resolvedID != "agent-host-1" || resource.ID != "agent-host-1" {
 		t.Fatalf("alias reference resolved to id=%q resource=%q, want agent-host-1", resolvedID, resource.ID)
 	}
+
+	resource, resolvedID, ok = rr.GetByReference("agent:machine-1")
+	if !ok {
+		t.Fatal("expected prefixed agent reference to resolve")
+	}
+	if resolvedID != "agent-host-1" || resource.ID != "agent-host-1" {
+		t.Fatalf("agent reference resolved to id=%q resource=%q, want agent-host-1", resolvedID, resource.ID)
+	}
+}
+
+// A pulse-agent installed on a Proxmox node merges into one canonical
+// resource whose primary ID is "node:{sourceID}", not "agent:{agentID}".
+// Alert evaluation still references the host as "agent:{hostID}"
+// (alerts.hostResourceID), and per-resource intent policies are keyed by the
+// canonical registry ID, so this reference must resolve or grace overrides
+// silently fall back to factory (#1497).
+func TestResourceRegistry_GetByReferenceResolvesAgentRefOnMergedProxmoxHost(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestResources([]Resource{{
+		ID:   "agent-abcdef123456",
+		Type: ResourceTypeAgent,
+		Name: "proxmox2",
+		Agent: &AgentData{
+			AgentID:  "machine-2",
+			Hostname: "proxmox2.local",
+		},
+		Proxmox: &ProxmoxData{
+			SourceID: "node/proxmox2",
+			NodeName: "proxmox2",
+		},
+	}})
+
+	merged, ok := rr.Get("agent-abcdef123456")
+	if !ok || merged.Canonical == nil {
+		t.Fatalf("merged host missing canonical identity: ok=%v resource=%+v", ok, merged)
+	}
+	if merged.Canonical.PrimaryID != "node:node/proxmox2" {
+		t.Fatalf("merged host primary ID = %q, want node:node/proxmox2", merged.Canonical.PrimaryID)
+	}
+
+	resource, resolvedID, ok := rr.GetByReference("agent:machine-2")
+	if !ok {
+		t.Fatal("expected agent reference to resolve on merged Proxmox host")
+	}
+	if resolvedID != "agent-abcdef123456" || resource.ID != "agent-abcdef123456" {
+		t.Fatalf("agent reference resolved to id=%q resource=%q, want agent-abcdef123456", resolvedID, resource.ID)
+	}
 }
 
 func TestMonitorAdapterKeepsSameNamedProxmoxProvidersDistinct(t *testing.T) {

@@ -65,6 +65,7 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 		"tower.local",
 		"machine-1",
 		"agent-1",
+		"agent:host-1",
 	}
 	if len(resource.Canonical.Aliases) != len(wantAliases) {
 		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
@@ -435,6 +436,7 @@ func TestRefreshCanonicalIdentityCanonicalizesTargetResourceTypeAliases(t *testi
 		"docker-runtime-1",
 		"Tower",
 		"agent-1",
+		"agent:host-1",
 	}
 	if len(resource.Canonical.Aliases) != len(wantAliases) {
 		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
