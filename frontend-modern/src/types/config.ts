@@ -97,6 +97,11 @@ export interface NodesConfig {
  */
 export interface SecurityStatusSettingsCapabilities {
   infrastructureRead: boolean;
+  availabilityRead: boolean;
+  pulseIntelligenceRead: boolean;
+  diagnosticsRead: boolean;
+  systemLogsRead: boolean;
+  reportingRead: boolean;
   apiAccessRead: boolean;
   apiAccessWrite: boolean;
   authenticationRead: boolean;

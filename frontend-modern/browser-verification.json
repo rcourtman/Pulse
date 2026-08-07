@@ -1,21 +1,34 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "755a8887874e21d0115e1490b9e69e9501d2a31e",
-  "verified_at": "2026-08-07T19:21:05Z",
+  "base_sha": "14a82e7684390c9fe0a4bd900417c4adbb7140b8",
+  "verified_at": "2026-08-07T21:29:58Z",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
+    "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "1a27dd2c374fc3fe09f718044e3685c450ff4fddfce2f0ada92ac5210676bbd9"
+    "frontend-modern/src/components/Settings/Settings.tsx": "94cb784fb80b1cdbb153b9aeaa8b3c29ae726fd9b071b50a2f98341bc13975ff",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "f1b8bd0806ca17948c11a08601f1362218caa02de4913884854c8368f7b11584",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "e5ef64c853fa5dea84cb19bfdc79f7d3a380fa156e5afadda964e97ffbd729cc",
+    "frontend-modern/src/types/config.ts": "cb2aa098b5a40332d6a1caeaf74f3557e79f8e00630ce7dd1d19a63571048592"
   },
   "routes": [
-    "/infrastructure (Proxmox overview, nodes + workloads tables)"
+    "/ (redirect target for an authenticated session landing on Settings)",
+    "/settings/monitoring/availability (Availability checks, the reported trap)",
+    "/settings/system-general (the new non-admin fallback landing tab)",
+    "/settings/pulse-intelligence/provider (Provider & Models)",
+    "/settings/support/diagnostics (Diagnostics & Health)",
+    "/settings/support/logs (System Logs)",
+    "/settings/support/reporting (Data & Reports)",
+    "/settings/system-network (residual admin-only tab left ungated on this branch)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 375,
@@ -23,14 +36,23 @@
     }
   ],
   "states": [
-    "inbound guard tripped: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES temporarily lowered to 256 KiB against a live backend on port 7655 whose real initialState frame is ~741 KB, reproducing the oversized-snapshot condition a >3100-resource estate hits at the shipped 8 MiB cap",
-    "post-recovery steady state: 265 resources hydrated from /api/state with 48 distinct resource types, then held across subsequent resourceDelta ticks (delta frames logged with resourceCount 0 while the store stayed at 265), proving the REST snapshot established a usable delta baseline",
-    "shipped 8 MiB cap restored: the same ~741 KB frame is accepted and hydrates via initialState over the socket with no oversized warning and no REST fetch, confirming the fallback is inert on normal estates"
+    "non-admin proxy-auth session (X-Remote-Role: viewer) against a binary built from this worktree, so the served capabilities and the rendering frontend are one artifact: /api/security/status reports detailLevel=authenticated with availabilityRead, pulseIntelligenceRead, diagnosticsRead, systemLogsRead and reportingRead all false",
+    "non-admin landing state: / resolves to /settings/system-general, not /settings/monitoring/availability, and the Appearance panel renders with no [role=alert] banner",
+    "non-admin settings sidebar reduced to Plans & Billing, General, Network, Pulse server updates, Recovery and Security Overview; Infrastructure, Availability checks, Provider & Models, Patrol, Assistant, Diagnostics & Health, Data & Reports, System Logs and the whole Security group are absent",
+    "non-admin deep link to /settings/monitoring/availability redirects to /settings/system-general with zero requests to /api/availability-targets, /api/settings/ai, /api/diagnostics, /api/logs/* or /api/admin/reports/* in the network log",
+    "admin proxy-auth session (X-Remote-Role: admin) reports detailLevel=privileged with all five new capabilities true and keeps the full 22-item settings nav",
+    "admin Availability checks renders its own empty state ('No availability checks configured', Refresh, Add service/device check) off a 200 from /api/availability-targets",
+    "admin Data & Reports still renders its inline Advanced Reporting upgrade gate on this unlicensed install, confirming the new admin gate did not swallow the paid-feature teaser the 2026-08-07 commercial-surfaces revision requires to stay visible",
+    "residual, deliberately out of scope: the non-admin can still open /settings/system-network, /settings/system-updates and /settings/system-recovery, which render with default values behind a 403 on /api/system/settings. Gated on claude/great-liskov-05900a (9b0618b7a, systemSettingsRead); not duplicated here"
   ],
   "interactions": [
-    "loaded /infrastructure with the guard tripped and read the console sequence: 'Ignoring oversized WebSocket payload {characterCount: 741468, maxBytes: 262144}' then 'Recovering full state over REST' then 'Hydrated full state over REST after an oversized WebSocket snapshot' then 'Updating resources {count: 265}'",
-    "confirmed the nodes table and workloads table rendered populated rows (6 PVE nodes with live CPU/memory/disk/temp, guest rows beneath) rather than the empty UI the dropped snapshot previously produced",
-    "re-ran the same oversized-recovery load at 375x812 and confirmed identical console recovery sequence plus a populated mobile nodes list and bottom nav counters",
-    "restored the 8 MiB constant, reloaded, and confirmed the console showed 'message {type: initialState, resourceCount: 265}' with no oversized warning and no /api/state recovery fetch"
+    "loaded / at 1280x800 as the viewer and read location.href plus the network log: landed on /settings/system-general, no /api/availability-targets request, no error banner",
+    "navigated the viewer to /settings/monitoring/availability at both 1280x800 and 375x812 and confirmed the redirect to /settings/system-general with an empty [role=alert] set and no horizontal overflow at 375px",
+    "enumerated the viewer's settings sidebar buttons from the DOM at 1280x800 to confirm exactly which entries survive the gates",
+    "read the viewer console: the only remaining 403s are /api/updates/check, /api/updates/status and the bootstrap /api/system/settings, all pre-existing on this branch and tracked on other branches; none originate from a settings panel mount",
+    "navigated the admin to /settings/monitoring/availability, /settings/pulse-intelligence/provider, /settings/support/diagnostics, /settings/support/logs and /settings/support/reporting and confirmed each renders its real panel heading and content, so the capability-resolution wait in Settings.tsx does not strand an admin on the loading state",
+    "read the admin network log for /api/availability-targets (200), /api/config/nodes (200), /api/discover (200) and /api/system/settings (200) with no 403 on any settings route",
+    "screenshotted the admin Availability checks panel at 375x812 to confirm the mobile layout renders the empty state rather than an error",
+    "counted performance.getEntriesByType('resource') on the admin Availability checks load: /api/availability-targets fired exactly once while /api/security/status fired three times, confirming the capability-resolution wait keys off the first resolve only and does not unmount and remount a live panel when the status is refreshed"
   ]
 }

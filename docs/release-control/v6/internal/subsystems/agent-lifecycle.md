@@ -5998,3 +5998,19 @@ status codes and payloads unchanged — an agent presenting insufficient
 credentials is refused exactly as before, it simply no longer emits a warn line
 per attempt. The security-privacy and api-contracts entries hold the
 authoritative description and proof.
+
+### Security status capability payload gained the admin-only settings tab fields
+
+`internal/api/` is a canonical reference in this contract's Extension Points, so
+this records the additive change made in
+`internal/api/security_status_capabilities.go`: the settings capability payload
+served by `GET /api/security/status` now also carries `availabilityRead`,
+`pulseIntelligenceRead`, `diagnosticsRead`, `systemLogsRead` and
+`reportingRead`, each derived from
+`canAccessAdminSurface(config.ScopeSettingsRead)`.
+
+No agent enrollment, report, ack, command-exec, or update route reads or emits
+these fields, and no agent-facing payload shape changes. Availability targets
+are the agentless probe surface, so the gate is on who may configure them, not
+on how a probe agent reports. The api-contracts entry holds the authoritative
+description and its proof.

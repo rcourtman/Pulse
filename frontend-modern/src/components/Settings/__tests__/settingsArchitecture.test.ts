@@ -351,8 +351,61 @@ describe('settings architecture guardrails', () => {
     // DEFAULT_SETTINGS_TAB points at the tab we just made blockable, so the
     // fallback must resolve a reachable tab rather than the hardcoded default,
     // or a non-admin lands back on the blocked route.
-    expect(settingsAccessSource).toContain('const fallbackTab = flatTabs()[0]?.id');
+    expect(settingsAccessSource).toContain('SETTINGS_FALLBACK_TAB_ORDER.find(');
     expect(settingsAccessSource).toContain('setActiveTab(fallbackTab)');
+  });
+
+  it('prefers a user-scoped tab over catalog order when the default is blocked', () => {
+    // Once every admin-only tab above it is gated, plain catalog order resolves
+    // to system-billing, so every non-admin session landed on the Plans page -
+    // an upgrade surface it cannot act on. General holds appearance, language
+    // and unit preferences, which are user-scoped, so it is the one tab any
+    // session can both see and use.
+    const fallbackOrder = settingsAccessSource.match(
+      /const SETTINGS_FALLBACK_TAB_ORDER[\s\S]*?\];/,
+    );
+    expect(fallbackOrder?.[0]).toContain('DEFAULT_SETTINGS_TAB');
+    expect(fallbackOrder?.[0]).toContain("'system-general'");
+    expect(fallbackOrder?.[0]).not.toContain("'system-billing'");
+    // system-general must stay ungated for that to hold.
+    const generalNavBlock = settingsNavCatalogSource.match(/id: 'system-general',[\s\S]*?\n {6}},/);
+    expect(generalNavBlock?.[0]).toBeTruthy();
+    expect(generalNavBlock?.[0]).not.toContain('requiredCapability');
+  });
+
+  it('gates every settings tab whose mount fetch is admin-only', () => {
+    // Each of these reads an endpoint that answers 403 to a non-admin on mount,
+    // verified against the routes in
+    // internal/api/security_status_capability_enforcement_test.go. An ungated
+    // entry here does not just render one dead page: it becomes a candidate for
+    // the blocked-route fallback, so it is where non-admin sessions land.
+    const adminOnlyTabs: Array<[string, string]> = [
+      ['monitoring-availability', 'availabilityRead'],
+      ['system-ai', 'pulseIntelligenceRead'],
+      ['system-ai-patrol', 'pulseIntelligenceRead'],
+      ['system-ai-assistant', 'pulseIntelligenceRead'],
+      ['support-diagnostics', 'diagnosticsRead'],
+      ['support-reporting', 'reportingRead'],
+      ['support-logs', 'systemLogsRead'],
+    ];
+
+    for (const [tab, capability] of adminOnlyTabs) {
+      const navBlock = settingsNavCatalogSource.match(
+        new RegExp(`id: '${tab}',[\\s\\S]*?requiredCapability: '${capability}',`),
+      );
+      expect(navBlock?.[0], `${tab} must be gated on ${capability}`).toBeTruthy();
+    }
+  });
+
+  it('withholds a capability-gated panel until the capability first resolves', () => {
+    // settingsCapabilities is unresolved until /api/security/status answers, so
+    // a gated tab is still in flatTabs on first paint. Without this guard the
+    // panel mounts and fires the very request the gate exists to prevent.
+    // securityStatus() === null is the "first resolve" half: refreshes must not
+    // unmount a live panel, and a failed request must not strand the tab.
+    expect(settingsSource).toContain(
+      'getSettingsNavItem(currentTab)?.requiredCapability &&\n      securityStatus() === null &&\n      securityStatusLoading()',
+    );
   });
 
   it('keeps the external-agent (MCP) connector setup findable from sidebar search', () => {

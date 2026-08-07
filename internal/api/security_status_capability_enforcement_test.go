@@ -77,6 +77,11 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		"authenticationRead",
 		"authenticationWrite",
 		"infrastructureRead",
+		"availabilityRead",
+		"pulseIntelligenceRead",
+		"diagnosticsRead",
+		"systemLogsRead",
+		"reportingRead",
 	} {
 		if caps[key] != false {
 			t.Fatalf("%s = %v for a non-admin session, want false", key, caps[key])
@@ -92,6 +97,17 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		// them, so a withheld infrastructureRead has to line up with a refusal.
 		{http.MethodGet, "/api/config/nodes"},
 		{http.MethodGet, "/api/system/settings"},
+		// The mount fetch behind each remaining admin-only settings tab. Every
+		// one of these was reachable from an ungated nav entry, and once
+		// Infrastructure was gated the blocked-route fallback started landing
+		// non-admin sessions on them rather than merely offering the link.
+		{http.MethodGet, "/api/availability-targets"},    // availabilityRead
+		{http.MethodGet, "/api/settings/ai"},             // pulseIntelligenceRead
+		{http.MethodGet, "/api/diagnostics"},             // diagnosticsRead
+		{http.MethodGet, "/api/logs/level"},              // systemLogsRead
+		{http.MethodGet, "/api/logs/stream"},             // systemLogsRead
+		{http.MethodGet, "/api/admin/reports/catalog"},   // reportingRead
+		{http.MethodGet, "/api/admin/reports/schedules"}, // reportingRead
 	} {
 		req := httptest.NewRequest(probe.method, probe.path, nil)
 		req.AddCookie(capabilitySessionCookie(t, "sso:outsider@example.com"))
@@ -114,9 +130,42 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "admin"))
-	for _, key := range []string{"apiAccessRead", "apiAccessWrite", "singleSignOnRead", "singleSignOnWrite", "infrastructureRead"} {
+	for _, key := range []string{
+		"apiAccessRead",
+		"apiAccessWrite",
+		"singleSignOnRead",
+		"singleSignOnWrite",
+		"infrastructureRead",
+		"availabilityRead",
+		"pulseIntelligenceRead",
+		"diagnosticsRead",
+		"systemLogsRead",
+		"reportingRead",
+	} {
 		if caps[key] != true {
 			t.Fatalf("%s = %v for the configured admin, want true", key, caps[key])
+		}
+	}
+
+	// The other direction: the admin the capabilities grant must not be refused
+	// by the routes those capabilities describe, or the fix has swung into
+	// hiding tabs from the only account that can use them. /api/diagnostics and
+	// the reporting routes are exercised for "not 403" rather than 200 because
+	// this router has no monitor wired and no reporting licence.
+	for _, probe := range []struct{ method, path string }{
+		{http.MethodGet, "/api/availability-targets"},
+		{http.MethodGet, "/api/settings/ai"},
+		{http.MethodGet, "/api/diagnostics"},
+		{http.MethodGet, "/api/logs/level"},
+		{http.MethodGet, "/api/admin/reports/catalog"},
+		{http.MethodGet, "/api/admin/reports/schedules"},
+	} {
+		req := httptest.NewRequest(probe.method, probe.path, nil)
+		req.AddCookie(capabilitySessionCookie(t, "admin"))
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusForbidden {
+			t.Fatalf("%s %s = 403 for the configured admin, contradicting the granted capability", probe.method, probe.path)
 		}
 	}
 }

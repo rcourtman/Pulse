@@ -10996,6 +10996,111 @@ func TestContract_SecurityStatusInfrastructureReadTracksSettingsReadScope(t *tes
 	}
 }
 
+// Availability checks, the three Pulse Intelligence tabs, Diagnostics & Health,
+// Data & Reports and System Logs all reach their data through
+// ensureSettingsScope(settings:read). Their nav entries were ungated, which
+// mattered more than one dead link each: once Infrastructure was gated the
+// blocked-route fallback resolves to "the first tab the session can reach", so
+// an ungated admin-only tab becomes the page every non-admin session lands on.
+func TestContract_SecurityStatusAdminOnlySettingsTabsTrackSettingsReadScope(t *testing.T) {
+	// Each capability paired with a mount fetch from the tab it gates.
+	surfaces := []struct {
+		capability string
+		read       func(securityStatusSettingsCapabilities) bool
+		routes     []string
+	}{
+		{
+			"availabilityRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.AvailabilityRead },
+			[]string{"/api/availability-targets"},
+		},
+		{
+			"pulseIntelligenceRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.PulseIntelligenceRead },
+			[]string{"/api/settings/ai"},
+		},
+		{
+			"diagnosticsRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.DiagnosticsRead },
+			[]string{"/api/diagnostics"},
+		},
+		{
+			"systemLogsRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.SystemLogsRead },
+			// /api/logs/stream shares the guard but is an open-ended SSE
+			// response, so probing it in the granted direction never returns.
+			// The refusal direction is covered in
+			// security_status_capability_enforcement_test.go, where it 403s.
+			[]string{"/api/logs/level"},
+		},
+		{
+			"reportingRead",
+			func(c securityStatusSettingsCapabilities) bool { return c.ReportingRead },
+			// Only the catalog: it is the panel's unconditional mount fetch and
+			// its guard chain ends in RequireScope(settings:read), so the scope
+			// is what decides. /api/admin/reports/schedules puts
+			// RequireLicenseFeature ahead of the scope check, so a token
+			// without the reporting licence is refused 402 before the scope is
+			// ever consulted - a real refusal, but not one that says anything
+			// about settings:read. Its non-admin refusal is pinned in
+			// security_status_capability_enforcement_test.go instead.
+			[]string{"/api/admin/reports/catalog"},
+		},
+	}
+
+	cases := []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{"settings read grants the admin-only settings tabs", []string{config.ScopeSettingsRead}, true},
+		{"monitoring read alone withholds them", []string{config.ScopeMonitoringRead}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rawToken := fmt.Sprintf("contract-admin-tabs-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
+			record := newTokenRecord(t, rawToken, tc.scopes, nil)
+			cfg := newTestConfigWithTokens(t, record)
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+			req.Header.Set("X-API-Token", rawToken)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+			}
+
+			var payload struct {
+				SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode security status payload: %v", err)
+			}
+
+			for _, surface := range surfaces {
+				if got := surface.read(payload.SettingsCapabilities); got != tc.want {
+					t.Fatalf("settingsCapabilities.%s = %v, want %v", surface.capability, got, tc.want)
+				}
+
+				// The capability is only honest if the tab's mount fetch agrees.
+				for _, path := range surface.routes {
+					probe := httptest.NewRequest(http.MethodGet, path, nil)
+					probe.Header.Set("X-API-Token", rawToken)
+					probeRec := httptest.NewRecorder()
+					router.Handler().ServeHTTP(probeRec, probe)
+					refused := probeRec.Code == http.StatusForbidden
+					if refused == tc.want {
+						t.Fatalf("GET %s = %d, which contradicts %s=%v",
+							path, probeRec.Code, surface.capability, tc.want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestContract_SecurityStatusSplitsAuditLogCapabilityFromSettingsRead(t *testing.T) {
 	prevAuthorizer := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&allowRulesAuthorizer{

@@ -56,6 +56,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Availability checks',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
+        // /api/availability-targets is RequireAdmin + settings:read and is the
+        // page's only data source, so an ungated entry rendered a non-admin an
+        // empty panel under a red "Admin privileges required" banner. Worse,
+        // once Infrastructure was gated this became the first tab the
+        // blocked-route fallback could reach, so it was where every non-admin
+        // session landed.
+        requiredCapability: 'availabilityRead',
       },
     ],
   },
@@ -63,17 +70,26 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     id: 'pulse-intelligence',
     label: 'Pulse Intelligence',
     items: [
+      // Provider & Models, Patrol and Assistant all read /api/settings/ai on
+      // mount. That route is RequirePermission, but its handler still calls
+      // ensureSettingsReadScope, so a non-admin is refused with or without an
+      // RBAC licence. Provider keys, model selection and Patrol autonomy are
+      // instance administration a non-admin cannot grant themselves, so these
+      // hide rather than render an inline gate — the same reasoning that keeps
+      // the paid-feature items below visible does not apply.
       {
         id: 'system-ai',
         label: 'Provider & Models',
         icon: Sparkles,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'pulseIntelligenceRead',
       },
       {
         id: 'system-ai-patrol',
         label: 'Patrol',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'pulseIntelligenceRead',
       },
       {
         id: 'system-billing',
@@ -96,6 +112,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         ],
         icon: Terminal,
         iconProps: { strokeWidth: 2 },
+        requiredCapability: 'pulseIntelligenceRead',
       },
     ],
   },
@@ -198,6 +215,9 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Activity,
         iconProps: { strokeWidth: 2 },
         hideWhenDemoMode: true,
+        // /api/diagnostics is RequireAdmin + settings:read and is read on
+        // mount, so an ungated entry left a non-admin on an empty page.
+        requiredCapability: 'diagnosticsRead',
       },
       {
         id: 'support-reporting',
@@ -209,6 +229,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         // revision): the panel renders its own upgrade gate, and hiding the
         // item made the capability undiscoverable — same rationale as Relay.
         hideWhenDemoMode: true,
+        // The paid gate and the admin gate answer different questions. A free
+        // install can act on a locked feature by upgrading, so that stays
+        // visible; a non-admin cannot grant themselves admin, and both
+        // /api/admin/reports/catalog (loaded unconditionally on mount) and
+        // /api/admin/reports/schedules refuse them.
+        requiredCapability: 'reportingRead',
       },
       {
         id: 'support-logs',
@@ -216,6 +242,9 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Terminal,
         iconProps: { strokeWidth: 2 },
         hideWhenDemoMode: true,
+        // /api/logs/level and the /api/logs/stream EventSource are both
+        // RequireAdmin + settings:read and both open on mount.
+        requiredCapability: 'systemLogsRead',
       },
     ],
   },

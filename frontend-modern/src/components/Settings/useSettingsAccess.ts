@@ -1,4 +1,4 @@
-import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
+import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesOrganizationSurfaces,
@@ -20,6 +20,14 @@ import { tabFeatureRequirements } from './settingsFeatureGates';
 import { getSettingsHeaderMeta } from './settingsHeaderMeta';
 import { getSettingsNavGroups, getSettingsNavItem } from './settingsNavCatalog';
 import { shouldBlockSettingsRouteItem, shouldHideSettingsNavItem } from './settingsNavVisibility';
+
+// Preference order for the blocked-route fallback, most specific first. Only
+// tabs that are reachable for the session are considered, so this is a
+// preference and not a guarantee.
+const SETTINGS_FALLBACK_TAB_ORDER: readonly SettingsTab[] = [
+  DEFAULT_SETTINGS_TAB,
+  'system-general',
+];
 
 interface UseSettingsAccessParams {
   activeTab: Accessor<SettingsTab>;
@@ -184,14 +192,25 @@ export function useSettingsAccess({
       }
       // The default tab is itself gated now (Infrastructure needs
       // settings:read), so falling back to it unconditionally would strand a
-      // non-admin session on a blocked tab. Prefer the first tab this session
-      // can actually reach.
-      const fallbackTab = flatTabs()[0]?.id ?? DEFAULT_SETTINGS_TAB;
+      // non-admin session on a blocked tab. Prefer the first reachable tab from
+      // an explicit order rather than whatever catalog order happens to put
+      // first: once every admin-only tab above it is gated, "first reachable"
+      // resolves to Plans, so every non-admin session landed on an upgrade page
+      // it cannot act on. General is the fallback because appearance, language
+      // and unit preferences are user-scoped, so it is the one tab any session
+      // can both see and use.
+      const reachable = flatTabs();
+      const fallbackTab =
+        SETTINGS_FALLBACK_TAB_ORDER.find((tab) => reachable.some((item) => item.id === tab)) ??
+        reachable[0]?.id ??
+        DEFAULT_SETTINGS_TAB;
       setActiveTab(fallbackTab);
     }
   });
 
-  async function loadSecurityStatus() {
+  let securityStatusRequest: Promise<void> | null = null;
+
+  async function fetchSecurityStatus() {
     setSecurityStatusLoading(true);
     try {
       const { apiFetch } = await import('@/utils/apiClient');
@@ -210,6 +229,30 @@ export function useSettingsAccess({
       setSecurityStatusLoading(false);
     }
   }
+
+  function loadSecurityStatus(): Promise<void> {
+    // Callers that refresh after a mutation still get a fresh request; this only
+    // joins one already in flight. Settings mounts several hooks that each want
+    // the status, and the panel gate below now blocks on securityStatusLoading,
+    // so a duplicate request is both wasted and a second window where a gated
+    // tab is stuck on the loading state.
+    if (securityStatusRequest) {
+      return securityStatusRequest;
+    }
+    const request = fetchSecurityStatus().finally(() => {
+      securityStatusRequest = null;
+    });
+    securityStatusRequest = request;
+    return request;
+  }
+
+  // The settings shell cannot render a capability-gated panel until this
+  // resolves, so owning the load here keeps that guarantee local. It used to
+  // ride on useInfrastructureSettingsState's onMount, which made the whole
+  // gating scheme depend on an unrelated hook still being constructed.
+  onMount(() => {
+    void loadSecurityStatus();
+  });
 
   return {
     securityStatus,

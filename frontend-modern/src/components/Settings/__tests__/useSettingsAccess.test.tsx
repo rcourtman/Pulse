@@ -116,6 +116,49 @@ describe('useSettingsAccess', () => {
     });
   });
 
+  it('falls back to General rather than Plans when the admin-only tabs are blocked', async () => {
+    // A non-admin session: Infrastructure, Availability checks, the three Pulse
+    // Intelligence tabs and the Support tabs are all gated on capabilities the
+    // session does not hold. Plain catalog order resolves that to
+    // system-billing, so every non-admin landed on an upgrade page it cannot
+    // act on. General is user-scoped (appearance, language, units), so it is
+    // the tab a non-admin can actually use.
+    const setActiveTabSpy = vi.fn();
+    const blockedForNonAdmin = new Set([
+      'organization-access',
+      'infrastructure-systems',
+      'monitoring-availability',
+      'system-ai',
+      'system-ai-patrol',
+      'system-ai-assistant',
+      'support-diagnostics',
+      'support-reporting',
+      'support-logs',
+      'api',
+      'security-auth',
+      'security-sso',
+      'security-roles',
+      'security-users',
+      'security-audit',
+      'security-webhooks',
+      'system-relay',
+    ]);
+    hasFeatureMock.mockReturnValue(false);
+    shouldBlockSettingsRouteItemMock.mockImplementation((tab: string) =>
+      blockedForNonAdmin.has(tab),
+    );
+
+    // Starts on a tab with no requiredCapability so the effect is not waiting
+    // on the security status; the gates being exercised are the fallback's, not
+    // the entry route's.
+    renderHarness(setActiveTabSpy, 'organization-access');
+
+    await waitFor(() => {
+      expect(setActiveTabSpy).toHaveBeenCalledWith('system-general');
+    });
+    expect(setActiveTabSpy).not.toHaveBeenCalledWith('system-billing');
+  });
+
   it('keeps direct feature-gated routes active when the panel owns the locked state', async () => {
     const setActiveTabSpy = vi.fn();
     hasFeatureMock.mockReturnValue(false);

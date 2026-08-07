@@ -19,7 +19,29 @@ type securityStatusSettingsCapabilities struct {
 	// which needs settings:write on top). Serving it lets the nav hide a page
 	// that would otherwise mount 15s and 30s pollers whose every request is
 	// refused and logged at warn level.
-	InfrastructureRead  bool `json:"infrastructureRead"`
+	InfrastructureRead bool `json:"infrastructureRead"`
+	// AvailabilityRead mirrors the RequireAdmin + settings:read gate on
+	// /api/availability-targets, the only data source behind Settings →
+	// Availability checks. The panel lists targets on mount, so an ungated nav
+	// entry put a non-admin on a page whose first request is refused.
+	AvailabilityRead bool `json:"availabilityRead"`
+	// PulseIntelligenceRead mirrors the gate on /api/settings/ai, which every
+	// Pulse Intelligence tab (Provider & Models, Patrol, Assistant) loads on
+	// mount. The route is RequirePermission, but the handler still calls
+	// ensureSettingsReadScope, so a non-admin is refused with or without RBAC.
+	PulseIntelligenceRead bool `json:"pulseIntelligenceRead"`
+	// DiagnosticsRead mirrors the RequireAdmin + settings:read gate on
+	// /api/diagnostics, which Settings → Diagnostics & Health reads on mount.
+	DiagnosticsRead bool `json:"diagnosticsRead"`
+	// SystemLogsRead mirrors the RequireAdmin + settings:read gate shared by
+	// /api/logs/level, /api/logs/stream and /api/logs/download, which
+	// Settings → System Logs reads and then streams on mount.
+	SystemLogsRead bool `json:"systemLogsRead"`
+	// ReportingRead mirrors the admin gate on /api/admin/reports/catalog and
+	// /api/admin/reports/schedules, which Settings → Data & Reports loads on
+	// mount. It describes admin reachability only; the paid-feature gate is
+	// separate and stays visible so the capability remains discoverable.
+	ReportingRead       bool `json:"reportingRead"`
 	APIAccessRead       bool `json:"apiAccessRead"`
 	APIAccessWrite      bool `json:"apiAccessWrite"`
 	AuthenticationRead  bool `json:"authenticationRead"`
@@ -255,21 +277,30 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	canManageRoles := snapshot.passesPrivilegedSessionGate() && canManageUsers
 
 	return securityStatusSettingsCapabilities{
-		InfrastructureRead:  canReadSettings,
-		APIAccessRead:       r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
-		APIAccessWrite:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
-		AuthenticationRead:  canReadSettings,
-		AuthenticationWrite: canAdminSettings,
-		SingleSignOnRead:    r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
-		SingleSignOnWrite:   r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
-		Roles:               canManageRoles,
-		Users:               canManageRoles,
-		AuditLog:            canReadAudit,
-		AuditWebhooksRead:   snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsRead),
-		AuditWebhooksWrite:  snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsWrite),
-		RelayRead:           canReadSettings,
-		RelayWrite:          canAdminSettings,
-		BillingAdmin:        r.canAccessPlatformAdminSurface(snapshot),
+		InfrastructureRead: canReadSettings,
+		// Every one of these five surfaces reaches its data through
+		// ensureSettingsScope(settings:read) — directly under RequireAdmin, or
+		// inside the handler for the RequirePermission routes — so they share
+		// the predicate rather than each re-deriving "is this caller an admin".
+		AvailabilityRead:      canReadSettings,
+		PulseIntelligenceRead: canReadSettings,
+		DiagnosticsRead:       canReadSettings,
+		SystemLogsRead:        canReadSettings,
+		ReportingRead:         canReadSettings,
+		APIAccessRead:         r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
+		APIAccessWrite:        r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
+		AuthenticationRead:    canReadSettings,
+		AuthenticationWrite:   canAdminSettings,
+		SingleSignOnRead:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
+		SingleSignOnWrite:     r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
+		Roles:                 canManageRoles,
+		Users:                 canManageRoles,
+		AuditLog:              canReadAudit,
+		AuditWebhooksRead:     snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsRead),
+		AuditWebhooksWrite:    snapshot.passesPrivilegedSessionGate() && r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceAuditLogs, config.ScopeSettingsWrite),
+		RelayRead:             canReadSettings,
+		RelayWrite:            canAdminSettings,
+		BillingAdmin:          r.canAccessPlatformAdminSurface(snapshot),
 	}
 }
 

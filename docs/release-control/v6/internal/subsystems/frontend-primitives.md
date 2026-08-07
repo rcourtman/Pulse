@@ -5828,3 +5828,56 @@ Pinned by the `infrastructure-systems` block assertion in
 `__tests__/infrastructureNavCapabilityGate.test.ts`, which also pins that
 neither gate fires before the security status resolves — hiding on an
 unresolved status would flash the default tab away from an admin on every load.
+
+### Every admin-only settings tab is capability-gated, and the fallback is ordered
+
+Gating `infrastructure-systems` changed the blocked-route fallback from "the
+hardcoded default" to "the first tab the session can reach". That turned every
+remaining ungated-but-admin-only nav entry from a dead link into a landing page:
+whichever one came first in catalog order is where non-admin sessions ended up.
+`monitoring-availability` was first, and its only data source
+(`/api/availability-targets`) is `RequireAdmin`, so a non-admin opening Settings
+was taken straight to an empty Availability checks panel under a red
+"Admin privileges required" banner.
+
+`frontend-modern/src/components/Settings/settingsNavCatalog.ts` now declares a
+`requiredCapability` on every entry whose mount fetch is admin-only:
+`monitoring-availability` → `availabilityRead`; `system-ai`,
+`system-ai-patrol` and `system-ai-assistant` → `pulseIntelligenceRead`;
+`support-diagnostics` → `diagnosticsRead`; `support-reporting` →
+`reportingRead`; `support-logs` → `systemLogsRead`. See the api-contracts entry
+for the served fields and the routes each one describes.
+
+These hide rather than render an inline gate, which is the deliberate opposite
+of the paid-feature items in the same catalog. A free install seeing a paid tab
+can act on it by upgrading, so hiding it would cost discoverability; a non-admin
+cannot grant themselves admin, so the door is only noise. `support-reporting`
+carries both gates, and they answer different questions: it stays visible
+without `advanced_reporting` and disappears without `reportingRead`.
+
+Two shell behaviours follow from the gating:
+
+- `useSettingsAccess` resolves the fallback from an explicit
+  `SETTINGS_FALLBACK_TAB_ORDER` (`DEFAULT_SETTINGS_TAB`, then `system-general`)
+  before falling through to catalog order. With every admin-only tab above it
+  gated, plain catalog order resolves to `system-billing`, so every non-admin
+  session landed on an upgrade page it cannot act on. `system-general` stays
+  ungated on purpose — appearance, language and unit preferences are
+  user-scoped — which is what makes it a usable landing tab.
+- `Settings.tsx` withholds `activeSettingsPanelEntry` for a tab that declares a
+  `requiredCapability` while `securityStatusLoading()` is true. Both nav gates
+  fail open until the status resolves, so without this the panel mounts on first
+  paint and fires the very request the gate exists to prevent. Tabs with no
+  `requiredCapability` are unaffected and render immediately.
+
+`useSettingsAccess` also owns the `/api/security/status` load
+(`onMount`, with in-flight requests deduplicated so refresh callers still get a
+fresh fetch). It previously rode on `useInfrastructureSettingsState`'s mount,
+which made the whole gating scheme depend on an unrelated hook still being
+constructed for every settings tab.
+
+Pinned by `__tests__/adminOnlySettingsNavGates.test.ts` (per-tab hide, block,
+grant and unresolved cases, plus an assertion that a reachable landing tab
+survives when every capability is withheld), the fallback case in
+`__tests__/useSettingsAccess.test.tsx`, and the source pins in
+`__tests__/settingsArchitecture.test.ts`.

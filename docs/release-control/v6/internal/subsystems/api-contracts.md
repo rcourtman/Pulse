@@ -9048,3 +9048,50 @@ pins that pairing directly — a scoped API token and a non-admin proxy session
 both still get 403, no warn line is emitted, and the refusal still leaves a
 debug-level trace — so a future attempt to quiet the log by relaxing enforcement
 fails the contract instead of passing it.
+
+### Security status serves a capability per admin-only settings tab
+
+`GET /api/security/status` adds `settingsCapabilities.availabilityRead`,
+`pulseIntelligenceRead`, `diagnosticsRead`, `systemLogsRead` and `reportingRead`
+(`internal/api/security_status_capabilities.go`). Each names the mount fetch of
+one settings surface and is derived from the same
+`canAccessAdminSurface(config.ScopeSettingsRead)` expression that fetch ends up
+enforcing:
+
+| Capability | Tab | Mount fetch | Guard |
+| --- | --- | --- | --- |
+| `availabilityRead` | Availability checks | `GET /api/availability-targets` | `RequireAdmin` + `settings:read` |
+| `pulseIntelligenceRead` | Provider & Models, Patrol, Assistant | `GET /api/settings/ai` | `RequirePermission` → `ensureSettingsReadScope` |
+| `diagnosticsRead` | Diagnostics & Health | `GET /api/diagnostics` | `RequireAdmin` + `settings:read` |
+| `systemLogsRead` | System Logs | `GET /api/logs/level`, `GET /api/logs/stream` | `RequireAdmin` + `settings:read` |
+| `reportingRead` | Data & Reports | `GET /api/admin/reports/catalog` | `RequirePermission` → `ensureAdminSession` → `settings:read` |
+
+`/api/settings/ai` is worth calling out because its outer middleware is
+`RequirePermission`, which defers to the authorizer when RBAC is licensed. It is
+still an admin surface: `HandleGetAISettings` calls `ensureSettingsReadScope`,
+which ends in `ensureAdminSession`, so the refusal holds with or without RBAC
+and `canAccessAdminSurface` is the honest mirror rather than
+`canAccessPermissionSurface`.
+
+The fields are additive and marshal as `false` for any session that cannot reach
+those routes, so clients that predate them are unaffected. They exist because
+`infrastructureRead` changed the blocked-route fallback to "the first tab the
+session can reach": an ungated admin-only tab stopped being one dead link and
+became the page every non-admin session lands on.
+
+`TestContract_SecurityStatusAdminOnlySettingsTabsTrackSettingsReadScope` pins
+both halves per capability — the served value for a `settings:read` token versus
+a `monitoring:read` token, and that the tab's mount fetch agrees with whichever
+value was served. `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` and
+`TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC` keep both directions
+honest against live responses for a non-admin session and the configured admin.
+
+Two routes are deliberately probed asymmetrically. `/api/logs/stream` is pinned
+only in the refusal direction: it shares the guard but answers an open-ended SSE
+body, so a granted-direction probe never returns.
+`/api/admin/reports/schedules` is likewise pinned only against a non-admin,
+because it places `RequireLicenseFeature` ahead of the scope check and so
+answers `402` to a scope-limited token before `settings:read` is ever consulted
+— a real refusal, but not one that says anything about the scope the capability
+describes. `/api/admin/reports/catalog` carries the scope pin instead, and it is
+also the panel's unconditional mount fetch.

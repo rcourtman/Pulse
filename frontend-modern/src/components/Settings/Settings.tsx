@@ -25,6 +25,7 @@ import { useSettingsSystemPanels } from './useSettingsSystemPanels';
 import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
+import { getSettingsNavItem } from './settingsNavCatalog';
 import { isRouteableSettingsLocation } from './settingsNavigationModel';
 import NotFound from '@/pages/NotFound';
 
@@ -155,6 +156,27 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
   });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
+    // A capability-gated panel must not mount before the capability first
+    // resolves. Panels fetch on mount and the nav gates fail open while
+    // settingsCapabilities is unresolved, so without this the tab is still in
+    // flatTabs on first paint, the panel mounts, and it fires the very request
+    // the gate exists to prevent - one 403 per settings visit, plus a flash of
+    // the error banner before the tab disappears.
+    //
+    // The condition is deliberately narrow on all three axes. Tabs with no
+    // requiredCapability render immediately, as they did before. Once a status
+    // has resolved this never fires again, so a refresh (SecurityAuthPanel and
+    // the password modal both reload the status after a change) cannot unmount
+    // a live panel and re-run its mount fetch. And if the status request fails
+    // outright, loading settles false with no status and the panel mounts
+    // rather than stranding the tab on a permanent loading state.
+    if (
+      getSettingsNavItem(currentTab)?.requiredCapability &&
+      securityStatus() === null &&
+      securityStatusLoading()
+    ) {
+      return null;
+    }
     if (!flatTabs().some((tab) => tab.id === currentTab)) {
       return null;
     }

@@ -176,10 +176,16 @@ describe('settingsNavigation integration scaffold', () => {
           runtimeCapabilitiesLoaded: () => true,
           hostedModeEnabled: false,
           settingsCapabilitiesResolved: true,
+          // Admin capabilities held: this pins the paid gate, which is the one
+          // that must not hide. support-reporting also carries an admin gate
+          // (reportingRead) - a free install can act on a locked feature by
+          // upgrading, but a non-admin cannot grant themselves admin, so the
+          // two gates answer different questions and both apply.
           settingsCapabilities: {
             auditLog: true,
             auditWebhooksRead: true,
             relayRead: true,
+            reportingRead: true,
             roles: true,
             users: true,
           },

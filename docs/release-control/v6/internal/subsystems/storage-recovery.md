@@ -5073,3 +5073,19 @@ Routine authorization refusals raised by `internal/api/auth.go` and
 `internal/api/auth_denial_signal.go`. No recovery or storage route, payload, or
 persisted shape changes. The security-privacy and api-contracts entries hold the
 authoritative description and proof.
+
+### Security status capability payload gained the admin-only settings tab fields
+
+`internal/api/` is a canonical reference in this contract's Extension Points, so
+this records the additive change made in
+`internal/api/security_status_capabilities.go`: the settings capability payload
+served by `GET /api/security/status` now also carries `availabilityRead`,
+`pulseIntelligenceRead`, `diagnosticsRead`, `systemLogsRead` and
+`reportingRead`, each derived from
+`canAccessAdminSurface(config.ScopeSettingsRead)`.
+
+No recovery or storage route, payload, or persisted shape changes. The
+Recovery settings tab keeps its existing gating, and the diagnostics bundle and
+log download routes the new fields describe are unchanged — only the client's
+decision to mount their tabs moves. The api-contracts entry holds the
+authoritative description and its proof.
