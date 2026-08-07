@@ -1,7 +1,7 @@
-name: install.sh Smoke (Published Release)
+name: install.sh Smoke (Release Assets)
 
 # End-to-end smoke that exercises the documented Proxmox-LXC / systemd
-# install flow against the published GitHub Release. Across v6 rc.1 → rc.5
+# install flow against staged or published GitHub Release assets. Across v6 rc.1 → rc.5
 # the published install.sh asset was actually the agent installer (rejecting
 # --version) and the README's pinned signature key did not match the
 # pipeline's actual signing key, so anyone running the secure-install
@@ -17,7 +17,8 @@ name: install.sh Smoke (Published Release)
 #
 # What it does:
 # 1. Downloads install.sh + install.sh.sshsig + the linux-amd64 tarball
-#    from the published release URL (not the local release/ dir).
+#    from the authenticated draft-release API during a release cut, or from
+#    the public release URL during a manual post-publication check.
 # 2. Extracts the README's pinned ed25519 key and runs the README's exact
 #    ssh-keygen -Y verify command. Catches README/key drift.
 # 3. Boots a privileged systemd Debian 12 container, runs
@@ -40,7 +41,17 @@ on:
         required: true
         type: string
       repository:
-        description: 'owner/repo to pull the published release from. Defaults to the workflow repository.'
+        description: 'owner/repo to pull the release from. Defaults to the workflow repository.'
+        required: false
+        type: string
+        default: ''
+      asset_source:
+        description: 'Asset source: staged for a draft release, or published for the public release URL.'
+        required: false
+        type: string
+        default: 'published'
+      release_id:
+        description: 'Draft release ID. Required when asset_source is staged.'
         required: false
         type: string
         default: ''
@@ -56,6 +67,19 @@ on:
         type: string
       repository:
         description: 'owner/repo to pull from (leave blank for current repo)'
+        required: false
+        type: string
+        default: ''
+      asset_source:
+        description: 'Asset source'
+        required: false
+        type: choice
+        options:
+          - published
+          - staged
+        default: published
+      release_id:
+        description: 'Draft release ID (required for staged assets)'
         required: false
         type: string
         default: ''
@@ -80,6 +104,8 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_REPO: ${{ inputs.repository }}
+          INPUT_ASSET_SOURCE: ${{ inputs.asset_source }}
+          INPUT_RELEASE_ID: ${{ inputs.release_id }}
           DEFAULT_REPO: ${{ github.repository }}
         run: |
           # workflow_call and workflow_dispatch both require tag + version,
@@ -91,35 +117,78 @@ jobs:
             exit 1
           fi
           repo="${INPUT_REPO:-$DEFAULT_REPO}"
+          asset_source="${INPUT_ASSET_SOURCE:-published}"
+          release_id="${INPUT_RELEASE_ID:-}"
+          case "$asset_source" in
+            published) ;;
+            staged)
+              if [ -z "$release_id" ]; then
+                echo "::error::release_id is required when asset_source=staged"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::asset_source must be staged or published, got: $asset_source"
+              exit 1
+              ;;
+          esac
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "Resolved: tag=$tag version=$version repo=$repo"
+          echo "asset_source=$asset_source" >> "$GITHUB_OUTPUT"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "Resolved: tag=$tag version=$version repo=$repo asset_source=$asset_source release_id=${release_id:-none}"
 
-      - name: Download published install.sh + sshsig + linux-amd64 tarball
+      - name: Download install.sh + sshsig + linux-amd64 tarball
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.inputs.outputs.tag }}
           REPO: ${{ steps.inputs.outputs.repo }}
+          ASSET_SOURCE: ${{ steps.inputs.outputs.asset_source }}
+          RELEASE_ID: ${{ steps.inputs.outputs.release_id }}
         run: |
           set -euo pipefail
           mkdir -p smoke-workspace
           cd smoke-workspace
-          base="https://github.com/${REPO}/releases/download/${TAG}"
-          echo "Pulling from ${base}/"
-
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
-            -o install.sh "${base}/install.sh"
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
-            -o install.sh.sshsig "${base}/install.sh.sshsig"
-
           tarball="pulse-${TAG}-linux-amd64.tar.gz"
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
-            -o "${tarball}" "${base}/${tarball}"
-          # The .sshsig sidecar must travel with the tarball: install.sh
-          # --archive now requires it for signature verification before
-          # extraction, closing the local-tarball-swap window.
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
-            -o "${tarball}.sshsig" "${base}/${tarball}.sshsig"
+          assets=(install.sh install.sh.sshsig "${tarball}" "${tarball}.sshsig")
+
+          if [ "$ASSET_SOURCE" = "staged" ]; then
+            assets_json=$(mktemp)
+            gh api --paginate "repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100" \
+              | jq -s 'add' > "$assets_json"
+
+            release_state=$(gh api "repos/${REPO}/releases/${RELEASE_ID}" \
+              --jq '[.tag_name, (.draft | tostring), (.published_at // "")] | @tsv')
+            actual_tag=$(awk -F '\t' '{print $1}' <<<"$release_state")
+            is_draft=$(awk -F '\t' '{print $2}' <<<"$release_state")
+            published_at=$(awk -F '\t' '{print $3}' <<<"$release_state")
+            if [ "$actual_tag" != "$TAG" ] || [ "$is_draft" != "true" ] || [ -n "$published_at" ]; then
+              echo "::error::Release ${RELEASE_ID} is not the unpublished draft for ${TAG}."
+              exit 1
+            fi
+
+            for asset_name in "${assets[@]}"; do
+              asset_id=$(jq -r --arg name "$asset_name" \
+                'map(select(.name == $name)) | if length == 1 then .[0].id else empty end' \
+                "$assets_json")
+              if [ -z "$asset_id" ]; then
+                echo "::error::Draft release ${RELEASE_ID} does not contain exactly one ${asset_name} asset."
+                exit 1
+              fi
+              gh api \
+                -H 'Accept: application/octet-stream' \
+                "repos/${REPO}/releases/assets/${asset_id}" > "$asset_name"
+            done
+            rm -f "$assets_json"
+          else
+            base="https://github.com/${REPO}/releases/download/${TAG}"
+            echo "Pulling from ${base}/"
+            for asset_name in "${assets[@]}"; do
+              curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+                -o "$asset_name" "${base}/${asset_name}"
+            done
+          fi
 
           echo "Downloaded:"
           ls -la

@@ -1,12 +1,16 @@
 name: Release Helm Chart to GitHub Pages
 run-name: Release Helm Chart ${{ inputs.chart_version }}
 
-# Triggered automatically when publish-docker.yml completes, or manually
-# We wait for Docker publish because the smoke test pulls the Docker image
+# Called explicitly from create-release.yml after the exact Docker image is
+# pullable, or dispatched manually for a governed backfill. The release
+# pipeline awaits this workflow before customer activation.
 on:
-  workflow_run:
-    workflows: ["Publish Docker Images"]
-    types: [completed]
+  workflow_call:
+    inputs:
+      chart_version:
+        description: "Chart version (e.g., 6.2.0-rc.9)."
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       chart_version:
@@ -19,31 +23,11 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    # Only run if workflow_dispatch OR if workflow_run completed successfully
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Determine chart version
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.chart_version }}"
-          else
-            RUN_ID="${{ github.event.workflow_run.id }}"
-            echo "Extracting version from workflow run ${RUN_ID}..."
-
-            WORKFLOW_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID})
-            TAG=$(echo "$WORKFLOW_DATA" | jq -r '.display_title' | grep -oP 'v?\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?' || echo "")
-
-            if [ -z "$TAG" ]; then
-              echo "::error::Could not extract version from workflow_run"
-              exit 1
-            fi
-
-            VERSION="${TAG#v}"
-          fi
-
+          VERSION="${{ inputs.chart_version }}"
           if [ -z "$VERSION" ]; then
             echo "::error::chart_version input is required"
             exit 1
@@ -70,12 +54,12 @@ jobs:
             --purpose "Helm pages release" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Check out governed release branch
+      - name: Check out validated release tag
         env:
-          REQUIRED_BRANCH: ${{ steps.release_line.outputs.required_branch }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
-          git checkout -B "$REQUIRED_BRANCH" "origin/$REQUIRED_BRANCH"
+          git checkout --detach "refs/tags/${RELEASE_TAG}"
 
       - name: Configure Git
         run: |
@@ -100,27 +84,13 @@ jobs:
           helm-docs --version
 
       - name: Generate chart documentation
-        env:
-          REQUIRED_BRANCH: ${{ steps.release_line.outputs.required_branch }}
         run: |
           set -euo pipefail
           cd deploy/helm/pulse
           helm-docs
-
-          # Commit if README changed
-          if ! git diff --quiet README.md; then
-            git config user.name "$GITHUB_ACTOR"
-            git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-            git add README.md
-            git commit -m "Auto-update Helm chart documentation"
-            git pull --rebase origin "$REQUIRED_BRANCH"
-            git push origin HEAD:"$REQUIRED_BRANCH"
-          fi
           cd ../../..
 
       - name: Update Chart.yaml version
-        env:
-          REQUIRED_BRANCH: ${{ steps.release_line.outputs.required_branch }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
@@ -128,16 +98,6 @@ jobs:
             --chart deploy/helm/pulse/Chart.yaml \
             --version "$VERSION" \
             --repo "${{ github.repository }}"
-
-          # Commit if Chart.yaml changed
-          if ! git diff --quiet deploy/helm/pulse/Chart.yaml; then
-            git config user.name "$GITHUB_ACTOR"
-            git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-            git add deploy/helm/pulse/Chart.yaml
-            git commit -m "Auto-update Helm chart version to $VERSION"
-            git pull --rebase origin "$REQUIRED_BRANCH"
-            git push origin HEAD:"$REQUIRED_BRANCH"
-          fi
 
       - name: Validate Helm chart
         run: |
@@ -305,6 +265,30 @@ jobs:
             git -C "${workdir}/gh-pages" commit -m "Update Helm chart index for ${VERSION}"
             git -C "${workdir}/gh-pages" push origin HEAD:gh-pages
           fi
+
+          public_repo="https://rcourtman.github.io/Pulse"
+          public_ready=false
+          for attempt in $(seq 1 12); do
+            public_index="${workdir}/public-index.yaml"
+            if curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors \
+                 -o "$public_index" "${public_repo}/index.yaml" && \
+               grep -q "version: ${VERSION}" "$public_index"; then
+              helm repo remove pulse-public >/dev/null 2>&1 || true
+              helm repo add pulse-public "$public_repo" --force-update
+              helm repo update pulse-public
+              if helm show chart pulse-public/pulse --version "$VERSION" >/dev/null; then
+                public_ready=true
+                break
+              fi
+            fi
+            echo "Public Helm repository has not exposed ${VERSION} yet (attempt ${attempt}/12)."
+            sleep 5
+          done
+          if [ "$public_ready" != "true" ]; then
+            echo "::error::Public Helm repository did not expose chart ${VERSION}."
+            exit 1
+          fi
+          echo "[OK] Public Helm repository serves pulse ${VERSION}."
 
       - name: Mark Helm chart release as pre-release (avoid latest override)
         env:

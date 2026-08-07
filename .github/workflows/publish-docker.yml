@@ -51,7 +51,7 @@ jobs:
           IS_PRERELEASE="false"
           if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
             IS_PRERELEASE="true"
-            echo "Detected prerelease version - will NOT update :latest tag"
+            echo "Detected prerelease version"
           fi
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -129,10 +129,8 @@ jobs:
           tags: |
             rcourtman/pulse:${{ steps.version.outputs.tag }}
             rcourtman/pulse:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse:latest' || '' }}
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.tag }}
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse:latest', github.repository_owner) || '' }}
 
       - name: Attest Pulse server image on Docker Hub
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
@@ -169,10 +167,8 @@ jobs:
           tags: |
             rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}
             rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && 'rcourtman/pulse-control-plane:latest' || '' }}
             ghcr.io/${{ github.repository_owner }}/pulse-control-plane:${{ steps.version.outputs.tag }}
             ghcr.io/${{ github.repository_owner }}/pulse-control-plane:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse-control-plane:latest', github.repository_owner) || '' }}
 
       - name: Attest Pulse control-plane image on Docker Hub
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
@@ -192,26 +188,16 @@ jobs:
 
       - name: Output image information
         run: |
-          IS_PRERELEASE="${{ steps.version.outputs.is_prerelease }}"
-          echo "✅ Docker images published successfully!"
+          echo "✅ Exact-version Docker images staged successfully!"
           echo ""
           echo "Server images (linux/amd64, linux/arm64):"
           echo "  - rcourtman/pulse:${{ steps.version.outputs.tag }}"
           echo "  - rcourtman/pulse:${{ steps.version.outputs.version }}"
-          if [ "$IS_PRERELEASE" != "true" ]; then
-            echo "  - rcourtman/pulse:latest"
-          fi
           echo ""
           echo "Control-plane images (linux/amd64, linux/arm64):"
           echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.tag }}"
           echo "  - rcourtman/pulse-control-plane:${{ steps.version.outputs.version }}"
-          if [ "$IS_PRERELEASE" != "true" ]; then
-            echo "  - rcourtman/pulse-control-plane:latest"
-          fi
           echo ""
           echo "Pulse Agent binaries ship as release assets, not as a Docker image."
           echo "See the GitHub release page for pulse-agent-{darwin,freebsd,linux,windows}-{amd64,arm64,...}."
-          echo ""
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            echo "Note: :latest tags were NOT updated (this is a prerelease)"
-          fi
+          echo "Floating aliases are promoted separately at the activation barrier."

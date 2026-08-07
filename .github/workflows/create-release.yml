@@ -1170,44 +1170,13 @@ jobs:
           release_upload_with_retry "${TAG}" release/install-docker.sh --clobber
           release_upload_with_retry "${TAG}" release/pulse-auto-update.sh --clobber
 
-      - name: Publish release
-        if: ${{ github.event.inputs.draft_only != 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          RELEASE_ID="${{ steps.create_release.outputs.release_id }}"
-          IS_PRERELEASE="${{ needs.prepare.outputs.is_prerelease }}"
-
-          if [ "$IS_PRERELEASE" = "true" ]; then
-            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-              -X PATCH -F draft=false -F make_latest=false
-            echo "[OK] Published as prerelease: ${TAG}"
-          else
-            # 'latest' belongs to the highest stable semver overall. A
-            # maintenance cut of an older line (e.g. v5.1.36 after v6 GA)
-            # publishes without stealing the latest marker from the current
-            # line.
-            HIGHEST_STABLE=$(gh api --paginate "repos/${{ github.repository }}/tags" --jq '.[].name' \
-              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-            if [ "$TAG" = "$HIGHEST_STABLE" ]; then
-              gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-                -X PATCH -F draft=false -F make_latest=true
-              echo "[OK] Published as latest: ${TAG}"
-            else
-              gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-                -X PATCH -F draft=false -F make_latest=false
-              echo "[OK] Published WITHOUT latest marker: ${TAG} (highest stable is ${HIGHEST_STABLE})"
-            fi
-          fi
-
-      - name: Skip publish (draft only)
+      - name: Stop after staging (draft only)
         if: ${{ github.event.inputs.draft_only == 'true' }}
         run: 'echo "Draft-only mode: ${{ steps.create_release.outputs.release_url }}"'
 
       - name: Summary
         run: |
-          echo "[SUCCESS] Release published!"
+          echo "[SUCCESS] Release assets staged behind an unpublished draft."
           echo "Release: ${{ needs.prepare.outputs.tag }}"
           echo "URL: ${{ steps.create_release.outputs.release_url }}"
 
@@ -1295,30 +1264,30 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
       release_id: ${{ needs.create_release.outputs.release_id }}
-      draft: ${{ github.event.inputs.draft_only == 'true' }}
+      draft: true
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
       candidate_manifest_artifact: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}
 
-  # End-to-end install.sh smoke against the just-published release. Catches
+  # End-to-end install.sh smoke against the staged draft release. Catches
   # runtime regressions in the documented Proxmox-LXC / systemd install flow
   # that the build-time validate-release.sh checks cannot see: the script
   # parses fine, signs cleanly, but fails to actually install or boot Pulse.
   # This class of regression broke silently across v6 rc.1 → rc.5 because no
   # existing gate exercised the documented secure-install commands against
-  # the published GitHub Release URL.
+  # the exact GitHub Release asset bytes before the customer notification.
   #
   # Gated on validate_release_assets success — the smoke depends on the
-  # published asset bundle being well-formed, so we only run it after the
+  # staged asset bundle being well-formed, so we only run it after the
   # cheaper content checks pass. Skipped for the historical-backfill path
   # since that flow re-uploads to an already-published release and the
-  # smoke would just re-confirm what hasn't changed. Also skipped for
-  # draft-only runs because draft release assets are not available at the
-  # public /releases/download/<tag>/ URL this smoke intentionally exercises.
+  # smoke would just re-confirm what hasn't changed. Draft-only runs stop after
+  # validation and do not enter the customer activation sequence.
   install_sh_smoke:
     needs:
       - prepare
+      - create_release
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
     uses: ./.github/workflows/install-sh-smoke.yml
@@ -1327,12 +1296,15 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
       repository: ${{ github.repository }}
+      asset_source: staged
+      release_id: ${{ needs.create_release.outputs.release_id }}
 
   update_stable_demo:
     needs:
       - prepare
-      - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
+      - create_release
+      - release_readiness
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.prepare.outputs.is_prerelease != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     permissions:
       contents: read
     uses: ./.github/workflows/update-demo-server.yml
@@ -1341,6 +1313,7 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       target: stable
       verify_only: false
+      release_id: ${{ needs.create_release.outputs.release_id }}
 
   # Publish the Helm chart for this release. publish-helm-chart.yml also
   # listens for `release: published` events directly, but the create_release
@@ -1366,20 +1339,52 @@ jobs:
       chart_version: ${{ needs.prepare.outputs.version }}
       app_version: ${{ needs.prepare.outputs.version }}
 
-  # Defensive backup to promote-floating-tags.yml's workflow_run chain off
-  # publish-docker.yml. The chain works when publish-docker succeeds, but
-  # when it fails the floating tags don't advance and customers pulling
-  # rcourtman/pulse:latest stay on whatever the previous successful release
-  # tagged. Calling promote-floating-tags as workflow_call after
-  # validate_release_assets and publish_docker succeed guarantees the floating
-  # tags advance. Draft-only runs must not promote floating tags because the
-  # release is still in private promotion state.
-  promote_floating_tags:
+  # Stage and prove the customer-facing Helm Pages repository explicitly.
+  # The legacy workflow_run chain was asynchronous and could leave the public
+  # index behind an already-visible GitHub release.
+  publish_helm_pages:
     needs:
       - prepare
       - publish_docker
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+      - publish_helm_chart
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/helm-pages.yml
+    secrets: inherit
+    with:
+      chart_version: ${{ needs.prepare.outputs.version }}
+
+  # One immutable-readiness gate joins every exact-version path before any
+  # mutable customer pointer moves. v6 additionally requires the staged Pro
+  # image and signed packet; older release lines have no private Pro job.
+  release_readiness:
+    needs:
+      - prepare
+      - create_release
+      - publish_docker
+      - validate_release_assets
+      - install_sh_smoke
+      - publish_helm_chart
+      - publish_helm_pages
+      - stage_private_pro_runtime
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.publish_helm_pages.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Confirm immutable release readiness
+        run: echo "All exact-version release paths are ready for customer activation."
+
+  # Mutable image aliases move only after the exact-version images and staged
+  # release assets have passed validation. promote-floating-tags.yml has no
+  # implicit workflow_run trigger, so this explicit call is the sole owner of
+  # rc/latest/major/minor pointers for both runtime images.
+  promote_floating_tags:
+    needs:
+      - prepare
+      - release_readiness
+    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -1389,26 +1394,21 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
 
-  # Customer-facing v6 public releases must not outrun the private Pulse Pro
-  # runtime path. The public release is the immutable source tag; this job
-  # dispatches the private build against that exact tag, waits for the R2 and
-  # Docker publication workflow to pass, then dispatches the pulse-pro live
-  # promotion workflow and waits for the signed packet to update the license
-  # broker. A failure here fails the release pipeline instead of leaving paid
-  # customers on a stale private manifest. Rerunning this job after a
-  # promotion-only failure is safe: the R2 prefix is derived from run-stable
-  # values and the build is dispatched with reuse_existing_packet=true, so the
-  # enterprise side validates the packet the earlier attempt uploaded, skips
-  # the rebuild, and only the promotion re-executes.
-  publish_private_pro_runtime:
+  # Stage the exact private Pro image and signed R2 packet as soon as the draft
+  # release/tag exist. This slow build runs in parallel with public artifact
+  # validation, but does not update the live paid-runtime broker manifest.
+  stage_private_pro_runtime:
     needs:
       - prepare
       - create_release
     if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 120
+    outputs:
+      r2_prefix: ${{ steps.publish.outputs.r2_prefix }}
     steps:
-      - name: Dispatch and verify private Pro runtime publication
+      - name: Dispatch and verify private Pro runtime staging
+        id: publish
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -1500,6 +1500,7 @@ jobs:
             exit 1
           fi
           r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
+          echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"
           build_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           echo "Dispatching private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
           gh workflow run build-pro-release.yml \
@@ -1516,15 +1517,195 @@ jobs:
             -f allow_stable_ga_publish="${allow_ga_publish}"
           wait_for_workflow rcourtman/pulse-enterprise "Build Pro Release" main "${build_started_at}" "private Pro build" 7200
 
+  # The paid-runtime broker is a mutable customer pointer, so promote it only
+  # after every exact-version public artifact and staged install path is ready.
+  # A rerun reuses the run-stable R2 prefix produced by the staging job.
+  promote_private_pro_runtime:
+    needs:
+      - prepare
+      - release_readiness
+      - stage_private_pro_runtime
+    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' && needs.stage_private_pro_runtime.result == 'success' && startsWith(needs.prepare.outputs.version, '6.') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Promote and verify private Pro runtime
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::WORKFLOW_PAT is required to dispatch private Pro promotion workflows."
+            exit 1
+          fi
+          if [[ -z "${R2_PREFIX:-}" ]]; then
+            echo "::error::Private Pro staging did not return an R2 prefix."
+            exit 1
+          fi
+
+          wait_for_workflow() {
+            local repo="$1"
+            local workflow="$2"
+            local branch="$3"
+            local started_at="$4"
+            local label="$5"
+            local timeout_seconds="$6"
+            local deadline=$((SECONDS + timeout_seconds))
+            local run_id=""
+
+            while (( SECONDS < deadline )); do
+              if [[ -z "${run_id}" ]]; then
+                run_id="$(
+                  gh run list \
+                    --repo "${repo}" \
+                    --workflow "${workflow}" \
+                    --event workflow_dispatch \
+                    --branch "${branch}" \
+                    --limit 50 \
+                    --json databaseId,createdAt \
+                    --jq "map(select(.createdAt >= \"${started_at}\")) | sort_by(.createdAt) | reverse | .[0].databaseId // \"\""
+                )"
+                if [[ -n "${run_id}" ]]; then
+                  echo "Watching ${label} run ${run_id} in ${repo}."
+                else
+                  echo "Waiting for ${label} workflow run to appear..."
+                fi
+              fi
+
+              if [[ -n "${run_id}" ]]; then
+                run_state="$(
+                  gh run view "${run_id}" \
+                    --repo "${repo}" \
+                    --json status,conclusion,url \
+                    --jq '[.status, (.conclusion // ""), .url] | @tsv'
+                )"
+                status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
+                conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
+                url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
+                echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
+                if [[ "${status}" == "completed" ]]; then
+                  if [[ "${conclusion}" == "success" ]]; then
+                    echo "[OK] ${label} completed successfully: ${url}"
+                    return 0
+                  fi
+                  echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
+                  return 1
+                fi
+              fi
+
+              sleep 30
+            done
+
+            echo "::error::Timed out waiting for ${label} after ${timeout_seconds}s."
+            return 1
+          }
+
+          allow_ga_publish=false
+          if [[ "${IS_PRERELEASE}" != "true" ]]; then
+            allow_ga_publish=true
+          fi
           promote_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${r2_prefix}."
+          echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX}."
           gh workflow run promote-paid-runtime-release.yml \
             --repo rcourtman/pulse-pro \
             --ref main \
             -f version="${VERSION}" \
-            -f r2_prefix="${r2_prefix}" \
+            -f r2_prefix="${R2_PREFIX}" \
             -f allow_ga_prefix="${allow_ga_publish}"
           wait_for_workflow rcourtman/pulse-pro "Promote Paid Runtime Release" main "${promote_started_at}" "private Pro live promotion" 3600
+
+  # Customer activation is one final publication barrier. All exact-version
+  # artifacts, mutable image aliases, and the live paid-runtime manifest are
+  # ready before the GitHub release becomes visible. If public asset reads fail
+  # immediately after activation, quarantine the release back to draft.
+  activate_release:
+    needs:
+      - prepare
+      - create_release
+      - release_readiness
+      - update_stable_demo
+      - promote_floating_tags
+      - promote_private_pro_runtime
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.promote_floating_tags.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.promote_private_pro_runtime.result == 'success' ) && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.prepare.outputs.is_prerelease == 'true' || needs.update_stable_demo.result == 'success' ) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the fully staged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_ID: ${{ needs.create_release.outputs.release_id }}
+          EXPECTED_COMMIT: ${{ needs.create_release.outputs.target_commitish }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+        run: |
+          set -euo pipefail
+          release_json=$(mktemp)
+          publish_payload=$(mktemp)
+          quarantine_payload=$(mktemp)
+          activated=false
+
+          quarantine_on_error() {
+            if [ "$activated" = "true" ]; then
+              echo "::warning::Public asset verification failed; returning ${TAG} to draft quarantine."
+              gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+                -X PATCH --input "$quarantine_payload" >/dev/null || true
+            fi
+          }
+          trap quarantine_on_error ERR
+
+          gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" > "$release_json"
+          actual_tag=$(jq -r '.tag_name // ""' "$release_json")
+          actual_commit=$(jq -r '.target_commitish // ""' "$release_json")
+          actual_draft=$(jq -r '.draft' "$release_json")
+          published_at=$(jq -r '.published_at // ""' "$release_json")
+          actual_prerelease=$(jq -r '.prerelease' "$release_json")
+          if [ "$actual_tag" != "$TAG" ] || [ "$actual_commit" != "$EXPECTED_COMMIT" ] || \
+             [ "$actual_draft" != "true" ] || [ -n "$published_at" ] || \
+             [ "$actual_prerelease" != "$IS_PRERELEASE" ]; then
+            echo "::error::Release ${RELEASE_ID} no longer matches the staged activation candidate."
+            exit 1
+          fi
+
+          make_latest=false
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            highest_stable=$(gh api --paginate "repos/${{ github.repository }}/tags" --jq '.[].name' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            if [ "$TAG" = "$highest_stable" ]; then
+              make_latest=true
+            fi
+          fi
+          jq -n --arg make_latest "$make_latest" \
+            '{draft: false, make_latest: $make_latest}' > "$publish_payload"
+          jq -n '{draft: true, make_latest: "false"}' > "$quarantine_payload"
+
+          gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+            -X PATCH --input "$publish_payload" > "$release_json"
+          activated=true
+          if [ "$(jq -r '.draft' "$release_json")" != "false" ] || \
+             [ -z "$(jq -r '.published_at // ""' "$release_json")" ]; then
+            echo "::error::GitHub did not publish release ${RELEASE_ID}."
+            exit 1
+          fi
+
+          base="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          for asset_name in \
+            checksums.txt \
+            install.sh \
+            "pulse-${TAG}-linux-amd64.tar.gz"; do
+            curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+              -o /dev/null "${base}/${asset_name}"
+          done
+
+          trap - ERR
+          rm -f "$release_json" "$publish_payload" "$quarantine_payload"
+          echo "[OK] Activated ${TAG} after every customer-facing release path was ready."
 
   release_verdict:
     name: Definitive Release Verdict
@@ -1538,8 +1719,12 @@ jobs:
       - install_sh_smoke
       - update_stable_demo
       - publish_helm_chart
+      - publish_helm_pages
+      - release_readiness
       - promote_floating_tags
-      - publish_private_pro_runtime
+      - stage_private_pro_runtime
+      - promote_private_pro_runtime
+      - activate_release
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     steps:
@@ -1556,8 +1741,12 @@ jobs:
           INSTALL_RESULT: ${{ needs.install_sh_smoke.result }}
           DEMO_RESULT: ${{ needs.update_stable_demo.result }}
           HELM_RESULT: ${{ needs.publish_helm_chart.result }}
+          HELM_PAGES_RESULT: ${{ needs.publish_helm_pages.result }}
+          READINESS_RESULT: ${{ needs.release_readiness.result }}
           FLOATING_RESULT: ${{ needs.promote_floating_tags.result }}
-          PRIVATE_PRO_RESULT: ${{ needs.publish_private_pro_runtime.result }}
+          PRIVATE_PRO_STAGE_RESULT: ${{ needs.stage_private_pro_runtime.result }}
+          PRIVATE_PRO_PROMOTION_RESULT: ${{ needs.promote_private_pro_runtime.result }}
+          ACTIVATION_RESULT: ${{ needs.activate_release.result }}
         run: |
           set -euo pipefail
           require_result() {
@@ -1572,16 +1761,20 @@ jobs:
 
           require_result "release smoke" "$SMOKE_RESULT" success
           require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success
-          require_result "release assembly" "$CREATE_RESULT" success
+          require_result "release staging" "$CREATE_RESULT" success
           require_result "release asset validation" "$VALIDATE_RESULT" success
 
           if [ "${DRAFT_ONLY:-false}" != "true" ]; then
-            require_result "Docker publication" "$DOCKER_RESULT" success
-            require_result "install.sh smoke" "$INSTALL_RESULT" success
-            require_result "Helm publication" "$HELM_RESULT" success
+            require_result "exact-version Docker staging" "$DOCKER_RESULT" success
+            require_result "staged install.sh smoke" "$INSTALL_RESULT" success
+            require_result "Helm staging" "$HELM_RESULT" success
+            require_result "public Helm repository staging" "$HELM_PAGES_RESULT" success
+            require_result "immutable release readiness" "$READINESS_RESULT" success
             require_result "floating-tag promotion" "$FLOATING_RESULT" success
+            require_result "release activation" "$ACTIVATION_RESULT" success
             if [[ "$VERSION" == 6.* ]]; then
-              require_result "private Pro publication" "$PRIVATE_PRO_RESULT" success
+              require_result "private Pro staging" "$PRIVATE_PRO_STAGE_RESULT" success
+              require_result "private Pro live promotion" "$PRIVATE_PRO_PROMOTION_RESULT" success
               if [ "$IS_PRERELEASE" != "true" ]; then
                 require_result "stable demo deployment and verification" "$DEMO_RESULT" success
               fi

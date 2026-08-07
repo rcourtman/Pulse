@@ -1,24 +1,16 @@
 name: Promote Floating Tags
 run-name: Promote Floating Tags ${{ inputs.tag }}
 
-# Promotes floating tags for the Pulse server image after a release. Only
-# rcourtman/pulse + ghcr.io/<owner>/pulse are promoted; the Pulse agent
-# ships as GitHub Release binaries (see publish-docker.yml line 199), not
-# as a Docker image, so there are no agent floating tags to promote.
+# Promotes floating tags for the Pulse server and control-plane images at the
+# release activation barrier. The exact-version images are staged first by
+# publish-docker.yml; this workflow is the sole owner of mutable aliases.
 #
 # Triggers:
-# - workflow_run: chains off publish-docker.yml completion. Historically
-#   this was the only path; it remains the default for releases that go
-#   straight through publish-docker.yml.
-# - workflow_call: called explicitly from create-release.yml after
-#   validate_release_assets succeeds. Defensive backup so a workflow_run
-#   failure doesn't silently leave latest/major/minor tags unpromoted.
+# - workflow_call: called explicitly from create-release.yml after the exact
+#   version images and release assets pass their staging checks.
 # - workflow_dispatch: manual backfill path.
 
 on:
-  workflow_run:
-    workflows: ["Publish Docker Images"]
-    types: [completed]
   workflow_call:
     inputs:
       tag:
@@ -52,9 +44,6 @@ permissions:
 jobs:
   promote-images:
     runs-on: ubuntu-24.04
-    # workflow_dispatch and workflow_call always run; workflow_run only when
-    # the triggering Publish Docker Images run completed successfully.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -67,40 +56,11 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          # inputs.tag is set by both workflow_dispatch and workflow_call. Fall
-          # back to the workflow_run derivation only when running as a chain
-          # downstream of publish-docker.yml.
-          if [ -n "${INPUT_TAG}" ]; then
-            TAG="${INPUT_TAG}"
-            PRERELEASE="${INPUT_PRERELEASE}"
-          else
-            # workflow_run trigger - extract from the triggering workflow's inputs
-            # The publish-docker workflow was triggered with a tag input
-            RUN_ID="${{ github.event.workflow_run.id }}"
-            echo "Extracting inputs from workflow run ${RUN_ID}..."
-
-            # Get the workflow run details to extract the tag
-            WORKFLOW_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID})
-            TAG=$(echo "$WORKFLOW_DATA" | jq -r '.head_branch // ""')
-
-            # If head_branch is main, we need to get it from the run's inputs
-            # The inputs are stored in the run's display_title or we parse from artifacts
-            if [ "$TAG" = "main" ] || [ -z "$TAG" ]; then
-              # Try to get from run name which typically includes the tag
-              TAG=$(echo "$WORKFLOW_DATA" | jq -r '.display_title' | grep -oP 'v\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?' || echo "")
-            fi
-
-            if [ -z "$TAG" ]; then
-              echo "::error::Could not extract tag from workflow_run"
-              exit 1
-            fi
-
-            # Detect prerelease from tag
-            if [[ "$TAG" =~ -rc\.[0-9]+$ ]] || [[ "$TAG" =~ -alpha\.[0-9]+$ ]] || [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
-              PRERELEASE="true"
-            else
-              PRERELEASE="false"
-            fi
+          TAG="${INPUT_TAG}"
+          PRERELEASE="${INPUT_PRERELEASE}"
+          if [ -z "$TAG" ]; then
+            echo "::error::tag is required"
+            exit 1
           fi
 
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -135,25 +95,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for Pulse server image to be available
+      - name: Wait for exact-version images to be available
         env:
           TAG: ${{ steps.extract.outputs.tag }}
         run: |
-          echo "Waiting for rcourtman/pulse:${TAG} to be available..."
-          MAX_ATTEMPTS=30
-          ATTEMPT=0
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            if docker manifest inspect rcourtman/pulse:${TAG} > /dev/null 2>&1; then
-              echo "Image rcourtman/pulse:${TAG} is available!"
-              exit 0
+          set -euo pipefail
+          for image in pulse pulse-control-plane; do
+            echo "Waiting for rcourtman/${image}:${TAG} to be available..."
+            available=false
+            for attempt in $(seq 1 30); do
+              if docker manifest inspect "rcourtman/${image}:${TAG}" > /dev/null 2>&1; then
+                echo "Image rcourtman/${image}:${TAG} is available."
+                available=true
+                break
+              fi
+              echo "Attempt ${attempt}/30 - ${image} image not yet available, waiting 10s..."
+              sleep 10
+            done
+            if [ "$available" != "true" ]; then
+              echo "::error::Timeout waiting for rcourtman/${image}:${TAG}"
+              exit 1
             fi
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - pulse image not yet available, waiting 10s..."
-            sleep 10
           done
-
-          echo "Timeout waiting for pulse Docker image"
-          exit 1
 
       - name: Promote Pulse server image tags
         env:
@@ -169,40 +132,41 @@ jobs:
           MINOR=${MINOR:-0}
           MAJOR_MINOR="$MAJOR.$MINOR"
 
-          if [ "$PRERELEASE" = "true" ]; then
-            echo "Promoting prerelease tags for ${TAG}"
-            docker buildx imagetools create \
-              -t rcourtman/pulse:rc \
-              rcourtman/pulse:${TAG}
-            docker buildx imagetools create \
-              -t ghcr.io/${OWNER}/pulse:rc \
-              ghcr.io/${OWNER}/pulse:${TAG}
-          else
-            # :latest belongs to the highest stable semver overall. A
-            # maintenance cut of an older line (e.g. v5.1.36 after v6 GA, or a
-            # 6.0.x patch after 6.1 ships) must only move its own :MAJOR and
-            # :MAJOR.MINOR tags.
-            HIGHEST_STABLE=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-            LATEST_ARGS=""
-            LATEST_ARGS_GHCR=""
+          HIGHEST_STABLE=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          for image in pulse pulse-control-plane; do
+            if [ "$PRERELEASE" = "true" ]; then
+              echo "Promoting :rc for ${image} from ${TAG}."
+              docker buildx imagetools create \
+                -t "rcourtman/${image}:rc" \
+                "rcourtman/${image}:${TAG}"
+              docker buildx imagetools create \
+                -t "ghcr.io/${OWNER}/${image}:rc" \
+                "ghcr.io/${OWNER}/${image}:${TAG}"
+              continue
+            fi
+
+            docker_hub_tags=(
+              -t "rcourtman/${image}:${MAJOR_MINOR}"
+              -t "rcourtman/${image}:${MAJOR}"
+            )
+            ghcr_tags=(
+              -t "ghcr.io/${OWNER}/${image}:${MAJOR_MINOR}"
+              -t "ghcr.io/${OWNER}/${image}:${MAJOR}"
+            )
             if [ "$TAG" = "$HIGHEST_STABLE" ] || [ "${FORCE_LATEST}" = "true" ]; then
-              LATEST_ARGS="-t rcourtman/pulse:latest"
-              LATEST_ARGS_GHCR="-t ghcr.io/${OWNER}/pulse:latest"
-              echo "Promoting stable tags for ${TAG} (including :latest)"
+              docker_hub_tags+=( -t "rcourtman/${image}:latest" )
+              ghcr_tags+=( -t "ghcr.io/${OWNER}/${image}:latest" )
+              echo "Promoting stable aliases for ${image} from ${TAG}, including :latest."
             else
-              echo "Promoting stable tags for ${TAG} WITHOUT :latest (highest stable is ${HIGHEST_STABLE})"
+              echo "Promoting stable aliases for ${image} from ${TAG} without :latest (highest stable is ${HIGHEST_STABLE})."
             fi
             docker buildx imagetools create \
-              ${LATEST_ARGS} \
-              -t rcourtman/pulse:${MAJOR_MINOR} \
-              -t rcourtman/pulse:${MAJOR} \
-              rcourtman/pulse:${TAG}
+              "${docker_hub_tags[@]}" \
+              "rcourtman/${image}:${TAG}"
             docker buildx imagetools create \
-              ${LATEST_ARGS_GHCR} \
-              -t ghcr.io/${OWNER}/pulse:${MAJOR_MINOR} \
-              -t ghcr.io/${OWNER}/pulse:${MAJOR} \
-              ghcr.io/${OWNER}/pulse:${TAG}
-          fi
+              "${ghcr_tags[@]}" \
+              "ghcr.io/${OWNER}/${image}:${TAG}"
+          done
 
       - name: Promotion summary
         env:
@@ -215,8 +179,8 @@ jobs:
           MAJOR_MINOR="$MAJOR.${MINOR:-0}"
 
           if [ "$PRERELEASE" = "true" ]; then
-            echo "✅ Updated :rc tag to point to ${TAG} for the Pulse server image."
+            echo "✅ Updated :rc to point to ${TAG} for the server and control-plane images."
           else
-            echo "✅ Updated :latest, :${MAJOR_MINOR}, :${MAJOR} tags to point to ${TAG} for the Pulse server image."
+            echo "✅ Updated stable floating aliases for the server and control-plane images to ${TAG}."
           fi
           echo "Pulse Agent ships as GitHub Release binaries, not a Docker image."

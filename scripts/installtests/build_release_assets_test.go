@@ -355,6 +355,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`needs.validate_release_assets.result == 'success'`,
 		`needs.prepare.outputs.historical_asset_backfill_only != 'true'`,
 		`repository: ${{ github.repository }}`,
+		`asset_source: staged`,
+		`release_id: ${{ needs.create_release.outputs.release_id }}`,
 		// Helm chart publish must be called explicitly from create-release
 		// because the draft→PATCH(draft=false) publish path does NOT fire
 		// the `release: published` webhook (GitHub-documented quirk). v6
@@ -365,23 +367,22 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`publish_helm_chart:`,
 		`chart_version: ${{ needs.prepare.outputs.version }}`,
 		`app_version: ${{ needs.prepare.outputs.version }}`,
-		// promote-floating-tags chains off publish-docker via workflow_run,
-		// but when publish-docker fails (rc.3 → rc.5 all did) the chain
-		// silently doesn't fire and latest/major/minor docker tags stay
-		// stale. Defensive workflow_call backup, gated on
-		// validate_release_assets succeeding (which waits for the image to
-		// be pullable, so the tag points at a real manifest).
+		`uses: ./.github/workflows/helm-pages.yml`,
+		`publish_helm_pages:`,
+		// Mutable image aliases have one explicit owner at the activation
+		// barrier; no implicit workflow_run may race that call.
 		`uses: ./.github/workflows/promote-floating-tags.yml`,
 		`promote_floating_tags:`,
 		`tag: ${{ needs.prepare.outputs.tag }}`,
 		`prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}`,
-		// Draft-only mode (draft_only=true input) keeps the release as a
-		// draft and skips the publish step. The three workflow_call'd
-		// downstreams must skip in that mode too — install-sh-smoke can't
-		// reach the /releases/download/<tag>/ URL of a draft (404), and
-		// helm publish + tag promotion would advance externally-visible
-		// state to a release that hasn't been promoted out of draft yet.
+		// Draft-only mode stops after staged validation and skips the
+		// customer activation sequence.
 		`needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`,
+		`activate_release:`,
+		`needs.promote_private_pro_runtime.result == 'success'`,
+		`Publish the fully staged release`,
+		`'{draft: false, make_latest: $make_latest}'`,
+		`returning ${TAG} to draft quarantine`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
@@ -390,15 +391,27 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	}
 
 	publishedReleaseGuard := `needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`
-	for _, job := range []string{"install_sh_smoke", "publish_helm_chart", "promote_floating_tags"} {
+	for _, job := range []string{"install_sh_smoke", "publish_helm_chart", "publish_helm_pages"} {
 		block := workflowJobBlock(t, workflow, job)
 		if !strings.Contains(block, publishedReleaseGuard) {
 			t.Fatalf("create-release.yml job %s must skip historical backfill and draft-only runs before invoking downstream workflow_call", job)
 		}
 	}
+	readinessJob := workflowJobBlock(t, workflow, "release_readiness")
+	if !strings.Contains(readinessJob, publishedReleaseGuard) {
+		t.Fatal("release_readiness must skip historical backfill and draft-only runs")
+	}
+	floatingJob := workflowJobBlock(t, workflow, "promote_floating_tags")
+	if !strings.Contains(floatingJob, `needs.release_readiness.result == 'success'`) {
+		t.Fatal("floating-tag promotion must run only after the immutable readiness barrier")
+	}
 
-	if !strings.Contains(workflow, `draft: ${{ github.event.inputs.draft_only == 'true' }}`) {
-		t.Fatal("create-release.yml must pass the actual draft_only state into validate-release-assets")
+	if !strings.Contains(workflow, `draft: true`) {
+		t.Fatal("create-release.yml must validate the release while it remains staged as a draft")
+	}
+	createJob := workflowJobBlock(t, workflow, "create_release")
+	if strings.Contains(createJob, `draft=false`) || strings.Contains(createJob, `Publish release`) {
+		t.Fatal("create_release must stage assets without crossing the customer publication boundary")
 	}
 	if strings.Contains(workflow, `provenance: false`) {
 		t.Fatal("create-release.yml must not disable release-image provenance")
@@ -1228,6 +1241,8 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 	helmPages := string(helmPagesBytes)
 	required := []string{
+		`workflow_call:`,
+		`chart_version:`,
 		`HELM_DOCS_VERSION="1.14.2"`,
 		`HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"`,
 		`HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"`,
@@ -1237,10 +1252,20 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`helm repo index "${index_work}"`,
 		`git -C "${workdir}/gh-pages" push origin HEAD:gh-pages`,
 		`grep -q "version: ${VERSION}"`,
+		`helm show chart pulse-public/pulse --version "$VERSION"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(helmPages, needle) {
 			t.Fatalf("helm-pages.yml missing checksum-verified helm-docs install step: %s", needle)
+		}
+	}
+	for _, forbidden := range []string{
+		"workflow_run:",
+		`git checkout -B "$REQUIRED_BRANCH"`,
+		`git push origin HEAD:"$REQUIRED_BRANCH"`,
+	} {
+		if strings.Contains(helmPages, forbidden) {
+			t.Fatalf("helm-pages.yml must be an awaited exact-tag staging job; found forbidden %q", forbidden)
 		}
 	}
 }
@@ -1343,6 +1368,10 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`bash .github/scripts/check-demo-reachability.sh`,
 		`workflow_call:`,
 		`verify_only:`,
+		`release_id:`,
+		`repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?per_page=100`,
+		`Accept: application/octet-stream`,
+		`--archive "/tmp/${tarball}" --disable-auto-updates`,
 		`Refuse mutation during verification-only checks`,
 		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
 		`go run ./scripts/release_update_key.go public-key-ssh`,
@@ -1765,22 +1794,25 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 }
 
 // The release-pipeline downstream workflows and private Pro publication path
-// share the same root cause: v6 rc.1 -> rc.6 silently broke because GitHub's
-// `release: published` webhook doesn't fire when create-release.yml's draft ->
-// PATCH(draft=false) promotion path is used, `workflow_run` chains don't fire
-// when their upstream fails, and the private Pro path was left as a manual
-// checklist step. The fix is explicit post-release orchestration after
-// validate_release_assets succeeds. The tests below pin the trigger
-// declarations, resolver logic, and private Pro dispatch contract so the
-// regression class can't return.
+// share one customer boundary. Exact-version artifacts are staged behind a
+// draft, verified, and only then activated; GitHub publication is the final
+// notification rather than the trigger for a long tail of publication work.
+// The tests below pin that barrier so the staggered-release regression class
+// cannot return.
 
 func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 	assertFileContainsAll(t, repoFile(".github", "workflows", "install-sh-smoke.yml"),
 		// Inputs and triggers.
-		`name: install.sh Smoke (Published Release)`,
+		`name: install.sh Smoke (Release Assets)`,
 		`workflow_call:`,
 		`workflow_dispatch:`,
-		// Pull straight from the published release URL (not local release/).
+		`asset_source:`,
+		`release_id:`,
+		// Staged cuts use authenticated draft assets; manual verification can
+		// still pull from the public release URL.
+		`repos/${REPO}/releases/${RELEASE_ID}/assets?per_page=100`,
+		`repos/${REPO}/releases/assets/${asset_id}`,
+		`Accept: application/octet-stream`,
 		`releases/download/${TAG}`,
 		`install.sh.sshsig`,
 		`pulse-${TAG}-linux-amd64.tar.gz`,
@@ -1807,18 +1839,40 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 }
 
 func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {
-	assertFileContainsAll(t, repoFile(".github", "workflows", "promote-floating-tags.yml"),
+	workflowPath := repoFile(".github", "workflows", "promote-floating-tags.yml")
+	assertFileContainsAll(t, workflowPath,
 		`workflow_call:`,
 		`tag:`,
 		`description: "Release tag (e.g., v6.0.0). Required for workflow_call."`,
 		`prerelease:`,
 		`type: boolean`,
-		// Job condition must accept workflow_call alongside workflow_dispatch.
-		`github.event_name == 'workflow_call'`,
-		// Tag resolver must prefer inputs over the workflow_run derivation.
-		`if [ -n "${INPUT_TAG}" ]; then`,
 		`TAG="${INPUT_TAG}"`,
+		`for image in pulse pulse-control-plane; do`,
+		`"rcourtman/${image}:rc"`,
+		`"ghcr.io/${OWNER}/${image}:latest"`,
 	)
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read promote-floating-tags.yml: %v", err)
+	}
+	if strings.Contains(string(content), "workflow_run:") {
+		t.Fatal("floating aliases must have one explicit activation owner, not an implicit workflow_run trigger")
+	}
+	publishBytes, err := os.ReadFile(repoFile(".github", "workflows", "publish-docker.yml"))
+	if err != nil {
+		t.Fatalf("read publish-docker.yml: %v", err)
+	}
+	publishWorkflow := string(publishBytes)
+	for _, mutableTag := range []string{
+		`rcourtman/pulse:latest`,
+		`ghcr.io/{0}/pulse:latest`,
+		`rcourtman/pulse-control-plane:latest`,
+		`ghcr.io/{0}/pulse-control-plane:latest`,
+	} {
+		if strings.Contains(publishWorkflow, mutableTag) {
+			t.Fatalf("publish-docker.yml must stage exact-version images without moving mutable alias %q", mutableTag)
+		}
+	}
 }
 
 func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
@@ -1877,7 +1931,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
 	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
 	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
-	privateJob := workflowJobBlock(t, createWorkflow, "publish_private_pro_runtime")
+	privateStageJob := workflowJobBlock(t, createWorkflow, "stage_private_pro_runtime")
+	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
+	privatePromotionJob := workflowJobBlock(t, createWorkflow, "promote_private_pro_runtime")
+	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
 
 	for _, needle := range []string{
 		`./scripts/build-release.sh "${{ inputs.version }}"`,
@@ -1919,8 +1976,39 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if strings.Contains(validationJob, "- publish_docker") {
 		t.Fatal("release asset digest validation must run in parallel with Docker publication")
 	}
-	if !strings.Contains(privateJob, "- create_release") || strings.Contains(privateJob, "- validate_release_assets") {
-		t.Fatal("private Pro publication must start after release creation without waiting for asset validation")
+	if !strings.Contains(privateStageJob, "- create_release") || strings.Contains(privateStageJob, "- validate_release_assets") {
+		t.Fatal("private Pro staging must start after draft creation without waiting for asset validation")
+	}
+	for _, dependency := range []string{
+		"- create_release",
+		"- publish_docker",
+		"- validate_release_assets",
+		"- install_sh_smoke",
+		"- publish_helm_chart",
+		"- publish_helm_pages",
+		"- stage_private_pro_runtime",
+	} {
+		if !strings.Contains(readinessJob, dependency) {
+			t.Fatalf("immutable release readiness missing dependency: %s", dependency)
+		}
+	}
+	for _, dependency := range []string{"- release_readiness", "- stage_private_pro_runtime"} {
+		if !strings.Contains(privatePromotionJob, dependency) {
+			t.Fatalf("private Pro live promotion missing staging dependency: %s", dependency)
+		}
+	}
+	for _, dependency := range []string{
+		"- release_readiness",
+		"- update_stable_demo",
+		"- promote_floating_tags",
+		"- promote_private_pro_runtime",
+	} {
+		if !strings.Contains(activationJob, dependency) {
+			t.Fatalf("release activation missing readiness dependency: %s", dependency)
+		}
+	}
+	if !strings.Contains(activationJob, `'{draft: false, make_latest: $make_latest}'`) {
+		t.Fatal("release activation must be the job that crosses the draft publication boundary")
 	}
 	for _, needle := range []string{
 		`inputs.candidate_manifest_artifact != ''`,
@@ -1985,7 +2073,8 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
 	workflow := string(content)
-	job := workflowJobBlock(t, workflow, "publish_private_pro_runtime")
+	stageJob := workflowJobBlock(t, workflow, "stage_private_pro_runtime")
+	promotionJob := workflowJobBlock(t, workflow, "promote_private_pro_runtime")
 
 	for _, needle := range []string{
 		`needs.create_release.result == 'success'`,
@@ -2006,19 +2095,28 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`-f reuse_existing_packet=true`,
 		`-f allow_stable_ga_publish="${allow_ga_publish}"`,
 		`wait_for_workflow rcourtman/pulse-enterprise "Build Pro Release" main "${build_started_at}" "private Pro build"`,
+		`echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"`,
+	} {
+		if !strings.Contains(stageJob, needle) {
+			t.Fatalf("stage_private_pro_runtime missing required contract: %s", needle)
+		}
+	}
+	for _, needle := range []string{
+		`needs.stage_private_pro_runtime.result == 'success'`,
+		`R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}`,
 		`gh workflow run promote-paid-runtime-release.yml`,
 		`--repo rcourtman/pulse-pro`,
-		`-f r2_prefix="${r2_prefix}"`,
+		`-f r2_prefix="${R2_PREFIX}"`,
 		`-f allow_ga_prefix="${allow_ga_publish}"`,
 		`wait_for_workflow rcourtman/pulse-pro "Promote Paid Runtime Release" main "${promote_started_at}" "private Pro live promotion"`,
 		`echo "::error::${label} failed with conclusion=${conclusion}: ${url}"`,
 	} {
-		if !strings.Contains(job, needle) {
-			t.Fatalf("publish_private_pro_runtime missing required contract: %s", needle)
+		if !strings.Contains(promotionJob, needle) {
+			t.Fatalf("promote_private_pro_runtime missing required contract: %s", needle)
 		}
 	}
-	if strings.Contains(job, "continue-on-error: true") {
-		t.Fatal("publish_private_pro_runtime must fail the release pipeline when private Pro publication or promotion fails")
+	if strings.Contains(stageJob, "continue-on-error: true") || strings.Contains(promotionJob, "continue-on-error: true") {
+		t.Fatal("private Pro staging and promotion must fail the release pipeline on error")
 	}
 }
 

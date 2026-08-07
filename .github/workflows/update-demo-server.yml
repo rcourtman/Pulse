@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      release_id:
+        description: 'Optional staged GitHub release ID used before customer activation'
+        required: false
+        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -36,6 +41,11 @@ on:
         required: false
         default: false
         type: boolean
+      release_id:
+        description: 'Optional staged GitHub release ID'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -193,9 +203,43 @@ jobs:
 
       - name: Wait for release assets
         if: inputs.verify_only != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ inputs.release_id }}
         run: |
           set -euo pipefail
           TAG="${{ needs.resolve.outputs.tag }}"
+          if [ -n "${RELEASE_ID:-}" ]; then
+            release_state=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+              --jq '[.tag_name, (.draft | tostring), (.published_at // "")] | @tsv')
+            actual_tag=$(awk -F '\t' '{print $1}' <<<"$release_state")
+            is_draft=$(awk -F '\t' '{print $2}' <<<"$release_state")
+            published_at=$(awk -F '\t' '{print $3}' <<<"$release_state")
+            if [ "$actual_tag" != "$TAG" ] || [ "$is_draft" != "true" ] || [ -n "$published_at" ]; then
+              echo "::error::Release ${RELEASE_ID} is not the unpublished draft for ${TAG}."
+              exit 1
+            fi
+
+            assets_json=$(mktemp)
+            gh api --paginate "repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?per_page=100" \
+              | jq -s 'add' > "$assets_json"
+            tarball="pulse-${TAG}-linux-amd64.tar.gz"
+            for asset_name in "$tarball" "${tarball}.sshsig"; do
+              asset_id=$(jq -r --arg name "$asset_name" \
+                'map(select(.name == $name)) | if length == 1 then .[0].id else empty end' \
+                "$assets_json")
+              if [ -z "$asset_id" ]; then
+                echo "::error::Draft release ${RELEASE_ID} does not contain exactly one ${asset_name} asset."
+                exit 1
+              fi
+              gh api -H 'Accept: application/octet-stream' \
+                "repos/${{ github.repository }}/releases/assets/${asset_id}" > "/tmp/${asset_name}"
+            done
+            rm -f "$assets_json"
+            echo "Staged release assets are available for the demo update."
+            exit 0
+          fi
+
           echo "Waiting for release assets to be available..."
 
           MAX_ATTEMPTS=30
@@ -428,15 +472,24 @@ jobs:
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          RELEASE_ID: ${{ inputs.release_id }}
         run: |
           set -euo pipefail
           scp -i ~/.ssh/id_ed25519 /tmp/pulse-install.sh "$DEMO_SERVER_USER@$DEMO_SERVER_HOST:/tmp/pulse-install.sh"
+          if [ -n "${RELEASE_ID:-}" ]; then
+            TAG="${{ needs.resolve.outputs.tag }}"
+            tarball="pulse-${TAG}-linux-amd64.tar.gz"
+            scp -i ~/.ssh/id_ed25519 \
+              "/tmp/${tarball}" "/tmp/${tarball}.sshsig" \
+              "$DEMO_SERVER_USER@$DEMO_SERVER_HOST:/tmp/"
+          fi
 
       - name: Update demo server
         if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          RELEASE_ID: ${{ inputs.release_id }}
         run: |
           set -euo pipefail
           TAG="${{ needs.resolve.outputs.tag }}"
@@ -445,15 +498,28 @@ jobs:
           set -euo pipefail
           TAG="$1"
           SERVICE_NAME="$2"
+          USE_STAGED_ARCHIVE="$3"
           INSTALLER_ENV=()
           if [ -n "$SERVICE_NAME" ]; then
             INSTALLER_ENV+=("PULSE_SERVICE_NAME=$SERVICE_NAME")
           fi
-          sudo env "${INSTALLER_ENV[@]}" bash /tmp/pulse-install.sh --version "$TAG"
+          if [ "$USE_STAGED_ARCHIVE" = "true" ]; then
+            tarball="pulse-${TAG}-linux-amd64.tar.gz"
+            sudo env "${INSTALLER_ENV[@]}" bash /tmp/pulse-install.sh \
+              --archive "/tmp/${tarball}" --disable-auto-updates
+            rm -f "/tmp/${tarball}" "/tmp/${tarball}.sshsig"
+          else
+            sudo env "${INSTALLER_ENV[@]}" bash /tmp/pulse-install.sh --version "$TAG"
+          fi
           rm -f /tmp/pulse-install.sh
           EOF
           )
-          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$TAG" "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
+          use_staged_archive=false
+          if [ -n "${RELEASE_ID:-}" ]; then
+            use_staged_archive=true
+          fi
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "bash -s -- $(printf '%q ' "$TAG" "$SERVICE_NAME" "$use_staged_archive")" <<<"$REMOTE_SCRIPT"
 
       - name: Restore demo runtime configuration
         if: inputs.verify_only != true
