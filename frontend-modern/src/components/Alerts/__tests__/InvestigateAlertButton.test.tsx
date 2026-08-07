@@ -760,11 +760,12 @@ describe('InvestigateAlertButton patrolOption', () => {
     await fireEvent.click(screen.getByRole('button', { name: /Have Patrol investigate/i }));
 
     await waitFor(() => {
+      // Exactly the fields the backend's manualScopedPatrolRequest accepts —
+      // the run endpoint rejects unknown fields with a 400.
       expect(triggerPatrolRunMock).toHaveBeenCalledWith({
         resource_ids: ['vm-101'],
         alert_identifier: 'alert-9',
         alert_type: 'cpu',
-        context: 'Manual targeted check from alert: cpu',
       });
     });
     await waitFor(() => {

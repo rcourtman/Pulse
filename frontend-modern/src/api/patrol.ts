@@ -839,12 +839,13 @@ export interface PatrolStreamEvent {
  * alert path uses, instead of a fleet-wide Patrol check. A scoped run bypasses
  * the full-run cadence gate but still honours Patrol readiness.
  */
+// Mirrors the backend's manualScopedPatrolRequest exactly: the run endpoint
+// decodes with DisallowUnknownFields, so any extra key is a 400.
 export interface PatrolRunScope {
   resource_ids?: string[];
   resource_types?: string[];
   alert_identifier?: string;
   alert_type?: string;
-  context?: string;
 }
 
 /**

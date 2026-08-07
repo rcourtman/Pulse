@@ -1,18 +1,17 @@
 {
   "version": 1,
-  "base_sha": "0928071b9a1342c824cc75dd3ef6047c86c67b64",
+  "base_sha": "6a36b5f8ef34a87d613ff113712be758c7b9ceff",
   "verified_at": "2026-08-07T14:05:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "0625744f76128b42b3802ffb3880a5169013e11343f4b74332d171be05d77ae2"
+    "frontend-modern/src/api/patrol.ts": "c15184ae7f1e0443d53ab54ab4d9349d349b0571042b84429cbee10c958dc11b",
+    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "7cd20de990cab862718c7495e5314ab9143b3101fd565a1eaa4a273b4780ca88"
   },
   "routes": [
-    "/proxmox/overview",
-    "/docker/overview",
-    "/standalone/machines",
     "/alerts/overview"
   ],
   "viewports": [
@@ -26,17 +25,12 @@
     }
   ],
   "states": [
-    "Live dev estate with 263 resources across 48 types including agent-merged Proxmox nodes (Agent chip on Disaster Recovery A) and docker hosts",
-    "WebSocket delta stream active: initialState full snapshot followed by continuous resourceDelta-only rawData messages",
-    "Machines page with two standalone agent hosts",
-    "Docker overview with two hosts and eight containers",
-    "Mobile viewport after full reload re-hydrating from a fresh initialState plus deltas"
+    "Alerts Overview with seventeen active alerts on the live dev estate, each row offering the Have Patrol investigate primary action",
+    "Post-click state after triggering a scoped Patrol run against the pve5 connectivity alert"
   ],
   "interactions": [
-    "Logged in and watched the delta stream for over five minutes across dozens of resourceDelta messages; resource count stayed exactly 263 after every delta application with zero console errors",
-    "Navigated Proxmox, Docker, Machines, and Alerts surfaces mid-stream and confirmed all six platform navigation tabs stayed present the whole time",
-    "Confirmed the Machines table kept both agent hosts and the Docker overview kept both hosts and all eight containers across delta cycles",
-    "Reloaded at 375x812 and confirmed the mobile platform rail and Proxmox overview re-hydrated fully from initialState plus deltas",
-    "Confirmed live metric values (CPU and memory cells) continued updating from delta payloads while resource membership stayed stable"
+    "Clicked Have Patrol investigate on the pve5 connectivity alert and captured the POST to /api/ai/patrol/run returning 200 with success true and message Triggered targeted Patrol check, where the same click previously returned 400 invalid_patrol_scope",
+    "Confirmed the request body carried only resource_ids, alert_identifier, and alert_type",
+    "Reloaded at 375x812 and confirmed the alerts surface renders with the investigate actions reachable"
   ]
 }

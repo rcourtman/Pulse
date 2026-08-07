@@ -106,7 +106,6 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         resource_ids: [resourceId],
         alert_identifier: props.alert.id,
         alert_type: props.alert.type,
-        context: `Manual targeted check from alert: ${props.alert.type}`,
       });
       if (result.success) {
         notificationStore.success(

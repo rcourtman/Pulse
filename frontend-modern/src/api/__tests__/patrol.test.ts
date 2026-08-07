@@ -539,7 +539,6 @@ describe('triggerPatrolRun scope body', () => {
       resource_ids: ['vm-101'],
       alert_identifier: 'alert-1',
       alert_type: 'cpu',
-      context: 'Manual targeted check from alert: cpu',
     };
     await triggerPatrolRun(scope);
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/patrol/run', {
