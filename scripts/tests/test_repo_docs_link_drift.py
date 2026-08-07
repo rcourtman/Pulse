@@ -17,6 +17,7 @@ FORBIDDEN_PATTERNS = (
 )
 
 SKIP_DIR_NAMES = {
+    ".claude",
     ".git",
     ".next",
     ".pytest_cache",

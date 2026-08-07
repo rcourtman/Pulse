@@ -111,7 +111,7 @@ Old metadata section.
             self.assertEqual(body.count("## Promotion Metadata"), 1)
             self.assertIn("docker pull rcourtman/pulse:6.0.0-rc.2", body)
             self.assertIn(
-                "[Code signing policy](https://github.com/rcourtman/Pulse/blob/main/docs/CODE_SIGNING_POLICY.md)",
+                "[Code signing policy](https://github.com/rcourtman/Pulse/blob/v6.0.0-rc.2/docs/CODE_SIGNING_POLICY.md)",
                 body,
             )
             self.assertIn(
