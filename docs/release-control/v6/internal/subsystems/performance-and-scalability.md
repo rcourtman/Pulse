@@ -2255,6 +2255,26 @@ most one tenant-local system-settings read; it must not scan tenants, read
 external logo files, call a licensing network service, or add per-route and
 per-component refetches. The response remains bounded to an enabled flag, one
 120-character display name, and the already size-limited inline image.
+### Workloads inventory source polling keeps its existing cost
+
+The workloads surface polls inventory source health on mount and every 15s via
+`WORKLOADS_CONNECTIONS_POLL_INTERVAL_MS` in `useWorkloadsState.ts`. Repointing
+that query from `ConnectionsAPI.list()` to `RuntimeInventorySourcesAPI.list()`
+must not change the polling shape: one `createNonSuspendingQuery` keyed on the
+same `workloadsEnabled` source, the same single background refetch per
+interval, and the same refetch on surface reconnect. No second query, no
+per-row fetch, and no per-source detail lookup may be added.
+
+Server-side cost is bounded by the same aggregator the admin ledger already
+runs — one `buildConnections` pass over configured sources with no network
+I/O — and is strictly cheaper than `HandleList` because the agent
+command-session liveness enrichment is skipped and grouped systems are not
+built. The response is smaller than the ledger it replaces on this surface:
+disabled sources are dropped server-side, and each row carries six scalar
+fields instead of the full connection record with its fleet, capability, and
+agent sub-objects. The banner renders from the same in-memory list, so no
+additional client-side pass over the workload set is introduced.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

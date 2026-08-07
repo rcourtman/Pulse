@@ -1,65 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import type { Connection, ConnectionFleetGovernance } from '@/api/connections';
+import type { RuntimeInventorySource } from '@/api/runtimeInventorySources';
 import { buildWorkloadInventorySourceIssues } from '../workloadInventorySourceIssues';
 
-const fleet = (overrides: Partial<ConnectionFleetGovernance> = {}): ConnectionFleetGovernance => ({
-  enrollmentState: 'configured',
-  livenessState: 'active',
-  versionDrift: 'not-applicable',
-  adapterHealth: 'healthy',
-  configRollout: 'configured',
-  credentialStatus: 'verified',
-  updateStatus: 'not-applicable',
-  remoteControl: 'not-applicable',
+const source = (overrides: Partial<RuntimeInventorySource>): RuntimeInventorySource => ({
+  id: 'pve:node',
+  type: 'pve',
+  name: 'node',
+  state: 'active',
+  surfaces: ['vms'],
+  credentialsInvalid: false,
   ...overrides,
 });
-
-const connection = (overrides: Partial<Connection>): Connection =>
-  ({
-    id: 'pve:node',
-    type: 'pve',
-    name: 'node',
-    address: 'https://node:8006',
-    state: 'active',
-    stateReason: '',
-    enabled: true,
-    surfaces: ['vms'],
-    scope: { vms: true },
-    lastSeen: null,
-    lastError: null,
-    source: 'agent',
-    fleet: fleet(),
-    capabilities: {
-      supportsPause: true,
-      supportsScope: true,
-      supportsTest: true,
-    },
-    ...overrides,
-  }) as Connection;
 
 describe('workloadInventorySourceIssues (branch coverage)', () => {
   describe('credentialInvalid', () => {
     it('is true when state is unauthorized (first OR arm)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:unauth',
-          name: 'unauth',
-          state: 'unauthorized',
-          fleet: fleet({ credentialStatus: 'verified' }),
-        }),
+        source({ id: 'pve:unauth', name: 'unauth', state: 'unauthorized' }),
       ]);
 
       expect(issues).toHaveLength(1);
       expect(issues[0]?.stateLabel).toBe('Credentials invalid');
     });
 
-    it('is true when fleet.credentialStatus is invalid (second OR arm, active state)', () => {
+    it('is true when the projection flags credentialsInvalid (second OR arm, active state)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'pve:badstatus',
           name: 'badstatus',
           state: 'active',
-          fleet: fleet({ credentialStatus: 'invalid' }),
+          credentialsInvalid: true,
         }),
       ]);
 
@@ -67,41 +37,13 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
       expect(issues[0]?.stateLabel).toBe('Credentials invalid');
     });
 
-    it('is true when fleet.credentialHealth.status is invalid (third OR arm)', () => {
+    it('is false when credentialsInvalid is absent from the payload', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:healthbad',
-          name: 'healthbad',
-          state: 'active',
-          fleet: fleet({ credentialHealth: { status: 'invalid' } }),
-        }),
-      ]);
-
-      expect(issues).toHaveLength(1);
-      expect(issues[0]?.stateLabel).toBe('Credentials invalid');
-    });
-
-    it('is true when fleet.credentialHealth.status is expired (fourth OR arm)', () => {
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:expired',
-          name: 'expired',
-          state: 'active',
-          fleet: fleet({ credentialHealth: { status: 'expired' } }),
-        }),
-      ]);
-
-      expect(issues).toHaveLength(1);
-      expect(issues[0]?.stateLabel).toBe('Credentials invalid');
-    });
-
-    it('short-circuits gracefully when fleet is undefined (optional-chain false arm)', () => {
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:nofleet',
-          name: 'nofleet',
+        source({
+          id: 'pve:noflag',
+          name: 'noflag',
           state: 'paused',
-          fleet: undefined as unknown as Connection['fleet'],
+          credentialsInvalid: undefined as unknown as boolean,
         }),
       ]);
 
@@ -113,7 +55,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
   describe('stateLabelFor switch arms (credentialInvalid false)', () => {
     it('maps pending to "Collection pending"', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:pend', name: 'pend', state: 'pending' }),
+        source({ id: 'pve:pend', name: 'pend', state: 'pending' }),
       ]);
 
       expect(issues[0]?.stateLabel).toBe('Collection pending');
@@ -121,7 +63,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('maps stale to "Collection stale"', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:stale', name: 'stale', state: 'stale' }),
+        source({ id: 'pve:stale', name: 'stale', state: 'stale' }),
       ]);
 
       expect(issues[0]?.stateLabel).toBe('Collection stale');
@@ -129,12 +71,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('maps unreachable to "Source unreachable"', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'vmware:down',
-          type: 'vmware',
-          name: 'down',
-          state: 'unreachable',
-        }),
+        source({ id: 'vmware:down', type: 'vmware', name: 'down', state: 'unreachable' }),
       ]);
 
       expect(issues[0]?.stateLabel).toBe('Source unreachable');
@@ -144,14 +81,13 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
   describe('descriptionFor branches', () => {
     it('credentialInvalid arm names the type-label API credentials', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'docker:bad',
           type: 'docker',
           name: 'dockerhost',
           state: 'active',
           surfaces: ['containers'],
-          scope: { containers: true },
-          fleet: fleet({ credentialStatus: 'invalid' }),
+          credentialsInvalid: true,
         }),
       ]);
 
@@ -162,7 +98,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('paused arm says collection is paused', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:paused', name: 'paused', state: 'paused' }),
+        source({ id: 'pve:paused', name: 'paused', state: 'paused' }),
       ]);
 
       expect(issues[0]?.description).toBe(
@@ -172,7 +108,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('pending arm says collection has not completed yet', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:pend', name: 'pend', state: 'pending' }),
+        source({ id: 'pve:pend', name: 'pend', state: 'pending' }),
       ]);
 
       expect(issues[0]?.description).toBe(
@@ -182,7 +118,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('stale arm says inventory data is stale', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:stale', name: 'stale', state: 'stale' }),
+        source({ id: 'pve:stale', name: 'stale', state: 'stale' }),
       ]);
 
       expect(issues[0]?.description).toBe(
@@ -192,12 +128,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('unreachable arm interpolates the type label before "API is unreachable"', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'vmware:down',
-          type: 'vmware',
-          name: 'vc1',
-          state: 'unreachable',
-        }),
+        source({ id: 'vmware:down', type: 'vmware', name: 'vc1', state: 'unreachable' }),
       ]);
 
       expect(issues[0]?.description).toBe(
@@ -209,7 +140,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
   describe('formatCoverage', () => {
     it('returns the single label unchanged for one surface (length === 1 arm)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:one', name: 'one', state: 'paused' }),
+        source({ id: 'pve:one', name: 'one', state: 'paused' }),
       ]);
 
       expect(issues[0]?.coverageLabel).toBe('VMs');
@@ -217,12 +148,11 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('joins two labels with "and" (length === 2 arm)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'pve:two',
           name: 'two',
           state: 'paused',
           surfaces: ['vms', 'containers'],
-          scope: { vms: true, containers: true },
         }),
       ]);
 
@@ -231,13 +161,12 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('joins three-plus labels with Oxford comma (length >= 3 arm)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'pve:three',
           type: 'kubernetes',
           name: 'three',
           state: 'paused',
           surfaces: ['vms', 'containers', 'kubernetes'],
-          scope: { vms: true, containers: true, kubernetes: true },
         }),
       ]);
 
@@ -245,58 +174,43 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
     });
   });
 
+  // Scope-over-surfaces resolution now happens server-side in
+  // runtimeInventorySourceSurfaces; these cover what the client still decides.
   describe('activeWorkloadSurfaces', () => {
-    it('keeps only truthy scope entries and drops surfaces with no label', () => {
+    it('drops surfaces with no label', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'pve:scoped',
           name: 'scoped',
           state: 'paused',
-          surfaces: ['vms', 'containers', 'storage'],
-          scope: { vms: true, containers: false, storage: true },
+          surfaces: ['vms', 'storage'],
         }),
       ]);
 
       expect(issues[0]?.coverageLabel).toBe('VMs');
     });
 
-    it('falls back to connection.surfaces when scope is empty', () => {
+    it('tolerates a missing surfaces array (?? [] arm)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:fallback',
-          name: 'fallback',
+        source({
+          id: 'pve:nosurfaces',
+          name: 'nosurfaces',
           state: 'paused',
-          surfaces: ['vms', 'pods'],
-          scope: {},
+          surfaces: undefined as unknown as string[],
         }),
       ]);
 
-      expect(issues[0]?.coverageLabel).toBe('VMs and pods');
-    });
-
-    it('falls back to surfaces when scope is undefined (?? {} arm)', () => {
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:noscope',
-          name: 'noscope',
-          state: 'paused',
-          surfaces: ['vms'],
-          scope: undefined as unknown as Connection['scope'],
-        }),
-      ]);
-
-      expect(issues[0]?.coverageLabel).toBe('VMs');
+      expect(issues).toEqual([]);
     });
 
     it('deduplicates surfaces that map to the same label (seen.has arm)', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'docker:dup',
           type: 'docker',
           name: 'dup',
           state: 'paused',
           surfaces: ['containers', 'docker'],
-          scope: {},
         }),
       ]);
 
@@ -305,103 +219,25 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('sorts an unknown surface via the -1 rank normalization branch', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:unknown',
-          name: 'unknown',
-          state: 'paused',
-          surfaces: ['zzz', 'vms'],
-          scope: {},
-        }),
+        source({ id: 'pve:unknown', name: 'unknown', state: 'paused', surfaces: ['zzz', 'vms'] }),
       ]);
 
       expect(issues[0]?.coverageLabel).toBe('VMs');
     });
   });
 
-  describe('compactDetail', () => {
-    it('returns undefined when no error message is available (!formatted arm)', () => {
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:nomsg',
-          name: 'nomsg',
-          state: 'paused',
-          stateReason: '',
-          lastError: null,
-        }),
-      ]);
-
-      expect(issues[0]?.detail).toBeUndefined();
-    });
-
-    it('formats a short lastError.message (left ?? operand non-null)', () => {
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:shorterr',
-          name: 'shorterr',
-          state: 'paused',
-          stateReason: 'should-not-be-used',
-          lastError: {
-            at: '2026-07-12T00:00:00Z',
-            message: 'no such host',
-          },
-        }),
-      ]);
-
-      expect(issues[0]?.detail).toBe('Host not found. Check the hostname or IP address.');
-    });
-
-    it('falls back to stateReason when lastError is null (right ?? operand)', () => {
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:reason',
-          name: 'reason',
-          state: 'paused',
-          stateReason: 'connection refused',
-          lastError: null,
-        }),
-      ]);
-
-      expect(issues[0]?.detail).toBe(
-        'Connection refused. The host is reachable but rejected the connection on this port. Check the port is correct and the service is running.',
-      );
-    });
-
-    it('truncates a formatted message longer than 220 characters (>220 arm)', () => {
-      const longMessage = 'x'.repeat(300);
-      const issues = buildWorkloadInventorySourceIssues([
-        connection({
-          id: 'pve:longerr',
-          name: 'longerr',
-          state: 'paused',
-          lastError: {
-            at: '2026-07-12T00:00:00Z',
-            message: longMessage,
-          },
-        }),
-      ]);
-
-      const detail = issues[0]?.detail;
-      expect(detail).toBeDefined();
-      expect(detail?.length).toBe(220);
-      expect(detail).toBe(`${'x'.repeat(217)}...`);
-      expect(detail?.endsWith('...')).toBe(true);
-    });
-  });
-
   describe('buildWorkloadInventorySourceIssues pipeline', () => {
-    it('excludes disabled, non-workload-type, and active-valid connections', () => {
+    it('excludes non-workload-type and active-valid sources', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:disabled', name: 'disabled', enabled: false, state: 'unauthorized' }),
-        connection({
+        source({
           id: 'pbs:tower',
           type: 'pbs',
           name: 'tower',
           state: 'unreachable',
           surfaces: ['backups'],
-          scope: { backups: true },
         }),
-        connection({ id: 'pve:healthy', name: 'healthy', state: 'active' }),
-        connection({ id: 'pve:blocked', name: 'blocked', state: 'stale' }),
+        source({ id: 'pve:healthy', name: 'healthy', state: 'active' }),
+        source({ id: 'pve:blocked', name: 'blocked', state: 'stale' }),
       ]);
 
       expect(issues).toHaveLength(1);
@@ -410,8 +246,8 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('orders by descending STATE_RANK when states differ', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:aaa', name: 'aaa', state: 'paused' }),
-        connection({ id: 'pve:zzz', name: 'zzz', state: 'unreachable' }),
+        source({ id: 'pve:aaa', name: 'aaa', state: 'paused' }),
+        source({ id: 'pve:zzz', name: 'zzz', state: 'unreachable' }),
       ]);
 
       expect(issues.map((issue) => issue.state)).toEqual(['unreachable', 'paused']);
@@ -420,22 +256,21 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
 
     it('breaks state-rank ties with name localeCompare', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({ id: 'pve:zeta', name: 'zeta', state: 'paused' }),
-        connection({ id: 'pve:alpha', name: 'alpha', state: 'paused' }),
+        source({ id: 'pve:zeta', name: 'zeta', state: 'paused' }),
+        source({ id: 'pve:alpha', name: 'alpha', state: 'paused' }),
       ]);
 
       expect(issues.map((issue) => issue.name)).toEqual(['alpha', 'zeta']);
     });
 
-    it('emits a fully-shaped issue for a kubernetes source', () => {
+    it('emits a fully-shaped issue for a kubernetes source, with no detail field', () => {
       const issues = buildWorkloadInventorySourceIssues([
-        connection({
+        source({
           id: 'kubernetes:k1',
           type: 'kubernetes',
           name: 'k1',
           state: 'pending',
           surfaces: ['kubernetes'],
-          scope: { kubernetes: true },
         }),
       ]);
 
@@ -450,7 +285,6 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
           coverageLabel: 'Kubernetes workloads',
           description:
             'Pulse has Kubernetes workloads enabled for k1, but collection has not completed yet.',
-          detail: undefined,
         },
       ]);
     });

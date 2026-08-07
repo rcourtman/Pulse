@@ -1,21 +1,27 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "755a8887874e21d0115e1490b9e69e9501d2a31e",
-  "verified_at": "2026-08-07T19:21:05Z",
+  "base_sha": "14a82e7684390c9fe0a4bd900417c4adbb7140b8",
+  "verified_at": "2026-08-07T22:34:00Z",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
+    "frontend-modern/src/api/runtimeInventorySources.ts",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "1a27dd2c374fc3fe09f718044e3685c450ff4fddfce2f0ada92ac5210676bbd9"
+    "frontend-modern/src/api/runtimeInventorySources.ts": "9e232e6614ea8be4c4381b8211e70c630e5e55257f7dff0a4700b6874aad25f2",
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "27b72d5663a71c1cc23b2fab2631a33b53bfea5e73371609e501afa682364f3c",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "15ac1786d045306add2c262e5f98f9560356274541c93ac604144336d2263f66",
+    "frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts": "21500acb325413aed230f970c748ff9e9ed81405d12128473223b51507b677d9"
   },
   "routes": [
-    "/infrastructure (Proxmox overview, nodes + workloads tables)"
+    "/infrastructure (Proxmox overview: nodes table + embedded workloads surface, which owns the inventory source issues banner)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 375,
@@ -23,14 +29,17 @@
     }
   ],
   "states": [
-    "inbound guard tripped: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES temporarily lowered to 256 KiB against a live backend on port 7655 whose real initialState frame is ~741 KB, reproducing the oversized-snapshot condition a >3100-resource estate hits at the shipped 8 MiB cap",
-    "post-recovery steady state: 265 resources hydrated from /api/state with 48 distinct resource types, then held across subsequent resourceDelta ticks (delta frames logged with resourceCount 0 while the store stayed at 265), proving the REST snapshot established a usable delta baseline",
-    "shipped 8 MiB cap restored: the same ~741 KB frame is accepted and hydrates via initialState over the socket with no oversized warning and no REST fetch, confirming the fallback is inert on normal estates"
+    "authenticated NON-ADMIN viewer session (proxy auth, X-Remote-Role: viewer) against a scratch backend on 8920 behind a header-injecting proxy on 8922; /api/security/status reported detailLevel 'authenticated' and settingsCapabilities.infrastructureRead false, the same session tier that previously got nothing",
+    "authenticated ADMIN control session (X-Remote-Role: admin, proxy on 8921) reporting detailLevel 'privileged' and infrastructureRead true, used as the A/B for the identical-projection claim",
+    "one workload-capable source in a blocking state: a PVE connection configured at https://10.255.255.1:8006 (unroutable) so it settles into an unreachable state carrying vms + containers coverage",
+    "banner rendered for the viewer at both viewports reading 'Source unreachable: scratch-pve / Pulse has VMs and containers enabled for scratch-pve, but the Proxmox VE API is unreachable. / VMs and containers' — before this change the same session saw no banner at all",
+    "no raw-error detail line on the banner in either tier, and the rendered page text contained neither the source address '10.255.255.1' nor the administrative stateReason 'awaiting first poll'"
   ],
   "interactions": [
-    "loaded /infrastructure with the guard tripped and read the console sequence: 'Ignoring oversized WebSocket payload {characterCount: 741468, maxBytes: 262144}' then 'Recovering full state over REST' then 'Hydrated full state over REST after an oversized WebSocket snapshot' then 'Updating resources {count: 265}'",
-    "confirmed the nodes table and workloads table rendered populated rows (6 PVE nodes with live CPU/memory/disk/temp, guest rows beneath) rather than the empty UI the dropped snapshot previously produced",
-    "re-ran the same oversized-recovery load at 375x812 and confirmed identical console recovery sequence plus a populated mobile nodes list and bottom nav counters",
-    "restored the 8 MiB constant, reloaded, and confirmed the console showed 'message {type: initialState, resourceCount: 265}' with no oversized warning and no /api/state recovery fetch"
+    "compared the two tiers at the API boundary: viewer GET /api/connections returned HTTP 403 (the defect) while viewer GET /api/runtime/inventory-sources returned HTTP 200 with the narrow envelope {id, type, name, state, surfaces, credentialsInvalid}; the admin GET /api/connections for the same source additionally carried address 'https://10.255.255.1:8006', hostAliases ['scratch-pve','10.255.255.1'] and stateReason, none of which appear in the projection",
+    "logged every viewer API call through the proxy across ~50s (3+ background refetch cycles) at 1280x800: GET /api/runtime/inventory-sources -> 200 x4 (initial mount plus background refetches at the 15s poll interval) and zero GET /api/connections calls of any status",
+    "counted admin-endpoint denials in the backend log over the same window: 0 lines matching 'non-admin' / 'attempted to access admin endpoint', down from one denial per mount plus one per 15s refetch",
+    "reloaded /infrastructure at 375x812 as the viewer and confirmed the banner still renders with identical copy, with documentElement.scrollWidth not exceeding the 375px viewport (no horizontal overflow)",
+    "loaded /infrastructure as the ADMIN session at 1280x800 and confirmed the banner renders byte-identical text to the viewer, proving the projection is not privilege-dependent and that admins keep the warning"
   ]
 }

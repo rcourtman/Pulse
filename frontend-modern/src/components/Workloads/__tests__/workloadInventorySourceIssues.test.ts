@@ -1,58 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { Connection } from '@/api/connections';
+import type { RuntimeInventorySource } from '@/api/runtimeInventorySources';
 import { buildWorkloadInventorySourceIssues } from '../workloadInventorySourceIssues';
 
-const connection = (overrides: Partial<Connection>): Connection =>
-  ({
-    id: 'pve:delly',
-    type: 'pve',
-    name: 'delly',
-    address: 'https://delly:8006',
-    state: 'active',
-    enabled: true,
-    surfaces: ['vms', 'containers', 'storage', 'backups'],
-    scope: { vms: true, containers: true, storage: true, backups: true },
-    lastSeen: null,
-    lastError: null,
-    source: 'agent',
-    fleet: {
-      enrollmentState: 'configured',
-      livenessState: 'active',
-      versionDrift: 'not-applicable',
-      adapterHealth: 'healthy',
-      configRollout: 'configured',
-      credentialStatus: 'verified',
-      updateStatus: 'not-applicable',
-      remoteControl: 'not-applicable',
-    },
-    capabilities: {
-      supportsPause: true,
-      supportsScope: true,
-      supportsTest: true,
-    },
-    ...overrides,
-  }) as Connection;
+const source = (overrides: Partial<RuntimeInventorySource>): RuntimeInventorySource => ({
+  id: 'pve:delly',
+  type: 'pve',
+  name: 'delly',
+  state: 'active',
+  surfaces: ['vms', 'containers', 'storage', 'backups'],
+  credentialsInvalid: false,
+  ...overrides,
+});
 
 describe('buildWorkloadInventorySourceIssues', () => {
-  it('reports enabled workload-capable sources with invalid credentials', () => {
+  it('reports workload-capable sources with invalid credentials', () => {
     const issues = buildWorkloadInventorySourceIssues([
-      connection({
-        state: 'unauthorized',
-        fleet: {
-          enrollmentState: 'configured',
-          livenessState: 'unauthorized',
-          versionDrift: 'not-applicable',
-          adapterHealth: 'blocked',
-          configRollout: 'configured',
-          credentialStatus: 'invalid',
-          updateStatus: 'not-applicable',
-          remoteControl: 'not-applicable',
-        },
-        lastError: {
-          at: '2026-05-13T23:58:54Z',
-          message: 'Authentication failed - check API token or credentials',
-        },
-      }),
+      source({ state: 'unauthorized', credentialsInvalid: true }),
     ]);
 
     expect(issues).toEqual([
@@ -63,25 +26,42 @@ describe('buildWorkloadInventorySourceIssues', () => {
         coverageLabel: 'VMs and containers',
         description:
           'Pulse has VMs and containers enabled for delly, but its Proxmox VE API credentials are invalid.',
-        detail: 'Authentication failed. Re-check the API token or username/password.',
       }),
     ]);
   });
 
-  it('ignores active, disabled, and non-workload sources', () => {
+  it('flags credential failure from the projection flag alone', () => {
     const issues = buildWorkloadInventorySourceIssues([
-      connection({ id: 'pve:pi', name: 'pi', state: 'active' }),
-      connection({ id: 'pve:paused', enabled: false, state: 'unauthorized' }),
-      connection({
+      source({ state: 'stale', credentialsInvalid: true }),
+    ]);
+
+    expect(issues[0]?.stateLabel).toBe('Credentials invalid');
+  });
+
+  it('ignores active and non-workload sources', () => {
+    const issues = buildWorkloadInventorySourceIssues([
+      source({ id: 'pve:pi', name: 'pi', state: 'active' }),
+      source({
         id: 'pbs:tower',
         type: 'pbs',
         name: 'pbs-docker',
         state: 'unreachable',
         surfaces: ['backups'],
-        scope: { backups: true },
       }),
     ]);
 
     expect(issues).toEqual([]);
+  });
+
+  // The monitoring:read projection carries no raw error text, so the banner
+  // must not reintroduce a detail line. Full diagnostics live on
+  // Settings > Infrastructure for the admin who can act on them.
+  it('never emits a raw error detail line', () => {
+    const issues = buildWorkloadInventorySourceIssues([
+      source({ state: 'unreachable', credentialsInvalid: false }),
+    ]);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).not.toHaveProperty('detail');
   });
 });

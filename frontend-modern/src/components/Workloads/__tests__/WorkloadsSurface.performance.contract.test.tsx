@@ -183,8 +183,8 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   },
 }));
 
-vi.mock('@/api/connections', () => ({
-  ConnectionsAPI: {
+vi.mock('@/api/runtimeInventorySources', () => ({
+  RuntimeInventorySourcesAPI: {
     list: connectionsApiMocks.list,
   },
 }));
@@ -497,7 +497,7 @@ describe('Workloads performance contract', () => {
     workloadsRefetchMock.mockReset();
     navigateSpy.mockReset();
     connectionsApiMocks.list.mockReset();
-    connectionsApiMocks.list.mockResolvedValue({ connections: [], systems: [] });
+    connectionsApiMocks.list.mockResolvedValue({ sources: [] });
     resetCreateNonSuspendingQueryCacheForTest();
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
@@ -609,8 +609,6 @@ describe('Workloads performance contract', () => {
                         coverageLabel: 'VMs and containers',
                         description:
                           'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
-                        detail:
-                          'Connection blocked. The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
                       },
                       {
                         id: 'docker:tower',
@@ -642,11 +640,14 @@ describe('Workloads performance contract', () => {
           'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
         ),
       ).toBeInTheDocument();
+      // The monitoring:read projection carries no raw error text, so the
+      // banner renders the product-level description only. Full diagnostics
+      // stay on Settings > Infrastructure.
       expect(
-        screen.getByText(
+        screen.queryByText(
           'Connection blocked. The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
         ),
-      ).toBeInTheDocument();
+      ).not.toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Review infrastructure sources' })).toHaveAttribute(
         'href',
         '/settings/infrastructure',
@@ -1016,11 +1017,17 @@ describe('Workloads performance contract', () => {
       expect(workloadsStateSource).toContain('useWorkloadsDerivedState');
       expect(workloadsStateSource).toContain('useWorkloadRouteState');
       expect(workloadsStateSource).toContain('buildWorkloadInventorySourceIssues');
-      expect(workloadsStateSource).toContain('createNonSuspendingQuery<ConnectionsListResponse');
+      expect(workloadsStateSource).toContain(
+        'createNonSuspendingQuery<RuntimeInventorySourcesResponse',
+      );
       expect(workloadsStateSource).toContain('connectionsSnapshot.refetch({ background: true })');
       expect(workloadsStateSource).not.toContain('createResource<ConnectionsListResponse');
+      // Workloads is a monitoring surface: it must read the monitoring:read
+      // projection, never the RequireAdmin connections ledger.
+      expect(workloadsStateSource).toContain('RuntimeInventorySourcesAPI.list()');
+      expect(workloadsStateSource).not.toContain('ConnectionsAPI');
       expect(workloadInventorySourceIssuesSource).toContain('WORKLOAD_CAPABLE_TYPES');
-      expect(workloadInventorySourceIssuesSource).toContain('formatConnectionErrorMessage');
+      expect(workloadInventorySourceIssuesSource).not.toContain('formatConnectionErrorMessage');
       expect(workloadsStateSource).toContain('createWorkloadSortComparator');
       expect(workloadsStateSource).toContain('filterWorkloads(params)');
       expect(workloadsStateSource).not.toContain('useBreakpoint');

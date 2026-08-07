@@ -8905,6 +8905,46 @@ invalid or unknown image without discarding a valid display name.
 `internal/api/route_inventory_test.go` pin the entitlement, shape, image, and
 route contracts.
 
+### Inventory source health is a narrow monitoring-tier projection
+
+`GET /api/runtime/inventory-sources` is the authenticated `monitoring:read`
+boundary for "which of my monitored sources is failing to deliver inventory".
+It is the second member of the `/api/runtime/*` family established by
+`GET /api/runtime/branding`: a narrow, explicitly whitelisted projection served
+at the session tier, never a privilege-filtered view of an administrative
+record.
+
+The response envelope is `{"sources": [...]}` where each entry is
+`RuntimeInventorySource` in `internal/api/runtime_inventory_sources.go` and
+carries exactly six fields: `id`, `type`, `name`, `state`, `surfaces`, and
+`credentialsInvalid`. It is deliberately **not** a subset of `Connection`.
+Nothing that locates a source or describes how Pulse authenticates to it has a
+field to travel in — no `address`, `hostAliases`, `stateReason`, `lastError`,
+`lastSeen`, `agentIdentity`, `agentVersion`, `source`, `fleet`, or
+`capabilities`. Widening this type is a deliberate disclosure decision;
+`TestRuntimeInventorySourceWireShapeIsWhitelisted` fails on any added field and
+`TestRuntimeInventorySourcesOmitAdministrativeFacts` fails if a fully populated
+administrative `Connection` leaks an address, hostname, agent version or error
+string through the projection.
+
+Three reductions happen server-side so the client never receives the inputs:
+disabled sources are dropped entirely rather than shipped with an `enabled`
+flag; the scope-overrides-declared-surfaces rule is resolved into one effective
+`surfaces` list; and the several fleet credential signals
+(`state == unauthorized`, `fleet.credentialStatus`, `fleet.credentialHealth`)
+collapse into the single `credentialsInvalid` boolean.
+
+The administrative ledger contract is unchanged: `GET /api/connections` remains
+`RequireAdmin` + `settings:read` and remains the only source of addresses,
+agent identity, fleet governance and raw error text. Monitoring surfaces must
+read the projection; admin surfaces such as Settings → Infrastructure keep
+reading the ledger. The projection serves identical bytes to every session tier
+— there is no privileged variant, and reintroducing one would recreate the
+drift this split exists to prevent.
+`internal/api/runtime_inventory_sources_test.go` and
+`internal/api/route_inventory_test.go` pin the shape, the reductions, and the
+route registration.
+
 ### ZFS dataset evidence is an optional nested host-report contract
 
 The existing authenticated host-report payload may include `zfsDatasets` on a

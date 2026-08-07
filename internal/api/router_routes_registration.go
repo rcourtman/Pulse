@@ -217,6 +217,23 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.connectionsHandlers.HandleList))(w, req)
 	})
 
+	// Monitoring-tier inventory source health. Deliberately NOT the ledger
+	// above: it serves an explicit whitelist type carrying only source name,
+	// type, state and coverage, so monitoring surfaces can warn any viewer
+	// that inventory is incomplete without exposing addresses, agent identity
+	// or credential detail. See runtime_inventory_sources.go.
+	r.mux.HandleFunc("/api/runtime/inventory-sources", func(w http.ResponseWriter, req *http.Request) {
+		if r.connectionsHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "connections_unavailable", "Connections service unavailable", nil)
+			return
+		}
+		if req.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.connectionsHandlers.HandleRuntimeInventorySources))(w, req)
+	})
+
 	// Connection address probe — stateless type detection before credential entry.
 	r.mux.HandleFunc("/api/connections/probe", func(w http.ResponseWriter, req *http.Request) {
 		if r.connectionsHandlers == nil {

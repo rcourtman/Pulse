@@ -5065,6 +5065,25 @@ from `canAccessAdminSurface(config.ScopeSettingsRead)`. No recovery or storage
 route, payload, or persisted shape changes. The api-contracts entry holds the
 authoritative description and its proof.
 
+### Inventory source health projection persists nothing
+
+`internal/api/` and `internal/api/router_routes_registration.go` are canonical
+references in this contract's Extension Points, so this records the additive
+route registered there: `GET /api/runtime/inventory-sources`, served at
+`RequireAuth` + `monitoring:read` by
+`internal/api/runtime_inventory_sources.go`.
+
+The handler is read-only and stateless. It derives its response from the
+existing connections aggregator over already-loaded configuration and cached
+poller health, performs no network I/O, and writes no file, database row, or
+cache entry. It introduces no backup, restore, snapshot, or retention
+semantics, and it does not expose storage-backed connection material —
+addresses, credentials, and raw error text are excluded from the wire type by
+construction. `storage` appears only as an opaque string inside a source's
+`surfaces` coverage list, which is a monitoring-scope label and not a storage
+recovery artifact. The api-contracts entry holds the authoritative description
+and its proofs.
+
 ### API-layer refusal logging moved to debug
 
 `internal/api/` is a canonical reference in this contract's Extension Points.

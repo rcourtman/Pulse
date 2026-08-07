@@ -5848,6 +5848,26 @@ agents, resolve install tokens, mutate agent state, or reuse agent lifecycle
 authority. Agent setup and reporting remain independent of whether an
 operator has configured a custom application name or logo.
 
+### Inventory source health projection carries no agent identity
+
+The authenticated `GET /api/runtime/inventory-sources` monitoring read added in
+`internal/api/runtime_inventory_sources.go` is a source-health projection, not
+an agent enumeration, registration, update, or command route. It reuses the
+existing connections aggregator to derive per-source state, but the wire type
+it serves carries only `id`, `type`, `name`, `state`, `surfaces`, and
+`credentialsInvalid`.
+
+Agent lifecycle facts are specifically excluded and must stay excluded:
+`agentIdentity` (hostname, report IP, OS, kernel, architecture,
+`commandsEnabled`), `agentVersion`, `expectedAgentVersion`, `agentUpdate`,
+`agentModules`, and the unexported `agentID` / `agentTokenID` /
+`commandChannelConnected` fields never cross this boundary. The handler also
+skips the command-session liveness enrichment `HandleList` performs, because
+the fleet remote-control state that enrichment refines is not part of the
+projection. Agent enrollment, token minting, self-update, and command
+admission remain unaffected by whether a non-admin viewer can see that a
+source is unreachable.
+
 ### ZFS dataset inventory is read-only host evidence
 
 The Unified Agent host report may attach a bounded `zfsDatasets` collection to

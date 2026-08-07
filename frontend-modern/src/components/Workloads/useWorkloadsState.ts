@@ -1,6 +1,9 @@
 import { createEffect, createMemo, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
+import {
+  RuntimeInventorySourcesAPI,
+  type RuntimeInventorySourcesResponse,
+} from '@/api/runtimeInventorySources';
 import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import type { VM, Container, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -51,9 +54,8 @@ import { buildGuestParentNodeMapFromNodes } from './workloadTopology';
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
 const WORKLOADS_CONNECTIONS_POLL_INTERVAL_MS = 15000;
-const EMPTY_CONNECTIONS_RESPONSE: ConnectionsListResponse = {
-  connections: [],
-  systems: [],
+const EMPTY_INVENTORY_SOURCES_RESPONSE: RuntimeInventorySourcesResponse = {
+  sources: [],
 };
 
 const isProxmoxNodeResource = (resource: Resource): boolean =>
@@ -146,11 +148,15 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     enabled: workloadsEnabled,
   });
   const connectionsResourceKey = createMemo(() => (workloadsEnabled() ? 'enabled' : null));
-  const connectionsSnapshot = createNonSuspendingQuery<ConnectionsListResponse, string>({
+  // Monitoring-tier projection, not the admin connections ledger: Workloads is
+  // a surface viewers are meant to use, and they need the source-issue banner
+  // as much as an admin does. Every session takes this same path — the
+  // endpoint never widens for privileged callers.
+  const connectionsSnapshot = createNonSuspendingQuery<RuntimeInventorySourcesResponse, string>({
     source: connectionsResourceKey,
-    fetcher: () => ConnectionsAPI.list(),
-    initialValue: EMPTY_CONNECTIONS_RESPONSE,
-    cacheKey: (key) => `workloads-connections:${key}`,
+    fetcher: () => RuntimeInventorySourcesAPI.list(),
+    initialValue: EMPTY_INVENTORY_SOURCES_RESPONSE,
+    cacheKey: (key) => `workloads-inventory-sources:${key}`,
   });
 
   const dedupeGuests = (guests: WorkloadGuest[]): WorkloadGuest[] => {
@@ -338,7 +344,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     getWorkloadsDisconnectedState(reconnecting()),
   );
   const workloadInventoryIssues = createMemo(() =>
-    buildWorkloadInventorySourceIssues(connectionsSnapshot.value().connections ?? []),
+    buildWorkloadInventorySourceIssues(connectionsSnapshot.value().sources ?? []),
   );
   const workloadMetricHistory = useWorkloadTableMetricHistory({
     enabled: () => workloadMetricDisplayMode() === 'sparklines',
