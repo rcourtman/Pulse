@@ -121,6 +121,10 @@ host**.
   push notifications, and fourteen days of history.
 - **Pro** — Relay plus Patrol investigation, governed fixes, ninety days of
   history, centralized agent profiles, RBAC, audit logging, and reporting.
+- **MSP** — for managed service providers: one Pulse Account running many
+  client workspaces, each with an isolated Pulse runtime — separate
+  dashboards, alerts, users, audit history, and reports. Free sixty-day
+  two-client evaluation at [Pulse for MSPs](https://pulserelay.pro/msp.html).
 
 Core self-hosted monitoring is not gated by monitored-system or child-resource
 volume. See the [runtime-aligned capability reference](docs/PULSE_PRO.md) and
