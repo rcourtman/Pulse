@@ -76,3 +76,46 @@ of the capabilities users would deliberately reach for.
   and hosted handoff still absent.
 - Live browser verification recorded in
   `frontend-modern/browser-verification.json` in the landing commit.
+
+## Release Note Copy (ready to paste)
+
+This closes the release-note entry owed by this revision. `v6.2.0-rc.9` was
+already tagged when the work landed, so the copy is staged here rather than
+written into a version-numbered packet: choosing the next version and
+generating its packet is the governed release-preparation step. Paste these
+into the `Changed` and `Telemetry` sections of the next `v6.2.0` packet.
+
+### Changed
+
+- Free self-hosted installs now show the paid feature pages in Settings with
+  an inline explanation on each one, instead of hiding them, and Plans &
+  Billing is reachable from Settings without hunting for it. Monitoring pages,
+  alerts, onboarding, and notification channels carry no commercial content.
+- An install whose monitored estate reaches business scale (5 or more Proxmox
+  nodes, 10 or more Docker hosts, or 3 or more vSphere hosts) may see one card
+  asking whether Pulse is running at work. It never appears on the first day
+  the estate qualifies, and every button on it dismisses the card for good.
+- Demo mode, kiosk sessions, white-label runtimes, and MSP tenant containers
+  continue to show no commercial content anywhere. That suppression is
+  unchanged.
+
+### Telemetry
+
+- The usage telemetry payload moves to schema 8 and adds `business_estate`, a
+  true or false flag the install works out from the resource counts already in
+  the payload. No new detail about your infrastructure is collected. Telemetry
+  stays opt-out through `PULSE_TELEMETRY=false` or the Settings toggle, and the
+  new field is listed in the privacy documentation alongside the counts it is
+  derived from.
+- A checkout started from inside Pulse now records which surface it came from,
+  such as a feature page or the plans page. It is a fixed list of surface
+  names, never account or infrastructure data, and it is sent only at the
+  moment you choose to start a purchase.
+
+### Release ordering
+
+The checkout attribution field is read by the private license server, which
+decodes the handoff strictly. The license server must be deployed before a
+Pulse build that sends the field reaches users, or in-app upgrade clicks fail
+closed with the Pulse Account unavailable page. The constraint is recorded in
+`pulse-pro` `OPERATIONS.md` under `Stripe / Checkout attribution`.
