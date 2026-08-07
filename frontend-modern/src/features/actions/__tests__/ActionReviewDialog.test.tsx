@@ -6,7 +6,12 @@ import type { ActionAuditRecord, ActionDetailResponse } from '@/types/actionAudi
 import { ActionReviewDialog } from '../ActionReviewDialog';
 
 vi.mock('@/api/resourceActions', () => ({
-  ResourceActionsAPI: { getAction: vi.fn(), decideAction: vi.fn(), executeAction: vi.fn() },
+  ResourceActionsAPI: {
+    getAction: vi.fn(),
+    refreshAction: vi.fn(),
+    decideAction: vi.fn(),
+    executeAction: vi.fn(),
+  },
 }));
 vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -96,7 +101,17 @@ const makeAudit = (
   },
   verificationOutcome: { status: 'unknown' },
 });
-const detail = (audit: ActionAuditRecord): ActionDetailResponse => ({ audit, events: [] });
+const detail = (audit: ActionAuditRecord): ActionDetailResponse => ({
+  audit,
+  events: [],
+  readiness: {
+    ready: true,
+    code: 'ready',
+    message: 'Action is ready for approval and dispatch.',
+    refreshable: false,
+    checkedAt: '2026-07-12T00:00:00Z',
+  },
+});
 
 describe('ActionReviewDialog trust gates', () => {
   it('offers no approve or run control for legacy provenance', () => {
@@ -142,6 +157,54 @@ describe('ActionReviewDialog trust gates', () => {
     );
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Run action' })).toBeNull();
+  });
+
+  it('blocks approval with the exact live-readiness unblock while keeping rejection available', () => {
+    const current = detail(makeAudit('resolved', '2099-01-01T00:00:00Z'));
+    current.readiness = {
+      ready: false,
+      code: 'command_agent_disconnected',
+      message: 'Connect the command agent for web-42.',
+      remediation: 'Reconnect the agent, then refresh this check.',
+      refreshable: false,
+      checkedAt: '2026-07-12T00:00:00Z',
+    };
+    render(() => <ActionReviewDialog detail={current} onClose={vi.fn()} />);
+    expect(screen.getByTestId('action-review-invalid')).toHaveTextContent(
+      'Connect the command agent for web-42. Reconnect the agent, then refresh this check.',
+    );
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+  });
+
+  it('refreshes a drifted plan and hands the replacement back for review', async () => {
+    const current = detail(makeAudit('resolved', '2099-01-01T00:00:00Z'));
+    current.readiness = {
+      ready: false,
+      code: 'action_plan_drift',
+      message: 'The resource changed after this plan was created.',
+      remediation: 'Refresh the plan and review the replacement.',
+      refreshable: true,
+      checkedAt: '2026-07-12T00:00:00Z',
+    };
+    const replacementAudit = { ...current.audit, id: 'action-2' };
+    replacementAudit.plan = {
+      ...current.audit.plan,
+      actionId: 'action-2',
+      planHash: 'sha256:replacement',
+    };
+    const replacement = detail(replacementAudit);
+    vi.mocked(ResourceActionsAPI.refreshAction).mockResolvedValue(replacement);
+    const onChanged = vi.fn();
+    render(() => <ActionReviewDialog detail={current} onClose={vi.fn()} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh plan' }));
+    await waitFor(() => {
+      expect(ResourceActionsAPI.refreshAction).toHaveBeenCalledWith(
+        'action-1',
+        'sha256:reviewed-plan',
+      );
+      expect(onChanged).toHaveBeenCalledWith(replacement);
+    });
   });
 
   it('keeps mock and other read-only sessions inspectable without mutation controls', () => {

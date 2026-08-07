@@ -779,11 +779,11 @@ func runEmergencyStopBlocksHumanAndPolicy(t *testing.T, store unified.ResourceSt
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved})); err != nil {
-		t.Fatal(err)
+	if _, err = service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved})); !errors.Is(err, unified.ErrActionEmergencyStop) {
+		t.Fatalf("human approval error=%v", err)
 	}
-	if _, err = service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), ""); !errors.Is(err, unified.ErrActionEmergencyStop) {
-		t.Fatalf("human error=%v", err)
+	if record, found, getErr := service.Get("default", plan.ActionID); getErr != nil || !found || record.State != unified.ActionStatePending {
+		t.Fatalf("blocked approval must remain pending: found=%v state=%s err=%v", found, record.State, getErr)
 	}
 	policy := restartRequest()
 	policy.RequestID = "policy-stop"
@@ -1211,6 +1211,86 @@ func TestDecideApprovesPendingAction(t *testing.T) {
 	})); !errors.As(err, &notFound) {
 		t.Fatalf("unknown action error = %v, want ActionNotFoundError", err)
 	}
+}
+
+func TestApprovalRequiresCurrentReadinessButRejectionRemainsAvailable(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.executor.readiness = &unified.ResourceActionReadiness{
+		Name:       "restart",
+		Available:  false,
+		ReasonCode: "agent_disconnected",
+		Reason:     "Connect the command agent for web-42.",
+	}
+
+	readiness := env.service.AssessCurrentReadiness(context.Background(), "default", mustActionRecord(t, env.service, plan.ActionID))
+	if readiness.Ready || readiness.Code != "agent_disconnected" || readiness.Message != "Connect the command agent for web-42." {
+		t.Fatalf("readiness=%#v", readiness)
+	}
+	decision := testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeApproved})
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, decision); !errors.Is(err, unified.ErrActionExecutionUnavailable) {
+		t.Fatalf("approval error=%v", err)
+	}
+	current := mustActionRecord(t, env.service, plan.ActionID)
+	if current.State != unified.ActionStatePending || len(current.Approvals) != 0 {
+		t.Fatalf("refused approval mutated record: %#v", current)
+	}
+
+	rejection := testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeRejected})
+	rejected, err := env.service.Decide(context.Background(), "default", plan.ActionID, rejection)
+	if err != nil || rejected.State != unified.ActionStateRejected {
+		t.Fatalf("rejected=%#v err=%v", rejected, err)
+	}
+}
+
+func TestRefreshReplacesExpiredPlanAndPreservesTrustedOrigin(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	origin := &unified.ActionOrigin{Surface: "operational_trust_attention", OperationalRecordID: "attention-1", EvidenceIDs: []string{"evidence-1"}}
+	plan, err := env.service.PlanWithOptions(context.Background(), "default", restartRequest(), PlanOptions{Actor: testActionActor("requester", "default"), Origin: origin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readinessChecks := 0
+	env.service.Now = func() time.Time {
+		readinessChecks++
+		if readinessChecks == 1 {
+			return plan.ExpiresAt.Add(time.Second)
+		}
+		return time.Now().UTC()
+	}
+	replacement, err := env.service.Refresh(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacement.ID == plan.ActionID || replacement.Request.RequestID != "refresh:"+plan.ActionID {
+		t.Fatalf("replacement=%#v", replacement)
+	}
+	if replacement.Origin == nil || replacement.Origin.Surface != origin.Surface || replacement.Origin.OperationalRecordID != origin.OperationalRecordID {
+		t.Fatalf("origin=%#v", replacement.Origin)
+	}
+	previous := mustActionRecord(t, env.service, plan.ActionID)
+	if previous.State != unified.ActionStateExpired {
+		t.Fatalf("previous state=%q", previous.State)
+	}
+
+	replayed, err := env.service.Refresh(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"))
+	if err != nil || replayed.ID != replacement.ID {
+		t.Fatalf("replayed=%#v err=%v", replayed, err)
+	}
+}
+
+func mustActionRecord(t *testing.T, service *Service, actionID string) unified.ActionAuditRecord {
+	t.Helper()
+	record, found, err := service.Get("default", actionID)
+	if err != nil || !found {
+		t.Fatalf("Get(%q): found=%v err=%v", actionID, found, err)
+	}
+	return record
 }
 
 func TestExecuteRunsApprovedActionToTerminalAudit(t *testing.T) {

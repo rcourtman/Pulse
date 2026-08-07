@@ -18,4 +18,13 @@ describe('ResourceActionsAPI durable inbox', () => {
     await ResourceActionsAPI.getAction('action/one');
     expect(fetchJSON).toHaveBeenCalledWith('/api/actions/action%2Fone');
   });
+
+  it('refreshes the exact reviewed action plan', async () => {
+    fetchJSON.mockResolvedValue({ audit: {}, events: [] });
+    await ResourceActionsAPI.refreshAction('action/one', ' sha256:reviewed ');
+    expect(fetchJSON).toHaveBeenCalledWith('/api/actions/action%2Fone/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ planHash: 'sha256:reviewed' }),
+    });
+  });
 });

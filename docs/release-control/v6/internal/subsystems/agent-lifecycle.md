@@ -2724,12 +2724,14 @@ in-flight projection.
 
 The canonical Actions lifecycle may ask an executor-owned
 `AvailabilityChecker` whether an already-planned capability is still reachable
-immediately before human or automatic policy dispatch admission. Agent
+before a human approval is persisted and again immediately before human or
+automatic policy dispatch admission. Agent
 connectivity and command-agent loss are read-only readiness evidence at this
-boundary: an explicit unavailable result produces the stable
-`action_execution_unavailable` refusal, a terminal failed action audit and
-lifecycle event, and the normal action-completed publication without creating
-a dispatch attempt or issuing an agent command. The check does not enroll,
+boundary: at approval it prevents the decision record and returns the exact
+bounded reconnect reason; at dispatch an explicit unavailable result produces
+the stable `action_execution_unavailable` refusal, a terminal failed action
+audit and lifecycle event, and the normal action-completed publication without
+creating a dispatch attempt or issuing an agent command. The check does not enroll,
 reconnect, reconfigure, update, or otherwise mutate an agent, and it cannot
 replace canonical planning, approval, policy authorization, dispatch receipt,
 or verification.

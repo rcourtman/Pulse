@@ -244,6 +244,7 @@ export type ActionAuditRefusalPrefix =
   | 'plan_drift:'
   | 'action_plan_expired:'
   | 'action_dry_run_only:'
+  | 'action_execution_unavailable:'
   | 'resource_remediation_locked:'
   | 'policy_authorization_expired:'
   | 'policy_authorization_invalid:'
@@ -346,7 +347,17 @@ export interface ActionDetailResponse {
   events: ActionLifecycleEvent[];
   attempt?: ActionDispatchAttempt;
   receipt?: ActionDispatchReceipt;
+  readiness: ActionReadiness;
   readOnly?: boolean;
+}
+
+export interface ActionReadiness {
+  ready: boolean;
+  code: string;
+  message: string;
+  remediation?: string;
+  refreshable: boolean;
+  checkedAt: string;
 }
 
 export interface ActionDecisionResponse {

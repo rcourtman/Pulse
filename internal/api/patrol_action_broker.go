@@ -81,6 +81,48 @@ func NewPatrolActionBroker(orgID string, resources *ResourceHandlers, policy ...
 	return broker
 }
 
+// NewActionRefreshPlanner reconstructs trusted planning inputs for both
+// operator-originated and broker-originated replacement plans. Patrol plans
+// are rebound to the service actor and freshly evaluated policy authorities;
+// the authenticated operator only requests the refresh and cannot author
+// those fields.
+func NewActionRefreshPlanner(resources *ResourceHandlers, policy PatrolActionPolicyProvider) actionlifecycle.RefreshPlanner {
+	return func(ctx context.Context, orgID string, previous unified.ActionAuditRecord, actor unified.ActionActor, requestID string) (unified.ActionRequest, actionlifecycle.PlanOptions, error) {
+		req := previous.Request
+		req.RequestID = requestID
+		req.Actor = unified.ActionActor{}
+		req.RequestedBy = ""
+		opts := actionlifecycle.PlanOptions{Actor: actor, Origin: previous.Origin}
+		if !isPatrolActionOrigin(previous.Origin) {
+			return req, opts, nil
+		}
+		proposal := aicontracts.ActionProposal{
+			ProposalID:      requestID,
+			FindingID:       previous.Origin.FindingID,
+			InvestigationID: previous.Origin.InvestigationID,
+			ResourceID:      previous.Request.ResourceID,
+			CapabilityName:  previous.Request.CapabilityName,
+			Params:          previous.Request.Params,
+			Reason:          previous.Request.Reason,
+			EvidenceIDs:     append([]string(nil), previous.Origin.EvidenceIDs...),
+		}
+		broker := &patrolActionBroker{orgID: orgID, lifecycle: resources.ActionLifecycle, policy: policy}
+		if err := broker.rejectSensitiveParams(ctx, proposal); err != nil {
+			return unified.ActionRequest{}, actionlifecycle.PlanOptions{}, err
+		}
+		factors, _ := broker.planPolicyFactors(ctx, proposal, broker.currentTime())
+		req.RequestedBy = patrolActionBrokerActor
+		opts.Actor = unified.ActionActor{
+			SubjectID:    patrolActionBrokerActor,
+			Kind:         unified.ActionActorService,
+			CredentialID: "service:patrol-action-broker",
+			OrgID:        orgID,
+		}
+		opts.PolicyFactors = factors
+		return req, opts, nil
+	}
+}
+
 func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string) (aicontracts.ActionCapabilityCatalog, error) {
 	resourceID = unified.CanonicalResourceID(resourceID)
 	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, resourceID)

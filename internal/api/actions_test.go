@@ -499,6 +499,8 @@ func TestHandleListActionsRejectsUnknownViewAndUnsafeLimit(t *testing.T) {
 func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true}}
+	h.SetActionExecutor(executor)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -568,6 +570,9 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	}
 	if decision.Audit.Result != nil {
 		t.Fatalf("approval must not execute the action, got result %#v", decision.Audit.Result)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("approval must not call the executor, calls=%d", executor.calls)
 	}
 
 	store, err := h.getStore("default")

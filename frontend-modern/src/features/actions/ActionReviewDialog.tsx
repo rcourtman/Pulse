@@ -37,6 +37,7 @@ export const ActionReviewDialog: Component<{
   const hasCurrentPolicyProvenance = createMemo(
     () => audit()?.plan.policyDecision?.status === 'resolved',
   );
+  const readiness = createMemo(() => props.detail?.readiness);
   const reviewedPlanHash = createMemo(() => audit()?.plan.planHash?.trim() || '');
   const aptParametersValid = createMemo(() => {
     const action = audit();
@@ -48,13 +49,14 @@ export const ActionReviewDialog: Component<{
     const timestamp = new Date(expiresAt).valueOf();
     return Number.isNaN(timestamp) || timestamp <= clock();
   });
-  const canDecide = () =>
+  const canReject = () =>
     !readOnly() &&
     reviewedPlanHash() &&
     hasCurrentPolicyProvenance() &&
     aptParametersValid() &&
     !isExpired() &&
     audit()?.state === 'pending_approval';
+  const canApprove = () => canReject() && readiness()?.ready === true;
   // Low-risk capabilities (rollback-supported, routine) collapse the decision
   // to one confirmation: a single click records the approval and dispatches
   // execution. Both lifecycle records are still written server-side.
@@ -65,11 +67,16 @@ export const ActionReviewDialog: Component<{
     hasCurrentPolicyProvenance() &&
     aptParametersValid() &&
     !isExpired() &&
+    readiness()?.ready === true &&
     (audit()?.state === 'approved' ||
       (audit()?.state === 'planned' && !audit()?.plan.requiresApproval));
   const invalidActionMessage = createMemo(() => {
     const state = audit()?.state;
-    const actionable = state === 'pending_approval' || state === 'approved' || state === 'planned';
+    const actionable =
+      state === 'pending_approval' ||
+      state === 'approved' ||
+      state === 'planned' ||
+      state === 'expired';
     if (!actionable) return '';
     if (readOnly())
       return 'This session is read-only. You can inspect the action and its policy evidence, but you cannot approve or run it.';
@@ -79,10 +86,28 @@ export const ActionReviewDialog: Component<{
       return 'This action has no current server policy provenance. Close it and create a new plan before approving or running anything.';
     if (!aptParametersValid())
       return 'This host-maintenance action contains unexpected operator-selected parameters. Close it and create a new plan; do not approve or run this record.';
+    if (readiness() && !readiness()!.ready) {
+      return [readiness()!.message, readiness()!.remediation].filter(Boolean).join(' ');
+    }
     if (isExpired())
-      return 'This action review expired. Close it and create a new plan so current resource and policy state can be checked again.';
+      return 'This action review expired. Refresh the plan so current resource and policy state can be checked again.';
     return '';
   });
+
+  const canRefreshPlan = createMemo(
+    () =>
+      !readOnly() &&
+      Boolean(reviewedPlanHash()) &&
+      (readiness()?.refreshable === true || isExpired()) &&
+      ['planned', 'pending_approval', 'approved', 'expired'].includes(audit()?.state ?? ''),
+  );
+
+  const actionableErrorMessage = (cause: unknown, fallback: string): string => {
+    if (!(cause instanceof Error)) return fallback;
+    const details = (cause as Error & { details?: Record<string, string> }).details;
+    const reason = details?.reason?.trim();
+    return reason || cause.message || fallback;
+  };
 
   const refresh = async () => {
     const actionId = audit()?.id;
@@ -111,9 +136,28 @@ export const ActionReviewDialog: Component<{
       );
       if (outcome === 'rejected') props.onClose();
     } catch (cause) {
-      const message =
-        cause instanceof Error ? cause.message : 'The decision could not be recorded.';
-      setError(message);
+      setError(actionableErrorMessage(cause, 'The decision could not be recorded.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const refreshPlan = async () => {
+    const action = audit();
+    if (!action || busy()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const replacement = await ResourceActionsAPI.refreshAction(action.id, reviewedPlanHash());
+      await props.onChanged?.(replacement);
+      notificationStore.success('Plan refreshed. Review the replacement before approving it.');
+    } catch (cause) {
+      setError(actionableErrorMessage(cause, 'The action plan could not be refreshed.'));
+      try {
+        await refresh();
+      } catch {
+        /* preserve the refresh failure */
+      }
     } finally {
       setBusy(false);
     }
@@ -141,9 +185,7 @@ export const ActionReviewDialog: Component<{
         'Action approved and dispatched. Review the recorded outcome below.',
       );
     } catch (cause) {
-      const message =
-        cause instanceof Error ? cause.message : 'The action could not be approved and run.';
-      setError(message);
+      setError(actionableErrorMessage(cause, 'The action could not be approved and run.'));
       try {
         await refresh();
       } catch {
@@ -170,8 +212,7 @@ export const ActionReviewDialog: Component<{
         'Action dispatch response recorded. Review execution, verification, and recovery separately.',
       );
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'The action could not be run.';
-      setError(message);
+      setError(actionableErrorMessage(cause, 'The action could not be run.'));
       try {
         await refresh();
       } catch {
@@ -236,10 +277,17 @@ export const ActionReviewDialog: Component<{
             </div>
             <footer class="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end">
               <Button onClick={props.onClose}>Close</Button>
-              <Show when={canDecide()}>
+              <Show when={canRefreshPlan()}>
+                <Button variant="primary" isLoading={busy()} onClick={() => void refreshPlan()}>
+                  Refresh plan
+                </Button>
+              </Show>
+              <Show when={canReject()}>
                 <Button variant="danger" disabled={busy()} onClick={() => void decide('rejected')}>
                   Reject
                 </Button>
+              </Show>
+              <Show when={canApprove()}>
                 <Show
                   when={singleConfirmation()}
                   fallback={

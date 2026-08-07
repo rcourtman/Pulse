@@ -32,6 +32,16 @@ export class ResourceActionsAPI {
     return apiFetchJSON<ActionDetailResponse>(`/api/actions/${encodeURIComponent(actionId)}`);
   }
 
+  static async refreshAction(actionId: string, planHash: string): Promise<ActionDetailResponse> {
+    return apiFetchJSON<ActionDetailResponse>(
+      `/api/actions/${encodeURIComponent(actionId)}/refresh`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ planHash: reviewedPlanHash(planHash) }),
+      },
+    );
+  }
+
   static async listPendingActions(): Promise<PendingActionsResponse> {
     return apiFetchJSON<PendingActionsResponse>('/api/actions/pending');
   }

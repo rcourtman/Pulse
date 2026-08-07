@@ -6584,6 +6584,16 @@ pending rather than converting a valid proposal into an investigation failure.
 An idempotent resubmission returns the existing action disposition and must not
 execute a terminal action twice.
 
+Operator review reads a server-computed current-readiness projection, and the
+shared lifecycle refuses a Patrol approval before persistence when the exact
+plan has expired, drifted, lost executor reachability, encountered an operator
+lock, or is stopped by current policy. An expired or drifted Patrol plan can be
+refreshed only through the shared lifecycle: the replacement gets a new action
+identity, retains trusted finding/investigation evidence links, and recomputes
+current tenant/resource policy authorities under the fixed Patrol service
+actor. The deciding human cannot supply or downgrade those broker-owned
+fields, and no prior approval transfers to the replacement.
+
 ### Canonical mutation registry boundary
 
 Assistant infrastructure mutations are classified by the generated
@@ -6597,10 +6607,11 @@ are omitted from offered schemas and denied if fabricated.
 
 The registry audits enumerate actual registered tool discriminator values and
 bind mechanically discovered API, job, and transport candidates to one registry
-disposition. The action lifecycle API surface registers four lifecycle
+disposition. The action lifecycle API surface registers five lifecycle
 entries — `action.api.plan`, `action.api.decision`, `action.api.execute`, and
-`action.api.force-fail` — all executed by `internal/actionlifecycle.Service`
-with committed-lifecycle delivery. `action.api.force-fail` is the operator
+`action.api.force-fail`, plus `action.api.refresh` — all executed by
+`internal/actionlifecycle.Service` with committed-lifecycle delivery.
+`action.api.force-fail` is the operator
 override that terminalizes a dispatched action stranded without agent
 completion evidence; it shares the `execute_action` capability and admin
 approval floor with execute, writes terminal inconclusive audit truth through

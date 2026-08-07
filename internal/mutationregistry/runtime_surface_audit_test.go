@@ -16,6 +16,7 @@ type routeClassification struct {
 
 var infrastructureRouteCatalog = map[string]routeClassification{
 	"POST /api/actions/plan":               {MutationID: "action.api.plan"},
+	"POST /api/actions/{id}/refresh":       {MutationID: "action.api.refresh"},
 	"GET /api/actions/pending":             {},
 	"GET /api/actions":                     {},
 	"GET /api/actions/{id}":                {},

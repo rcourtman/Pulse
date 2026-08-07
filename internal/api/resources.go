@@ -40,6 +40,7 @@ type ResourceHandlers struct {
 	actionEmergencyStop       func(orgID string) (bool, error)
 	actionDecisionAuthorizer  actionlifecycle.DecisionAuthorizer
 	actionExecutionAuthorizer actionlifecycle.ExecutionAuthorizer
+	actionRefreshPlanner      actionlifecycle.RefreshPlanner
 	discoveryReadiness        ResourceDiscoveryReadinessProvider
 }
 
@@ -117,6 +118,12 @@ func (h *ResourceHandlers) SetActionEmergencyStopChecker(checker func(orgID stri
 func (h *ResourceHandlers) SetActionAuthorizers(decision actionlifecycle.DecisionAuthorizer, execution actionlifecycle.ExecutionAuthorizer) {
 	h.actionDecisionAuthorizer = decision
 	h.actionExecutionAuthorizer = execution
+}
+
+// SetActionRefreshPlanner installs the trusted reconstruction hook used when
+// a broker-originated immutable plan must be replaced.
+func (h *ResourceHandlers) SetActionRefreshPlanner(planner actionlifecycle.RefreshPlanner) {
+	h.actionRefreshPlanner = planner
 }
 
 // SetActionCompletedPublisher configures the terminal action notification hook

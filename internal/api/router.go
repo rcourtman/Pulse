@@ -744,24 +744,26 @@ func (r *Router) setupRoutes() {
 		r.aiSettingsHandler.SetPolicyMutationCoordinator(r.resourceHandlers.ActionLifecycle().WithPolicyMutation)
 		r.resourceHandlers.SetActionTransitionPublisher(r.aiSettingsHandler.ReconcilePatrolActionTransition)
 		resourceHandlers := r.resourceHandlers
+		patrolPolicyProvider := func(ctx context.Context, scopedOrgID string) (PatrolActionPolicySnapshot, error) {
+			orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(scopedOrgID))
+			svc := r.aiSettingsHandler.GetAIService(orgCtx)
+			if svc == nil {
+				return PatrolActionPolicySnapshot{}, nil
+			}
+			cfg := svc.GetConfig()
+			if cfg == nil {
+				return PatrolActionPolicySnapshot{}, nil
+			}
+			effectiveAutonomyLevel := svc.GetEffectivePatrolAutonomyLevel()
+			return PatrolActionPolicySnapshot{
+				EffectiveAutonomyLevel: effectiveAutonomyLevel,
+				FullModeUnlocked:       effectiveAutonomyLevel == config.PatrolAutonomyFull,
+				EmergencyStop:          cfg.PatrolActionEmergencyStop,
+			}, nil
+		}
+		resourceHandlers.SetActionRefreshPlanner(NewActionRefreshPlanner(resourceHandlers, patrolPolicyProvider))
 		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
-			return NewPatrolActionBroker(orgID, resourceHandlers, func(ctx context.Context, scopedOrgID string) (PatrolActionPolicySnapshot, error) {
-				orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(scopedOrgID))
-				svc := r.aiSettingsHandler.GetAIService(orgCtx)
-				if svc == nil {
-					return PatrolActionPolicySnapshot{}, nil
-				}
-				cfg := svc.GetConfig()
-				if cfg == nil {
-					return PatrolActionPolicySnapshot{}, nil
-				}
-				effectiveAutonomyLevel := svc.GetEffectivePatrolAutonomyLevel()
-				return PatrolActionPolicySnapshot{
-					EffectiveAutonomyLevel: effectiveAutonomyLevel,
-					FullModeUnlocked:       effectiveAutonomyLevel == config.PatrolAutonomyFull,
-					EmergencyStop:          cfg.PatrolActionEmergencyStop,
-				}, nil
-			})
+			return NewPatrolActionBroker(orgID, resourceHandlers, patrolPolicyProvider)
 		})
 		r.aiSettingsHandler.SetProposalCatalogFactory(func(orgID string) tools.ProposalCatalog {
 			return func(ctx context.Context, resourceID string) ([]unifiedresources.ResourceCapability, error) {

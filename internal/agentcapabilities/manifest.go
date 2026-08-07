@@ -612,6 +612,7 @@ var (
 		AgentErrCodeResourceNotFound,
 		AgentErrCodeCapabilityNotFound,
 		AgentErrCodeActionExecutionUnavailable,
+		AgentErrCodeActionRefreshNotAllowed,
 	}
 	agentCapabilityDecisionActionErrorCodes = []string{
 		AgentErrCodeMockModeEnabled,
@@ -628,6 +629,13 @@ var (
 		AgentErrCodeActionDecisionConflict,
 		AgentErrCodeActionSeparationRequired,
 		AgentErrCodeActionReplanRequired,
+		AgentErrCodeActionExecutionUnavailable,
+		AgentErrCodeActionPlanDrift,
+		AgentErrCodeActionEmergencyStop,
+		AgentErrCodeActionDryRunOnly,
+		AgentErrCodeResourceRemediationLocked,
+		AgentErrCodeActionExecutorUnavailable,
+		AgentErrCodeActionReadinessCheckFailed,
 	}
 	agentCapabilityExecuteActionErrorCodes = []string{
 		AgentErrCodeMockModeEnabled,
@@ -642,6 +650,7 @@ var (
 		AgentErrCodeActionPlanExpired,
 		AgentErrCodeActionExecutionUnavailable,
 		AgentErrCodeActionPlanDrift,
+		AgentErrCodeActionEmergencyStop,
 		AgentErrCodeActionPlanIdentityMismatch,
 		AgentErrCodeResourceRemediationLocked,
 		AgentErrCodeActionExecutorUnavailable,
@@ -1054,7 +1063,7 @@ var canonicalManifest = Manifest{
 		{
 			Name:             DecideActionCapabilityName,
 			Title:            "Decide action",
-			Description:      "Record an approval decision (approved or rejected) on a previously planned action. The actor is taken from the authenticated identity; an explicit reason can be passed in the body. An exact retry returns the authoritative persisted decision without adding an approval or lifecycle event; a conflicting retry fails closed.",
+			Description:      "Record an approval decision (approved or rejected) on a previously planned action. The actor is taken from the authenticated identity; an explicit reason can be passed in the body. Approval rechecks current expiry, policy, executor, resource-contract, and executor-owned availability gates before persistence, while rejection remains available when readiness is false. An exact retry returns the authoritative persisted decision without adding an approval or lifecycle event; a conflicting retry fails closed.",
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             ActionDecisionCapabilityPath,

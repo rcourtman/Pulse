@@ -1842,6 +1842,15 @@ compatibility, but a checker that names the capability and reports it
 unavailable fails closed before either human or automatic policy admission.
 This refusal cannot alter the approved plan, select a replacement executor, or
 grant mutation authority from resource health alone.
+The lifecycle also evaluates these gates before recording a human approval.
+The immutable plan remains the reviewed snapshot, while the API projects
+current readiness separately and prevents approvals that are already known to
+fail before dispatch. Rejections are unaffected. Expired or drifted plans
+refresh into a distinct action ID with a fresh resource version, policy
+version, hash, expiry, and preflight; the replacement never inherits an
+approval from the old action. Patrol replacements preserve their trusted
+finding/investigation origin and recompute current tenant/resource authority
+factors server-side.
 `internal/unifiedresources/actions_test.go`,
 `internal/actionlifecycle/service_test.go`, `internal/api/actions_test.go`,
 `internal/api/contract_test.go`, and

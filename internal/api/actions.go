@@ -20,6 +20,7 @@ import (
 const maxActionPlanRequestBytes = 1 << 20
 const maxActionDecisionRequestBytes = 64 << 10
 const maxActionExecutionRequestBytes = 64 << 10
+const maxActionRefreshRequestBytes = 64 << 10
 const maxActionForceFailRequestBytes = 64 << 10
 const maxPendingActionAudits = 100
 
@@ -62,6 +63,10 @@ type actionDecisionResponse struct {
 type actionExecutionRequest struct {
 	Reason   string `json:"reason,omitempty"`
 	PlanHash string `json:"planHash,omitempty"`
+}
+
+type actionRefreshRequest struct {
+	PlanHash string `json:"planHash"`
 }
 
 // actionForceFailRequest carries the operator's justification for the
@@ -114,11 +119,12 @@ type actionInboxResponse struct {
 }
 
 type actionDetailResponse struct {
-	Audit    actionAuditProjection          `json:"audit"`
-	Events   []unified.ActionLifecycleEvent `json:"events"`
-	Attempt  *unified.ActionDispatchAttempt `json:"attempt,omitempty"`
-	Receipt  *unified.ActionDispatchReceipt `json:"receipt,omitempty"`
-	ReadOnly bool                           `json:"readOnly"`
+	Audit     actionAuditProjection           `json:"audit"`
+	Events    []unified.ActionLifecycleEvent  `json:"events"`
+	Attempt   *unified.ActionDispatchAttempt  `json:"attempt,omitempty"`
+	Receipt   *unified.ActionDispatchReceipt  `json:"receipt,omitempty"`
+	Readiness actionlifecycle.ActionReadiness `json:"readiness"`
+	ReadOnly  bool                            `json:"readOnly"`
 }
 
 // ActionLifecycle returns the shared transport-independent action lifecycle
@@ -139,6 +145,7 @@ func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
 		EmergencyStop:       h.actionEmergencyStop,
 		DecisionAuthorizer:  h.actionDecisionAuthorizer,
 		ExecutionAuthorizer: h.actionExecutionAuthorizer,
+		RefreshPlanner:      h.actionRefreshPlanner,
 	}
 }
 
@@ -291,8 +298,12 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 			}
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(actionDetailResponse{
-				Audit:    projectActionAudit(fixture.Audit, mockActionResourceRegistry()),
-				Events:   fixture.Events,
+				Audit:  projectActionAudit(fixture.Audit, mockActionResourceRegistry()),
+				Events: fixture.Events,
+				Readiness: actionlifecycle.ActionReadiness{
+					Code: "mock_read_only", Message: "Mock actions are read-only.",
+					Remediation: "Use a live Pulse instance to approve or run actions.", CheckedAt: time.Now().UTC(),
+				},
 				ReadOnly: true,
 			}); err != nil {
 				writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
@@ -315,10 +326,11 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionDetailResponse{
-		Audit:   h.projectActionAudit(GetOrgID(r.Context()), detail.Audit),
-		Events:  detail.Events,
-		Attempt: detail.Attempt,
-		Receipt: detail.Receipt,
+		Audit:     h.projectActionAudit(GetOrgID(r.Context()), detail.Audit),
+		Events:    detail.Events,
+		Attempt:   detail.Attempt,
+		Receipt:   detail.Receipt,
+		Readiness: h.ActionLifecycle().AssessCurrentReadiness(r.Context(), GetOrgID(r.Context()), detail.Audit),
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
 	}
@@ -442,6 +454,9 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	updated, err := lifecycle.Decide(r.Context(), orgID, actionID, canonicalDecision)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
+			if writeActionReadinessError(w, err) {
+				return
+			}
 			var persist *actionlifecycle.PersistError
 			if errors.As(err, &persist) {
 				writeJSONError(w, http.StatusInternalServerError, "action_decision_persist_failed", sanitizeErrorForClient(err, "Failed to persist action decision"))
@@ -465,6 +480,129 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "action_decision_encode_failed", "Failed to encode action decision")
 	}
+}
+
+// HandleRefreshAction replaces an expired or drifted immutable plan with a
+// newly validated plan. The reviewed hash binds the request to the record the
+// operator actually saw; broker origin and current authority inputs are
+// reconstructed only by trusted server code.
+func (h *ResourceHandlers) HandleRefreshAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if mock.IsMockEnabled() {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeMockModeEnabled, "Cannot refresh actions in mock mode")
+		return
+	}
+	actionID := strings.TrimSpace(r.PathValue("id"))
+	if actionID == "" || !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
+		return
+	}
+	var refresh actionRefreshRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionRefreshRequestBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&refresh); err != nil {
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action refresh request", map[string]string{"body": "request body must contain the reviewed plan hash"})
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action refresh request", map[string]string{"body": "request body must contain one JSON object"})
+		return
+	}
+	refresh.PlanHash = strings.TrimSpace(refresh.PlanHash)
+	if refresh.PlanHash == "" {
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action refresh request", map[string]string{"planHash": "reviewed plan hash is required"})
+		return
+	}
+	orgID := GetOrgID(r.Context())
+	actor, err := actionActorForRequest(h.cfg, r, orgID)
+	if err != nil {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
+		return
+	}
+	lifecycle := h.ActionLifecycle()
+	previous, found, err := lifecycle.Get(orgID, actionID)
+	if err != nil {
+		writeActionLifecycleReadError(w, err, func() {
+			writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
+		})
+		return
+	}
+	if !found {
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
+		return
+	}
+	if refresh.PlanHash != previous.Plan.PlanHash {
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The reviewed action plan changed; reload it before refreshing")
+		return
+	}
+	replacement, err := lifecycle.Refresh(r.Context(), orgID, actionID, actor)
+	if err != nil {
+		if errors.Is(err, actionlifecycle.ErrActionRefreshNotAllowed) {
+			writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionRefreshNotAllowed, "Only expired or drifted action plans can be refreshed")
+			return
+		}
+		if writeActionReadinessError(w, err) {
+			return
+		}
+		writeActionPlanError(w, err)
+		return
+	}
+	detail, found, err := lifecycle.Detail(orgID, replacement.ID)
+	if err != nil || !found {
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailFailed, "Replacement action detail is unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(actionDetailResponse{
+		Audit:     h.projectActionAudit(orgID, detail.Audit),
+		Events:    detail.Events,
+		Attempt:   detail.Attempt,
+		Receipt:   detail.Receipt,
+		Readiness: lifecycle.AssessCurrentReadiness(r.Context(), orgID, detail.Audit),
+	}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode replacement action detail")
+	}
+}
+
+// writeActionReadinessError maps failures shared by approval and dispatch to
+// the same stable client contract. Returning true indicates that the response
+// was written.
+func writeActionReadinessError(w http.ResponseWriter, err error) bool {
+	var availability *actionlifecycle.AvailabilityRefusedError
+	var freshness *actionlifecycle.FreshnessCheckError
+	var policy *actionlifecycle.PolicyCheckError
+	var availabilityCheck *actionlifecycle.AvailabilityCheckError
+	switch {
+	case errors.As(err, &availability):
+		writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
+			"resourceId":     availability.ResourceID,
+			"capabilityName": availability.CapabilityName,
+			"reasonCode":     availability.Readiness.ReasonCode,
+			"reason":         firstNonEmpty(availability.Readiness.Reason, "action execution is unavailable"),
+		})
+	case errors.Is(err, unified.ErrActionPlanDrift):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract; refresh the plan before continuing")
+	case errors.Is(err, unified.ErrActionEmergencyStop):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionEmergencyStop, "Action dispatch is stopped by the operator")
+	case errors.Is(err, unified.ErrResourceRemediationLocked):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeResourceRemediationLocked, "Resource is operator-locked against remediation")
+	case errors.Is(err, unified.ErrActionDryRunOnly):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionDryRunOnly, "Action plan is dry-run only and cannot be approved for execution")
+	case errors.Is(err, actionlifecycle.ErrExecutorUnavailable):
+		writeJSONError(w, http.StatusServiceUnavailable, agentcapabilities.AgentErrCodeActionExecutorUnavailable, "No action executor is available")
+	case errors.As(err, &freshness):
+		writeJSONError(w, http.StatusInternalServerError, "action_plan_validation_failed", sanitizeErrorForClient(err, "Failed to validate action plan freshness"))
+	case errors.As(err, &policy):
+		writeJSONError(w, http.StatusInternalServerError, "action_policy_validation_failed", sanitizeErrorForClient(err, "Failed to validate action policy"))
+	case errors.As(err, &availabilityCheck):
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionReadinessCheckFailed, sanitizeErrorForClient(err, "Failed to validate action execution availability"))
+	default:
+		return false
+	}
+	return true
 }
 
 func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request) {

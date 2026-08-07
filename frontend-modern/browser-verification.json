@@ -1,54 +1,42 @@
 {
   "version": 1,
+  "base_sha": "8fd43b307bf3faabc9c362d1ebccf1830be9ca0d",
+  "verified_at": "2026-08-07T15:30:51Z",
   "result": "passed",
-  "base_sha": "1019310adf4aebaa88d5de0933be95dfc61284c8",
-  "verified_at": "2026-08-07T12:40:13Z",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/components/BusinessEstateCard.tsx",
-    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/stores/sessionCapabilities.ts",
-    "frontend-modern/src/types/config.ts"
+    "frontend-modern/src/api/resourceActions.ts",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
+    "frontend-modern/src/types/actionAudit.ts",
+    "frontend-modern/src/utils/actionAuditPresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "7c22f48d04053556f07df34511b49847e9f9b2bd1217f819ff7d8b4f41ed83ef",
-    "frontend-modern/src/components/BusinessEstateCard.tsx": "af4463ea3a33de6a3a24b8ed89d41fcc42ceadb12736b6443a88556e18c88362",
-    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "c9d3a0405c626370239eaa3ff5fd1f7118887553ab8e80ef26b55008b817af3f",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "b6a8f9c622c72a86dc7a0034c479e86fb9a1919ad0eb4a5fcd81222242fae865",
-    "frontend-modern/src/stores/sessionCapabilities.ts": "455c254df2ea7236bb9a1202e848f7226b963e1e36c761799d6eeca70a845b19",
-    "frontend-modern/src/types/config.ts": "36f050dba43af75781f98435faaa9921072d696d6133fb7f10bdfe04506c39bd"
+    "frontend-modern/src/api/resourceActions.ts": "0c4bac0a4f779f6afeee39f45ad46d51baf0b1b5a47ebdc3f424148804f1c329",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "992b1203fb775cf2e1eb86ffc04f1ce5ca5e072f26dedfbb0f9338459022c2eb",
+    "frontend-modern/src/types/actionAudit.ts": "e44b0cf97b070c63da667fa035a2a5f427ccc58936b7a4296e520eec1f9a1ed0",
+    "frontend-modern/src/utils/actionAuditPresentation.ts": "fd1ae3e44b9881d7324845520cfdeaf958dcb30bf62a59f6ec69d342ca13290a"
   },
   "routes": [
-    "/",
-    "/settings/pulse-intelligence/billing/plan",
-    "/settings/security-roles"
-  ],
-  "states": [
-    "free Community tier with hideUpgrade=false served by the rebuilt dev backend (verified via /api/security/status)",
-    "sessionCapabilities.businessEstate=true from 6 mock PVE nodes on the free tier",
-    "business-estate card eligible state (star prompt dismissed, first-seen recorded on a prior day), re-exercised after the storage keys moved local to the component",
-    "business-estate card permanently dismissed state after each dismissal action",
-    "settings navigation for a free install showing Data & Reports, Roles, Users, Audit Log, Audit Webhooks, Remote Access, and Plans & Billing",
-    "Roles panel feature gate with visible View plans CTA on the free tier",
-    "Plans & Billing Community plan with the MSPs and multi-client providers section"
-  ],
-  "interactions": [
-    "logged in as admin via real clicks and typing at 1280x800",
-    "clicked 'See business plans' on the business-estate card: navigated to /settings/pulse-intelligence/billing/plan and set the permanent dismissal key",
-    "reset dismissal, reloaded, clicked 'This is a homelab': card removed from DOM and dismissal persisted (repeated against the final component bytes)",
-    "navigated to Roles via settings navigation and confirmed the inline gate with View plans CTA",
-    "read the Plans & Billing page including the MSP provider section and pulserelay.pro/msp link",
-    "repeated the card render and homelab dismissal at mobile viewport with the card clearing the bottom navigation bar"
+    "/actions?action=action-browser-1"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
+      "width": 1440,
+      "height": 1000
     },
     {
-      "width": 375,
-      "height": 812
+      "width": 390,
+      "height": 844
     }
+  ],
+  "states": [
+    "Pending action whose executor reports an exact command-agent readiness refusal",
+    "Drifted pending action with a refreshable replacement plan",
+    "Fresh replacement action ready for a new operator approval"
+  ],
+  "interactions": [
+    "Confirmed the exact executor-owned refusal and remediation are visible on desktop, Reject remains available, and Approve is absent",
+    "Confirmed the mobile dialog stays within the 390px viewport with no document overflow and keeps Close, Refresh plan, and Reject reachable",
+    "Refreshed the drifted plan through the real dialog and API client, confirmed the success notice, removed Refresh plan, and exposed Approve only for the fresh replacement",
+    "Reset the viewport override and finalized the browser session"
   ]
 }

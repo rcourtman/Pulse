@@ -46,6 +46,12 @@ type AvailabilityChecker interface {
 	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
 }
 
+// RefreshPlanner reconstructs broker-owned planning inputs for a replacement
+// plan. Public/operator actions use the lifecycle default; first-party
+// brokers use this hook to re-evaluate current policy factors without letting
+// the HTTP caller forge origin or authority metadata.
+type RefreshPlanner func(ctx context.Context, orgID string, previous unified.ActionAuditRecord, actor unified.ActionActor, requestID string) (unified.ActionRequest, PlanOptions, error)
+
 // Store is the narrow persistence surface the lifecycle needs. It is a
 // structural subset of unified.ResourceStore so the canonical store
 // satisfies it without adaptation.
@@ -86,6 +92,7 @@ type Service struct {
 	DecisionAuthorizer  DecisionAuthorizer
 	ExecutionAuthorizer ExecutionAuthorizer
 	StepUpVerifier      StepUpVerifier
+	RefreshPlanner      RefreshPlanner
 	// OnActionCompleted receives every terminal (completed/failed) audit
 	// record, including refused-before-dispatch failures, so SSE bridges
 	// and reconcilers observe the full lifecycle regardless of transport.
@@ -110,6 +117,19 @@ type ActionDetail struct {
 	Events  []unified.ActionLifecycleEvent `json:"events"`
 	Attempt *unified.ActionDispatchAttempt `json:"attempt,omitempty"`
 	Receipt *unified.ActionDispatchReceipt `json:"receipt,omitempty"`
+}
+
+// ActionReadiness is the current, server-computed admission posture for an
+// action. It is deliberately separate from the immutable plan preflight: the
+// plan records what was true when it was created, while readiness reports
+// whether the same action can safely cross approval and dispatch now.
+type ActionReadiness struct {
+	Ready       bool      `json:"ready"`
+	Code        string    `json:"code"`
+	Message     string    `json:"message"`
+	Remediation string    `json:"remediation,omitempty"`
+	Refreshable bool      `json:"refreshable"`
+	CheckedAt   time.Time `json:"checkedAt"`
 }
 
 type ActionListView string
@@ -212,6 +232,7 @@ var (
 	ErrApprovalActorNotHuman             = errors.New("detached or service actors cannot satisfy human approval")
 	ErrApprovalSeparationRequired        = errors.New("requester cannot approve this action")
 	ErrDecisionReplayConflict            = errors.New("action decision replay conflicts with the persisted decision")
+	ErrActionRefreshNotAllowed           = errors.New("action plan is current or no longer refreshable")
 )
 
 // ResourceNotFoundError reports that the requested resource is not present
@@ -469,6 +490,61 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 	return plan, nil
 }
 
+// Refresh creates a fresh immutable plan for an expired or drifted action.
+// The previous record remains historical (and an unexpired drifted record
+// naturally expires at its original short TTL); callers always receive the
+// replacement action ID and must review that replacement before deciding.
+func (s *Service) Refresh(ctx context.Context, orgID, actionID string, actor unified.ActionActor) (unified.ActionAuditRecord, error) {
+	previous, found, err := s.Get(orgID, actionID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if !found {
+		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: strings.TrimSpace(actionID)}
+	}
+	refreshable := previous.State == unified.ActionStateExpired || previous.Plan.ExpiresAt.IsZero() || !s.now().Before(previous.Plan.ExpiresAt)
+	if !refreshable {
+		freshnessErr := s.ValidatePlanFresh(orgID, previous)
+		switch {
+		case freshnessErr == nil:
+		case errors.Is(freshnessErr, unified.ErrActionPlanDrift):
+			refreshable = true
+		default:
+			return unified.ActionAuditRecord{}, &FreshnessCheckError{Err: freshnessErr}
+		}
+	}
+	if !refreshable {
+		return unified.ActionAuditRecord{}, ErrActionRefreshNotAllowed
+	}
+	requestID := "refresh:" + previous.ID
+	req := previous.Request
+	req.RequestID = requestID
+	req.RequestedBy = ""
+	req.Actor = unified.ActionActor{}
+	opts := PlanOptions{Actor: actor, Origin: previous.Origin}
+	if s.RefreshPlanner != nil {
+		req, opts, err = s.RefreshPlanner(ctx, strings.TrimSpace(orgID), previous, actor, requestID)
+		if err != nil {
+			return unified.ActionAuditRecord{}, err
+		}
+	}
+	plan, err := s.PlanWithOptions(ctx, orgID, req, opts)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if plan.ActionID == previous.ID {
+		return unified.ActionAuditRecord{}, fmt.Errorf("%w: replacement action identity did not change", ErrActionRefreshNotAllowed)
+	}
+	replacement, found, err := s.Get(orgID, plan.ActionID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if !found {
+		return unified.ActionAuditRecord{}, &QueryError{Op: "replacement action audit", Err: errors.New("persisted replacement is unavailable")}
+	}
+	return replacement, nil
+}
+
 // Get returns the authoritative audit record for an action.
 func (s *Service) Get(orgID, actionID string) (unified.ActionAuditRecord, bool, error) {
 	store, err := s.store(orgID)
@@ -686,11 +762,23 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 	if err := validateDecisionBinding(record, orgID, decision); err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
+	if record.State != unified.ActionStatePending {
+		return unified.ActionAuditRecord{}, unified.ErrActionNotPending
+	}
 	if s.DecisionAuthorizer == nil {
 		return unified.ActionAuditRecord{}, ErrDecisionAuthorizationUnavailable
 	}
 	if err := s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, record, decision); err != nil {
 		return unified.ActionAuditRecord{}, err
+	}
+	// Rejections must always remain possible, but an approval is only useful
+	// when the exact reviewed plan can still pass the same live gates used at
+	// dispatch. Checking here (inside the lifecycle boundary) prevents an
+	// approval from being persisted during a resource/policy/readiness race.
+	if decision.Outcome == unified.OutcomeApproved {
+		if err := s.ValidateCurrentReadiness(ctx, orgID, record); err != nil {
+			return unified.ActionAuditRecord{}, err
+		}
 	}
 	if err := s.validateApprovalFloor(ctx, record, decision, true); err != nil {
 		return unified.ActionAuditRecord{}, err
@@ -703,10 +791,6 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 		Reason:       decision.Reason,
 		Evidence:     &decision.Evidence,
 	}
-	if record.State != unified.ActionStatePending {
-		return unified.ActionAuditRecord{}, unified.ErrActionNotPending
-	}
-
 	now := s.now()
 	if approval.Timestamp.IsZero() {
 		approval.Timestamp = now
@@ -742,6 +826,11 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 				if err := s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, current, decision); err != nil {
 					return unified.ActionAuditRecord{}, err
 				}
+				if decision.Outcome == unified.OutcomeApproved {
+					if err := s.ValidateCurrentReadiness(ctx, orgID, current); err != nil {
+						return unified.ActionAuditRecord{}, err
+					}
+				}
 				if err := s.validateApprovalFloor(ctx, current, decision, false); err != nil {
 					return unified.ActionAuditRecord{}, err
 				}
@@ -765,6 +854,125 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 		return updated, nil
 	}
 	return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: unified.ErrActionDecisionRevisionConflict}
+}
+
+// ValidateCurrentReadiness applies every non-mutating gate that must remain
+// true from approval through dispatch. It intentionally does not validate the
+// approval state itself, so pending actions can be checked before a human
+// decision and approved actions can be checked again before execution.
+func (s *Service) ValidateCurrentReadiness(ctx context.Context, orgID string, record unified.ActionAuditRecord) error {
+	now := s.now()
+	switch record.State {
+	case unified.ActionStatePlanned, unified.ActionStatePending, unified.ActionStateApproved:
+	case unified.ActionStateExpired:
+		return unified.ErrActionPlanExpired
+	default:
+		return unified.ErrActionExecutionFinal
+	}
+	if record.Plan.ExpiresAt.IsZero() || !now.Before(record.Plan.ExpiresAt) || record.State == unified.ActionStateExpired {
+		return unified.ErrActionPlanExpired
+	}
+	if unified.NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy).Floor == unified.ApprovalDryRun {
+		return unified.ErrActionDryRunOnly
+	}
+	if stopped, err := s.emergencyStopped(orgID); err != nil {
+		return &PolicyCheckError{Err: err}
+	} else if stopped {
+		return unified.ErrActionEmergencyStop
+	}
+	if s.Executor == nil {
+		return ErrExecutorUnavailable
+	}
+	if err := s.ValidatePlanFresh(orgID, record); err != nil {
+		if errors.Is(err, unified.ErrActionPlanDrift) {
+			return err
+		}
+		return &FreshnessCheckError{Err: err}
+	}
+	store, err := s.store(orgID)
+	if err != nil {
+		return err
+	}
+	if err := validateExecutionPolicy(store, record); err != nil {
+		if errors.Is(err, unified.ErrResourceRemediationLocked) {
+			return err
+		}
+		return &PolicyCheckError{Err: err}
+	}
+	if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil {
+		var unavailable *AvailabilityRefusedError
+		if errors.As(err, &unavailable) {
+			return err
+		}
+		return &AvailabilityCheckError{Err: err}
+	}
+	return nil
+}
+
+// AssessCurrentReadiness converts the canonical readiness gates into a stable
+// UI/API projection while retaining exact executor-owned refusal detail.
+func (s *Service) AssessCurrentReadiness(ctx context.Context, orgID string, record unified.ActionAuditRecord) ActionReadiness {
+	checkedAt := s.now()
+	err := s.ValidateCurrentReadiness(ctx, orgID, record)
+	readiness := ActionReadiness{Ready: err == nil, Code: "ready", Message: "Action is ready for approval and dispatch.", CheckedAt: checkedAt}
+	if err == nil {
+		return readiness
+	}
+	readiness.Ready = false
+	readiness.Code = "readiness_check_failed"
+	readiness.Message = "Pulse could not confirm current action readiness."
+	readiness.Remediation = "Retry the readiness check before approving or running this action."
+	switch {
+	case errors.Is(err, unified.ErrActionPlanExpired):
+		readiness.Code = "action_plan_expired"
+		readiness.Message = "This action plan has expired."
+		readiness.Remediation = "Refresh the plan to re-check the current resource and policy state."
+		readiness.Refreshable = true
+	case errors.Is(err, unified.ErrActionPlanDrift):
+		readiness.Code = "action_plan_drift"
+		readiness.Message = "The resource or capability contract changed after this plan was created."
+		readiness.Remediation = "Refresh the plan and review the replacement before approving it."
+		readiness.Refreshable = true
+	case errors.Is(err, unified.ErrActionDryRunOnly):
+		readiness.Code = "action_dry_run_only"
+		readiness.Message = "This plan is dry-run only."
+		readiness.Remediation = "Create a plan for a capability that permits execution."
+	case errors.Is(err, unified.ErrActionEmergencyStop):
+		readiness.Code = "action_emergency_stop"
+		readiness.Message = "Action dispatch is stopped by the operator."
+		readiness.Remediation = "Turn off the Patrol emergency stop, then refresh readiness."
+	case errors.Is(err, unified.ErrResourceRemediationLocked):
+		readiness.Code = "resource_remediation_locked"
+		readiness.Message = "This resource is locked against remediation."
+		readiness.Remediation = "Remove the resource remediation lock, then refresh readiness."
+	case errors.Is(err, ErrExecutorUnavailable):
+		readiness.Code = "action_executor_unavailable"
+		readiness.Message = "No action executor is available."
+		readiness.Remediation = "Restore the action execution service before approving this action."
+	case errors.Is(err, unified.ErrActionExecutionUnavailable):
+		readiness.Code = "action_execution_unavailable"
+		readiness.Message = "Action execution is currently unavailable."
+		readiness.Remediation = "Restore target readiness, then refresh this check."
+		var unavailable *AvailabilityRefusedError
+		if errors.As(err, &unavailable) {
+			readiness.Code = firstNonEmptyString(unavailable.Readiness.ReasonCode, readiness.Code)
+			readiness.Message = firstNonEmptyString(unavailable.Readiness.Reason, readiness.Message)
+		}
+	case errors.Is(err, unified.ErrActionExecutionFinal):
+		readiness.Code = "action_not_actionable"
+		readiness.Message = "This action is no longer open for approval or dispatch."
+		readiness.Remediation = "Review the recorded outcome."
+	}
+	return readiness
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func decisionReplay(record unified.ActionAuditRecord, decision unified.ActionDecision) (exact, conflict bool) {
@@ -911,18 +1119,6 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 	if record.State == unified.ActionStateExpired {
 		return record, unified.ErrActionPlanExpired
 	}
-	if stopped, stopErr := s.emergencyStopped(orgID); stopErr != nil || stopped {
-		if stopErr != nil {
-			return unified.ActionAuditRecord{}, &PolicyCheckError{Err: stopErr}
-		}
-		failed, persistErr := RecordRefusedExecution(store, record, actorID, now, unified.ErrActionEmergencyStop)
-		if persistErr != nil {
-			return unified.ActionAuditRecord{}, &PersistError{Op: "emergency-stop refusal", Err: persistErr}
-		}
-		s.publishTransition(orgID, failed)
-		s.publishCompleted(failed)
-		return failed, unified.ErrActionEmergencyStop
-	}
 	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
 		if unified.IsPermanentActionExecutionRefusal(err) {
 			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
@@ -935,22 +1131,11 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 		}
 		return unified.ActionAuditRecord{}, err
 	}
-	if s.Executor == nil {
-		return unified.ActionAuditRecord{}, ErrExecutorUnavailable
-	}
-	if err := s.ValidatePlanFresh(orgID, record); err != nil {
-		if errors.Is(err, unified.ErrActionPlanDrift) {
-			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
-			if persistErr != nil {
-				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
-			}
-			s.publishTransition(orgID, failed)
-			s.publishCompleted(failed)
-			return failed, err
-		}
-		return unified.ActionAuditRecord{}, &FreshnessCheckError{Err: err}
-	}
-	if err := validateExecutionPolicy(store, record); err != nil {
+	// Reuse the exact gate set applied before approval. This second check is
+	// the dispatch-side half of the boundary: it closes the race between the
+	// operator's decision and durable dispatch admission without maintaining a
+	// second, subtly different readiness implementation.
+	if err := s.ValidateCurrentReadiness(ctx, orgID, record); err != nil {
 		if unified.IsPermanentActionExecutionRefusal(err) {
 			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
 			if persistErr != nil {
@@ -960,19 +1145,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 			s.publishCompleted(failed)
 			return failed, err
 		}
-		return unified.ActionAuditRecord{}, &PolicyCheckError{Err: err}
-	}
-	if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil {
-		if unified.IsPermanentActionExecutionRefusal(err) {
-			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
-			if persistErr != nil {
-				return unified.ActionAuditRecord{}, &PersistError{Op: "unavailable action execution refusal", Err: persistErr}
-			}
-			s.publishTransition(orgID, failed)
-			s.publishCompleted(failed)
-			return failed, err
-		}
-		return unified.ActionAuditRecord{}, &AvailabilityCheckError{Err: err}
+		return unified.ActionAuditRecord{}, err
 	}
 
 	started, startEvent, err := unified.BeginActionExecution(record, actorID, now)

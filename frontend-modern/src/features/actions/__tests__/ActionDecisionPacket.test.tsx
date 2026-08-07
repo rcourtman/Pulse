@@ -292,6 +292,13 @@ describe('ActionDecisionPacket', () => {
             transportRequestId: 'transport-1',
             receivedAt: '2026-07-12T00:05:00Z',
           },
+          readiness: {
+            ready: false,
+            code: 'action_not_actionable',
+            message: 'This action is no longer open for approval or dispatch.',
+            refreshable: false,
+            checkedAt: aptAudit.updatedAt,
+          },
         }}
       />
     ));

@@ -8466,6 +8466,17 @@ are replan-required. MFA is not implemented by labels: until a server verifier
 can validate and consume action-bound cryptographic evidence, MFA-required
 decisions remain unavailable and no API or product surface may claim otherwise.
 
+The human approval boundary consumes the same current, non-mutating readiness
+gates as dispatch before it persists an approved decision. Action detail
+includes a typed `readiness` projection with a stable code, bounded message,
+operator remediation, check time, and refreshability; an exact executor-owned
+reason remains visible instead of collapsing into a generic HTTP conflict.
+Rejection stays available when readiness is lost. Expired or drifted immutable
+plans may be replaced through `POST /api/actions/{id}/refresh`, bound to the
+reviewed plan hash. The server creates a new action identity, preserves trusted
+origin, and re-evaluates broker-owned policy factors; no prior approval carries
+to the replacement.
+
 Action completion now carries the unified-resource-owned `ActionResultV2`
 through canonical completion events and agent resource context while retaining
 legacy fields for one compatibility window. Lifecycle executors may return a

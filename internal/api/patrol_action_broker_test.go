@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -137,6 +138,99 @@ func TestPatrolActionBrokerSnapshotsTenantResourceAndCapabilityPolicyAtPlanTime(
 	}
 	if executor.calls != 0 {
 		t.Fatalf("descriptive provenance authorized dispatch: calls=%d", executor.calls)
+	}
+}
+
+func TestPatrolApprovalRefusesLostReadinessBeforeRecordingDecision(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	disposition, err := NewPatrolActionBroker("default", h).Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor.readiness = &unified.ResourceActionReadiness{
+		Name:       "restart",
+		Available:  false,
+		ReasonCode: "command_agent_disconnected",
+		Reason:     "Connect the command agent for web-42.",
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/actions/"+disposition.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved"}`))
+	request.SetPathValue("id", disposition.ActionID)
+	h.HandleDecideAction(recorder, actionHandlerTestRequest(request, "operator@example.com"))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var envelope struct {
+		Error   string            `json:"error"`
+		Details map[string]string `json:"details"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Error != "action_execution_unavailable" || envelope.Details["reasonCode"] != "command_agent_disconnected" || envelope.Details["reason"] != "Connect the command agent for web-42." {
+		t.Fatalf("envelope=%#v", envelope)
+	}
+	record, found, err := h.ActionLifecycle().Get("default", disposition.ActionID)
+	if err != nil || !found || record.State != unified.ActionStatePending || len(record.Approvals) != 0 || executor.calls != 0 {
+		t.Fatalf("record=%#v found=%v err=%v calls=%d", record, found, err, executor.calls)
+	}
+}
+
+func TestPatrolRefreshRebindsCurrentPolicyAndTrustedOrigin(t *testing.T) {
+	h, _ := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	policyVersion := "tenant-v1"
+	policy := func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "monitor", PolicyVersion: policyVersion}, nil
+	}
+	disposition, err := NewPatrolActionBroker("default", h, policy).Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous, found, err := h.ActionLifecycle().Get("default", disposition.ActionID)
+	if err != nil || !found {
+		t.Fatalf("previous found=%v err=%v", found, err)
+	}
+	registry, err := h.buildRegistry("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource, found := registry.Get(previous.Request.ResourceID)
+	if !found || resource == nil {
+		t.Fatal("planned resource missing")
+	}
+	changed := *resource
+	changed.UpdatedAt = changed.UpdatedAt.Add(time.Second)
+	changed.Name = changed.Name + " refreshed"
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: changed.UpdatedAt},
+		resources: []unified.Resource{changed},
+	})
+	h.cacheMu.Lock()
+	h.registryCache = make(map[string]registryCacheEntry)
+	h.cacheMu.Unlock()
+	policyVersion = "tenant-v2"
+	h.SetActionRefreshPlanner(NewActionRefreshPlanner(h, policy))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/actions/"+previous.ID+"/refresh", bytes.NewBufferString(`{"planHash":"`+previous.Plan.PlanHash+`"}`))
+	request.SetPathValue("id", previous.ID)
+	h.HandleRefreshAction(recorder, actionHandlerTestRequest(request, "operator@example.com"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var detail actionDetailResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	replacement := detail.Audit.ActionAuditRecord
+	if replacement.ID == previous.ID || replacement.Request.RequestID != "refresh:"+previous.ID || replacement.Request.Actor.SubjectID != patrolActionBrokerActor {
+		t.Fatalf("replacement=%#v", replacement)
+	}
+	if replacement.Origin == nil || replacement.Origin.FindingID != previous.Origin.FindingID || replacement.Origin.InvestigationID != previous.Origin.InvestigationID {
+		t.Fatalf("origin=%#v", replacement.Origin)
+	}
+	if !detail.Readiness.Ready || len(replacement.Plan.PolicyDecision.Authorities) != 3 || replacement.Plan.PolicyDecision.Authorities[1].Revision == previous.Plan.PolicyDecision.Authorities[1].Revision {
+		t.Fatalf("readiness=%#v policy=%#v", detail.Readiness, replacement.Plan.PolicyDecision)
 	}
 }
 

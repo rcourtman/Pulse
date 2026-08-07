@@ -37,6 +37,8 @@ const (
 	AgentErrCodeActionReadinessCheckFailed = "action_execution_availability_failed"
 	AgentErrCodeActionPlanDrift            = "action_plan_drift"
 	AgentErrCodeActionPlanIdentityMismatch = "action_plan_identity_mismatch"
+	AgentErrCodeActionRefreshNotAllowed    = "action_refresh_not_allowed"
+	AgentErrCodeActionEmergencyStop        = "action_emergency_stop"
 	AgentErrCodeResourceRemediationLocked  = "resource_remediation_locked"
 	AgentErrCodeMockModeEnabled            = "mock_mode_enabled"
 	AgentErrCodeActionExecutorUnavailable  = "action_executor_unavailable"

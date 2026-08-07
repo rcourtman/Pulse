@@ -436,6 +436,7 @@ var allRouteAllowlist = []string{
 	"POST /api/actions/{id}/decision",
 	"POST /api/actions/{id}/execute",
 	"POST /api/actions/{id}/force-fail",
+	"POST /api/actions/{id}/refresh",
 	"/api/guests/metadata",
 	"/api/guests/metadata/",
 	"/api/docker/metadata",

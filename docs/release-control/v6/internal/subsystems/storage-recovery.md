@@ -2208,10 +2208,15 @@ connection outcome, but they do not become storage or restore authority.
 ### Recovery actions retain execution-time readiness checks
 
 Recovery-oriented capabilities admitted to canonical Actions are subject to
-the same execution-time `AvailabilityChecker` gate as every other governed
-action. Losing executor or agent reachability after planning or approval
-produces a persisted `action_execution_unavailable` terminal no-effect refusal
-before a dispatch attempt for both human and automatic policy execution.
+the same current `AvailabilityChecker` gate as every other governed action.
+Losing executor or agent reachability after planning prevents a human approval
+from being recorded and exposes the bounded reconnect reason. If readiness is
+lost after approval, execution produces a persisted
+`action_execution_unavailable` terminal no-effect refusal before a dispatch
+attempt for both human and automatic policy execution. Expired or drifted
+plans refresh only through the shared action lifecycle into a distinct action
+identity; recovery consumers cannot reuse the old approval or invent a
+storage-local replacement path.
 Recovery Assurance remains a separate deterministic domain: backup freshness,
 protection posture, restore-chain evidence, and recoverability cannot satisfy
 action authorization or live executor readiness, and the readiness refusal

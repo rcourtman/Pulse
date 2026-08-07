@@ -20668,6 +20668,8 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionReadinessCheckFailed": agentcapabilities.AgentErrCodeActionReadinessCheckFailed,
 		"AgentErrCodeActionPlanDrift":            agentcapabilities.AgentErrCodeActionPlanDrift,
 		"AgentErrCodeActionPlanIdentityMismatch": agentcapabilities.AgentErrCodeActionPlanIdentityMismatch,
+		"AgentErrCodeActionRefreshNotAllowed":    agentcapabilities.AgentErrCodeActionRefreshNotAllowed,
+		"AgentErrCodeActionEmergencyStop":        agentcapabilities.AgentErrCodeActionEmergencyStop,
 		"AgentErrCodeResourceRemediationLocked":  agentcapabilities.AgentErrCodeResourceRemediationLocked,
 		"AgentErrCodeMockModeEnabled":            agentcapabilities.AgentErrCodeMockModeEnabled,
 		"AgentErrCodeActionExecutorUnavailable":  agentcapabilities.AgentErrCodeActionExecutorUnavailable,

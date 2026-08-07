@@ -107,6 +107,13 @@ const ACTION_REFUSAL_PRESENTATION: Record<
     className:
       'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
   },
+  'action_execution_unavailable:': {
+    label: 'Target not ready',
+    detail:
+      'Pulse refused the action before dispatch because the target or execution path was not ready.',
+    className:
+      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  },
   'resource_remediation_locked:': {
     label: 'Resource remediation locked',
     detail:
