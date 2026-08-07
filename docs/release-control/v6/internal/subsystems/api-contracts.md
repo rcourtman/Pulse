@@ -9001,3 +9001,28 @@ keeps the surface that started it. Unrelated query parameters keep their
 existing pass-through behavior.
 `TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal` pins
 both the forwarding and the drop of a malformed value.
+
+### Security status serves an infrastructureRead settings capability
+
+`GET /api/security/status` adds `settingsCapabilities.infrastructureRead` to the
+authenticated and privileged payloads
+(`internal/api/security_status_capabilities.go`). It is derived from the same
+`canAccessAdminSurface(config.ScopeSettingsRead)` expression that the routes
+behind Settings → Infrastructure enforce — `/api/connections`,
+`/api/config/nodes`, `/api/system/settings`, `/api/truenas/connections` and
+`/api/vmware/connections` are all `RequireAdmin` + `settings:read`, and
+`/api/discover` additionally requires `settings:write`. The field is additive
+and marshals as `false` for any session that cannot reach those routes, so
+clients that predate it are unaffected.
+
+The capability exists because the page it describes is not merely read-only for
+a non-admin, it is empty and noisy: mounting it started a 15s `/api/connections`
+poll and a 30s `/api/discover` poll whose every tick logged
+`Non-admin user attempted to access admin endpoint` at warn level. Serving the
+capability is what lets the client decline to mount the surface at all.
+
+`TestContract_SecurityStatusInfrastructureReadTracksSettingsReadScope` pins both
+halves: the served value for a `settings:read` token versus a
+`monitoring:read` token, and that the routes agree with whichever value was
+served. `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` keeps the
+withheld case honest against live 403s.

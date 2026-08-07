@@ -38,6 +38,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Infrastructure',
         icon: Server,
         iconProps: { strokeWidth: 2 },
+        // Every data source on this page is RequireAdmin + settings:read, and
+        // the page mounts 15s/30s pollers against two of them. Without the
+        // gate a non-admin session renders an all-empty page that reprints a
+        // "Non-admin user attempted to access admin endpoint" warn line
+        // roughly every four seconds.
+        requiredCapability: 'infrastructureRead',
       },
     ],
   },

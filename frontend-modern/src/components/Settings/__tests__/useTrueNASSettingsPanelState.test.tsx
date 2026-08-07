@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrueNASAPI } from '@/api/truenas';
 import { notificationStore } from '@/stores/notifications';
@@ -56,6 +57,30 @@ const safeTrueNASPreview = () => ({
 describe('useTrueNASSettingsPanelState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  // /api/truenas/connections is RequireAdmin, and Settings constructs this hook
+  // for every settings tab, so a non-admin session used to 403 on any settings
+  // page it opened.
+  it('skips the connection load for a session without the infrastructure capability', async () => {
+    const { result } = renderHook(() => useTrueNASSettingsPanelState({ canLoad: () => false }));
+
+    await waitFor(() => expect(result.loading()).toBe(false));
+    expect(TrueNASAPI.listConnections).not.toHaveBeenCalled();
+    expect(result.connections()).toEqual([]);
+  });
+
+  // The capability resolves asynchronously, so sampling it once at mount would
+  // withhold the load from admins too.
+  it('loads once the infrastructure capability resolves', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValue([]);
+    const [canLoad, setCanLoad] = createSignal(false);
+
+    renderHook(() => useTrueNASSettingsPanelState({ canLoad }));
+    expect(TrueNASAPI.listConnections).not.toHaveBeenCalled();
+
+    setCanLoad(true);
+    await waitFor(() => expect(TrueNASAPI.listConnections).toHaveBeenCalledTimes(1));
   });
 
   it('treats a 404 list response as a feature-disabled integration state', async () => {

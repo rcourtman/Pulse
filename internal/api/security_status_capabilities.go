@@ -12,6 +12,14 @@ import (
 )
 
 type securityStatusSettingsCapabilities struct {
+	// InfrastructureRead mirrors the RequireAdmin + settings:read gate that
+	// every data source behind Settings → Infrastructure enforces
+	// (/api/connections, /api/config/nodes, /api/system/settings,
+	// /api/truenas/connections, /api/vmware/connections, and /api/discover,
+	// which needs settings:write on top). Serving it lets the nav hide a page
+	// that would otherwise mount 15s and 30s pollers whose every request is
+	// refused and logged at warn level.
+	InfrastructureRead  bool `json:"infrastructureRead"`
 	APIAccessRead       bool `json:"apiAccessRead"`
 	APIAccessWrite      bool `json:"apiAccessWrite"`
 	AuthenticationRead  bool `json:"authenticationRead"`
@@ -247,6 +255,7 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	canManageRoles := snapshot.passesPrivilegedSessionGate() && canManageUsers
 
 	return securityStatusSettingsCapabilities{
+		InfrastructureRead:  canReadSettings,
 		APIAccessRead:       r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
 		APIAccessWrite:      r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
 		AuthenticationRead:  canReadSettings,

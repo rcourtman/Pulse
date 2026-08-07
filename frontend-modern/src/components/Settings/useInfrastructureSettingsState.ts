@@ -12,6 +12,11 @@ type InfrastructureEventBus = {
 
 interface UseInfrastructureSettingsStateParams {
   eventBus: InfrastructureEventBus;
+  // Every endpoint this hook reads is RequireAdmin, but Settings.tsx mounts it
+  // for every settings tab. Without the gate a non-admin session fires the
+  // whole bootstrap (nodes, discovery, system settings, TrueNAS, VMware) on any
+  // settings page and then keeps polling discovery.
+  canReadInfrastructure: Accessor<boolean>;
   discoveryEnabled: Accessor<boolean>;
   setDiscoveryEnabled: Setter<boolean>;
   discoverySubnet: Accessor<string>;
@@ -38,6 +43,7 @@ interface UseInfrastructureSettingsStateParams {
 
 export function useInfrastructureSettingsState({
   eventBus,
+  canReadInfrastructure,
   discoveryEnabled,
   setDiscoveryEnabled,
   discoverySubnet,
@@ -68,12 +74,13 @@ export function useInfrastructureSettingsState({
     savingTemperatureSetting,
     setSavingTemperatureSetting,
   });
-  const trueNASSettings = useTrueNASSettingsPanelState();
-  const vmwareSettings = useVMwareSettingsPanelState();
+  const trueNASSettings = useTrueNASSettingsPanelState({ canLoad: canReadInfrastructure });
+  const vmwareSettings = useVMwareSettingsPanelState({ canLoad: canReadInfrastructure });
 
   const discoveryRuntime = useInfrastructureDiscoveryRuntimeState({
     eventBus,
     nodes: configuredNodes.nodes,
+    canReadInfrastructure,
     discoveryEnabled,
     setDiscoveryEnabled,
     discoverySubnet,
@@ -132,7 +139,12 @@ export function useInfrastructureSettingsState({
 
   onMount(async () => {
     try {
+      // loadSecurityStatus is what resolves canReadInfrastructure, so it always
+      // runs; /api/security/status is readable by any session.
       await loadSecurityStatus();
+      if (!canReadInfrastructure()) {
+        return;
+      }
       await new Promise((resolve) => setTimeout(resolve, 50));
       await configuredNodes.loadNodes();
       await new Promise((resolve) => setTimeout(resolve, 50));

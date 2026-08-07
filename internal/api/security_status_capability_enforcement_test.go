@@ -76,6 +76,7 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		"singleSignOnWrite",
 		"authenticationRead",
 		"authenticationWrite",
+		"infrastructureRead",
 	} {
 		if caps[key] != false {
 			t.Fatalf("%s = %v for a non-admin session, want false", key, caps[key])
@@ -87,6 +88,10 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 	for _, probe := range []struct{ method, path string }{
 		{http.MethodGet, "/api/security/tokens"},
 		{http.MethodGet, "/api/security/sso/providers"},
+		// Settings → Infrastructure reads these on mount and then polls two of
+		// them, so a withheld infrastructureRead has to line up with a refusal.
+		{http.MethodGet, "/api/config/nodes"},
+		{http.MethodGet, "/api/system/settings"},
 	} {
 		req := httptest.NewRequest(probe.method, probe.path, nil)
 		req.AddCookie(capabilitySessionCookie(t, "sso:outsider@example.com"))
@@ -109,7 +114,7 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "admin"))
-	for _, key := range []string{"apiAccessRead", "apiAccessWrite", "singleSignOnRead", "singleSignOnWrite"} {
+	for _, key := range []string{"apiAccessRead", "apiAccessWrite", "singleSignOnRead", "singleSignOnWrite", "infrastructureRead"} {
 		if caps[key] != true {
 			t.Fatalf("%s = %v for the configured admin, want true", key, caps[key])
 		}

@@ -338,6 +338,23 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('gates the Infrastructure nav item on the served infrastructureRead capability', () => {
+    // Unlike system-relay, Infrastructure is not a paid-feature teaser: every
+    // endpoint behind it is RequireAdmin, so a session without settings:read
+    // gets an all-empty page whose 15s and 30s pollers log a warn-level denial
+    // on every tick. Hiding the item is what stops the pollers mounting.
+    const infrastructureNavBlock = settingsNavCatalogSource.match(
+      /id: 'infrastructure-systems',[\s\S]*?requiredCapability: 'infrastructureRead',\n\s*},/,
+    );
+    expect(infrastructureNavBlock?.[0]).toBeTruthy();
+
+    // DEFAULT_SETTINGS_TAB points at the tab we just made blockable, so the
+    // fallback must resolve a reachable tab rather than the hardcoded default,
+    // or a non-admin lands back on the blocked route.
+    expect(settingsAccessSource).toContain('const fallbackTab = flatTabs()[0]?.id');
+    expect(settingsAccessSource).toContain('setActiveTab(fallbackTab)');
+  });
+
   it('keeps the external-agent (MCP) connector setup findable from sidebar search', () => {
     // The Assistant page hosts the pulse-mcp connector setup, but its label and
     // copy can't carry every term users search for. The nav item's search-only

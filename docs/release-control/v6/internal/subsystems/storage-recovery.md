@@ -5054,3 +5054,13 @@ body, and echoed onto the cancel return URL. It is never written to config
 persistence, the license store, or any recovery artifact, so the install's
 storage surface is unchanged. Attribution is retained only by the commercial
 backend, on the checkout intent it already owns.
+
+### Security status capability payload gained an infrastructure field
+
+`internal/api/` is a canonical reference in this contract's Extension Points, so
+this records the additive change made in
+`internal/api/security_status_capabilities.go`: the settings capability payload
+served by `GET /api/security/status` now carries `infrastructureRead`, derived
+from `canAccessAdminSurface(config.ScopeSettingsRead)`. No recovery or storage
+route, payload, or persisted shape changes. The api-contracts entry holds the
+authoritative description and its proof.

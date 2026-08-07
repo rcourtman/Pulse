@@ -5802,3 +5802,29 @@ pin this composition boundary.
 ZFS dataset table rows inside `StoragePoolDetail` inherit their separator from
 the shared `STORAGE_DETAIL_ROW_CLASS` presentation constant. The component
 must not reintroduce a raw border-token class for dataset rows.
+
+### The settings nav gates Infrastructure, and the blocked-route fallback is capability-aware
+
+`infrastructure-systems` now declares `requiredCapability: 'infrastructureRead'`
+in `frontend-modern/src/components/Settings/settingsNavCatalog.ts`, so
+`shouldHideSettingsNavItem` and `shouldBlockSettingsRouteItem` withhold both the
+sidebar entry and the route from a session the backend says cannot read it.
+
+This is a different gate from `system-relay` and `support-reporting`, which stay
+visible without their paid feature so the panel can render its own upgrade
+prompt. Infrastructure has no upgrade story: every endpoint behind it is
+`RequireAdmin`, so a non-admin got an all-empty page whose pollers logged a
+warn-level denial on every tick. Hiding the item is what stops those pollers
+mounting.
+
+Because `DEFAULT_SETTINGS_TAB` *is* `infrastructure-systems`, the blocked-route
+fallback in `useSettingsAccess.ts` can no longer resolve to the constant — that
+sent a refused session straight back to the tab that had just refused it. It now
+falls back to `flatTabs()[0]`, the first tab the session can actually reach, and
+only uses `DEFAULT_SETTINGS_TAB` when no tab resolves at all.
+
+Pinned by the `infrastructure-systems` block assertion in
+`settingsArchitecture.test.ts` and by
+`__tests__/infrastructureNavCapabilityGate.test.ts`, which also pins that
+neither gate fires before the security status resolves — hiding on an
+unresolved status would flash the default tab away from an admin on every load.

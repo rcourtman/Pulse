@@ -1,30 +1,37 @@
 {
   "version": 1,
+  "base_sha": "06d8bfe65ebf3683a07d9ec7775a50a9872418ce",
+  "verified_at": "2026-08-07T19:15:00Z",
   "result": "passed",
-  "base_sha": "5b07bdc3d8eab45ee004c3c71f22fd2f4d318371",
-  "verified_at": "2026-08-07T18:40:21Z",
   "changed_paths": [
-    "frontend-modern/src/components/BusinessEstateCard.tsx",
-    "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
-    "frontend-modern/src/utils/pricingHandoff.ts"
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
+    "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/BusinessEstateCard.tsx": "a3717b19a728ef33f775ccce714080b6affd0a56a3a3d8d7a678625a9a6af900",
-    "frontend-modern/src/components/Settings/useProLicensePanelState.ts": "bfed84fd6aefa15e7b2f7b3ba2c91d8f6e2379172c45bbce3822c7cb1151f776",
-    "frontend-modern/src/utils/pricingHandoff.ts": "7e5c6178f8811179d64894ab136a2ff4263181b61bdc7298a2d341aca9e9b0cc"
+    "frontend-modern/src/components/Settings/Settings.tsx": "0e400e1896d2272364f298f721ff6f7a867900cd0e49fb5c7a64432928662f6b",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "534c501a82919927c7bfcbbffd26a0f822d362247d8339e7de54696bd9ab172a",
+    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts": "d56324453d07a8ec7ce81f9a385251da456cae68c2b674d692c231f86b24498e",
+    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "406a7e7328017a501a085ce3e0754afb23d9927b4011fc4b976b5d79aa341a47",
+    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "8e7ff8c036632b474aa9e66ba388e1fa6a514d1cf85b15ff56a581fb6ab5a163",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "5e7ac8b1ba5b481323eb4d7e9751919ff2478840c85532452991649939732e80",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "cdaeb8a98deef07dee1069fd09ecd618360ba9058b197c297a8bd3ef7daddda0",
+    "frontend-modern/src/types/config.ts": "b918901c67294b7dcf6b0243ba92fd7a741468a009ea0a927f7caedb602ce2f9"
   },
   "routes": [
-    "/",
-    "/settings (Security > Roles, RBAC inline gate)",
-    "/settings (System > General, branding gate)",
-    "/settings/pulse-intelligence/billing/plan?source=gate-rbac",
-    "/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan&source=gate-rbac",
-    "/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan"
+    "/settings/infrastructure (non-admin proxy-auth session: route blocked, falls back to the first reachable tab)",
+    "/settings (non-admin: bare settings path resolves through the same blocked default tab)",
+    "/settings/infrastructure (admin proxy-auth session: page renders and loads)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 375,
@@ -32,18 +39,18 @@
     }
   ],
   "states": [
-    "free Community tier with presentationPolicy.hideUpgrade=false, served by an isolated worktree backend on port 7698 with 6 mock PVE nodes",
-    "RBAC inline feature gate rendered on the Roles panel for an unentitled install",
-    "plan route reached with gate attribution present, and separately with no source at all to exercise the plans-page default",
-    "business-estate card in its eligible state (star prompt already dismissed, first-seen recorded on a prior day)",
-    "branding gate for white_label, an unmapped feature key that routes straight to purchase-start rather than the plan page"
+    "authenticated non-admin proxy-auth session (X-Remote-Role=viewer) against a local backend on port 7855 fronted by a header-injecting shim; /api/security/status reports detailLevel=authenticated and settingsCapabilities.infrastructureRead=false",
+    "admin proxy-auth session (X-Remote-Role=admin) on the same instance; detailLevel=privileged and infrastructureRead=true",
+    "settings sidebar for the non-admin: the whole Infrastructure group is absent and the sidebar starts at Monitoring > Availability checks",
+    "settings sidebar for the admin: Infrastructure group present and selected, discovery card shows 'Last scanned 0s ago' proving the gated load ran once the capability resolved",
+    "empty-estate instance (0 connected systems) so the Infrastructure page renders its onboarding empty state rather than a populated table"
   ],
   "interactions": [
-    "clicked the RBAC gate 'View plans' CTA and confirmed its href carried ?source=gate-rbac, then confirmed the source survived canonical billing-route resolution on arrival",
-    "read the purchase-start hrefs rendered on the plan page: /auth/license-purchase-start?source=gate-rbac&feature=self_hosted_plan",
-    "loaded the same plan route with no source parameter and confirmed the purchase-start hrefs fell back to source=plans-page",
-    "clicked 'See business plans' on the business-estate card and confirmed it navigated to the plan route with ?source=estate-card and dismissed the card permanently",
-    "inspected the branding gate href and confirmed unmapped keys carry attribution too: /auth/license-purchase-start?source=gate-white-label&feature=white_label",
-    "re-exercised the attributed plan route at 375x812 and confirmed the purchase-start hrefs and layout hold at narrow width"
+    "deep-linked a non-admin straight to /settings/infrastructure and confirmed the route redirected to Availability checks instead of ping-ponging back to the blocked default tab",
+    "queried the rendered DOM for any /settings/infrastructure link or 'Infrastructure' text as the non-admin at both widths and found none",
+    "measured the backend warn log over a 60s idle window on the non-admin settings page before and after the gate: /api/connections 4/min and /api/discover 2/min dropped to 0, with 0 denials on /api/config/nodes, /api/system/settings, /api/truenas/connections and /api/vmware/connections",
+    "switched the shim to an admin role, reloaded /settings/infrastructure and confirmed the page renders, then instrumented window.fetch for 152s and observed /api/discover x4 (30s poller) and /api/connections x3 (15s ledger poller) with 0 denials",
+    "repeated the non-admin deep link and the admin page load at 375x812 and confirmed the same outcomes on the mobile drill-down layout",
+    "confirmed the footer still reads 'Pulse | Version: 4.26.0' for the non-admin throughout, since the version comes from the public /api/version rather than the admin-only update check"
   ]
 }

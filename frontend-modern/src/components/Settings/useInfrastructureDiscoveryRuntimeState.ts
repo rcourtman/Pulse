@@ -37,6 +37,10 @@ type RawDiscoveredServer = {
 interface UseInfrastructureDiscoveryRuntimeStateParams {
   eventBus: InfrastructureEventBus;
   nodes: Accessor<NodeConfigWithStatus[]>;
+  // /api/discover is RequireAdmin + settings:write. Settings.tsx mounts this
+  // hook for every settings tab, so without the gate a non-admin session polls
+  // an endpoint it can never reach for as long as Settings stays open.
+  canReadInfrastructure: Accessor<boolean>;
   discoveryEnabled: Accessor<boolean>;
   setDiscoveryEnabled: Setter<boolean>;
   discoverySubnet: Accessor<string>;
@@ -59,6 +63,7 @@ interface UseInfrastructureDiscoveryRuntimeStateParams {
 export const useInfrastructureDiscoveryRuntimeState = ({
   eventBus,
   nodes,
+  canReadInfrastructure,
   discoveryEnabled,
   setDiscoveryEnabled,
   discoverySubnet,
@@ -167,6 +172,9 @@ export const useInfrastructureDiscoveryRuntimeState = ({
   };
 
   const loadDiscoveredNodes = async () => {
+    if (!canReadInfrastructure()) {
+      return;
+    }
     try {
       const { apiFetch } = await import('@/utils/apiClient');
       const response = await apiFetch('/api/discover');
@@ -529,6 +537,12 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       if (discoveryInterval) {
         clearInterval(discoveryInterval);
         discoveryInterval = undefined;
+      }
+
+      // Reading the accessor here makes the effect re-run once the security
+      // status resolves, so an admin still gets the poller armed on load.
+      if (!canReadInfrastructure()) {
+        return;
       }
 
       discoveryInterval = setInterval(() => {

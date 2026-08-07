@@ -96,6 +96,7 @@ export interface NodesConfig {
  * API response for security status
  */
 export interface SecurityStatusSettingsCapabilities {
+  infrastructureRead: boolean;
   apiAccessRead: boolean;
   apiAccessWrite: boolean;
   authenticationRead: boolean;

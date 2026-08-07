@@ -82,8 +82,14 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
     setDiscoveryEnabled: discoverySettings.setDiscoveryEnabled,
     applySavedDiscoverySubnet: discoverySettings.applySavedDiscoverySubnet,
   });
+  // Mirrors the RequireAdmin + settings:read gate on every infrastructure
+  // endpoint. Until the security status resolves this is false, so the
+  // bootstrap waits rather than firing requests it may not be allowed to make.
+  const canReadInfrastructure = () =>
+    securityStatus()?.settingsCapabilities?.infrastructureRead === true;
   const infrastructureSettings = useInfrastructureSettingsState({
     eventBus,
+    canReadInfrastructure,
     discoveryEnabled: discoverySettings.discoveryEnabled,
     setDiscoveryEnabled: discoverySettings.setDiscoveryEnabled,
     discoverySubnet: discoverySettings.discoverySubnet,

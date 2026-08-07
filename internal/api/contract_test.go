@@ -10939,6 +10939,62 @@ func TestContract_BusinessScaleEstateThresholds(t *testing.T) {
 	}
 }
 
+// Settings → Infrastructure reads only RequireAdmin + settings:read endpoints
+// and then polls two of them, so the served capability has to track the scope
+// exactly. A capability that over-reports puts a non-admin back on a page whose
+// every request is refused and logged at warn level; one that under-reports
+// hides a page the caller can use.
+func TestContract_SecurityStatusInfrastructureReadTracksSettingsReadScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		scopes []string
+		want   bool
+	}{
+		{"settings read grants the infrastructure surface", []string{config.ScopeSettingsRead}, true},
+		{"monitoring read alone withholds it", []string{config.ScopeMonitoringRead}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rawToken := fmt.Sprintf("contract-infra-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
+			record := newTokenRecord(t, rawToken, tc.scopes, nil)
+			cfg := newTestConfigWithTokens(t, record)
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+			req.Header.Set("X-API-Token", rawToken)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+			}
+
+			var payload struct {
+				SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode security status payload: %v", err)
+			}
+			if payload.SettingsCapabilities.InfrastructureRead != tc.want {
+				t.Fatalf("settingsCapabilities.infrastructureRead = %v, want %v",
+					payload.SettingsCapabilities.InfrastructureRead, tc.want)
+			}
+
+			// The capability is only honest if the routes behind the page agree.
+			for _, path := range []string{"/api/config/nodes", "/api/system/settings"} {
+				probe := httptest.NewRequest(http.MethodGet, path, nil)
+				probe.Header.Set("X-API-Token", rawToken)
+				probeRec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(probeRec, probe)
+				refused := probeRec.Code == http.StatusForbidden
+				if refused == tc.want {
+					t.Fatalf("GET %s = %d, which contradicts infrastructureRead=%v", path, probeRec.Code, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestContract_SecurityStatusSplitsAuditLogCapabilityFromSettingsRead(t *testing.T) {
 	prevAuthorizer := authpkg.GetAuthorizer()
 	authpkg.SetAuthorizer(&allowRulesAuthorizer{

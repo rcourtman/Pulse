@@ -455,4 +455,24 @@ describe('infrastructure operations model', () => {
     expect(discoveryStateSource).toContain('filterRepresentedDiscoveredServers');
     expect(discoveryStateSource).toContain('nodes()');
   });
+
+  // /api/discover is RequireAdmin + settings:write and Settings mounts this
+  // hook for every settings tab, so both the one-shot read and the 30s poller
+  // must consult the served infrastructure capability. Without the gate a
+  // non-admin session reprinted a warn-level denial every 30 seconds for as
+  // long as any settings page stayed open.
+  it('gates the discovery read and its poller on the served infrastructure capability', async () => {
+    const discoveryStateSource = await import('../useInfrastructureDiscoveryRuntimeState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+    expect(discoveryStateSource).toContain('canReadInfrastructure: Accessor<boolean>');
+    // The read guard sits ahead of the fetch...
+    expect(discoveryStateSource).toMatch(
+      /const loadDiscoveredNodes = async \(\) => \{\s*if \(!canReadInfrastructure\(\)\) \{\s*return;/,
+    );
+    // ...and the interval is only armed once the capability is granted.
+    expect(discoveryStateSource).toMatch(
+      /if \(!canReadInfrastructure\(\)\) \{\s*return;\s*\}\s*discoveryInterval = setInterval\(/,
+    );
+  });
 });

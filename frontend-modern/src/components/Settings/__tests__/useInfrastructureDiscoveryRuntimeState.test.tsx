@@ -55,6 +55,7 @@ const mountHook = () => {
         on: () => () => {},
       },
       nodes,
+      canReadInfrastructure: () => true,
       discoveryEnabled,
       setDiscoveryEnabled,
       discoverySubnet,

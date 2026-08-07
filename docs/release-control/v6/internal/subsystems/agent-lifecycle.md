@@ -5953,3 +5953,36 @@ The `source` attribution parameter added to
 it is read from the purchase-start query, validated, and passed to the
 license-server portal handoff. No agent enrollment, report, ack, or update
 route reads or emits it, and the agent-facing payload shapes are unchanged.
+
+### Platform connection panel state waits on the infrastructure capability
+
+`Settings.tsx` constructs `useInfrastructureSettingsState` for every settings
+tab, not just Infrastructure, so its bootstrap and pollers ran on whatever
+settings page a session happened to open. All of the endpoints involved are
+`RequireAdmin`, which made this the largest repeating source of
+`Non-admin user attempted to access admin endpoint` warn lines on an idle
+instance.
+
+`useInfrastructureSettingsState`, `useInfrastructureDiscoveryRuntimeState`,
+`useTrueNASSettingsPanelState` and `useVMwareSettingsPanelState` now take the
+session's `infrastructureRead` capability (see the api-contracts entry for the
+served field) and hold their reads until it is granted:
+
+- the discovery hook skips `loadDiscoveredNodes` outright and only arms its 30s
+  `/api/discover` interval once the capability reads true — the accessor is read
+  inside the effect so the interval still arms for an admin as soon as the
+  status resolves;
+- the infrastructure bootstrap still awaits `loadSecurityStatus` (which is what
+  resolves the capability, and is readable by any session) but returns before
+  the node, discovery and system-settings loads when it is withheld;
+- the TrueNAS and VMware panel loads moved from `onMount` to a once-only effect.
+  An `onMount` check would sample the capability before the status request
+  resolves and withhold the load from admins too.
+
+`canLoad` is optional on the two panel hooks so tests and stories that construct
+them directly keep the eager load.
+
+Pinned by the capability cases in `useTrueNASSettingsPanelState.test.tsx` and
+`useVMwareSettingsPanelState.test.tsx` (skipped when withheld, loads once when
+the accessor flips) and by the discovery source pin in
+`InfrastructureOperationsModel.test.tsx`.

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 import {
   VMwareAPI,
@@ -146,7 +146,10 @@ const buildConnectionInput = (form: VMwareConnectionFormState): VMwareConnection
   };
 };
 
-export function useVMwareSettingsPanelState() {
+// See useTrueNASSettingsPanelState: /api/vmware/connections is RequireAdmin and
+// this hook is constructed for every settings tab, so the mount fetch has to be
+// gated on the session's infrastructure capability.
+export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boolean } = {}) {
   const [connections, setConnections] = createSignal<VMwareConnection[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingError, setLoadingError] = createSignal<string | null>(null);
@@ -208,7 +211,16 @@ export function useVMwareSettingsPanelState() {
     }
   };
 
-  onMount(() => {
+  // See useTrueNASSettingsPanelState: wait for the capability to resolve rather
+  // than sampling it once at mount.
+  let connectionsRequested = false;
+  createEffect(() => {
+    if (connectionsRequested) return;
+    if (canLoad && !canLoad()) {
+      setLoading(false);
+      return;
+    }
+    connectionsRequested = true;
     void loadConnections();
   });
 

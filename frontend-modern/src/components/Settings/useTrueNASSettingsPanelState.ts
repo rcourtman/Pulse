@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
@@ -177,7 +177,11 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
   return input;
 };
 
-export function useTrueNASSettingsPanelState() {
+// `canLoad` gates the mount fetch: /api/truenas/connections is RequireAdmin and
+// this hook is constructed for every settings tab, so a non-admin session would
+// otherwise 403 on any settings page. Defaults to enabled for callers (tests,
+// stories) that have no capability to hand it.
+export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => boolean } = {}) {
   const [connections, setConnections] = createSignal<TrueNASConnection[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [loadingError, setLoadingError] = createSignal<string | null>(null);
@@ -235,7 +239,17 @@ export function useTrueNASSettingsPanelState() {
     }
   };
 
-  onMount(() => {
+  // The capability resolves asynchronously (Settings awaits /api/security/status
+  // after mount), so this waits for it rather than reading it once at mount —
+  // an onMount check would see `false` for admins too and never load.
+  let connectionsRequested = false;
+  createEffect(() => {
+    if (connectionsRequested) return;
+    if (canLoad && !canLoad()) {
+      setLoading(false);
+      return;
+    }
+    connectionsRequested = true;
     void loadConnections();
   });
 

@@ -182,7 +182,12 @@ export function useSettingsAccess({
       if (currentRouteStillAllowed) {
         return;
       }
-      setActiveTab(DEFAULT_SETTINGS_TAB);
+      // The default tab is itself gated now (Infrastructure needs
+      // settings:read), so falling back to it unconditionally would strand a
+      // non-admin session on a blocked tab. Prefer the first tab this session
+      // can actually reach.
+      const fallbackTab = flatTabs()[0]?.id ?? DEFAULT_SETTINGS_TAB;
+      setActiveTab(fallbackTab);
     }
   });
 
