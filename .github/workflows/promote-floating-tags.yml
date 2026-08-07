@@ -2,8 +2,9 @@ name: Promote Floating Tags
 run-name: Promote Floating Tags ${{ inputs.tag }}
 
 # Promotes floating tags for the Pulse server and control-plane images at the
-# release activation barrier. The exact-version images are staged first by
-# publish-docker.yml; this workflow is the sole owner of mutable aliases.
+# post-activation promotion barrier. The exact-version images are staged first
+# by publish-docker.yml; this workflow is the sole owner of mutable aliases and
+# refuses to point them at a draft or quarantined GitHub release.
 #
 # Triggers:
 # - workflow_call: called explicitly from create-release.yml after the exact
@@ -81,6 +82,22 @@ jobs:
           python3 scripts/release_control/validate_artifact_release_line.py \
             --tag "${TAG}" \
             --purpose "floating-tag promotion"
+
+      - name: Require activated GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.extract.outputs.tag }}
+        run: |
+          set -euo pipefail
+          release_state="$(gh release view "${TAG}" --json isDraft,publishedAt,tagName \
+            --jq '[.tagName, (.isDraft | tostring), (.publishedAt // "")] | @tsv')"
+          actual_tag="$(awk -F '\t' '{print $1}' <<<"${release_state}")"
+          is_draft="$(awk -F '\t' '{print $2}' <<<"${release_state}")"
+          published_at="$(awk -F '\t' '{print $3}' <<<"${release_state}")"
+          if [ "${actual_tag}" != "${TAG}" ] || [ "${is_draft}" != "false" ] || [ -z "${published_at}" ]; then
+            echo "::error::Floating-tag promotion refuses inactive release ${TAG}."
+            exit 1
+          fi
 
       - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0

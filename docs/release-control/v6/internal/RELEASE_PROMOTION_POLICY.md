@@ -126,18 +126,24 @@ TLS-unverified receipts leave the claim at `implemented` or
 4. A private Pro build from a moving branch is valid only as an internal proof
    artifact. It is not valid customer guidance and must not update the live
    paid-download manifest or private Docker customer tag.
-5. Customer-facing private Pro archive and Docker publication is part of the
-   public v6 release pipeline. After `validate-release-assets.yml` succeeds for
-   a non-draft v6 release, `create-release.yml` must dispatch
+5. Customer-facing private Pro archive and exact-version Docker staging is part
+   of the public v6 release pipeline. After the governed tag and unpublished
+   draft exist, `create-release.yml` must dispatch
    `rcourtman/pulse-enterprise` `Build Pro Release` against the exact public
    tag with `upload_to_r2=true`, `publish_docker_image=true`, and an R2 prefix
-   derived by the release run, then wait for that workflow to succeed.
-6. The public v6 release pipeline must then dispatch `rcourtman/pulse-pro`
-   `Promote Paid Runtime Release` with the same version and R2 prefix, and
-   wait for the signed packet to promote the live paid-download broker. A failed
-   private build or failed live promotion fails the public release workflow;
-   private Pro RC/GA advancement must not depend on an operator noticing a
-   checklist item after the public RC has shipped.
+   derived by the release run, then wait for that workflow to succeed. Every
+   cross-repository dispatch must request GitHub's returned workflow-run details
+   and poll that exact run ID. Selecting the newest run by workflow, branch, or
+   dispatch timestamp is forbidden because different release versions and manual
+   dispatches may run concurrently.
+6. The public v6 release pipeline must publish and publicly verify the GitHub
+   release before it dispatches `rcourtman/pulse-pro` `Promote Paid Runtime
+   Release` with the same version and R2 prefix. The live paid-download broker
+   is a mutable customer pointer and must never advance to a release that can
+   still be returned to draft quarantine by activation verification. A failed
+   private build or live promotion fails the public release workflow; private
+   Pro RC/GA advancement must not depend on an operator noticing a checklist
+   item after the public RC has shipped.
 7. Customer-facing private Pro archive or Docker promotion must use the generated
    paid-runtime proof packet from the Pro release workflow. The canonical command
    is `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --admin-token-file <explicit-token-file> --execute-live`
@@ -260,17 +266,24 @@ TLS-unverified receipts leave the claim at `implemented` or
    machine-readable manifest that pins source SHA, version, filename, size, and
    SHA-256 for every release asset. Publication downloads and verifies that
    exact candidate; it must not rebuild release binaries or installers.
-3. Standard post-publication asset verification compares the candidate
+3. Standard staged asset verification compares the candidate
    manifest with GitHub's server-side release-asset SHA-256 digests. It must
    not re-download the multi-gigabyte release packet merely to recompute hashes
    already proven before upload. Manual and release-edit repair validation may
    retain the full-download fallback when no same-run candidate manifest exists.
-4. Docker publication, release-asset verification, and the private Pro build
-   begin independently as soon as the release exists. Helm, floating tags,
-   install smoke, stable demo deployment, and private paid-runtime promotion
-   retain their required dependencies, and `Definitive Release Verdict` still
+4. Exact-version Docker publication, staged release-asset verification, exact
+   Helm OCI publication, staged install smoke, and the exact-version private
+   Pro build begin from the unpublished draft and converge at one immutable
+   readiness gate. `activate_release` is the next and only transition: it
+   publishes the GitHub release, verifies the public checksums, installer, and
+   canonical Linux archive URLs, and returns the release to draft quarantine
+   on verification failure.
+5. Mutable Docker aliases, the live paid-runtime broker, the public Helm Pages
+   index, and stable demo deployment depend directly on successful activation.
+   They may fan out in parallel only after the release can no longer be
+   quarantined by activation verification. `Definitive Release Verdict` still
    fails unless every applicable terminal result passes.
-5. `Release Dry Run` remains the no-public-release rehearsal surface. It calls
+6. `Release Dry Run` remains the no-public-release rehearsal surface. It calls
    the same candidate builder and no-mutation demo verification, but a separate
    dry run is not required before a normal release because the single publish
    workflow performs the exact-SHA preflight before crossing the publication
@@ -309,7 +322,10 @@ TLS-unverified receipts leave the claim at `implemented` or
    public health/browser verification, install smoke, Helm publication,
    floating-tag promotion, and private Pro promotion where applicable. The
    terminal `Definitive Release Verdict` job is the one release result; an
-   asynchronously dispatched demo workflow is not release completion.
+   asynchronously dispatched demo workflow is not release completion. Every
+   mutable pointer and live-environment job must depend on successful GitHub
+   release activation and public verification, never only on pre-activation
+   exact-version readiness.
 
 ## Rollout Rules
 

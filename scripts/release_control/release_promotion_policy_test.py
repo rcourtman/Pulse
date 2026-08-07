@@ -38,6 +38,16 @@ def normalize_ws(text: str) -> str:
     return " ".join(text.split())
 
 
+def workflow_job_block(workflow: str, job: str) -> str:
+    match = re.search(
+        rf"(?ms)^  {re.escape(job)}:\n.*?(?=^  [A-Za-z0-9_]+:\n|\Z)",
+        workflow,
+    )
+    if match is None:
+        raise AssertionError(f"workflow missing job {job}")
+    return match.group(0)
+
+
 _RC_DRAFT_PACKET_NAME_RE = re.compile(r"^RELEASE_NOTES_v6_RC(\d+)_DRAFT\.md$")
 
 
@@ -140,6 +150,94 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 "staged promotion proof inputs are incomplete:\n- "
                 + "\n- ".join(STAGED_GOVERNANCE_INPUT_ERRORS)
             )
+
+    def test_release_activation_precedes_every_mutable_customer_target(self) -> None:
+        workflow = read(".github/workflows/create-release.yml")
+        readiness = workflow_job_block(workflow, "release_readiness")
+        activation = workflow_job_block(workflow, "activate_release")
+
+        for dependency in (
+            "create_release",
+            "publish_docker",
+            "validate_release_assets",
+            "install_sh_smoke",
+            "publish_helm_chart",
+            "stage_private_pro_runtime",
+        ):
+            self.assertIn(f"- {dependency}", readiness)
+        for mutable_job in (
+            "publish_helm_pages",
+            "promote_floating_tags",
+            "promote_private_pro_runtime",
+            "update_stable_demo",
+        ):
+            with self.subTest(mutable_job=mutable_job):
+                self.assertNotIn(f"- {mutable_job}", readiness)
+                self.assertNotIn(f"- {mutable_job}", activation)
+                mutable = workflow_job_block(workflow, mutable_job)
+                self.assertIn("- activate_release", mutable)
+                self.assertIn("needs.activate_release.result == 'success'", mutable)
+
+        self.assertIn("- release_readiness", activation)
+        self.assertIn("returning ${TAG} to draft quarantine", activation)
+        self.assertIn("Activated and publicly verified ${TAG}", activation)
+
+        demo = workflow_job_block(workflow, "update_stable_demo")
+        self.assertNotIn("release_id:", demo)
+        demo_workflow = read(".github/workflows/update-demo-server.yml")
+        self.assertNotIn("release_id:", demo_workflow)
+        self.assertNotIn("unpublished draft", demo_workflow)
+
+        for workflow_path, refusal in (
+            (
+                ".github/workflows/helm-pages.yml",
+                "Helm Pages refuses to advertise inactive release",
+            ),
+            (
+                ".github/workflows/promote-floating-tags.yml",
+                "Floating-tag promotion refuses inactive release",
+            ),
+        ):
+            with self.subTest(workflow_path=workflow_path):
+                guarded_workflow = read(workflow_path)
+                self.assertIn("Require activated GitHub release", guarded_workflow)
+                self.assertIn("--json isDraft,publishedAt,tagName", guarded_workflow)
+                self.assertIn(refusal, guarded_workflow)
+
+    def test_private_dispatches_wait_for_the_exact_created_run(self) -> None:
+        workflow = read(".github/workflows/create-release.yml")
+        cases = (
+            (
+                "stage_private_pro_runtime",
+                "repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches",
+                "build_run_id",
+            ),
+            (
+                "promote_private_pro_runtime",
+                "repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches",
+                "promote_run_id",
+            ),
+        )
+
+        for job_name, endpoint, run_id_variable in cases:
+            with self.subTest(job_name=job_name):
+                job = workflow_job_block(workflow, job_name)
+                self.assertIn("return_run_details: true", job)
+                self.assertIn(
+                    '-H "X-GitHub-Api-Version: 2026-03-10"',
+                    job,
+                )
+                self.assertIn(endpoint, job)
+                self.assertIn(
+                    f'{run_id_variable}="$(jq -r \'.workflow_run_id // empty\'',
+                    job,
+                )
+                self.assertIn(f'"${{{run_id_variable}}}"', job)
+                self.assertIn('local run_id="$2"', job)
+                self.assertIn('gh run view "${run_id}"', job)
+                self.assertIn("did not return an exact workflow run ID", job)
+                self.assertNotIn("gh run list", job)
+                self.assertNotIn("started_at", job)
 
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")

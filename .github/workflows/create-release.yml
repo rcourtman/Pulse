@@ -1304,7 +1304,8 @@ jobs:
       - prepare
       - create_release
       - release_readiness
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.prepare.outputs.is_prerelease != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
+      - activate_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.activate_release.result == 'success' && needs.prepare.outputs.is_prerelease != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     permissions:
       contents: read
     uses: ./.github/workflows/update-demo-server.yml
@@ -1313,7 +1314,6 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       target: stable
       verify_only: false
-      release_id: ${{ needs.create_release.outputs.release_id }}
 
   # Publish the Helm chart for this release. publish-helm-chart.yml also
   # listens for `release: published` events directly, but the create_release
@@ -1339,16 +1339,17 @@ jobs:
       chart_version: ${{ needs.prepare.outputs.version }}
       app_version: ${{ needs.prepare.outputs.version }}
 
-  # Stage and prove the customer-facing Helm Pages repository explicitly.
-  # The legacy workflow_run chain was asynchronous and could leave the public
-  # index behind an already-visible GitHub release.
+  # Publish and prove the mutable Helm Pages index only after the GitHub
+  # release has survived public activation verification. The legacy
+  # workflow_run chain remains forbidden because it bypasses this ordering.
   publish_helm_pages:
     needs:
       - prepare
       - publish_docker
       - validate_release_assets
       - publish_helm_chart
-    if: ${{ always() && needs.prepare.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+      - activate_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.activate_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: write
     uses: ./.github/workflows/helm-pages.yml
@@ -1356,9 +1357,11 @@ jobs:
     with:
       chart_version: ${{ needs.prepare.outputs.version }}
 
-  # One immutable-readiness gate joins every exact-version path before any
-  # mutable customer pointer moves. v6 additionally requires the staged Pro
-  # image and signed packet; older release lines have no private Pro job.
+  # One immutable-readiness gate joins every exact-version path before the
+  # GitHub release crosses its public activation boundary. v6 additionally
+  # requires the staged Pro image and signed packet; older release lines have
+  # no private Pro job. Mutable indexes, aliases, brokers, and live environments
+  # are deliberately excluded from this pre-activation join.
   release_readiness:
     needs:
       - prepare
@@ -1367,9 +1370,8 @@ jobs:
       - validate_release_assets
       - install_sh_smoke
       - publish_helm_chart
-      - publish_helm_pages
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && needs.publish_helm_pages.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.install_sh_smoke.result == 'success' && needs.publish_helm_chart.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.stage_private_pro_runtime.result == 'success' ) && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -1377,14 +1379,16 @@ jobs:
         run: echo "All exact-version release paths are ready for customer activation."
 
   # Mutable image aliases move only after the exact-version images and staged
-  # release assets have passed validation. promote-floating-tags.yml has no
-  # implicit workflow_run trigger, so this explicit call is the sole owner of
+  # release assets have passed validation and the GitHub release has survived
+  # public activation verification. promote-floating-tags.yml has no implicit
+  # workflow_run trigger, so this explicit call is the sole owner of
   # rc/latest/major/minor pointers for both runtime images.
   promote_floating_tags:
     needs:
       - prepare
       - release_readiness
-    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' }}
+      - activate_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' && needs.activate_release.result == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -1424,52 +1428,36 @@ jobs:
 
           wait_for_workflow() {
             local repo="$1"
-            local workflow="$2"
-            local branch="$3"
-            local started_at="$4"
-            local label="$5"
-            local timeout_seconds="$6"
+            local run_id="$2"
+            local label="$3"
+            local timeout_seconds="$4"
             local deadline=$((SECONDS + timeout_seconds))
-            local run_id=""
+
+            if [[ ! "${run_id}" =~ ^[0-9]+$ ]]; then
+              echo "::error::Dispatch for ${label} did not return an exact workflow run ID."
+              return 1
+            fi
+
+            echo "Watching exact ${label} run ${run_id} in ${repo}."
 
             while (( SECONDS < deadline )); do
-              if [[ -z "${run_id}" ]]; then
-                run_id="$(
-                  gh run list \
-                    --repo "${repo}" \
-                    --workflow "${workflow}" \
-                    --event workflow_dispatch \
-                    --branch "${branch}" \
-                    --limit 50 \
-                    --json databaseId,createdAt \
-                    --jq "map(select(.createdAt >= \"${started_at}\")) | sort_by(.createdAt) | reverse | .[0].databaseId // \"\""
-                )"
-                if [[ -n "${run_id}" ]]; then
-                  echo "Watching ${label} run ${run_id} in ${repo}."
-                else
-                  echo "Waiting for ${label} workflow run to appear..."
+              run_state="$(
+                gh run view "${run_id}" \
+                  --repo "${repo}" \
+                  --json status,conclusion,url \
+                  --jq '[.status, (.conclusion // ""), .url] | @tsv'
+              )"
+              status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
+              conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
+              url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
+              echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
+              if [[ "${status}" == "completed" ]]; then
+                if [[ "${conclusion}" == "success" ]]; then
+                  echo "[OK] ${label} completed successfully: ${url}"
+                  return 0
                 fi
-              fi
-
-              if [[ -n "${run_id}" ]]; then
-                run_state="$(
-                  gh run view "${run_id}" \
-                    --repo "${repo}" \
-                    --json status,conclusion,url \
-                    --jq '[.status, (.conclusion // ""), .url] | @tsv'
-                )"
-                status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
-                conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
-                url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
-                echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
-                if [[ "${status}" == "completed" ]]; then
-                  if [[ "${conclusion}" == "success" ]]; then
-                    echo "[OK] ${label} completed successfully: ${url}"
-                    return 0
-                  fi
-                  echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
-                  return 1
-                fi
+                echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
+                return 1
               fi
 
               sleep 30
@@ -1501,31 +1489,49 @@ jobs:
           fi
           r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
           echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"
-          build_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           echo "Dispatching private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
-          gh workflow run build-pro-release.yml \
-            --repo rcourtman/pulse-enterprise \
-            --ref main \
-            -f pulse_ref="${TAG}" \
-            -f version="${VERSION}" \
-            -f upload_actions_artifact=false \
-            -f upload_to_r2=true \
-            -f publish_docker_image=true \
-            -f docker_image=license.pulserelay.pro/pulse-pro \
-            -f r2_prefix="${r2_prefix}" \
-            -f reuse_existing_packet=true \
-            -f allow_stable_ga_publish="${allow_ga_publish}"
-          wait_for_workflow rcourtman/pulse-enterprise "Build Pro Release" main "${build_started_at}" "private Pro build" 7200
+          build_dispatch="$(
+            jq -n \
+              --arg pulse_ref "${TAG}" \
+              --arg version "${VERSION}" \
+              --arg r2_prefix "${r2_prefix}" \
+              --arg allow_stable_ga_publish "${allow_ga_publish}" \
+              '{
+                ref: "main",
+                return_run_details: true,
+                inputs: {
+                  pulse_ref: $pulse_ref,
+                  version: $version,
+                  upload_actions_artifact: "false",
+                  upload_to_r2: "true",
+                  publish_docker_image: "true",
+                  docker_image: "license.pulserelay.pro/pulse-pro",
+                  r2_prefix: $r2_prefix,
+                  reuse_existing_packet: "true",
+                  allow_stable_ga_publish: $allow_stable_ga_publish
+                }
+              }' | \
+              gh api \
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
+                repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches \
+                --input -
+          )"
+          build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"
+          wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 7200
 
   # The paid-runtime broker is a mutable customer pointer, so promote it only
-  # after every exact-version public artifact and staged install path is ready.
-  # A rerun reuses the run-stable R2 prefix produced by the staging job.
+  # after every exact-version public artifact and staged install path is ready
+  # and the GitHub release has survived public activation verification. A
+  # rerun reuses the run-stable R2 prefix produced by the staging job.
   promote_private_pro_runtime:
     needs:
       - prepare
       - release_readiness
       - stage_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' && needs.stage_private_pro_runtime.result == 'success' && startsWith(needs.prepare.outputs.version, '6.') }}
+      - activate_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.release_readiness.result == 'success' && needs.stage_private_pro_runtime.result == 'success' && needs.activate_release.result == 'success' && startsWith(needs.prepare.outputs.version, '6.') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     steps:
@@ -1550,52 +1556,36 @@ jobs:
 
           wait_for_workflow() {
             local repo="$1"
-            local workflow="$2"
-            local branch="$3"
-            local started_at="$4"
-            local label="$5"
-            local timeout_seconds="$6"
+            local run_id="$2"
+            local label="$3"
+            local timeout_seconds="$4"
             local deadline=$((SECONDS + timeout_seconds))
-            local run_id=""
+
+            if [[ ! "${run_id}" =~ ^[0-9]+$ ]]; then
+              echo "::error::Dispatch for ${label} did not return an exact workflow run ID."
+              return 1
+            fi
+
+            echo "Watching exact ${label} run ${run_id} in ${repo}."
 
             while (( SECONDS < deadline )); do
-              if [[ -z "${run_id}" ]]; then
-                run_id="$(
-                  gh run list \
-                    --repo "${repo}" \
-                    --workflow "${workflow}" \
-                    --event workflow_dispatch \
-                    --branch "${branch}" \
-                    --limit 50 \
-                    --json databaseId,createdAt \
-                    --jq "map(select(.createdAt >= \"${started_at}\")) | sort_by(.createdAt) | reverse | .[0].databaseId // \"\""
-                )"
-                if [[ -n "${run_id}" ]]; then
-                  echo "Watching ${label} run ${run_id} in ${repo}."
-                else
-                  echo "Waiting for ${label} workflow run to appear..."
+              run_state="$(
+                gh run view "${run_id}" \
+                  --repo "${repo}" \
+                  --json status,conclusion,url \
+                  --jq '[.status, (.conclusion // ""), .url] | @tsv'
+              )"
+              status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
+              conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
+              url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
+              echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
+              if [[ "${status}" == "completed" ]]; then
+                if [[ "${conclusion}" == "success" ]]; then
+                  echo "[OK] ${label} completed successfully: ${url}"
+                  return 0
                 fi
-              fi
-
-              if [[ -n "${run_id}" ]]; then
-                run_state="$(
-                  gh run view "${run_id}" \
-                    --repo "${repo}" \
-                    --json status,conclusion,url \
-                    --jq '[.status, (.conclusion // ""), .url] | @tsv'
-                )"
-                status="$(awk -F '\t' '{print $1}' <<<"${run_state}")"
-                conclusion="$(awk -F '\t' '{print $2}' <<<"${run_state}")"
-                url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
-                echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
-                if [[ "${status}" == "completed" ]]; then
-                  if [[ "${conclusion}" == "success" ]]; then
-                    echo "[OK] ${label} completed successfully: ${url}"
-                    return 0
-                  fi
-                  echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
-                  return 1
-                fi
+                echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
+                return 1
               fi
 
               sleep 30
@@ -1609,29 +1599,41 @@ jobs:
           if [[ "${IS_PRERELEASE}" != "true" ]]; then
             allow_ga_publish=true
           fi
-          promote_started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX}."
-          gh workflow run promote-paid-runtime-release.yml \
-            --repo rcourtman/pulse-pro \
-            --ref main \
-            -f version="${VERSION}" \
-            -f r2_prefix="${R2_PREFIX}" \
-            -f allow_ga_prefix="${allow_ga_publish}"
-          wait_for_workflow rcourtman/pulse-pro "Promote Paid Runtime Release" main "${promote_started_at}" "private Pro live promotion" 3600
+          promote_dispatch="$(
+            jq -n \
+              --arg version "${VERSION}" \
+              --arg r2_prefix "${R2_PREFIX}" \
+              --arg allow_ga_prefix "${allow_ga_publish}" \
+              '{
+                ref: "main",
+                return_run_details: true,
+                inputs: {
+                  version: $version,
+                  r2_prefix: $r2_prefix,
+                  allow_ga_prefix: $allow_ga_prefix
+                }
+              }' | \
+              gh api \
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
+                repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches \
+                --input -
+          )"
+          promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"
+          wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion" 3600
 
-  # Customer activation is one final publication barrier. All exact-version
-  # artifacts, mutable image aliases, and the live paid-runtime manifest are
-  # ready before the GitHub release becomes visible. If public asset reads fail
-  # immediately after activation, quarantine the release back to draft.
+  # Customer activation is the publication barrier between exact-version
+  # staging and every mutable customer pointer or live environment. If public
+  # asset reads fail immediately after activation, quarantine the release back
+  # to draft before those downstream mutations become eligible to run.
   activate_release:
     needs:
       - prepare
       - create_release
       - release_readiness
-      - update_stable_demo
-      - promote_floating_tags
-      - promote_private_pro_runtime
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' && needs.promote_floating_tags.result == 'success' && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.promote_private_pro_runtime.result == 'success' ) && ( !startsWith(needs.prepare.outputs.version, '6.') || needs.prepare.outputs.is_prerelease == 'true' || needs.update_stable_demo.result == 'success' ) }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.release_readiness.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -1705,7 +1707,7 @@ jobs:
 
           trap - ERR
           rm -f "$release_json" "$publish_payload" "$quarantine_payload"
-          echo "[OK] Activated ${TAG} after every customer-facing release path was ready."
+          echo "[OK] Activated and publicly verified ${TAG}; mutable customer promotion may begin."
 
   release_verdict:
     name: Definitive Release Verdict
@@ -1768,7 +1770,7 @@ jobs:
             require_result "exact-version Docker staging" "$DOCKER_RESULT" success
             require_result "staged install.sh smoke" "$INSTALL_RESULT" success
             require_result "Helm staging" "$HELM_RESULT" success
-            require_result "public Helm repository staging" "$HELM_PAGES_RESULT" success
+            require_result "public Helm repository promotion" "$HELM_PAGES_RESULT" success
             require_result "immutable release readiness" "$READINESS_RESULT" success
             require_result "floating-tag promotion" "$FLOATING_RESULT" success
             require_result "release activation" "$ACTIVATION_RESULT" success

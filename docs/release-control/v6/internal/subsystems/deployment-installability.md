@@ -444,9 +444,10 @@ upgrade, update, release, or artifact-selection behavior.
    release checks run in parallel. `create-release.yml` may stage only that
    candidate after `scripts/release_candidate_manifest.py` verifies its version, source
    SHA, filenames, sizes, and SHA-256 values. The GitHub release must remain an
-   unpublished draft until every exact-version customer artifact and mutable
-   customer pointer required by the cut has passed its owned proof. Standard
-   post-upload validation
+   unpublished draft until every exact-version customer artifact required by
+   the cut has passed its owned proof. It must then be published and publicly
+   verified before any mutable customer pointer or live environment advances.
+   Standard post-upload validation
    must compare that manifest with GitHub's server-side asset digests instead
    of downloading the complete release packet again. Historical repair and
    release-edit validation may use the full-download fallback because those
@@ -908,21 +909,27 @@ upgrade, update, release, or artifact-selection behavior.
    governed tag and unpublished draft exist, in parallel with public asset
    validation. It must pass the exact public tag/version, set
    `upload_to_r2=true` and `publish_docker_image=true`, and wait for the exact
-   private image and signed R2 packet to succeed. Only after public release
+   private image and signed R2 packet to succeed. The dispatcher must request
+   workflow-run details from GitHub and poll the exact returned run ID; it must
+   never infer its child from the newest matching workflow/branch/timestamp,
+   because version-scoped release concurrency and manual dispatches can overlap.
+   Only after public release
    asset validation, staged install smoke, exact public Docker publication,
-   Helm publication, and floating-image promotion succeed may it call the
-   private `rcourtman/pulse-pro` `Promote Paid Runtime Release` workflow with
-   the same version and R2 prefix.
+   exact Helm OCI publication, and successful GitHub release activation and
+   public verification may it call the private `rcourtman/pulse-pro` `Promote
+   Paid Runtime Release` workflow with the same version and R2 prefix.
    The promotion workflow downloads the signed proof packet and runs
    `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --execute-live`
    from `repos/pulse-pro`. That command is the canonical live-broker promotion
    path because it validates the signed proof packet, installs the exact
    manifest on `pulse-license`, runs the customer-path live proof, and restores
    the previous remote manifest if the gate fails. GA promotions also require
-   `--allow-ga-prefix`. A failed private build or failed live promotion must
-   leave the GitHub release unpublished and fail the public release workflow;
-   future private Pro publication must not depend on an operator noticing a
-   manual checklist step after the public RC has shipped.
+   `--allow-ga-prefix`. A failed private build leaves the GitHub release
+   unpublished; a failed live promotion leaves the already activated GitHub
+   release public and restores the previous broker manifest. Both failures
+   must fail the public release workflow; future private Pro publication must
+   not depend on an operator noticing a manual checklist step after the public
+   RC has shipped.
    A promotion-only failure must be recoverable by rerunning the public
    release run's failed jobs: the paid-runtime R2 prefix is derived from
    run-stable values (the run's creation date and run id, never the
@@ -933,23 +940,24 @@ upgrade, update, release, or artifact-selection behavior.
    A rebuilt packet from identical inputs is waste and lineage churn; a
    non-empty prefix that fails packet validation must fail the private build
    instead of being overwritten.
-   GitHub release publication is the final customer notification boundary, not
-   the trigger for downstream artifact work. `activate_release` must verify the
-   draft's tag, target commit, prerelease state, and unpublished state, depend
-   on all required public and private readiness jobs, and only then PATCH
+   GitHub release publication is the atomic barrier between exact-version
+   staging and mutable customer rollout, not a final notification after live
+   pointers have already moved. `activate_release` must verify the draft's tag,
+   target commit, prerelease state, and unpublished state, depend on all
+   required immutable public and private readiness jobs, and only then PATCH
    `draft=false`. It must prove the public checksums, installer, and canonical
    Linux archive URLs immediately after activation; a failed public read must
-   attempt to return the release to draft quarantine and fail closed. Exact
-   version artifacts may exist before this boundary so they can be tested, but
-   no GitHub release may advertise a version whose private Pro image or broker
-   manifest is still missing.
+   attempt to return the release to draft quarantine and fail closed before
+   any mutable pointer or live-environment job becomes eligible. Exact-version
+   artifacts may exist before this boundary so they can be tested.
    One immutable-readiness join must cover the staged release packet, staged
-   install smoke, exact public Docker images, both Helm distribution paths, and
-   (for v6) the exact Pro image and signed packet. Only after that join succeeds
-   may the Docker floating aliases and paid-runtime broker manifest advance;
-   those independent mutable pointers should advance in parallel, and final
-   GitHub publication must await both, minimizing the unavoidable cross-system
-   activation interval without pretending the registries share a transaction.
+   install smoke, exact public Docker images, exact Helm OCI chart, and (for
+   v6) the exact Pro image and signed packet. After that join, activation and
+   public verification must succeed before the Docker floating aliases,
+   paid-runtime broker manifest, public Helm Pages index, or stable demo may
+   advance. Those independent post-activation mutations may run in parallel,
+   and the definitive verdict must await all of them without pretending the
+   external systems share a transaction.
    A support-only private Pro prerelease image is a narrower exception for
    customer verification of an already-fixed defect. It may dispatch the private
    `Build Pro Release` workflow with `publish_docker_image=true`,
@@ -1056,8 +1064,9 @@ upgrade, update, release, or artifact-selection behavior.
    awaited `workflow_call` from `create-release.yml`, not an asynchronous
    `workflow_run` child of Docker publication. It must package from the exact
    validated release tag without committing generated metadata back onto the
-   governed source branch, then prove the public Pages repository can resolve
-   and download that exact chart version before final release activation.
+   governed source branch. It must refuse a draft or quarantined GitHub release,
+   then prove the public Pages repository can resolve and download that exact
+   chart version as a post-activation promotion gate.
    After pushing the OCI chart, `publish-helm-chart.yml` must prove the
    pushed chart is readable from GHCR without registry credentials by logging
    out of `ghcr.io` and running `helm show chart` against the versioned chart
@@ -1072,9 +1081,9 @@ upgrade, update, release, or artifact-selection behavior.
    publisher must publish only immutable version tags; `promote-floating-tags`
    is the sole owner of `rc`, `latest`, major, and major/minor aliases for both
    `pulse` and `pulse-control-plane` on Docker Hub and GHCR. It must expose
-   `workflow_call` inputs (`tag`, `prerelease`), and the create-release wiring
-   must gate on `validate_release_assets` and exact Docker publication so every
-   alias points at a pullable manifest before GitHub release activation.
+   `workflow_call` inputs (`tag`, `prerelease`), refuse a draft or quarantined
+   GitHub release, and depend on successful activation in the create-release
+   wiring so every alias points at an already-public, verified release.
    Generated chart docs are part of the packaged release artifact, not a
    disposable byproduct: when the stable candidate version changes, the checked
    in `deploy/helm/pulse/README.md` output must be regenerated from the same
@@ -1787,11 +1796,12 @@ loop must not hide an ACL, peer-propagation, firewall, or sshd failure.
 `create-release.yml` must call the update workflow as an awaited reusable job,
 and its terminal `Definitive Release Verdict` must require stable demo runtime,
 frontend, public health, and browser proof. During a stable release cut, the
-update workflow must accept the staged draft release ID, download the exact
-Linux archive and signature through the authenticated release-assets API, and
-install that archive without waiting for the public release URL. The stable
-demo update may run in parallel with the other mutable customer pointers after
-immutable readiness, and final GitHub publication must await its proof. An
+update workflow must wait for the activated public release assets and install
+the exact requested version through the normal signed release path. It must not
+accept an unpublished draft release ID or install draft assets into the live
+demo. The stable demo update may run in parallel with the other mutable
+customer pointers only after activation, and the definitive verdict must await
+its proof. An
 asynchronous dispatch or manual SSH deployment is not release completion. A one-shot `ssh-keyscan`
 against a private demo target is not sufficient release or deploy proof.
 Those same workflows also own customer-visible browser truth for the public

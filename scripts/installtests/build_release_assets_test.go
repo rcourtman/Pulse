@@ -379,7 +379,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		// customer activation sequence.
 		`needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true'`,
 		`activate_release:`,
-		`needs.promote_private_pro_runtime.result == 'success'`,
+		`needs.activate_release.result == 'success'`,
 		`Publish the fully staged release`,
 		`'{draft: false, make_latest: $make_latest}'`,
 		`returning ${TAG} to draft quarantine`,
@@ -402,8 +402,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		t.Fatal("release_readiness must skip historical backfill and draft-only runs")
 	}
 	floatingJob := workflowJobBlock(t, workflow, "promote_floating_tags")
-	if !strings.Contains(floatingJob, `needs.release_readiness.result == 'success'`) {
-		t.Fatal("floating-tag promotion must run only after the immutable readiness barrier")
+	if !strings.Contains(floatingJob, `needs.activate_release.result == 'success'`) {
+		t.Fatal("floating-tag promotion must run only after successful public activation")
 	}
 
 	if !strings.Contains(workflow, `draft: true`) {
@@ -1243,6 +1243,9 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	required := []string{
 		`workflow_call:`,
 		`chart_version:`,
+		`Require activated GitHub release`,
+		`gh release view "${RELEASE_TAG}" --json isDraft,publishedAt,tagName`,
+		`Helm Pages refuses to advertise inactive release ${RELEASE_TAG}.`,
 		`HELM_DOCS_VERSION="1.14.2"`,
 		`HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"`,
 		`HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"`,
@@ -1368,10 +1371,8 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`bash .github/scripts/check-demo-reachability.sh`,
 		`workflow_call:`,
 		`verify_only:`,
-		`release_id:`,
-		`repos/${{ github.repository }}/releases/${RELEASE_ID}/assets?per_page=100`,
-		`Accept: application/octet-stream`,
-		`--archive "/tmp/${tarball}" --disable-auto-updates`,
+		`Waiting for activated release assets to be available`,
+		`bash /tmp/pulse-install.sh --version "$TAG"`,
 		`Refuse mutation during verification-only checks`,
 		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
 		`go run ./scripts/release_update_key.go public-key-ssh`,
@@ -1404,6 +1405,16 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("update-demo-server workflow missing governed network path: %s", needle)
+		}
+	}
+	for _, forbidden := range []string{
+		`release_id:`,
+		`RELEASE_ID: ${{ inputs.release_id }}`,
+		`--archive "/tmp/${tarball}"`,
+		`unpublished draft`,
+	} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("update-demo-server.yml must not deploy draft release assets; found %q", forbidden)
 		}
 	}
 }
@@ -1847,6 +1858,9 @@ func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {
 		`prerelease:`,
 		`type: boolean`,
 		`TAG="${INPUT_TAG}"`,
+		`Require activated GitHub release`,
+		`gh release view "${TAG}" --json isDraft,publishedAt,tagName`,
+		`Floating-tag promotion refuses inactive release ${TAG}.`,
 		`for image in pulse pulse-control-plane; do`,
 		`"rcourtman/${image}:rc"`,
 		`"ghcr.io/${OWNER}/${image}:latest"`,
@@ -1935,6 +1949,9 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	readinessJob := workflowJobBlock(t, createWorkflow, "release_readiness")
 	privatePromotionJob := workflowJobBlock(t, createWorkflow, "promote_private_pro_runtime")
 	activationJob := workflowJobBlock(t, createWorkflow, "activate_release")
+	floatingJob := workflowJobBlock(t, createWorkflow, "promote_floating_tags")
+	helmPagesJob := workflowJobBlock(t, createWorkflow, "publish_helm_pages")
+	demoJob := workflowJobBlock(t, createWorkflow, "update_stable_demo")
 
 	for _, needle := range []string{
 		`./scripts/build-release.sh "${{ inputs.version }}"`,
@@ -1985,30 +2002,55 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 		"- validate_release_assets",
 		"- install_sh_smoke",
 		"- publish_helm_chart",
-		"- publish_helm_pages",
 		"- stage_private_pro_runtime",
 	} {
 		if !strings.Contains(readinessJob, dependency) {
 			t.Fatalf("immutable release readiness missing dependency: %s", dependency)
 		}
 	}
-	for _, dependency := range []string{"- release_readiness", "- stage_private_pro_runtime"} {
-		if !strings.Contains(privatePromotionJob, dependency) {
-			t.Fatalf("private Pro live promotion missing staging dependency: %s", dependency)
+	for _, forbiddenDependency := range []string{
+		"- publish_helm_pages",
+		"- promote_floating_tags",
+		"- promote_private_pro_runtime",
+		"- update_stable_demo",
+	} {
+		if strings.Contains(readinessJob, forbiddenDependency) {
+			t.Fatalf("immutable readiness must exclude mutable customer state: %s", forbiddenDependency)
 		}
 	}
-	for _, dependency := range []string{
-		"- release_readiness",
+	if !strings.Contains(activationJob, "- release_readiness") {
+		t.Fatal("release activation must depend on immutable release readiness")
+	}
+	for _, forbiddenDependency := range []string{
 		"- update_stable_demo",
 		"- promote_floating_tags",
 		"- promote_private_pro_runtime",
 	} {
-		if !strings.Contains(activationJob, dependency) {
-			t.Fatalf("release activation missing readiness dependency: %s", dependency)
+		if strings.Contains(activationJob, forbiddenDependency) {
+			t.Fatalf("release activation must precede mutable customer state: %s", forbiddenDependency)
 		}
 	}
 	if !strings.Contains(activationJob, `'{draft: false, make_latest: $make_latest}'`) {
 		t.Fatal("release activation must be the job that crosses the draft publication boundary")
+	}
+	for jobName, jobBlock := range map[string]string{
+		"floating-tag promotion":      floatingJob,
+		"public Helm Pages promotion": helmPagesJob,
+		"private Pro live promotion":  privatePromotionJob,
+		"stable demo deployment":      demoJob,
+	} {
+		if !strings.Contains(jobBlock, "- activate_release") ||
+			!strings.Contains(jobBlock, `needs.activate_release.result == 'success'`) {
+			t.Fatalf("%s must depend on successful public activation", jobName)
+		}
+	}
+	for _, dependency := range []string{"- release_readiness", "- stage_private_pro_runtime", "- activate_release"} {
+		if !strings.Contains(privatePromotionJob, dependency) {
+			t.Fatalf("private Pro live promotion missing required dependency: %s", dependency)
+		}
+	}
+	if strings.Contains(demoJob, "release_id:") {
+		t.Fatal("stable demo must use activated public assets, not an unpublished release id")
 	}
 	for _, needle := range []string{
 		`inputs.candidate_manifest_artifact != ''`,
@@ -2083,18 +2125,19 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}`,
 		`--json createdAt`,
 		`r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"`,
-		`gh workflow run build-pro-release.yml`,
-		`--repo rcourtman/pulse-enterprise`,
-		`-f pulse_ref="${TAG}"`,
-		`-f version="${VERSION}"`,
-		`-f upload_actions_artifact=false`,
-		`-f upload_to_r2=true`,
-		`-f publish_docker_image=true`,
-		`-f docker_image=license.pulserelay.pro/pulse-pro`,
-		`-f r2_prefix="${r2_prefix}"`,
-		`-f reuse_existing_packet=true`,
-		`-f allow_stable_ga_publish="${allow_ga_publish}"`,
-		`wait_for_workflow rcourtman/pulse-enterprise "Build Pro Release" main "${build_started_at}" "private Pro build"`,
+		`return_run_details: true`,
+		`pulse_ref: $pulse_ref`,
+		`version: $version`,
+		`upload_actions_artifact: "false"`,
+		`upload_to_r2: "true"`,
+		`publish_docker_image: "true"`,
+		`docker_image: "license.pulserelay.pro/pulse-pro"`,
+		`r2_prefix: $r2_prefix`,
+		`reuse_existing_packet: "true"`,
+		`allow_stable_ga_publish: $allow_stable_ga_publish`,
+		`repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches`,
+		`build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"`,
+		`wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build"`,
 		`echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"`,
 	} {
 		if !strings.Contains(stageJob, needle) {
@@ -2104,11 +2147,12 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	for _, needle := range []string{
 		`needs.stage_private_pro_runtime.result == 'success'`,
 		`R2_PREFIX: ${{ needs.stage_private_pro_runtime.outputs.r2_prefix }}`,
-		`gh workflow run promote-paid-runtime-release.yml`,
-		`--repo rcourtman/pulse-pro`,
-		`-f r2_prefix="${R2_PREFIX}"`,
-		`-f allow_ga_prefix="${allow_ga_publish}"`,
-		`wait_for_workflow rcourtman/pulse-pro "Promote Paid Runtime Release" main "${promote_started_at}" "private Pro live promotion"`,
+		`return_run_details: true`,
+		`r2_prefix: $r2_prefix`,
+		`allow_ga_prefix: $allow_ga_prefix`,
+		`repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches`,
+		`promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"`,
+		`wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion"`,
 		`echo "::error::${label} failed with conclusion=${conclusion}: ${url}"`,
 	} {
 		if !strings.Contains(promotionJob, needle) {
@@ -2117,6 +2161,24 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	}
 	if strings.Contains(stageJob, "continue-on-error: true") || strings.Contains(promotionJob, "continue-on-error: true") {
 		t.Fatal("private Pro staging and promotion must fail the release pipeline on error")
+	}
+	for label, job := range map[string]string{
+		"private Pro staging":   stageJob,
+		"private Pro promotion": promotionJob,
+	} {
+		if strings.Contains(job, "gh run list") || strings.Contains(job, "started_at") {
+			t.Fatalf("%s must not infer a downstream run from time-ordered workflow listings", label)
+		}
+		for _, needle := range []string{
+			`-H "X-GitHub-Api-Version: 2026-03-10"`,
+			`local run_id="$2"`,
+			`gh run view "${run_id}"`,
+			`did not return an exact workflow run ID`,
+		} {
+			if !strings.Contains(job, needle) {
+				t.Fatalf("%s missing exact downstream-run correlation contract: %s", label, needle)
+			}
+		}
 	}
 }
 
