@@ -10853,7 +10853,10 @@ func TestContract_PublicSecurityStatusIncludesDemoPresentationPolicy(t *testing.
 	}
 }
 
-func TestContract_SecurityStatusPresentationPolicyDefaultsHideUpgradeOutsideHosted(t *testing.T) {
+func TestContract_SecurityStatusPresentationPolicyShowsUpgradeByDefault(t *testing.T) {
+	// 2026-08-07 self-hosted commercial-surfaces revision: ordinary free
+	// self-hosted sessions see upgrade CTAs; suppression is reserved for demo
+	// mode and white-label runtimes (pinned separately below).
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = false
 
@@ -10879,11 +10882,60 @@ func TestContract_SecurityStatusPresentationPolicyDefaultsHideUpgradeOutsideHost
 		"demoMode":       false,
 		"readOnly":       false,
 		"hideCommercial": false,
-		"hideUpgrade":    true,
+		"hideUpgrade":    false,
 	} {
 		if got, _ := presentationPolicy[key].(bool); got != want {
 			t.Fatalf("presentationPolicy.%s = %v, want %v", key, presentationPolicy[key], want)
 		}
+	}
+}
+
+func TestContract_SecurityStatusPresentationPolicySuppressionInputs(t *testing.T) {
+	cases := []struct {
+		name       string
+		demoMode   bool
+		whiteLabel bool
+		wantHidden bool
+	}{
+		{"default shows commercial surfaces", false, false, false},
+		{"demo mode hides commercial surfaces", true, false, true},
+		{"white-label hides commercial surfaces", false, true, true},
+		{"demo and white-label hides commercial surfaces", true, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := resolveSecurityStatusPresentationPolicy(tc.demoMode, tc.whiteLabel)
+			if policy.HideUpgrade != tc.wantHidden || policy.HideCommercial != tc.wantHidden {
+				t.Fatalf("policy = %+v, want hideUpgrade=hideCommercial=%v", policy, tc.wantHidden)
+			}
+			if policy.DemoMode != tc.demoMode || policy.ReadOnly != tc.demoMode {
+				t.Fatalf("policy = %+v, want demoMode=readOnly=%v", policy, tc.demoMode)
+			}
+		})
+	}
+}
+
+func TestContract_BusinessScaleEstateThresholds(t *testing.T) {
+	// Thresholds mirror the 2026-08-07 telemetry segmentation: >=5 PVE nodes,
+	// >=10 Docker hosts, or >=3 VMware hosts marks a business-scale estate.
+	cases := []struct {
+		name                               string
+		pveNodes, dockerHosts, vmwareHosts int
+		want                               bool
+	}{
+		{"empty estate", 0, 0, 0, false},
+		{"homelab scale", 4, 9, 2, false},
+		{"pve threshold", 5, 0, 0, true},
+		{"docker threshold", 0, 10, 0, true},
+		{"vmware threshold", 0, 0, 3, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := businessScaleEstateCounts(tc.pveNodes, tc.dockerHosts, tc.vmwareHosts); got != tc.want {
+				t.Fatalf("businessScaleEstateCounts(%d, %d, %d) = %v, want %v",
+					tc.pveNodes, tc.dockerHosts, tc.vmwareHosts, got, tc.want)
+			}
+		})
 	}
 }
 

@@ -15,6 +15,7 @@ function normalizeSessionCapabilities(
   return {
     ...DEFAULT_SESSION_CAPABILITIES,
     demoMode: capabilities?.demoMode === true,
+    businessEstate: capabilities?.businessEstate === true,
   };
 }
 

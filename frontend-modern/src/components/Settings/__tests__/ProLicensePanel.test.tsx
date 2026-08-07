@@ -274,6 +274,23 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
   });
 
+  // 2026-08-07 commercial-surfaces revision: the plans page is the landing
+  // surface for business-estate prompts, so it must carry the MSP/provider
+  // path including the self-issued evaluation.
+  it('surfaces the MSP provider section with the self-issued evaluation', async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+
+    expect(screen.getByText('MSPs and multi-client providers')).toBeInTheDocument();
+    expect(screen.getByText(/Plans start at \$149\/mo/)).toBeInTheDocument();
+    expect(screen.getByText(/free\s*60-day evaluation/)).toBeInTheDocument();
+    const mspLink = screen.getByRole('link', { name: /pulserelay\.pro\/msp/i });
+    expect(mspLink).toHaveAttribute('href', 'https://pulserelay.pro/msp');
+  });
+
   it('opens compare-plan checkout from the explicit self-hosted billing handoff', async () => {
     useLocationMock.mockReturnValue({
       search: `?intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,

@@ -1310,17 +1310,27 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     pricing/checkout, upgrade-metrics, or infrastructure-onboarding analytics
     fields, controls, routes, stores, or startup DB artifacts to normal product
     users.
-17. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
-    may keep checkout, activation, recovery, and support-only trial plumbing
-    available for explicit handoffs and entitled installs, but default
-    self-hosted browser surfaces must honor `presentationPolicy.hideUpgrade`
-    and suppress Relay/Pro plan comparison, Pro trial CTAs, monitored-system
-    limit pressure, paid-only settings navigation, and feature upsells unless
-    hosted mode, direct intent, activation/recovery state, or active entitlement
-    makes them relevant. The authenticated app shell must also skip background
-    `/api/license/commercial-posture` bootstrap while `presentationPolicy.hideUpgrade`
-    is true; explicit self-hosted plan, activation/recovery, and hosted or
-    prompt-allowed flows may still refresh the shared posture store.
+17. Keep ordinary self-hosted v6 commercial surfaces reactive and
+    policy-governed (2026-08-07 revision, supersedes the 2026-04-25 opt-in
+    posture; see
+    records/self-hosted-commercial-surfaces-revision-2026-08-07.md). Default
+    free self-hosted browser surfaces show paid-feature settings navigation
+    with panel-owned inline gates, render gate CTAs, and keep Plans & Billing
+    discoverable including the MSP/provider path with its self-issued
+    evaluation. Exactly one proactive commercial surface is allowed: the
+    one-shot business-estate card driven by the authenticated
+    `sessionCapabilities.businessEstate` flag, shown only to free installs
+    and permanently dismissible in a single interaction.
+    `presentationPolicy.hideUpgrade` remains the suppression contract and is
+    forced true for demo mode and white-label runtimes (which covers MSP
+    tenant containers); every commercial surface must keep honoring it
+    wherever it is true. Trial CTAs, hosted handoff prompts, and
+    monitored-system limit pressure stay out of default self-hosted UI. The
+    authenticated app shell must still skip background
+    `/api/license/commercial-posture` bootstrap while
+    `presentationPolicy.hideUpgrade` is true; explicit self-hosted plan,
+    activation/recovery, and prompt-allowed flows may refresh the shared
+    posture store.
 18. Keep hosted and trial billing construction separate from retired hosted-AI
     quickstart inventory: `pkg/licensing/trial_start.go` and hosted
     entitlement refresh paths may preserve historical billing fields for old
@@ -2117,7 +2127,9 @@ Browser and shell coverage now guard that retired boundary:
 `tests/integration/scripts/retired-trial-acquisition-contract.sh` must expect `404` from the
 retired route and prove entitlements remain unchanged. The paid-prompt browser
 proof in `tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
-must keep trial CTAs and paid-only navigation out of the default self-hosted UI.
+must keep trial CTAs and hosted handoff prompts out of the default
+self-hosted UI while proving paid-feature navigation stays visible with
+panel-owned inline gates (2026-08-07 commercial-surfaces revision).
 `scripts/tests/test-retired-trial-acquisition-docs.sh` guards the same documentation posture
 so active operator docs and eval metadata describe the retired route instead of
 the old hosted-signup acquisition contract.

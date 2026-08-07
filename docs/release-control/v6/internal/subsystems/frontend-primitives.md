@@ -238,7 +238,14 @@ item stays visible without the `relay` feature so Relay remains discoverable
 to free installs, and the panel-owned feature gate — not nav hiding —
 communicates the paid boundary. Capability-based hiding (`relayRead`) still
 applies; feature-based `hideWhenUnavailable` must not be reintroduced on that
-item.
+item. Per the 2026-08-07 self-hosted commercial-surfaces revision
+(`records/self-hosted-commercial-surfaces-revision-2026-08-07.md`), the same
+rule extends to `support-reporting`, `security-roles`, `security-users`,
+`security-audit`, and `security-webhooks`: their nav items stay visible
+without the paid feature, the panel-owned gates communicate the paid
+boundary, capability-based hiding still applies, and feature-based
+`hideWhenUnavailable` must not be reintroduced on them. The `multi_tenant`
+organization items are deliberately excluded and keep `hideWhenUnavailable`.
 
 Candidate import-plan presentation inside the Infrastructure settings dialog is
 a shared primitive composition boundary. `NodeCandidateImportPlan.tsx` may use

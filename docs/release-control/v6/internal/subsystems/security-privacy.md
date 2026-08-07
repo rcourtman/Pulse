@@ -1618,7 +1618,11 @@ availability fact through
 `/api/security/status.sessionCapabilities.assistantEnabled`, so general
 settings or security surfaces do not probe `/api/settings/ai` or other
 assistant endpoints merely to decide whether dormant assistant chrome may be
-opened.
+opened. The same tiering rule protects estate size: the business-scale
+marker `sessionCapabilities.businessEstate` (2026-08-07 commercial-surfaces
+revision) is authenticated-session data and must never move onto the
+pre-auth `presentationPolicy` payload, where it would disclose to anonymous
+visitors that an install monitors a business-scale estate.
 Security status disclosure is tiered by construction: public callers receive
 only login/setup discovery, authenticated callers receive their own identity
 and capability context, and deployment, network, credential, token-hint,

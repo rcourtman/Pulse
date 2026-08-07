@@ -3304,6 +3304,12 @@ items, recovery events, and latest points so PBS backups, TrueNAS snapshots,
 Kubernetes artifacts, and future providers all fit the same first-class UI
 frame without removing the source badges and row-level cues that make Proxmox
 operators productive.
+License recovery keeps the same shape under the 2026-08-07
+commercial-surfaces revision: the self-hosted license recovery section on the
+Plans & Billing page (`SelfHostedCommercialRecoverySection` inside
+`ProLicensePanel.tsx`) stays reachable and functionally unchanged while that
+page gains commercial discoverability (MSP/provider section, visible plan
+surfaces); recovery flows must not acquire commercial prompts of their own.
 Operator-facing filter and detail labels should likewise prefer `platform`
 wording over implementation-facing `provider` wording, so the recovery surface
 describes the monitored platform families Pulse covers rather than exposing

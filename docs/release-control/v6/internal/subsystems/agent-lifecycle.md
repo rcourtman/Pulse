@@ -3075,13 +3075,15 @@ records for private Pro runtime hooks. Lifecycle-adjacent flows must treat
 those records as executable-runtime identity, not as agent enrollment,
 installer success, or lifecycle capability evidence, and must leave private
 runtime download guidance to the licensing/settings surfaces that own it.
-The same presentation-policy split now governs paid lifecycle extensions in
-ordinary self-hosted v6 installs. Agent profile management may remain an
-entitled lifecycle surface, but default Infrastructure navigation must not
-advertise agent-profile upgrades, trial prompts, or paid helper links while
-`presentationPolicy.hideUpgrade` is true; it should stay on the free source
-manager unless an explicit entitlement or recovery context makes the paid
-lifecycle surface relevant.
+The same presentation-policy split still governs paid lifecycle extensions in
+ordinary self-hosted v6 installs, under the revised default (2026-08-07
+commercial-surfaces revision): `presentationPolicy.hideUpgrade` is no longer
+forced true outside hosted mode, but wherever it is true (demo mode,
+white-label runtimes) default Infrastructure navigation must not advertise
+agent-profile upgrades, trial prompts, or paid helper links. Agent lifecycle
+flows themselves carry no commercial content either way; the revision changes
+browser presentation posture only, not agent auth, registration, or the
+security-status auth snapshot.
 The normal Infrastructure installer also follows that contract. Agent-command
 execution controls may describe the runtime trust and command-execution effect,
 but their default labels and tooltips must not mention Pro requirements or paid

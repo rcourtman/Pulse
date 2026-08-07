@@ -16,12 +16,16 @@ const SELF_HOSTED_SECURITY_STATUS = {
   ssoProviders: [],
   sessionCapabilities: {
     demoMode: false,
+    businessEstate: false,
   },
+  // 2026-08-07 commercial-surfaces revision: the canonical free self-hosted
+  // policy shows upgrade CTAs; suppression is reserved for demo mode and
+  // white-label runtimes.
   presentationPolicy: {
     demoMode: false,
     readOnly: false,
     hideCommercial: false,
-    hideUpgrade: true,
+    hideUpgrade: false,
   },
   settingsCapabilities: {
     apiAccessRead: true,
@@ -37,7 +41,7 @@ const SELF_HOSTED_SECURITY_STATUS = {
 };
 
 test.describe.serial('Self-hosted paid prompt visibility', () => {
-  test('keeps paid-only navigation and trial CTAs out of the default self-hosted UI', async ({
+  test('surfaces paid-only navigation with inline gates and no trial ceremony', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -87,16 +91,19 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
     await page.goto('/settings/security-roles');
 
     await expect(page.getByRole('heading', { level: 1, name: 'Roles' })).toBeVisible();
-    await expect(page.getByText('Custom Roles (Pro)')).toHaveCount(0);
-    // Remote Access stays in the nav without the relay feature on purpose:
-    // the panel renders its own upgrade gate, and hiding the item made Relay
-    // undiscoverable for free installs (settingsNavCatalog system-relay).
+    // The panel gates inline with the canonical upgrade CTA (2026-08-07
+    // commercial-surfaces revision: paid-only tabs follow the Relay
+    // precedent instead of hiding).
+    await expect(page.getByRole('heading', { name: 'Custom Roles' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View plans' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Remote Access' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Roles' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Users' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Audit Log' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Audit Webhooks' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Self-hosted plan' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Roles' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Users' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Audit Log' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Audit Webhooks' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Plans & Billing' })).toBeVisible();
+    // Trial ceremony and hosted handoff remain absent: the revision opens
+    // discoverability, not trial or hosted flows.
     await expect(page.getByRole('link', { name: /upgrade to pro/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start free trial/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start trial/i })).toHaveCount(0);

@@ -1,37 +1,54 @@
 {
   "version": 1,
-  "base_sha": "bb75580073b6b161bcfe773307a54ac17217fa88",
-  "verified_at": "2026-08-06T22:24:12Z",
   "result": "passed",
+  "base_sha": "1019310adf4aebaa88d5de0933be95dfc61284c8",
+  "verified_at": "2026-08-07T12:40:13Z",
   "changed_paths": [
-    "frontend-modern/src/features/alerts/useAlertOverridesState.ts"
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/components/BusinessEstateCard.tsx",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/stores/sessionCapabilities.ts",
+    "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/features/alerts/useAlertOverridesState.ts": "558a4be683bc7b9ba712298955ffe2d61e43a4f74fa73f08f39252a1019eb273"
+    "frontend-modern/src/App.tsx": "7c22f48d04053556f07df34511b49847e9f9b2bd1217f819ff7d8b4f41ed83ef",
+    "frontend-modern/src/components/BusinessEstateCard.tsx": "af4463ea3a33de6a3a24b8ed89d41fcc42ceadb12736b6443a88556e18c88362",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "c9d3a0405c626370239eaa3ff5fd1f7118887553ab8e80ef26b55008b817af3f",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "b6a8f9c622c72a86dc7a0034c479e86fb9a1919ad0eb4a5fcd81222242fae865",
+    "frontend-modern/src/stores/sessionCapabilities.ts": "455c254df2ea7236bb9a1202e848f7226b963e1e36c761799d6eeca70a845b19",
+    "frontend-modern/src/types/config.ts": "36f050dba43af75781f98435faaa9921072d696d6133fb7f10bdfe04506c39bd"
   },
   "routes": [
-    "/alerts/thresholds/truenas",
-    "/alerts/thresholds/proxmox"
+    "/",
+    "/settings/pulse-intelligence/billing/plan",
+    "/settings/security-roles"
+  ],
+  "states": [
+    "free Community tier with hideUpgrade=false served by the rebuilt dev backend (verified via /api/security/status)",
+    "sessionCapabilities.businessEstate=true from 6 mock PVE nodes on the free tier",
+    "business-estate card eligible state (star prompt dismissed, first-seen recorded on a prior day), re-exercised after the storage keys moved local to the component",
+    "business-estate card permanently dismissed state after each dismissal action",
+    "settings navigation for a free install showing Data & Reports, Roles, Users, Audit Log, Audit Webhooks, Remote Access, and Plans & Billing",
+    "Roles panel feature gate with visible View plans CTA on the free tier",
+    "Plans & Billing Community plan with the MSPs and multi-client providers section"
+  ],
+  "interactions": [
+    "logged in as admin via real clicks and typing at 1280x800",
+    "clicked 'See business plans' on the business-estate card: navigated to /settings/pulse-intelligence/billing/plan and set the permanent dismissal key",
+    "reset dismissal, reloaded, clicked 'This is a homelab': card removed from DOM and dismissal persisted (repeated against the final component bytes)",
+    "navigated to Roles via settings navigation and confirmed the inline gate with View plans CTA",
+    "read the Plans & Billing page including the MSP provider section and pulserelay.pro/msp link",
+    "repeated the card render and homelab dismissal at mobile viewport with the card clearing the bottom navigation bar"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 800
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
-  ],
-  "states": [
-    "TrueNAS system threshold row at its inherited 85% memory default and after a custom 95% override",
-    "Proxmox Virtualization Hosts section containing only PVE-scoped host rows",
-    "narrow TrueNAS threshold route with the selected platform tab visible and the saved 95% override rendered after reload"
-  ],
-  "interactions": [
-    "edited truenas-main memory from 85% to 95%, committed the inline row edit, and confirmed Save Changes appeared without resetting the value",
-    "saved the alert configuration, reloaded /alerts/thresholds/truenas, and confirmed the custom 95% value persisted",
-    "switched to /alerts/thresholds/proxmox and confirmed the TrueNAS system was absent from Virtualization Hosts",
-    "reloaded /alerts/thresholds/truenas at 390x844 and confirmed the active TrueNAS tab and persisted 95% value remained visible"
   ]
 }

@@ -322,7 +322,7 @@
     },
     {
       "id": "RA5",
-      "summary": "Ordinary self-hosted v6 users do not see paid service prompts, trial CTAs, plan upsells, or paid-only navigation by default; commercial surfaces are reachable only through explicit handoff, direct route, hosted mode, or active entitlement/recovery state.",
+      "summary": "Ordinary free self-hosted v6 sessions see reactive commercial surfaces (visible paid-feature navigation with panel-owned inline gates, gate CTAs, discoverable Plans & Billing) plus exactly one proactive one-shot business-estate card gated to authenticated sessions; demo mode and white-label runtimes hide all commercial surfaces, the business-estate signal never rides the pre-auth policy, and trial ceremony plus hosted handoff stay absent.",
       "kind": "invariant",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -385,7 +385,7 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/self-hosted-paid-services-opt-in-surface-2026-04-25.md",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-surfaces-revision-2026-08-07.md",
           "kind": "file"
         },
         {

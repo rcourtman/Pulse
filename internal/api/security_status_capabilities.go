@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 type securityStatusSettingsCapabilities struct {
@@ -29,6 +31,11 @@ type securityStatusSettingsCapabilities struct {
 type securityStatusSessionCapabilities struct {
 	DemoMode         bool `json:"demoMode"`
 	AssistantEnabled bool `json:"assistantEnabled"`
+	// BusinessEstate marks a free self-hosted install whose monitored estate
+	// crosses the business-scale thresholds. Authenticated-session only: it
+	// must never ride the pre-auth presentation policy, where it would leak
+	// estate size to anonymous visitors.
+	BusinessEstate bool `json:"businessEstate"`
 }
 
 type securityStatusPresentationPolicy struct {
@@ -263,19 +270,92 @@ func (r *Router) securityStatusSessionCapabilities(ctx context.Context) security
 	if r != nil && r.aiSettingsHandler != nil {
 		assistantEnabled = r.aiSettingsHandler.AssistantEnabled(ctx)
 	}
+	businessEstate := false
+	if r != nil && !demoMode && !r.hostedMode {
+		paidOrBranded := false
+		if svc := getLicenseServiceForContext(ctx); svc != nil {
+			if lic := svc.Current(); lic != nil && lic.Claims.Tier != pkglicensing.TierFree {
+				paidOrBranded = true
+			}
+			if svc.HasFeature(featureWhiteLabelValue) {
+				paidOrBranded = true
+			}
+		}
+		if !paidOrBranded {
+			businessEstate = r.businessScaleEstate(ctx)
+		}
+	}
 	return securityStatusSessionCapabilities{
 		DemoMode:         demoMode,
 		AssistantEnabled: assistantEnabled,
+		BusinessEstate:   businessEstate,
 	}
 }
 
-func (r *Router) securityStatusPresentationPolicy() securityStatusPresentationPolicy {
-	demoMode := r != nil && r.config != nil && r.config.DemoMode
-	hideUpgrade := demoMode || r == nil || !r.hostedMode
+// Business-scale estate thresholds. These mirror the segmentation used in the
+// 2026-08-07 telemetry read that motivated the commercial-surface revision:
+// installs at or above any one of these convert to paid at ~8x the rate of
+// smaller estates.
+const (
+	businessEstateMinPVENodes    = 5
+	businessEstateMinDockerHosts = 10
+	businessEstateMinVMwareHosts = 3
+)
+
+func businessScaleEstateCounts(pveNodes, dockerHosts, vmwareHosts int) bool {
+	return pveNodes >= businessEstateMinPVENodes ||
+		dockerHosts >= businessEstateMinDockerHosts ||
+		vmwareHosts >= businessEstateMinVMwareHosts
+}
+
+func (r *Router) businessScaleEstate(ctx context.Context) bool {
+	if r == nil || r.configHandlers == nil {
+		return false
+	}
+	monitor := r.configHandlers.getMonitor(ctx)
+	if monitor == nil {
+		return false
+	}
+	pveNodes, dockerHosts := 0, 0
+	if readState := monitor.GetUnifiedReadStateOrSnapshot(); readState != nil {
+		pveNodes = len(readState.Nodes())
+		dockerHosts = len(readState.DockerHosts())
+	}
+	vmwareHosts := 0
+	resources, _ := monitor.UnifiedResourceSnapshot()
+	for _, resource := range resources {
+		if resource.VMware == nil {
+			continue
+		}
+		if unifiedresources.CanonicalResourceType(resource.Type) == unifiedresources.ResourceTypeAgent {
+			vmwareHosts++
+		}
+	}
+	return businessScaleEstateCounts(pveNodes, dockerHosts, vmwareHosts)
+}
+
+// resolveSecurityStatusPresentationPolicy maps commercial suppression inputs
+// to the served policy. Per the 2026-08-07 self-hosted commercial-surfaces
+// revision (supersedes the 2026-04-25 opt-in record, RA5), upgrade CTAs are
+// visible by default; demo mode and white-label runtimes stay suppressed so
+// demos, kiosks, and MSP tenant containers never show commercial content.
+func resolveSecurityStatusPresentationPolicy(demoMode, whiteLabel bool) securityStatusPresentationPolicy {
+	hideCommercial := demoMode || whiteLabel
 	return securityStatusPresentationPolicy{
 		DemoMode:       demoMode,
 		ReadOnly:       demoMode,
-		HideCommercial: demoMode,
-		HideUpgrade:    hideUpgrade,
+		HideCommercial: hideCommercial,
+		HideUpgrade:    hideCommercial,
 	}
+}
+
+func (r *Router) securityStatusPresentationPolicy(ctx context.Context) securityStatusPresentationPolicy {
+	demoMode := r != nil && r.config != nil && r.config.DemoMode
+	whiteLabel := false
+	if r != nil && !demoMode {
+		if svc := getLicenseServiceForContext(ctx); svc != nil {
+			whiteLabel = svc.HasFeature(featureWhiteLabelValue)
+		}
+	}
+	return resolveSecurityStatusPresentationPolicy(demoMode, whiteLabel)
 }

@@ -16,6 +16,25 @@ import {
   SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID,
 } from '@/utils/pricingHandoff';
 
+const MSPProviderSection: Component = () => (
+  <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
+    <p class="font-semibold text-base-content">MSPs and multi-client providers</p>
+    <p class="mt-1 text-muted">
+      Run an isolated Pulse instance per client with central provisioning, backups, and branded
+      reporting. Plans start at $149/mo, and the provider bundle self-issues a free 60-day
+      evaluation.
+    </p>
+    <a
+      href="https://pulserelay.pro/msp"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="mt-2 inline-block text-blue-500 hover:underline"
+    >
+      Learn more at pulserelay.pro/msp
+    </a>
+  </div>
+);
+
 const ProLicensePolicyLoadingPanel: Component = () => (
   <CommercialBillingShell
     title={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellTitle}
@@ -103,6 +122,8 @@ const ProLicensePanelContent: Component = () => {
                   purchaseActivationAction={state.purchaseActivationAction()}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
                 />
+
+                <MSPProviderSection />
 
                 <SelfHostedCommercialRecoverySection
                   sectionId={SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID}

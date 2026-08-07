@@ -233,6 +233,46 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  // 2026-08-07 commercial-surfaces revision (see
+  // docs/release-control/v6/internal/records/
+  // self-hosted-commercial-surfaces-revision-2026-08-07.md): paid-feature
+  // tabs stay visible for free installs and their panels gate inline, while
+  // the multi_tenant organization tabs deliberately stay feature-hidden.
+  it('keeps paid-feature settings tabs visible with panel-owned inline gates', () => {
+    const itemBlock = (id: string): string => {
+      const start = settingsNavCatalogSource.indexOf(`id: '${id}'`);
+      expect(start, `nav item ${id} present in catalog`).toBeGreaterThan(-1);
+      const next = settingsNavCatalogSource.indexOf("id: '", start + 1);
+      return settingsNavCatalogSource.slice(start, next === -1 ? undefined : next);
+    };
+
+    for (const id of [
+      'support-reporting',
+      'security-roles',
+      'security-users',
+      'security-audit',
+      'security-webhooks',
+      'system-relay',
+    ]) {
+      expect(
+        itemBlock(id),
+        `${id} must stay visible without the paid feature (panel gates inline)`,
+      ).not.toContain('hideWhenUnavailable');
+    }
+
+    for (const id of [
+      'organization-overview',
+      'organization-access',
+      'organization-sharing',
+      'organization-billing',
+      'organization-billing-admin',
+    ]) {
+      expect(itemBlock(id), `${id} stays hidden without multi_tenant`).toContain(
+        'hideWhenUnavailable: true',
+      );
+    }
+  });
+
   it('keeps allowed organization deep links on the canonical settings shell', () => {
     expect(settingsSource).toContain("import { useSettingsAccess } from './useSettingsAccess';");
     expect(settingsSource).toContain('const activeSettingsPanelEntry = createMemo(() => {');

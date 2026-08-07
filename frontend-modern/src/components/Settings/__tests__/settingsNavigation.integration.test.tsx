@@ -159,7 +159,10 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
-  it('hides paid-only self-hosted tabs from free installs', () => {
+  // 2026-08-07 commercial-surfaces revision: paid-only tabs stay visible for
+  // free installs and their panels gate inline, following the Relay
+  // precedent. Hiding them made the capabilities undiscoverable.
+  it('shows paid-only self-hosted tabs to free installs (panels gate inline)', () => {
     for (const tab of [
       'security-roles',
       'security-users',
@@ -181,11 +184,11 @@ describe('settingsNavigation integration scaffold', () => {
             users: true,
           },
         }),
-      ).toBe(true);
+      ).toBe(false);
     }
   });
 
-  it('shows paid reporting navigation only after advanced reporting is available', () => {
+  it('keeps reporting navigation visible with and without advanced reporting', () => {
     expect(
       shouldHideSettingsNavItem('support-reporting', {
         hasFeature: hasFeatures([]),
@@ -194,7 +197,7 @@ describe('settingsNavigation integration scaffold', () => {
         presentationPolicyIsDemoMode: false,
         hostedModeEnabled: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
 
     expect(
       shouldHideSettingsNavItem('support-reporting', {
@@ -207,7 +210,7 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
-  it('keeps direct panel-owned feature gates routeable even when hidden from navigation', () => {
+  it('keeps panel-owned feature gate tabs visible and routeable for free installs', () => {
     for (const tab of [
       'support-reporting',
       'security-roles',
@@ -224,7 +227,7 @@ describe('settingsNavigation integration scaffold', () => {
           hostedModeEnabled: false,
           settingsCapabilitiesResolved: false,
         }),
-      ).toBe(true);
+      ).toBe(false);
       expect(
         shouldBlockSettingsRouteItem(tab, {
           hasFeature: hasFeatures([]),

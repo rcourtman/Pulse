@@ -5214,10 +5214,16 @@ must therefore defer their first read until that policy has resolved, so
 public demos fail closed without probing hidden commercial routes during
 bootstrap.
 For ordinary self-hosted v6 installs, that same security-status contract owns
-the free-first commercial posture: `hideUpgrade` defaults to true outside
-hosted mode, and API consumers must treat it as a prompt-suppression contract
-for upgrade links, trial CTAs, plan upsells, and paid-only navigation rather
-than as a billing entitlement change.
+the revised commercial posture (2026-08-07, supersedes the 2026-04-25 opt-in
+posture; see records/self-hosted-commercial-surfaces-revision-2026-08-07.md):
+`hideUpgrade` and `hideCommercial` default to false and are forced true only
+for demo mode and white-label runtimes. API consumers must still treat them as
+the prompt-suppression contract for upgrade links, plan upsells, and
+commercial navigation rather than as a billing entitlement change. The
+authenticated `sessionCapabilities` payload additionally carries
+`businessEstate`, a business-scale estate marker for free installs; it must
+never move onto the pre-auth presentation policy, because the public response
+would leak estate size to anonymous visitors.
 That same contract split also makes the licensing boundary explicit:
 `/api/license/runtime-capabilities` is the public runtime feature contract,
 `/api/license/commercial-posture` is the non-billing upgrade posture

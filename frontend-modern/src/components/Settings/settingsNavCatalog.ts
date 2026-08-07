@@ -199,7 +199,9 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: FileText,
         iconProps: { strokeWidth: 2 },
         features: ['advanced_reporting'],
-        hideWhenUnavailable: true,
+        // Visible without the feature (2026-08-07 commercial-surfaces
+        // revision): the panel renders its own upgrade gate, and hiding the
+        // item made the capability undiscoverable — same rationale as Relay.
         hideWhenDemoMode: true,
       },
       {
@@ -254,7 +256,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: ShieldCheck,
         iconProps: { strokeWidth: 2 },
         features: ['rbac'],
-        hideWhenUnavailable: true,
+        // Visible without the feature: the panel gates inline (see Relay).
         requiredCapability: 'roles',
       },
       {
@@ -263,7 +265,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Users,
         iconProps: { strokeWidth: 2 },
         features: ['rbac'],
-        hideWhenUnavailable: true,
+        // Visible without the feature: the panel gates inline (see Relay).
         requiredCapability: 'users',
       },
       {
@@ -272,7 +274,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Activity,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
-        hideWhenUnavailable: true,
+        // Visible without the feature: the panel gates inline (see Relay).
         requiredCapability: 'auditLog',
       },
       {
@@ -281,7 +283,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
-        hideWhenUnavailable: true,
+        // Visible without the feature: the panel gates inline (see Relay).
         requiredCapability: 'auditWebhooksRead',
       },
       {

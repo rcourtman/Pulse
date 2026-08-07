@@ -362,7 +362,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			SSOEnabled:         hasEnabledSSO,
 			HideLocalLogin:     r.config.HideLocalLogin,
 			SSOProviders:       ssoProviders,
-			PresentationPolicy: r.securityStatusPresentationPolicy(),
+			PresentationPolicy: r.securityStatusPresentationPolicy(req.Context()),
 		}
 
 		// Bearer and query-string tokens are intentionally not accepted here. The
