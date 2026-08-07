@@ -49,6 +49,11 @@ type CheckoutPortalHandoffRequest struct {
 	SuccessURL        string `json:"success_url"`
 	CancelURL         string `json:"cancel_url"`
 	PurchaseReturnJTI string `json:"purchase_return_jti"`
+	// Source is the closed-vocabulary in-app surface attribution for the
+	// checkout (e.g. "gate-rbac", "estate-card", "plans-page"). omitempty keeps
+	// requests without attribution compatible with license servers that predate
+	// the field, since the receiver decodes strictly.
+	Source string `json:"source,omitempty"`
 }
 
 // CheckoutPortalHandoffResponse is the canonical opaque portal handoff used to

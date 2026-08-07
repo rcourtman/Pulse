@@ -8,7 +8,10 @@ import {
 import { useWebSocket } from '@/contexts/appRuntime';
 import { sessionCapabilities } from '@/stores/sessionCapabilities';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { SELF_HOSTED_PRO_BILLING_PLAN_ROUTE } from '@/utils/pricingHandoff';
+import {
+  getSelfHostedBillingHref,
+  PURCHASE_HANDOFF_SOURCE_ESTATE_CARD,
+} from '@/utils/pricingHandoff';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import BriefcaseIcon from 'lucide-solid/icons/briefcase';
 import XIcon from 'lucide-solid/icons/x';
@@ -104,7 +107,7 @@ export function BusinessEstateCard() {
   const handleSeePlans = () => {
     setDismissed(true);
     setShowCard(false);
-    navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE);
+    navigate(getSelfHostedBillingHref('plan', { source: PURCHASE_HANDOFF_SOURCE_ESTATE_CARD }));
   };
 
   createEffect(() => {

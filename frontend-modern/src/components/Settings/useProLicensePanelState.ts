@@ -32,7 +32,9 @@ import {
   getSelfHostedBillingHref,
   getSelfHostedBillingPlanDetail,
   getSelfHostedBillingPlanIntent,
+  getSelfHostedBillingPlanSource,
   getSelfHostedBillingPurchaseArrival,
+  PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
   resolveSelfHostedBillingSection,
   resolveSelfHostedPurchaseStartDestination,
   SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
@@ -164,6 +166,12 @@ export function useProLicensePanelState() {
     resolveSelfHostedBillingSection(location.pathname, location.search, location.hash),
   );
 
+  // Checkout attribution: a gate CTA or the estate card stamps ?source= onto
+  // the plan route; organic arrivals attribute to the plans page itself.
+  const purchaseHandoffSource = createMemo(
+    () => getSelfHostedBillingPlanSource(location.search) ?? PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
+  );
+
   const activeSection = createMemo<SelfHostedBillingSection>(() => {
     return requestedSection() === 'usage' ? 'plan' : requestedSection();
   });
@@ -207,6 +215,8 @@ export function useProLicensePanelState() {
       actionLabel: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptActionLabel,
       actionDestination: resolveSelfHostedPurchaseStartDestination(
         SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+        undefined,
+        purchaseHandoffSource(),
       ),
     };
   });
@@ -331,12 +341,20 @@ export function useProLicensePanelState() {
       case SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED:
         return {
           label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseCancelledActionLabel,
-          destination: resolveSelfHostedPurchaseStartDestination(intent),
+          destination: resolveSelfHostedPurchaseStartDestination(
+            intent,
+            undefined,
+            purchaseHandoffSource(),
+          ),
         };
       case SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED:
         return {
           label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseExpiredActionLabel,
-          destination: resolveSelfHostedPurchaseStartDestination(intent),
+          destination: resolveSelfHostedPurchaseStartDestination(
+            intent,
+            undefined,
+            purchaseHandoffSource(),
+          ),
         };
       case SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED:
         return {
@@ -351,7 +369,11 @@ export function useProLicensePanelState() {
       case SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE:
         return {
           label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseUnavailableActionLabel,
-          destination: resolveSelfHostedPurchaseStartDestination(intent),
+          destination: resolveSelfHostedPurchaseStartDestination(
+            intent,
+            undefined,
+            purchaseHandoffSource(),
+          ),
         };
       default:
         return null;
@@ -410,6 +432,8 @@ export function useProLicensePanelState() {
             label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonActionLabel,
             destination: resolveSelfHostedPurchaseStartDestination(
               SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+              undefined,
+              purchaseHandoffSource(),
             ),
           }
         : null,

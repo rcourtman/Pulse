@@ -25,6 +25,7 @@ export const SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM =
 export const SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM =
   SELF_HOSTED_PRO_BILLING_DETAILS_QUERY_PARAM;
 export const SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM = 'intent';
+export const SELF_HOSTED_PRO_BILLING_PLAN_SOURCE_QUERY_PARAM = 'source';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM = 'purchase';
 export const SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL = 'counting-rules';
 export const SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL = 'recovery';
@@ -52,6 +53,49 @@ export const SELF_HOSTED_PRO_BILLING_USAGE_HREF = SELF_HOSTED_PRO_BILLING_USAGE_
 export const SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL}`;
 export const SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF = `${SELF_HOSTED_PRO_BILLING_USAGE_ROUTE}?${SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL}`;
 export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`;
+
+// Checkout source attribution. Gate CTAs stamp a closed-vocabulary `source`
+// onto the billing plan route (or directly onto the purchase-start URL for
+// unmapped keys); the plan page threads it into the purchase-start handoff so
+// the license server can attribute the Stripe checkout to the surface that
+// started it. The param is authenticated-session-only: the public /pricing
+// route and the public pricing URL never carry it, and forwarded pre-auth
+// query strings are scrubbed of it in getSelfHostedPurchaseStartUrl.
+export const PURCHASE_HANDOFF_SOURCE_PLANS_PAGE = 'plans-page';
+export const PURCHASE_HANDOFF_SOURCE_ESTATE_CARD = 'estate-card';
+
+const PURCHASE_HANDOFF_GATE_SOURCES: Record<string, string> = {
+  rbac: 'gate-rbac',
+  advanced_reporting: 'gate-reporting',
+  mobile_app: 'gate-mobile-app',
+  push_notifications: 'gate-push-notifications',
+  ai_alerts: 'gate-ai-alerts',
+  ai_autofix: 'gate-ai-autofix',
+  relay: 'gate-relay',
+  audit_logging: 'gate-audit-logging',
+  agent_profiles: 'gate-agent-profiles',
+  external_probe: 'gate-external-probe',
+  long_term_metrics: 'gate-long-term-metrics',
+  white_label: 'gate-white-label',
+};
+
+const PURCHASE_HANDOFF_SOURCE_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
+
+export function normalizePurchaseHandoffSource(
+  source: string | null | undefined,
+): string | undefined {
+  const normalized = source?.trim();
+  if (!normalized || !PURCHASE_HANDOFF_SOURCE_PATTERN.test(normalized)) return undefined;
+  return normalized;
+}
+
+export function getPurchaseHandoffGateSource(
+  feature: string | null | undefined,
+): string | undefined {
+  const normalizedFeature = feature?.trim();
+  if (!normalizedFeature) return undefined;
+  return PURCHASE_HANDOFF_GATE_SOURCES[normalizedFeature];
+}
 
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
@@ -119,6 +163,7 @@ function normalizeFeatureKey(feature: string | null | undefined): string | undef
 export function getSelfHostedPurchaseStartUrl(
   feature?: string | null,
   searchParams?: URLSearchParams,
+  source?: string | null,
 ): string {
   const url = new URL(SELF_HOSTED_PURCHASE_START_PATH, INTERNAL_HREF_BASE);
   if (searchParams) {
@@ -128,6 +173,15 @@ export function getSelfHostedPurchaseStartUrl(
         url.searchParams.set(key, normalizedValue);
       }
     }
+  }
+
+  // Attribution is set only by authenticated in-app callers via the explicit
+  // argument; a forwarded query string (the public /pricing route) never
+  // carries it through.
+  url.searchParams.delete(SELF_HOSTED_PRO_BILLING_PLAN_SOURCE_QUERY_PARAM);
+  const normalizedSource = normalizePurchaseHandoffSource(source);
+  if (normalizedSource) {
+    url.searchParams.set(SELF_HOSTED_PRO_BILLING_PLAN_SOURCE_QUERY_PARAM, normalizedSource);
   }
 
   const normalizedFeature = normalizeFeatureKey(feature);
@@ -140,8 +194,9 @@ export function getSelfHostedPurchaseStartUrl(
 export function resolveSelfHostedPurchaseStartDestination(
   feature?: string | null,
   searchParams?: URLSearchParams,
+  source?: string | null,
 ): UpgradeDestination {
-  return resolveUpgradeDestination(getSelfHostedPurchaseStartUrl(feature, searchParams), {
+  return resolveUpgradeDestination(getSelfHostedPurchaseStartUrl(feature, searchParams, source), {
     hardNavigation: true,
     newTab: true,
     preserveOpener: true,
@@ -174,12 +229,30 @@ export function getManagedHostingRequestUrl(): string {
   return DEFAULT_MANAGED_HOSTING_REQUEST_URL;
 }
 
+// withPurchaseHandoffSource stamps a gate source onto an in-product billing
+// plan href. Only the authenticated upgrade-CTA fallback below uses it; the
+// public /pricing route resolves the same destinations unsourced so a website
+// arrival is never attributed to an in-app gate.
+function withPurchaseHandoffSource(destination: string, source: string | undefined): string {
+  const normalized = normalizePurchaseHandoffSource(source);
+  if (!normalized) return destination;
+  const url = new URL(destination, INTERNAL_HREF_BASE);
+  if (!isSelfHostedBillingPath(url.pathname)) return destination;
+  url.searchParams.set(SELF_HOSTED_PRO_BILLING_PLAN_SOURCE_QUERY_PARAM, normalized);
+  return `${url.pathname}${url.search}`;
+}
+
 export function getUpgradeFallbackDestination(feature?: string | null): string | undefined {
   if (isRetiredPricingFeature(feature)) return undefined;
   if (normalizeFeatureKey(feature) === 'cloud') {
     return getManagedHostingRequestUrl();
   }
-  return getInProductPricingDestination(feature) || getSelfHostedPurchaseStartUrl(feature);
+  const gateSource = getPurchaseHandoffGateSource(feature);
+  const inProductDestination = getInProductPricingDestination(feature);
+  if (inProductDestination) {
+    return withPurchaseHandoffSource(inProductDestination, gateSource);
+  }
+  return getSelfHostedPurchaseStartUrl(feature, undefined, gateSource);
 }
 
 export function getSelfHostedBillingUsageDetail(
@@ -206,6 +279,14 @@ export function getSelfHostedBillingPlanIntent(search: string): SelfHostedBillin
   return null;
 }
 
+export function getSelfHostedBillingPlanSource(search: string): string | null {
+  return (
+    normalizePurchaseHandoffSource(
+      billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PLAN_SOURCE_QUERY_PARAM),
+    ) ?? null
+  );
+}
+
 export function getSelfHostedBillingPurchaseArrival(
   search: string,
 ): SelfHostedBillingPurchaseArrival | null {
@@ -228,6 +309,7 @@ export function getSelfHostedBillingHref(
     detail?: SelfHostedBillingDetail | null;
     intent?: SelfHostedBillingPlanIntent | null;
     purchase?: SelfHostedBillingPurchaseArrival | null;
+    source?: string | null;
   } = {},
 ): string {
   const baseRoute =
@@ -257,6 +339,11 @@ export function getSelfHostedBillingHref(
 
   if (options.purchase) {
     params.set(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM, options.purchase);
+  }
+
+  const source = section === 'plan' ? normalizePurchaseHandoffSource(options.source) : undefined;
+  if (source) {
+    params.set(SELF_HOSTED_PRO_BILLING_PLAN_SOURCE_QUERY_PARAM, source);
   }
 
   const search = params.toString();
@@ -326,6 +413,7 @@ export function resolveCanonicalSelfHostedBillingHref(
       ? SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL
       : null;
   const planIntent = section === 'plan' ? getSelfHostedBillingPlanIntent(search) : null;
+  const planSource = section === 'plan' ? getSelfHostedBillingPlanSource(search) : null;
   const planDetail =
     section === 'plan' &&
     (getSelfHostedBillingPlanDetail(search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL ||
@@ -338,6 +426,7 @@ export function resolveCanonicalSelfHostedBillingHref(
     detail: section === 'usage' ? usageDetail : planDetail,
     intent: planIntent,
     purchase,
+    source: planSource,
   });
 }
 

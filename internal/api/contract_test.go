@@ -22520,3 +22520,73 @@ func TestUnifiedAgentHandlers_HandleReportAckOmitsEmptyServerVersion(t *testing.
 		t.Fatalf("ack unexpectedly carries serverVersion: %v", ack["serverVersion"])
 	}
 }
+
+// Checkout source attribution is an in-app funnel signal, not a browser-visible
+// one: it must reach the license server only inside the portal-handoff body and
+// must never appear on the Pulse Account portal redirect the browser follows.
+func TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal(t *testing.T) {
+	cases := []struct {
+		name          string
+		querySource   string
+		wantSource    string
+		wantCancelURL string
+	}{
+		{
+			name:          "valid gate source",
+			querySource:   "gate-rbac",
+			wantSource:    "gate-rbac",
+			wantCancelURL: "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled&source=gate-rbac",
+		},
+		{
+			name:          "malformed source is dropped",
+			querySource:   "Bad Source!",
+			wantSource:    "",
+			wantCancelURL: "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := createTestHandler(t)
+			handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+			var capturedReq struct {
+				Feature   string `json:"feature"`
+				CancelURL string `json:"cancel_url"`
+				Source    string `json:"source"`
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
+					t.Fatalf("decode checkout portal handoff request: %v", err)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"portal_handoff_id": "cph_test_source"})
+			}))
+			defer server.Close()
+			t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"https://pulse.example.com/auth/license-purchase-start?feature=rbac&source="+url.QueryEscape(tc.querySource),
+				nil,
+			)
+			rec := httptest.NewRecorder()
+			handler.HandleCheckoutStart(rec, req)
+
+			if rec.Code != http.StatusSeeOther {
+				t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusSeeOther, rec.Body.String())
+			}
+			redirectURL, err := url.Parse(rec.Header().Get("Location"))
+			if err != nil {
+				t.Fatalf("parse redirect location: %v", err)
+			}
+			if got := redirectURL.Query().Get("source"); got != "" {
+				t.Fatalf("source = %q, want omitted from portal query", got)
+			}
+			if capturedReq.Source != tc.wantSource {
+				t.Fatalf("handoff source = %q, want %q", capturedReq.Source, tc.wantSource)
+			}
+			if capturedReq.CancelURL != tc.wantCancelURL {
+				t.Fatalf("cancel_url = %q, want %q", capturedReq.CancelURL, tc.wantCancelURL)
+			}
+		})
+	}
+}

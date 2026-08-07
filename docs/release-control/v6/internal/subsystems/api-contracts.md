@@ -8984,3 +8984,20 @@ router echoes it end-to-end on enrollment acks
 (`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`). Agents
 use it to trigger an immediate self-update check after a server upgrade. The
 field is additive: agents that predate it ignore it.
+### Checkout start forwards attribution in the handoff body, never the portal URL
+
+`GET /auth/license-purchase-start` accepts an optional `source` query
+parameter alongside `feature`. It is validated in
+`internal/api/licensing_handlers.go` against the same closed kebab vocabulary
+the frontend emits (`normalizeSelfHostedPurchaseSource`); anything else is
+dropped rather than forwarded. Like `feature`, `source` is added to the
+skip list in `pulseAccountUpgradeURLForRequest`, so it never reaches the
+browser-visible Pulse Account portal redirect; it travels only inside the
+`CreateCheckoutPortalHandoff` request body, where `omitempty` keeps
+source-less installs compatible with a license server that predates the
+field. The cancelled-checkout return URL echoes a valid source back onto the
+plan route (`licensePurchaseActivationRedirectPathWithSource`) so a retry
+keeps the surface that started it. Unrelated query parameters keep their
+existing pass-through behavior.
+`TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal` pins
+both the forwarding and the drop of a malformed value.

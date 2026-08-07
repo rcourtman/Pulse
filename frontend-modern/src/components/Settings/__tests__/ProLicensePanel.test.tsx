@@ -13,6 +13,7 @@ import {
   getSelfHostedBillingHref,
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
+  PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
@@ -1150,7 +1151,11 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
       title: 'Checkout cancelled',
       actionLabel: 'View plans',
-      actionHref: getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
+      actionHref: getSelfHostedPurchaseStartUrl(
+        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+        undefined,
+        PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
+      ),
       redirectedHref: getSelfHostedBillingHref('plan', {
         intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
       }),
@@ -1159,7 +1164,11 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
       title: 'Upgrade return expired',
       actionLabel: 'View plans',
-      actionHref: getSelfHostedPurchaseStartUrl(),
+      actionHref: getSelfHostedPurchaseStartUrl(
+        undefined,
+        undefined,
+        PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
+      ),
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
@@ -1176,7 +1185,11 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
       title: 'Pulse Account unavailable',
       actionLabel: 'Try again',
-      actionHref: getSelfHostedPurchaseStartUrl(),
+      actionHref: getSelfHostedPurchaseStartUrl(
+        undefined,
+        undefined,
+        PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
+      ),
     },
   ])(
     'shows the purchase arrival notice for $purchase',
@@ -1432,7 +1445,11 @@ describe('ProLicensePanel', () => {
       compareLinks.some(
         (link) =>
           link.getAttribute('href') ===
-          getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
+          getSelfHostedPurchaseStartUrl(
+            SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+            undefined,
+            PURCHASE_HANDOFF_SOURCE_PLANS_PAGE,
+          ),
       ),
     ).toBe(true);
     expect(screen.queryByRole('button', { name: 'Hide counting rules' })).not.toBeInTheDocument();

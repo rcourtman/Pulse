@@ -1,17 +1,25 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "2aa43058b7bb700dcd19b8068178e92d14ded583",
-  "verified_at": "2026-08-07T14:03:33Z",
+  "base_sha": "5b07bdc3d8eab45ee004c3c71f22fd2f4d318371",
+  "verified_at": "2026-08-07T18:40:21Z",
   "changed_paths": [
-    "frontend-modern/src/api/settings.ts"
+    "frontend-modern/src/components/BusinessEstateCard.tsx",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
+    "frontend-modern/src/utils/pricingHandoff.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/settings.ts": "de9f9d21e26270464bc7402a969dd56f356494e976e4bb483884850d8b148901"
+    "frontend-modern/src/components/BusinessEstateCard.tsx": "a3717b19a728ef33f775ccce714080b6affd0a56a3a3d8d7a678625a9a6af900",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts": "bfed84fd6aefa15e7b2f7b3ba2c91d8f6e2379172c45bbce3822c7cb1151f776",
+    "frontend-modern/src/utils/pricingHandoff.ts": "7e5c6178f8811179d64894ab136a2ff4263181b61bdc7298a2d341aca9e9b0cc"
   },
   "routes": [
     "/",
-    "/settings (System > General panel via settings search)"
+    "/settings (Security > Roles, RBAC inline gate)",
+    "/settings (System > General, branding gate)",
+    "/settings/pulse-intelligence/billing/plan?source=gate-rbac",
+    "/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan&source=gate-rbac",
+    "/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan"
   ],
   "viewports": [
     {
@@ -24,13 +32,18 @@
     }
   ],
   "states": [
-    "free Community tier served by an isolated worktree backend (PULSE_MOCK_MODE=true, 6 mock PVE nodes) on port 7698",
-    "sessionCapabilities.businessEstate=true confirmed via /api/security/status after the threshold helper moved to internal/monitoring",
-    "telemetry preview payload rendered in Settings > System > General showing schema_version 8 with business_estate: true alongside pve_nodes: 6 and paid_license: false"
+    "free Community tier with presentationPolicy.hideUpgrade=false, served by an isolated worktree backend on port 7698 with 6 mock PVE nodes",
+    "RBAC inline feature gate rendered on the Roles panel for an unentitled install",
+    "plan route reached with gate attribution present, and separately with no source at all to exercise the plans-page default",
+    "business-estate card in its eligible state (star prompt already dismissed, first-seen recorded on a prior day)",
+    "branding gate for white_label, an unmapped feature key that routes straight to purchase-start rather than the plan page"
   ],
   "interactions": [
-    "logged in as admin, opened Settings, searched for General, opened the Usage data and privacy section",
-    "clicked Preview payload and read the full rendered CURRENT HEARTBEAT PAYLOAD JSON including the new business_estate field",
-    "re-exercised the plan route and workspace at 375x812 to confirm the settings surfaces still render at narrow width"
+    "clicked the RBAC gate 'View plans' CTA and confirmed its href carried ?source=gate-rbac, then confirmed the source survived canonical billing-route resolution on arrival",
+    "read the purchase-start hrefs rendered on the plan page: /auth/license-purchase-start?source=gate-rbac&feature=self_hosted_plan",
+    "loaded the same plan route with no source parameter and confirmed the purchase-start hrefs fell back to source=plans-page",
+    "clicked 'See business plans' on the business-estate card and confirmed it navigated to the plan route with ?source=estate-card and dismissed the card permanently",
+    "inspected the branding gate href and confirmed unmapped keys carry attribution too: /auth/license-purchase-start?source=gate-white-label&feature=white_label",
+    "re-exercised the attributed plan route at 375x812 and confirmed the purchase-start hrefs and layout hold at narrow width"
   ]
 }

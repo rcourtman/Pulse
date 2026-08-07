@@ -46,19 +46,27 @@ describe('pricingHandoff', () => {
     expect(getInProductPricingDestination('cloud')).toBeUndefined();
   });
 
-  it('routes paid self-hosted feature upgrades to the in-product billing plan page', () => {
-    expect(getUpgradeFallbackDestination('relay')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
-    expect(getUpgradeFallbackDestination('mobile_app')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+  it('routes paid self-hosted feature upgrades to the in-product billing plan page with gate attribution', () => {
+    expect(getUpgradeFallbackDestination('relay')).toBe(
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-relay`,
+    );
+    expect(getUpgradeFallbackDestination('mobile_app')).toBe(
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-mobile-app`,
+    );
     expect(getUpgradeFallbackDestination('push_notifications')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-push-notifications`,
     );
-    expect(getUpgradeFallbackDestination('ai_alerts')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('ai_alerts')).toBe(
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-ai-alerts`,
+    );
     expect(getUpgradeFallbackDestination('ai_autofix')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-ai-autofix`,
     );
-    expect(getUpgradeFallbackDestination('rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('rbac')).toBe(
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-rbac`,
+    );
     expect(getUpgradeFallbackDestination('advanced_reporting')).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-reporting`,
     );
   });
 
@@ -83,13 +91,59 @@ describe('pricingHandoff', () => {
       'agent_profiles',
       'external_probe',
     ]);
+    const expectedGateSources: Record<string, string> = {
+      relay: 'gate-relay',
+      mobile_app: 'gate-mobile-app',
+      push_notifications: 'gate-push-notifications',
+      ai_alerts: 'gate-ai-alerts',
+      ai_autofix: 'gate-ai-autofix',
+      long_term_metrics: 'gate-long-term-metrics',
+      rbac: 'gate-rbac',
+      audit_logging: 'gate-audit-logging',
+      advanced_reporting: 'gate-reporting',
+      agent_profiles: 'gate-agent-profiles',
+      external_probe: 'gate-external-probe',
+    };
     for (const key of paidCatalogFeatureKeys) {
       expect(getUpgradeFallbackDestination(key)).toBe(
         key === 'ai_autofix'
-          ? SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF
-          : SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+          ? `${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF}&source=gate-ai-autofix`
+          : `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=${expectedGateSources[key]}`,
       );
     }
+  });
+
+  it('threads checkout source attribution through owned billing hrefs and purchase start', () => {
+    // Plan hrefs carry a validated source; the usage section never does.
+    expect(getSelfHostedBillingHref('plan', { source: 'estate-card' })).toBe(
+      `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=estate-card`,
+    );
+    expect(getSelfHostedBillingHref('usage', { source: 'estate-card' })).toBe(
+      SELF_HOSTED_PRO_BILLING_USAGE_HREF,
+    );
+    // Canonical route resolution preserves a valid plan-route source.
+    expect(
+      resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_PLAN_HREF, '?source=gate-rbac'),
+    ).toBe(`${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?source=gate-rbac`);
+    // An explicit source lands on the purchase-start URL.
+    expect(getSelfHostedPurchaseStartUrl('self_hosted_plan', undefined, 'plans-page')).toBe(
+      `${SELF_HOSTED_PURCHASE_START_PATH}?source=plans-page&feature=self_hosted_plan`,
+    );
+    // A forwarded query string never smuggles attribution in (public /pricing).
+    expect(
+      getSelfHostedPurchaseStartUrl(
+        'unknown_pro_feature',
+        new URLSearchParams('source=gate-rbac&utm_content=legacy-bookmark'),
+      ),
+    ).toBe(
+      `${SELF_HOSTED_PURCHASE_START_PATH}?utm_content=legacy-bookmark&feature=unknown_pro_feature`,
+    );
+    // Malformed sources are dropped rather than forwarded.
+    expect(getSelfHostedPurchaseStartUrl('relay', undefined, 'Bad Source!')).toBe(
+      `${SELF_HOSTED_PURCHASE_START_PATH}?feature=relay`,
+    );
+    // The public /pricing resolver stays unsourced for mapped features.
+    expect(getPricingRouteDestination('?feature=rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
   });
 
   it('keeps retired trial-expired out of upgrade fallbacks while preserving neutral legacy arrival', () => {

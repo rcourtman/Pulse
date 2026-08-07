@@ -5945,3 +5945,11 @@ unified resources) and the pinned thresholds
 (`TestContract_BusinessScaleEstateThresholds`) are identical; only the source
 of the numbers moved, so the card cohort and the telemetry cohort cannot
 drift.
+### Purchase-start attribution does not touch agent routes
+
+The `source` attribution parameter added to
+`internal/api/licensing_handlers.go` (an extension point of this subsystem's
+`internal/api/` surface) is confined to the self-hosted purchase handoff:
+it is read from the purchase-start query, validated, and passed to the
+license-server portal handoff. No agent enrollment, report, ack, or update
+route reads or emits it, and the agent-facing payload shapes are unchanged.

@@ -1405,6 +1405,29 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     scope-limited session gets the temporary header reveal instead. The
     blocked-route redirect and the banner block must stay active for a
     scope-limited session even when kiosk is off.
+30. Keep checkout source attribution closed-vocabulary, authenticated-only,
+    and out of browser-visible portal URLs. In-app upgrade CTAs stamp a
+    `source` token (`gate-<feature>`, `estate-card`, or the `plans-page`
+    default) onto the owned billing plan route and the authenticated
+    `/auth/license-purchase-start` URL
+    (`frontend-modern/src/utils/pricingHandoff.ts`); the public `/pricing`
+    route and the public pricing URL never carry it, and
+    `getSelfHostedPurchaseStartUrl` scrubs it from forwarded query strings so
+    a crafted website link cannot claim in-app attribution. Server-side,
+    `HandleCheckoutStart` validates the token against the closed kebab
+    pattern, sends it only inside the `CreateCheckoutPortalHandoff` body
+    (`omitempty`, so source-less requests stay compatible with older license
+    servers), skip-lists it from the Pulse Account portal redirect query, and
+    echoes it onto the cancel return so a retry keeps its origin
+    (`TestHandleCheckoutStart_SourceAttributionReachesHandoffNeverPortal`).
+    The license server persists it on the checkout intent and stamps Stripe
+    session metadata `checkout_source`, with `checkout_origin` now honestly
+    split: `pulse_app` for intent-resolved sessions, `pulserelay_landing`
+    only for the public landing funnel
+    (`TestHandleCheckoutSessionCreate_CarriesSourceAttributionToStripe`,
+    `TestCreateStripeCheckoutSessionKeepsLandingOriginWithoutIntent`).
+    Deploy ordering: the license server must carry the `source` field before
+    a Pulse release that sends it, because the handoff body decodes strictly.
 
 ## Current State
 

@@ -523,6 +523,54 @@ func TestClientCreateCheckoutPortalHandoff(t *testing.T) {
 	}
 }
 
+func TestClientCreateCheckoutPortalHandoffSourceAttribution(t *testing.T) {
+	// The license server decodes this body strictly (DisallowUnknownFields), so
+	// an install with no attribution must omit `source` entirely rather than
+	// send an empty string. That keeps source-less handoffs working against a
+	// license server deployed either side of the field being added.
+	cases := []struct {
+		name       string
+		source     string
+		wantKey    bool
+		wantSource string
+	}{
+		{name: "attributed handoff carries the source", source: "gate-rbac", wantKey: true, wantSource: "gate-rbac"},
+		{name: "unattributed handoff omits the key", source: "", wantKey: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode request: %v", err)
+				}
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(CheckoutPortalHandoffResponse{PortalHandoffID: "cph_test_source"})
+			}))
+			defer server.Close()
+
+			client := NewLicenseServerClient(server.URL)
+			if _, err := client.CreateCheckoutPortalHandoff(context.Background(), CheckoutPortalHandoffRequest{
+				Feature:           "rbac",
+				SuccessURL:        "https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}",
+				CancelURL:         "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled",
+				PurchaseReturnJTI: "purchase_return_jti_123",
+				Source:            tc.source,
+			}); err != nil {
+				t.Fatalf("CreateCheckoutPortalHandoff failed: %v", err)
+			}
+
+			got, present := body["source"]
+			if present != tc.wantKey {
+				t.Fatalf("source key present = %v, want %v (body=%v)", present, tc.wantKey, body)
+			}
+			if tc.wantKey && got != tc.wantSource {
+				t.Fatalf("source = %v, want %q", got, tc.wantSource)
+			}
+		})
+	}
+}
+
 func TestClientRefreshGrant(t *testing.T) {
 	t.Run("successful refresh", func(t *testing.T) {
 		newGrantJWT := makeTestGrantJWT(t, &GrantClaims{

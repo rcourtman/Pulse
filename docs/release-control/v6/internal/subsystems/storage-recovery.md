@@ -5045,3 +5045,12 @@ schema-v8 telemetry `business_estate` field. The capability read path stays a
 pure in-memory classification over monitor state — no storage surface, store
 handle, or persistence behavior is introduced or altered
 (`TestContract_BusinessScaleEstateThresholds` pins the unchanged thresholds).
+### Purchase-start attribution persists nothing on the install
+
+The `source` attribution parameter handled in
+`internal/api/licensing_handlers.go` (named in this contract's extension
+points) is request-scoped: it is validated, forwarded in the portal-handoff
+body, and echoed onto the cancel return URL. It is never written to config
+persistence, the license store, or any recovery artifact, so the install's
+storage surface is unchanged. Attribution is retained only by the commercial
+backend, on the checkout intent it already owns.

@@ -175,7 +175,9 @@ describe('BusinessEstateCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'See business plans' }));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/settings/pulse-intelligence/billing/plan');
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/settings/pulse-intelligence/billing/plan?source=estate-card',
+    );
     expect(queryCard()).toBeNull();
     expect(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? 'false')).toBe(true);
   });

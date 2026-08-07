@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ const (
 	licensePurchaseReturnTokenField         = "purchase_return_token"
 	pulseAccountUpgradeService              = "upgrade"
 	pulseAccountPortalFeatureQueryParam     = "feature"
+	pulseAccountPortalSourceQueryParam      = "source"
 	pulseAccountPortalHandoffIDField        = "portal_handoff_id"
 	pulseAccountPortalHandoffURLQueryParam  = "purchase_handoff_url"
 	pulseAccountPortalServiceQueryParam     = "service"
@@ -292,6 +294,7 @@ func pulseAccountUpgradeURLForRequest(portalHandoffID string, query url.Values) 
 	for key, values := range query {
 		switch key {
 		case pulseAccountPortalFeatureQueryParam,
+			pulseAccountPortalSourceQueryParam,
 			pulseAccountPortalHandoffIDField,
 			pulseAccountPortalHandoffURLQueryParam,
 			pulseAccountPortalServiceQueryParam,
@@ -354,12 +357,35 @@ func normalizeSelfHostedPurchaseFeature(feature string) string {
 	}
 }
 
+// selfHostedPurchaseSourcePattern mirrors the frontend attribution vocabulary
+// (pricingHandoff.ts): lowercase kebab tokens such as "gate-rbac",
+// "estate-card", or "plans-page". Anything else is dropped, not forwarded.
+var selfHostedPurchaseSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`)
+
+func normalizeSelfHostedPurchaseSource(source string) string {
+	trimmed := strings.TrimSpace(source)
+	if !selfHostedPurchaseSourcePattern.MatchString(trimmed) {
+		return ""
+	}
+	return trimmed
+}
+
 func licensePurchaseActivationRedirectPath(feature, purchaseResult string) string {
+	return licensePurchaseActivationRedirectPathWithSource(feature, purchaseResult, "")
+}
+
+// licensePurchaseActivationRedirectPathWithSource additionally carries the
+// checkout source attribution back onto the plan route so a retry after a
+// cancelled checkout keeps the surface that originally drove it.
+func licensePurchaseActivationRedirectPathWithSource(feature, purchaseResult, source string) string {
 	normalizedFeature := normalizeSelfHostedPurchaseFeature(feature)
 	query := url.Values{}
 	switch normalizedFeature {
 	case "self_hosted_plan":
 		query.Set("intent", "self_hosted_plan")
+	}
+	if normalizedSource := normalizeSelfHostedPurchaseSource(source); normalizedSource != "" {
+		query.Set(pulseAccountPortalSourceQueryParam, normalizedSource)
 	}
 	switch strings.TrimSpace(purchaseResult) {
 	case selfHostedBillingPurchaseActivated,
@@ -1075,6 +1101,9 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	feature := normalizeSelfHostedPurchaseFeature(
 		r.URL.Query().Get(pulseAccountPortalFeatureQueryParam),
 	)
+	purchaseSource := normalizeSelfHostedPurchaseSource(
+		r.URL.Query().Get(pulseAccountPortalSourceQueryParam),
+	)
 	writeUnavailable := func(statusCode int, message string) {
 		writeLicensePurchaseStartFailurePage(w, statusCode, feature, message)
 	}
@@ -1131,7 +1160,7 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	cancelURL, err := publicAbsoluteURLForPath(
 		r,
 		h.cfg,
-		licensePurchaseActivationRedirectPath(feature, selfHostedBillingPurchaseCancelled),
+		licensePurchaseActivationRedirectPathWithSource(feature, selfHostedBillingPurchaseCancelled, purchaseSource),
 	)
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account cancellation return url")
@@ -1169,6 +1198,7 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		SuccessURL:        activationURLTemplate,
 		CancelURL:         cancelURL,
 		PurchaseReturnJTI: purchaseReturnJTI,
+		Source:            purchaseSource,
 	})
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to create Pulse Account checkout portal handoff")
