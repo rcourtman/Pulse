@@ -102,9 +102,9 @@ bash install.sh --version "${PULSE_VERSION}"
 rm -f install.sh install.sh.sshsig
 ```
 
-The GitHub installer installs the Pulse server. Install and upgrade agents with
-the per-host command generated under **Settings → Infrastructure → Install on a
-host**.
+The GitHub installer installs the Pulse server. Install and upgrade agents
+(including v5-to-v6 agent upgrades) with the per-host command generated under
+**Settings → Infrastructure → Install on a host**.
 
 > [!IMPORTANT]
 > GitHub release assets and `rcourtman/pulse` images are Community builds.

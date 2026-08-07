@@ -22,6 +22,14 @@ def read(rel: str) -> str:
     return read_repo_text(rel, staged=USE_STAGED_GOVERNANCE, strict_staged=USE_STAGED_GOVERNANCE)
 
 
+def normalize_prose(text: str) -> str:
+    # Markdown renders a single newline as a space, so prose fragments must be
+    # matched against rendered wording, not source line wrapping. Structural
+    # fragments (table rows, headings) stay on raw content: wrapping those
+    # genuinely breaks rendering and should keep failing.
+    return " ".join(text.split())
+
+
 CONTROL_PLANE = load_json("docs/release-control/control_plane.json")
 STATUS = load_json("docs/release-control/v6/internal/status.json")
 ACTIVE_PROFILE_ID = str(CONTROL_PLANE["active_profile_id"])
@@ -88,12 +96,12 @@ class DocumentationCurrentnessTest(unittest.TestCase):
 
     def test_control_plane_doc_reflects_current_active_target(self) -> None:
         content = read("docs/release-control/internal/CONTROL_PLANE.md")
-        self.assertIn(f"`{ACTIVE_TARGET_ID}` is the current active engineering target.", content)
+        self.assertIn(f"`{ACTIVE_TARGET_ID}` is the current active engineering target.", normalize_prose(content))
         inactive_target_id = "v6-ga-promotion" if ACTIVE_TARGET_ID != "v6-ga-promotion" else "v6-rc-stabilization"
         self.assertNotIn(f"`{inactive_target_id}` is the current active engineering target.", content)
 
     def test_source_of_truth_keeps_supporting_docs_as_evidence_only(self) -> None:
-        content = read("docs/release-control/v6/internal/SOURCE_OF_TRUTH.md")
+        content = normalize_prose(read("docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"))
         self.assertIn("Supporting architecture and release docs are evidence only.", content)
         self.assertIn("override the files above.", content)
 
@@ -128,7 +136,7 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         )
         self.assertIn(
             "Community and Relay installs can still run scheduled Patrol findings with BYOK.",
-            ai_doc,
+            normalize_prose(ai_doc),
         )
         self.assertNotIn(
             "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community (BYOK) |",
@@ -136,7 +144,7 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         )
         self.assertIn(
             "`approval`, `assisted`, and `full`: Require the `ai_autofix` capability",
-            autonomy_doc,
+            normalize_prose(autonomy_doc),
         )
         self.assertNotIn("Upgrade to Assisted", autonomy_doc)
         self.assertIn(
@@ -210,9 +218,9 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             for retired_path in retired_agent_settings_paths:
                 self.assertNotIn(retired_path, content, msg=f"{rel} still points at {retired_path}")
 
-        root_readme = read("README.md")
-        upgrade_doc = read("docs/UPGRADE_v6.md")
-        unified_agent_doc = read("docs/UNIFIED_AGENT.md")
+        root_readme = normalize_prose(read("README.md"))
+        upgrade_doc = normalize_prose(read("docs/UPGRADE_v6.md"))
+        unified_agent_doc = normalize_prose(read("docs/UNIFIED_AGENT.md"))
         self.assertIn("Settings → Infrastructure → Install on a host", root_readme)
         self.assertIn("v5-to-v6 agent upgrades", root_readme)
         self.assertIn("first installs and in-place agent upgrades", upgrade_doc)
@@ -233,11 +241,12 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             "create and install a replacement token first",
         )
         for content in (config_doc, public_config_doc):
+            prose = normalize_prose(content)
             for fragment in expected_fragments:
-                self.assertIn(fragment, content)
+                self.assertIn(fragment, prose)
 
     def test_webhook_docs_make_ntfy_service_picker_discoverable(self) -> None:
-        webhook_doc = read("docs/WEBHOOKS.md")
+        webhook_doc = normalize_prose(read("docs/WEBHOOKS.md"))
 
         self.assertIn("Click the current service label (Generic by default) to open the service picker", webhook_doc)
         self.assertIn("choose **ntfy** in the service picker before entering the topic URL", webhook_doc)
