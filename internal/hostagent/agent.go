@@ -92,6 +92,12 @@ type Config struct {
 	UpdateStatus  func() agentupdate.Status
 	ModuleStatus  func() []agentshost.ModuleStatus
 
+	// OnServerVersion is called with the server version carried on each
+	// authoritative report acknowledgement, so the updater can react to a
+	// server upgrade within one report cycle instead of its next hourly check.
+	// Nil disables the hook; acks from observer destinations never invoke it.
+	OnServerVersion func(version string)
+
 	Collector SystemCollector // Optional: override default system information collector (for testing)
 
 	// DockerContainerUpdater bridges typed container update operations to the
@@ -1333,9 +1339,10 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 
 	// Parse response to check for server-side config overrides
 	var reportResp struct {
-		Success bool   `json:"success"`
-		AgentID string `json:"agentId"`
-		Config  *struct {
+		Success       bool   `json:"success"`
+		AgentID       string `json:"agentId"`
+		ServerVersion string `json:"serverVersion"`
+		Config        *struct {
 			CommandsEnabled *bool `json:"commandsEnabled"`
 		} `json:"config,omitempty"`
 	}
@@ -1343,6 +1350,14 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 		// Non-fatal: just log and continue
 		a.logger.Debug().Err(err).Msg("Failed to parse report response, ignoring config")
 		return nil
+	}
+
+	// Surface the server's version so the updater can converge promptly after
+	// a server upgrade rather than waiting out its hourly check interval.
+	if a.cfg.OnServerVersion != nil {
+		if serverVersion := strings.TrimSpace(reportResp.ServerVersion); serverVersion != "" {
+			a.cfg.OnServerVersion(serverVersion)
+		}
 	}
 
 	// Persist the server-acknowledged agent ID so uninstall can deregister.

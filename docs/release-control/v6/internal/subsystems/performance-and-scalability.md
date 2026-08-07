@@ -2268,3 +2268,11 @@ a fresh handle rather than using a closed one
 (`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
 are idempotent and nil-safe
 (`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+### Report-ack version echo adds no steady-state work
+
+The `serverVersion` field on unified-agent report acks is a constant string
+echo per report. Agents queue an update check only when the ack version is
+strictly newer than the running agent, and at most once per distinct version
+(`TestNudgeVersionNudgesEachDistinctVersionOnce`), so steady-state report
+traffic — equal versions on every cycle — never wakes the update loop and adds
+no recurring work on either side.

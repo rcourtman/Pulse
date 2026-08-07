@@ -5905,3 +5905,26 @@ a fresh handle rather than using a closed one
 (`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
 are idempotent and nil-safe
 (`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+### Server upgrades nudge agent self-update within one report cycle
+
+The unified-agent report ack now carries the server's version
+(`serverVersion`), and the host module surfaces it through
+`hostagent.Config.OnServerVersion`, which `cmd/pulse-agent` wires to
+`agentupdate.Updater.NudgeVersion` via `wireUpdaterHooks`
+(`TestWireUpdaterHooksNudgesUpdaterOnNewerAckVersion`). A nudge wakes the
+update loop immediately, including during the initial-check delay, so after a
+server upgrade agents converge within one report interval instead of waiting
+out the hourly check (`TestRunLoopRunsCheckOnNudge`). Nudges queue only for
+versions strictly newer than the running agent, at most once per distinct
+server version, and never on disabled or development-mode updaters
+(`TestNudgeVersionQueuesOnlyForNewerVersions`,
+`TestNudgeVersionComparesPrereleaseIdentifiers`,
+`TestNudgeVersionNudgesEachDistinctVersionOnce`,
+`TestNudgeVersionRespectsDisabledAndDevelopmentGates`); the hourly loop stays
+the retry path when a nudged check fails. Only the authoritative destination's
+ack invokes the hook — observer acks never steer the updater
+(`TestAgentSendReport_SurfacesAckServerVersion`,
+`TestAgentSendReport_SkipsCallbackWithoutAckServerVersion`,
+`TestAgentSendReport_ObserverAckNeverInvokesCallback`).
+`agentupdate.Config.InitialCheckDelay` overrides the five-second initial check
+delay; zero keeps the default.

@@ -136,6 +136,10 @@ type Config struct {
 	// CheckInterval is how often to check for updates (default: 1 hour)
 	CheckInterval time.Duration
 
+	// InitialCheckDelay overrides the short delay before the first update
+	// check after RunLoop starts (default: 5 seconds). Zero keeps the default.
+	InitialCheckDelay time.Duration
+
 	// InsecureSkipVerify skips TLS certificate verification
 	InsecureSkipVerify bool
 
@@ -168,6 +172,10 @@ type Updater struct {
 	selfTestFn      func(context.Context, string) error
 	initialDelay    time.Duration
 	newTicker       func(time.Duration) *time.Ticker
+
+	nudgeCh           chan struct{}
+	nudgeMu           sync.Mutex
+	lastNudgedVersion string
 }
 
 // New creates a new Updater with the given configuration.
@@ -233,7 +241,11 @@ func New(cfg Config) *Updater {
 	u.performUpdateFn = u.performUpdateForVersion
 	u.selfTestFn = u.runDownloadedBinarySelfTest
 	u.initialDelay = 5 * time.Second
+	if cfg.InitialCheckDelay > 0 {
+		u.initialDelay = cfg.InitialCheckDelay
+	}
 	u.newTicker = time.NewTicker
+	u.nudgeCh = make(chan struct{}, 1)
 	return u
 }
 
@@ -309,6 +321,8 @@ func (u *Updater) RunLoop(ctx context.Context) {
 		return
 	case <-initialDelayTimer.C:
 		u.CheckAndUpdate(ctx)
+	case <-u.nudgeCh:
+		u.CheckAndUpdate(ctx)
 	}
 
 	ticker := u.newTicker(u.cfg.CheckInterval)
@@ -320,7 +334,49 @@ func (u *Updater) RunLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			u.CheckAndUpdate(ctx)
+		case <-u.nudgeCh:
+			u.CheckAndUpdate(ctx)
 		}
+	}
+}
+
+// NudgeVersion asks the update loop to run a check now, outside the hourly
+// cadence. Callers pass the version the server just reported (for example on a
+// report acknowledgement); the nudge is dropped unless that version is
+// strictly newer than the running agent, so steady-state report traffic never
+// wakes the loop. Each distinct server version nudges at most once — if the
+// resulting check fails, the hourly loop remains the retry path — and the
+// nudged check re-validates against the server before updating, so a stale or
+// spoofed version string can trigger nothing beyond one extra check.
+func (u *Updater) NudgeVersion(serverVersion string) {
+	serverVersion = strings.TrimSpace(serverVersion)
+	if serverVersion == "" || u.cfg.Disabled || u.configErr != nil {
+		return
+	}
+	if u.cfg.CurrentVersion == developmentVersion || serverVersion == developmentVersion {
+		return
+	}
+	if utils.CompareVersions(utils.NormalizeVersion(serverVersion), utils.NormalizeVersion(u.cfg.CurrentVersion)) <= 0 {
+		return
+	}
+
+	u.nudgeMu.Lock()
+	alreadyNudged := u.lastNudgedVersion == serverVersion
+	if !alreadyNudged {
+		u.lastNudgedVersion = serverVersion
+	}
+	u.nudgeMu.Unlock()
+	if alreadyNudged {
+		return
+	}
+
+	select {
+	case u.nudgeCh <- struct{}{}:
+		u.logger.Info().
+			Str("currentVersion", u.cfg.CurrentVersion).
+			Str("serverVersion", serverVersion).
+			Msg("server reported a newer version; scheduling immediate update check")
+	default:
 	}
 }
 

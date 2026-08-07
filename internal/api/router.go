@@ -536,6 +536,7 @@ func (r *Router) setupRoutes() {
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
+	r.unifiedAgentHandlers.SetServerVersion(r.serverVersion)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
 	actionOrgChecker := NewAuthorizationChecker(NewMultiTenantOrganizationLoader(r.multiTenant))

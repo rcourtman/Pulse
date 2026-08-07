@@ -531,3 +531,138 @@ func TestUpdater_performUpdateWithExecPath_RejectsRedirects(t *testing.T) {
 		t.Fatalf("expected no redirected download request to be sent")
 	}
 }
+
+func drainNudge(u *Updater) bool {
+	select {
+	case <-u.nudgeCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func TestNudgeVersionQueuesOnlyForNewerVersions(t *testing.T) {
+	t.Parallel()
+
+	u := New(Config{CurrentVersion: "6.2.0", PulseURL: "http://127.0.0.1:7655"})
+
+	for _, version := range []string{"", "6.2.0", "6.1.9", "v6.2.0", "not-a-version"} {
+		u.NudgeVersion(version)
+		if drainNudge(u) {
+			t.Fatalf("NudgeVersion(%q) queued a nudge, want none", version)
+		}
+	}
+
+	u.NudgeVersion("6.2.1")
+	if !drainNudge(u) {
+		t.Fatal("NudgeVersion(6.2.1) queued no nudge, want one")
+	}
+}
+
+func TestNudgeVersionComparesPrereleaseIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	u := New(Config{CurrentVersion: "6.2.0-rc.8", PulseURL: "http://127.0.0.1:7655"})
+
+	u.NudgeVersion("6.2.0-rc.8")
+	if drainNudge(u) {
+		t.Fatal("equal prerelease queued a nudge, want none")
+	}
+
+	u.NudgeVersion("v6.2.0-rc.9")
+	if !drainNudge(u) {
+		t.Fatal("newer prerelease queued no nudge, want one")
+	}
+
+	// A stable release outranks its own release candidates.
+	u.NudgeVersion("6.2.0")
+	if !drainNudge(u) {
+		t.Fatal("stable release above rc queued no nudge, want one")
+	}
+}
+
+func TestNudgeVersionNudgesEachDistinctVersionOnce(t *testing.T) {
+	t.Parallel()
+
+	u := New(Config{CurrentVersion: "6.2.0", PulseURL: "http://127.0.0.1:7655"})
+
+	u.NudgeVersion("6.2.1")
+	if !drainNudge(u) {
+		t.Fatal("first nudge for 6.2.1 not queued")
+	}
+
+	// Repeats of the same server version — one per report cycle in production —
+	// must not re-wake the loop even after the first nudge was consumed.
+	u.NudgeVersion("6.2.1")
+	if drainNudge(u) {
+		t.Fatal("repeated nudge for 6.2.1 queued, want dedupe")
+	}
+
+	u.NudgeVersion("6.2.2")
+	if !drainNudge(u) {
+		t.Fatal("nudge for distinct newer version 6.2.2 not queued")
+	}
+}
+
+func TestNudgeVersionRespectsDisabledAndDevelopmentGates(t *testing.T) {
+	t.Parallel()
+
+	disabled := New(Config{CurrentVersion: "6.2.0", PulseURL: "http://127.0.0.1:7655", Disabled: true})
+	disabled.NudgeVersion("6.2.1")
+	if drainNudge(disabled) {
+		t.Fatal("disabled updater queued a nudge, want none")
+	}
+
+	dev := New(Config{CurrentVersion: developmentVersion, PulseURL: "http://127.0.0.1:7655"})
+	dev.NudgeVersion("6.2.1")
+	if drainNudge(dev) {
+		t.Fatal("development-mode updater queued a nudge, want none")
+	}
+
+	current := New(Config{CurrentVersion: "6.2.0", PulseURL: "http://127.0.0.1:7655"})
+	current.NudgeVersion(developmentVersion)
+	if drainNudge(current) {
+		t.Fatal("development server version queued a nudge, want none")
+	}
+}
+
+func TestRunLoopRunsCheckOnNudge(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "6.2.1"})
+	}))
+	defer srv.Close()
+
+	u := New(Config{CurrentVersion: "6.2.0", PulseURL: srv.URL})
+	// Keep the initial check and the hourly ticker out of the way so the only
+	// thing that can trigger a check is the nudge.
+	u.initialDelay = time.Hour
+	updated := make(chan string, 1)
+	u.performUpdateFn = func(_ context.Context, targetVersion string) error {
+		updated <- targetVersion
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		u.RunLoop(ctx)
+	}()
+
+	u.NudgeVersion("6.2.1")
+
+	select {
+	case targetVersion := <-updated:
+		if targetVersion != "6.2.1" {
+			t.Fatalf("performUpdate target = %q, want %q", targetVersion, "6.2.1")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("nudge did not trigger an update check")
+	}
+
+	cancel()
+	<-done
+}

@@ -1951,3 +1951,14 @@ a fresh handle rather than using a closed one
 (`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
 are idempotent and nil-safe
 (`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+### Report-ack server versions cannot steer agents beyond one validated check
+
+The unified-agent report ack's `serverVersion` echo gives acks a version
+channel, but it carries no update authority. Only the authoritative Pulse
+destination's ack reaches the updater hook — observer destination acks are
+discarded before config parsing
+(`TestAgentSendReport_ObserverAckNeverInvokesCallback`) — and a nudged updater
+re-fetches the server version itself and runs the existing download, checksum,
+and self-test pipeline before swapping binaries, so a stale or spoofed ack
+version can at most trigger one extra validated check
+(`TestRunLoopRunsCheckOnNudge`).

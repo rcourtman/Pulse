@@ -2393,3 +2393,57 @@ func TestApplyRemoteSettingsCarriesAvailabilityAssignmentsToStartup(t *testing.T
 		t.Fatalf("availability targets = %+v, want an unreadable payload ignored", cfg.AvailabilityTargets)
 	}
 }
+
+func TestWireUpdaterHooksNudgesUpdaterOnNewerAckVersion(t *testing.T) {
+	t.Parallel()
+
+	hits := make(chan string, 8)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits <- r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"9.9.9"}`))
+	}))
+	defer srv.Close()
+
+	updater := newUpdater(agentupdate.Config{
+		CurrentVersion: "1.0.0",
+		PulseURL:       srv.URL,
+		// Keep the built-in initial check out of the way so the only thing
+		// that can reach the server inside the assertion window is the nudge.
+		InitialCheckDelay: time.Hour,
+		CheckInterval:     time.Hour,
+	})
+
+	var hostCfg hostagent.Config
+	wireUpdaterHooks(&hostCfg, updater)
+	if hostCfg.UpdateStatus == nil {
+		t.Fatal("UpdateStatus hook not wired")
+	}
+	if hostCfg.OnServerVersion == nil {
+		t.Fatal("OnServerVersion hook not wired")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.RunLoop(ctx)
+	}()
+
+	// Simulate what the host module does when a report ack carries a newer
+	// server version. The wired updater must check for updates immediately.
+	hostCfg.OnServerVersion("9.9.9")
+
+	select {
+	case path := <-hits:
+		if !strings.Contains(path, "/api/agent/version") {
+			t.Fatalf("first updater request hit %q, want the version check endpoint", path)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("ack-carried server version did not trigger an immediate update check")
+	}
+
+	cancel()
+	<-done
+}

@@ -366,3 +366,97 @@ func TestAgentProcess_SuccessLogsUnifiedAgentReport(t *testing.T) {
 		t.Fatalf("expected success log to mention Unified Agent report, got %q", logBuf.String())
 	}
 }
+
+func newServerVersionAckServer(body string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
+func TestAgentSendReport_SurfacesAckServerVersion(t *testing.T) {
+	t.Parallel()
+
+	server := newServerVersionAckServer(`{"success":true,"agentId":"agent-1","serverVersion":"6.2.1"}`)
+	defer server.Close()
+
+	var seen []string
+	agent := &Agent{
+		cfg: Config{
+			APIToken:        "test-token",
+			OnServerVersion: func(version string) { seen = append(seen, version) },
+		},
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+	}
+
+	if err := agent.sendReport(context.Background(), agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-1"},
+		Host:  agentshost.HostInfo{Hostname: "test-host"},
+	}); err != nil {
+		t.Fatalf("sendReport: %v", err)
+	}
+
+	if len(seen) != 1 || seen[0] != "6.2.1" {
+		t.Fatalf("OnServerVersion calls = %v, want exactly [6.2.1]", seen)
+	}
+}
+
+func TestAgentSendReport_SkipsCallbackWithoutAckServerVersion(t *testing.T) {
+	t.Parallel()
+
+	server := newServerVersionAckServer(`{"success":true,"agentId":"agent-1"}`)
+	defer server.Close()
+
+	called := false
+	agent := &Agent{
+		cfg: Config{
+			APIToken:        "test-token",
+			OnServerVersion: func(string) { called = true },
+		},
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+	}
+
+	if err := agent.sendReport(context.Background(), agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-1"},
+		Host:  agentshost.HostInfo{Hostname: "test-host"},
+	}); err != nil {
+		t.Fatalf("sendReport: %v", err)
+	}
+
+	if called {
+		t.Fatal("OnServerVersion called for an ack without serverVersion")
+	}
+}
+
+func TestAgentSendReport_ObserverAckNeverInvokesCallback(t *testing.T) {
+	t.Parallel()
+
+	// Observer destinations may run any Pulse version; only the authoritative
+	// server may steer this agent's updater.
+	server := newServerVersionAckServer(`{"success":true,"agentId":"agent-1","serverVersion":"9.9.9"}`)
+	defer server.Close()
+
+	called := false
+	agent := &Agent{
+		cfg: Config{
+			APIToken:        "test-token",
+			OnServerVersion: func(string) { called = true },
+		},
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+	}
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-1"},
+		Host:  agentshost.HostInfo{Hostname: "test-host"},
+	}
+	if err := agent.sendReportToDestination(context.Background(), report, server.URL, "observer-token", server.Client(), false); err != nil {
+		t.Fatalf("sendReportToDestination: %v", err)
+	}
+
+	if called {
+		t.Fatal("OnServerVersion called from a non-authoritative destination ack")
+	}
+}

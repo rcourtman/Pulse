@@ -36,6 +36,18 @@ var configSigningState struct {
 // UnifiedAgentHandlers manages ingest from the runtime-side Unified Agent module of pulse-agent.
 type UnifiedAgentHandlers struct {
 	baseAgentHandlers
+
+	// serverVersion is echoed on report acknowledgements so agents can spot a
+	// server upgrade on their next report instead of their next hourly update
+	// check. Empty (the default) omits it from acks.
+	serverVersion string
+}
+
+// SetServerVersion supplies the running server version to include on report
+// acknowledgements. Call once at wiring time; an empty version keeps acks
+// version-free.
+func (h *UnifiedAgentHandlers) SetServerVersion(version string) {
+	h.serverVersion = strings.TrimSpace(version)
 }
 
 func trimUnifiedAgentRoutePath(path string) string {
@@ -108,6 +120,9 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 		"platform":  host.Platform,
 		"osName":    host.OSName,
 		"osVersion": host.OSVersion,
+	}
+	if h.serverVersion != "" {
+		resp["serverVersion"] = h.serverVersion
 	}
 
 	// Only include config if there are actual overrides

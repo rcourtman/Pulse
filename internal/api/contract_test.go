@@ -22413,3 +22413,56 @@ func TestCleanupTenantReleasesPerTenantResourceStore(t *testing.T) {
 		t.Error("Router must expose ShutdownResourceStores for shutdown-time release")
 	}
 }
+
+func postUnifiedAgentReport(t *testing.T, handler *UnifiedAgentHandlers) map[string]any {
+	t.Helper()
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-ack",
+			Version: "1.0.0",
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-ack",
+			Hostname: "host-ack.local",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	body, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleReport(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var ack map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &ack); err != nil {
+		t.Fatalf("unmarshal ack: %v", err)
+	}
+	return ack
+}
+
+func TestUnifiedAgentHandlers_HandleReportAckCarriesServerVersion(t *testing.T) {
+	handler, _ := newUnifiedAgentHandlers(t, nil)
+	handler.SetServerVersion(" 6.2.1 ")
+
+	ack := postUnifiedAgentReport(t, handler)
+	if got, ok := ack["serverVersion"].(string); !ok || got != "6.2.1" {
+		t.Fatalf("ack serverVersion = %v, want trimmed %q", ack["serverVersion"], "6.2.1")
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleReportAckOmitsEmptyServerVersion(t *testing.T) {
+	handler, _ := newUnifiedAgentHandlers(t, nil)
+
+	ack := postUnifiedAgentReport(t, handler)
+	if _, present := ack["serverVersion"]; present {
+		t.Fatalf("ack unexpectedly carries serverVersion: %v", ack["serverVersion"])
+	}
+}

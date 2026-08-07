@@ -178,6 +178,17 @@ func TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart(t *testin
 	if targetID == "" || keeperID == "" || targetID == keeperID {
 		t.Fatalf("active IDs target=%q keeper=%q, want distinct", targetID, keeperID)
 	}
+	// Report acks from the live router echo the server version it was wired
+	// with, so an enrolled agent can spot a server upgrade on its next report.
+	var targetAck struct {
+		ServerVersion string `json:"serverVersion"`
+	}
+	if err := json.Unmarshal([]byte(targetBody), &targetAck); err != nil {
+		t.Fatalf("decode target ack: %v", err)
+	}
+	if targetAck.ServerVersion != "6.1.1" {
+		t.Fatalf("target ack serverVersion = %q, want %q", targetAck.ServerVersion, "6.1.1")
+	}
 
 	deleteRec := serveHostRemovalLifecycleRequest(
 		t,

@@ -5017,3 +5017,11 @@ a fresh handle rather than using a closed one
 (`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
 are idempotent and nil-safe
 (`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+### Report-ack version echo persists nothing
+
+The unified-agent report ack's `serverVersion` field is supplied from the
+running server's version at router wiring time
+(`UnifiedAgentHandlers.SetServerVersion`) and is never persisted; the report
+ingest path's persistence surface — agent-id continuity and host state — is
+unchanged by the echo
+(`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`).

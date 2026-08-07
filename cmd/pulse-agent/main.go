@@ -108,6 +108,15 @@ var (
 	remoteConfigRefreshInterval = 1 * time.Minute
 )
 
+// wireUpdaterHooks connects the self-updater to the host module's report loop:
+// update status snapshots flow out on reports, and server versions carried on
+// report acks nudge the updater so a server upgrade converges within one
+// report cycle instead of the next hourly check.
+func wireUpdaterHooks(hostCfg *hostagent.Config, updater *agentupdate.Updater) {
+	hostCfg.UpdateStatus = updater.Snapshot
+	hostCfg.OnServerVersion = updater.NudgeVersion
+}
+
 type multiValue []string
 
 func (m *multiValue) String() string {
@@ -413,12 +422,12 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			DisableCeph:         cfg.DisableCeph,
 			AvailabilityTargets: cfg.AvailabilityTargets,
 			AppliedConfig:       cfg.AppliedConfig,
-			UpdateStatus:        updater.Snapshot,
 			ModuleStatus:        runtimeStatus.moduleStatuses,
 			Observers:           hostObserverTargets(cfg.Observers),
 
 			DockerContainerUpdater: dockerUpdaterBridge,
 		}
+		wireUpdaterHooks(&hostCfg, updater)
 
 		agent, err := newHostAgent(hostCfg)
 		if err != nil {

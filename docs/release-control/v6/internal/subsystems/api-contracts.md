@@ -8935,3 +8935,15 @@ a fresh handle rather than using a closed one
 (`TestResourceHandlers_CloseTenantStoreReleasesTheHandle`), and both entry points
 are idempotent and nil-safe
 (`TestResourceHandlers_CloseIsIdempotentAndNilSafe`).
+### Unified-agent report ack optionally carries serverVersion
+
+The `POST /api/agents/agent/report` acknowledgement now includes a
+`serverVersion` field carrying the running server's trimmed version string,
+supplied at wiring time via `UnifiedAgentHandlers.SetServerVersion` and
+omitted entirely when unset
+(`TestUnifiedAgentHandlers_HandleReportAckCarriesServerVersion`,
+`TestUnifiedAgentHandlers_HandleReportAckOmitsEmptyServerVersion`); the live
+router echoes it end-to-end on enrollment acks
+(`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`). Agents
+use it to trigger an immediate self-update check after a server upgrade. The
+field is additive: agents that predate it ignore it.
