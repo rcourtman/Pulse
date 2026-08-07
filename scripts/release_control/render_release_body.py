@@ -19,6 +19,11 @@ _VALIDATION_STATUS_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+_HIGHLIGHTS_HEADING_RE = re.compile(r"^(#{2,6})[ \t]+Highlights[ \t]*$", re.IGNORECASE)
+_HIGHLIGHT_BULLET_RE = re.compile(r"^-[ \t]+(.+)$")
+_MAX_HIGHLIGHT_ITEMS = 3
+_MAX_HIGHLIGHT_LENGTH = 140
+
 
 def _normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
@@ -38,6 +43,75 @@ def _find_inline_markdown_markers(text: str) -> list[str]:
         if any(match.start() != 0 for match in fence_markers):
             markers.append(f"inline code-fence marker on line {line_number}")
     return markers
+
+
+def _highlight_items(text: str) -> list[str] | None:
+    """Return the optional in-app Highlights list after validating its shape."""
+
+    lines = _normalize_newlines(text).splitlines()
+    headings: list[tuple[int, int]] = []
+    for index, line in enumerate(lines):
+        match = _HIGHLIGHTS_HEADING_RE.fullmatch(line.strip())
+        if match:
+            headings.append((index, len(match.group(1))))
+
+    if not headings:
+        return None
+    if len(headings) > 1:
+        raise ReleaseBodyIntegrityError(
+            "release notes must contain at most one Highlights section"
+        )
+
+    start_index, start_level = headings[0]
+    section_lines: list[str] = []
+    for line in lines[start_index + 1 :]:
+        heading = re.fullmatch(r"(#{1,6})[ \t]+\S.*", line.strip())
+        if heading and len(heading.group(1)) <= start_level:
+            break
+        section_lines.append(line)
+
+    items: list[str] = []
+    for line in section_lines:
+        if not line.strip():
+            continue
+        bullet = _HIGHLIGHT_BULLET_RE.fullmatch(line)
+        if bullet:
+            items.append(bullet.group(1).strip())
+            continue
+        if line[:1].isspace() and items and not line.lstrip().startswith(("- ", "* ", "+ ")):
+            items[-1] = f"{items[-1]} {line.strip()}"
+            continue
+        raise ReleaseBodyIntegrityError(
+            "Highlights must be a flat list of short plain-text bullets"
+        )
+
+    if not items:
+        raise ReleaseBodyIntegrityError("Highlights must contain at least one bullet")
+    if len(items) > _MAX_HIGHLIGHT_ITEMS:
+        raise ReleaseBodyIntegrityError(
+            f"Highlights may contain at most {_MAX_HIGHLIGHT_ITEMS} bullets"
+        )
+
+    for item in items:
+        if len(item) > _MAX_HIGHLIGHT_LENGTH:
+            raise ReleaseBodyIntegrityError(
+                "each Highlights bullet must be "
+                f"{_MAX_HIGHLIGHT_LENGTH} characters or fewer"
+            )
+        if (
+            "`" in item
+            or "*" in item
+            or "_" in item
+            or re.search(r"!?\[[^\]]+\]\([^\)]+\)", item)
+            or re.search(r"<[^>]+>", item)
+            or re.search(r"\(#[0-9]+\)", item)
+        ):
+            raise ReleaseBodyIntegrityError(
+                "Highlights bullets must use plain text without links, code, HTML, "
+                "or issue references"
+            )
+
+    return items
 
 
 def validate_release_notes_shape(raw_text: str, version: str) -> None:
@@ -70,6 +144,8 @@ def validate_release_notes_shape(raw_text: str, version: str) -> None:
         raise ReleaseBodyIntegrityError(
             "release notes contain flattened Markdown: " + ", ".join(inline_markers)
         )
+
+    _highlight_items(text)
 
 
 def strip_validation_status_block(text: str) -> str:

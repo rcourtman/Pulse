@@ -657,6 +657,11 @@ upgrade, update, release, or artifact-selection behavior.
    while the post-update card may show that same section once per later
    installed release and must stay silent for a first baseline, malformed or
    development versions, missing releases, and releases without highlights.
+   When present, `Highlights` is the complete in-app overview: release
+   rendering must keep it to at most three short plain-text bullets of no more
+   than 140 characters each, with links, code, issue references, nested
+   structure, and implementation-oriented detail reserved for the full release
+   notes.
    The same post-update communication boundary owns the one-time schema-v2
    telemetry payload notice. It must use a non-blocking shared notice banner,
    appear only for existing installations on a published build, stay silent
@@ -1416,9 +1421,10 @@ experience. Update checks can preview a curated `Highlights` section, and an
 authenticated running-version endpoint lets the update surface show those
 same published highlights once after a later upgrade. Missing highlights stay
 quiet by design, and source or development builds never masquerade as
-published releases. Post-update highlights use the shared dialog so multi-item
-release content has a readable measure without pushing the dashboard down;
-every close path still records the running release as seen.
+published releases. Post-update highlights are limited to three short,
+plain-text user outcomes and use the shared dialog so the overview stays easy
+to scan without pushing the dashboard down; every close path still records the
+running release as seen.
 The initial GA promotion
 metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,

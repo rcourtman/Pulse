@@ -29,6 +29,105 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def test_highlights_are_a_small_plain_language_overview(self) -> None:
+        notes = """# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- Alerts now explain what went wrong and what to do next.
+- Tables are easier to use on phones and small screens.
+- Updates recover cleanly when an earlier installation was interrupted.
+
+## Fixed
+
+- Corrected a release issue.
+"""
+
+        render_release_body.validate_release_notes_shape(notes, "6.2.0")
+
+    def test_generated_level_three_highlights_and_wrapped_bullets_are_supported(self) -> None:
+        notes = """# Pulse v6.2.0 Release Notes
+
+## v6.2.0
+
+### Highlights
+
+- Alerts now explain what went wrong and what to do
+  next.
+- Tables are easier to use on small screens.
+
+### Bug Fixes
+
+- Corrected a release issue.
+"""
+
+        render_release_body.validate_release_notes_shape(notes, "6.2.0")
+
+    def test_highlights_reject_more_than_three_items(self) -> None:
+        notes = """# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- One.
+- Two.
+- Three.
+- Four.
+
+## Fixed
+
+- Corrected a release issue.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "at most 3 bullets",
+        ):
+            render_release_body.validate_release_notes_shape(notes, "6.2.0")
+
+    def test_highlights_reject_long_or_formatted_items(self) -> None:
+        long_item = "A" * 141
+        long_notes = f"""# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- {long_item}
+
+## Fixed
+
+- Corrected a release issue.
+"""
+        formatted_notes = """# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- Read the [upgrade guide](https://example.com) for details.
+
+## Fixed
+
+- Corrected a release issue.
+"""
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "140 characters or fewer",
+        ):
+            render_release_body.validate_release_notes_shape(long_notes, "6.2.0")
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "must use plain text",
+        ):
+            render_release_body.validate_release_notes_shape(formatted_notes, "6.2.0")
+
+    def test_release_notes_may_omit_highlights(self) -> None:
+        notes = """# Pulse v6.2.1 Release Notes
+
+## Fixed
+
+- Corrected a maintenance issue.
+"""
+
+        render_release_body.validate_release_notes_shape(notes, "6.2.1")
+
     def test_sanitize_release_notes_strips_draft_markers_duplicate_sections_and_draft_links(self) -> None:
         raw = """# Pulse v6.0.0-rc.2 Draft Release Notes
 

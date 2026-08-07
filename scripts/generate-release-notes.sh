@@ -68,13 +68,15 @@ Write the release notes in exactly this format:
 ## v${VERSION}
 
 ### Highlights
-[2-4 short bullets, plain English, covering only what a typical user would
-notice and care about. This section is rendered inside the Pulse UI itself
-(the post-update "What's New" banner and the update-banner preview), so each
-bullet must be self-contained and jargon-free. IMPORTANT: if this release has
-nothing a typical user would notice (only internal fixes or minor patches),
-OMIT this entire section — that deliberately keeps the in-app banner silent
-for maintenance releases. Keep the heading at level 3 (###).]
+[2-3 short bullets covering only what a typical user would notice and care
+about. This is the entire overview shown inside Pulse after an update. Use one
+plain-text sentence per bullet, no more than 140 characters. Say what improved
+and why it matters in everyday words; avoid component names, acronyms,
+implementation details, links, issue numbers, and Markdown formatting.
+IMPORTANT: if this release has nothing a typical user would notice (only
+internal fixes or minor patches), OMIT this entire section — that deliberately
+keeps the in-app banner silent for maintenance releases. Keep the heading at
+level 3 (###).]
 
 ### New Features
 [Genuinely new user-facing capabilities. Be specific about what users can now do.]
@@ -92,8 +94,8 @@ Guidelines:
 - Do NOT write an Installation section or anything after Improvements — the
   release pipeline appends those.
 - Highlights is the ONE exception to "boring": it is shown in-app to users who
-  just updated, so pick the few changes they would actually notice — but still
-  facts, no hype.
+  just updated, so make it the shortest useful explanation of what changed —
+  still factual, with no hype.
 
 Your reply must be ONLY the release-notes markdown, starting with
 "## v${VERSION}" — no preamble, no code fences, no commentary.
