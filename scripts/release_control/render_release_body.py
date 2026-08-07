@@ -21,6 +21,15 @@ _VALIDATION_STATUS_BLOCK_RE = re.compile(
 
 _HIGHLIGHTS_HEADING_RE = re.compile(r"^(#{2,6})[ \t]+Highlights[ \t]*$", re.IGNORECASE)
 _HIGHLIGHT_BULLET_RE = re.compile(r"^-[ \t]+(.+)$")
+_ISSUE_REFERENCE_RE = re.compile(
+    r"(?:"
+    r"(?<![A-Za-z0-9])#[0-9]+\b"
+    r"|\b[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+\b"
+    r"|\bGH-[0-9]+\b"
+    r"|https?://(?:www\.)?github\.com/[^/\s]+/[^/\s]+/(?:issues|pull)/[0-9]+\b"
+    r")",
+    re.IGNORECASE,
+)
 _MAX_HIGHLIGHT_ITEMS = 3
 _MAX_HIGHLIGHT_LENGTH = 140
 
@@ -104,7 +113,7 @@ def _highlight_items(text: str) -> list[str] | None:
             or "_" in item
             or re.search(r"!?\[[^\]]+\]\([^\)]+\)", item)
             or re.search(r"<[^>]+>", item)
-            or re.search(r"\(#[0-9]+\)", item)
+            or _ISSUE_REFERENCE_RE.search(item)
         ):
             raise ReleaseBodyIntegrityError(
                 "Highlights bullets must use plain text without links, code, HTML, "

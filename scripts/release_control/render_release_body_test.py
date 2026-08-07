@@ -118,6 +118,67 @@ class RenderReleaseBodyTest(unittest.TestCase):
         ):
             render_release_body.validate_release_notes_shape(formatted_notes, "6.2.0")
 
+    def test_highlights_reject_bare_and_parenthesized_issue_references(self) -> None:
+        for reference in ("#123", "(#123)"):
+            with self.subTest(reference=reference):
+                notes = f"""# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- Alerts recover cleanly after an update {reference}.
+
+## Fixed
+
+- Corrected a release issue.
+"""
+
+                with self.assertRaisesRegex(
+                    render_release_body.ReleaseBodyIntegrityError,
+                    "issue references",
+                ):
+                    render_release_body.validate_release_notes_shape(notes, "6.2.0")
+
+    def test_highlights_reject_common_github_issue_reference_variants(self) -> None:
+        references = (
+            "GH-123",
+            "rcourtman/Pulse#123",
+            "https://github.com/rcourtman/Pulse/issues/123",
+            "https://github.com/rcourtman/Pulse/pull/123",
+        )
+        for reference in references:
+            with self.subTest(reference=reference):
+                notes = f"""# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- Alerts recover cleanly after an update {reference}.
+
+## Fixed
+
+- Corrected a release issue.
+"""
+
+                with self.assertRaisesRegex(
+                    render_release_body.ReleaseBodyIntegrityError,
+                    "issue references",
+                ):
+                    render_release_body.validate_release_notes_shape(notes, "6.2.0")
+
+    def test_highlights_preserve_legitimate_plain_text_with_hash_characters(self) -> None:
+        notes = """# Pulse v6.2.0 Release Notes
+
+## Highlights
+
+- C# service checks now recover cleanly after interrupted updates.
+- F# applications keep their configured display names.
+
+## Fixed
+
+- Corrected a release issue.
+"""
+
+        render_release_body.validate_release_notes_shape(notes, "6.2.0")
+
     def test_release_notes_may_omit_highlights(self) -> None:
         notes = """# Pulse v6.2.1 Release Notes
 
