@@ -263,6 +263,21 @@ contact support to get set up or to join the MSP design-partner program.
 
 ### Evaluating without a licence
 
+To start, fetch the bundle and run the guided setup on the host that will run
+the stack. Until the evaluation flow reaches a stable release, take the bundle
+from `main` — the `setup.sh` in the v6.1.2 tarball predates it and still stops
+to ask for a licence:
+
+```bash
+curl -L https://github.com/rcourtman/Pulse/archive/refs/heads/main.tar.gz | tar xz
+cd Pulse-main/deploy/provider-msp
+sudo -E ./setup.sh
+```
+
+The host needs Ubuntu 24.04 or similar, a domain whose DNS is managed through
+Cloudflare (the wildcard certificate uses a Cloudflare DNS token), and ports
+80 and 443 free.
+
 Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
 2-client evaluation licence for you. It sends only the public half of the
 signing key it generated on your host, exactly as the paid path does, and the
