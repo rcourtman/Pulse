@@ -342,6 +342,27 @@ describe('App architecture', () => {
     expect(appSource).not.toContain("scopes.includes('settings:read')");
   });
 
+  it('keeps non-privileged sessions off the update-status poll', () => {
+    // /api/updates/status and /api/updates/stream are RequireAdmin +
+    // settings:read routes. detailLevel === 'privileged' is the served mirror
+    // of that exact gate, so an authenticated session without admin privileges
+    // (SSO user with only read roles) must never mount the watcher — its 5s
+    // fallback poll would 403 on every tick and spam the backend log, which
+    // misled the #1601 rc.9 retest into diagnosing an RBAC break.
+    expect(appSource).toContain('const canReadUpdateStatus = createMemo(() => {');
+    // Open instances (requiresAuth false) keep the fallback poll: the update
+    // routes are reachable there even though detailLevel is served as 'public'.
+    expect(appSource).toContain('if (!status || !status.requiresAuth) return true;');
+    expect(appSource).toContain(
+      "return status.detailLevel === undefined || status.detailLevel === 'privileged';",
+    );
+    const watcherGate = appSource.indexOf('<Show when={canReadUpdateStatus()}>');
+    expect(watcherGate).toBeGreaterThan(-1);
+    expect(appSource.indexOf('<GlobalUpdateProgressWatcher />')).toBeGreaterThan(watcherGate);
+    // Exactly one mount, and only the gated one.
+    expect(appSource.split('<GlobalUpdateProgressWatcher />').length).toBe(2);
+  });
+
   it('keeps the update progress watcher aligned with the backend updater stages', () => {
     // The in-progress stage list must mirror internal/updates/manager.go
     // updateStatus emissions, including the rollback path's restoring stage,

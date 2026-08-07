@@ -1,45 +1,34 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "1019310adf4aebaa88d5de0933be95dfc61284c8",
-  "verified_at": "2026-08-07T12:40:13Z",
+  "base_sha": "f0e2243b44b7e40eb6c3af624c4f9337cdf2f4d4",
+  "verified_at": "2026-08-07T18:44:06Z",
   "changed_paths": [
-    "frontend-modern/src/App.tsx",
-    "frontend-modern/src/components/BusinessEstateCard.tsx",
-    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/stores/sessionCapabilities.ts",
-    "frontend-modern/src/types/config.ts"
+    "frontend-modern/src/App.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/App.tsx": "7c22f48d04053556f07df34511b49847e9f9b2bd1217f819ff7d8b4f41ed83ef",
-    "frontend-modern/src/components/BusinessEstateCard.tsx": "af4463ea3a33de6a3a24b8ed89d41fcc42ceadb12736b6443a88556e18c88362",
-    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "c9d3a0405c626370239eaa3ff5fd1f7118887553ab8e80ef26b55008b817af3f",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "b6a8f9c622c72a86dc7a0034c479e86fb9a1919ad0eb4a5fcd81222242fae865",
-    "frontend-modern/src/stores/sessionCapabilities.ts": "455c254df2ea7236bb9a1202e848f7226b963e1e36c761799d6eeca70a845b19",
-    "frontend-modern/src/types/config.ts": "36f050dba43af75781f98435faaa9921072d696d6133fb7f10bdfe04506c39bd"
+    "frontend-modern/src/App.tsx": "a41475370826987f90ffd476983fb7abd02ba87afbbee46cfb7f160c5c649dd7"
   },
   "routes": [
     "/",
-    "/settings/pulse-intelligence/billing/plan",
-    "/settings/security-roles"
+    "/settings/infrastructure"
   ],
   "states": [
-    "free Community tier with hideUpgrade=false served by the rebuilt dev backend (verified via /api/security/status)",
-    "sessionCapabilities.businessEstate=true from 6 mock PVE nodes on the free tier",
-    "business-estate card eligible state (star prompt dismissed, first-seen recorded on a prior day), re-exercised after the storage keys moved local to the component",
-    "business-estate card permanently dismissed state after each dismissal action",
-    "settings navigation for a free install showing Data & Reports, Roles, Users, Audit Log, Audit Webhooks, Remote Access, and Plans & Billing",
-    "Roles panel feature gate with visible View plans CTA on the free tier",
-    "Plans & Billing Community plan with the MSPs and multi-client providers section"
+    "authenticated NON-ADMIN session (proxy auth, X-Remote-Role=viewer): /api/security/status serves detailLevel=authenticated, requiresAuth=true, proxyAuthIsAdmin=false, and a direct GET /api/updates/status returns 403",
+    "authenticated ADMIN session (proxy auth, X-Remote-Role=admin): /api/security/status serves detailLevel=privileged, proxyAuthIsAdmin=true, and a direct GET /api/updates/status returns 200",
+    "non-admin app shell fully rendered with the global banner block mounted (hasSettingsAccess is true for a cookie/proxy session carrying no token scopes), confirming the new gate is what suppresses the watcher rather than the pre-existing kiosk/settings-access gate",
+    "GlobalUpdateProgressWatcher absent for the non-admin session: zero GET /api/updates/status requests recorded in a 60s window at each viewport, a window that previously held roughly 13 five-second poll ticks",
+    "GlobalUpdateProgressWatcher active for the admin session: 22 GET /api/updates/status requests recorded across both viewports, all 200 OK, so the fallback poll is unchanged for sessions that can actually read it",
+    "backend log across the whole verification session contains zero /api/updates/status admin-denial warnings, down from one per five seconds per non-admin tab"
   ],
   "interactions": [
-    "logged in as admin via real clicks and typing at 1280x800",
-    "clicked 'See business plans' on the business-estate card: navigated to /settings/pulse-intelligence/billing/plan and set the permanent dismissal key",
-    "reset dismissal, reloaded, clicked 'This is a homelab': card removed from DOM and dismissal persisted (repeated against the final component bytes)",
-    "navigated to Roles via settings navigation and confirmed the inline gate with View plans CTA",
-    "read the Plans & Billing page including the MSP provider section and pulserelay.pro/msp link",
-    "repeated the card render and homelab dismissal at mobile viewport with the card clearing the bottom navigation bar"
+    "started an isolated Pulse instance on a scratch data dir with PROXY_AUTH_SECRET, PROXY_AUTH_USER_HEADER=X-Remote-User, PROXY_AUTH_ROLE_HEADER=X-Remote-Role, PROXY_AUTH_ADMIN_ROLE=admin, serving the freshly built frontend bundle containing this change",
+    "drove the non-admin identity through a header-injecting reverse proxy on port 8902 and the admin identity through one on port 8901, so both sessions differ only in the role header",
+    "loaded / as the non-admin at 1280x800, waited a full 60s poll window, and read the browser network log plus the backend log: zero /api/updates/status requests",
+    "reloaded / as the non-admin at 375x812, waited another full 60s window, and re-read both logs: still zero /api/updates/status requests, with the settings shell and bottom navigation rendering normally",
+    "loaded / as the admin at 375x812 and confirmed 12 GET /api/updates/status responses at 200 OK",
+    "reloaded / as the admin at 1280x800 and confirmed a further 10 GET /api/updates/status responses at 200 OK",
+    "screenshotted the non-admin shell at both viewports to confirm the gate removes only the update poll and leaves the rendered UI intact"
   ],
   "viewports": [
     {

@@ -307,6 +307,20 @@ function App() {
     const hasSettingsAccess = createMemo(() =>
       sessionHasSettingsAccess(runtime.securityStatus()?.tokenScopes),
     );
+    // /api/updates/status and /api/updates/stream sit behind RequireAdmin +
+    // settings:read. /api/security/status mirrors that exact gate: detailLevel
+    // is 'privileged' iff the session passes canAccessAdminSurface(settings:read)
+    // (router_routes_auth_security.go), so an authenticated-but-unprivileged
+    // session (e.g. an SSO user without an RBAC admin grant) must not mount the
+    // watcher — its 5s fallback poll would 403 forever and spam the backend log
+    // (misread as an RBAC break in the #1601 rc.9 retest). Instances that
+    // require no auth serve detailLevel 'public' while leaving the update
+    // routes open, so only the authenticated non-privileged case is gated.
+    const canReadUpdateStatus = createMemo(() => {
+      const status = runtime.securityStatus();
+      if (!status || !status.requiresAuth) return true;
+      return status.detailLevel === undefined || status.detailLevel === 'privileged';
+    });
     let appShellRoutePreloadCleanup: (() => void) | undefined;
     let appShellRoutesPreloadScheduled = false;
     let workspaceRedirectPending = false;
@@ -512,7 +526,9 @@ function App() {
                         <WhatsNewCard />
                         <GitHubStarBanner />
                         <BusinessEstateCard />
-                        <GlobalUpdateProgressWatcher />
+                        <Show when={canReadUpdateStatus()}>
+                          <GlobalUpdateProgressWatcher />
+                        </Show>
                       </Show>
                       {/* Main layout container - flexbox to allow AI panel to push content */}
                       <div class="flex h-screen overflow-hidden">
