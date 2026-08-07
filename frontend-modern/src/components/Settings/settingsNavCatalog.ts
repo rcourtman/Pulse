@@ -182,12 +182,23 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',
       },
+      // Network, updates, and recovery are pure instance administration - the
+      // public URL and CORS boundaries, the server update channel, backup
+      // polling and config export/import - and every route behind them is
+      // RequireAdmin + settings:read. Hidden rather than shown with an inline
+      // gate, which is the deliberate opposite of the paid-feature items in
+      // this catalog: a free install can act on a paid tab by upgrading, so
+      // hiding it costs discoverability, but a non-admin cannot grant
+      // themselves admin, so the tab can only end in a panel they will never
+      // populate. system-general above stays ungated - theme, language, and
+      // unit preferences there are user-scoped.
       {
         id: 'system-network',
         label: 'Network',
         icon: Network,
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',
+        requiredCapability: 'systemSettingsRead',
       },
       {
         id: 'system-updates',
@@ -195,6 +206,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: RefreshCw,
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',
+        requiredCapability: 'systemSettingsRead',
       },
       {
         id: 'system-recovery',
@@ -202,6 +214,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Clock,
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',
+        requiredCapability: 'systemSettingsRead',
       },
     ],
   },

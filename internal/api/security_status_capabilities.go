@@ -41,7 +41,17 @@ type securityStatusSettingsCapabilities struct {
 	// /api/admin/reports/schedules, which Settings → Data & Reports loads on
 	// mount. It describes admin reachability only; the paid-feature gate is
 	// separate and stays visible so the capability remains discoverable.
-	ReportingRead       bool `json:"reportingRead"`
+	ReportingRead bool `json:"reportingRead"`
+	// SystemSettingsRead mirrors the same RequireAdmin + settings:read gate for
+	// the System → Network, Pulse server updates, and Recovery tabs, whose
+	// panels read and write the public URL and CORS boundaries, the server
+	// update channel, and backup polling plus config export/import. It is a
+	// sibling of InfrastructureRead rather than a reuse of it: they happen to
+	// share a derivation today, but each names the surface it describes, so
+	// tightening one gate cannot silently hide the other's tabs. System →
+	// General stays ungated - theme, language, and unit preferences there are
+	// user-scoped, not instance administration.
+	SystemSettingsRead  bool `json:"systemSettingsRead"`
 	APIAccessRead       bool `json:"apiAccessRead"`
 	APIAccessWrite      bool `json:"apiAccessWrite"`
 	AuthenticationRead  bool `json:"authenticationRead"`
@@ -278,7 +288,7 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 
 	return securityStatusSettingsCapabilities{
 		InfrastructureRead: canReadSettings,
-		// Every one of these five surfaces reaches its data through
+		// Every one of these six surfaces reaches its data through
 		// ensureSettingsScope(settings:read) — directly under RequireAdmin, or
 		// inside the handler for the RequirePermission routes — so they share
 		// the predicate rather than each re-deriving "is this caller an admin".
@@ -287,6 +297,7 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 		DiagnosticsRead:       canReadSettings,
 		SystemLogsRead:        canReadSettings,
 		ReportingRead:         canReadSettings,
+		SystemSettingsRead:    canReadSettings,
 		APIAccessRead:         r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
 		APIAccessWrite:        r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
 		AuthenticationRead:    canReadSettings,

@@ -408,6 +408,24 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('gates the admin-only System tabs on the served systemSettingsRead capability', () => {
+    // Same rationale as Infrastructure rather than the paid-feature one: a free
+    // install can act on a paid tab by upgrading, but a non-admin cannot grant
+    // themselves admin, so Network / Pulse server updates / Recovery can only
+    // end in a panel they will never populate.
+    for (const id of ['system-network', 'system-updates', 'system-recovery']) {
+      const navBlock = settingsNavCatalogSource.match(
+        new RegExp(`id: '${id}',[\\s\\S]*?requiredCapability: 'systemSettingsRead',\\n\\s*},`),
+      );
+      expect(navBlock?.[0]).toBeTruthy();
+    }
+
+    // system-general carries user-scoped theme, language, and unit preferences,
+    // so gating it would take personal settings away from every non-admin.
+    const generalNavBlock = settingsNavCatalogSource.match(/id: 'system-general',[\s\S]*?\n {6}},/);
+    expect(generalNavBlock?.[0]).not.toContain('requiredCapability');
+  });
+
   it('keeps the external-agent (MCP) connector setup findable from sidebar search', () => {
     // The Assistant page hosts the pulse-mcp connector setup, but its label and
     // copy can't carry every term users search for. The nav item's search-only

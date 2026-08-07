@@ -82,6 +82,10 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		"diagnosticsRead",
 		"systemLogsRead",
 		"reportingRead",
+		// Sibling of infrastructureRead for the admin-only System tabs. Same
+		// derivation today, but each names its own surface so tightening one
+		// gate cannot silently hide the other's tabs.
+		"systemSettingsRead",
 	} {
 		if caps[key] != false {
 			t.Fatalf("%s = %v for a non-admin session, want false", key, caps[key])
@@ -141,6 +145,7 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 		"diagnosticsRead",
 		"systemLogsRead",
 		"reportingRead",
+		"systemSettingsRead",
 	} {
 		if caps[key] != true {
 			t.Fatalf("%s = %v for the configured admin, want true", key, caps[key])

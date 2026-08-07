@@ -5817,6 +5817,22 @@ prompt. Infrastructure has no upgrade story: every endpoint behind it is
 warn-level denial on every tick. Hiding the item is what stops those pollers
 mounting.
 
+The same rule now covers the admin-only System tabs. `system-network`,
+`system-updates`, and `system-recovery` declare
+`requiredCapability: 'systemSettingsRead'` in the same catalog, so both the
+sidebar entry and the route are withheld from a session that cannot read
+settings. They share Infrastructure's rationale rather than the paid-feature
+one: a free install can act on a paid tab by upgrading, but a non-admin cannot
+grant themselves admin, so the tab can only end in a panel they will never
+populate.
+
+`system-general` is deliberately excluded. Theme, language, and unit
+preferences on that tab are user-scoped, so gating it would take personal
+settings away from every non-admin, and the panel is not empty for them. Proof:
+`frontend-modern/src/components/Settings/__tests__/systemNavCapabilityGate.test.ts`,
+which pins the withheld, granted, and unresolved cases plus the
+`system-general` exclusion.
+
 Because `DEFAULT_SETTINGS_TAB` *is* `infrastructure-systems`, the blocked-route
 fallback in `useSettingsAccess.ts` can no longer resolve to the constant — that
 sent a refused session straight back to the tab that had just refused it. It now

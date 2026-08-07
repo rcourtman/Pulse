@@ -5060,10 +5060,19 @@ backend, on the checkout intent it already owns.
 `internal/api/` is a canonical reference in this contract's Extension Points, so
 this records the additive change made in
 `internal/api/security_status_capabilities.go`: the settings capability payload
-served by `GET /api/security/status` now carries `infrastructureRead`, derived
-from `canAccessAdminSurface(config.ScopeSettingsRead)`. No recovery or storage
+served by `GET /api/security/status` now carries `infrastructureRead` and its
+sibling `systemSettingsRead`, both derived from
+`canAccessAdminSurface(config.ScopeSettingsRead)`. No recovery or storage
 route, payload, or persisted shape changes. The api-contracts entry holds the
 authoritative description and its proof.
+
+`systemSettingsRead` gates the System → Recovery tab, which is where operators
+reach backup polling and configuration export/import. Withholding it says only
+that the caller may not reach those admin routes — never that a backup is
+absent, a snapshot is stale, or a restore target is unavailable. A recovery
+surface that finds the capability withheld must present an access state and
+must not record the skipped fetch as coverage loss or mutate recovery
+freshness from it.
 
 ### API-layer refusal logging moved to debug
 

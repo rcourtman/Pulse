@@ -102,6 +102,13 @@ export interface SecurityStatusSettingsCapabilities {
   diagnosticsRead: boolean;
   systemLogsRead: boolean;
   reportingRead: boolean;
+  /**
+   * The same RequireAdmin + settings:read gate as infrastructureRead, scoped to
+   * the System > Network / Pulse server updates / Recovery tabs. A sibling
+   * rather than a reuse, so tightening one surface's gate cannot silently hide
+   * the other's tabs.
+   */
+  systemSettingsRead: boolean;
   apiAccessRead: boolean;
   apiAccessWrite: boolean;
   authenticationRead: boolean;

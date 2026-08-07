@@ -1,29 +1,20 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "14a82e7684390c9fe0a4bd900417c4adbb7140b8",
-  "verified_at": "2026-08-07T21:29:58Z",
+  "base_sha": "a8775495eaef979d3c454ff713c263e64020d1ed",
+  "verified_at": "2026-08-07T22:02:36Z",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/Settings.tsx",
     "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
     "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/Settings.tsx": "94cb784fb80b1cdbb153b9aeaa8b3c29ae726fd9b071b50a2f98341bc13975ff",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "f1b8bd0806ca17948c11a08601f1362218caa02de4913884854c8368f7b11584",
-    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "e5ef64c853fa5dea84cb19bfdc79f7d3a380fa156e5afadda964e97ffbd729cc",
-    "frontend-modern/src/types/config.ts": "cb2aa098b5a40332d6a1caeaf74f3557e79f8e00630ce7dd1d19a63571048592"
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "95d92142e693a16641f462b7fd4f30c5ef05ed61a56dc8989c2f452c63c18004",
+    "frontend-modern/src/types/config.ts": "9dc0faa8e9b41eab526245aae72e447535709108c0b109c76545ab73500a2588"
   },
   "routes": [
-    "/ (redirect target for an authenticated session landing on Settings)",
-    "/settings/monitoring/availability (Availability checks, the reported trap)",
-    "/settings/system-general (the new non-admin fallback landing tab)",
-    "/settings/pulse-intelligence/provider (Provider & Models)",
-    "/settings/support/diagnostics (Diagnostics & Health)",
-    "/settings/support/logs (System Logs)",
-    "/settings/support/reporting (Data & Reports)",
-    "/settings/system-network (residual admin-only tab left ungated on this branch)"
+    "/settings/monitoring/availability (this branch's gate)",
+    "/settings/support/logs (this branch's gate)",
+    "/settings/system-general (the non-admin landing tab both branches rely on)"
   ],
   "viewports": [
     {
@@ -36,23 +27,17 @@
     }
   ],
   "states": [
-    "non-admin proxy-auth session (X-Remote-Role: viewer) against a binary built from this worktree, so the served capabilities and the rendering frontend are one artifact: /api/security/status reports detailLevel=authenticated with availabilityRead, pulseIntelligenceRead, diagnosticsRead, systemLogsRead and reportingRead all false",
-    "non-admin landing state: / resolves to /settings/system-general, not /settings/monitoring/availability, and the Appearance panel renders with no [role=alert] banner",
-    "non-admin settings sidebar reduced to Plans & Billing, General, Network, Pulse server updates, Recovery and Security Overview; Infrastructure, Availability checks, Provider & Models, Patrol, Assistant, Diagnostics & Health, Data & Reports, System Logs and the whole Security group are absent",
-    "non-admin deep link to /settings/monitoring/availability redirects to /settings/system-general with zero requests to /api/availability-targets, /api/settings/ai, /api/diagnostics, /api/logs/* or /api/admin/reports/* in the network log",
-    "admin proxy-auth session (X-Remote-Role: admin) reports detailLevel=privileged with all five new capabilities true and keeps the full 22-item settings nav",
-    "admin Availability checks renders its own empty state ('No availability checks configured', Refresh, Add service/device check) off a 200 from /api/availability-targets",
-    "admin Data & Reports still renders its inline Advanced Reporting upgrade gate on this unlicensed install, confirming the new admin gate did not swallow the paid-feature teaser the 2026-08-07 commercial-surfaces revision requires to stay visible",
-    "residual, deliberately out of scope: the non-admin can still open /settings/system-network, /settings/system-updates and /settings/system-recovery, which render with default values behind a 403 on /api/system/settings. Gated on claude/great-liskov-05900a (9b0618b7a, systemSettingsRead); not duplicated here"
+    "merge of origin/main (6a958761e, systemSettingsRead gating the System tabs) into a8775495e (availabilityRead / pulseIntelligenceRead / diagnosticsRead / systemLogsRead / reportingRead). The two commits gate disjoint tabs from the same canAccessAdminSurface(settings:read) derivation, and settingsNavCatalog.ts and types/config.ts now carry both sets - which is exactly why the merged artifact needed re-exercising rather than inheriting either side's receipt",
+    "re-verified against a binary built from the merged tree, behind the same two-identity header-injecting proxy-auth shim: viewer reports detailLevel=authenticated with all 21 settings capabilities false; admin reports detailLevel=privileged with all 21 true",
+    "non-admin settings nav is now down to Plans & Billing, General and Security Overview - this branch removes Availability checks, the three Pulse Intelligence tabs and the three Support tabs, and main removes Network, Pulse server updates and Recovery. Neither side's gates were lost in the merge",
+    "non-admin deep link to /settings/monitoring/availability still redirects to /settings/system-general, with no [role=alert] and no request to /api/availability-targets, /api/settings/ai, /api/diagnostics, /api/logs/* or /api/admin/reports/*",
+    "admin keeps the full 22-item nav across both gate sets and Availability checks renders its real panel, so neither commit's capability withholds a surface from an entitled session",
+    "residual unchanged and out of scope: the bootstrap GET /api/system/settings still answers 403 to a non-admin. It is the last remaining settings-related refusal and is addressed by the /api/runtime/display work on claude/frosty-brahmagupta-34865c"
   ],
   "interactions": [
-    "loaded / at 1280x800 as the viewer and read location.href plus the network log: landed on /settings/system-general, no /api/availability-targets request, no error banner",
-    "navigated the viewer to /settings/monitoring/availability at both 1280x800 and 375x812 and confirmed the redirect to /settings/system-general with an empty [role=alert] set and no horizontal overflow at 375px",
-    "enumerated the viewer's settings sidebar buttons from the DOM at 1280x800 to confirm exactly which entries survive the gates",
-    "read the viewer console: the only remaining 403s are /api/updates/check, /api/updates/status and the bootstrap /api/system/settings, all pre-existing on this branch and tracked on other branches; none originate from a settings panel mount",
-    "navigated the admin to /settings/monitoring/availability, /settings/pulse-intelligence/provider, /settings/support/diagnostics, /settings/support/logs and /settings/support/reporting and confirmed each renders its real panel heading and content, so the capability-resolution wait in Settings.tsx does not strand an admin on the loading state",
-    "read the admin network log for /api/availability-targets (200), /api/config/nodes (200), /api/discover (200) and /api/system/settings (200) with no 403 on any settings route",
-    "screenshotted the admin Availability checks panel at 375x812 to confirm the mobile layout renders the empty state rather than an error",
-    "counted performance.getEntriesByType('resource') on the admin Availability checks load: /api/availability-targets fired exactly once while /api/security/status fired three times, confirming the capability-resolution wait keys off the first resolve only and does not unmount and remount a live panel when the status is refreshed"
+    "curled /api/security/status through both proxies against the merged binary and compared the full 21-field capability map for viewer and admin before touching the browser",
+    "loaded /settings/monitoring/availability as the viewer at 1280x800, recorded the settled URL, the empty [role=alert] set, the surviving nav entries, and every /api/ resource entry matching the gated routes",
+    "loaded /settings/support/logs as the viewer at 375x812 and confirmed the same redirect to /settings/system-general with no gated request and no horizontal overflow",
+    "loaded /settings/monitoring/availability as the admin at 1280x800 and enumerated all 22 nav entries plus the rendered Availability checks heading"
   ]
 }
