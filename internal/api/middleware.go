@@ -94,9 +94,18 @@ func ErrorHandler(next http.Handler) http.Handler {
 		// Call the next handler
 		next.ServeHTTP(rw, r)
 
-		// Log errors (4xx and 5xx)
+		// A 5xx is ours to explain, so it warns. A 4xx is the client being told
+		// no — an unauthenticated bootstrap request, an RBAC refusal, a probe for
+		// an endpoint this build does not serve — and warning on each one meant a
+		// correctly behaving instance could never produce a quiet log. Those go to
+		// debug; logAuthDenial carries the escalation for refusals that arrive at
+		// a rate worth an operator's attention.
 		if rw.statusCode >= 400 {
-			log.Warn().
+			event := log.Debug()
+			if rw.statusCode >= 500 {
+				event = log.Warn()
+			}
+			event.
 				Str("path", r.URL.Path).
 				Str("method", r.Method).
 				Int("status", rw.statusCode).

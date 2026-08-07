@@ -9026,3 +9026,25 @@ halves: the served value for a `settings:read` token versus a
 `monitoring:read` token, and that the routes agree with whichever value was
 served. `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` keeps the
 withheld case honest against live 403s.
+
+### The API layer warns on faults, not on refusals
+
+`internal/api/middleware.go` logged every response `>= 400` at warn. That put an
+unauthenticated bootstrap request, an RBAC refusal, and a probe for an endpoint
+this build does not serve on the same footing as a handler panic, so a correctly
+configured instance could not produce a quiet log. The middleware now warns only
+on `5xx` — the class this build owns — and records `4xx` at debug.
+
+The auth wrappers in `internal/api/auth.go` (`RequireAuth`, `RequireAdmin`,
+`RequirePermission`) previously added a second warn line per refusal. They now
+route through `logAuthDenial` in `internal/api/auth_denial_signal.go`, which
+logs the refusal at debug and escalates once per window when one caller crosses
+a probing threshold. The security-privacy contract holds the authoritative
+description of that escalation.
+
+No route, status code, payload, or header changes: the same callers receive the
+same responses. `TestContract_AuthorizationRefusalKeepsStatusWhileLoggingAtDebug`
+pins that pairing directly — a scoped API token and a non-admin proxy session
+both still get 403, no warn line is emitted, and the refusal still leaves a
+debug-level trace — so a future attempt to quiet the log by relaxing enforcement
+fails the contract instead of passing it.

@@ -1024,12 +1024,9 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 			return
 		}
 
-		// Log the failed attempt
-		log.Warn().
-			Str("ip", r.RemoteAddr).
-			Str("path", r.URL.Path).
-			Str("method", r.Method).
-			Msg("Unauthorized access attempt")
+		// An unauthenticated caller on a protected route is the expected outcome
+		// before login, not a fault. See logAuthDenial for the escalation rule.
+		logAuthDenial(r, "", "Unauthorized access attempt", nil)
 
 		if !authWriter.wrote {
 			// Never send WWW-Authenticate header - we want to use our custom login page.
@@ -1056,12 +1053,7 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 		// First check if user is authenticated
 		authWriter := &responseCapture{ResponseWriter: w}
 		if !checkAuth(cfg, authWriter, r, false) {
-			// Log the failed attempt
-			log.Warn().
-				Str("ip", r.RemoteAddr).
-				Str("path", r.URL.Path).
-				Str("method", r.Method).
-				Msg("Unauthorized access attempt")
+			logAuthDenial(r, "", "Unauthorized access attempt", nil)
 
 			if !authWriter.wrote {
 				writeAuthenticationRequired(w, r)
@@ -1073,13 +1065,10 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 		if cfg.ProxyAuthSecret != "" {
 			if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid {
 				if !isAdmin {
-					// User is authenticated but not an admin
-					log.Warn().
-						Str("ip", r.RemoteAddr).
-						Str("path", r.URL.Path).
-						Str("method", r.Method).
-						Str("username", username).
-						Msg("Non-admin user attempted to access admin endpoint")
+					// Authenticated, just not an admin. Every settings surface a
+					// non-admin UI still mounts lands here, so this must not warn
+					// per request; the rate escalation carries the security signal.
+					logAuthDenial(r, username, "Non-admin user attempted to access admin endpoint", nil)
 
 					// Return forbidden error
 					if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
@@ -1134,13 +1123,9 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 					_, isDefaultAuth := authorizer.(*internalauth.DefaultAuthorizer)
 					if isDefaultAuth {
 						// No RBAC: non-admin proxy users are rejected
-						log.Warn().
-							Str("ip", r.RemoteAddr).
-							Str("path", r.URL.Path).
-							Str("action", action).
-							Str("resource", resource).
-							Str("username", username).
-							Msg("Non-admin proxy user attempted to access permissioned endpoint (no RBAC active)")
+						logAuthDenial(r, username,
+							"Non-admin proxy user attempted to access permissioned endpoint (no RBAC active)",
+							map[string]string{"action": action, "resource": resource})
 
 						if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
 							w.Header().Set("Content-Type", "application/json")
@@ -1202,13 +1187,8 @@ func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, r
 		}
 
 		if !allowed {
-			log.Warn().
-				Str("user", username).
-				Str("ip", r.RemoteAddr).
-				Str("path", r.URL.Path).
-				Str("action", action).
-				Str("resource", resource).
-				Msg("Forbidden access attempt (RBAC)")
+			logAuthDenial(r, username, "Forbidden access attempt (RBAC)",
+				map[string]string{"action": action, "resource": resource})
 
 			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
 				w.Header().Set("Content-Type", "application/json")

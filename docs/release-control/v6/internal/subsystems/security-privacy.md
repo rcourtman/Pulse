@@ -1980,3 +1980,40 @@ re-fetches the server version itself and runs the existing download, checksum,
 and self-test pipeline before swapping binaries, so a stale or spoofed ack
 version can at most trigger one extra validated check
 (`TestRunLoopRunsCheckOnNudge`).
+
+### Routine authorization refusals log at debug; the rate is what warns
+
+`RequireAuth`, `RequireAdmin` and `RequirePermission` used to emit `log.Warn()`
+for every refusal — an unauthenticated caller before login, a non-admin on an
+admin route, an RBAC denial — and `internal/api/middleware.go` independently
+warned on *every* 4xx. A single refusal therefore produced two warn lines, and a
+correctly configured instance could not produce a quiet log. #1601's rc.9
+reporter read that stream as an RBAC regression.
+
+Refusals now route through `logAuthDenial`
+(`internal/api/auth_denial_signal.go`), which records the refusal at debug and
+counts it per caller. Attribution prefers the authenticated username so a
+principal is still tracked across rotating source addresses, falling back to
+`GetClientIP`. When one caller crosses `authDenialWarnThreshold` refusals inside
+`authDenialWindow`, exactly one warn is emitted for that window
+(`"Repeated authorization denials from one caller; possible endpoint probing"`),
+which is the shape that actually distinguishes probing from a UI mounting a
+surface its session cannot read. The tracked set is bounded by
+`authDenialMaxTracked` with oldest-window eviction so spoofed forwarded-for
+values cannot grow it without bound.
+
+The middleware now warns only on 5xx — a fault this build owns — and logs 4xx at
+debug.
+
+**Enforcement is unchanged.** Every route returns the same status to the same
+callers; only the log level and the escalation moved. Verified live on a
+proxy-auth instance: `/api/connections`, `/api/updates/status` and
+`/api/system/settings` still return 403 to a viewer and 200 to an admin, while
+an idle non-admin browser session produced zero warn lines across 90 seconds
+where it previously produced roughly one per refusal plus a paired
+`"Request failed"`.
+
+Pinned by `auth_denial_signal_test.go`: below-threshold refusals stay at debug,
+the escalation fires exactly once per window, a closed window re-arms it, a
+username aggregates across addresses, separate callers keep separate budgets,
+and the tracked set stays bounded.

@@ -5064,3 +5064,12 @@ served by `GET /api/security/status` now carries `infrastructureRead`, derived
 from `canAccessAdminSurface(config.ScopeSettingsRead)`. No recovery or storage
 route, payload, or persisted shape changes. The api-contracts entry holds the
 authoritative description and its proof.
+
+### API-layer refusal logging moved to debug
+
+`internal/api/` is a canonical reference in this contract's Extension Points.
+Routine authorization refusals raised by `internal/api/auth.go` and
+`internal/api/middleware.go` now log at debug, with a rate-based escalation in
+`internal/api/auth_denial_signal.go`. No recovery or storage route, payload, or
+persisted shape changes. The security-privacy and api-contracts entries hold the
+authoritative description and proof.

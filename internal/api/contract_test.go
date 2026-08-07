@@ -61,6 +61,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	tmock "github.com/stretchr/testify/mock"
 )
 
@@ -22644,5 +22645,83 @@ func TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal(t *tes
 				t.Fatalf("cancel_url = %q, want %q", capturedReq.CancelURL, tc.wantCancelURL)
 			}
 		})
+	}
+}
+
+// The refusal itself is the contract; its log severity is not. This pins both
+// halves of the 2026-08-07 logging change together, because the tempting way to
+// quiet a noisy log is to stop refusing — a "fix" that would be a security
+// regression rather than an observability one.
+func TestContract_AuthorizationRefusalKeepsStatusWhileLoggingAtDebug(t *testing.T) {
+	rawToken := "contract-refusal-severity.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	// Exercise the proxy-auth non-admin branch too: that is the exact line
+	// #1601's rc.9 reporter saw repeating.
+	cfg.ProxyAuthSecret = "contract-proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Role"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	// Capture only the request phase — router construction emits unrelated
+	// startup warnings that have nothing to do with authorization.
+	var logBuf bytes.Buffer
+	prevLogger := log.Logger
+	prevLevel := zerolog.GlobalLevel()
+	log.Logger = zerolog.New(&logBuf).Level(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
+	authDenialMu.Lock()
+	authDenials = make(map[string]*authDenialCounter)
+	authDenialMu.Unlock()
+
+	t.Cleanup(func() {
+		log.Logger = prevLogger
+		zerolog.SetGlobalLevel(prevLevel)
+		authDenialMu.Lock()
+		authDenials = make(map[string]*authDenialCounter)
+		authDenialMu.Unlock()
+	})
+
+	cases := []struct {
+		name    string
+		path    string
+		prepare func(*http.Request)
+	}{
+		{
+			name:    "scoped api token",
+			path:    "/api/connections",
+			prepare: func(r *http.Request) { r.Header.Set("X-API-Token", rawToken) },
+		},
+		{
+			name: "non-admin proxy session",
+			path: "/api/system/settings",
+			prepare: func(r *http.Request) {
+				r.Header.Set("X-Proxy-Secret", "contract-proxy-secret")
+				r.Header.Set("X-Remote-User", "viewer")
+				r.Header.Set("X-Remote-Role", "viewer")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		tc.prepare(req)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s: GET %s = %d, want 403 — the refusal must survive the logging change",
+				tc.name, tc.path, rec.Code)
+		}
+	}
+
+	output := logBuf.String()
+	if strings.Contains(output, `"level":"warn"`) {
+		t.Fatalf("ordinary refusals emitted a warn line, which is the noise this change removed:\n%s", output)
+	}
+	// The refusal must still be recorded somewhere an operator can find it.
+	if !strings.Contains(output, `"status":403`) {
+		t.Fatalf("refusal left no debug-level trace at all:\n%s", output)
 	}
 }

@@ -5986,3 +5986,15 @@ Pinned by the capability cases in `useTrueNASSettingsPanelState.test.tsx` and
 `useVMwareSettingsPanelState.test.tsx` (skipped when withheld, loads once when
 the accessor flips) and by the discovery source pin in
 `InfrastructureOperationsModel.test.tsx`.
+
+### API-layer refusal logging moved to debug
+
+`internal/api/` is a canonical reference in this contract's Extension Points, so
+this records the change made in `internal/api/auth.go`,
+`internal/api/middleware.go` and `internal/api/auth_denial_signal.go`: routine
+authorization refusals log at debug, and only an abnormal rate from one caller
+warns. Agent registration, capability, and lifecycle routes keep their existing
+status codes and payloads unchanged — an agent presenting insufficient
+credentials is refused exactly as before, it simply no longer emits a warn line
+per attempt. The security-privacy and api-contracts entries hold the
+authoritative description and proof.
