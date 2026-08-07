@@ -1,42 +1,42 @@
 {
   "version": 1,
-  "base_sha": "8fd43b307bf3faabc9c362d1ebccf1830be9ca0d",
-  "verified_at": "2026-08-07T15:30:51Z",
+  "base_sha": "0928071b9a1342c824cc75dd3ef6047c86c67b64",
+  "verified_at": "2026-08-07T14:05:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/api/resourceActions.ts",
-    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
-    "frontend-modern/src/types/actionAudit.ts",
-    "frontend-modern/src/utils/actionAuditPresentation.ts"
+    "frontend-modern/src/stores/websocket.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/resourceActions.ts": "0c4bac0a4f779f6afeee39f45ad46d51baf0b1b5a47ebdc3f424148804f1c329",
-    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "992b1203fb775cf2e1eb86ffc04f1ce5ca5e072f26dedfbb0f9338459022c2eb",
-    "frontend-modern/src/types/actionAudit.ts": "e44b0cf97b070c63da667fa035a2a5f427ccc58936b7a4296e520eec1f9a1ed0",
-    "frontend-modern/src/utils/actionAuditPresentation.ts": "fd1ae3e44b9881d7324845520cfdeaf958dcb30bf62a59f6ec69d342ca13290a"
+    "frontend-modern/src/stores/websocket.ts": "0625744f76128b42b3802ffb3880a5169013e11343f4b74332d171be05d77ae2"
   },
   "routes": [
-    "/actions?action=action-browser-1"
+    "/proxmox/overview",
+    "/docker/overview",
+    "/standalone/machines",
+    "/alerts/overview"
   ],
   "viewports": [
     {
-      "width": 1440,
-      "height": 1000
+      "width": 1280,
+      "height": 720
     },
     {
-      "width": 390,
-      "height": 844
+      "width": 375,
+      "height": 812
     }
   ],
   "states": [
-    "Pending action whose executor reports an exact command-agent readiness refusal",
-    "Drifted pending action with a refreshable replacement plan",
-    "Fresh replacement action ready for a new operator approval"
+    "Live dev estate with 263 resources across 48 types including agent-merged Proxmox nodes (Agent chip on Disaster Recovery A) and docker hosts",
+    "WebSocket delta stream active: initialState full snapshot followed by continuous resourceDelta-only rawData messages",
+    "Machines page with two standalone agent hosts",
+    "Docker overview with two hosts and eight containers",
+    "Mobile viewport after full reload re-hydrating from a fresh initialState plus deltas"
   ],
   "interactions": [
-    "Confirmed the exact executor-owned refusal and remediation are visible on desktop, Reject remains available, and Approve is absent",
-    "Confirmed the mobile dialog stays within the 390px viewport with no document overflow and keeps Close, Refresh plan, and Reject reachable",
-    "Refreshed the drifted plan through the real dialog and API client, confirmed the success notice, removed Refresh plan, and exposed Approve only for the fresh replacement",
-    "Reset the viewport override and finalized the browser session"
+    "Logged in and watched the delta stream for over five minutes across dozens of resourceDelta messages; resource count stayed exactly 263 after every delta application with zero console errors",
+    "Navigated Proxmox, Docker, Machines, and Alerts surfaces mid-stream and confirmed all six platform navigation tabs stayed present the whole time",
+    "Confirmed the Machines table kept both agent hosts and the Docker overview kept both hosts and all eight containers across delta cycles",
+    "Reloaded at 375x812 and confirmed the mobile platform rail and Proxmox overview re-hydrated fully from initialState plus deltas",
+    "Confirmed live metric values (CPU and memory cells) continued updating from delta payloads while resource membership stayed stable"
   ]
 }

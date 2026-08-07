@@ -302,6 +302,15 @@ export function createWebSocketStore(url: string) {
   }
 
   let ws: WebSocket | null = null;
+  // Pristine copy of the server's resource array. Resource deltas are diffed
+  // against the server's per-client snapshot, so they must be applied to this
+  // raw payload — never to the canonically merged `state.resources`, whose
+  // coalesced host IDs and enriched fields no longer match the server
+  // baseline. Kept isolated from the store: entries handed to the canonical
+  // merge are cloned first, because the merge output shares nested references
+  // and Solid's reconcile mutates adopted objects in place.
+  let rawServerResources: Resource[] | null = null;
+  let lastDeltaRecoveryRequestAt = 0;
   let reconnectTimeout = 0;
   let reconnectDelayTimeout = 0;
   let lastServerActivityAt = Date.now();
@@ -428,6 +437,16 @@ export function createWebSocketStore(url: string) {
     }, delay);
   };
 
+  const requestFullStateRecovery = () => {
+    const now = Date.now();
+    if (now - lastDeltaRecoveryRequestAt < 30000) return;
+    lastDeltaRecoveryRequestAt = now;
+    logger.warn('Received resource delta without a full snapshot baseline; requesting full state');
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'requestData' }));
+    }
+  };
+
   const setupWebSocket = () => {
     if (!ws || isDisposed) return;
 
@@ -534,17 +553,36 @@ export function createWebSocketStore(url: string) {
               // Handle unified resources
               let nextResources: Resource[] | undefined;
               if (message.data.resources !== undefined) {
-                nextResources = Array.isArray(message.data.resources)
-                  ? mergeCanonicalResourceSnapshot(message.data.resources, state.resources)
-                  : [];
+                if (Array.isArray(message.data.resources)) {
+                  rawServerResources = structuredClone(message.data.resources) as Resource[];
+                  nextResources = mergeCanonicalResourceSnapshot(
+                    message.data.resources,
+                    state.resources,
+                  );
+                } else {
+                  rawServerResources = [];
+                  nextResources = [];
+                }
               } else if (
                 'resourceDelta' in message.data &&
                 message.data.resourceDelta !== undefined
               ) {
-                nextResources = applyResourceStateDelta(
-                  state.resources,
-                  message.data.resourceDelta,
-                );
+                if (rawServerResources) {
+                  rawServerResources = applyResourceStateDelta(
+                    rawServerResources,
+                    message.data.resourceDelta,
+                  );
+                  nextResources = mergeCanonicalResourceSnapshot(
+                    structuredClone(rawServerResources) as Resource[],
+                    state.resources,
+                  );
+                } else {
+                  // A delta landed before any full snapshot (e.g. the initial
+                  // payload was dropped as oversized). There is no baseline to
+                  // patch, so ask the server for a full snapshot instead of
+                  // applying the delta to nothing and rendering stubs.
+                  requestFullStateRecovery();
+                }
               }
               if (nextResources !== undefined) {
                 logger.debug('[WebSocket] Updating resources', {
@@ -888,6 +926,8 @@ export function createWebSocketStore(url: string) {
         setRecentlyResolved(reconcile({}));
       });
 
+      rawServerResources = null;
+      lastDeltaRecoveryRequestAt = 0;
       clearReconnectTimeout();
       clearReconnectDelayTimeout();
       reconnectAttempt = 0;

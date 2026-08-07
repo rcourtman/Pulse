@@ -313,8 +313,116 @@ describe('websocket store unified resource contract', () => {
         agent: { osName: 'Debian', agentVersion: '6.2.0' },
         disks: [{ name: 'sda', usage: 20 }],
       });
-      expect(agent).not.toHaveProperty('status');
+      // Deltas must land exactly where a full snapshot would: the canonical
+      // merge keeps the previous status when the server payload omits it, so
+      // the delta path has to agree with the full-snapshot path here.
+      expect(agent?.status).toBe('online');
       expect(store.state.lastUpdate).toBe(200);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps canonically merged hosts consistent with full snapshots across deltas (#1601)', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      // Two server resources that the client coalesces into ONE host: an
+      // agent host and a docker host sharing a hostname. The server's
+      // per-client delta baseline keeps both IDs, so deltas reference IDs
+      // the merged client view no longer holds.
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'agent-host-1',
+              type: 'agent',
+              name: 'docker-01',
+              status: 'online',
+              lastSeen: 100,
+              sources: ['agent'],
+            },
+            {
+              id: 'docker-host-1',
+              type: 'agent',
+              name: 'docker-01',
+              status: 'online',
+              lastSeen: 100,
+              sources: ['docker'],
+            },
+          ],
+          lastUpdate: 100,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      expect(store.state.resources).toHaveLength(1);
+      expect(store.state.resources[0]?.id).toBe('agent-host-1');
+
+      // A merge patch for the coalesced-away docker ID must not surface a
+      // typeless stub resource: the delta applies to the raw server baseline
+      // and the canonical merge runs again on the result.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [{ id: 'docker-host-1', lastSeen: 200 }],
+          },
+        },
+      });
+
+      expect(store.state.resources).toHaveLength(1);
+      expect(store.state.resources[0]?.id).toBe('agent-host-1');
+      expect(store.state.resources.every((resource) => Boolean(resource.type))).toBe(true);
+
+      // Removing the agent side server-side must leave the surviving docker
+      // host visible. Before the raw-baseline fix this removed the single
+      // merged client resource outright and the docker host never came back.
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            removed: ['agent-host-1'],
+            order: ['docker-host-1'],
+          },
+        },
+      });
+
+      expect(store.state.resources).toHaveLength(1);
+      expect(store.state.resources[0]?.id).toBe('docker-host-1');
+      expect(store.state.resources[0]?.type).toBe('agent');
+      expect(store.state.resources[0]?.lastSeen).toBe(200);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('requests a full snapshot instead of applying a delta without a baseline', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 100,
+          resourceDelta: {
+            upserts: [{ id: 'agent-1', cpu: { current: 42 } }],
+          },
+        },
+      });
+
+      expect(store.state.resources).toHaveLength(0);
+      const sentTypes = (mockWsInstance?.send.mock.calls ?? []).map(
+        (call) => JSON.parse(call[0] as string).type,
+      );
+      expect(sentTypes).toContain('requestData');
     } finally {
       dispose();
     }
