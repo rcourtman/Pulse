@@ -2813,3 +2813,29 @@ func TestMockGuestChartHistorySkipsMemoryUsedForNonProxmoxGuests(t *testing.T) {
 		}
 	}
 }
+
+// The business-scale estate thresholds are monitoring-owned so the session
+// capability surface (internal/api) and the outbound telemetry snapshot
+// (pkg/server) classify against one definition. This pins the counts-derived
+// method used by telemetry; the API-side wrapper is pinned separately by
+// TestContract_BusinessScaleEstateThresholds in internal/api.
+func TestInstallSnapshotCountsBusinessScaleEstate(t *testing.T) {
+	cases := []struct {
+		name   string
+		counts InstallSnapshotCounts
+		want   bool
+	}{
+		{"empty estate", InstallSnapshotCounts{}, false},
+		{"homelab scale", InstallSnapshotCounts{PVENodes: 4, DockerHosts: 9, VMwareHosts: 2}, false},
+		{"pve threshold", InstallSnapshotCounts{PVENodes: 5}, true},
+		{"docker threshold", InstallSnapshotCounts{DockerHosts: 10}, true},
+		{"vmware threshold", InstallSnapshotCounts{VMwareHosts: 3}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.counts.BusinessScaleEstate(); got != tc.want {
+				t.Fatalf("BusinessScaleEstate() with %+v = %v, want %v", tc.counts, got, tc.want)
+			}
+		})
+	}
+}

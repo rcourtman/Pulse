@@ -355,6 +355,7 @@ func TestApplySnapshot(t *testing.T) {
 			AlertAIEnabled:                  true,
 			ActiveAlerts:                    2,
 			PaidLicense:                     true,
+			BusinessEstate:                  true,
 			HasAPITokens:                    true,
 			RBACCustomRoles:                 3,
 			RBACUserAssignments:             7,
@@ -463,6 +464,9 @@ func TestApplySnapshot(t *testing.T) {
 	}
 	if !ping.PaidLicense {
 		t.Fatal("PaidLicense should be true")
+	}
+	if !ping.BusinessEstate {
+		t.Fatal("BusinessEstate should be true")
 	}
 	if !ping.HasAPITokens {
 		t.Fatal("HasAPITokens should be true")

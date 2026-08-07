@@ -1926,6 +1926,20 @@ actor, and every audit row read stay on the install.
 `TestWithAuditReadActivity_RecordIsContentFree` and
 `TestRecordAuditReadActivity_RejectsUnknownActivity` pin both properties.
 
+### Business-estate telemetry is classification, not new information
+
+Schema v8's `business_estate` boolean is derived on the install, inside the
+`pkg/server` telemetry snapshot closure, from the same aggregate resource
+counts (`pve_nodes`, `docker_hosts`, `vmware_hosts`) the payload already
+sends; no additional infrastructure detail leaves the install. It is the
+telemetry counterpart of the authenticated
+`sessionCapabilities.businessEstate` marker and classifies against the same
+single threshold definition in `internal/monitoring/business_estate.go`. The
+authenticated-only tiering rule above is unaffected: telemetry pings are
+pseudonymous outbound payloads under the standing telemetry opt-out, not a
+pre-auth API surface. Both PRIVACY.md copies document the field alongside the
+counts it is derived from.
+
 ### Licensed-feature adoption fields must discriminate
 
 `telemetry.LicensedFeatureAdoptionFields` registers every telemetry field whose

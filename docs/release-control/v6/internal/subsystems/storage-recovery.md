@@ -5036,3 +5036,12 @@ running server's version at router wiring time
 ingest path's persistence surface — agent-id continuity and host state — is
 unchanged by the echo
 (`TestHostAgentRemovalLifecycleThroughAuthenticatedRouterAndRestart`).
+### Estate-threshold delegation leaves capability persistence untouched
+
+`internal/api/security_status_capabilities.go` (named in this contract's
+extension points) changed only in where its business-estate thresholds live:
+it now delegates to `internal/monitoring/business_estate.go`, shared with the
+schema-v8 telemetry `business_estate` field. The capability read path stays a
+pure in-memory classification over monitor state — no storage surface, store
+handle, or persistence behavior is introduced or altered
+(`TestContract_BusinessScaleEstateThresholds` pins the unchanged thresholds).

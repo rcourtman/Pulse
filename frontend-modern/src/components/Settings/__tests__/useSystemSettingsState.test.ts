@@ -69,6 +69,7 @@ const buildTelemetryPreviewPayload = (
   sso_enabled: false,
   multi_tenant: false,
   paid_license: false,
+  business_estate: false,
   has_api_tokens: true,
   rbac_custom_roles: 0,
   rbac_user_assignments: 0,

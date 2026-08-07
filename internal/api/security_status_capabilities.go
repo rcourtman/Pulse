@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 type securityStatusSettingsCapabilities struct {
@@ -274,7 +274,7 @@ func (r *Router) securityStatusSessionCapabilities(ctx context.Context) security
 	if r != nil && !demoMode && !r.hostedMode {
 		paidOrBranded := false
 		if svc := getLicenseServiceForContext(ctx); svc != nil {
-			if lic := svc.Current(); lic != nil && lic.Claims.Tier != pkglicensing.TierFree {
+			if lic := svc.Current(); lic != nil && lic.Claims.Tier != licenseTierFreeValue {
 				paidOrBranded = true
 			}
 			if svc.HasFeature(featureWhiteLabelValue) {
@@ -292,20 +292,11 @@ func (r *Router) securityStatusSessionCapabilities(ctx context.Context) security
 	}
 }
 
-// Business-scale estate thresholds. These mirror the segmentation used in the
-// 2026-08-07 telemetry read that motivated the commercial-surface revision:
-// installs at or above any one of these convert to paid at ~8x the rate of
-// smaller estates.
-const (
-	businessEstateMinPVENodes    = 5
-	businessEstateMinDockerHosts = 10
-	businessEstateMinVMwareHosts = 3
-)
-
+// businessScaleEstateCounts delegates to the canonical business-scale estate
+// definition in internal/monitoring, which the outbound telemetry snapshot
+// also classifies against.
 func businessScaleEstateCounts(pveNodes, dockerHosts, vmwareHosts int) bool {
-	return pveNodes >= businessEstateMinPVENodes ||
-		dockerHosts >= businessEstateMinDockerHosts ||
-		vmwareHosts >= businessEstateMinVMwareHosts
+	return monitoring.BusinessScaleEstateCounts(pveNodes, dockerHosts, vmwareHosts)
 }
 
 func (r *Router) businessScaleEstate(ctx context.Context) bool {

@@ -108,6 +108,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
 | Paid license | `true`/`false` | Distinguish free from paid posture without sending the exact commercial tier |
+| Business estate | `true`/`false` | Mark whether the resource counts above cross a business-scale threshold, derived on the install from counts already in this payload; no extra infrastructure detail is sent |
 | Has API tokens | `true`/`false` | See whether token-based automation/integration is being used without sending token counts |
 | RBAC custom roles | `3` | Count roles created by the operator, excluding the roles that ship built in, without sending role names, permissions, or scopes |
 | RBAC user assignments | `7` | Count user-to-role assignments without sending usernames, role names, or permissions |

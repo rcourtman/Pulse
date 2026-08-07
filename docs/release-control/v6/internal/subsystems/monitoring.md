@@ -2848,3 +2848,20 @@ Known and deliberately unchanged: each changed guest still triggers a full-file
 save, so one poll cycle over N changed guests performs N marshals and N atomic
 writes that serialize on the store mutex. Coalescing them is a behavioural
 change beyond the shutdown defect.
+### Business-scale estate classification is monitoring-owned
+
+`internal/monitoring/business_estate.go` holds the single definition of the
+business-scale estate thresholds (>=5 PVE nodes, >=10 Docker hosts, or >=3
+VMware hosts, from the 2026-08-07 telemetry segmentation): exported constants,
+`BusinessScaleEstateCounts`, and `InstallSnapshotCounts.BusinessScaleEstate`.
+Both consumers delegate here rather than restating numbers: the authenticated
+session-capability surface behind the in-product business-estate card
+(`internal/api/security_status_capabilities.go`) and the schema-v8 telemetry
+snapshot in `pkg/server`, which derives the `business_estate` boolean from the
+same `AggregateInstallSnapshotCounts` values the ping already carries. The
+counts-derived method is pinned by
+`TestInstallSnapshotCountsBusinessScaleEstate`
+(`internal/monitoring/canonical_guardrails_test.go`) and the threshold values
+by `TestContract_BusinessScaleEstateThresholds` in `internal/api`; the
+`pkg/server` wiring is pinned by
+`TestTelemetrySnapshotDerivesBusinessEstateFromAggregateCounts`.

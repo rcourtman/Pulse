@@ -5932,3 +5932,16 @@ ack invokes the hook — observer acks never steer the updater
 `TestAgentSendReport_ObserverAckNeverInvokesCallback`).
 `agentupdate.Config.InitialCheckDelay` overrides the five-second initial check
 delay; zero keeps the default.
+### Session-capability estate classification delegates to monitoring
+
+The business-estate marker on the authenticated session-capability surface
+(`internal/api/security_status_capabilities.go`, an extension point of this
+subsystem's agent routes) no longer carries its own threshold constants:
+`businessScaleEstateCounts` now delegates to the monitoring-owned definition
+in `internal/monitoring/business_estate.go`, which the schema-v8 telemetry
+`business_estate` field also classifies against. Behavior is unchanged — the
+agent-host counting inputs (Docker hosts from read state, VMware agent-type
+unified resources) and the pinned thresholds
+(`TestContract_BusinessScaleEstateThresholds`) are identical; only the source
+of the numbers moved, so the card cohort and the telemetry cohort cannot
+drift.

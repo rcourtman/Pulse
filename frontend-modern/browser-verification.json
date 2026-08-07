@@ -1,18 +1,17 @@
 {
   "version": 1,
-  "base_sha": "6a36b5f8ef34a87d613ff113712be758c7b9ceff",
-  "verified_at": "2026-08-07T14:05:00Z",
   "result": "passed",
+  "base_sha": "2aa43058b7bb700dcd19b8068178e92d14ded583",
+  "verified_at": "2026-08-07T14:03:33Z",
   "changed_paths": [
-    "frontend-modern/src/api/patrol.ts",
-    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx"
+    "frontend-modern/src/api/settings.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/api/patrol.ts": "c15184ae7f1e0443d53ab54ab4d9349d349b0571042b84429cbee10c958dc11b",
-    "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx": "7cd20de990cab862718c7495e5314ab9143b3101fd565a1eaa4a273b4780ca88"
+    "frontend-modern/src/api/settings.ts": "de9f9d21e26270464bc7402a969dd56f356494e976e4bb483884850d8b148901"
   },
   "routes": [
-    "/alerts/overview"
+    "/",
+    "/settings (System > General panel via settings search)"
   ],
   "viewports": [
     {
@@ -25,12 +24,13 @@
     }
   ],
   "states": [
-    "Alerts Overview with seventeen active alerts on the live dev estate, each row offering the Have Patrol investigate primary action",
-    "Post-click state after triggering a scoped Patrol run against the pve5 connectivity alert"
+    "free Community tier served by an isolated worktree backend (PULSE_MOCK_MODE=true, 6 mock PVE nodes) on port 7698",
+    "sessionCapabilities.businessEstate=true confirmed via /api/security/status after the threshold helper moved to internal/monitoring",
+    "telemetry preview payload rendered in Settings > System > General showing schema_version 8 with business_estate: true alongside pve_nodes: 6 and paid_license: false"
   ],
   "interactions": [
-    "Clicked Have Patrol investigate on the pve5 connectivity alert and captured the POST to /api/ai/patrol/run returning 200 with success true and message Triggered targeted Patrol check, where the same click previously returned 400 invalid_patrol_scope",
-    "Confirmed the request body carried only resource_ids, alert_identifier, and alert_type",
-    "Reloaded at 375x812 and confirmed the alerts surface renders with the investigate actions reachable"
+    "logged in as admin, opened Settings, searched for General, opened the Usage data and privacy section",
+    "clicked Preview payload and read the full rendered CURRENT HEARTBEAT PAYLOAD JSON including the new business_estate field",
+    "re-exercised the plan route and workspace at 375x812 to confirm the settings surfaces still render at narrow width"
   ]
 }

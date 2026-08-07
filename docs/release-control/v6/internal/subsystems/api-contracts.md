@@ -8939,6 +8939,26 @@ together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
 Retired columns stay in the live receiver database rather than being dropped:
 migrations only add, the columns hold real rows from the schema-v6 window, and
 nothing writes them once the receiver struct loses the fields.
+### Telemetry payload parity spans three surfaces at schema v8
+
+The outbound telemetry contract stays defined in exactly three places that move
+together: `type Ping struct` in `internal/telemetry/telemetry.go`, the
+`var ping struct` receiver in the private license server, and
+`export interface TelemetryPingPreview` in
+`frontend-modern/src/api/settings.ts`, all checked by
+`scripts/check_telemetry_schema_parity.py`. Schema v8 adds `business_estate`,
+a boolean the install derives inside the `pkg/server` snapshot closure from
+the same `AggregateInstallSnapshotCounts` values the payload already carries.
+The thresholds (>=5 PVE nodes, >=10 Docker hosts, or >=3 VMware hosts) live in
+exactly one place, `internal/monitoring/business_estate.go`, and the
+session-capability surface that drives the in-product business-estate card
+(`internal/api/security_status_capabilities.go`) delegates to that same
+definition, so the card cohort and the telemetry cohort cannot drift apart
+(`TestContract_BusinessScaleEstateThresholds`,
+`TestInstallSnapshotCountsBusinessScaleEstate`). The flag reveals nothing the
+resource counts in the payload do not already reveal; it exists so
+receiver-side cohort queries keep a stable column even if the thresholds
+change in a later schema.
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

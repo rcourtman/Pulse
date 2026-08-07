@@ -35,6 +35,7 @@
 //   - Whether SSO/OIDC is configured
 //   - Whether multi-tenant mode is enabled
 //   - Whether a paid license is active
+//   - Whether the monitored estate crosses a business-scale threshold (a boolean derived from the resource counts above)
 //   - Whether any API tokens are configured
 //   - Aggregate alert fired/acknowledged/resolved counts over 30 days
 //   - Aggregate notification attempt/delivery/failure counts over seven days
@@ -147,7 +148,12 @@ const (
 	// count measured background write volume; neither discriminated an install
 	// that uses audit logging from one that merely has it. Reaching a
 	// license-gated audit read does.
-	TelemetrySchemaVersion = 7
+	// Schema v8 adds business_estate, a server-derived boolean marking installs
+	// whose aggregate counts cross any business-scale estate threshold (the
+	// same single definition that drives the in-product business-estate card).
+	// The flag is derived from counts already present in the payload; it adds a
+	// stable cohort column so segmentation survives future threshold changes.
+	TelemetrySchemaVersion = 8
 )
 
 type installIDRecord struct {
@@ -233,6 +239,7 @@ type Ping struct {
 	SSOEnabled           bool `json:"sso_enabled"`
 	MultiTenant          bool `json:"multi_tenant"`
 	PaidLicense          bool `json:"paid_license"`
+	BusinessEstate       bool `json:"business_estate"`
 	HasAPITokens         bool `json:"has_api_tokens"`
 
 	// Licensed-feature adoption. Counts only: no role names, schedule names,
@@ -382,6 +389,7 @@ type Snapshot struct {
 	SSOEnabled                                                     bool
 	MultiTenant                                                    bool
 	PaidLicense                                                    bool
+	BusinessEstate                                                 bool
 	HasAPITokens                                                   bool
 	RBACCustomRoles                                                int
 	RBACUserAssignments                                            int
@@ -972,6 +980,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.SSOEnabled = s.SSOEnabled
 	ping.MultiTenant = s.MultiTenant
 	ping.PaidLicense = s.PaidLicense
+	ping.BusinessEstate = s.BusinessEstate
 	ping.HasAPITokens = s.HasAPITokens
 	ping.RBACCustomRoles = s.RBACCustomRoles
 	ping.RBACUserAssignments = s.RBACUserAssignments
