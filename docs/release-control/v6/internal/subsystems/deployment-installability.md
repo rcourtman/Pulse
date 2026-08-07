@@ -64,10 +64,12 @@ TLS floor in the dynamic config.
 23. `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`
 23. `docs/RELEASE_NOTES.md`
 24. `docs/releases/`
-25. `docs/UPGRADE_v6.md`
-26. `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`
-27. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
-28. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
+25. `docs/MSP.md`
+26. `frontend-modern/public/docs/MSP.md`
+27. `docs/UPGRADE_v6.md`
+28. `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`
+29. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
+30. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
 29. `package.json`
 30. `package-lock.json`
 31. `frontend-modern/package.json`
@@ -515,6 +517,16 @@ upgrade, update, release, or artifact-selection behavior.
    `install.sh.sshsig` for the published release; this is enforced by
    `scripts/validate-release.sh` at build time and re-verified by
    `install-sh-smoke.yml` against the served asset.
+   Provider MSP evaluation installation must use a dedicated
+   `pulse-provider-msp-v<version>.tar.gz` release asset, never a source-branch
+   archive. The asset must contain the complete `deploy/provider-msp/` bundle,
+   stamp the control-plane and tenant Pulse images to the same exact release
+   tag before `setup.sh` resolves them to registry digests, and participate in
+   the normal immutable candidate manifest, checksum, detached-signature,
+   release upload, and activation-read checks. Until such an asset is actually
+   published, `docs/MSP.md` and its shipped frontend copy must fail closed and
+   describe evaluation onboarding as request-assisted rather than directing
+   operators to execute mutable source as root.
 3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
    Canonical server deployment paths also stamp the privacy-bounded outbound
    telemetry deployment label without changing runtime behavior: the image
@@ -1223,8 +1235,22 @@ upgrade, update, release, or artifact-selection behavior.
    `docs/UPGRADE_v6.md` must state the continuity impact explicitly. Those docs
    must not imply automatic updater continuity from a historical signer unless
    the actual trust-migration path is already shipped and exercised.
+14. Keep `docs/MSP.md` and `frontend-modern/public/docs/MSP.md` byte-synchronized
+   and fail closed on provider MSP evaluation installation whenever a signed,
+   evaluation-capable exact-version release asset is not yet published. Any
+   future installation command must verify the dedicated archive with the
+   pinned release key before extraction or root execution.
 
 ## Current State
+
+Provider-hosted MSP evaluation source exists, but the active published release
+line does not yet contain a signed evaluation-capable deploy bundle. Public MSP
+guidance therefore fails closed instead of running the moving `main` archive.
+Future release candidates now assemble a dedicated versioned provider MSP
+bundle, stamp its Pulse image refs to the same exact tag, cover it with the
+canonical candidate manifest/checksum/signature path, and require the asset at
+the final publication barrier. The remaining dependency is publication of the
+first release built from this packaging path.
 
 The shell installer's container-runtime discovery prefers a working rootful
 Docker daemon over any rootless socket (#1647).

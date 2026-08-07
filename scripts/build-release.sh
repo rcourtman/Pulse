@@ -482,6 +482,22 @@ cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 cp scripts/install-mcp.sh "$RELEASE_DIR/install-mcp.sh"
 [ -f scripts/install-mcp.ps1 ] && cp scripts/install-mcp.ps1 "$RELEASE_DIR/install-mcp.ps1"
 
+# Package the provider-hosted MSP deploy surface as its own versioned release
+# asset. The source-tree archive is not an installation channel: this bundle is
+# covered by the immutable candidate manifest, checksums, and detached release
+# signatures below. Its Pulse image refs are exact-version tags which setup.sh
+# resolves to immutable registry digests before Compose is allowed to run.
+provider_msp_bundle_root="pulse-provider-msp-v${VERSION}"
+provider_msp_bundle_dir="${BUILD_DIR}/${provider_msp_bundle_root}"
+provider_msp_bundle_asset="${RELEASE_DIR}/${provider_msp_bundle_root}.tar.gz"
+rm -rf "${provider_msp_bundle_dir}"
+mkdir -p "${provider_msp_bundle_dir}"
+cp -a deploy/provider-msp/. "${provider_msp_bundle_dir}/"
+sed -i "s|^CONTROL_PLANE_IMAGE=.*|CONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane:v${VERSION}|" "${provider_msp_bundle_dir}/.env.example"
+sed -i "s|^CP_PULSE_IMAGE=.*|CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse:v${VERSION}|" "${provider_msp_bundle_dir}/.env.example"
+printf '%s\n' "${VERSION}" > "${provider_msp_bundle_dir}/VERSION"
+tar -czf "${provider_msp_bundle_asset}" -C "${BUILD_DIR}" "${provider_msp_bundle_root}"
+
 pulse_release_generate_packet_sbom "${RELEASE_DIR}" "${RELEASE_PACKET_SBOM}"
 mapfile -t checksum_files < <(pulse_release_collect_checksum_files "${RELEASE_DIR}")
 pulse_release_write_checksums_and_signatures "${RELEASE_DIR}" "${checksum_files[@]}"

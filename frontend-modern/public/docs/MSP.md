@@ -263,29 +263,53 @@ contact support to get set up or to join the MSP design-partner program.
 
 ### Evaluating without a licence
 
-To start, fetch the bundle and run the guided setup on the host that will run
-the stack. Until the evaluation flow reaches a stable release, take the bundle
-from `main` — the `setup.sh` in the v6.1.2 tarball predates it and still stops
-to ask for a licence:
+Self-service evaluation is available only from an exact release page that
+includes the evaluation-capable provider MSP bundle and both integrity
+sidecars described below. If the release you intend to use does not list all
+three assets, stop: evaluation onboarding for that release remains
+request-assisted. Do **not** download the moving `main` branch archive or run
+its `setup.sh` as root; contact support or join the MSP design-partner program
+instead.
+
+Once an exact release publishes
+`pulse-provider-msp-vX.Y.Z.tar.gz`, download that versioned asset and its
+integrity sidecars, verify the archive with Pulse's pinned release key, and
+only then extract and run the guided setup:
 
 ```bash
-curl -L https://github.com/rcourtman/Pulse/archive/refs/heads/main.tar.gz | tar xz
-cd Pulse-main/deploy/provider-msp
-sudo -E ./setup.sh
+export PULSE_VERSION=vX.Y.Z
+export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
+export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
+
+curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}"
+curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}.sha256"
+curl -fsSLO "${PULSE_RELEASE_BASE}/${PULSE_MSP_BUNDLE}.sshsig"
+
+ssh-keygen -Y verify \
+  -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
+  -I pulse-installer \
+  -n pulse-install \
+  -s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}"
+sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"
+
+tar -xzf "${PULSE_MSP_BUNDLE}"
+cd "pulse-provider-msp-${PULSE_VERSION}"
+sudo -E bash ./setup.sh
 ```
 
 The host needs Ubuntu 24.04 or similar, a domain you can point at it, and
-ports 80 and 443 free. The wildcard certificate is issued over DNS-01 with
-Cloudflare as the default provider (`CF_DNS_API_TOKEN`); any other Traefik
-dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env` and
-putting that provider's credential variables in `dns-credentials.env`.
+ports 80 and 443 free. Install `curl`, `openssh-client`, `coreutils`, and `tar`
+before the verification step. The wildcard certificate is issued over DNS-01
+with Cloudflare as the default provider (`CF_DNS_API_TOKEN`); any other
+Traefik dnsChallenge provider works by setting `ACME_DNS_PROVIDER` in `.env`
+and putting that provider's credential variables in `dns-credentials.env`.
 
-Leave `CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a
-2-client evaluation licence for you. It sends only the public half of the
-signing key it generated on your host, exactly as the paid path does, and the
-private key never leaves the machine. Nothing to request and nobody to wait
-for. Stand the stack up, onboard two real clients, and confirm the isolation
-boundary holds on your own infrastructure before you spend anything.
+In a published evaluation-capable bundle, leave
+`CP_PROVIDER_MSP_LICENSE_FILE` blank and `setup.sh` self-issues a 2-client
+evaluation licence. It sends only the public half of the signing key generated
+on your host, exactly as the paid path does, and the private key never leaves
+the machine. You can then onboard two real clients and confirm the isolation
+boundary on your own infrastructure before buying.
 
 The evaluation licence lasts 60 days and re-running `setup.sh` reuses the one
 already on disk. On an air-gapped host set

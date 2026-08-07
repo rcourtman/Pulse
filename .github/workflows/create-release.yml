@@ -1700,6 +1700,7 @@ jobs:
           for asset_name in \
             checksums.txt \
             install.sh \
+            "pulse-provider-msp-${TAG}.tar.gz" \
             "pulse-${TAG}-linux-amd64.tar.gz"; do
             curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
               -o /dev/null "${base}/${asset_name}"

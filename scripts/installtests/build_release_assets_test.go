@@ -43,6 +43,11 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		`cp "$BUILD_DIR/pulse-agent-linux-armv7" "$RELEASE_DIR/"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-armv6" "$RELEASE_DIR/"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-386" "$RELEASE_DIR/"`,
+		`provider_msp_bundle_root="pulse-provider-msp-v${VERSION}"`,
+		`cp -a deploy/provider-msp/. "${provider_msp_bundle_dir}/"`,
+		`CONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane:v${VERSION}`,
+		`CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse:v${VERSION}`,
+		`tar -czf "${provider_msp_bundle_asset}" -C "${BUILD_DIR}" "${provider_msp_bundle_root}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -105,6 +110,34 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		if !strings.Contains(helper, needle) {
 			t.Fatalf("release_asset_common.sh missing canonical release asset wiring: %s", needle)
 		}
+	}
+}
+
+func TestProviderMSPReleaseBundleIsRequiredAndValidated(t *testing.T) {
+	validateBytes, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
+	if err != nil {
+		t.Fatalf("read validate-release.sh: %v", err)
+	}
+	validate := string(validateBytes)
+	for _, needle := range []string{
+		`"pulse-provider-msp-v${PULSE_VERSION}.tar.gz"`,
+		`section "Validating provider MSP bundle"`,
+		`provider_msp_root="pulse-provider-msp-v${PULSE_VERSION}"`,
+		`CONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane:${PULSE_TAG}`,
+		`CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse:${PULSE_TAG}`,
+	} {
+		if !strings.Contains(validate, needle) {
+			t.Fatalf("validate-release.sh missing provider MSP bundle guard: %s", needle)
+		}
+	}
+
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	workflow := string(workflowBytes)
+	if !strings.Contains(workflow, `"pulse-provider-msp-${TAG}.tar.gz"`) {
+		t.Fatal("create-release.yml must read the exact provider MSP asset before customer activation")
 	}
 }
 

@@ -353,6 +353,8 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 		"default_image_ref",
 		"resolve_image_digest",
 		"buildx imagetools inspect",
+		`if [[ "${current}" == *@sha256:*`,
+		`ref="${current}"`,
 		// Self-issue, and the three ways it must degrade instead of blocking.
 		"ensure_eval_license",
 		"/v1/provider-msp/eval-license",
@@ -395,6 +397,38 @@ func TestProviderMSPSetupScriptSupportsUnlicensedEvaluation(t *testing.T) {
 			t.Fatalf(".env.example must ship %s blank so setup.sh resolves its digest", key)
 		}
 	}
+}
+
+func TestProviderMSPEvaluationDocsFailClosedUntilSignedBundlePublication(t *testing.T) {
+	repoDocBytes, err := os.ReadFile(repoFile("docs", "MSP.md"))
+	if err != nil {
+		t.Fatalf("read repo MSP guide: %v", err)
+	}
+	shippedDocBytes, err := os.ReadFile(repoFile("frontend-modern", "public", "docs", "MSP.md"))
+	if err != nil {
+		t.Fatalf("read shipped MSP guide: %v", err)
+	}
+	if string(repoDocBytes) != string(shippedDocBytes) {
+		t.Fatal("repo and shipped MSP guides must remain byte-synchronized")
+	}
+
+	doc := string(repoDocBytes)
+	assertContainsAll(t, doc,
+		"Self-service evaluation is available only from an exact release page",
+		"three assets, stop: evaluation onboarding for that release remains",
+		"request-assisted. Do **not** download the moving `main` branch archive",
+		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
+		`releases/download/${PULSE_VERSION}`,
+		"ssh-keygen -Y verify",
+		`-s "${PULSE_MSP_BUNDLE}.sshsig" < "${PULSE_MSP_BUNDLE}"`,
+		`sha256sum -c "${PULSE_MSP_BUNDLE}.sha256"`,
+		`sudo -E bash ./setup.sh`,
+	)
+	assertNotContainsAny(t, doc,
+		"Pulse/archive/refs/heads/main.tar.gz",
+		"cd Pulse-main/deploy/provider-msp",
+		"sudo -E ./setup.sh",
+	)
 }
 
 // Traefik terminates TLS at the internet edge. Handing it the whole operator

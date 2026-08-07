@@ -305,16 +305,17 @@ resolve_image_digest() {
   printf '%s@%s\n' "${ref%:*}" "${digest}"
 }
 
-# ensure_image_pins fills in any image variable the operator left blank or on
-# the shipped <pin> placeholder.
+# ensure_image_pins resolves every tag-based image reference to an immutable
+# digest. Operators may provide an exact release tag or a digest directly;
+# blank and legacy <pin> values use the bundle defaults.
 #
 # The bundle used to ship four unfillable "@sha256:<pin>" placeholders that
 # setup.sh then refused to run without, so the only way to obtain them was to
 # ask us. All four images are publicly readable, so there was never anything
 # to hand out; it just meant nobody could start without a conversation first.
 #
-# Still resolved to an immutable digest, not left on a floating tag, so a
-# rebuild of the tag cannot silently change what a provider is running.
+# Still resolved to an immutable digest, not left on a tag, so a later tag
+# mutation cannot silently change what a provider is running.
 ensure_image_pins() {
   local env_path="${PULSE_PROVIDER_MSP_INSTALL_DIR}/.env"
   [[ -f "${env_path}" ]] || die "missing ${env_path}"
@@ -322,10 +323,14 @@ ensure_image_pins() {
   local key current ref resolved
   for key in TRAEFIK_IMAGE DOCKER_SOCKET_PROXY_IMAGE CONTROL_PLANE_IMAGE CP_PULSE_IMAGE; do
     current="$(env_value "${key}" "${env_path}")"
-    if [[ -n "${current}" && "${current}" != *"<pin>"* ]]; then
+    if [[ "${current}" == *@sha256:* && "${current}" != *"<pin>"* ]]; then
       continue
     fi
-    ref="$(default_image_ref "${key}")" || die "no default image ref for ${key}"
+    if [[ -n "${current}" && "${current}" != *"<pin>"* ]]; then
+      ref="${current}"
+    else
+      ref="$(default_image_ref "${key}")" || die "no default image ref for ${key}"
+    fi
     log "resolving ${key} digest from ${ref}"
     if ! resolved="$(resolve_image_digest "${ref}")"; then
       die "could not resolve a digest for ${ref}

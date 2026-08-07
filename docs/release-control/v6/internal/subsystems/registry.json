@@ -4135,6 +4135,7 @@
         "cmd/pulse-control-plane/provider_msp_status.go",
         "docker-compose.yml",
         "Dockerfile",
+        "docs/MSP.md",
         "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
         "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
         "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
@@ -4142,6 +4143,7 @@
         "docs/UPGRADE_v6.md",
         "frontend-modern/package-lock.json",
         "frontend-modern/package.json",
+        "frontend-modern/public/docs/MSP.md",
         "frontend-modern/src/api/updates.ts",
         "frontend-modern/src/components/UpdateBanner.tsx",
         "frontend-modern/src/components/WhatsNewCard.tsx",
@@ -4198,6 +4200,7 @@
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
         "scripts/trigger-stable-patch.sh",
+        "scripts/validate-release.sh",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
@@ -4252,6 +4255,21 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/updates.test.ts",
               "internal/api/updates_test.go"
+            ]
+          },
+          {
+            "id": "provider-msp-delivery-docs",
+            "label": "provider MSP verifiable delivery documentation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "docs/MSP.md",
+              "frontend-modern/public/docs/MSP.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/docsLinks.test.ts",
+              "scripts/installtests/provider_msp_deploy_test.go"
             ]
           },
           {
@@ -4351,7 +4369,8 @@
               "scripts/backfill-release-assets.sh",
               "scripts/build-release.sh",
               "scripts/release_asset_common.sh",
-              "scripts/release_ldflags.sh"
+              "scripts/release_ldflags.sh",
+              "scripts/validate-release.sh"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

@@ -457,6 +457,7 @@ required_assets=(
     "pulse-v${PULSE_VERSION}-linux-armv7.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-armv6.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-386.tar.gz"
+    "pulse-provider-msp-v${PULSE_VERSION}.tar.gz"
     "pulse-agent-v${PULSE_VERSION}-darwin-amd64.tar.gz"
     "pulse-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz"
     "pulse-agent-v${PULSE_VERSION}-windows-amd64.zip"
@@ -562,6 +563,30 @@ tar -tzf "pulse-v${PULSE_VERSION}.tar.gz" ./VERSION >/dev/null 2>&1 || { error "
 info "Validating universal tarball contains all agent binaries..."
 check_tar_entries_nonempty "pulse-v${PULSE_VERSION}.tar.gz" "${unified_agent_entries[@]}"
 success "Universal tarball validated (includes cross-platform unified agents)"
+
+# Validate the provider MSP bundle as one extracted tree. It is a separately
+# signed release asset because the normal Pulse archives do not carry this
+# deployment surface.
+section "Validating provider MSP bundle"
+provider_msp_bundle="pulse-provider-msp-v${PULSE_VERSION}.tar.gz"
+provider_msp_root="pulse-provider-msp-v${PULSE_VERSION}"
+provider_msp_extract="${tmp_root}/provider-msp"
+mkdir -p "${provider_msp_extract}"
+tar -xzf "${provider_msp_bundle}" -C "${provider_msp_extract}"
+for required in setup.sh upgrade.sh run-install-proof.sh docker-compose.yml traefik.yml traefik-dynamic.yml .env.example VERSION; do
+    if [ ! -s "${provider_msp_extract}/${provider_msp_root}/${required}" ]; then
+        error "Provider MSP bundle is missing ${required}"
+        exit 1
+    fi
+done
+if [ "$(tr -d '\r\n' < "${provider_msp_extract}/${provider_msp_root}/VERSION")" != "${PULSE_VERSION}" ]; then
+    error "Provider MSP bundle VERSION does not match ${PULSE_VERSION}"
+    exit 1
+fi
+provider_msp_env="${provider_msp_extract}/${provider_msp_root}/.env.example"
+grep -Fx "CONTROL_PLANE_IMAGE=ghcr.io/rcourtman/pulse-control-plane:${PULSE_TAG}" "${provider_msp_env}" >/dev/null || { error "Provider MSP bundle does not pin the control-plane image to ${PULSE_TAG}"; exit 1; }
+grep -Fx "CP_PULSE_IMAGE=ghcr.io/rcourtman/pulse:${PULSE_TAG}" "${provider_msp_env}" >/dev/null || { error "Provider MSP bundle does not pin the tenant image to ${PULSE_TAG}"; exit 1; }
+success "Provider MSP bundle validated with exact-version Pulse image refs"
 
 # Validate macOS tarballs
 tar -tzf "pulse-agent-v${PULSE_VERSION}-darwin-arm64.tar.gz" pulse-agent-darwin-arm64 >/dev/null 2>&1 || { error "macOS unified-agent tarball validation failed"; exit 1; }
