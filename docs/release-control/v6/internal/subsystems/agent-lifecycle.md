@@ -5987,6 +5987,16 @@ Pinned by the capability cases in `useTrueNASSettingsPanelState.test.tsx` and
 the accessor flips) and by the discovery source pin in
 `InfrastructureOperationsModel.test.tsx`.
 
+`internal/api/` is a canonical reference in this contract's Extension Points,
+so this records the additive sibling added alongside that capability:
+`settingsCapabilities.systemSettingsRead`, describing the same
+`canAccessAdminSurface(config.ScopeSettingsRead)` gate for the admin-only
+System tabs. It changes no lifecycle route, payload, or agent-facing shape, and
+the infrastructure hooks above continue to read `infrastructureRead` rather
+than the new field — the two are siblings precisely so neither page's gate can
+be moved by a change aimed at the other. The api-contracts entry holds the
+authoritative description and its proof.
+
 ### API-layer refusal logging moved to debug
 
 `internal/api/` is a canonical reference in this contract's Extension Points, so

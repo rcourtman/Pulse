@@ -77,6 +77,10 @@ func TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC(t *testing.T) {
 		"authenticationRead",
 		"authenticationWrite",
 		"infrastructureRead",
+		// Sibling of infrastructureRead for the admin-only System tabs. Same
+		// derivation today, but each names its own surface so tightening one
+		// gate cannot silently hide the other's tabs.
+		"systemSettingsRead",
 	} {
 		if caps[key] != false {
 			t.Fatalf("%s = %v for a non-admin session, want false", key, caps[key])
@@ -114,7 +118,7 @@ func TestSettingsCapabilitiesGrantConfiguredAdminWithoutRBAC(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	caps := fetchSettingsCapabilities(t, router, capabilitySessionCookie(t, "admin"))
-	for _, key := range []string{"apiAccessRead", "apiAccessWrite", "singleSignOnRead", "singleSignOnWrite", "infrastructureRead"} {
+	for _, key := range []string{"apiAccessRead", "apiAccessWrite", "singleSignOnRead", "singleSignOnWrite", "infrastructureRead", "systemSettingsRead"} {
 		if caps[key] != true {
 			t.Fatalf("%s = %v for the configured admin, want true", key, caps[key])
 		}

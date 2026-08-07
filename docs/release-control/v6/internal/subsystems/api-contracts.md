@@ -9048,3 +9048,29 @@ pins that pairing directly — a scoped API token and a non-admin proxy session
 both still get 403, no warn line is emitted, and the refusal still leaves a
 debug-level trace — so a future attempt to quiet the log by relaxing enforcement
 fails the contract instead of passing it.
+
+### Security status serves a systemSettingsRead settings capability
+
+`GET /api/security/status` also carries
+`settingsCapabilities.systemSettingsRead`, describing the same `RequireAdmin` +
+`settings:read` gate for the System → Network, Pulse server updates, and
+Recovery tabs. Those panels own the public URL and CORS boundaries, the server
+update channel, and backup polling plus configuration export/import; every
+route behind them answers to `settings:read`. Additive and `false` for any
+session that cannot reach them, exactly like `infrastructureRead`.
+
+It is a sibling of `infrastructureRead`, not a reuse of it. The two share the
+`canAccessAdminSurface(config.ScopeSettingsRead)` derivation today, but each
+names the surface it gates, so tightening one page's gate later cannot silently
+hide the other page's tabs — the drift this section's rule 35 exists to
+prevent. Reusing a capability whose name and doc comment scope it to a
+different surface is the same defect as re-deriving one.
+
+System → General is deliberately outside the gate: theme, language, and unit
+preferences there are user-scoped rather than instance administration, so
+withholding that tab would take personal settings away from every non-admin.
+
+`TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope` pins the
+served value against a `settings:read` token versus a `monitoring:read` token.
+`TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` keeps the withheld
+case honest against live 403s on `/api/config/nodes` and `/api/system/settings`.

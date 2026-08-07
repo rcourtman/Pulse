@@ -1,16 +1,37 @@
 {
   "version": 1,
   "result": "passed",
-  "base_sha": "755a8887874e21d0115e1490b9e69e9501d2a31e",
-  "verified_at": "2026-08-07T19:21:05Z",
+  "base_sha": "14a82e7684390c9fe0a4bd900417c4adbb7140b8",
+  "verified_at": "2026-08-07T20:36:11Z",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/types/config.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "1a27dd2c374fc3fe09f718044e3685c450ff4fddfce2f0ada92ac5210676bbd9"
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "4bc892c16a978f7a162828f1221acbfea4ec56ee8ddc4d5993536469c86f7252",
+    "frontend-modern/src/types/config.ts": "f7fc76d882f2c6fbd00d75860434ab4a8fd5369d031b9e24a18d76f42b607c72"
   },
   "routes": [
-    "/infrastructure (Proxmox overview, nodes + workloads tables)"
+    "/settings/system-general",
+    "/settings/system-network"
+  ],
+  "states": [
+    "verified against real admin and non-admin sessions rather than a stubbed capability: one binary built from this worktree on :8920 with PROXY_AUTH_SECRET / PROXY_AUTH_USER_HEADER / PROXY_AUTH_ROLE_HEADER / PROXY_AUTH_ADMIN_ROLE, fronted by two header-injecting reverse proxies differing only in the role header (:8921 admin-user/admin, :8922 viewer-user/viewer)",
+    "the served payload confirms the new field tracks the gate: :8921 reports detailLevel=privileged with infrastructureRead=true and systemSettingsRead=true; :8922 reports detailLevel=authenticated with both false",
+    "non-admin cold load of /settings/system-general: Network, Pulse server updates, and Recovery are all absent from the settings navigation while General remains, so user-scoped theme, language, and unit preferences stay reachable",
+    "non-admin cold load deep-linked at /settings/system-network: the route is refused and the session lands on /settings/monitoring/availability, the first tab it can actually reach - this composes with the capability-aware fallback added in 755a88878 rather than bouncing back to the blocked default",
+    "admin cold load deep-linked at /settings/system-network: the route resolves, the Network panel renders, and all three tabs are present, so the gate does not withhold from an entitled session",
+    "no stuck loading state in any of the above; this change gates nav visibility only and adds no fetch",
+    "rebased onto 14a82e768 after verification; that intervening commit moves API refusal logging from warn to debug and changes no route, payload, or frontend source, and the two verified frontend files are byte-identical across the rebase (content_sha256 unchanged), so the recorded exercise still describes this commit"
+  ],
+  "interactions": [
+    "built the frontend into the embed dir and rebuilt ./cmd/pulse so the served capability and the rendering frontend are the same artifact",
+    "curled /api/security/status through both proxies to establish the admin/non-admin A/B before touching the browser, reading infrastructureRead and systemSettingsRead side by side",
+    "cold-loaded /settings/system-general as viewer-user at 1280x720 and enumerated every settings nav control by DOM text, so items below the sidebar fold were counted",
+    "cold-loaded /settings/system-network as viewer-user and recorded the route the app settled on",
+    "cold-loaded /settings/system-network as admin-user and confirmed the panel renders with all three tabs present",
+    "repeated the non-admin /settings/system-general load at 375x812 and confirmed the same three tabs absent with General retained",
+    "screenshotted the non-admin System > General panel at 375x812"
   ],
   "viewports": [
     {
@@ -21,16 +42,5 @@
       "width": 375,
       "height": 812
     }
-  ],
-  "states": [
-    "inbound guard tripped: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES temporarily lowered to 256 KiB against a live backend on port 7655 whose real initialState frame is ~741 KB, reproducing the oversized-snapshot condition a >3100-resource estate hits at the shipped 8 MiB cap",
-    "post-recovery steady state: 265 resources hydrated from /api/state with 48 distinct resource types, then held across subsequent resourceDelta ticks (delta frames logged with resourceCount 0 while the store stayed at 265), proving the REST snapshot established a usable delta baseline",
-    "shipped 8 MiB cap restored: the same ~741 KB frame is accepted and hydrates via initialState over the socket with no oversized warning and no REST fetch, confirming the fallback is inert on normal estates"
-  ],
-  "interactions": [
-    "loaded /infrastructure with the guard tripped and read the console sequence: 'Ignoring oversized WebSocket payload {characterCount: 741468, maxBytes: 262144}' then 'Recovering full state over REST' then 'Hydrated full state over REST after an oversized WebSocket snapshot' then 'Updating resources {count: 265}'",
-    "confirmed the nodes table and workloads table rendered populated rows (6 PVE nodes with live CPU/memory/disk/temp, guest rows beneath) rather than the empty UI the dropped snapshot previously produced",
-    "re-ran the same oversized-recovery load at 375x812 and confirmed identical console recovery sequence plus a populated mobile nodes list and bottom nav counters",
-    "restored the 8 MiB constant, reloaded, and confirmed the console showed 'message {type: initialState, resourceCount: 265}' with no oversized warning and no /api/state recovery fetch"
   ]
 }
