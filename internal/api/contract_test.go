@@ -22646,3 +22646,62 @@ func TestContract_CheckoutStartSourceAttributionReachesHandoffNeverPortal(t *tes
 		})
 	}
 }
+
+// App bootstrap needs four presentation values — theme, fullWidthMode,
+// disableDockerUpdateActions and reduceProUpsellNoise — on every page load, for
+// every session. It used to read them off /api/system/settings, which is
+// RequireAdmin + settings:read, so an authenticated non-admin took a 403 on each
+// load and the frontend catch silently pinned it to client defaults: the session
+// ignored the theme and layout an admin had configured and rendered Docker
+// update buttons an admin had turned off.
+//
+// The fix is a session-tier projection, not a relaxed admin guard: the settings
+// payload also carries allowedOrigins, publicURL, webhookAllowedPrivateCIDRs,
+// telemetry configuration and hideLocalLogin. Both halves are pinned here —
+// /api/runtime/display must stay reachable without admin, and
+// /api/system/settings must stay refused.
+func TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin(t *testing.T) {
+	prevAuthorizer := authpkg.GetAuthorizer()
+	authpkg.SetAuthorizer(&authpkg.DefaultAuthorizer{})
+	defer authpkg.SetAuthorizer(prevAuthorizer)
+
+	cfg := newCapabilityConfig(t, "admin")
+	persistence := config.NewConfigPersistence(cfg.ConfigPath)
+	settings := config.DefaultSystemSettings()
+	settings.Theme = "dark"
+	settings.FullWidthMode = true
+	if err := persistence.SaveSystemSettings(*settings); err != nil {
+		t.Fatalf("save system settings: %v", err)
+	}
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	cookie := capabilitySessionCookie(t, "viewer@example.com")
+
+	get := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := get("/api/system/settings"); rec.Code != http.StatusForbidden {
+		t.Fatalf("non-admin GET /api/system/settings = %d, want 403; the admin payload must stay admin-only", rec.Code)
+	}
+
+	rec := get("/api/runtime/display")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("non-admin GET /api/runtime/display = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var display RuntimeDisplayResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &display); err != nil {
+		t.Fatalf("decode runtime display: %v", err)
+	}
+	if display.Theme != "dark" {
+		t.Fatalf("theme = %q, want %q; the non-admin session lost the configured theme", display.Theme, "dark")
+	}
+	if !display.FullWidthMode {
+		t.Fatal("fullWidthMode = false, want true; the non-admin session lost the configured layout")
+	}
+}

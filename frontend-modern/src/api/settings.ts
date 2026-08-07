@@ -170,6 +170,19 @@ export interface RuntimeBrandingResponse {
   logoDataUrl: string;
 }
 
+/**
+ * Presentation-only slice of system settings served to every authenticated
+ * session at `monitoring:read`, so non-admin viewers render the shell the way
+ * the admin configured it. Fields stay optional because an older backend
+ * without `/api/runtime/display` leaves them absent.
+ */
+export interface RuntimeDisplayResponse {
+  theme?: string;
+  fullWidthMode?: boolean;
+  disableDockerUpdateActions?: boolean;
+  reduceProUpsellNoise?: boolean;
+}
+
 export class SettingsAPI {
   private static baseUrl = '/api';
 
@@ -188,6 +201,10 @@ export class SettingsAPI {
 
   static async getRuntimeBranding(): Promise<RuntimeBrandingResponse> {
     return apiFetchJSON(`${this.baseUrl}/runtime/branding`) as Promise<RuntimeBrandingResponse>;
+  }
+
+  static async getRuntimeDisplay(): Promise<RuntimeDisplayResponse> {
+    return apiFetchJSON(`${this.baseUrl}/runtime/display`) as Promise<RuntimeDisplayResponse>;
   }
 
   static async getTelemetryPreview(): Promise<TelemetryPreviewResponse> {

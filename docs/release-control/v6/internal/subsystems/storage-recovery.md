@@ -5064,3 +5064,15 @@ served by `GET /api/security/status` now carries `infrastructureRead`, derived
 from `canAccessAdminSurface(config.ScopeSettingsRead)`. No recovery or storage
 route, payload, or persisted shape changes. The api-contracts entry holds the
 authoritative description and its proof.
+
+### Session-tier display projection reads system settings persistence
+
+`internal/api/` is a canonical reference in this contract's Extension Points, so
+this records the additive change made in `internal/api/runtime_display.go`: the
+new `GET /api/runtime/display` route calls
+`persistence.LoadSystemSettings()` read-only, the same call
+`HandleGetRuntimeBranding` already makes, and projects four presentation fields
+from it. It writes nothing, adds no persisted shape, and changes no recovery or
+storage route. A load error degrades to the zero-value response rather than
+failing the request. The api-contracts entry holds the authoritative description
+and its proof.

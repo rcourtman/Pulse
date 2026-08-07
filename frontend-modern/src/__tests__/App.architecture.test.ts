@@ -532,6 +532,12 @@ describe('App architecture', () => {
     );
     expect(appRuntimeStateSource).toContain('if (!(await loadAuthenticatedBootstrapState())) {');
     expect(appRuntimeStateSource.match(/apiFetch\('\/api\/state'/g)).toHaveLength(1);
+    // Bootstrap runs for every session, so it may only read session-tier
+    // endpoints. /api/system/settings is RequireAdmin + settings:read: reading
+    // the theme and layout from it 403'd every non-admin and the catch silently
+    // pinned them to client defaults.
+    expect(appRuntimeStateSource).toContain('SettingsAPI.getRuntimeDisplay()');
+    expect(appRuntimeStateSource).not.toContain('SettingsAPI.getSystemSettings');
     expect(appRuntimeStateSource).toContain(
       'const [backendHealthy, setBackendHealthy] = createSignal(false);',
     );

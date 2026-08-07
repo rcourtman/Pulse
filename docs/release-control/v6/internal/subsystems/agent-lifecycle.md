@@ -5986,3 +5986,18 @@ Pinned by the capability cases in `useTrueNASSettingsPanelState.test.tsx` and
 `useVMwareSettingsPanelState.test.tsx` (skipped when withheld, loads once when
 the accessor flips) and by the discovery source pin in
 `InfrastructureOperationsModel.test.tsx`.
+
+### Session-tier display route added under internal/api/
+
+`internal/api/` is a canonical reference in this contract's Extension Points, so
+this records the additive change made in `internal/api/runtime_display.go` and
+its one-line registration in `internal/api/router_routes_registration.go`: a new
+`GET /api/runtime/display` at `RequireAuth` + `RequireScope(ScopeMonitoringRead)`.
+
+No agent-lifecycle surface changes. The route touches no agent registration,
+report, command, token, or update path, and the handler is read-only against
+system-settings persistence. Agents that carry `monitoring:read` can reach it,
+as they can `/api/runtime/branding`, and it returns only presentation values —
+theme, layout, and two UI suppression flags — never connection, credential, or
+agent identity data. The api-contracts entry holds the authoritative description
+and its proof.

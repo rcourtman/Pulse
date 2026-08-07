@@ -317,16 +317,19 @@ export const useAppRuntimeState = () => {
 
   const loadSystemSettingsAndLayout = async () => {
     try {
-      const systemSettings = await SettingsAPI.getSystemSettings();
-      updateSystemSettingsFromResponse(systemSettings);
-      applyServerThemeIfAllowed(systemSettings.theme);
+      // /api/runtime/display, not /api/system/settings: the latter is
+      // RequireAdmin + settings:read, so every non-admin session 403'd here and
+      // fell through to the catch, silently losing the server theme and layout.
+      const display = await SettingsAPI.getRuntimeDisplay();
+      updateSystemSettingsFromResponse(display);
+      applyServerThemeIfAllowed(display.theme);
       setHasLoadedServerTheme(true);
       // Apply the server's canonical full-width mode using the settings we just
       // fetched, so it is honored after auth even if a stale localStorage
-      // preference exists (#1130) — loadFromServer() would short-circuit on it.
-      layoutStore.applyServerMode(systemSettings.fullWidthMode);
+      // preference exists (#1130).
+      layoutStore.applyServerMode(display.fullWidthMode);
     } catch (error) {
-      logger.error('Failed to load system settings from server', error);
+      logger.error('Failed to load runtime display settings from server', error);
       markSystemSettingsLoadedWithDefaults();
     }
   };

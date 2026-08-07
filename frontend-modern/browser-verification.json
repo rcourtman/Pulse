@@ -1,21 +1,25 @@
 {
   "version": 1,
+  "base_sha": "75fcc92424621862f7dfabe0159ac5506ef996ef",
+  "verified_at": "2026-08-07T20:28:40Z",
   "result": "passed",
-  "base_sha": "755a8887874e21d0115e1490b9e69e9501d2a31e",
-  "verified_at": "2026-08-07T19:21:05Z",
   "changed_paths": [
-    "frontend-modern/src/stores/websocket.ts"
+    "frontend-modern/src/api/settings.ts",
+    "frontend-modern/src/stores/systemSettings.ts",
+    "frontend-modern/src/useAppRuntimeState.ts",
+    "frontend-modern/src/utils/layout.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/stores/websocket.ts": "1a27dd2c374fc3fe09f718044e3685c450ff4fddfce2f0ada92ac5210676bbd9"
+    "frontend-modern/src/api/settings.ts": "2d6fecc015abf096d4b12218ea47a4b51bce1a07f4e71964fb4e3a909bce7669",
+    "frontend-modern/src/stores/systemSettings.ts": "77ffba9993f3cf4004bd9dc12e50b3c335dc59159e2004ac9b35c3ba272cb4b6",
+    "frontend-modern/src/useAppRuntimeState.ts": "c5c9f8d026849e7cb3d60202699ac9f348a9daf80c9cf39adbf5821870769997",
+    "frontend-modern/src/utils/layout.ts": "ee4180b3eaa9386a091df027319873429d603e7b10b5481859349a2fa00e8f86"
   },
-  "routes": [
-    "/infrastructure (Proxmox overview, nodes + workloads tables)"
-  ],
+  "routes": ["/", "/settings/monitoring/availability", "/settings/infrastructure"],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 375,
@@ -23,14 +27,15 @@
     }
   ],
   "states": [
-    "inbound guard tripped: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES temporarily lowered to 256 KiB against a live backend on port 7655 whose real initialState frame is ~741 KB, reproducing the oversized-snapshot condition a >3100-resource estate hits at the shipped 8 MiB cap",
-    "post-recovery steady state: 265 resources hydrated from /api/state with 48 distinct resource types, then held across subsequent resourceDelta ticks (delta frames logged with resourceCount 0 while the store stayed at 265), proving the REST snapshot established a usable delta baseline",
-    "shipped 8 MiB cap restored: the same ~741 KB frame is accepted and hydrates via initialState over the socket with no oversized warning and no REST fetch, confirming the fallback is inert on normal estates"
+    "non-admin proxy-auth session (X-Remote-Role: viewer, /api/security/status detailLevel=authenticated, proxyAuthIsAdmin=false), cold localStorage: bootstrap requests /api/runtime/display -> 200 and issues zero /api/system/settings requests; documentElement.className resolves to 'dark' with localStorage 'theme' null, so the dark theme came from the server rather than a stored preference",
+    "same non-admin session: localStorage fullWidthMode resolves to 'full-width' from the server value, and /api/runtime/display reports disableDockerUpdateActions true",
+    "admin proxy-auth session (X-Remote-Role: admin, detailLevel=privileged): identical dark + full-width result, Settings -> Infrastructure still reachable, no regression",
+    "curl A/B on both identities: /api/system/settings stays 403 for the viewer and 200 for the admin, while /api/runtime/display is 200 for both and returns the same presentation values",
+    "non-admin at 375x812: dark theme applied, documentElement.scrollWidth does not exceed clientWidth (no horizontal overflow), bootstrap again shows /api/runtime/display 200 and no /api/system/settings"
   ],
   "interactions": [
-    "loaded /infrastructure with the guard tripped and read the console sequence: 'Ignoring oversized WebSocket payload {characterCount: 741468, maxBytes: 262144}' then 'Recovering full state over REST' then 'Hydrated full state over REST after an oversized WebSocket snapshot' then 'Updating resources {count: 265}'",
-    "confirmed the nodes table and workloads table rendered populated rows (6 PVE nodes with live CPU/memory/disk/temp, guest rows beneath) rather than the empty UI the dropped snapshot previously produced",
-    "re-ran the same oversized-recovery load at 375x812 and confirmed identical console recovery sequence plus a populated mobile nodes list and bottom nav counters",
-    "restored the 8 MiB constant, reloaded, and confirmed the console showed 'message {type: initialState, resourceCount: 265}' with no oversized warning and no /api/state recovery fetch"
+    "cleared localStorage and sessionStorage, then reloaded each identity so the server theme/layout was not masked by a stored client preference",
+    "read the browser network log across a full cold bootstrap for both identities at both viewports to confirm /api/system/settings is no longer requested",
+    "wrote theme=dark, fullWidthMode=true and disableDockerUpdateActions=true through the admin session's /api/system/settings/update before verifying the viewer picked them up"
   ]
 }

@@ -28,7 +28,7 @@ describe('systemSettings store', () => {
 
   it('applies route and docker feature flags from API response', () => {
     updateSystemSettingsFromResponse({
-      autoUpdateEnabled: false,
+      theme: 'dark',
       disableDockerUpdateActions: true,
       reduceProUpsellNoise: true,
     });
@@ -39,7 +39,7 @@ describe('systemSettings store', () => {
 
   it('resets route and docker feature flags to safe defaults', () => {
     updateSystemSettingsFromResponse({
-      autoUpdateEnabled: false,
+      theme: 'dark',
       disableDockerUpdateActions: true,
       reduceProUpsellNoise: true,
     });
@@ -50,8 +50,10 @@ describe('systemSettings store', () => {
   });
 
   it('keeps privacy and local paid-flow defaults safe when flags are omitted', () => {
+    // An older backend without /api/runtime/display answers 404 and the caller
+    // falls back to defaults; a newer one that drops a field must land here too.
     updateSystemSettingsFromResponse({
-      autoUpdateEnabled: false,
+      theme: 'dark',
     });
 
     expect(areSystemSettingsLoaded()).toBe(true);

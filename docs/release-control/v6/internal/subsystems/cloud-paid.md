@@ -3335,3 +3335,26 @@ fall through to the Pulse-hosted branch and mint leases claiming those three
 Pulse-service-backed capabilities. `providerChained` retains its narrower
 meaning: a Pulse-signed licence is available to embed so release builds can
 verify the lease.
+
+### Bootstrap display load moved off the admin settings route
+
+`frontend-modern/src/useAppRuntimeState.ts` is a canonical reference in this
+contract, so this records the change to `loadSystemSettingsAndLayout`: it now
+reads `SettingsAPI.getRuntimeDisplay()` (`GET /api/runtime/display`) instead of
+`SettingsAPI.getSystemSettings()` (`GET /api/system/settings`, RequireAdmin).
+
+No hosted, licensing, entitlement, or organization-bootstrap behavior changes.
+The call sits in the same `Promise.all` beside `loadRuntimeBranding()` inside
+`beginAuthenticatedRuntime`, after `loadOrganizations()` and the `/api/state`
+probe, so bootstrap ordering and request count are unchanged. One of the four
+values it carries, `reduceProUpsellNoise`, is a commercial-presentation
+compatibility flag: it was already served on the admin payload and is now
+readable by non-admin sessions, which is what the flag was always meant to
+control. Commercial suppression itself stays on `presentationPolicy` in
+`/api/security/status` and is untouched.
+
+Pinned by the bootstrap cases in
+`frontend-modern/src/__tests__/useAppRuntimeState.test.ts` and by the source
+pins in `frontend-modern/src/__tests__/App.architecture.test.ts`, which assert
+bootstrap references `SettingsAPI.getRuntimeDisplay()` and never
+`SettingsAPI.getSystemSettings`.

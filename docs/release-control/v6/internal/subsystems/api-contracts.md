@@ -9026,3 +9026,35 @@ halves: the served value for a `settings:read` token versus a
 `monitoring:read` token, and that the routes agree with whichever value was
 served. `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` keeps the
 withheld case honest against live 403s.
+
+### Session-tier display projection at /api/runtime/display
+
+`GET /api/runtime/display` is new
+(`internal/api/runtime_display.go`, registered in
+`internal/api/router_routes_registration.go`). It is `RequireAuth` +
+`RequireScope(config.ScopeMonitoringRead)`, the same guard `/api/runtime/branding`
+carries, and serves `RuntimeDisplayResponse`: `theme`, `fullWidthMode`,
+`disableDockerUpdateActions` and `reduceProUpsellNoise`.
+
+App bootstrap needs those four values on every page load for every session. It
+read them off `GET /api/system/settings`, which is `RequireAdmin` +
+`RequireScope(config.ScopeSettingsRead)`, so an authenticated non-admin took a
+403 on every load and the client catch fell back to defaults: the session
+ignored the theme and layout an admin had configured and rendered Docker update
+buttons an admin had turned off.
+
+The admin guard on `/api/system/settings` is unchanged and must stay: that
+payload also carries `allowedOrigins`, `publicURL`,
+`webhookAllowedPrivateCIDRs`, telemetry configuration and `hideLocalLogin`. The
+session tier gets a separate whitelist type instead of a privilege-dependent
+projection of `config.SystemSettings`, so a field added to the settings struct
+is never published by omission. `disableDockerUpdateActions` is read from
+`h.config`, not the persisted blob, matching `HandleGetSystemSettings` so the
+`PULSE_DISABLE_DOCKER_UPDATE_ACTIONS` override wins on both routes.
+
+`TestContract_RuntimeDisplayServesPresentationValuesWithoutAdmin` pins both
+halves against the live router: a non-admin session still gets 403 from
+`/api/system/settings` and 200 with the configured theme and layout from
+`/api/runtime/display`.
+`TestHandleGetRuntimeDisplay_PublishesOnlyPresentationFields` asserts on the
+serialized object so an embedded struct cannot widen the contract silently.

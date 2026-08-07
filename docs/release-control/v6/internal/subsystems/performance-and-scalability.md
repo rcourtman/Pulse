@@ -2276,3 +2276,19 @@ strictly newer than the running agent, and at most once per distinct version
 (`TestNudgeVersionNudgesEachDistinctVersionOnce`), so steady-state report
 traffic — equal versions on every cycle — never wakes the update loop and adds
 no recurring work on either side.
+
+### Bootstrap display load keeps its request budget
+
+`frontend-modern/src/useAppRuntimeState.ts` is a canonical reference in this
+contract, so this records that swapping `loadSystemSettingsAndLayout` from
+`GET /api/system/settings` to `GET /api/runtime/display` adds no steady-state
+work. It is the same one request per authenticated bootstrap, still awaited in
+the existing `Promise.all` beside `loadRuntimeBranding()`, so the two run
+concurrently rather than in series and the bootstrap request count is unchanged.
+
+There is no poll and no refetch: the values are read once per page load. The
+handler is strictly cheaper than the one it replaces — a single
+`persistence.LoadSystemSettings()` read projected onto four scalar fields,
+against the full settings response with its env-override map and collection
+normalization. Non-admin sessions additionally stop generating one refused
+request and one warn-level log line per page load.

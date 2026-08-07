@@ -210,6 +210,26 @@ describe('SettingsAPI', () => {
     });
   });
 
+  describe('getRuntimeDisplay', () => {
+    // The session tier is the whole point: /api/system/settings is RequireAdmin,
+    // so bootstrap reading display values from it 403'd every non-admin.
+    it('fetches display settings from the session-tier runtime route', async () => {
+      const display = {
+        theme: 'dark',
+        fullWidthMode: true,
+        disableDockerUpdateActions: true,
+        reduceProUpsellNoise: false,
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(display);
+
+      const result = await SettingsAPI.getRuntimeDisplay();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/runtime/display');
+      expect(apiFetchJSON).not.toHaveBeenCalledWith('/api/system/settings');
+      expect(result).toEqual(display);
+    });
+  });
+
   describe('getTelemetryPreview', () => {
     it('fetches the telemetry preview payload', async () => {
       const mockPreview = {

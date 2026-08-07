@@ -67,6 +67,11 @@ describe('useAppRuntimeState', () => {
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiChatSetEnabledMock: ReturnType<typeof vi.fn>;
+  let getSystemSettingsMock: ReturnType<typeof vi.fn>;
+  let getRuntimeDisplayMock: ReturnType<typeof vi.fn>;
+  let applyServerModeMock: ReturnType<typeof vi.fn>;
+  let updateSystemSettingsFromResponseMock: ReturnType<typeof vi.fn>;
+  let markSystemSettingsLoadedWithDefaultsMock: ReturnType<typeof vi.fn>;
   let websocketState: State;
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
@@ -110,6 +115,11 @@ describe('useAppRuntimeState', () => {
     setOrgIDMock = vi.fn();
     showToastMock = vi.fn();
     aiChatSetEnabledMock = vi.fn();
+    getSystemSettingsMock = vi.fn().mockResolvedValue({ theme: '' });
+    getRuntimeDisplayMock = vi.fn().mockResolvedValue({ theme: '', fullWidthMode: false });
+    applyServerModeMock = vi.fn();
+    updateSystemSettingsFromResponseMock = vi.fn();
+    markSystemSettingsLoadedWithDefaultsMock = vi.fn();
     websocketState = makeWebSocketState();
     websocketConnected = false;
     websocketReconnecting = false;
@@ -158,7 +168,8 @@ describe('useAppRuntimeState', () => {
 
     vi.doMock('@/api/settings', () => ({
       SettingsAPI: {
-        getSystemSettings: vi.fn().mockResolvedValue({ theme: '' }),
+        getSystemSettings: getSystemSettingsMock,
+        getRuntimeDisplay: getRuntimeDisplayMock,
         updateSystemSettings: vi.fn(),
       },
     }));
@@ -233,14 +244,14 @@ describe('useAppRuntimeState', () => {
 
     vi.doMock('@/utils/layout', () => ({
       layoutStore: {
-        loadFromServer: vi.fn(),
+        applyServerMode: applyServerModeMock,
       },
     }));
 
     vi.doMock('@/stores/systemSettings', () => ({
       loadRuntimeBranding: vi.fn().mockResolvedValue(undefined),
-      markSystemSettingsLoadedWithDefaults: vi.fn(),
-      updateSystemSettingsFromResponse: vi.fn(),
+      markSystemSettingsLoadedWithDefaults: markSystemSettingsLoadedWithDefaultsMock,
+      updateSystemSettingsFromResponse: updateSystemSettingsFromResponseMock,
     }));
 
     ({ useAppRuntimeState } = await import('@/useAppRuntimeState'));
@@ -271,6 +282,47 @@ describe('useAppRuntimeState', () => {
 
     return { dispose, hookState: hookState! };
   };
+
+  // Bootstrap needs theme, fullWidthMode and the Docker/upsell display flags on
+  // every page load. It used to read them off /api/system/settings, which is
+  // RequireAdmin, so a non-admin 403'd here every load and the catch silently
+  // pinned the session to client defaults. The session-tier projection is the
+  // fix, so bootstrap must not reach for the admin payload at all.
+  it('reads bootstrap display settings from the session-tier runtime projection', async () => {
+    getRuntimeDisplayMock.mockResolvedValue({
+      theme: 'dark',
+      fullWidthMode: true,
+      disableDockerUpdateActions: true,
+      reduceProUpsellNoise: false,
+    });
+    const { dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(getRuntimeDisplayMock).toHaveBeenCalled();
+    });
+
+    expect(getSystemSettingsMock).not.toHaveBeenCalled();
+    expect(updateSystemSettingsFromResponseMock).toHaveBeenCalledWith(
+      expect.objectContaining({ disableDockerUpdateActions: true }),
+    );
+    expect(applyServerModeMock).toHaveBeenCalledWith(true);
+    expect(markSystemSettingsLoadedWithDefaultsMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it('falls back to client defaults when the runtime display projection is unavailable', async () => {
+    getRuntimeDisplayMock.mockRejectedValue(new Error('404'));
+    const { dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(markSystemSettingsLoadedWithDefaultsMock).toHaveBeenCalled();
+    });
+
+    expect(getSystemSettingsMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
 
   it('stays on the default organization path when multi-tenant is not enabled', async () => {
     isMultiTenantEnabledMock.mockReturnValue(false);

@@ -17,7 +17,6 @@ export function createLayoutStore() {
   const initialMode: LayoutMode = stored === 'full-width' ? 'full-width' : 'default';
 
   const [mode, setModeInternal] = createSignal<LayoutMode>(initialMode);
-  const [hasLoadedFromServer, setHasLoadedFromServer] = createSignal(false);
 
   const setMode = (newMode: LayoutMode, syncToServer = true) => {
     localStorage.setItem(STORAGE_KEYS.FULL_WIDTH_MODE, newMode);
@@ -39,10 +38,11 @@ export function createLayoutStore() {
   const isFullWidth = () => mode() === 'full-width';
 
   /**
-   * Apply the server's canonical full-width preference (called after auth with
-   * the already-fetched system settings). Unlike loadFromServer this is
-   * authoritative: it applies the server value even when a local preference
-   * exists, so the server setting is honored after login/reload (#1130).
+   * Apply the server's canonical full-width preference, called after auth with
+   * the already-fetched runtime display projection. This is authoritative: it
+   * applies the server value even when a local preference exists, so the server
+   * setting is honored after login/reload (#1130). A missing value (older
+   * backend without /api/runtime/display) leaves the local mode alone.
    */
   const applyServerMode = (serverFullWidthMode: boolean | undefined) => {
     if (serverFullWidthMode !== undefined) {
@@ -50,25 +50,6 @@ export function createLayoutStore() {
       localStorage.setItem(STORAGE_KEYS.FULL_WIDTH_MODE, serverMode);
       setModeInternal(serverMode);
       logger.debug('Applied full-width mode from server', { mode: serverMode });
-    }
-    setHasLoadedFromServer(true);
-  };
-
-  /**
-   * Load full-width preference from server (called after auth)
-   * Only uses server preference if no local preference exists
-   */
-  const loadFromServer = async () => {
-    const hasLocalPreference = localStorage.getItem(STORAGE_KEYS.FULL_WIDTH_MODE) !== null;
-    if (hasLocalPreference || hasLoadedFromServer()) {
-      return; // Prefer local preference or already loaded
-    }
-
-    try {
-      const settings = await SettingsAPI.getSystemSettings();
-      applyServerMode(settings.fullWidthMode);
-    } catch (error) {
-      logger.warn('Failed to load full-width mode from server', error);
     }
   };
 
@@ -78,7 +59,6 @@ export function createLayoutStore() {
     toggle,
     isFullWidth,
     applyServerMode,
-    loadFromServer,
   };
 }
 
