@@ -22,15 +22,18 @@ type resourceDeltaPayload struct {
 	Order   []string          `json:"order,omitempty"`
 }
 
-func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
+// buildClientStateSnapshot builds the per-client delta baseline and returns the
+// marshalled state alongside it. Callers that are about to put the same state on
+// the wire reuse those bytes instead of marshalling the payload a second time.
+func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, []byte, error) {
 	encoded, err := json.Marshal(state)
 	if err != nil {
-		return nil, fmt.Errorf("marshal state snapshot: %w", err)
+		return nil, nil, fmt.Errorf("marshal state snapshot: %w", err)
 	}
 
 	fields := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(encoded, &fields); err != nil {
-		return nil, fmt.Errorf("decode state snapshot: %w", err)
+		return nil, nil, fmt.Errorf("decode state snapshot: %w", err)
 	}
 
 	resources := make(map[string]json.RawMessage)
@@ -38,20 +41,20 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 	if encodedResources, ok := fields["resources"]; ok {
 		var entries []json.RawMessage
 		if err := json.Unmarshal(encodedResources, &entries); err != nil {
-			return nil, fmt.Errorf("decode state resources: %w", err)
+			return nil, nil, fmt.Errorf("decode state resources: %w", err)
 		}
 		for _, entry := range entries {
 			var identity struct {
 				ID string `json:"id"`
 			}
 			if err := json.Unmarshal(entry, &identity); err != nil {
-				return nil, fmt.Errorf("decode state resource identity: %w", err)
+				return nil, nil, fmt.Errorf("decode state resource identity: %w", err)
 			}
 			if identity.ID == "" {
-				return nil, fmt.Errorf("state resource is missing id")
+				return nil, nil, fmt.Errorf("state resource is missing id")
 			}
 			if _, exists := resources[identity.ID]; exists {
-				return nil, fmt.Errorf("state resource id %q is duplicated", identity.ID)
+				return nil, nil, fmt.Errorf("state resource id %q is duplicated", identity.ID)
 			}
 			resources[identity.ID] = append(json.RawMessage(nil), entry...)
 			resourceOrder = append(resourceOrder, identity.ID)
@@ -63,7 +66,7 @@ func buildClientStateSnapshot(state interface{}) (*clientStateSnapshot, error) {
 		fields:        fields,
 		resources:     resources,
 		resourceOrder: resourceOrder,
-	}, nil
+	}, encoded, nil
 }
 
 func buildClientStateDelta(previous, current *clientStateSnapshot) (map[string]interface{}, error) {

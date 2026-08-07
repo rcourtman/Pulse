@@ -1596,3 +1596,26 @@ incident from cluster health.
 `internal/truenas/provider_pool_health_contract_test.go`, and
 `internal/unifiedresources/ceph_pool_health_contract_test.go` prove the
 lifecycle and deduplication matrix.
+
+### Alert state survives a withheld WebSocket snapshot
+
+`activeAlerts` and `recentlyResolved` reach the client inside the same state
+payload as `resources`, so any path that withholds that payload also withholds
+alert state. On an estate whose snapshot exceeds the client's advertised inbound
+frame limit the hub sends a `stateTooLarge` marker instead, and the store
+re-hydrates from `GET /api/state` and applies it through the same code path as
+an `initialState` message (`frontend-modern/src/stores/websocket.ts`). Alert
+sync, the `alertsEnabled` detection gate, and pending-ack clearing therefore
+behave identically whether the snapshot arrived over the socket or over REST.
+
+A resource delta that lands before any baseline exists must not mark the store
+as holding usable data. Doing so flips the app shell off the populated REST
+bootstrap snapshot and onto a live store whose `resources` array was never
+filled, blanking the dashboard and its alert surfaces until a snapshot finally
+lands. The store withholds `initialDataReceived` for exactly that case and sets
+it once hydration applies.
+
+`frontend-modern/src/stores/__tests__/websocket-resilience.test.ts` pins that
+alert state survives the REST hydration path, and
+`frontend-modern/src/stores/__tests__/websocket-oversized-state.test.ts` pins
+the withheld-snapshot, delta-without-baseline, and hydration-retry behavior.

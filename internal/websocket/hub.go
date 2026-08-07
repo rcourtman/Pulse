@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,7 +43,59 @@ const (
 	// pong-only client survives two consecutive lost ping/pong round trips
 	// within clientReadDeadline.
 	clientPingPeriod = 30 * time.Second
+	// inboundLimitQueryParam is the upgrade-URL parameter a client uses to declare
+	// how large an inbound frame it can accept. It rides the handshake rather than
+	// a post-connect message so the limit is known before the first state build.
+	// Clients that omit it keep receiving unrestricted state payloads.
+	inboundLimitQueryParam = "max_message_bytes"
+	// stateTooLargeMessageType tells a client that its state payload was withheld
+	// because it exceeds the limit the client advertised. The client re-hydrates
+	// from GET /api/state, which serves the same BuildFrontendState() snapshot
+	// without a frame ceiling.
+	stateTooLargeMessageType = "stateTooLarge"
+	// minAdvertisedInboundBytes is the smallest frame limit the hub honors. A
+	// smaller advertisement cannot hold a useful state payload and most likely
+	// reflects a malformed client, so it is ignored rather than trusted into
+	// withholding every snapshot.
+	minAdvertisedInboundBytes = 64 * 1024
 )
+
+// messageEnvelopeOverhead is the byte cost of the Message envelope wrapped around
+// an already-marshalled Data payload: `{"type":"` + type + `","data":` + data + `}`.
+// Timestamp is omitempty and unset on state payloads, and the message types we
+// project are fixed internal constants that need no JSON escaping.
+const messageEnvelopeOverhead = len(`{"type":"`) + len(`","data":`) + len(`}`)
+
+// projectedStateMessageBytes reports the exact wire size of a state message
+// without paying for a second multi-megabyte marshal to measure it.
+func projectedStateMessageBytes(messageType string, payloadBytes int) int {
+	return messageEnvelopeOverhead + len(messageType) + payloadBytes
+}
+
+// stateTooLargePayload is the compact marker sent in place of a withheld snapshot.
+type stateTooLargePayload struct {
+	// Supersedes names the message type that would have carried the snapshot.
+	Supersedes string `json:"supersedes"`
+	// Bytes is the size the withheld payload would have had on the wire.
+	Bytes int `json:"bytes"`
+	// MaxBytes echoes the limit the client advertised.
+	MaxBytes int64 `json:"maxBytes"`
+	// ResourceCount is the resource count in the withheld snapshot.
+	ResourceCount int `json:"resourceCount"`
+	// HydrateFrom names the REST endpoint that serves the same snapshot.
+	HydrateFrom string `json:"hydrateFrom"`
+}
+
+// fullStateQueueResult reports what queueFullState did with a state payload.
+type fullStateQueueResult struct {
+	// bytes is the wire size of the payload the client would have received.
+	bytes int
+	// sent reports whether anything was queued — the snapshot or the marker.
+	sent bool
+	// withheld reports that the snapshot exceeded the client's advertised inbound
+	// limit, so a stateTooLarge marker was queued in its place.
+	withheld bool
+}
 
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
 func extractPeerIP(remoteAddr string) string {
@@ -275,6 +328,47 @@ type Client struct {
 	lifecycleOnce sync.Once
 	stateMu       sync.Mutex
 	stateSnapshot *clientStateSnapshot
+	// maxInboundBytes is the frame limit the client advertised on the upgrade
+	// URL; 0 means it never advertised one and gets today's unrestricted
+	// payloads. Set once during the upgrade, then read by the initial-state
+	// goroutine and the broadcast workers.
+	maxInboundBytes atomic.Int64
+}
+
+// inboundLimitBytes returns the client's advertised frame limit, or 0 when the
+// client never advertised one.
+func (c *Client) inboundLimitBytes() int64 {
+	return c.maxInboundBytes.Load()
+}
+
+// applyAdvertisedInboundLimit records a client's advertised inbound frame limit.
+// Absent, unparseable, or implausibly small advertisements are ignored so the
+// client simply keeps the unrestricted behaviour.
+func (c *Client) applyAdvertisedInboundLimit(raw string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return
+	}
+
+	limit, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		log.Debug().Str("client", c.id).Str("value", raw).Msg("ignoring unparseable client inbound frame limit")
+		return
+	}
+	if limit < minAdvertisedInboundBytes {
+		log.Debug().
+			Str("client", c.id).
+			Int64("advertisedBytes", limit).
+			Int("minBytes", minAdvertisedInboundBytes).
+			Msg("ignoring implausible client inbound frame limit")
+		return
+	}
+
+	c.maxInboundBytes.Store(limit)
+	log.Debug().
+		Str("client", c.id).
+		Int64("maxInboundBytes", limit).
+		Msg("recorded client inbound frame limit")
 }
 
 func (c *Client) lifecycleSignal() chan struct{} {
@@ -322,23 +416,79 @@ func (c *Client) safeSend(data []byte) (sent bool) {
 	}
 }
 
-func (c *Client) queueFullState(messageType string, state interface{}) (int, bool, error) {
-	snapshot, err := buildClientStateSnapshot(state)
+func (c *Client) queueFullState(messageType string, state interface{}) (fullStateQueueResult, error) {
+	snapshot, encoded, err := buildClientStateSnapshot(state)
 	if err != nil {
-		return 0, false, err
+		return fullStateQueueResult{}, err
 	}
-	data, err := json.Marshal(Message{Type: messageType, Data: state})
+
+	// Measure from the bytes the baseline build already produced. Marshalling the
+	// state a second time just to learn its size costs a full extra copy of a
+	// payload we may be about to throw away.
+	projected := projectedStateMessageBytes(messageType, len(encoded))
+	if limit := c.inboundLimitBytes(); limit > 0 && int64(projected) > limit {
+		return c.queueStateTooLarge(messageType, snapshot, projected, limit)
+	}
+
+	// Reuse the marshalled payload rather than re-encoding the object graph.
+	// json.RawMessage round-trips verbatim, so the wire bytes are identical to
+	// marshalling Message{Data: state} directly.
+	data, err := json.Marshal(Message{Type: messageType, Data: json.RawMessage(encoded)})
 	if err != nil {
-		return 0, false, err
+		return fullStateQueueResult{}, err
 	}
 
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
 	if !c.safeSend(data) {
-		return len(data), false, nil
+		return fullStateQueueResult{bytes: len(data)}, nil
 	}
 	c.stateSnapshot = snapshot
-	return len(data), true, nil
+	return fullStateQueueResult{bytes: len(data), sent: true}, nil
+}
+
+// buildStateTooLargeMarker encodes the marker that tells a client to hydrate a
+// withheld payload from REST.
+func buildStateTooLargeMarker(supersedes string, resourceCount, projected int, limit int64) ([]byte, error) {
+	return json.Marshal(Message{
+		Type: stateTooLargeMessageType,
+		Data: stateTooLargePayload{
+			Supersedes:    supersedes,
+			Bytes:         projected,
+			MaxBytes:      limit,
+			ResourceCount: resourceCount,
+			HydrateFrom:   "/api/state",
+		},
+	})
+}
+
+// queueStateTooLarge withholds a snapshot the client cannot accept and queues a
+// compact marker pointing it at the REST snapshot instead.
+func (c *Client) queueStateTooLarge(
+	supersedes string,
+	snapshot *clientStateSnapshot,
+	projected int,
+	limit int64,
+) (fullStateQueueResult, error) {
+	marker, err := buildStateTooLargeMarker(supersedes, len(snapshot.resourceOrder), projected, limit)
+	if err != nil {
+		return fullStateQueueResult{}, err
+	}
+
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	if !c.safeSend(marker) {
+		// No marker means the client was never told to hydrate, so leave the
+		// baseline unset — the same contract as a snapshot that failed to queue.
+		return fullStateQueueResult{bytes: projected, withheld: true}, nil
+	}
+	// The baseline must still be established. The client hydrates from
+	// GET /api/state, which is built from the same BuildFrontendState() source as
+	// this snapshot, so deltas diffed against it land on state the client holds.
+	// Leaving it nil would make queueStateDelta abstain forever and freeze the
+	// client on its REST copy.
+	c.stateSnapshot = snapshot
+	return fullStateQueueResult{bytes: projected, sent: true, withheld: true}, nil
 }
 
 func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool, error) {
@@ -366,6 +516,28 @@ func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool,
 	if err != nil {
 		return 0, true, false, err
 	}
+
+	// A delta can itself outgrow the client's frame limit — a poll cycle that
+	// touches most of a large estate produces one. Sending it anyway would have
+	// the client drop it while the server advanced the baseline past state the
+	// client never applied, silently desynchronising every later delta.
+	if limit := c.inboundLimitBytes(); limit > 0 && int64(len(data)) > limit {
+		marker, markerErr := buildStateTooLargeMarker("rawData", len(current.resourceOrder), len(data), limit)
+		if markerErr != nil {
+			return len(data), true, false, markerErr
+		}
+		if !c.safeSend(marker) {
+			return len(data), true, false, nil
+		}
+		log.Debug().
+			Str("client", c.id).
+			Int("dataLen", len(data)).
+			Int64("maxInboundBytes", limit).
+			Msg("state delta exceeds client frame limit; sent hydrate marker instead")
+		c.stateSnapshot = current
+		return len(data), true, true, nil
+	}
+
 	if !c.safeSend(data) {
 		return len(data), true, false, nil
 	}
@@ -816,16 +988,23 @@ func (h *Hub) sendInitialState(client *Client) {
 		return
 	}
 
-	dataLen, sent, err := client.queueFullState("initialState", stateData)
+	result, err := client.queueFullState("initialState", stateData)
 	if err != nil {
 		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
 		return
 	}
 
-	log.Info().Str("client", client.id).Int("dataLen", dataLen).Int("dataKB", dataLen/1024).Msg("sending initial state to client")
-	if sent {
+	log.Info().Str("client", client.id).Int("dataLen", result.bytes).Int("dataKB", result.bytes/1024).Msg("sending initial state to client")
+	switch {
+	case result.withheld && result.sent:
+		log.Info().
+			Str("client", client.id).
+			Int("dataKB", result.bytes/1024).
+			Int64("maxInboundBytes", client.inboundLimitBytes()).
+			Msg("initial state exceeds client frame limit; client will hydrate from REST")
+	case result.sent:
 		log.Info().Str("client", client.id).Msg("initial state sent successfully")
-	} else {
+	default:
 		log.Warn().Str("client", client.id).Msg("client closed or buffer full, skipping initial state")
 	}
 }
@@ -840,7 +1019,7 @@ func (h *Hub) sendRequestedState(client *Client) {
 	}
 	defer h.releaseStateBuildSlot()
 
-	_, sent, err := client.queueFullState(
+	result, err := client.queueFullState(
 		"rawData",
 		h.prepareStateForBroadcast(h.getStateForClient(client)),
 	)
@@ -848,8 +1027,17 @@ func (h *Hub) sendRequestedState(client *Client) {
 		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal state for requestData")
 		return
 	}
-	if !sent {
+	if !result.sent {
 		log.Warn().Str("client", client.id).Msg("Failed to queue requestData state response; client channel closed or full")
+		return
+	}
+	if result.withheld {
+		// The recovery path must not re-send the payload that could not be
+		// delivered in the first place, or the client loops on it.
+		log.Info().
+			Str("client", client.id).
+			Int("dataKB", result.bytes/1024).
+			Msg("requestData state exceeds client frame limit; client will hydrate from REST")
 	}
 }
 
@@ -1022,6 +1210,12 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		id:       clientID,
 		lastPing: time.Now(),
 	}
+	// Read the frame limit off the upgrade URL rather than a post-connect
+	// message: the limit has to be known before the first state build, and a
+	// message racing that build would have us marshal and ship a payload the
+	// client is about to drop. Absent or unparseable means no limit, which is
+	// what every client predating this negotiation sends.
+	client.applyAdvertisedInboundLimit(r.URL.Query().Get(inboundLimitQueryParam))
 
 	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("webSocket client created")
 
@@ -1196,7 +1390,7 @@ func (h *Hub) dispatchStateBroadcast(pending *Message, orgID string) {
 }
 
 func (h *Hub) dispatchCurrentStateSnapshot(state interface{}, orgID string) {
-	snapshot, err := buildClientStateSnapshot(state)
+	snapshot, _, err := buildClientStateSnapshot(state)
 	if err != nil {
 		log.Error().Err(err).Str("org_id", normalizeOrgID(orgID)).Msg("Failed to build WebSocket state delta snapshot")
 		return

@@ -8,9 +8,18 @@ const notificationMocks = vi.hoisted(() => ({
   warning: vi.fn(),
 }));
 
+const apiClientMocks = vi.hoisted(() => ({
+  apiFetchJSON: vi.fn(),
+}));
+
 vi.mock('@/stores/notifications', () => ({
   notificationStore: notificationMocks,
 }));
+
+vi.mock('@/utils/apiClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/apiClient')>();
+  return { ...actual, apiFetchJSON: apiClientMocks.apiFetchJSON };
+});
 
 interface MockWebSocketInstance {
   url: string;
@@ -81,6 +90,7 @@ describe('websocket store resilience', () => {
     instances.length = 0;
     vi.setSystemTime(new Date('2026-05-14T08:00:00.000Z'));
     notificationMocks.success.mockClear();
+    apiClientMocks.apiFetchJSON.mockReset();
     installWebSocketMock();
   });
 
@@ -208,6 +218,74 @@ describe('websocket store resilience', () => {
       expect(store.activeAlerts[alert.id]).toMatchObject(alert);
       expect(store.state.activeAlerts).toHaveLength(1);
       expect(store.state.resources[0]?.cpu?.current).toBe(91);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps alert state when the snapshot is withheld and hydrated over REST', async () => {
+    // activeAlerts ships inside the same payload as resources, so a snapshot the
+    // server withholds for exceeding the client's frame limit withholds alert
+    // state too. The REST hydration path must restore both.
+    const alert = {
+      id: 'agent:host-1-cpu',
+      type: 'cpu',
+      level: 'warning',
+      resourceId: 'agent:host-1',
+      resourceName: 'host-1',
+      node: 'host-1',
+      instance: 'host-1',
+      message: 'CPU above threshold',
+      value: 90,
+      threshold: 80,
+      startTime: '2026-05-14T07:59:00Z',
+      acknowledged: false,
+    };
+    apiClientMocks.apiFetchJSON.mockResolvedValue({
+      connectedInfrastructure: [],
+      resources: [{ id: 'agent:host-1', type: 'agent', name: 'host-1' }],
+      activeAlerts: [alert],
+      recentlyResolved: [],
+      lastUpdate: Date.now(),
+    });
+
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      expect(currentInstance).not.toBeNull();
+
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'stateTooLarge',
+          data: {
+            supersedes: 'initialState',
+            bytes: 13_411_000,
+            maxBytes: 8 * 1024 * 1024,
+            resourceCount: 1,
+            hydrateFrom: '/api/state',
+          },
+        }),
+      } as MessageEvent);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(store.activeAlerts[alert.id]).toMatchObject(alert);
+      expect(store.state.activeAlerts).toHaveLength(1);
+
+      // Deltas keep applying to the REST-hydrated baseline, because the server
+      // set its delta baseline to the snapshot it withheld.
+      currentInstance!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resourceDelta: { upserts: [{ id: 'agent:host-1', cpu: { current: 91 } }] },
+            lastUpdate: Date.now() + 1_000,
+          },
+        }),
+      } as MessageEvent);
+
+      expect(store.state.resources[0]?.cpu?.current).toBe(91);
+      expect(store.state.activeAlerts).toHaveLength(1);
     } finally {
       dispose();
     }

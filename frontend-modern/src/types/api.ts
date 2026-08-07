@@ -1344,6 +1344,20 @@ export interface Incident {
 export type WSMessage =
   | { type: 'initialState'; data: State }
   | { type: 'rawData'; data: StateUpdate }
+  // Sent in place of a state payload that exceeds the inbound frame limit the
+  // client advertised on connect. The client hydrates from `hydrateFrom`
+  // instead; the server has already set its delta baseline to the withheld
+  // snapshot, so deltas keep flowing against it.
+  | {
+      type: 'stateTooLarge';
+      data: {
+        supersedes: string;
+        bytes: number;
+        maxBytes: number;
+        resourceCount: number;
+        hydrateFrom: string;
+      };
+    }
   | { type: 'error'; error: string }
   | { type: 'ping'; data?: unknown }
   | { type: 'pong'; data?: unknown }

@@ -1,32 +1,19 @@
 {
   "version": 1,
-  "base_sha": "06d8bfe65ebf3683a07d9ec7775a50a9872418ce",
-  "verified_at": "2026-08-07T19:15:00Z",
+  "base_sha": "755a8887874e21d0115e1490b9e69e9501d2a31e",
+  "verified_at": "2026-08-07T20:38:00Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/Settings.tsx",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
-    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
-    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
-    "frontend-modern/src/types/config.ts"
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/types/api.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/Settings.tsx": "0e400e1896d2272364f298f721ff6f7a867900cd0e49fb5c7a64432928662f6b",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "534c501a82919927c7bfcbbffd26a0f822d362247d8339e7de54696bd9ab172a",
-    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts": "d56324453d07a8ec7ce81f9a385251da456cae68c2b674d692c231f86b24498e",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "406a7e7328017a501a085ce3e0754afb23d9927b4011fc4b976b5d79aa341a47",
-    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "8e7ff8c036632b474aa9e66ba388e1fa6a514d1cf85b15ff56a581fb6ab5a163",
-    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "5e7ac8b1ba5b481323eb4d7e9751919ff2478840c85532452991649939732e80",
-    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "cdaeb8a98deef07dee1069fd09ecd618360ba9058b197c297a8bd3ef7daddda0",
-    "frontend-modern/src/types/config.ts": "b918901c67294b7dcf6b0243ba92fd7a741468a009ea0a927f7caedb602ce2f9"
+    "frontend-modern/src/stores/websocket.ts": "127aa5b5766f3f4a363bb70be6f0d2b7710ad1d542b7b3ffb0a3caefc5ade71f",
+    "frontend-modern/src/types/api.ts": "0b7c36e84b551cd9b4abf04ce2ef09ecc897bfb843799d0d6021851c7d355b53"
   },
   "routes": [
-    "/settings/infrastructure (non-admin proxy-auth session: route blocked, falls back to the first reachable tab)",
-    "/settings (non-admin: bare settings path resolves through the same blocked default tab)",
-    "/settings/infrastructure (admin proxy-auth session: page renders and loads)"
+    "/",
+    "/proxmox"
   ],
   "viewports": [
     {
@@ -39,18 +26,19 @@
     }
   ],
   "states": [
-    "authenticated non-admin proxy-auth session (X-Remote-Role=viewer) against a local backend on port 7855 fronted by a header-injecting shim; /api/security/status reports detailLevel=authenticated and settingsCapabilities.infrastructureRead=false",
-    "admin proxy-auth session (X-Remote-Role=admin) on the same instance; detailLevel=privileged and infrastructureRead=true",
-    "settings sidebar for the non-admin: the whole Infrastructure group is absent and the sidebar starts at Monitoring > Availability checks",
-    "settings sidebar for the admin: Infrastructure group present and selected, discovery card shows 'Last scanned 0s ago' proving the gated load ran once the capability resolved",
-    "empty-estate instance (0 connected systems) so the Infrastructure page renders its onboarding empty state rather than a populated table"
+    "Oversized estate (4068 mock resources, 11.5 MiB /api/state) against a scratch backend: server withheld the 11,815 KB initialState and sent the stateTooLarge marker; client hydrated over REST and rendered the full 40-node Proxmox overview with live CPU/memory/disk/temp/uptime columns",
+    "Post-hydration delta flow: server queued 2.3 MB rawData deltas against the baseline established by the withheld snapshot; Alerts/Actions/Patrol badges advanced live (7->9 alerts, 40->65 patrol) proving deltas applied to the REST-hydrated resource array",
+    "Backward compatibility, old client: a stale pre-negotiation bundle sent no max_message_bytes, and the server shipped today's full 11.8 MiB snapshot unchanged",
+    "Backward compatibility, non-negotiating clients: repeatedly re-shipped 11.8 MiB and re-requested, reproducing the pre-fix pathology this change removes",
+    "Loading state: Proxmox overview 'Loading Proxmox resources' gate while the page's own paginated /api/resources fetch completes (unchanged by this work)",
+    "Narrow viewport: mobile shell with bottom nav, Overview/Storage/Replication/Backup tabs, agent-upgrade warning banner, search + filter row, and the scrolled NODES table with per-node CPU/memory bars and alert severity stripes"
   ],
   "interactions": [
-    "deep-linked a non-admin straight to /settings/infrastructure and confirmed the route redirected to Availability checks instead of ping-ponging back to the blocked default tab",
-    "queried the rendered DOM for any /settings/infrastructure link or 'Infrastructure' text as the non-admin at both widths and found none",
-    "measured the backend warn log over a 60s idle window on the non-admin settings page before and after the gate: /api/connections 4/min and /api/discover 2/min dropped to 0, with 0 denials on /api/config/nodes, /api/system/settings, /api/truenas/connections and /api/vmware/connections",
-    "switched the shim to an admin role, reloaded /settings/infrastructure and confirmed the page renders, then instrumented window.fetch for 152s and observed /api/discover x4 (30s poller) and /api/connections x3 (15s ledger poller) with 0 denials",
-    "repeated the non-admin deep link and the admin page load at 375x812 and confirmed the same outcomes on the mobile drill-down layout",
-    "confirmed the footer still reads 'Pulse | Version: 4.26.0' for the non-admin throughout, since the version comes from the public /api/version rather than the admin-only update check"
+    "Loaded / and let the app shell bootstrap through auth, WebSocket connect, and state hydration at 1280x800",
+    "Read the browser console to confirm the stateTooLarge warning, 'Hydrating full state over REST', and 'Updating resources {count: 4065}'",
+    "Inspected network requests to confirm GET /api/state returned 200 as the hydration source",
+    "Scrolled the Proxmox NODES table to confirm rendered rows and live metric bars",
+    "Sampled the 'Last refresh' timestamp and node CPU values over time to confirm deltas keep landing after hydration",
+    "Resized to 375x812 and reloaded so load-time responsive staging re-ran, then scrolled the node table at narrow width"
   ]
 }

@@ -27,11 +27,11 @@ func TestClientStateDeltaOmitsUnchangedResourcePayload(t *testing.T) {
 	currentState.Resources[0].LastSeen = 200
 	currentState.Resources[0].CPU = &models.ResourceMetricFrontend{Current: 41}
 
-	previous, err := buildClientStateSnapshot(previousState)
+	previous, _, err := buildClientStateSnapshot(previousState)
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := buildClientStateSnapshot(currentState)
+	current, _, err := buildClientStateSnapshot(currentState)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +66,11 @@ func TestClientStateDeltaTracksResourceRemovalAndOrder(t *testing.T) {
 		{ID: "a", Type: "agent", Name: "a", DisplayName: "a"},
 	}
 
-	previous, err := buildClientStateSnapshot(previousState)
+	previous, _, err := buildClientStateSnapshot(previousState)
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := buildClientStateSnapshot(currentState)
+	current, _, err := buildClientStateSnapshot(currentState)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,11 +106,11 @@ func TestClientStateBaselineAdvancesOnlyAfterDeltaIsQueued(t *testing.T) {
 	current.Resources[0].CPU = &models.ResourceMetricFrontend{Current: 20}
 
 	client := &Client{send: make(chan []byte, 1)}
-	if _, sent, err := client.queueFullState("initialState", initial); err != nil || !sent {
-		t.Fatalf("queueFullState() sent=%v error=%v", sent, err)
+	if result, err := client.queueFullState("initialState", initial); err != nil || !result.sent {
+		t.Fatalf("queueFullState() sent=%v error=%v", result.sent, err)
 	}
 	initialBaseline := client.stateSnapshot
-	currentSnapshot, err := buildClientStateSnapshot(current)
+	currentSnapshot, _, err := buildClientStateSnapshot(current)
 	if err != nil {
 		t.Fatal(err)
 	}

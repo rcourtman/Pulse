@@ -19,14 +19,21 @@ import {
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
 import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
+import { apiFetchJSON } from '@/utils/apiClient';
 
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
+// Floor between REST hydration attempts, so a server that keeps withholding
+// snapshots cannot turn the fallback into a request loop.
+const REST_HYDRATION_MIN_INTERVAL_MS = 15000;
 const AUTO_REGISTER_NOTIFICATION_FRESH_MS = 2 * 60 * 1000;
 const AUTO_REGISTER_NOTIFICATION_FUTURE_SKEW_MS = 30 * 1000;
 const AUTO_REGISTER_NOTIFICATION_DEDUPE_MS = 10 * 60 * 1000;
 const AUTO_REGISTER_NOTIFICATION_SESSION_GRACE_MS = 5 * 1000;
 
 type TimestampedWSMessage = WSMessage & { timestamp?: number | string };
+// The two message variants that carry a state payload — a full snapshot or a
+// resource delta. Both are applied by the same code path.
+type StatePayloadMessage = Extract<TimestampedWSMessage, { type: 'initialState' | 'rawData' }>;
 type AutoRegisterNotificationPayload = {
   type?: string;
   source?: string;
@@ -47,6 +54,22 @@ const asMergePatchRecord = (value: unknown): Record<string, unknown> | undefined
     : undefined;
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+// Declares our inbound frame limit on the handshake itself, so the server knows
+// it before building the first state payload. A post-connect message would race
+// that build and leave the server marshalling a snapshot we then drop. Servers
+// too old to read the parameter ignore it and keep sending full snapshots, which
+// the oversized-payload guard still catches.
+const buildSocketUrl = (rawUrl: string): string => {
+  try {
+    const parsed = new URL(rawUrl, window.location.href);
+    parsed.searchParams.set('max_message_bytes', String(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES));
+    return parsed.toString();
+  } catch {
+    // A URL we cannot parse still has to connect; it just forgoes negotiation.
+    return rawUrl;
+  }
+};
 
 const isInboundPayloadWithinLimit = (payload: string): boolean => {
   // JSON state is overwhelmingly ASCII. Avoid allocating a second multi-megabyte
@@ -311,6 +334,8 @@ export function createWebSocketStore(url: string) {
   // and Solid's reconcile mutates adopted objects in place.
   let rawServerResources: Resource[] | null = null;
   let lastDeltaRecoveryRequestAt = 0;
+  let restHydrationInFlight = false;
+  let lastRestHydrationAt = 0;
   let reconnectTimeout = 0;
   let reconnectDelayTimeout = 0;
   let lastServerActivityAt = Date.now();
@@ -403,7 +428,7 @@ export function createWebSocketStore(url: string) {
         ws = null;
       }
 
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(buildSocketUrl(wsUrl));
       setupWebSocket();
     } catch (err) {
       logger.error('Failed to create WebSocket', err);
@@ -442,9 +467,204 @@ export function createWebSocketStore(url: string) {
     if (now - lastDeltaRecoveryRequestAt < 30000) return;
     lastDeltaRecoveryRequestAt = now;
     logger.warn('Received resource delta without a full snapshot baseline; requesting full state');
+    // Still ask over the socket: on an estate small enough to fit, this is the
+    // cheap path, and it makes the server (re)establish the delta baseline it
+    // may never have set. When the snapshot is too large the server answers
+    // with a stateTooLarge marker rather than a payload we would drop again.
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'requestData' }));
     }
+  };
+
+  // Pulls the full snapshot over REST, which has no frame ceiling. Used when a
+  // socket state payload is too large for this client to accept — either because
+  // the server told us so, or because we dropped an oversized frame from a
+  // server too old to negotiate. /api/state serves the same BuildFrontendState()
+  // payload the socket would have carried, so it restores the very baseline the
+  // server is diffing its deltas against.
+  const hydrateStateFromRest = async (reason: string) => {
+    if (isDisposed || restHydrationInFlight) return;
+    const now = Date.now();
+    if (now - lastRestHydrationAt < REST_HYDRATION_MIN_INTERVAL_MS) return;
+    restHydrationInFlight = true;
+    lastRestHydrationAt = now;
+
+    try {
+      logger.info('Hydrating full state over REST', { reason });
+      const snapshot = await apiFetchJSON<State>('/api/state', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+      });
+      if (isDisposed) return;
+      if (!snapshot || !Array.isArray(snapshot.resources)) {
+        throw new Error('REST state response carried no resources array');
+      }
+      applyStatePayload({ type: WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE, data: snapshot });
+      logger.info('REST state hydration applied', { resourceCount: snapshot.resources.length });
+    } catch (error) {
+      // Allow an immediate retry: without a baseline the next delta is useless,
+      // so a failed hydration must not be rate-limited into a stall.
+      lastRestHydrationAt = 0;
+      logger.error('REST state hydration failed', error);
+    } finally {
+      restHydrationInFlight = false;
+    }
+  };
+
+  // Applies a full state payload or a resource delta. Shared by the WebSocket
+  // message path and the REST hydration fallback: both carry the same shape,
+  // because /api/state and the socket's state payloads are both built from the
+  // server-side BuildFrontendState().
+  const applyStatePayload = (message: StatePayloadMessage) => {
+    // Update state properties individually, but batch the whole payload to
+    // reduce reactive recomputations and UI thrash on large updates.
+    if (message.data)
+      batch(() => {
+        // A delta with no baseline to patch leaves `state.resources` empty.
+        // Flagging that as "usable data" would make the app shell abandon the
+        // populated REST bootstrap snapshot for an empty live store and blank
+        // the dashboard, so the flag waits until hydration actually lands.
+        const awaitingBaseline =
+          message.data.resources === undefined &&
+          'resourceDelta' in message.data &&
+          message.data.resourceDelta !== undefined &&
+          !rawServerResources;
+
+        // Mark that we've received usable data (initial payload or raw update)
+        if (!initialDataReceived() && !awaitingBaseline) {
+          setInitialDataReceived(true);
+        }
+
+        // Canonical resource contract:
+        // `state.resources` is the authoritative frontend model.
+        // `state.connectedInfrastructure` is the authoritative reporting projection.
+        if (message.data.connectedInfrastructure !== undefined) {
+          const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
+            ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
+            : [];
+          setState('connectedInfrastructure', reconcile(connectedInfrastructure, { key: 'id' }));
+        }
+        if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
+        if (message.data.performance !== undefined)
+          setState('performance', message.data.performance);
+        if (message.data.connectionHealth !== undefined)
+          setState('connectionHealth', message.data.connectionHealth);
+        if (message.data.stats !== undefined) setState('stats', message.data.stats);
+        if (message.data.pveTagColors !== undefined) {
+          setState('pveTagColors', message.data.pveTagColors ?? {});
+        }
+        if (message.data.pveTagStyles !== undefined) {
+          setState('pveTagStyles', message.data.pveTagStyles ?? {});
+        }
+        // Handle unified resources
+        let nextResources: Resource[] | undefined;
+        if (message.data.resources !== undefined) {
+          if (Array.isArray(message.data.resources)) {
+            rawServerResources = structuredClone(message.data.resources) as Resource[];
+            nextResources = mergeCanonicalResourceSnapshot(message.data.resources, state.resources);
+          } else {
+            rawServerResources = [];
+            nextResources = [];
+          }
+        } else if ('resourceDelta' in message.data && message.data.resourceDelta !== undefined) {
+          if (rawServerResources) {
+            rawServerResources = applyResourceStateDelta(
+              rawServerResources,
+              message.data.resourceDelta,
+            );
+            nextResources = mergeCanonicalResourceSnapshot(
+              structuredClone(rawServerResources) as Resource[],
+              state.resources,
+            );
+          } else {
+            // A delta landed before any full snapshot (e.g. the initial
+            // payload was dropped as oversized). There is no baseline to
+            // patch, so ask the server for a full snapshot instead of
+            // applying the delta to nothing and rendering stubs.
+            requestFullStateRecovery();
+          }
+        }
+        if (nextResources !== undefined) {
+          logger.debug('[WebSocket] Updating resources', {
+            count: nextResources.length,
+            types: [...new Set(nextResources.map((resource) => resource.type) || [])],
+          });
+          setState('resources', reconcile(nextResources, { key: 'id' }));
+
+          // Sync container update states with docker host command status payloads.
+          nextResources.forEach((resource: any) => {
+            if (resource?.type !== 'docker-host') return;
+            const platformData = asRecord(resource.platformData);
+            const dockerData = asRecord(platformData?.docker);
+            const command = dockerData?.command || platformData?.command;
+            if (!command || typeof command !== 'object') return;
+
+            const agentIds = new Set<string>([
+              resource.id,
+              asString(dockerData?.hostSourceId) || '',
+              asString(platformData?.hostSourceId) || '',
+              asString(resource?.discoveryTarget?.agentId) || '',
+              isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
+                ? asString(resource?.discoveryTarget?.resourceId) || ''
+                : '',
+            ]);
+            agentIds.forEach((agentId) => {
+              if (agentId) {
+                syncWithAgentCommand(agentId, command as any);
+              }
+            });
+          });
+        }
+        // Sync active alerts from state
+        if (message.data.activeAlerts !== undefined) {
+          const newAlerts: Record<string, Alert> = {};
+          if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
+            message.data.activeAlerts.forEach((alert: Alert) => {
+              newAlerts[alert.id] = alert;
+            });
+          }
+
+          lastActiveAlertsPayload = newAlerts;
+          applyActiveAlerts(alertsEnabled ? newAlerts : {});
+        }
+        // Sync recently resolved alerts
+        if (message.data.recentlyResolved !== undefined) {
+          // Received recentlyResolved update
+
+          // Update resolved alerts atomically to prevent race conditions
+          const newResolvedAlerts: Record<string, ResolvedAlert> = {};
+          if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
+            message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
+              newResolvedAlerts[alert.id] = alert;
+            });
+          }
+
+          // Clear existing resolved alerts and set new ones
+          const currentResolvedIds = Object.keys(recentlyResolved);
+          currentResolvedIds.forEach((id) => {
+            if (!newResolvedAlerts[id]) {
+              setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
+            }
+          });
+
+          // Add new resolved alerts
+          Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
+            setRecentlyResolved(id, alert);
+          });
+
+          setState('recentlyResolved', Object.values(newResolvedAlerts));
+
+          // Updated recentlyResolved
+        }
+        setState(
+          'lastUpdate',
+          typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now(),
+        );
+      });
+    logger.debug('message', {
+      type: message.type,
+      hasData: !!message.data,
+      resourceCount: message.data?.resources?.length || 0,
+    });
   };
 
   const setupWebSocket = () => {
@@ -498,6 +718,10 @@ export function createWebSocketStore(url: string) {
           characterCount: event.data.length,
           maxBytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES,
         });
+        // Only a state payload reaches this size, and the server that sent it is
+        // too old to have honored our advertised limit. Recover the snapshot over
+        // REST rather than leaving deltas with no baseline to patch.
+        void hydrateStateFromRest('oversized-websocket-payload');
         return;
       }
 
@@ -517,155 +741,18 @@ export function createWebSocketStore(url: string) {
           message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
           message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
         ) {
-          // Update state properties individually, but batch the whole payload to
-          // reduce reactive recomputations and UI thrash on large updates.
-          if (message.data)
-            batch(() => {
-              // Mark that we've received usable data (initial payload or raw update)
-              if (!initialDataReceived()) {
-                setInitialDataReceived(true);
-              }
-
-              // Canonical resource contract:
-              // `state.resources` is the authoritative frontend model.
-              // `state.connectedInfrastructure` is the authoritative reporting projection.
-              if (message.data.connectedInfrastructure !== undefined) {
-                const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
-                  ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
-                  : [];
-                setState(
-                  'connectedInfrastructure',
-                  reconcile(connectedInfrastructure, { key: 'id' }),
-                );
-              }
-              if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
-              if (message.data.performance !== undefined)
-                setState('performance', message.data.performance);
-              if (message.data.connectionHealth !== undefined)
-                setState('connectionHealth', message.data.connectionHealth);
-              if (message.data.stats !== undefined) setState('stats', message.data.stats);
-              if (message.data.pveTagColors !== undefined) {
-                setState('pveTagColors', message.data.pveTagColors ?? {});
-              }
-              if (message.data.pveTagStyles !== undefined) {
-                setState('pveTagStyles', message.data.pveTagStyles ?? {});
-              }
-              // Handle unified resources
-              let nextResources: Resource[] | undefined;
-              if (message.data.resources !== undefined) {
-                if (Array.isArray(message.data.resources)) {
-                  rawServerResources = structuredClone(message.data.resources) as Resource[];
-                  nextResources = mergeCanonicalResourceSnapshot(
-                    message.data.resources,
-                    state.resources,
-                  );
-                } else {
-                  rawServerResources = [];
-                  nextResources = [];
-                }
-              } else if (
-                'resourceDelta' in message.data &&
-                message.data.resourceDelta !== undefined
-              ) {
-                if (rawServerResources) {
-                  rawServerResources = applyResourceStateDelta(
-                    rawServerResources,
-                    message.data.resourceDelta,
-                  );
-                  nextResources = mergeCanonicalResourceSnapshot(
-                    structuredClone(rawServerResources) as Resource[],
-                    state.resources,
-                  );
-                } else {
-                  // A delta landed before any full snapshot (e.g. the initial
-                  // payload was dropped as oversized). There is no baseline to
-                  // patch, so ask the server for a full snapshot instead of
-                  // applying the delta to nothing and rendering stubs.
-                  requestFullStateRecovery();
-                }
-              }
-              if (nextResources !== undefined) {
-                logger.debug('[WebSocket] Updating resources', {
-                  count: nextResources.length,
-                  types: [...new Set(nextResources.map((resource) => resource.type) || [])],
-                });
-                setState('resources', reconcile(nextResources, { key: 'id' }));
-
-                // Sync container update states with docker host command status payloads.
-                nextResources.forEach((resource: any) => {
-                  if (resource?.type !== 'docker-host') return;
-                  const platformData = asRecord(resource.platformData);
-                  const dockerData = asRecord(platformData?.docker);
-                  const command = dockerData?.command || platformData?.command;
-                  if (!command || typeof command !== 'object') return;
-
-                  const agentIds = new Set<string>([
-                    resource.id,
-                    asString(dockerData?.hostSourceId) || '',
-                    asString(platformData?.hostSourceId) || '',
-                    asString(resource?.discoveryTarget?.agentId) || '',
-                    isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
-                      ? asString(resource?.discoveryTarget?.resourceId) || ''
-                      : '',
-                  ]);
-                  agentIds.forEach((agentId) => {
-                    if (agentId) {
-                      syncWithAgentCommand(agentId, command as any);
-                    }
-                  });
-                });
-              }
-              // Sync active alerts from state
-              if (message.data.activeAlerts !== undefined) {
-                const newAlerts: Record<string, Alert> = {};
-                if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
-                  message.data.activeAlerts.forEach((alert: Alert) => {
-                    newAlerts[alert.id] = alert;
-                  });
-                }
-
-                lastActiveAlertsPayload = newAlerts;
-                applyActiveAlerts(alertsEnabled ? newAlerts : {});
-              }
-              // Sync recently resolved alerts
-              if (message.data.recentlyResolved !== undefined) {
-                // Received recentlyResolved update
-
-                // Update resolved alerts atomically to prevent race conditions
-                const newResolvedAlerts: Record<string, ResolvedAlert> = {};
-                if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
-                  message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
-                    newResolvedAlerts[alert.id] = alert;
-                  });
-                }
-
-                // Clear existing resolved alerts and set new ones
-                const currentResolvedIds = Object.keys(recentlyResolved);
-                currentResolvedIds.forEach((id) => {
-                  if (!newResolvedAlerts[id]) {
-                    setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
-                  }
-                });
-
-                // Add new resolved alerts
-                Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
-                  setRecentlyResolved(id, alert);
-                });
-
-                setState('recentlyResolved', Object.values(newResolvedAlerts));
-
-                // Updated recentlyResolved
-              }
-              setState(
-                'lastUpdate',
-                typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now(),
-              );
-            });
-          logger.debug('message', {
-            type: message.type,
-            hasData: !!message.data,
-            resourceCount: message.data?.resources?.length || 0,
+          applyStatePayload(message);
+        } else if (message.type === 'stateTooLarge') {
+          // The server withheld a snapshot we could not have accepted. It has
+          // already set its delta baseline to that snapshot, so hydrating the
+          // same payload over REST puts us back in step with the deltas.
+          logger.warn('Server withheld an oversized state payload; hydrating over REST', {
+            supersedes: message.data?.supersedes,
+            bytes: message.data?.bytes,
+            maxBytes: message.data?.maxBytes,
+            resourceCount: message.data?.resourceCount,
           });
+          void hydrateStateFromRest('server-state-too-large');
         } else if (message.type === WEBSOCKET.MESSAGE_TYPES.ERROR) {
           logger.debug('error', message.error);
         } else if (message.type === 'ping') {
@@ -928,6 +1015,7 @@ export function createWebSocketStore(url: string) {
 
       rawServerResources = null;
       lastDeltaRecoveryRequestAt = 0;
+      lastRestHydrationAt = 0;
       clearReconnectTimeout();
       clearReconnectDelayTimeout();
       reconnectAttempt = 0;

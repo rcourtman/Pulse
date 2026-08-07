@@ -9026,3 +9026,49 @@ halves: the served value for a `settings:read` token versus a
 `monitoring:read` token, and that the routes agree with whichever value was
 served. `TestSettingsCapabilitiesMatchRouteEnforcementWithoutRBAC` keeps the
 withheld case honest against live 403s.
+
+### WebSocket state payloads negotiate an inbound frame limit
+
+The `/ws` upgrade accepts an optional `max_message_bytes` query parameter by
+which a client declares the largest inbound frame it can accept. The limit rides
+the handshake rather than a post-connect message because it must be known before
+the hub builds the first state payload; a message would race that build and
+leave the server marshalling a snapshot it is about to withhold. The hub honors
+values of at least 64 KiB and ignores anything absent, unparseable, or smaller
+(`internal/websocket/hub.go`).
+
+When a state payload would exceed the advertised limit, the hub withholds it and
+queues a compact `stateTooLarge` message in its place, carrying `supersedes`
+(the message type that would have shipped the payload), `bytes`, `maxBytes`,
+`resourceCount`, and `hydrateFrom` (`/api/state`). This applies to every path
+that ships a full snapshot — the initial `initialState`, the `rawData` answer to
+`requestData`, and an oversized `rawData` delta — so the recovery path can never
+re-ship the payload that could not be delivered in the first place. Clients
+re-hydrate from `GET /api/state`, which serves the same `BuildFrontendState()`
+snapshot without a frame ceiling.
+
+Withholding a snapshot still establishes the per-client delta baseline. Leaving
+it nil would make `queueStateDelta` abstain permanently and freeze the client on
+its REST copy; setting it keeps later deltas diffing against the state the
+client actually holds, because REST and the socket serve the same projection.
+When the marker itself cannot be queued the baseline stays unset, matching the
+existing contract for a snapshot that failed to send.
+
+`queueFullState` reuses the payload `buildClientStateSnapshot` already
+marshalled instead of re-encoding the object graph, and projects the wire size
+from those bytes, so a payload that is about to be withheld is never marshalled
+a second time.
+
+The negotiation is additive in both directions: a client that omits the
+parameter receives today's unrestricted payloads, and a server that ignores the
+parameter keeps working with a negotiating client, which still drops the
+oversized frame and re-hydrates over REST on its own.
+
+`TestQueueFullStateWithholdsSnapshotOverAdvertisedLimit`,
+`TestQueueFullStateSendsSnapshotWhenClientAdvertisesNoLimit`,
+`TestDeltasFlowAfterSnapshotIsWithheld`,
+`TestQueueStateDeltaWithholdsOversizedDelta`,
+`TestWithheldSnapshotLeavesBaselineUnsetWhenMarkerCannotQueue`,
+`TestApplyAdvertisedInboundLimit`,
+`TestQueueFullStateReusesMarshalledPayloadByteForByte`, and
+`TestProjectedStateMessageBytesMatchesMarshalledSize` pin the matrix.
