@@ -4,6 +4,8 @@ import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastr
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ButtonLink } from '@/components/shared/Button';
 import { TableCard } from '@/components/shared/TableCard';
+import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
+import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
 import { WorkloadsFilter } from './WorkloadsFilter';
 import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
@@ -91,13 +93,11 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
     }
 
     if (visibleInventoryIssues().length > 0) {
+      // Falls back to the shared helper rather than a local literal so the
+      // infrastructureRead gate cannot be bypassed by whichever path renders.
       return (
-        state.workloadsNoInventoryState?.() ?? {
-          title: 'No workload inventory available',
-          description:
-            'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now.',
-          actionLabel: 'Review infrastructure sources',
-        }
+        state.workloadsNoInventoryState?.() ??
+        getWorkloadsNoInventoryState(sessionCanReadInfrastructureSettings())
       );
     }
 

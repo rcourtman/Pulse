@@ -86,11 +86,28 @@ describe('workloadEmptyStatePresentation', () => {
         'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Review source credentials, permissions, and collection status in Settings → Infrastructure.',
       actionLabel: 'Review infrastructure sources',
     });
+    expect(getWorkloadsNoInventoryState(true)).toEqual(getWorkloadsNoInventoryState());
     expect(getWorkloadsNoResourcesState()).toEqual({
       title: 'Connect your first infrastructure source',
       description:
         'Workloads appear after Pulse receives its first monitored system. Add an infrastructure source with API inventory, Agent telemetry, or both, then return here to inspect running VMs, containers, and pods.',
       actionLabel: 'Add infrastructure source',
     });
+  });
+
+  it('drops the Settings → Infrastructure call to action without infrastructureRead', () => {
+    const state = getWorkloadsNoInventoryState(false);
+
+    expect(state).toEqual({
+      title: 'No workload inventory available',
+      description:
+        'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Contact a Pulse administrator to check source credentials, permissions, and collection status.',
+      actionLabel: undefined,
+    });
+    // A viewer cannot open Settings → Infrastructure (the nav item is gated on
+    // infrastructureRead), so neither the link nor the copy may point there.
+    expect(state.actionLabel).toBeUndefined();
+    expect(state.description).not.toContain('Settings → Infrastructure');
+    expect(state.description).not.toContain('Review');
   });
 });

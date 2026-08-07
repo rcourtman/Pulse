@@ -2255,6 +2255,28 @@ most one tenant-local system-settings read; it must not scan tenants, read
 external logo files, call a licensing network service, or add per-route and
 per-component refetches. The response remains bounded to an enabled flag, one
 120-character display name, and the already size-limited inline image.
+
+### Workloads empty-state capability gating adds no request
+
+The workloads no-inventory empty state gates its Settings handoff on the
+session's `infrastructureRead` capability. That capability must be read from
+the already-published session store in
+`frontend-modern/src/stores/sessionSettingsCapabilities.ts`, which is filled by
+the single `/api/security/status` resolve `useAppRuntimeState.ts` already
+performs on mount — the same response that feeds the session presentation
+policy and session capabilities. The gate must not add a fetch of its own, must
+not poll, and must not be resolved by mounting Settings or by calling
+`/api/security/status` a second time from a workload surface.
+
+Cost on the hot path stays a signal read inside the existing
+`workloadsNoInventoryState` memo in `useWorkloadsState.ts`: no extra query, no
+per-row work, and no additional pass over the workload set. The memo already
+recomputes only when its inputs change, so a session whose capabilities never
+change re-renders the empty state no more often than before. `WorkloadsSurface`
+resolves the same value through the shared presentation helper rather than a
+local literal, so the gate costs one accessor call on the empty-state path and
+nothing at all when workload rows are present.
+
 ### Per-tenant resource stores are released on offboarding and shutdown
 
 `ResourceHandlers.getStore` opens a SQLite handle per org and caches it for the

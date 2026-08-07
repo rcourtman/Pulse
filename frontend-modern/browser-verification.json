@@ -1,46 +1,47 @@
 {
   "version": 1,
+  "base_sha": "6a958761e84b64dca7052caad855144e57880690",
+  "verified_at": "2026-08-07T21:53:52Z",
   "result": "passed",
-  "base_sha": "14a82e7684390c9fe0a4bd900417c4adbb7140b8",
-  "verified_at": "2026-08-07T20:36:11Z",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/types/config.ts"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts",
+    "frontend-modern/src/stores/sessionPresentationPolicy.ts",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts",
+    "frontend-modern/src/utils/workloadEmptyStatePresentation.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "4bc892c16a978f7a162828f1221acbfea4ec56ee8ddc4d5993536469c86f7252",
-    "frontend-modern/src/types/config.ts": "f7fc76d882f2c6fbd00d75860434ab4a8fd5369d031b9e24a18d76f42b607c72"
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "b30c1f982a67303aa54381bb868f89bb8bfb37d745518a05aa8f1aa5c84a1258",
+    "frontend-modern/src/components/Workloads/useWorkloadsState.ts": "8fad9ab73ca735495fd3a5b9e7e75d33c1da86bd200d753e2c2f885cb4b7ae8c",
+    "frontend-modern/src/stores/sessionPresentationPolicy.ts": "56bf6f99d519f4373d6329bd4a9f066ec2b6b9d64378fd1a85b2c04b3eb7eac5",
+    "frontend-modern/src/stores/sessionSettingsCapabilities.ts": "d54cb07dd8458b88ce2e90b6c94f8548620f091065a093050a148d5862f34ec2",
+    "frontend-modern/src/utils/workloadEmptyStatePresentation.ts": "704e32f24a8f9e24020288d9b9e80674d3ca90e36f38f32dd52ae4eb7740ab1b"
   },
   "routes": [
-    "/settings/system-general",
-    "/settings/system-network"
-  ],
-  "states": [
-    "verified against real admin and non-admin sessions rather than a stubbed capability: one binary built from this worktree on :8920 with PROXY_AUTH_SECRET / PROXY_AUTH_USER_HEADER / PROXY_AUTH_ROLE_HEADER / PROXY_AUTH_ADMIN_ROLE, fronted by two header-injecting reverse proxies differing only in the role header (:8921 admin-user/admin, :8922 viewer-user/viewer)",
-    "the served payload confirms the new field tracks the gate: :8921 reports detailLevel=privileged with infrastructureRead=true and systemSettingsRead=true; :8922 reports detailLevel=authenticated with both false",
-    "non-admin cold load of /settings/system-general: Network, Pulse server updates, and Recovery are all absent from the settings navigation while General remains, so user-scoped theme, language, and unit preferences stay reachable",
-    "non-admin cold load deep-linked at /settings/system-network: the route is refused and the session lands on /settings/monitoring/availability, the first tab it can actually reach - this composes with the capability-aware fallback added in 755a88878 rather than bouncing back to the blocked default",
-    "admin cold load deep-linked at /settings/system-network: the route resolves, the Network panel renders, and all three tabs are present, so the gate does not withhold from an entitled session",
-    "no stuck loading state in any of the above; this change gates nav visibility only and adds no fetch",
-    "rebased onto 14a82e768 after verification; that intervening commit moves API refusal logging from warn to debug and changes no route, payload, or frontend source, and the two verified frontend files are byte-identical across the rebase (content_sha256 unchanged), so the recorded exercise still describes this commit"
-  ],
-  "interactions": [
-    "built the frontend into the embed dir and rebuilt ./cmd/pulse so the served capability and the rendering frontend are the same artifact",
-    "curled /api/security/status through both proxies to establish the admin/non-admin A/B before touching the browser, reading infrastructureRead and systemSettingsRead side by side",
-    "cold-loaded /settings/system-general as viewer-user at 1280x720 and enumerated every settings nav control by DOM text, so items below the sidebar fold were counted",
-    "cold-loaded /settings/system-network as viewer-user and recorded the route the app settled on",
-    "cold-loaded /settings/system-network as admin-user and confirmed the panel renders with all three tabs present",
-    "repeated the non-admin /settings/system-general load at 375x812 and confirmed the same three tabs absent with General retained",
-    "screenshotted the non-admin System > General panel at 375x812"
+    "/proxmox"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 720
+      "height": 800
     },
     {
       "width": 375,
       "height": 812
     }
+  ],
+  "states": [
+    "Workloads 'No workload inventory available' empty state as a real proxy-auth VIEWER session (detailLevel 'authenticated', proxyAuthIsAdmin false, settingsCapabilities.infrastructureRead false, /api/connections 403): description reads 'Contact a Pulse administrator to check source credentials, permissions, and collection status', no 'Review infrastructure sources' button, and querying the DOM for a[href*=\"/settings\"] returned zero nodes.",
+    "Same viewer state: the inventory source-issues banner is unchanged and still present (data-testid workload-inventory-source-issues) — 'Source unreachable: lab-pve / Pulse has VMs and containers enabled for lab-pve, but the Proxmox VE API is unreachable.' with the 'VMs and containers' coverage chip.",
+    "Same route as a real proxy-auth ADMIN session (detailLevel 'privileged', infrastructureRead true) on the same backend: admin behaviour unchanged — original 'Review source credentials, permissions, and collection status in Settings → Infrastructure.' copy plus the 'Review infrastructure sources' button linking to /settings/infrastructure.",
+    "Viewer at 375x812 after reload: same suppressed-CTA copy, banner intact, documentElement.scrollWidth did not exceed the viewport (no horizontal overflow).",
+    "Console at both viewports carried only pre-existing non-admin noise (ws upgrade unsupported by the test proxy; 403s from admin-gated system-settings and update-check polling that other branches address) — no error introduced by this change."
+  ],
+  "interactions": [
+    "Seeded an unreachable Proxmox VE source (host 192.0.2.77, RFC 5737 TEST-NET-1) via POST /api/config/nodes as the admin identity, then polled GET /api/runtime/inventory-sources as the viewer until it reported a blocking state, producing the inventory-issue empty state with zero guests.",
+    "Loaded /proxmox as the viewer at 1280x800 and inspected the rendered empty state, its links, and the source-issues banner via DOM query.",
+    "Resized to 375x812, reloaded /proxmox (the workload table stages width at mount), and re-inspected the same elements.",
+    "Loaded /proxmox as the admin identity at desktop width on the same backend as the A/B control and confirmed the CTA and original copy still render.",
+    "Read console errors for both sessions."
   ]
 }

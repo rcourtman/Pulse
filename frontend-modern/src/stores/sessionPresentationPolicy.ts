@@ -5,6 +5,7 @@ import type {
   SecurityStatusSessionCapabilities,
 } from '@/types/config';
 import { syncSessionCapabilities } from '@/stores/sessionCapabilities';
+import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 
 const DEFAULT_SESSION_PRESENTATION_POLICY: SecurityStatusPresentationPolicy = {
   demoMode: false,
@@ -40,9 +41,13 @@ function normalizeSessionPresentationPolicy(
 }
 
 export function syncSessionPresentationPolicy(
-  status?: Pick<SecurityStatus, 'sessionCapabilities' | 'presentationPolicy'> | null,
+  status?: Pick<
+    SecurityStatus,
+    'sessionCapabilities' | 'presentationPolicy' | 'settingsCapabilities'
+  > | null,
 ): SecurityStatusPresentationPolicy {
   syncSessionCapabilities(status);
+  syncSessionSettingsCapabilities(status);
   const next = normalizeSessionPresentationPolicy(
     status?.presentationPolicy,
     status?.sessionCapabilities,

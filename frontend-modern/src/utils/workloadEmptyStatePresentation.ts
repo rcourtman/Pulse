@@ -19,12 +19,20 @@ export function getWorkloadsGuestsEmptyState(search: string) {
   } as const;
 }
 
-export function getWorkloadsNoInventoryState() {
+/**
+ * `canReviewInfrastructureSources` reflects the session's `infrastructureRead`
+ * capability — the same gate that decides whether Settings → Infrastructure is
+ * in the nav at all. A viewer without it reaches this state (the inventory
+ * source issues that trigger it are served at monitoring:read), so the copy has
+ * to stop naming a page they cannot open and point them at someone who can.
+ */
+export function getWorkloadsNoInventoryState(canReviewInfrastructureSources = true) {
   return {
     title: 'No workload inventory available',
-    description:
-      'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Review source credentials, permissions, and collection status in Settings → Infrastructure.',
-    actionLabel: 'Review infrastructure sources',
+    description: canReviewInfrastructureSources
+      ? 'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Review source credentials, permissions, and collection status in Settings → Infrastructure.'
+      : 'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Contact a Pulse administrator to check source credentials, permissions, and collection status.',
+    actionLabel: canReviewInfrastructureSources ? 'Review infrastructure sources' : undefined,
   } as const;
 }
 

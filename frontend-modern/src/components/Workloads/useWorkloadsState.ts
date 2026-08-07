@@ -7,6 +7,7 @@ import type { Resource } from '@/types/resource';
 import type { ViewMode, WorkloadGuest, WorkloadType } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
@@ -333,7 +334,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   );
   const workloadsGuestsEmptyState = createMemo(() => getWorkloadsGuestsEmptyState(search()));
   const workloadsLoadingState = createMemo(() => getWorkloadsLoadingState(reconnecting()));
-  const workloadsNoInventoryState = createMemo(() => getWorkloadsNoInventoryState());
+  const workloadsNoInventoryState = createMemo(() =>
+    getWorkloadsNoInventoryState(sessionCanReadInfrastructureSettings()),
+  );
   const workloadsDisconnectedState = createMemo(() =>
     getWorkloadsDisconnectedState(reconnecting()),
   );

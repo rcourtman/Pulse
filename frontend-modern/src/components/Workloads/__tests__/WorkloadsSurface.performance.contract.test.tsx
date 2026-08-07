@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
+import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { WorkloadsSurface } from '../WorkloadsSurface';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
 import workloadsFilterSource from '../WorkloadsFilter.tsx?raw';
@@ -489,6 +490,9 @@ describe('Workloads performance contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // Session capability signals live at module scope; reset so a gated case
+    // cannot leak its viewer identity into the next test.
+    syncSessionSettingsCapabilities(null);
     mockLocationSearch = '';
     mockWorkloads = [];
     mockInfrastructureResources = [];
@@ -650,6 +654,79 @@ describe('Workloads performance contract', () => {
       expect(screen.getByRole('link', { name: 'Review infrastructure sources' })).toHaveAttribute(
         'href',
         '/settings/infrastructure',
+      );
+    });
+
+    it('withholds the infrastructure call to action from sessions without infrastructureRead', () => {
+      // No workloadsNoInventoryState stub here: the surface has to resolve the
+      // copy through the shared helper so the capability gate is what is under
+      // test, not a hand-written empty state.
+      syncSessionSettingsCapabilities({
+        settingsCapabilities: { infrastructureRead: false } as never,
+      });
+
+      render(() => (
+        <Router>
+          <Route
+            path="/"
+            component={() => (
+              <WorkloadsSurface
+                vms={[]}
+                containers={[]}
+                nodes={[]}
+                useWorkloads
+                state={
+                  {
+                    setClearSurfaceRootRef: vi.fn(),
+                    kioskMode: () => false,
+                    surfaceConnected: () => true,
+                    surfaceInitialDataReceived: () => true,
+                    allGuests: () => [],
+                    filteredGuests: () => [],
+                    search: () => '',
+                    viewMode: () => 'all',
+                    statusMode: () => 'all',
+                    hostFilterConfig: () => undefined,
+                    platformFilterConfig: () => undefined,
+                    namespaceFilterConfig: () => undefined,
+                    containerRuntimeFilterConfig: () => undefined,
+                    workloadsGuestsEmptyState: () => ({
+                      title: 'No guests found',
+                      description: 'No guests match your current filters',
+                    }),
+                    workloadInventoryIssues: () => [
+                      {
+                        id: 'pve:delly',
+                        name: 'delly',
+                        type: 'pve',
+                        typeLabel: 'Proxmox VE',
+                        state: 'unreachable',
+                        stateLabel: 'Source unreachable',
+                        coverageLabel: 'VMs and containers',
+                        description:
+                          'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
+                      },
+                    ],
+                  } as any
+                }
+              />
+            )}
+          />
+        </Router>
+      ));
+
+      // The banner itself is unaffected by the gate — only the destination is.
+      expect(screen.getByTestId('workload-inventory-source-issues')).toBeInTheDocument();
+      expect(screen.getByText('Source unreachable: delly')).toBeInTheDocument();
+      expect(screen.getByText('No workload inventory available')).toBeInTheDocument();
+
+      expect(
+        screen.queryByRole('link', { name: 'Review infrastructure sources' }),
+      ).not.toBeInTheDocument();
+      expect(document.querySelector('a[href="/settings/infrastructure"]')).toBeNull();
+      expect(document.body).not.toHaveTextContent('Settings → Infrastructure');
+      expect(document.body).toHaveTextContent(
+        'Contact a Pulse administrator to check source credentials, permissions, and collection status.',
       );
     });
 

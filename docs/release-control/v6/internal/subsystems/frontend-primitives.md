@@ -2246,7 +2246,20 @@ default` instead of fusing provider and badge text such as
     inventory must use a distinct no-inventory presentation that points
     operators at credentials, permissions, and collection status in the
     canonical infrastructure workspace instead of reusing first-run onboarding
-    copy.
+    copy. That handoff is conditional on the session being able to open the
+    workspace: the no-inventory presentation takes the session's
+    `infrastructureRead` capability as a parameter, and a session without it
+    must render neither the `/settings/infrastructure` action nor copy naming
+    that page, directing the operator to an administrator instead. The gate
+    reads the destination's own capability — the same one
+    `settingsNavCatalog` requires for the Infrastructure nav item — so the
+    offer and the nav gate cannot drift apart, and the variant stays a
+    parameter of the shared presentation owner rather than a branch at any
+    call site, including the surface's own inline fallback. Sessions whose
+    capabilities have not resolved keep the action, so an administrator never
+    flickers through the restricted copy. Inventory-source health itself stays
+    visible to every session that can read monitoring data; only the
+    Settings handoff is gated.
 18. Keep cross-surface investigation handoffs on shared route ownership.
     Feature shells such as Alerts and Patrol may decide which governed
     destination chips to render, but canonical href, label, dedupe, and
