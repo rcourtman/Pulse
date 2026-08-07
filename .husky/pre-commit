@@ -114,7 +114,11 @@ python3 scripts/release_control/contract_audit.py --check --staged
 
 echo "Running governance guardrail tests..."
 export PULSE_READ_STAGED_GOVERNANCE=1
-go test ./internal/repoctl -count=1
+# These tests are I/O bound (they os.Stat every evidence path status.json
+# references), so Go's 10m default is a false-failure trap when several agents
+# commit at once and starve each other. Raise the ceiling rather than skip the
+# tests; override with PULSE_HOOK_GO_TEST_TIMEOUT on a quiet machine.
+go test ./internal/repoctl -count=1 -timeout "${PULSE_HOOK_GO_TEST_TIMEOUT:-30m}"
 
 echo "Running readiness assertion guard..."
 python3 scripts/release_control/readiness_assertion_guard.py --staged --active-target --proof-type automated
@@ -203,11 +207,11 @@ if command -v golangci-lint >/dev/null 2>&1; then
             NEW_FROM_FLAG="--new-from-rev=$NEW_FROM_REV"
         fi
         if [ -n "$STAGED_GO_PKGS" ]; then
-            GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
+            GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-20m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
         fi
         for nested_module in $NESTED_GO_MODULES; do
             echo "Running golangci-lint in nested module $nested_module..."
-            (cd "$nested_module" && GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $NEW_FROM_FLAG ./...)
+            (cd "$nested_module" && GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-20m}" $NEW_FROM_FLAG ./...)
         done
     else
         echo "Skipping golangci-lint (no staged Go/module/linter changes)."
