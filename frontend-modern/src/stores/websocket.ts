@@ -19,6 +19,7 @@ import {
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
 import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
+import { apiFetchJSON } from '@/utils/apiClient';
 
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
 const AUTO_REGISTER_NOTIFICATION_FRESH_MS = 2 * 60 * 1000;
@@ -310,7 +311,12 @@ export function createWebSocketStore(url: string) {
   // merge are cloned first, because the merge output shares nested references
   // and Solid's reconcile mutates adopted objects in place.
   let rawServerResources: Resource[] | null = null;
-  let lastDeltaRecoveryRequestAt = 0;
+  let lastFullStateRecoveryAt = 0;
+  // Set once the server has sent a full snapshot too large for the inbound
+  // guard. Asking for another one over the socket would only reproduce the same
+  // oversized frame, so recovery has to leave the WebSocket entirely.
+  let oversizedSnapshotObserved = false;
+  let restHydrationInFlight = false;
   let reconnectTimeout = 0;
   let reconnectDelayTimeout = 0;
   let lastServerActivityAt = Date.now();
@@ -437,10 +443,300 @@ export function createWebSocketStore(url: string) {
     }, delay);
   };
 
+  // Applies one decoded server message to the store. Shared by the socket
+  // handler and the REST recovery path so a snapshot fetched over HTTP
+  // establishes the same delta baseline a socket snapshot would.
+  const processServerMessage = (data: unknown) => {
+    try {
+      const message = data as TimestampedWSMessage;
+
+      if (
+        message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
+        message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
+      ) {
+        // Update state properties individually, but batch the whole payload to
+        // reduce reactive recomputations and UI thrash on large updates.
+        if (message.data)
+          batch(() => {
+            // Mark that we've received usable data (initial payload or raw update)
+            if (!initialDataReceived()) {
+              setInitialDataReceived(true);
+            }
+
+            // Canonical resource contract:
+            // `state.resources` is the authoritative frontend model.
+            // `state.connectedInfrastructure` is the authoritative reporting projection.
+            if (message.data.connectedInfrastructure !== undefined) {
+              const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
+                ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
+                : [];
+              setState(
+                'connectedInfrastructure',
+                reconcile(connectedInfrastructure, { key: 'id' }),
+              );
+            }
+            if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
+            if (message.data.performance !== undefined)
+              setState('performance', message.data.performance);
+            if (message.data.connectionHealth !== undefined)
+              setState('connectionHealth', message.data.connectionHealth);
+            if (message.data.stats !== undefined) setState('stats', message.data.stats);
+            if (message.data.pveTagColors !== undefined) {
+              setState('pveTagColors', message.data.pveTagColors ?? {});
+            }
+            if (message.data.pveTagStyles !== undefined) {
+              setState('pveTagStyles', message.data.pveTagStyles ?? {});
+            }
+            // Handle unified resources
+            let nextResources: Resource[] | undefined;
+            if (message.data.resources !== undefined) {
+              if (Array.isArray(message.data.resources)) {
+                rawServerResources = structuredClone(message.data.resources) as Resource[];
+                nextResources = mergeCanonicalResourceSnapshot(
+                  message.data.resources,
+                  state.resources,
+                );
+              } else {
+                rawServerResources = [];
+                nextResources = [];
+              }
+            } else if (
+              'resourceDelta' in message.data &&
+              message.data.resourceDelta !== undefined
+            ) {
+              if (rawServerResources) {
+                rawServerResources = applyResourceStateDelta(
+                  rawServerResources,
+                  message.data.resourceDelta,
+                );
+                nextResources = mergeCanonicalResourceSnapshot(
+                  structuredClone(rawServerResources) as Resource[],
+                  state.resources,
+                );
+              } else {
+                // A delta landed before any full snapshot (e.g. the initial
+                // payload was dropped as oversized). There is no baseline to
+                // patch, so re-acquire a full snapshot instead of applying the
+                // delta to nothing and rendering stubs.
+                requestFullStateRecovery();
+              }
+            }
+            if (nextResources !== undefined) {
+              logger.debug('[WebSocket] Updating resources', {
+                count: nextResources.length,
+                types: [...new Set(nextResources.map((resource) => resource.type) || [])],
+              });
+              setState('resources', reconcile(nextResources, { key: 'id' }));
+
+              // Sync container update states with docker host command status payloads.
+              nextResources.forEach((resource: any) => {
+                if (resource?.type !== 'docker-host') return;
+                const platformData = asRecord(resource.platformData);
+                const dockerData = asRecord(platformData?.docker);
+                const command = dockerData?.command || platformData?.command;
+                if (!command || typeof command !== 'object') return;
+
+                const agentIds = new Set<string>([
+                  resource.id,
+                  asString(dockerData?.hostSourceId) || '',
+                  asString(platformData?.hostSourceId) || '',
+                  asString(resource?.discoveryTarget?.agentId) || '',
+                  isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
+                    ? asString(resource?.discoveryTarget?.resourceId) || ''
+                    : '',
+                ]);
+                agentIds.forEach((agentId) => {
+                  if (agentId) {
+                    syncWithAgentCommand(agentId, command as any);
+                  }
+                });
+              });
+            }
+            // Sync active alerts from state
+            if (message.data.activeAlerts !== undefined) {
+              const newAlerts: Record<string, Alert> = {};
+              if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
+                message.data.activeAlerts.forEach((alert: Alert) => {
+                  newAlerts[alert.id] = alert;
+                });
+              }
+
+              lastActiveAlertsPayload = newAlerts;
+              applyActiveAlerts(alertsEnabled ? newAlerts : {});
+            }
+            // Sync recently resolved alerts
+            if (message.data.recentlyResolved !== undefined) {
+              // Received recentlyResolved update
+
+              // Update resolved alerts atomically to prevent race conditions
+              const newResolvedAlerts: Record<string, ResolvedAlert> = {};
+              if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
+                message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
+                  newResolvedAlerts[alert.id] = alert;
+                });
+              }
+
+              // Clear existing resolved alerts and set new ones
+              const currentResolvedIds = Object.keys(recentlyResolved);
+              currentResolvedIds.forEach((id) => {
+                if (!newResolvedAlerts[id]) {
+                  setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
+                }
+              });
+
+              // Add new resolved alerts
+              Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
+                setRecentlyResolved(id, alert);
+              });
+
+              setState('recentlyResolved', Object.values(newResolvedAlerts));
+
+              // Updated recentlyResolved
+            }
+            setState(
+              'lastUpdate',
+              typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now(),
+            );
+          });
+        logger.debug('message', {
+          type: message.type,
+          hasData: !!message.data,
+          resourceCount: message.data?.resources?.length || 0,
+        });
+      } else if (message.type === WEBSOCKET.MESSAGE_TYPES.ERROR) {
+        logger.debug('error', message.error);
+      } else if (message.type === 'ping') {
+        // Respond to ping with pong
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'pong', data: { timestamp: Date.now() } }));
+        }
+      } else if (message.type === 'pong') {
+        // Server acknowledged our ping
+        logger.debug('Received pong from server');
+      } else if (message.type === 'welcome') {
+        // Welcome message from server
+        logger.info('WebSocket connection established');
+      } else if (message.type === 'alert') {
+        // Individual alerts now handled via state sync
+        logger.debug('New alert received (will sync with next state update)', message.data);
+      } else if (message.type === 'alertResolved') {
+        // Individual alert resolution now handled via state sync
+        logger.info('Alert resolved (will sync with next state update)', {
+          alertIdentifier: message.data.alertIdentifier,
+        });
+      } else if (message.type === 'update:progress') {
+        // Update progress event
+        setUpdateProgress(message.data);
+        logger.info('Update progress:', message.data);
+      } else if (message.type === 'node_auto_registered') {
+        const node = message.data;
+        const nodeName = node.name || node.host;
+        const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
+
+        if (
+          shouldShowAutoRegisterNotification(message, node, Date.now(), currentConnectionOpenedAtMs)
+        ) {
+          notificationStore.success(
+            `${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
+            8000,
+          );
+          eventBus.emit('node_auto_registered', node);
+          logger.info('Node auto-registered:', node);
+        } else {
+          logger.debug('Suppressed stale or duplicate node auto-registration notification', {
+            nodeName,
+            nodeType: node.type,
+            timestamp: message.timestamp,
+          });
+        }
+
+        eventBus.emit('refresh_nodes');
+      } else if (message.type === 'node_deleted' || message.type === 'nodes_changed') {
+        // Nodes configuration has changed, refresh the list
+        eventBus.emit('refresh_nodes');
+      } else if (message.type === 'discovery_update') {
+        // Discovery scan completed with new results
+        eventBus.emit('discovery_updated', message.data);
+      } else if (message.type === 'discovery_started') {
+        eventBus.emit('discovery_status', {
+          scanning: true,
+          subnet: message.data?.subnet,
+          timestamp: message.data?.timestamp,
+        });
+      } else if (message.type === 'discovery_complete') {
+        eventBus.emit('discovery_status', {
+          scanning: false,
+          timestamp: message.data?.timestamp,
+        });
+      } else if ((message as { type: string }).type === 'ai_discovery_progress') {
+        // AI-powered discovery progress update
+        eventBus.emit(
+          'ai_discovery_progress',
+          (message as { data: unknown }).data as import('../types/discovery').DiscoveryProgress,
+        );
+      } else if (message.type === 'settingsUpdate') {
+        // Settings have been updated (e.g., theme change)
+        if (message.data?.theme) {
+          // Emit event for theme change
+          eventBus.emit('theme_changed', message.data.theme);
+          logger.info('Theme update received via WebSocket:', message.data.theme);
+        }
+      } else {
+        // Log any unhandled message types in dev mode only
+        if (import.meta.env.DEV) {
+          // Silently ignore unhandled message types
+        }
+      }
+    } catch (err) {
+      logger.error('Failed to process WebSocket message', err);
+    }
+  };
+
+  // Hydrate from the REST snapshot endpoint. `/api/state` serves the same
+  // `BuildFrontendState()` value the socket sends as `initialState`, but over a
+  // transport with no frame-size ceiling, so it is the only recovery path that
+  // works once the snapshot has outgrown the inbound guard. The response is fed
+  // through the normal message handler so it establishes the delta baseline
+  // exactly as a socket snapshot would.
+  const hydrateFullStateFromREST = async () => {
+    if (isDisposed || restHydrationInFlight) return;
+    restHydrationInFlight = true;
+    try {
+      const snapshot = await apiFetchJSON<State>('/api/state');
+      if (isDisposed) return;
+      if (!snapshot || typeof snapshot !== 'object') {
+        logger.error('REST state recovery returned an unusable payload');
+        return;
+      }
+      logger.info('Hydrated full state over REST after an oversized WebSocket snapshot');
+      processServerMessage({ type: WEBSOCKET.MESSAGE_TYPES.RAW_DATA, data: snapshot });
+    } catch (error) {
+      // Leave the throttle stamp in place; the next delta without a baseline
+      // retries. Failing here is not fatal — the UI stays in its current state.
+      logger.error('REST state recovery failed', error);
+    } finally {
+      restHydrationInFlight = false;
+    }
+  };
+
+  // Single throttled entry point for re-acquiring a full snapshot, whichever
+  // trigger noticed the gap: a frame dropped as oversized, or a delta arriving
+  // with no baseline to patch. Sharing one budget keeps a server that repeatedly
+  // emits an undeliverable snapshot from turning into a REST hammer.
   const requestFullStateRecovery = () => {
     const now = Date.now();
-    if (now - lastDeltaRecoveryRequestAt < 30000) return;
-    lastDeltaRecoveryRequestAt = now;
+    if (now - lastFullStateRecoveryAt < 30000) return;
+    lastFullStateRecoveryAt = now;
+
+    if (oversizedSnapshotObserved) {
+      // The socket has already proven it cannot deliver this estate's snapshot.
+      // `requestData` would just queue another frame the guard drops, which is
+      // what left large estates stuck on an empty UI, retrying every 30s.
+      logger.warn('Recovering full state over REST; socket snapshot exceeds the inbound limit');
+      void hydrateFullStateFromREST();
+      return;
+    }
+
     logger.warn('Received resource delta without a full snapshot baseline; requesting full state');
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'requestData' }));
@@ -498,6 +794,14 @@ export function createWebSocketStore(url: string) {
           characterCount: event.data.length,
           maxBytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES,
         });
+        // A dropped frame is almost always the full snapshot: it is the only
+        // message that scales with estate size (~2.7 KB per resource, so the
+        // 8 MiB guard trips around 3100 resources). Recover over REST rather
+        // than waiting for a baseline-less delta to notice, otherwise the first
+        // paint on a large estate is an empty UI.
+        oversizedSnapshotObserved = true;
+        lastServerActivityAt = Date.now();
+        requestFullStateRecovery();
         return;
       }
 
@@ -510,254 +814,7 @@ export function createWebSocketStore(url: string) {
       }
       lastServerActivityAt = Date.now();
 
-      try {
-        const message = data as TimestampedWSMessage;
-
-        if (
-          message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
-          message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
-        ) {
-          // Update state properties individually, but batch the whole payload to
-          // reduce reactive recomputations and UI thrash on large updates.
-          if (message.data)
-            batch(() => {
-              // Mark that we've received usable data (initial payload or raw update)
-              if (!initialDataReceived()) {
-                setInitialDataReceived(true);
-              }
-
-              // Canonical resource contract:
-              // `state.resources` is the authoritative frontend model.
-              // `state.connectedInfrastructure` is the authoritative reporting projection.
-              if (message.data.connectedInfrastructure !== undefined) {
-                const connectedInfrastructure = Array.isArray(message.data.connectedInfrastructure)
-                  ? (message.data.connectedInfrastructure as ConnectedInfrastructureItem[])
-                  : [];
-                setState(
-                  'connectedInfrastructure',
-                  reconcile(connectedInfrastructure, { key: 'id' }),
-                );
-              }
-              if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
-              if (message.data.performance !== undefined)
-                setState('performance', message.data.performance);
-              if (message.data.connectionHealth !== undefined)
-                setState('connectionHealth', message.data.connectionHealth);
-              if (message.data.stats !== undefined) setState('stats', message.data.stats);
-              if (message.data.pveTagColors !== undefined) {
-                setState('pveTagColors', message.data.pveTagColors ?? {});
-              }
-              if (message.data.pveTagStyles !== undefined) {
-                setState('pveTagStyles', message.data.pveTagStyles ?? {});
-              }
-              // Handle unified resources
-              let nextResources: Resource[] | undefined;
-              if (message.data.resources !== undefined) {
-                if (Array.isArray(message.data.resources)) {
-                  rawServerResources = structuredClone(message.data.resources) as Resource[];
-                  nextResources = mergeCanonicalResourceSnapshot(
-                    message.data.resources,
-                    state.resources,
-                  );
-                } else {
-                  rawServerResources = [];
-                  nextResources = [];
-                }
-              } else if (
-                'resourceDelta' in message.data &&
-                message.data.resourceDelta !== undefined
-              ) {
-                if (rawServerResources) {
-                  rawServerResources = applyResourceStateDelta(
-                    rawServerResources,
-                    message.data.resourceDelta,
-                  );
-                  nextResources = mergeCanonicalResourceSnapshot(
-                    structuredClone(rawServerResources) as Resource[],
-                    state.resources,
-                  );
-                } else {
-                  // A delta landed before any full snapshot (e.g. the initial
-                  // payload was dropped as oversized). There is no baseline to
-                  // patch, so ask the server for a full snapshot instead of
-                  // applying the delta to nothing and rendering stubs.
-                  requestFullStateRecovery();
-                }
-              }
-              if (nextResources !== undefined) {
-                logger.debug('[WebSocket] Updating resources', {
-                  count: nextResources.length,
-                  types: [...new Set(nextResources.map((resource) => resource.type) || [])],
-                });
-                setState('resources', reconcile(nextResources, { key: 'id' }));
-
-                // Sync container update states with docker host command status payloads.
-                nextResources.forEach((resource: any) => {
-                  if (resource?.type !== 'docker-host') return;
-                  const platformData = asRecord(resource.platformData);
-                  const dockerData = asRecord(platformData?.docker);
-                  const command = dockerData?.command || platformData?.command;
-                  if (!command || typeof command !== 'object') return;
-
-                  const agentIds = new Set<string>([
-                    resource.id,
-                    asString(dockerData?.hostSourceId) || '',
-                    asString(platformData?.hostSourceId) || '',
-                    asString(resource?.discoveryTarget?.agentId) || '',
-                    isAppContainerDiscoveryResourceType(resource?.discoveryTarget?.resourceType)
-                      ? asString(resource?.discoveryTarget?.resourceId) || ''
-                      : '',
-                  ]);
-                  agentIds.forEach((agentId) => {
-                    if (agentId) {
-                      syncWithAgentCommand(agentId, command as any);
-                    }
-                  });
-                });
-              }
-              // Sync active alerts from state
-              if (message.data.activeAlerts !== undefined) {
-                const newAlerts: Record<string, Alert> = {};
-                if (message.data.activeAlerts && Array.isArray(message.data.activeAlerts)) {
-                  message.data.activeAlerts.forEach((alert: Alert) => {
-                    newAlerts[alert.id] = alert;
-                  });
-                }
-
-                lastActiveAlertsPayload = newAlerts;
-                applyActiveAlerts(alertsEnabled ? newAlerts : {});
-              }
-              // Sync recently resolved alerts
-              if (message.data.recentlyResolved !== undefined) {
-                // Received recentlyResolved update
-
-                // Update resolved alerts atomically to prevent race conditions
-                const newResolvedAlerts: Record<string, ResolvedAlert> = {};
-                if (message.data.recentlyResolved && Array.isArray(message.data.recentlyResolved)) {
-                  message.data.recentlyResolved.forEach((alert: ResolvedAlert) => {
-                    newResolvedAlerts[alert.id] = alert;
-                  });
-                }
-
-                // Clear existing resolved alerts and set new ones
-                const currentResolvedIds = Object.keys(recentlyResolved);
-                currentResolvedIds.forEach((id) => {
-                  if (!newResolvedAlerts[id]) {
-                    setRecentlyResolved(id, undefined as unknown as ResolvedAlert);
-                  }
-                });
-
-                // Add new resolved alerts
-                Object.entries(newResolvedAlerts).forEach(([id, alert]) => {
-                  setRecentlyResolved(id, alert);
-                });
-
-                setState('recentlyResolved', Object.values(newResolvedAlerts));
-
-                // Updated recentlyResolved
-              }
-              setState(
-                'lastUpdate',
-                typeof message.data.lastUpdate === 'number' ? message.data.lastUpdate : Date.now(),
-              );
-            });
-          logger.debug('message', {
-            type: message.type,
-            hasData: !!message.data,
-            resourceCount: message.data?.resources?.length || 0,
-          });
-        } else if (message.type === WEBSOCKET.MESSAGE_TYPES.ERROR) {
-          logger.debug('error', message.error);
-        } else if (message.type === 'ping') {
-          // Respond to ping with pong
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'pong', data: { timestamp: Date.now() } }));
-          }
-        } else if (message.type === 'pong') {
-          // Server acknowledged our ping
-          logger.debug('Received pong from server');
-        } else if (message.type === 'welcome') {
-          // Welcome message from server
-          logger.info('WebSocket connection established');
-        } else if (message.type === 'alert') {
-          // Individual alerts now handled via state sync
-          logger.debug('New alert received (will sync with next state update)', message.data);
-        } else if (message.type === 'alertResolved') {
-          // Individual alert resolution now handled via state sync
-          logger.info('Alert resolved (will sync with next state update)', {
-            alertIdentifier: message.data.alertIdentifier,
-          });
-        } else if (message.type === 'update:progress') {
-          // Update progress event
-          setUpdateProgress(message.data);
-          logger.info('Update progress:', message.data);
-        } else if (message.type === 'node_auto_registered') {
-          const node = message.data;
-          const nodeName = node.name || node.host;
-          const nodeType = node.type === 'pve' ? 'Proxmox VE' : 'Proxmox Backup Server';
-
-          if (
-            shouldShowAutoRegisterNotification(
-              message,
-              node,
-              Date.now(),
-              currentConnectionOpenedAtMs,
-            )
-          ) {
-            notificationStore.success(
-              `${nodeType} node "${nodeName}" was successfully auto-registered and is now being monitored!`,
-              8000,
-            );
-            eventBus.emit('node_auto_registered', node);
-            logger.info('Node auto-registered:', node);
-          } else {
-            logger.debug('Suppressed stale or duplicate node auto-registration notification', {
-              nodeName,
-              nodeType: node.type,
-              timestamp: message.timestamp,
-            });
-          }
-
-          eventBus.emit('refresh_nodes');
-        } else if (message.type === 'node_deleted' || message.type === 'nodes_changed') {
-          // Nodes configuration has changed, refresh the list
-          eventBus.emit('refresh_nodes');
-        } else if (message.type === 'discovery_update') {
-          // Discovery scan completed with new results
-          eventBus.emit('discovery_updated', message.data);
-        } else if (message.type === 'discovery_started') {
-          eventBus.emit('discovery_status', {
-            scanning: true,
-            subnet: message.data?.subnet,
-            timestamp: message.data?.timestamp,
-          });
-        } else if (message.type === 'discovery_complete') {
-          eventBus.emit('discovery_status', {
-            scanning: false,
-            timestamp: message.data?.timestamp,
-          });
-        } else if ((message as { type: string }).type === 'ai_discovery_progress') {
-          // AI-powered discovery progress update
-          eventBus.emit(
-            'ai_discovery_progress',
-            (message as { data: unknown }).data as import('../types/discovery').DiscoveryProgress,
-          );
-        } else if (message.type === 'settingsUpdate') {
-          // Settings have been updated (e.g., theme change)
-          if (message.data?.theme) {
-            // Emit event for theme change
-            eventBus.emit('theme_changed', message.data.theme);
-            logger.info('Theme update received via WebSocket:', message.data.theme);
-          }
-        } else {
-          // Log any unhandled message types in dev mode only
-          if (import.meta.env.DEV) {
-            // Silently ignore unhandled message types
-          }
-        }
-      } catch (err) {
-        logger.error('Failed to process WebSocket message', err);
-      }
+      processServerMessage(data);
     };
 
     ws.onclose = (event) => {
@@ -765,6 +822,11 @@ export function createWebSocketStore(url: string) {
       logger.debug('disconnect', { code: event.code, reason: event.reason });
       setConnected(false);
       setInitialDataReceived(false);
+      // The next connection re-sends the snapshot, so let its recovery fire
+      // immediately instead of inheriting this connection's throttle window —
+      // otherwise a reconnect on an estate whose snapshot the guard drops can
+      // sit unhydrated for up to 30s.
+      lastFullStateRecoveryAt = 0;
 
       // Clear heartbeat interval
       clearHeartbeatTimer();
@@ -927,7 +989,9 @@ export function createWebSocketStore(url: string) {
       });
 
       rawServerResources = null;
-      lastDeltaRecoveryRequestAt = 0;
+      lastFullStateRecoveryAt = 0;
+      // A different backend may have an estate that fits the socket guard.
+      oversizedSnapshotObserved = false;
       clearReconnectTimeout();
       clearReconnectDelayTimeout();
       reconnectAttempt = 0;

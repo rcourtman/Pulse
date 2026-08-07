@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
 
+// Mirrors MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES in the store under test.
+const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024;
+
+const apiFetchJSONMock = vi.fn();
+vi.mock('@/utils/apiClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/apiClient')>();
+  return {
+    ...actual,
+    apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
+  };
+});
+
 interface MockWebSocketInstance {
   url: string;
   readyState: number;
@@ -59,6 +71,35 @@ const emitMessage = (payload: unknown) => {
   mockWsInstance.onmessage({ data: JSON.stringify(payload) } as MessageEvent);
 };
 
+const emitRawMessage = (raw: string) => {
+  if (!mockWsInstance?.onmessage) {
+    throw new Error('WebSocket onmessage handler is not initialized');
+  }
+  mockWsInstance.onmessage({ data: raw } as MessageEvent);
+};
+
+// Builds a valid all-ASCII rawData frame of exactly `totalBytes`, so the inbound
+// size guard can be exercised right at its boundary without allocating a
+// realistic multi-thousand-resource estate.
+const frameOfExactly = (totalBytes: number): string => {
+  const prefix = '{"type":"rawData","data":{"lastUpdate":1,"pad":"';
+  const suffix = '"}}';
+  const fillerLength = totalBytes - prefix.length - suffix.length;
+  if (fillerLength < 0) throw new Error(`totalBytes ${totalBytes} is too small`);
+  return `${prefix}${'x'.repeat(fillerLength)}${suffix}`;
+};
+
+// The REST recovery path awaits a fetch, so the store settles over several
+// microtask turns rather than synchronously.
+const flushMicrotasks = async (turns = 6) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
+
+const sentMessageTypes = () =>
+  (mockWsInstance?.send.mock.calls ?? []).map((call) => JSON.parse(call[0] as string).type);
+
 const createStoreHarness = async () => {
   const { createWebSocketStore } = await import('@/stores/websocket');
   let dispose = () => {};
@@ -75,6 +116,7 @@ describe('websocket store unified resource contract', () => {
     vi.resetModules();
     mockWsInstance = null;
     MockWebSocket.mockClear();
+    apiFetchJSONMock.mockReset();
     installWebSocketMock();
   });
 
@@ -401,6 +443,174 @@ describe('websocket store unified resource contract', () => {
     } finally {
       dispose();
     }
+  });
+
+  // Regression: on estates large enough that the full snapshot exceeds the
+  // inbound guard (~3100 resources at the ~2.7 KB/resource measured against a
+  // real /api/state payload; ~12.8 MB at 5000), the client dropped initialState
+  // and asked the server for another one over the same socket. That response is
+  // the same oversized frame, so it was dropped too and the UI never hydrated.
+  describe('oversized snapshot recovery', () => {
+    it('processes a frame sitting exactly on the inbound byte limit', async () => {
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+
+        emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES));
+        await flushMicrotasks();
+
+        // Accepted and parsed: no recovery of any kind was triggered.
+        expect(apiFetchJSONMock).not.toHaveBeenCalled();
+        expect(sentMessageTypes()).not.toContain('requestData');
+        expect(store.state.lastUpdate).toBe(1);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('hydrates over REST when the snapshot exceeds the inbound byte limit by one byte', async () => {
+      apiFetchJSONMock.mockResolvedValue({
+        lastUpdate: 500,
+        resources: [
+          { id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 },
+          { id: 'agent-host-2', type: 'agent', name: 'host-2', lastSeen: 100 },
+        ],
+      });
+
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+
+        emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
+        await flushMicrotasks();
+
+        expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/state');
+        expect(store.state.resources).toHaveLength(2);
+        expect(store.state.resources.map((resource) => resource.id)).toEqual([
+          'agent-host-1',
+          'agent-host-2',
+        ]);
+        expect(store.initialDataReceived()).toBe(true);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('establishes a delta baseline from the REST snapshot', async () => {
+      apiFetchJSONMock.mockResolvedValue({
+        lastUpdate: 500,
+        resources: [{ id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 }],
+      });
+
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+
+        emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
+        await flushMicrotasks();
+        expect(store.state.resources).toHaveLength(1);
+
+        // The REST payload must serve as the baseline the server's deltas are
+        // patched onto — otherwise recovery hydrates once and then stalls again.
+        emitMessage({
+          type: 'rawData',
+          data: {
+            lastUpdate: 600,
+            resourceDelta: {
+              upserts: [{ id: 'agent-host-1', lastSeen: 200 }],
+            },
+          },
+        });
+        await flushMicrotasks();
+
+        expect(store.state.resources).toHaveLength(1);
+        expect(store.state.resources[0]?.lastSeen).toBe(200);
+        expect(store.state.resources[0]?.name).toBe('host-1');
+        expect(sentMessageTypes()).not.toContain('requestData');
+      } finally {
+        dispose();
+      }
+    });
+
+    it('recovers immediately after a reconnect instead of inheriting the throttle', async () => {
+      apiFetchJSONMock.mockResolvedValue({
+        lastUpdate: 500,
+        resources: [{ id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 }],
+      });
+
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+
+        emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
+        await flushMicrotasks();
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+        expect(store.state.resources).toHaveLength(1);
+
+        // Drop the connection and let the reconnect timer fire.
+        mockWsInstance?.onclose?.({ code: 1011, reason: 'network blip' } as CloseEvent);
+        vi.advanceTimersByTime(5000);
+        await flushMicrotasks();
+        await waitForOpenTick();
+
+        // The fresh connection re-sends the same oversized snapshot. Recovery
+        // must not be suppressed by the previous connection's throttle window.
+        emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
+        await flushMicrotasks();
+
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+        expect(sentMessageTypes()).not.toContain('requestData');
+        expect(store.state.resources).toHaveLength(1);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('never re-requests the snapshot over the socket once one was dropped', async () => {
+      apiFetchJSONMock.mockRejectedValue(new Error('state endpoint unavailable'));
+
+      const { store, dispose } = await createStoreHarness();
+      try {
+        await waitForOpenTick();
+
+        emitRawMessage(frameOfExactly(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1));
+        await flushMicrotasks();
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+
+        // A baseline-less delta arrives while the estate is still unhydrated.
+        // The old behaviour asked the socket for another full snapshot, which
+        // the guard drops again — an endless 30s retry loop on an empty UI.
+        emitMessage({
+          type: 'rawData',
+          data: {
+            lastUpdate: 600,
+            resourceDelta: { upserts: [{ id: 'agent-host-1', lastSeen: 200 }] },
+          },
+        });
+        await flushMicrotasks();
+
+        expect(sentMessageTypes()).not.toContain('requestData');
+        expect(store.state.resources).toHaveLength(0);
+
+        // Recovery stays throttled rather than hammering the endpoint.
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(30001);
+        emitMessage({
+          type: 'rawData',
+          data: {
+            lastUpdate: 700,
+            resourceDelta: { upserts: [{ id: 'agent-host-1', lastSeen: 300 }] },
+          },
+        });
+        await flushMicrotasks();
+
+        expect(sentMessageTypes()).not.toContain('requestData');
+        expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+      } finally {
+        dispose();
+      }
+    });
   });
 
   it('requests a full snapshot instead of applying a delta without a baseline', async () => {

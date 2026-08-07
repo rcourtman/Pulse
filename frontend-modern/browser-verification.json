@@ -1,37 +1,21 @@
 {
   "version": 1,
-  "base_sha": "06d8bfe65ebf3683a07d9ec7775a50a9872418ce",
-  "verified_at": "2026-08-07T19:15:00Z",
   "result": "passed",
+  "base_sha": "755a8887874e21d0115e1490b9e69e9501d2a31e",
+  "verified_at": "2026-08-07T19:21:05Z",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/Settings.tsx",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-    "frontend-modern/src/components/Settings/useSettingsAccess.ts",
-    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
-    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
-    "frontend-modern/src/types/config.ts"
+    "frontend-modern/src/stores/websocket.ts"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/Settings.tsx": "0e400e1896d2272364f298f721ff6f7a867900cd0e49fb5c7a64432928662f6b",
-    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "534c501a82919927c7bfcbbffd26a0f822d362247d8339e7de54696bd9ab172a",
-    "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts": "d56324453d07a8ec7ce81f9a385251da456cae68c2b674d692c231f86b24498e",
-    "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts": "406a7e7328017a501a085ce3e0754afb23d9927b4011fc4b976b5d79aa341a47",
-    "frontend-modern/src/components/Settings/useSettingsAccess.ts": "8e7ff8c036632b474aa9e66ba388e1fa6a514d1cf85b15ff56a581fb6ab5a163",
-    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "5e7ac8b1ba5b481323eb4d7e9751919ff2478840c85532452991649939732e80",
-    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "cdaeb8a98deef07dee1069fd09ecd618360ba9058b197c297a8bd3ef7daddda0",
-    "frontend-modern/src/types/config.ts": "b918901c67294b7dcf6b0243ba92fd7a741468a009ea0a927f7caedb602ce2f9"
+    "frontend-modern/src/stores/websocket.ts": "1a27dd2c374fc3fe09f718044e3685c450ff4fddfce2f0ada92ac5210676bbd9"
   },
   "routes": [
-    "/settings/infrastructure (non-admin proxy-auth session: route blocked, falls back to the first reachable tab)",
-    "/settings (non-admin: bare settings path resolves through the same blocked default tab)",
-    "/settings/infrastructure (admin proxy-auth session: page renders and loads)"
+    "/infrastructure (Proxmox overview, nodes + workloads tables)"
   ],
   "viewports": [
     {
       "width": 1280,
-      "height": 800
+      "height": 720
     },
     {
       "width": 375,
@@ -39,18 +23,14 @@
     }
   ],
   "states": [
-    "authenticated non-admin proxy-auth session (X-Remote-Role=viewer) against a local backend on port 7855 fronted by a header-injecting shim; /api/security/status reports detailLevel=authenticated and settingsCapabilities.infrastructureRead=false",
-    "admin proxy-auth session (X-Remote-Role=admin) on the same instance; detailLevel=privileged and infrastructureRead=true",
-    "settings sidebar for the non-admin: the whole Infrastructure group is absent and the sidebar starts at Monitoring > Availability checks",
-    "settings sidebar for the admin: Infrastructure group present and selected, discovery card shows 'Last scanned 0s ago' proving the gated load ran once the capability resolved",
-    "empty-estate instance (0 connected systems) so the Infrastructure page renders its onboarding empty state rather than a populated table"
+    "inbound guard tripped: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES temporarily lowered to 256 KiB against a live backend on port 7655 whose real initialState frame is ~741 KB, reproducing the oversized-snapshot condition a >3100-resource estate hits at the shipped 8 MiB cap",
+    "post-recovery steady state: 265 resources hydrated from /api/state with 48 distinct resource types, then held across subsequent resourceDelta ticks (delta frames logged with resourceCount 0 while the store stayed at 265), proving the REST snapshot established a usable delta baseline",
+    "shipped 8 MiB cap restored: the same ~741 KB frame is accepted and hydrates via initialState over the socket with no oversized warning and no REST fetch, confirming the fallback is inert on normal estates"
   ],
   "interactions": [
-    "deep-linked a non-admin straight to /settings/infrastructure and confirmed the route redirected to Availability checks instead of ping-ponging back to the blocked default tab",
-    "queried the rendered DOM for any /settings/infrastructure link or 'Infrastructure' text as the non-admin at both widths and found none",
-    "measured the backend warn log over a 60s idle window on the non-admin settings page before and after the gate: /api/connections 4/min and /api/discover 2/min dropped to 0, with 0 denials on /api/config/nodes, /api/system/settings, /api/truenas/connections and /api/vmware/connections",
-    "switched the shim to an admin role, reloaded /settings/infrastructure and confirmed the page renders, then instrumented window.fetch for 152s and observed /api/discover x4 (30s poller) and /api/connections x3 (15s ledger poller) with 0 denials",
-    "repeated the non-admin deep link and the admin page load at 375x812 and confirmed the same outcomes on the mobile drill-down layout",
-    "confirmed the footer still reads 'Pulse | Version: 4.26.0' for the non-admin throughout, since the version comes from the public /api/version rather than the admin-only update check"
+    "loaded /infrastructure with the guard tripped and read the console sequence: 'Ignoring oversized WebSocket payload {characterCount: 741468, maxBytes: 262144}' then 'Recovering full state over REST' then 'Hydrated full state over REST after an oversized WebSocket snapshot' then 'Updating resources {count: 265}'",
+    "confirmed the nodes table and workloads table rendered populated rows (6 PVE nodes with live CPU/memory/disk/temp, guest rows beneath) rather than the empty UI the dropped snapshot previously produced",
+    "re-ran the same oversized-recovery load at 375x812 and confirmed identical console recovery sequence plus a populated mobile nodes list and bottom nav counters",
+    "restored the 8 MiB constant, reloaded, and confirmed the console showed 'message {type: initialState, resourceCount: 265}' with no oversized warning and no /api/state recovery fetch"
   ]
 }
