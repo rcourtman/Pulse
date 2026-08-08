@@ -108,6 +108,27 @@ describe('renderDocMarkdown', () => {
     expect(html).not.toContain('onerror');
     expect(html).not.toContain('javascript:');
   });
+
+  it('neutralizes an advisory-shaped nested resource payload before link rewriting', () => {
+    const html = renderDocMarkdown(
+      [
+        '<footer>',
+        '  <img src="x" onload="alert(1)" onerror="alert(2)">',
+        '</footer>',
+        '<div><a href="INSTALL.md">safe link</a></div>',
+      ].join('\n'),
+      'README',
+    );
+    const template = document.createElement('template');
+    template.innerHTML = html;
+
+    expect(template.content.querySelector('footer, [onload], [onerror], script')).toBeNull();
+    const image = template.content.querySelector('img');
+    expect(image?.getAttribute('src')).toBe('x');
+    const link = template.content.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('/docs/INSTALL');
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+  });
 });
 
 describe('wrapTables', () => {

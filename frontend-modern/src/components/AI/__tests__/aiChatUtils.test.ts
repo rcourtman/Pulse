@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import * as utils from '@/components/AI/aiChatUtils';
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import type { ModelInfo } from '@/types/ai';
 
@@ -175,6 +176,71 @@ describe('aiChatUtils', () => {
       expect(output).toContain('target="_blank"');
       expect(output).toContain('rel="noopener noreferrer"');
     });
+
+    it('removes executable descendants from an advisory-shaped detached-subtree payload', () => {
+      const output = utils.renderMarkdown(
+        [
+          '<footer>',
+          '  <img src="x" onload="alert(1)" onerror="alert(2)">',
+          '</footer>',
+          '<a href="https://example.com">safe link</a>',
+        ].join('\n'),
+      );
+      const template = document.createElement('template');
+      template.innerHTML = output;
+
+      expect(template.content.querySelector('footer, img, [onload], [onerror], script')).toBeNull();
+      const link = template.content.querySelector('a');
+      expect(link?.getAttribute('href')).toBe('https://example.com');
+      expect(link?.getAttribute('target')).toBe('_blank');
+      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it.each(['beforeSanitizeElements', 'uponSanitizeElement'] as const)(
+      'neutralizes a hook-detached IN_PLACE subtree through the %s hook',
+      (hookName) => {
+        // Configure the same singleton hooks used by renderMarkdown before
+        // exercising DOMPurify's patched IN_PLACE hook-detachment path.
+        utils.renderMarkdown('```ts\nconst safe = true;\n```');
+
+        const root = document.createElement('div');
+        root.innerHTML =
+          '<section><img id="detached-tail" onerror="alert(1)"></section><div>safe</div>';
+        const detachedTail = root.querySelector<HTMLImageElement>('#detached-tail');
+        expect(detachedTail).not.toBeNull();
+
+        const removeSection = (node: Node) => {
+          if (node.nodeName === 'SECTION') (node as Element).remove();
+        };
+        if (hookName === 'beforeSanitizeElements') {
+          DOMPurify.addHook('beforeSanitizeElements', removeSection);
+        } else {
+          DOMPurify.addHook('uponSanitizeElement', removeSection);
+        }
+
+        try {
+          const result = DOMPurify.sanitize(root, {
+            ALLOWED_TAGS: ['div', 'section', '#text'],
+            IN_PLACE: true,
+          });
+
+          expect(result).toBe(root);
+          expect(root.innerHTML).toBe('<div>safe</div>');
+          expect(detachedTail?.isConnected).toBe(false);
+          expect(detachedTail?.getAttribute('onerror')).toBeNull();
+
+          const probe = document.createElement('div');
+          probe.innerHTML = `${root.outerHTML}${detachedTail?.outerHTML ?? ''}`;
+          expect(probe.querySelector('[onerror], [onload], script')).toBeNull();
+        } finally {
+          if (hookName === 'beforeSanitizeElements') {
+            DOMPurify.removeHook('beforeSanitizeElements', removeSection);
+          } else {
+            DOMPurify.removeHook('uponSanitizeElement', removeSection);
+          }
+        }
+      },
+    );
   });
 
   describe('Mention ID format contracts', () => {
