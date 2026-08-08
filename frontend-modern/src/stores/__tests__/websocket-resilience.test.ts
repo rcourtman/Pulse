@@ -1,16 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
 
+// Mirrors MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES in the store under test.
+const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024;
+
 const notificationMocks = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
   warning: vi.fn(),
 }));
+const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/notifications', () => ({
   notificationStore: notificationMocks,
 }));
+vi.mock('@/utils/apiClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/apiClient')>();
+  return {
+    ...actual,
+    apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
+  };
+});
 
 interface MockWebSocketInstance {
   url: string;
@@ -62,6 +73,12 @@ const installWebSocketMock = () => {
   vi.stubGlobal('WebSocket', MockWebSocketClass);
 };
 
+const flushMicrotasks = async (turns = 6) => {
+  for (let i = 0; i < turns; i += 1) {
+    await Promise.resolve();
+  }
+};
+
 const createStoreHarness = async () => {
   const { createWebSocketStore } = await import('@/stores/websocket');
   let dispose = () => {};
@@ -81,6 +98,7 @@ describe('websocket store resilience', () => {
     instances.length = 0;
     vi.setSystemTime(new Date('2026-05-14T08:00:00.000Z'));
     notificationMocks.success.mockClear();
+    apiFetchJSONMock.mockReset();
     installWebSocketMock();
   });
 
@@ -208,6 +226,206 @@ describe('websocket store resilience', () => {
       expect(store.activeAlerts[alert.id]).toMatchObject(alert);
       expect(store.state.activeAlerts).toHaveLength(1);
       expect(store.state.resources[0]?.cpu?.current).toBe(91);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('waits for the reconnect snapshot before applying resource deltas', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    let resolveRestSnapshot!: (snapshot: unknown) => void;
+    apiFetchJSONMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRestSnapshot = resolve;
+        }),
+    );
+    apiFetchJSONMock.mockResolvedValueOnce({
+      resources: [{ id: 'new-host', type: 'agent', name: 'new-host', lastSeen: 400 }],
+      activeAlerts: [],
+      recentlyResolved: [],
+      lastUpdate: 400,
+    });
+
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const firstConnection = currentInstance;
+      expect(firstConnection).not.toBeNull();
+
+      firstConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            resources: [{ id: 'old-host', type: 'agent', name: 'old-host', lastSeen: 100 }],
+            activeAlerts: [],
+            recentlyResolved: [],
+            lastUpdate: 100,
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources[0]?.lastSeen).toBe(100);
+
+      firstConnection!.onclose?.({ code: 1011, reason: 'network blip' } as CloseEvent);
+      expect(store.initialDataReceived()).toBe(false);
+      vi.advanceTimersByTime(1_000);
+      vi.advanceTimersByTime(1);
+      await flushMicrotasks();
+
+      const secondConnection = currentInstance;
+      expect(secondConnection).not.toBe(firstConnection);
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'stateTooLarge',
+          data: {
+            supersedes: 'initialState',
+            bytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES + 1,
+            maxBytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES,
+            resourceCount: 1,
+            hydrateFrom: '/api/state',
+          },
+        }),
+      } as MessageEvent);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+
+      // The new connection's delta is based on its own dropped snapshot. It
+      // must not patch the previous connection's raw resource array while the
+      // replacement snapshot is still pending over REST.
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resourceDelta: { upserts: [{ id: 'old-host', lastSeen: 999 }] },
+            lastUpdate: 200,
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources[0]?.lastSeen).toBe(100);
+      expect(store.initialDataReceived()).toBe(false);
+
+      resolveRestSnapshot({
+        resources: [{ id: 'new-host', type: 'agent', name: 'new-host', lastSeen: 300 }],
+        activeAlerts: [],
+        recentlyResolved: [],
+        lastUpdate: 300,
+      });
+      await flushMicrotasks();
+
+      expect(store.state.resources.map((resource) => resource.id)).toEqual(['new-host']);
+      expect(store.initialDataReceived()).toBe(true);
+
+      // REST is a valid display snapshot, but it is not the exact state the
+      // server withheld earlier. Deltas remain disabled for this connection.
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resourceDelta: { upserts: [{ id: 'new-host', lastSeen: 400 }] },
+            lastUpdate: 400,
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources[0]?.lastSeen).toBe(300);
+
+      // The delta that arrived during/after hydration is coalesced into one
+      // trailing REST refresh once the shared throttle expires. It cannot be
+      // lost merely because the first request was still in flight.
+      vi.advanceTimersByTime(30_000);
+      await flushMicrotasks();
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+      expect(store.state.resources[0]?.lastSeen).toBe(400);
+
+      // If the estate later fits, a delivered socket snapshot establishes the
+      // connection's delta baseline and normal incremental updates resume.
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resources: [{ id: 'new-host', type: 'agent', name: 'new-host', lastSeen: 500 }],
+            lastUpdate: 500,
+          },
+        }),
+      } as MessageEvent);
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resourceDelta: { upserts: [{ id: 'new-host', lastSeen: 600 }] },
+            lastUpdate: 600,
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources[0]?.lastSeen).toBe(600);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps URL-switched sockets isolated until their own snapshot arrives', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      vi.advanceTimersByTime(1);
+      const firstConnection = currentInstance;
+      firstConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            resources: [{ id: 'first-host', type: 'agent', name: 'first-host' }],
+            activeAlerts: [],
+            recentlyResolved: [],
+          },
+        }),
+      } as MessageEvent);
+
+      store.switchUrl('ws://other-backend/ws');
+      const secondConnection = currentInstance;
+      expect(secondConnection).not.toBe(firstConnection);
+      const switchedUrl = new URL(secondConnection!.url);
+      expect(`${switchedUrl.protocol}//${switchedUrl.host}${switchedUrl.pathname}`).toBe(
+        'ws://other-backend/ws',
+      );
+      expect(switchedUrl.searchParams.get('max_message_bytes')).toBe(
+        String(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES),
+      );
+      expect(store.state.resources).toEqual([]);
+      expect(store.initialDataReceived()).toBe(false);
+
+      // A late callback from the retired backend must not repopulate the reset
+      // store after URL switching.
+      firstConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resources: [{ id: 'late-first-host', type: 'agent', name: 'late-first-host' }],
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources).toEqual([]);
+
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'rawData',
+          data: {
+            resourceDelta: { upserts: [{ id: 'second-host', lastSeen: 200 }] },
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources).toEqual([]);
+      expect(store.initialDataReceived()).toBe(false);
+      expect(secondConnection!.send).toHaveBeenCalledWith(JSON.stringify({ type: 'requestData' }));
+
+      secondConnection!.onmessage?.({
+        data: JSON.stringify({
+          type: 'initialState',
+          data: {
+            resources: [{ id: 'second-host', type: 'agent', name: 'second-host' }],
+            activeAlerts: [],
+            recentlyResolved: [],
+          },
+        }),
+      } as MessageEvent);
+      expect(store.state.resources.map((resource) => resource.id)).toEqual(['second-host']);
+      expect(store.initialDataReceived()).toBe(true);
     } finally {
       dispose();
     }

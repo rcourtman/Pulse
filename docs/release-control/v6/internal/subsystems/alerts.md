@@ -261,6 +261,18 @@ overview must preserve active alert truth while notification delivery is
 pending review or snoozed. Notification activation must not clear the browser
 active-alert store, suppress resource indicators, lock threshold/history
 configuration, or claim that monitoring has stopped.
+The websocket store's raw resource-delta baseline is connection-scoped. Closing
+or replacing a socket invalidates that baseline and its recovery throttle; a
+delta from the replacement connection must not patch the previous connection's
+raw snapshot. Only a full snapshot delivered over that socket may establish
+the new delta baseline. Oversized-state REST recovery may refresh the current
+connection's display state, but it is independently built and must remain
+delta-free; a marker or baseline-less delta observed during hydration must
+coalesce one trailing REST refresh after the throttle window so the latest
+invalidation is not lost. Late socket callbacks and REST responses from a
+retired connection must be ignored, while a current oversized connection
+remains free to hydrate without waiting for the retired connection's request
+to settle.
 Operational evidence and lifecycle identity are typed through
 `internal/operationaltrust`. Evidence envelopes distinguish completeness,
 confidence, permissions, freshness, correlation, and bounded provider detail.

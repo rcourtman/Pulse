@@ -317,6 +317,21 @@ and slow-client eviction must use the same synchronized send/close ownership;
 recovering a send-on-closed panic is not a substitute for a race-free channel
 lifecycle.
 
+Browser clients declare their inbound state-frame ceiling on the WebSocket
+upgrade URL before initial-state construction begins. If a complete snapshot
+or a later delta exceeds that ceiling, the hub sends a compact
+`stateTooLarge` marker, clears the per-client delta snapshot, and enters
+baseline-free REST recovery. It must not advance the baseline to the withheld
+state: `GET /api/state` is constructed later and is not provably byte- or
+revision-identical. While recovery is active, coalesced state invalidations
+produce markers rather than deltas. The frontend may use each REST response as
+a complete display snapshot, with one throttled trailing refresh for markers
+that arrive during hydration, but only a complete state payload actually
+delivered on that WebSocket connection may re-establish its delta baseline.
+Clients and servers that predate negotiation retain the existing full-frame
+path; a new client that locally drops such a legacy oversized frame must stay
+delta-free and use the same throttled REST recovery for that connection.
+
 Docker and Podman app-container CPU payloads expose two API facts with
 different meanings: canonical resource metrics and `/api/metrics-store/history`
 CPU fallback points use host-capacity-normalized percent, while Docker metadata

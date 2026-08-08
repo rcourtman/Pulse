@@ -49,6 +49,20 @@ const asMergePatchRecord = (value: unknown): Record<string, unknown> | undefined
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 
+// The frame ceiling has to be negotiated on the upgrade request. A message
+// sent after open can race the server's initial-state build.
+const buildSocketUrl = (rawUrl: string): string => {
+  try {
+    const parsed = new URL(rawUrl, window.location.href);
+    if (parsed.protocol === 'http:') parsed.protocol = 'ws:';
+    if (parsed.protocol === 'https:') parsed.protocol = 'wss:';
+    parsed.searchParams.set('max_message_bytes', String(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES));
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
 const isInboundPayloadWithinLimit = (payload: string): boolean => {
   // JSON state is overwhelmingly ASCII. Avoid allocating a second multi-megabyte
   // Blob for normal messages, while retaining an exact UTF-8 check for strings
@@ -316,7 +330,11 @@ export function createWebSocketStore(url: string) {
   // guard. Asking for another one over the socket would only reproduce the same
   // oversized frame, so recovery has to leave the WebSocket entirely.
   let oversizedSnapshotObserved = false;
-  let restHydrationInFlight = false;
+  let restHydrationConnectionId: number | null = null;
+  let pendingRestHydrationConnectionId: number | null = null;
+  let restHydrationTimeout = 0;
+  let nextConnectionId = 0;
+  let activeConnectionId: number | null = null;
   let reconnectTimeout = 0;
   let reconnectDelayTimeout = 0;
   let lastServerActivityAt = Date.now();
@@ -370,6 +388,40 @@ export function createWebSocketStore(url: string) {
     }
   };
 
+  const resetConnectionBaseline = () => {
+    rawServerResources = null;
+    lastFullStateRecoveryAt = 0;
+    oversizedSnapshotObserved = false;
+    // A recovery request from a retired connection may still settle, but its
+    // connection id prevents it from mutating this connection. Clearing the
+    // owner here lets the replacement connection start its own recovery now.
+    restHydrationConnectionId = null;
+    pendingRestHydrationConnectionId = null;
+    if (restHydrationTimeout) {
+      window.clearTimeout(restHydrationTimeout);
+      restHydrationTimeout = 0;
+    }
+  };
+
+  const beginConnection = () => {
+    const connectionId = ++nextConnectionId;
+    activeConnectionId = connectionId;
+    resetConnectionBaseline();
+    setInitialDataReceived(false);
+    return connectionId;
+  };
+
+  const isCurrentConnection = (connectionId: number) =>
+    !isDisposed && activeConnectionId === connectionId;
+
+  const retireConnection = (connectionId: number) => {
+    if (activeConnectionId !== connectionId) return false;
+    activeConnectionId = null;
+    resetConnectionBaseline();
+    setInitialDataReceived(false);
+    return true;
+  };
+
   const shutdown = () => {
     if (isDisposed) return;
     isDisposed = true;
@@ -381,6 +433,8 @@ export function createWebSocketStore(url: string) {
     pendingAckTimeouts.forEach((timeout) => window.clearTimeout(timeout));
     pendingAckTimeouts.clear();
     pendingAckChanges.clear();
+    activeConnectionId = null;
+    resetConnectionBaseline();
 
     if (typeof window !== 'undefined') {
       window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
@@ -399,6 +453,7 @@ export function createWebSocketStore(url: string) {
   const connect = () => {
     if (isDisposed) return;
     clearReconnectDelayTimeout();
+    const connectionId = beginConnection();
 
     try {
       // Close existing connection if any
@@ -409,9 +464,11 @@ export function createWebSocketStore(url: string) {
         ws = null;
       }
 
-      ws = new WebSocket(wsUrl);
-      setupWebSocket();
+      const socket = new WebSocket(buildSocketUrl(wsUrl));
+      ws = socket;
+      setupWebSocket(socket, connectionId);
     } catch (err) {
+      retireConnection(connectionId);
       logger.error('Failed to create WebSocket', err);
       handleReconnect();
     }
@@ -443,10 +500,14 @@ export function createWebSocketStore(url: string) {
     }, delay);
   };
 
-  // Applies one decoded server message to the store. Shared by the socket
-  // handler and the REST recovery path so a snapshot fetched over HTTP
-  // establishes the same delta baseline a socket snapshot would.
-  const processServerMessage = (data: unknown) => {
+  // Applies one decoded server message to the store. Socket snapshots may
+  // establish a delta baseline; REST snapshots update display state only.
+  const processServerMessage = (
+    data: unknown,
+    connectionId: number,
+    source: 'websocket' | 'rest' = 'websocket',
+  ) => {
+    if (!isCurrentConnection(connectionId)) return;
     try {
       const message = data as TimestampedWSMessage;
 
@@ -454,12 +515,18 @@ export function createWebSocketStore(url: string) {
         message.type === WEBSOCKET.MESSAGE_TYPES.INITIAL_STATE ||
         message.type === WEBSOCKET.MESSAGE_TYPES.RAW_DATA
       ) {
+        const resourceDeltaWithoutBaseline =
+          message.data !== undefined &&
+          message.data.resources === undefined &&
+          'resourceDelta' in message.data &&
+          message.data.resourceDelta !== undefined &&
+          rawServerResources === null;
         // Update state properties individually, but batch the whole payload to
         // reduce reactive recomputations and UI thrash on large updates.
         if (message.data)
           batch(() => {
             // Mark that we've received usable data (initial payload or raw update)
-            if (!initialDataReceived()) {
+            if (!initialDataReceived() && !resourceDeltaWithoutBaseline) {
               setInitialDataReceived(true);
             }
 
@@ -491,13 +558,28 @@ export function createWebSocketStore(url: string) {
             let nextResources: Resource[] | undefined;
             if (message.data.resources !== undefined) {
               if (Array.isArray(message.data.resources)) {
-                rawServerResources = structuredClone(message.data.resources) as Resource[];
+                // Only a full payload actually delivered on this socket can
+                // establish its server-owned delta baseline. REST recovery is
+                // an independently built display snapshot and stays baseline-
+                // free until the server later delivers a socket snapshot.
+                rawServerResources =
+                  source === 'websocket'
+                    ? (structuredClone(message.data.resources) as Resource[])
+                    : null;
+                if (source === 'websocket') {
+                  oversizedSnapshotObserved = false;
+                  pendingRestHydrationConnectionId = null;
+                  if (restHydrationTimeout) {
+                    window.clearTimeout(restHydrationTimeout);
+                    restHydrationTimeout = 0;
+                  }
+                }
                 nextResources = mergeCanonicalResourceSnapshot(
                   message.data.resources,
                   state.resources,
                 );
               } else {
-                rawServerResources = [];
+                rawServerResources = source === 'websocket' ? [] : null;
                 nextResources = [];
               }
             } else if (
@@ -518,7 +600,7 @@ export function createWebSocketStore(url: string) {
                 // payload was dropped as oversized). There is no baseline to
                 // patch, so re-acquire a full snapshot instead of applying the
                 // delta to nothing and rendering stubs.
-                requestFullStateRecovery();
+                requestFullStateRecovery(connectionId);
               }
             }
             if (nextResources !== undefined) {
@@ -603,6 +685,19 @@ export function createWebSocketStore(url: string) {
           hasData: !!message.data,
           resourceCount: message.data?.resources?.length || 0,
         });
+      } else if (message.type === 'stateTooLarge') {
+        // The server deliberately did not adopt the withheld payload as this
+        // client's delta baseline. Invalidate any prior baseline before REST
+        // hydration and remain delta-free until a full socket snapshot lands.
+        rawServerResources = null;
+        oversizedSnapshotObserved = true;
+        logger.warn('Server withheld an oversized state payload; recovering over REST', {
+          supersedes: message.data.supersedes,
+          bytes: message.data.bytes,
+          maxBytes: message.data.maxBytes,
+          resourceCount: message.data.resourceCount,
+        });
+        requestFullStateRecovery(connectionId);
       } else if (message.type === WEBSOCKET.MESSAGE_TYPES.ERROR) {
         logger.debug('error', message.error);
       } else if (message.type === 'ping') {
@@ -692,30 +787,60 @@ export function createWebSocketStore(url: string) {
     }
   };
 
-  // Hydrate from the REST snapshot endpoint. `/api/state` serves the same
-  // `BuildFrontendState()` value the socket sends as `initialState`, but over a
-  // transport with no frame-size ceiling, so it is the only recovery path that
-  // works once the snapshot has outgrown the inbound guard. The response is fed
-  // through the normal message handler so it establishes the delta baseline
-  // exactly as a socket snapshot would.
-  const hydrateFullStateFromREST = async () => {
-    if (isDisposed || restHydrationInFlight) return;
-    restHydrationInFlight = true;
+  const schedulePendingRESTHydration = (connectionId: number, delay: number) => {
+    if (!isCurrentConnection(connectionId)) return;
+    pendingRestHydrationConnectionId = connectionId;
+    if (restHydrationTimeout) return;
+    restHydrationTimeout = window.setTimeout(
+      () => {
+        restHydrationTimeout = 0;
+        if (pendingRestHydrationConnectionId !== connectionId) return;
+        pendingRestHydrationConnectionId = null;
+        requestFullStateRecovery(connectionId);
+      },
+      Math.max(0, delay),
+    );
+  };
+
+  // Hydrate display state from `/api/state`, which has no frame-size ceiling.
+  // It deliberately does not establish a socket delta baseline: the endpoint
+  // builds independently from the snapshot the hub withheld.
+  const hydrateFullStateFromREST = async (connectionId: number) => {
+    if (!isCurrentConnection(connectionId) || restHydrationConnectionId === connectionId) return;
+    restHydrationConnectionId = connectionId;
     try {
       const snapshot = await apiFetchJSON<State>('/api/state');
-      if (isDisposed) return;
+      if (!isCurrentConnection(connectionId)) return;
+      if (rawServerResources !== null) {
+        // A deliverable socket snapshot won the race while REST was pending.
+        // Keep that connection-native baseline instead of replacing it with an
+        // older HTTP response captured before the socket snapshot arrived.
+        return;
+      }
       if (!snapshot || typeof snapshot !== 'object') {
         logger.error('REST state recovery returned an unusable payload');
         return;
       }
       logger.info('Hydrated full state over REST after an oversized WebSocket snapshot');
-      processServerMessage({ type: WEBSOCKET.MESSAGE_TYPES.RAW_DATA, data: snapshot });
+      processServerMessage(
+        { type: WEBSOCKET.MESSAGE_TYPES.RAW_DATA, data: snapshot },
+        connectionId,
+        'rest',
+      );
     } catch (error) {
-      // Leave the throttle stamp in place; the next delta without a baseline
-      // retries. Failing here is not fatal — the UI stays in its current state.
+      if (!isCurrentConnection(connectionId)) return;
+      // Leave the throttle stamp in place; the next marker or baseline-less
+      // delta retries after the shared recovery window. Failing here is not
+      // fatal — the UI stays in its current state without hammering REST.
       logger.error('REST state recovery failed', error);
     } finally {
-      restHydrationInFlight = false;
+      if (restHydrationConnectionId === connectionId) {
+        restHydrationConnectionId = null;
+      }
+      if (isCurrentConnection(connectionId) && pendingRestHydrationConnectionId === connectionId) {
+        const remaining = Math.max(0, 30000 - (Date.now() - lastFullStateRecoveryAt));
+        schedulePendingRESTHydration(connectionId, remaining);
+      }
     }
   };
 
@@ -723,19 +848,34 @@ export function createWebSocketStore(url: string) {
   // trigger noticed the gap: a frame dropped as oversized, or a delta arriving
   // with no baseline to patch. Sharing one budget keeps a server that repeatedly
   // emits an undeliverable snapshot from turning into a REST hammer.
-  const requestFullStateRecovery = () => {
+  const requestFullStateRecovery = (connectionId: number) => {
+    if (!isCurrentConnection(connectionId)) return;
     const now = Date.now();
-    if (now - lastFullStateRecoveryAt < 30000) return;
-    lastFullStateRecoveryAt = now;
 
     if (oversizedSnapshotObserved) {
+      if (restHydrationConnectionId === connectionId) {
+        // A marker received after this request started may describe a newer
+        // state than its response. Coalesce one trailing refresh rather than
+        // losing the update or starting concurrent full-state builds.
+        pendingRestHydrationConnectionId = connectionId;
+        return;
+      }
+      const remaining = 30000 - (now - lastFullStateRecoveryAt);
+      if (remaining > 0) {
+        schedulePendingRESTHydration(connectionId, remaining);
+        return;
+      }
+      lastFullStateRecoveryAt = now;
       // The socket has already proven it cannot deliver this estate's snapshot.
       // `requestData` would just queue another frame the guard drops, which is
       // what left large estates stuck on an empty UI, retrying every 30s.
       logger.warn('Recovering full state over REST; socket snapshot exceeds the inbound limit');
-      void hydrateFullStateFromREST();
+      void hydrateFullStateFromREST(connectionId);
       return;
     }
+
+    if (now - lastFullStateRecoveryAt < 30000) return;
+    lastFullStateRecoveryAt = now;
 
     logger.warn('Received resource delta without a full snapshot baseline; requesting full state');
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -743,11 +883,11 @@ export function createWebSocketStore(url: string) {
     }
   };
 
-  const setupWebSocket = () => {
-    if (!ws || isDisposed) return;
+  const setupWebSocket = (socket: WebSocket, connectionId: number) => {
+    if (!isCurrentConnection(connectionId)) return;
 
-    ws.onopen = () => {
-      if (isDisposed) return;
+    socket.onopen = () => {
+      if (!isCurrentConnection(connectionId)) return;
       logger.debug('connect');
       const wasReconnecting = reconnectAttempt > 0;
       setConnected(true);
@@ -760,16 +900,16 @@ export function createWebSocketStore(url: string) {
       // Start heartbeat to keep connection alive
       clearHeartbeatTimer();
       heartbeatInterval = window.setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        if (isCurrentConnection(connectionId) && socket.readyState === WebSocket.OPEN) {
           const silenceDuration = Date.now() - lastServerActivityAt;
           if (silenceDuration >= heartbeatTimeoutMs) {
             logger.warn('WebSocket heartbeat timeout, forcing reconnect', {
               silenceMs: silenceDuration,
             });
-            ws.close(4000, 'Heartbeat timeout');
+            socket.close(4000, 'Heartbeat timeout');
             return;
           }
-          ws.send(JSON.stringify({ type: 'ping', data: { timestamp: Date.now() } }));
+          socket.send(JSON.stringify({ type: 'ping', data: { timestamp: Date.now() } }));
         }
       }, heartbeatIntervalMs);
 
@@ -783,7 +923,8 @@ export function createWebSocketStore(url: string) {
       // Alerts will come with the initial state broadcast
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (!isCurrentConnection(connectionId)) return;
       if (typeof event.data !== 'string') {
         logger.warn('Ignoring non-text WebSocket payload');
         return;
@@ -801,7 +942,7 @@ export function createWebSocketStore(url: string) {
         // paint on a large estate is an empty UI.
         oversizedSnapshotObserved = true;
         lastServerActivityAt = Date.now();
-        requestFullStateRecovery();
+        requestFullStateRecovery(connectionId);
         return;
       }
 
@@ -814,19 +955,13 @@ export function createWebSocketStore(url: string) {
       }
       lastServerActivityAt = Date.now();
 
-      processServerMessage(data);
+      processServerMessage(data, connectionId);
     };
 
-    ws.onclose = (event) => {
-      if (isDisposed) return;
+    socket.onclose = (event) => {
+      if (isDisposed || !retireConnection(connectionId)) return;
       logger.debug('disconnect', { code: event.code, reason: event.reason });
       setConnected(false);
-      setInitialDataReceived(false);
-      // The next connection re-sends the snapshot, so let its recovery fire
-      // immediately instead of inheriting this connection's throttle window —
-      // otherwise a reconnect on an estate whose snapshot the guard drops can
-      // sit unhydrated for up to 30s.
-      lastFullStateRecoveryAt = 0;
 
       // Clear heartbeat interval
       clearHeartbeatTimer();
@@ -858,8 +993,8 @@ export function createWebSocketStore(url: string) {
       handleReconnect();
     };
 
-    ws.onerror = (error) => {
-      if (isDisposed) return;
+    socket.onerror = (error) => {
+      if (!isCurrentConnection(connectionId)) return;
       // Don't log connection errors if we're already connected
       // Browser may show errors for initial connection attempts even after success
       if (!connected()) {
@@ -875,6 +1010,8 @@ export function createWebSocketStore(url: string) {
   onCleanup(() => {
     isDisposed = true;
     isReconnecting = false;
+    activeConnectionId = null;
+    resetConnectionBaseline();
     window.clearTimeout(reconnectDelayTimeout);
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
@@ -988,10 +1125,6 @@ export function createWebSocketStore(url: string) {
         setRecentlyResolved(reconcile({}));
       });
 
-      rawServerResources = null;
-      lastFullStateRecoveryAt = 0;
-      // A different backend may have an estate that fits the socket guard.
-      oversizedSnapshotObserved = false;
       clearReconnectTimeout();
       clearReconnectDelayTimeout();
       reconnectAttempt = 0;

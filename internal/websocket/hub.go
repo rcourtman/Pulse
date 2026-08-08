@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,10 +27,17 @@ const (
 	// maxWebSocketInboundMessageSize bounds client->server websocket message size.
 	maxWebSocketInboundMessageSize = 64 * 1024
 	// maxWebSocketOrgIDLength keeps org IDs bounded to prevent oversized header/query abuse.
-	maxWebSocketOrgIDLength  = 64
-	websocketHubComponent    = "websocket_hub"
-	initialWelcomeDelay      = 500 * time.Millisecond
-	initialStateMessageDelay = 100 * time.Millisecond
+	maxWebSocketOrgIDLength = 64
+	// inboundLimitQueryParam lets a browser declare the largest state frame it
+	// can safely accept before the hub builds that connection's initial state.
+	inboundLimitQueryParam = "max_message_bytes"
+	// minAdvertisedInboundBytes keeps tiny or malicious values from turning
+	// ordinary control messages into an unusable connection.
+	minAdvertisedInboundBytes = 64 * 1024
+	stateTooLargeMessageType  = "stateTooLarge"
+	websocketHubComponent     = "websocket_hub"
+	initialWelcomeDelay       = 500 * time.Millisecond
+	initialStateMessageDelay  = 100 * time.Millisecond
 	// clientReadDeadline is how long a client may stay silent before the server
 	// drops it. Liveness is proven by ANY inbound frame (data, JSON heartbeat,
 	// or protocol pong) — proxies and middleboxes (Cloudflare, AV products)
@@ -43,6 +51,14 @@ const (
 	// within clientReadDeadline.
 	clientPingPeriod = 30 * time.Second
 )
+
+type stateTooLargePayload struct {
+	Supersedes    string `json:"supersedes"`
+	Bytes         int    `json:"bytes,omitempty"`
+	MaxBytes      int64  `json:"maxBytes"`
+	ResourceCount int    `json:"resourceCount"`
+	HydrateFrom   string `json:"hydrateFrom"`
+}
 
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
 func extractPeerIP(remoteAddr string) string {
@@ -275,6 +291,27 @@ type Client struct {
 	lifecycleOnce sync.Once
 	stateMu       sync.Mutex
 	stateSnapshot *clientStateSnapshot
+	// restRecovery is protected by stateMu. While set, REST supplies complete
+	// display snapshots and the socket deliberately has no delta baseline.
+	restRecovery    bool
+	maxInboundBytes atomic.Int64
+}
+
+func (c *Client) inboundLimitBytes() int64 {
+	return c.maxInboundBytes.Load()
+}
+
+func (c *Client) applyAdvertisedInboundLimit(raw string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return
+	}
+	limit, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || limit < minAdvertisedInboundBytes {
+		log.Debug().Str("client", c.id).Str("value", raw).Msg("ignoring invalid client inbound frame limit")
+		return
+	}
+	c.maxInboundBytes.Store(limit)
 }
 
 func (c *Client) lifecycleSignal() chan struct{} {
@@ -334,11 +371,49 @@ func (c *Client) queueFullState(messageType string, state interface{}) (int, boo
 
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
+	if limit := c.inboundLimitBytes(); limit > 0 && int64(len(data)) > limit {
+		return c.queueStateTooLargeLocked(messageType, snapshot, len(data), limit)
+	}
 	if !c.safeSend(data) {
 		return len(data), false, nil
 	}
 	c.stateSnapshot = snapshot
+	c.restRecovery = false
 	return len(data), true, nil
+}
+
+// queueStateTooLargeLocked sends a compact REST-hydration marker without
+// adopting the state as a delta baseline. REST builds its snapshot later and
+// independently, so treating the withheld state as accepted would let a delta
+// race onto a different baseline. The caller must hold stateMu.
+func (c *Client) queueStateTooLargeLocked(
+	supersedes string,
+	snapshot *clientStateSnapshot,
+	payloadBytes int,
+	limit int64,
+) (int, bool, error) {
+	marker, err := json.Marshal(Message{
+		Type: stateTooLargeMessageType,
+		Data: stateTooLargePayload{
+			Supersedes:    supersedes,
+			Bytes:         payloadBytes,
+			MaxBytes:      limit,
+			ResourceCount: len(snapshot.resourceOrder),
+			HydrateFrom:   "/api/state",
+		},
+	})
+	if err != nil {
+		return payloadBytes, false, err
+	}
+
+	// Invalidate first. Even if the marker cannot queue, no later delta may be
+	// based on the payload the client did not receive.
+	c.stateSnapshot = nil
+	c.restRecovery = true
+	if !c.safeSend(marker) {
+		return payloadBytes, false, nil
+	}
+	return payloadBytes, true, nil
 }
 
 func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool, error) {
@@ -348,6 +423,15 @@ func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool,
 
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
+	if c.restRecovery {
+		dataLen, sent, markerErr := c.queueStateTooLargeLocked(
+			"rawData",
+			current,
+			0,
+			c.inboundLimitBytes(),
+		)
+		return dataLen, true, sent, markerErr
+	}
 	if c.stateSnapshot == nil {
 		// Initial hydration owns the baseline. A client still waiting for that
 		// payload must not receive a delta based on state it has never seen.
@@ -365,6 +449,10 @@ func (c *Client) queueStateDelta(current *clientStateSnapshot) (int, bool, bool,
 	data, err := json.Marshal(Message{Type: "rawData", Data: delta})
 	if err != nil {
 		return 0, true, false, err
+	}
+	if limit := c.inboundLimitBytes(); limit > 0 && int64(len(data)) > limit {
+		dataLen, sent, markerErr := c.queueStateTooLargeLocked("rawData", current, len(data), limit)
+		return dataLen, true, sent, markerErr
 	}
 	if !c.safeSend(data) {
 		return len(data), true, false, nil
@@ -1022,6 +1110,9 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		id:       clientID,
 		lastPing: time.Now(),
 	}
+	// This must be captured from the upgrade URL before registration: initial
+	// state construction begins as soon as the hub accepts the client.
+	client.applyAdvertisedInboundLimit(r.URL.Query().Get(inboundLimitQueryParam))
 
 	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("webSocket client created")
 

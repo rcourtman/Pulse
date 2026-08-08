@@ -1344,6 +1344,16 @@ export interface Incident {
 export type WSMessage =
   | { type: 'initialState'; data: State }
   | { type: 'rawData'; data: StateUpdate }
+  | {
+      type: 'stateTooLarge';
+      data: {
+        supersedes: 'initialState' | 'rawData';
+        bytes?: number;
+        maxBytes: number;
+        resourceCount: number;
+        hydrateFrom: '/api/state';
+      };
+    }
   | { type: 'error'; error: string }
   | { type: 'ping'; data?: unknown }
   | { type: 'pong'; data?: unknown }

@@ -1145,6 +1145,11 @@ AI-only summary payloads, or page-local heuristics.
    from websocket `state.resources` instead of layering confirmatory
    route-local REST refetch loops over already-owned resource
    updates.
+   Oversized WebSocket recovery is the transport exception: a complete
+   `/api/state` response may refresh display state while the connection remains
+   baseline-free, but resource deltas must not patch that independently built
+   REST snapshot. The store resumes delta application only after the same
+   connection delivers a complete WebSocket resource snapshot.
    Browser WebSocket liveness tracking is part of that same store boundary:
    valid inbound server messages, including heartbeat `ping`/`pong` traffic,
    must refresh the browser-side activity timestamp so quiet periods between

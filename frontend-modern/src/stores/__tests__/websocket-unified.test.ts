@@ -496,7 +496,7 @@ describe('websocket store unified resource contract', () => {
       }
     });
 
-    it('establishes a delta baseline from the REST snapshot', async () => {
+    it('does not treat an independently built REST snapshot as a delta baseline', async () => {
       apiFetchJSONMock.mockResolvedValue({
         lastUpdate: 500,
         resources: [{ id: 'agent-host-1', type: 'agent', name: 'host-1', lastSeen: 100 }],
@@ -510,8 +510,8 @@ describe('websocket store unified resource contract', () => {
         await flushMicrotasks();
         expect(store.state.resources).toHaveLength(1);
 
-        // The REST payload must serve as the baseline the server's deltas are
-        // patched onto — otherwise recovery hydrates once and then stalls again.
+        // The server's withheld snapshot and this later REST response are not
+        // guaranteed to be identical, so the delta must not patch the REST copy.
         emitMessage({
           type: 'rawData',
           data: {
@@ -524,7 +524,7 @@ describe('websocket store unified resource contract', () => {
         await flushMicrotasks();
 
         expect(store.state.resources).toHaveLength(1);
-        expect(store.state.resources[0]?.lastSeen).toBe(200);
+        expect(store.state.resources[0]?.lastSeen).toBe(100);
         expect(store.state.resources[0]?.name).toBe('host-1');
         expect(sentMessageTypes()).not.toContain('requestData');
       } finally {
