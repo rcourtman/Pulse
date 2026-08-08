@@ -1,37 +1,40 @@
 {
   "version": 1,
-  "base_sha": "e434466269e684383a3be9b650428db10a1a7f8a",
-  "verified_at": "2026-08-08T04:26:26Z",
+  "base_sha": "76f433c2f86159be3a741628873001975e95dedc",
+  "verified_at": "2026-08-08T08:56:14Z",
   "result": "passed",
   "changed_paths": [
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx"
+    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx"
   ],
   "content_sha256": {
-    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "9f3745b074d4809d3066b31ddc14e06e564588ecaa41066644774ca58ea57430"
+    "frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx": "f75ab0102c54238b634fce3bb7662ef2fd2a5d819edd32cecf0689e49e35b517"
   },
   "routes": [
-    "/settings/pulse-intelligence/billing/plan",
-    "/settings/system-general"
+    "/settings (System > Network section)"
   ],
   "viewports": [
     {
-      "width": 1280,
-      "height": 800
-    },
-    {
       "width": 390,
       "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1280,
+      "height": 800
     }
   ],
   "states": [
-    "Direct Plans & Billing rendered in the shared Settings shell at 1280x800 with the navigation and content columns aligned, animation-name none, transform none, and document clientWidth and scrollWidth both 1280 pixels.",
-    "Immediately after resizing direct Plans & Billing from 1280x800 to 390x844, the content bounds remained inside the viewport (24.703125 to 354.28125 pixels), animation-name and transform remained none, and document clientWidth and scrollWidth were both 390 pixels.",
-    "After opening the mobile Settings navigation and selecting General, the adjacent panel remained inside the 390-pixel viewport (17.34375 to 361.640625 pixels), animation-name and transform remained none, and document clientWidth and scrollWidth were both 390 pixels."
+    "Public URL section default view with empty field showing the https FQDN placeholder",
+    "PULSE_PUBLIC_URL environment-override state: disabled input with amber override alert",
+    "Mobile 390x844 and tablet 768x1024 wrapped label/description with zero horizontal overflow"
   ],
   "interactions": [
-    "Built the production frontend from final base e4344662, opened the direct Plans & Billing route in the in-app browser at 1280x800, and inspected the shared navigation and content bounds.",
-    "Resized the live route directly to 390x844 and inspected the content bounds, computed animation and transform state, and document overflow immediately after the breakpoint transition.",
-    "Opened the mobile Settings drawer, selected General, visually inspected the rendered panel at 390x844, and confirmed the adjacent Settings route retained the same width and motion constraints.",
-    "Restored the browser viewport to 1280x800, closed the verification tab, and stopped the isolated local frontend and backend processes."
+    "Logged in at 1280x800 with real typed credentials and navigated Settings > System > Network via real clicks",
+    "Read the rendered label, description, and example copy via page text extraction and confirmed the exact new wording",
+    "Inspected the live input element: placeholder https://pulse.example.com, disabled by PULSE_PUBLIC_URL override",
+    "Re-rendered the section at 768x1024 and 390x844 (DOM-dispatched nav clicks; hidden-pane real input unavailable) and measured documentElement.scrollWidth == innerWidth at both"
   ]
 }

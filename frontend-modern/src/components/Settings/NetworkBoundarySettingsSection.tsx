@@ -47,10 +47,13 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           Public URL
         </h4>
         <div class="space-y-2">
-          <label class="text-sm font-medium text-base-content">Pulse URL for Notifications</label>
+          <label class="text-sm font-medium text-base-content">
+            Pulse URL for Alerts and Agent Commands
+          </label>
           <p class="text-xs text-muted">
-            The URL included in email alerts to link back to Pulse. Required for Docker deployments
-            with custom ports.
+            Where email alert links and copied agent install/update commands point back to Pulse.
+            Set this to the URL you actually use to reach Pulse, such as an HTTPS domain behind a
+            reverse proxy. Required for Docker deployments with custom ports.
           </p>
           <div class="relative">
             <input
@@ -63,7 +66,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
                 }
               }}
               disabled={props.envOverrides().publicURL}
-              placeholder="http://192.168.1.100:8080"
+              placeholder="https://pulse.example.com"
               class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${
                 props.envOverrides().publicURL
                   ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
@@ -78,8 +81,9 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
             </Show>
           </div>
           <p class="text-xs text-muted mt-1">
-            Example: If you access Pulse at <code>http://myserver:8080</code>, enter that URL here.
-            Leave empty to auto-detect (may not work correctly with Docker port mappings).
+            Example: If you access Pulse at <code>https://pulse.example.com</code>, enter that URL
+            here. Leave empty to auto-detect from each request (may not work correctly with Docker
+            port mappings).
           </p>
         </div>
       </section>
