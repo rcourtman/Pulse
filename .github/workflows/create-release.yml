@@ -1289,7 +1289,10 @@ jobs:
       - validate_release_assets
     if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
-      contents: read
+      # GitHub's release API requires write-level repository access to read
+      # assets from an unpublished draft release. The called workflow only
+      # performs GET requests, but a read-scoped GITHUB_TOKEN receives 403.
+      contents: write
     uses: ./.github/workflows/install-sh-smoke.yml
     secrets: inherit
     with:

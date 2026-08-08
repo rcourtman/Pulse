@@ -433,6 +433,10 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 			t.Fatalf("create-release.yml job %s must skip historical backfill and draft-only runs before invoking downstream workflow_call", job)
 		}
 	}
+	installSmokeJob := workflowJobBlock(t, workflow, "install_sh_smoke")
+	if !strings.Contains(installSmokeJob, "contents: write") {
+		t.Fatal("create-release.yml install_sh_smoke must grant contents: write so the called workflow can read unpublished draft assets")
+	}
 	readinessJob := workflowJobBlock(t, workflow, "release_readiness")
 	if !strings.Contains(readinessJob, publishedReleaseGuard) {
 		t.Fatal("release_readiness must skip historical backfill and draft-only runs")
@@ -1828,7 +1832,8 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 // cannot return.
 
 func TestInstallShSmokeWorkflowPresent(t *testing.T) {
-	assertFileContainsAll(t, repoFile(".github", "workflows", "install-sh-smoke.yml"),
+	workflowPath := repoFile(".github", "workflows", "install-sh-smoke.yml")
+	assertFileContainsAll(t, workflowPath,
 		// Inputs and triggers.
 		`name: install.sh Smoke (Release Assets)`,
 		`workflow_call:`,
@@ -1863,6 +1868,15 @@ func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 		`curl -fsS http://127.0.0.1:7655/api/version`,
 		`Installed version mismatch. Expected`,
 	)
+
+	workflowBytes, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read install-sh-smoke workflow: %v", err)
+	}
+	smokeJob := workflowJobBlock(t, string(workflowBytes), "smoke")
+	if !strings.Contains(smokeJob, "contents: write") {
+		t.Fatal("install-sh-smoke.yml smoke job must grant contents: write to read unpublished draft release assets")
+	}
 }
 
 func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {

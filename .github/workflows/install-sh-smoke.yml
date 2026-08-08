@@ -94,6 +94,10 @@ jobs:
   smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      # Unpublished draft release metadata and assets are unavailable to a
+      # read-scoped GITHUB_TOKEN even though this job only performs GETs.
+      contents: write
     steps:
       - name: Checkout repository (for README key extraction)
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

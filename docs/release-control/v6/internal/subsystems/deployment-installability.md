@@ -1771,6 +1771,13 @@ That same reusable-validation call boundary also owns permission handoff.
 `.github/workflows/validate-release-assets.yml` call the write scopes it
 requests (`contents: write` and `issues: write`), rather than inheriting the
 release pipeline's top-level read-only default and failing at workflow startup.
+The staged installer-smoke boundary owns the same fail-closed handoff for
+unpublished assets. GitHub requires write-level repository access to read draft
+release metadata and asset bytes, even when the consumer only performs GET
+requests. The `install_sh_smoke` call in `.github/workflows/create-release.yml`
+and the `smoke` job in `.github/workflows/install-sh-smoke.yml` must therefore
+grant `contents: write`; the workflow-level default remains read-only and the
+smoke job must not receive unrelated write scopes.
 That same validation status boundary must preserve release identity when it
 annotates a draft or failed release. Every release-body or draft-state PATCH
 from `.github/workflows/validate-release-assets.yml` must carry the intended
