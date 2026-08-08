@@ -1,0 +1,379 @@
+name: Recover Release Activation
+run-name: Recover release activation ${{ inputs.tag }} source ${{ inputs.source_release_run_id }}
+
+# Resume only a quarantined candidate whose immutable release gates already
+# passed. This path revalidates stored artifacts and repeats activation without
+# rebuilding or replacing the candidate.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Exact quarantined release tag."
+        required: true
+        type: string
+      source_release_run_id:
+        description: "Failed create-release.yml run whose immutable gates passed."
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  recover_activation:
+    name: Revalidate and recover activation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout release control
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Qualify the quarantined source run
+        id: qualify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]; then
+            echo "::error::Invalid recovery tag ${TAG}."
+            exit 1
+          fi
+          if [[ ! "${SOURCE_RELEASE_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Source release run ID must be numeric."
+            exit 1
+          fi
+
+          source_run=$(mktemp)
+          source_jobs=$(mktemp)
+          release_json=$(mktemp)
+          cleanup() { rm -f "${source_run}" "${source_jobs}" "${release_json}"; }
+          trap cleanup EXIT
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}" > "${source_run}"
+          jq -e \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            '.event == "workflow_dispatch" and
+             .path == ".github/workflows/create-release.yml" and
+             .head_branch == "main" and
+             .head_repository.full_name == $repository and
+             .status == "completed" and
+             .conclusion == "failure" and
+             (.head_sha | test("^[0-9a-f]{40}$"))' \
+            "${source_run}" >/dev/null || {
+              echo "::error::Run ${SOURCE_RELEASE_RUN_ID} is not a completed failed mainline create-release run."
+              exit 1
+            }
+
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}/jobs?per_page=100" \
+            | jq '[.[].jobs[]]' > "${source_jobs}"
+          for required_job in \
+            prepare \
+            "Windows PowerShell 5.1 Install Command Smoke" \
+            docker_build \
+            helm_smoke \
+            frontend_checks \
+            "Build Immutable Release Candidate / Verify Native Signing Configuration" \
+            "Build Immutable Release Candidate / Sign and Notarize macOS Agent" \
+            "Build Immutable Release Candidate / Build and Validate Release Candidate" \
+            backend_tests \
+            release_smoke \
+            create_release \
+            stage_private_pro_runtime \
+            "validate_release_assets / validate" \
+            "publish_docker / publish" \
+            "publish_helm_chart / Package and Push Helm Chart" \
+            "install_sh_smoke / smoke" \
+            release_readiness \
+            dispatch_release_convergence; do
+            jq -e --arg name "${required_job}" \
+              'any(.[]; .name == $name and .status == "completed" and .conclusion == "success")' \
+              "${source_jobs}" >/dev/null || {
+                echo "::error::Source run lacks successful immutable gate: ${required_job}."
+                exit 1
+              }
+          done
+          jq -e '
+            all(.[];
+              .conclusion == "success" or
+              .conclusion == "skipped" or
+              (.conclusion == "failure" and
+                (.name == "activate_release" or
+                 .name == "Release Activation Commit Verdict")))' \
+            "${source_jobs}" >/dev/null || {
+              echo "::error::Source run contains a failure outside the recoverable activation boundary."
+              exit 1
+            }
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate \
+            | jq -sc --arg tag "${TAG}" 'add | map(select(.tag_name == $tag)) | first // empty' \
+            > "${release_json}"
+          source_sha=$(jq -r '.head_sha' "${source_run}")
+          release_id=$(jq -r '.id // empty' "${release_json}")
+          target_commitish=$(jq -r '.target_commitish // empty' "${release_json}")
+          is_draft=$(jq -r '.draft // false' "${release_json}")
+          is_prerelease=$(jq -r '.prerelease // false' "${release_json}")
+          activation_committed=$(jq -r 'any(.assets[]?; .name == "release-activation.json")' "${release_json}")
+          if [ -z "${release_id}" ] || [ "${target_commitish}" != "${source_sha}" ] || \
+             [ "${is_draft}" != "true" ] || [ "${activation_committed}" = "true" ]; then
+            echo "::error::${TAG} is not the uncommitted quarantined candidate from run ${SOURCE_RELEASE_RUN_ID}."
+            exit 1
+          fi
+
+          version="${TAG#v}"
+          manifest_artifact="release-candidate-manifest-${source_sha}-${version}"
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}/artifacts?per_page=100" \
+            | jq '[.[].artifacts[]]' \
+            | jq -e --arg name "${manifest_artifact}" \
+                'any(.[]; .name == $name and .expired == false)' >/dev/null || {
+              echo "::error::Immutable candidate manifest ${manifest_artifact} is unavailable."
+              exit 1
+            }
+
+          run_created_date=$(jq -r '.created_at | fromdateiso8601 | strftime("%Y%m%d")' "${source_run}")
+          r2_prefix="${TAG}-pro-${run_created_date}-${SOURCE_RELEASE_RUN_ID}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${is_prerelease}" >> "$GITHUB_OUTPUT"
+          echo "manifest_artifact=${manifest_artifact}" >> "$GITHUB_OUTPUT"
+          echo "r2_prefix=${r2_prefix}" >> "$GITHUB_OUTPUT"
+          echo "[OK] ${TAG} is eligible for activation-only recovery from run ${SOURCE_RELEASE_RUN_ID}."
+
+      - name: Revalidate the immutable staged candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
+          VERSION: ${{ steps.qualify.outputs.version }}
+          SOURCE_SHA: ${{ steps.qualify.outputs.source_sha }}
+          RELEASE_ID: ${{ steps.qualify.outputs.release_id }}
+          MANIFEST_ARTIFACT: ${{ steps.qualify.outputs.manifest_artifact }}
+        run: |
+          set -euo pipefail
+          manifest_dir=$(mktemp -d)
+          release_assets=$(mktemp)
+          release_body=$(mktemp)
+          cleanup() { rm -rf "${manifest_dir}"; rm -f "${release_assets}" "${release_body}"; }
+          trap cleanup EXIT
+
+          gh run download "${SOURCE_RELEASE_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name "${MANIFEST_ARTIFACT}" \
+            --dir "${manifest_dir}"
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" \
+            | jq '[.[][]]' > "${release_assets}"
+          python3 scripts/release_candidate_manifest.py verify-release \
+            --manifest "${manifest_dir}/release-candidate.json" \
+            --assets-json "${release_assets}" \
+            --version "${VERSION}" \
+            --source-sha "${SOURCE_SHA}"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            --jq '.body // ""' > "${release_body}"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${VERSION}" \
+            --validate-body-file "${release_body}"
+          echo "[OK] GitHub's stored RC packet still matches the immutable source-run manifest."
+
+      - name: Dispatch a fresh durable convergence owner
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
+          VERSION: ${{ steps.qualify.outputs.version }}
+          SOURCE_SHA: ${{ steps.qualify.outputs.source_sha }}
+          RELEASE_ID: ${{ steps.qualify.outputs.release_id }}
+          IS_PRERELEASE: ${{ steps.qualify.outputs.is_prerelease }}
+          R2_PREFIX: ${{ steps.qualify.outputs.r2_prefix }}
+        run: |
+          set -euo pipefail
+          dispatch="$(
+            jq -n \
+              --arg tag "${TAG}" \
+              --arg version "${VERSION}" \
+              --arg prerelease "${IS_PRERELEASE}" \
+              --arg target_commitish "${SOURCE_SHA}" \
+              --arg release_id "${RELEASE_ID}" \
+              --arg r2_prefix "${R2_PREFIX}" \
+              --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
+              '{
+                ref: "main",
+                return_run_details: true,
+                inputs: {
+                  tag: $tag,
+                  version: $version,
+                  prerelease: $prerelease,
+                  target_commitish: $target_commitish,
+                  release_id: $release_id,
+                  r2_prefix: $r2_prefix,
+                  source_release_run_id: $source_release_run_id
+                }
+              }' | \
+              gh api \
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2026-03-10" \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/release-convergence.yml/dispatches" \
+                --input -
+          )"
+          run_id=$(jq -r '.workflow_run_id // empty' <<<"${dispatch}")
+          run_url=$(jq -r '.html_url // empty' <<<"${dispatch}")
+          if [[ ! "${run_id}" =~ ^[0-9]+$ ]] || [ -z "${run_url}" ]; then
+            echo "::error::Recovery convergence dispatch did not return an exact workflow run."
+            exit 1
+          fi
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+          echo "run_url=${run_url}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Fresh convergence owner is durably queued as ${run_url}."
+
+      - name: Commit the recovered activation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
+          EXPECTED_COMMIT: ${{ steps.qualify.outputs.source_sha }}
+          RELEASE_ID: ${{ steps.qualify.outputs.release_id }}
+          IS_PRERELEASE: ${{ steps.qualify.outputs.is_prerelease }}
+          R2_PREFIX: ${{ steps.qualify.outputs.r2_prefix }}
+          CONVERGENCE_RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          release_json=$(mktemp)
+          publish_payload=$(mktemp)
+          quarantine_payload=$(mktemp)
+          activation_marker_dir=$(mktemp -d)
+          activation_marker="${activation_marker_dir}/release-activation.json"
+          verified_marker=$(mktemp)
+          activated=false
+          committed=false
+
+          require_viable_convergence_owner() {
+            local owner_state
+            owner_state="$(
+              gh run view "${CONVERGENCE_RUN_ID}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --json event,status,conclusion,workflowName,displayTitle,url \
+                --jq '[.event, .status, (.conclusion // ""), .workflowName, .displayTitle, .url] | @tsv'
+            )"
+            owner_event=$(awk -F '\t' '{print $1}' <<<"${owner_state}")
+            owner_status=$(awk -F '\t' '{print $2}' <<<"${owner_state}")
+            owner_conclusion=$(awk -F '\t' '{print $3}' <<<"${owner_state}")
+            owner_workflow=$(awk -F '\t' '{print $4}' <<<"${owner_state}")
+            owner_title=$(awk -F '\t' '{print $5}' <<<"${owner_state}")
+            owner_url=$(awk -F '\t' '{print $6}' <<<"${owner_state}")
+            expected_title="Release convergence ${TAG} source ${SOURCE_RELEASE_RUN_ID}"
+            if [ "${owner_event}" != "workflow_dispatch" ] || \
+               [ "${owner_workflow}" != "Release Convergence" ] || \
+               [ "${owner_title}" != "${expected_title}" ] || \
+               [ "${owner_status}" = "completed" ] || \
+               [ -n "${owner_conclusion}" ]; then
+              echo "::error::Exact recovery convergence owner ${CONVERGENCE_RUN_ID} is not viable for ${TAG}: status=${owner_status} conclusion=${owner_conclusion:-none} ${owner_url}."
+              return 1
+            fi
+            echo "Verified viable recovery convergence owner ${CONVERGENCE_RUN_ID}: ${owner_status} ${owner_url}."
+          }
+
+          quarantine_on_error() {
+            if [ "${activated}" = "true" ] && [ "${committed}" != "true" ]; then
+              echo "::warning::Recovered activation failed before its marker; returning ${TAG} to draft quarantine."
+              gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+                -X PATCH --input "${quarantine_payload}" >/dev/null || true
+            fi
+          }
+          trap quarantine_on_error ERR
+
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" > "${release_json}"
+          jq -e \
+            --arg tag "${TAG}" \
+            --arg commit "${EXPECTED_COMMIT}" \
+            --argjson prerelease "${IS_PRERELEASE}" \
+            '.tag_name == $tag and .target_commitish == $commit and
+             .draft == true and .prerelease == $prerelease and
+             (any(.assets[]?; .name == "release-activation.json") | not)' \
+            "${release_json}" >/dev/null || {
+              echo "::error::Release ${RELEASE_ID} no longer matches the recoverable staged candidate."
+              exit 1
+            }
+
+          make_latest=false
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            highest_stable=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/tags" --jq '.[].name' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            if [ "${TAG}" = "${highest_stable}" ]; then
+              make_latest=true
+            fi
+          fi
+          jq -n --arg make_latest "${make_latest}" \
+            '{draft: false, make_latest: $make_latest}' > "${publish_payload}"
+          jq -n '{draft: true, make_latest: "false"}' > "${quarantine_payload}"
+
+          require_viable_convergence_owner
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -X PATCH --input "${publish_payload}" > "${release_json}"
+          activated=true
+          if [ "$(jq -r '.draft' "${release_json}")" != "false" ] || \
+             [ -z "$(jq -r '.published_at // ""' "${release_json}")" ]; then
+            echo "::error::GitHub did not publish release ${RELEASE_ID}."
+            exit 1
+          fi
+
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          for asset_name in \
+            checksums.txt \
+            install.sh \
+            "pulse-provider-msp-${TAG}.tar.gz" \
+            "pulse-${TAG}-linux-amd64.tar.gz"; do
+            curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+              -o /dev/null "${base}/${asset_name}"
+          done
+
+          require_viable_convergence_owner
+          jq -n \
+            --arg tag "${TAG}" \
+            --arg target_commitish "${EXPECTED_COMMIT}" \
+            --arg release_id "${RELEASE_ID}" \
+            --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg r2_prefix "${R2_PREFIX}" \
+            --arg activation_recovery_run_id "${GITHUB_RUN_ID}" \
+            '{
+              schema_version: 1,
+              tag: $tag,
+              target_commitish: $target_commitish,
+              release_id: $release_id,
+              source_release_run_id: $source_release_run_id,
+              convergence_run_id: $convergence_run_id,
+              r2_prefix: $r2_prefix,
+              activation_recovery_run_id: $activation_recovery_run_id
+            }' > "${activation_marker}"
+          gh release upload "${TAG}" \
+            "${activation_marker}" --clobber \
+            --repo "${GITHUB_REPOSITORY}"
+          committed=true
+          curl -fsSL --retry 12 --retry-delay 5 --retry-all-errors \
+            -o "${verified_marker}" "${base}/release-activation.json"
+          jq -e \
+            --arg tag "${TAG}" \
+            --arg target_commitish "${EXPECTED_COMMIT}" \
+            --arg release_id "${RELEASE_ID}" \
+            --arg source_release_run_id "${SOURCE_RELEASE_RUN_ID}" \
+            --arg convergence_run_id "${CONVERGENCE_RUN_ID}" \
+            --arg r2_prefix "${R2_PREFIX}" \
+            --arg activation_recovery_run_id "${GITHUB_RUN_ID}" \
+            '.schema_version == 1 and .tag == $tag and
+             .target_commitish == $target_commitish and .release_id == $release_id and
+             .source_release_run_id == $source_release_run_id and
+             .convergence_run_id == $convergence_run_id and .r2_prefix == $r2_prefix and
+             .activation_recovery_run_id == $activation_recovery_run_id' \
+            "${verified_marker}" >/dev/null
+          trap - ERR
+          echo "[OK] Recovered and irreversibly committed ${TAG}; convergence run ${CONVERGENCE_RUN_ID} owns customer rollout."

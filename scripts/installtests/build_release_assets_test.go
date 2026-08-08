@@ -1972,6 +1972,10 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read release-convergence.yml: %v", err)
 	}
+	recoveryBytes, err := os.ReadFile(repoFile(".github", "workflows", "recover-release-activation.yml"))
+	if err != nil {
+		t.Fatalf("read recover-release-activation.yml: %v", err)
+	}
 	leaseScriptBytes, err := os.ReadFile(repoFile("scripts", "release_control", "customer_promotion_lease.sh"))
 	if err != nil {
 		t.Fatalf("read customer_promotion_lease.sh: %v", err)
@@ -1981,6 +1985,7 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	candidateWorkflow := string(candidateBytes)
 	validationWorkflow := string(validationBytes)
 	convergenceWorkflow := string(convergenceBytes)
+	recoveryWorkflow := string(recoveryBytes)
 	leaseScript := string(leaseScriptBytes)
 	createJob := workflowJobBlock(t, createWorkflow, "create_release")
 	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
@@ -2081,10 +2086,50 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	if !strings.Contains(activationJob, `'{draft: false, make_latest: $make_latest}'`) {
 		t.Fatal("release activation must be the job that crosses the draft publication boundary")
 	}
-	for _, needle := range []string{`release-activation.json`, `require_viable_convergence_owner`, `continue-on-error: true`} {
+	for _, needle := range []string{
+		`release-activation.json`,
+		`require_viable_convergence_owner`,
+		`continue-on-error: true`,
+		`Resuming quarantined activation for ${TAG}`,
+		`[ "$activation_committed" = "true" ] ||`,
+		`--repo "${GITHUB_REPOSITORY}"`,
+	} {
 		if !strings.Contains(activationJob, needle) {
 			t.Fatalf("release activation missing irreversible handoff contract: %s", needle)
 		}
+	}
+	if strings.Contains(activationJob, `[ -n "$published_at" ] ||`) {
+		t.Fatal("release activation must allow retrying a current draft when GitHub retains historical published_at metadata")
+	}
+	if !strings.Contains(createJob, `Resuming quarantined draft for ${TAG}`) ||
+		!strings.Contains(createJob, `Resuming quarantined draft release for ${TAG}`) {
+		t.Fatal("release creation must explicitly support resuming a quarantined draft")
+	}
+	if !strings.Contains(createJob, `release_activation_committed=${RELEASE_ACTIVATION_COMMITTED}`) ||
+		!strings.Contains(createJob, `[ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]`) ||
+		!strings.Contains(createJob, `[ "$ACTIVATION_COMMITTED" != "true" ]`) {
+		t.Fatal("release creation must refuse to retarget a draft whose irreversible activation marker exists")
+	}
+	if strings.Contains(createJob, `[ -z "$EXISTING_RELEASE_PUBLISHED_AT" ]`) ||
+		strings.Contains(createJob, `[ -z "$PUBLISHED_AT" ]`) {
+		t.Fatal("release creation must not mistake historical published_at metadata for current public visibility")
+	}
+	for _, needle := range []string{
+		`.path == ".github/workflows/create-release.yml"`,
+		`release-candidate-manifest-${source_sha}-${version}`,
+		`scripts/release_candidate_manifest.py verify-release`,
+		`failure outside the recoverable activation boundary`,
+		`release-convergence.yml/dispatches`,
+		`activation_recovery_run_id`,
+		`--repo "${GITHUB_REPOSITORY}"`,
+	} {
+		if !strings.Contains(recoveryWorkflow, needle) {
+			t.Fatalf("activation-only recovery missing qualified reuse contract: %s", needle)
+		}
+	}
+	if strings.Contains(recoveryWorkflow, `scripts/build-release.sh`) ||
+		strings.Contains(recoveryWorkflow, `build-release-candidate.yml`) {
+		t.Fatal("activation-only recovery must never rebuild the qualified candidate")
 	}
 	for _, needle := range []string{`sort -Vr`, `superseded=true`} {
 		if !strings.Contains(leaseJob, needle) {

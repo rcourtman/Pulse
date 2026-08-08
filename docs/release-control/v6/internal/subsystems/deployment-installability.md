@@ -983,6 +983,22 @@ upgrade, update, release, or artifact-selection behavior.
    quarantine the release. Once that marker is public, the
    release remains committed and mutable-surface failures become explicit
    convergence debt rather than a fictional release rollback.
+   GitHub retains historical `published_at` metadata when a release is returned
+   to draft. Retry eligibility and staged activation identity must therefore use
+   the current `draft=true` state plus the absence of the irreversible marker,
+   rather than treating a retained timestamp as current publication. A draft
+   that already contains `release-activation.json` must never be retargeted or
+   resumed. Checkout-free activation jobs must also pass the repository
+   explicitly to `gh release upload`; local git discovery is not a valid
+   dependency at the irreversible marker boundary.
+   A failed activation after immutable readiness has passed may use the
+   activation-only recovery workflow. Recovery must accept only a completed
+   failed `create-release.yml` run whose failures are confined to activation,
+   require every immutable gate to be successful, revalidate GitHub's stored
+   asset digests against that source run's unexpired candidate manifest, and
+   require the same draft release ID, tag, target commit, and absent activation
+   marker. It then dispatches a fresh durable convergence owner and repeats the
+   activation commit without rebuilding or replacing any candidate artifact.
    One immutable-readiness join must cover the staged release packet, staged
    install smoke, exact public Docker images, exact Helm OCI chart, and (for
    v6) the exact Pro image and signed packet. After that join, activation must
@@ -1374,6 +1390,16 @@ remain distributed to the existing beta cohort through TestFlight and Play
 open testing. The changes since RC9 preserve the checked-in mobile API, Relay,
 pairing, approval, push, authentication, and onboarding contracts; no additional
 companion upload or public store rollout is part of RC11.
+The first RC11 publication attempt, run `31274524321`, passed every immutable
+release gate and briefly crossed the draft boundary, then failed before the
+irreversible activation marker because the checkout-free activation job relied
+on local git repository discovery. The error trap returned the release to draft
+quarantine and the orphaned convergence run was cancelled. The metadata-only
+correction targets the marker upload repository explicitly, adds a qualified
+activation-only recovery path that reuses the already validated RC11 packet,
+and accepts GitHub's retained historical `published_at` value only while the
+release's current state remains `draft=true`; RC11 keeps the same version
+identity and code-backed validation-risk head.
 The preceding `v6.2.0-rc.10` attempt used the same support-prerelease path with
 `rollback_version=v6.1.2`, but it is an abandoned partial candidate rather than
 the current public-testing identity. Run `31267947317` staged its annotated tag,

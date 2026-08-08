@@ -66,7 +66,7 @@ on:
         type: string
 
 concurrency:
-  group: release-${{ github.event.inputs.version || github.ref || github.run_id }}
+  group: release-v${{ github.event.inputs.version || github.ref || github.run_id }}
   cancel-in-progress: false
 
 permissions:
@@ -920,11 +920,13 @@ jobs:
           RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url // empty')
           RELEASE_IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft // false')
           RELEASE_PUBLISHED_AT=$(echo "$EXISTING_RELEASE" | jq -r '.published_at // empty')
+          RELEASE_ACTIVATION_COMMITTED=$(echo "$EXISTING_RELEASE" | jq -r 'any(.assets[]?; .name == "release-activation.json")')
 
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "release_is_draft=${RELEASE_IS_DRAFT}" >> $GITHUB_OUTPUT
           echo "release_published_at=${RELEASE_PUBLISHED_AT}" >> $GITHUB_OUTPUT
+          echo "release_activation_committed=${RELEASE_ACTIVATION_COMMITTED}" >> $GITHUB_OUTPUT
 
       - name: Create tag
         env:
@@ -935,6 +937,7 @@ jobs:
           EXISTING_RELEASE_ID="${{ steps.existing_release.outputs.release_id }}"
           EXISTING_RELEASE_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
           EXISTING_RELEASE_PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
+          EXISTING_RELEASE_ACTIVATION_COMMITTED="${{ steps.existing_release.outputs.release_activation_committed }}"
 
           REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
 
@@ -944,7 +947,10 @@ jobs:
 
             if [ "$REMOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
               echo "Tag ${TAG} already exists and points to HEAD - continuing"
-            elif [ -n "$EXISTING_RELEASE_ID" ] && [ "$EXISTING_RELEASE_DRAFT" = "true" ] && [ -z "$EXISTING_RELEASE_PUBLISHED_AT" ]; then
+            elif [ -n "$EXISTING_RELEASE_ID" ] && [ "$EXISTING_RELEASE_DRAFT" = "true" ] && [ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]; then
+              if [ -n "$EXISTING_RELEASE_PUBLISHED_AT" ]; then
+                echo "Resuming quarantined draft for ${TAG}; GitHub retained historical published_at=${EXISTING_RELEASE_PUBLISHED_AT}."
+              fi
               echo "Retargeting existing draft tag ${TAG} from ${REMOTE_COMMIT_SHA} to ${HEAD_SHA}"
               git config user.name "github-actions[bot]"
               git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -977,6 +983,7 @@ jobs:
           RELEASE_URL="${{ steps.existing_release.outputs.release_url }}"
           IS_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
           PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
+          ACTIVATION_COMMITTED="${{ steps.existing_release.outputs.release_activation_committed }}"
           RELEASE_PAYLOAD=$(mktemp)
           RELEASE_JSON_FILE=$(mktemp)
           ACTUAL_BODY_FILE=$(mktemp)
@@ -998,7 +1005,10 @@ jobs:
             }' > "$RELEASE_PAYLOAD"
 
           if [ -n "$RELEASE_ID" ]; then
-            if [ "$IS_DRAFT" = "true" ] && [ -z "$PUBLISHED_AT" ]; then
+            if [ "$IS_DRAFT" = "true" ] && [ "$ACTIVATION_COMMITTED" != "true" ]; then
+              if [ -n "$PUBLISHED_AT" ]; then
+                echo "Resuming quarantined draft release for ${TAG}; GitHub retained historical published_at=${PUBLISHED_AT}."
+              fi
               echo "Updating existing draft release for ${TAG}"
               gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
                 -X PATCH \
@@ -1621,11 +1631,16 @@ jobs:
           actual_draft=$(jq -r '.draft' "$release_json")
           published_at=$(jq -r '.published_at // ""' "$release_json")
           actual_prerelease=$(jq -r '.prerelease' "$release_json")
+          activation_committed=$(jq -r 'any(.assets[]?; .name == "release-activation.json")' "$release_json")
           if [ "$actual_tag" != "$TAG" ] || [ "$actual_commit" != "$EXPECTED_COMMIT" ] || \
-             [ "$actual_draft" != "true" ] || [ -n "$published_at" ] || \
+             [ "$actual_draft" != "true" ] || \
+             [ "$activation_committed" = "true" ] || \
              [ "$actual_prerelease" != "$IS_PRERELEASE" ]; then
             echo "::error::Release ${RELEASE_ID} no longer matches the staged activation candidate."
             exit 1
+          fi
+          if [ -n "$published_at" ]; then
+            echo "Resuming quarantined activation for ${TAG}; GitHub retained historical published_at=${published_at}."
           fi
 
           make_latest=false
@@ -1681,7 +1696,8 @@ jobs:
               r2_prefix: $r2_prefix
             }' > "${activation_marker}"
           gh release upload "${TAG}" \
-            "${activation_marker}" --clobber
+            "${activation_marker}" --clobber \
+            --repo "${GITHUB_REPOSITORY}"
           # The successful upload is the single irreversible logical boundary:
           # convergence may observe the marker immediately, so no later
           # activation-side read failure may return the release to draft.

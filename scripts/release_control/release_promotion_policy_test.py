@@ -382,6 +382,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Customer convergence dispatch did not return an exact workflow run", dispatch)
         self.assertIn("continue-on-error: true", activation)
         self.assertIn("returning ${TAG} to draft quarantine", activation)
+        self.assertIn("Resuming quarantined activation for ${TAG}", activation)
+        self.assertNotIn('[ -n "$published_at" ] ||', activation)
+        self.assertIn('[ "$activation_committed" = "true" ] ||', activation)
         self.assertIn('committed=false', activation)
         self.assertIn('[ "$committed" != "true" ]', activation)
         self.assertIn("release-activation.json", activation)
@@ -393,6 +396,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         marker_upload = activation.index('gh release upload "${TAG}"')
         commit_flip = activation.index("committed=true", marker_upload)
         activation_readback = activation.index("curl -fsSL --retry 12", commit_flip)
+        self.assertIn(
+            '--repo "${GITHUB_REPOSITORY}"',
+            activation[marker_upload:commit_flip],
+        )
         self.assertLess(marker_upload, commit_flip)
         self.assertLess(commit_flip, activation_readback)
 
@@ -421,6 +428,33 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         demo_workflow = read(".github/workflows/update-demo-server.yml")
         self.assertNotIn("release_id:", demo_workflow)
         self.assertNotIn("unpublished draft", demo_workflow)
+
+    def test_activation_recovery_reuses_the_qualified_candidate_without_rebuilding(self) -> None:
+        release = read(".github/workflows/create-release.yml")
+        recovery = read(".github/workflows/recover-release-activation.yml")
+        job = workflow_job_block(recovery, "recover_activation")
+
+        self.assertIn("group: release-v${{ github.event.inputs.version", release)
+        self.assertIn("group: release-${{ inputs.tag }}", recovery)
+        self.assertIn('.path == ".github/workflows/create-release.yml"', job)
+        self.assertIn("release_readiness", job)
+        self.assertIn("dispatch_release_convergence", job)
+        self.assertIn("failure outside the recoverable activation boundary", job)
+        self.assertIn("release-candidate-manifest-${source_sha}-${version}", job)
+        self.assertIn("scripts/release_candidate_manifest.py verify-release", job)
+        self.assertIn('(any(.assets[]?; .name == "release-activation.json") | not)', job)
+        self.assertIn("release-convergence.yml/dispatches", job)
+        self.assertIn("return_run_details: true", job)
+        self.assertIn("activation_recovery_run_id", job)
+        self.assertIn('--repo "${GITHUB_REPOSITORY}"', job)
+        self.assertNotIn("build-release-candidate.yml", recovery)
+        self.assertNotIn("scripts/build-release.sh", recovery)
+
+        marker_upload = job.index('gh release upload "${TAG}"')
+        committed = job.index("committed=true", marker_upload)
+        readback = job.index("curl -fsSL --retry 12", committed)
+        self.assertLess(marker_upload, committed)
+        self.assertLess(committed, readback)
 
         for workflow_path, refusal in (
             (
@@ -568,7 +602,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         lease_script = read("scripts/release_control/customer_promotion_lease.sh")
 
         self.assertIn(
-            "release-${{ github.event.inputs.version || github.ref || github.run_id }}",
+            "release-v${{ github.event.inputs.version || github.ref || github.run_id }}",
             release_workflow,
         )
         self.assertNotIn("release-customer-promotion-lock", release_workflow)
@@ -1341,6 +1375,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate', content)
         self.assertIn('git push origin "refs/tags/${TAG}" --force', content)
         self.assertIn('Retargeting existing draft tag ${TAG}', content)
+        self.assertIn('Resuming quarantined draft for ${TAG}', content)
+        self.assertIn('Resuming quarantined draft release for ${TAG}', content)
+        self.assertIn('release_activation_committed=${RELEASE_ACTIVATION_COMMITTED}', content)
+        self.assertIn('[ "$EXISTING_RELEASE_ACTIVATION_COMMITTED" != "true" ]', content)
+        self.assertIn('[ "$ACTIVATION_COMMITTED" != "true" ]', content)
+        self.assertNotIn('[ -z "$EXISTING_RELEASE_PUBLISHED_AT" ]', content)
+        self.assertNotIn('[ -z "$PUBLISHED_AT" ]', content)
         self.assertIn('--rawfile body "$NOTES_FILE"', content)
         self.assertIn('--input "$RELEASE_PAYLOAD"', content)
         self.assertIn('--expected-body-file "$NOTES_FILE"', content)

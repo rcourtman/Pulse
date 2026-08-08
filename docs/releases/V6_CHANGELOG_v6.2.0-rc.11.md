@@ -24,7 +24,8 @@ prerelease and rolls back to stable `v6.1.2`._
   supported.
 - Release artifact staging, authenticated draft install smoke, cold-runner
   Windows TLS proof, customer promotion convergence, frontend dependency
-  audits, historical secret scanning, and provider-MSP evaluation delivery.
+  audits, historical secret scanning, provider-MSP evaluation delivery, and
+  no-rebuild, repository-targeted activation recovery after draft quarantine.
 - Self-hosted commercial opt-in posture and plan-selection upgrade routing.
 
 ## Fixed

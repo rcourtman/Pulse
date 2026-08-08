@@ -36,6 +36,9 @@ release operations.
   that keep desktop, tablet, and phone navigation coherent.
 - Restored authenticated draft-asset access for release install smoke and gave
   the Windows TLS fixture a bounded setup window on cold hosted runners.
+- Made release activation retry-safe after draft quarantine, including a
+  no-rebuild recovery path, and bound the final activation-marker upload to the
+  explicit GitHub repository.
 - Restored release staging before publication, exact-version paid-customer
   promotion order, verifiable MSP evaluation delivery, and dependency-audit
   enforcement for the shipped frontend.
