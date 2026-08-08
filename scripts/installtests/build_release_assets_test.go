@@ -2112,6 +2112,16 @@ func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
 	}
 }
 
+func TestFrontendDependencySecurityAuditsAreRequired(t *testing.T) {
+	workflowPath := repoFile(".github", "workflows", "build-and-test.yml")
+	assertFileContainsAll(t, workflowPath,
+		`- name: Audit complete frontend dependency graph`,
+		`run: npm audit`,
+		`- name: Audit production frontend dependencies`,
+		`run: npm audit --omit=dev`,
+	)
+}
+
 func TestReleaseCutGatesCriticalFrontendAndWindowsRuntimeProof(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
 	if err != nil {

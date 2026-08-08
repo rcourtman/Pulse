@@ -122,6 +122,14 @@ jobs:
         working-directory: frontend-modern
         run: npm ci
 
+      - name: Audit complete frontend dependency graph
+        working-directory: frontend-modern
+        run: npm audit
+
+      - name: Audit production frontend dependencies
+        working-directory: frontend-modern
+        run: npm audit --omit=dev
+
       # Whole-tree, not staged-only: the pre-commit formatter only ever sees
       # staged files, so drift in untouched files is invisible to it. This is
       # the backstop that keeps `make format` a no-op on a clean tree.

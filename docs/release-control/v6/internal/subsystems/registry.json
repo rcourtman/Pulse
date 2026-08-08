@@ -4115,6 +4115,7 @@
         ".github/scripts/check-demo-reachability.sh",
         ".github/scripts/setup-demo-ssh.sh",
         ".github/workflows/backfill-release-assets.yml",
+        ".github/workflows/build-and-test.yml",
         ".github/workflows/build-release-candidate.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
@@ -4516,12 +4517,26 @@
             ]
           },
           {
+            "id": "frontend-dependency-security",
+            "label": "frontend dependency security proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/build-and-test.yml",
+              "frontend-modern/package-lock.json",
+              "frontend-modern/package.json"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/security/__tests__/dependencySecurity.test.ts",
+              "scripts/installtests/build_release_assets_test.go"
+            ]
+          },
+          {
             "id": "dev-runtime-orchestration",
             "label": "dev runtime orchestration proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/package-lock.json",
-              "frontend-modern/package.json",
               "frontend-modern/vite.config.ts",
               "go.mod",
               "go.sum",

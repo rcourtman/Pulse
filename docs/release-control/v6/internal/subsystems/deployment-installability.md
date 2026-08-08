@@ -51,6 +51,7 @@ TLS floor in the dynamic config.
 16. `internal/cloudcp/docker/labels.go`
 17. `internal/cloudcp/tenant_runtime_rollout.go`
 13. `.github/workflows/build-release-candidate.yml`
+14. `.github/workflows/build-and-test.yml`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`
@@ -2377,6 +2378,19 @@ are part of the same governed bootstrap input even when the package manifest
 range already permits the newer version; the lockfile must identify the
 resolved package version and integrity that the release build will actually
 consume.
+Frontend dependency-security changes use their own proof route rather than
+borrowing the local dev-runtime orchestration tests. The canonical
+`.github/workflows/build-and-test.yml` frontend job must run both the complete
+`npm audit` and the production-only `npm audit --omit=dev` after a clean
+install. `frontend-modern/src/security/__tests__/dependencySecurity.test.ts`
+pins the known safe floors for advisories remediated by commit `6ba85a185`,
+including DOMPurify `GHSA-55q2-fjhq-7xh7`, brace-expansion
+`GHSA-mh99-v99m-4gvg` and `GHSA-rgw5-rvv9-x895`, and nanoid
+`GHSA-2v37-7h3g-55p8`, while
+`scripts/installtests/build_release_assets_test.go` prevents either CI audit
+gate from being removed silently. A later advisory must advance these floors
+and its sanitizer or dependency-specific regression proof together; audit
+suppression is not a valid closure.
 Security-driven Go module graph bumps follow the same rule: `go.mod` and
 `go.sum` must move together when a reachable vulnerability is remediated, and
 the slice must carry direct vulnerability or dependency-floor proof so the
