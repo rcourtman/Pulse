@@ -1338,21 +1338,23 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.2.0-rc.9` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.2.0-rc.10` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.2.0-rc.9` release
+fallback, and Helm chart release metadata to the same `6.2.0-rc.10` release
 version. This support prerelease keeps `rollback_version=v6.1.2`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. Stable
 install pointers stay on `v6.1.2`, whose active stable cut is recorded below and
-continues to govern the stable line until this candidate is promoted. The ninth
-`v6.2.0` candidate is a monitoring-correctness, deployment-safety, security,
-and responsive-interface cut that supersedes `v6.2.0-rc.8`: it corrects alert
-delivery and infrastructure state, hardens agent install and update behavior,
-tightens authorization and dependency boundaries, and keeps operational
-controls usable across narrow layouts. The exact `main` SHA must pass the
-integrated release checks and immutable-candidate build before the single-build
-workflow crosses its public mutation boundary.
+continues to govern the stable line until this candidate is promoted. The tenth
+`v6.2.0` candidate is a security-boundary, role-correct access, live-state
+recovery, and release-operations cut that supersedes `v6.2.0-rc.9`: it validates
+request-derived origins, verifies legacy-cleanup SSH hosts, aligns Settings and
+resource reads with session authority, recovers oversized WebSocket state,
+converges agent and PBS lifecycle behavior, restores the deliberate self-hosted
+commercial opt-in posture, and closes the historical credential-containment
+gate. The exact `main` SHA must pass the integrated release checks and
+immutable-candidate build before the single-build workflow crosses its public
+mutation boundary.
 Every release cut, including a prerelease, now gates that mutation boundary on
 the complete frontend unit suite, frontend type-checking, and a deterministic
 render smoke against the verified frontend bundle. The smoke must render
@@ -1363,13 +1365,18 @@ diagnostics. The same release workflow also executes the generated self-signed
 and custom-CA Windows installer commands through Windows PowerShell 5.1 before
 release assembly, so the first HTTPS fetch is release proof rather than a
 string-shape assertion.
-The `v6.2.0-rc.9` server cut is classified
+The `v6.2.0-rc.10` server cut is classified
 `existing-mobile-build-compatible`. The synchronized Pulse Mobile 1.0.0 iOS
 build 12 and Android versionCode 9 candidates, both using runtime version 2,
 remain distributed to the existing beta cohort through TestFlight and Play
-open testing. The changes since RC8 do not alter mobile relay payloads, pairing,
-approvals, authentication, or onboarding contracts; no additional companion
-upload or public store rollout is part of RC9.
+open testing. The changes since RC9 preserve the checked-in mobile API, Relay,
+pairing, approval, push, authentication, and onboarding contracts; no additional
+companion upload or public store rollout is part of RC10.
+The preceding `v6.2.0-rc.9` candidate used the same support-prerelease path
+with `rollback_version=v6.1.2` and pinned the same four install surfaces to
+`6.2.0-rc.9`. It is superseded by this cut and no longer governs the install
+pins; its packet stays in `docs/releases/` as the historical candidate record
+for the `v6.2.0` line.
 The preceding `v6.2.0-rc.8` candidate used the same support-prerelease path
 with `rollback_version=v6.1.2` and pinned the same four install surfaces to
 `6.2.0-rc.8`. It is superseded by this cut and no longer governs the install
@@ -1560,20 +1567,22 @@ For the active stable `v6.1.2` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.1.2` whenever the
 governed `VERSION` is that stable cut. The stable promotion guard remains in
 force and rejects leftover `-rc.` defaults.
-For the active support prerelease `v6.2.0-rc.9` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.9`
+For the active support prerelease `v6.2.0-rc.10` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.2.0-rc.10`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release. Each new candidate on the
 `v6.2.0` line moves these two pins together with the repo-root `VERSION` and
 the Helm chart metadata in the same commit; a candidate that leaves any of the
 four on a superseded `6.2.0-rc.*` value is a release-packet blocker.
-The RC9 packet records `99407ee74ccaf24962713636e733eeff44228acb` as
-the code-backed validation-risk head. That head includes the post-RC8 alert,
-monitoring, agent lifecycle, installer, security, resource-read, and responsive
-interface changes. The release-link and metadata-only release-preparation
-commits may be the workflow dispatch head because they do not change that
-code-backed release-risk range.
+The RC10 packet records `5ff0855882cdbcfc9d4c8f8d87a1ffa3972db818` as
+the code-backed validation-risk head. That head covers 61 commits and 226 files
+since RC9 across request-origin and SSH trust, settings RBAC and responsive
+layout, WebSocket recovery and resource deltas, agent and PBS lifecycle,
+commercial-surface rollback, release-control hardening, and customer artifact
+promotion. The credential-containment record and metadata-only
+release-preparation commits may be the workflow dispatch head because they do
+not change that code-backed release-risk range.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server
