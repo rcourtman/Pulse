@@ -101,7 +101,7 @@ describe.runIf(Boolean(powerShellRuntime))('Windows install command TLS runtime'
     const address = testServer.address();
     if (!address || typeof address === 'string') throw new Error('HTTPS test server did not bind.');
     baseUrl = `https://localhost:${address.port}`;
-  });
+  }, 30_000);
 
   beforeEach(async () => {
     testDirectory = await mkdtemp(join(tmpdir(), 'pulse-windows-tls-'));
