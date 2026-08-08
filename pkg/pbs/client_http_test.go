@@ -426,3 +426,84 @@ func TestClient_GetDatastores_HTMLResponseOnHTTP(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestClient_GetNodeName_CachesResult(t *testing.T) {
+	var nodesCalls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		nodesCalls.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"node": "pbs-main"}},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!pulse-token",
+		TokenValue: "secret",
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		name, err := client.GetNodeName(context.Background())
+		if err != nil {
+			t.Fatalf("GetNodeName call %d: %v", i, err)
+		}
+		if name != "pbs-main" {
+			t.Fatalf("GetNodeName call %d = %q, want pbs-main", i, name)
+		}
+	}
+	if got := nodesCalls.Load(); got != 1 {
+		t.Fatalf("/nodes hit %d times, want 1 (cached after first success)", got)
+	}
+}
+
+func TestClient_GetNodeName_PermissionDenialDefersRetry(t *testing.T) {
+	var nodesCalls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		nodesCalls.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"permission check failed"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!pulse-token",
+		TokenValue: "secret",
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		if _, err := client.GetNodeName(context.Background()); err == nil {
+			t.Fatalf("GetNodeName call %d: expected error", i)
+		}
+	}
+	if got := nodesCalls.Load(); got != 1 {
+		t.Fatalf("/nodes hit %d times, want 1 (403 defers retries)", got)
+	}
+
+	// A transient (non-permission) failure must not defer: reset the deferral
+	// and confirm the next call goes back to the server.
+	client.nodeNameMu.Lock()
+	client.nodeNameRetryAfter = time.Time{}
+	client.nodeNameMu.Unlock()
+	if _, err := client.GetNodeName(context.Background()); err == nil {
+		t.Fatal("expected error after deferral reset")
+	}
+	if got := nodesCalls.Load(); got != 2 {
+		t.Fatalf("/nodes hit %d times after deferral reset, want 2", got)
+	}
+}

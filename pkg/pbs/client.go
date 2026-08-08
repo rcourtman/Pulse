@@ -37,7 +37,19 @@ type Client struct {
 	httpClient *http.Client
 	auth       auth
 	config     ClientConfig
+
+	// GetNodeName caching. The node hostname is stable for the lifetime of a
+	// connection, and polling /nodes every cycle makes PBS log a 403 every few
+	// seconds when the token lacks permission (refs #1691).
+	nodeNameMu         sync.Mutex
+	cachedNodeName     string
+	nodeNameRetryAfter time.Time
 }
+
+// nodeNamePermissionRetryInterval throttles /nodes retries after a permission
+// denial. Long enough to stop per-cycle 403 spam in the PBS syslog, short
+// enough to self-heal once an operator widens the token's ACL.
+const nodeNamePermissionRetryInterval = 30 * time.Minute
 
 func (c *Client) apiBaseURL() (*url.URL, error) {
 	if c.baseAPIURL != nil {
@@ -606,12 +618,34 @@ func (c *Client) GetVersion(ctx context.Context) (*Version, error) {
 	return &result.Data, nil
 }
 
-// GetNodeName returns the PBS node's hostname
+// GetNodeName returns the PBS node's hostname. The result is cached for the
+// lifetime of the client: the hostname cannot change underneath an open
+// connection, and re-fetching /nodes on every poll cycle floods the PBS syslog
+// with 403s when the token cannot read it (refs #1691). Permission denials
+// defer the next attempt by nodeNamePermissionRetryInterval; transient
+// failures retry on the next call.
 func (c *Client) GetNodeName(ctx context.Context) (string, error) {
+	c.nodeNameMu.Lock()
+	if c.cachedNodeName != "" {
+		name := c.cachedNodeName
+		c.nodeNameMu.Unlock()
+		return name, nil
+	}
+	if !c.nodeNameRetryAfter.IsZero() && time.Now().Before(c.nodeNameRetryAfter) {
+		c.nodeNameMu.Unlock()
+		return "", fmt.Errorf("node name unavailable: /nodes permission denied, retry deferred")
+	}
+	c.nodeNameMu.Unlock()
+
 	log.Debug().Msg("PBS GetNodeName: fetching node name")
 
 	resp, err := c.get(ctx, "/nodes")
 	if err != nil {
+		if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "permission") {
+			c.nodeNameMu.Lock()
+			c.nodeNameRetryAfter = time.Now().Add(nodeNamePermissionRetryInterval)
+			c.nodeNameMu.Unlock()
+		}
 		return "", fmt.Errorf("failed to get nodes: %w", err)
 	}
 	defer resp.Body.Close()
@@ -632,6 +666,10 @@ func (c *Client) GetNodeName(ctx context.Context) (string, error) {
 
 	// Return the first (usually only) node name
 	nodeName := result.Data[0].Node
+	c.nodeNameMu.Lock()
+	c.cachedNodeName = nodeName
+	c.nodeNameRetryAfter = time.Time{}
+	c.nodeNameMu.Unlock()
 	log.Debug().Str("nodeName", nodeName).Msg("PBS GetNodeName: found node name")
 	return nodeName, nil
 }
