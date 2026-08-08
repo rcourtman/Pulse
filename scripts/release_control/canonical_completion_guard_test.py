@@ -1183,6 +1183,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/issue1640_readiness_transport_test.go",
                         "internal/api/metadata_handlers_test.go",
                         "internal/api/patrol_autopilot_test.go",
+                        "internal/api/runtime_inventory_sources_test.go",
                         "pulse-enterprise:test/extensions_contract_test.go",
                     ],
                 }
