@@ -1,11 +1,9 @@
 package monitoring
 
-// Business-scale estate thresholds. These mirror the segmentation used in the
-// 2026-08-07 telemetry read that motivated the commercial-surface revision:
-// installs at or above any one of these convert to paid at ~8x the rate of
-// smaller estates. This is the single definition; the session capability
-// surface in internal/api and the outbound telemetry snapshot both classify
-// against it.
+// Business-scale estate thresholds. These are the single classification
+// definition used by the session capability surface in internal/api and the
+// outbound telemetry snapshot. They are product segmentation constants, not
+// evidence of conversion or owner approval for a commercial surface.
 const (
 	BusinessEstateMinPVENodes    = 5
 	BusinessEstateMinDockerHosts = 10

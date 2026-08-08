@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-08-02
+Last updated: 2026-08-08
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -423,6 +423,14 @@ Assertion design rules:
     verification receipt with exact routes, changed paths, final-content
     digests, states, and interactions. DOM presence, unit tests, snapshots, and
     a successful build cannot substitute for rendered-pixel and behavior proof.
+27. A material owner-approval record that relies on quantitative rationale must
+    carry reproducible provenance in the same record. It must identify the
+    durable source, exact query or canonical report command, sanitized snapshot,
+    and measurement time. A prose number, model summary, operator recollection,
+    or unreferenced claim cannot substitute for those artifacts. Quantitative
+    association must not be labelled conversion or causation unless the source
+    and query actually measure that outcome. The approval itself still requires
+    a separate durable owner-confirmation artifact.
 
 ## Non-Negotiable Release Gates
 

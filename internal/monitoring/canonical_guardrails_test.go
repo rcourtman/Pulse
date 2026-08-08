@@ -2839,3 +2839,22 @@ func TestInstallSnapshotCountsBusinessScaleEstate(t *testing.T) {
 		})
 	}
 }
+
+func TestBusinessEstateClassifierDoesNotClaimCommercialEvidence(t *testing.T) {
+	data, err := os.ReadFile("business_estate.go")
+	if err != nil {
+		t.Fatalf("read business_estate.go: %v", err)
+	}
+
+	source := strings.ToLower(string(data))
+	for _, unsupported := range []string{
+		"convert to paid",
+		"conversion rate",
+		"richard-approved",
+		"~8x",
+	} {
+		if strings.Contains(source, unsupported) {
+			t.Fatalf("business-estate classifier must not claim unsupported commercial evidence %q", unsupported)
+		}
+	}
+}

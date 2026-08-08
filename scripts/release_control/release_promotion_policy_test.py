@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import PurePosixPath
 import re
 import subprocess
 import unittest
@@ -39,6 +40,141 @@ def read_json(rel: str) -> dict:
 
 def normalize_ws(text: str) -> str:
     return " ".join(text.split())
+
+
+_MATERIAL_APPROVAL_RE = re.compile(
+    r"(?i)(?:"
+    r"\brichard[- ]approved\b|"
+    r"\bapproved by (?:richard|the (?:project|product|release) owner)\b|"
+    r"\b(?:project|product|release) owner (?:then )?(?:explicitly )?approved\b"
+    r")"
+)
+_QUANTITATIVE_RATIONALE_RE = re.compile(
+    r"(?i)(?:"
+    r"\d+(?:\.\d+)?\s*%|"
+    r"\bconversion(?: rate)?\b|"
+    r"\bweekly active\b|"
+    r"\bsubscriptions?\s*(?:/|per )\s*(?:month|week|year)\b|"
+    r"\bgrew from\b|"
+    r"\bmeasured on\b|"
+    r"\bcohort(?:s)?\b"
+    r")"
+)
+_QUANTITATIVE_EVIDENCE_FIELDS = (
+    "Source",
+    "Query",
+    "Snapshot",
+    "Measured at",
+)
+_UNUSABLE_EVIDENCE_VALUE_RE = re.compile(
+    r"(?i)^(?:none|n/a|na|unknown|unavailable|not (?:available|recorded)|missing)$"
+)
+_INLINE_EVIDENCE_REFERENCE_RE = re.compile(r"`([^`]+)`")
+_RFC3339_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
+def _heading_anchor(heading: str) -> str:
+    normalized = re.sub(r"[^a-z0-9 _-]", "", heading.strip().lower())
+    return re.sub(r"[ _]+", "-", normalized)
+
+
+def _local_evidence_reference_error(
+    *, field: str, value: str, record_rel: str
+) -> str | None:
+    reference_match = _INLINE_EVIDENCE_REFERENCE_RE.search(value)
+    if reference_match is None:
+        return f"'- {field}:' must contain an inline durable reference"
+
+    reference = reference_match.group(1).strip()
+    if reference.startswith(("https://", "http://")):
+        return None
+    if field == "Source" and re.fullmatch(r"[A-Za-z0-9_.-]+@[0-9a-f]{7,40}:.+", reference):
+        return None
+
+    path_part, separator, anchor = reference.partition("#")
+    if not path_part or path_part.startswith("/") or any(char.isspace() for char in path_part):
+        return f"'- {field}:' must reference a repository artifact, source identifier, or URL"
+
+    candidate = PurePosixPath(path_part)
+    if candidate.parts and candidate.parts[0] not in {"docs", "scripts"}:
+        candidate = PurePosixPath(record_rel).parent / candidate
+    candidate_rel = candidate.as_posix()
+    try:
+        target_content = read(candidate_rel)
+    except (OSError, subprocess.CalledProcessError):
+        return f"'- {field}:' references missing artifact {candidate_rel!r}"
+
+    if separator:
+        anchors = {
+            _heading_anchor(match.group(1))
+            for match in re.finditer(r"(?m)^#{1,6}\s+(.+?)\s*$", target_content)
+        }
+        if anchor not in anchors:
+            return f"'- {field}:' references missing section #{anchor} in {candidate_rel!r}"
+    return None
+
+
+def material_approval_evidence_errors(
+    content: str, *, record_rel: str | None = None
+) -> tuple[str, ...]:
+    """Return structural evidence errors for quantitatively justified owner approvals."""
+    if not _MATERIAL_APPROVAL_RE.search(content):
+        return ()
+    if not _QUANTITATIVE_RATIONALE_RE.search(content):
+        return ()
+
+    errors: list[str] = []
+    if not re.search(r"(?m)^## Quantitative Evidence\s*$", content):
+        return ("missing '## Quantitative Evidence' section",)
+
+    values: dict[str, str] = {}
+    for field in _QUANTITATIVE_EVIDENCE_FIELDS:
+        match = re.search(rf"(?m)^- {re.escape(field)}:\s*(.+?)\s*$", content)
+        if match is None:
+            errors.append(f"missing '- {field}:' provenance field")
+            continue
+        value = match.group(1).strip().strip("`").strip()
+        values[field] = match.group(1).strip()
+        if not value or _UNUSABLE_EVIDENCE_VALUE_RE.fullmatch(value):
+            errors.append(f"'- {field}:' must identify durable reproducible evidence")
+
+    for field in ("Source", "Query", "Snapshot"):
+        value = values.get(field)
+        if value is None or _UNUSABLE_EVIDENCE_VALUE_RE.fullmatch(value.strip("`").strip()):
+            continue
+        if record_rel is None:
+            if _INLINE_EVIDENCE_REFERENCE_RE.search(value) is None:
+                errors.append(f"'- {field}:' must contain an inline durable reference")
+            continue
+        error = _local_evidence_reference_error(
+            field=field,
+            value=value,
+            record_rel=record_rel,
+        )
+        if error is not None:
+            errors.append(error)
+
+    measured_at = values.get("Measured at", "").strip("`").strip()
+    if measured_at and not _UNUSABLE_EVIDENCE_VALUE_RE.fullmatch(measured_at):
+        if _RFC3339_UTC_RE.fullmatch(measured_at) is None:
+            errors.append("'- Measured at:' must be an exact RFC3339 UTC timestamp")
+    return tuple(errors)
+
+
+def tracked_release_control_records() -> tuple[str, ...]:
+    result = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "docs/release-control/v6/internal/records/*.md",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=git_env(),
+    )
+    return tuple(sorted(line for line in result.stdout.splitlines() if line.strip()))
 
 
 def workflow_job_block(workflow: str, job: str) -> str:
@@ -643,6 +779,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("`live-verified`", content)
         self.assertIn("scripts/release_control/live_runtime_proof.py", content)
         self.assertIn("an operator statement cannot substitute for the receipt", content)
+
 
     def test_live_runtime_claim_rejects_unknown_successful_posture(self) -> None:
         observed, failures = evaluate_live_runtime(
@@ -1720,6 +1857,114 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Routine Stable Patch Path", policy)
         self.assertIn("single publish workflow performs the exact-SHA preflight", normalize_ws(policy))
         self.assertIn("An asynchronous dispatch or manual SSH deployment is not release completion.", normalize_ws(contract))
+
+
+class MaterialApprovalEvidenceTest(unittest.TestCase):
+    def test_source_of_truth_requires_quantitative_approval_provenance(self) -> None:
+        content = normalize_ws(
+            read("docs/release-control/v6/internal/SOURCE_OF_TRUTH.md")
+        )
+        self.assertIn(
+            "material owner-approval record that relies on quantitative rationale",
+            content,
+        )
+        self.assertIn(
+            "durable source, exact query or canonical report command, sanitized snapshot, and measurement time",
+            content,
+        )
+        self.assertIn("separate durable owner-confirmation artifact", content)
+
+    def test_quantitative_owner_approval_requires_reproducible_provenance(self) -> None:
+        content = """# Material decision
+
+The release owner explicitly approved this change because weekly active installs
+grew from 100 to 1,000 and conversion reached 7.9%.
+"""
+        self.assertEqual(
+            material_approval_evidence_errors(content),
+            ("missing '## Quantitative Evidence' section",),
+        )
+
+    def test_quantitative_evidence_rejects_placeholder_provenance(self) -> None:
+        content = """# Material decision
+
+Approved by the project owner after conversion reached 7.9%.
+
+## Quantitative Evidence
+
+- Source: unavailable
+- Query: `scripts/report.py --as-of 2026-08-08`
+- Snapshot: `records/report-2026-08-08.json`
+- Measured at: `2026-08-08T01:47:00Z`
+"""
+        self.assertEqual(
+            material_approval_evidence_errors(content),
+            ("'- Source:' must identify durable reproducible evidence",),
+        )
+
+    def test_quantitative_evidence_rejects_unreferenced_field_values(self) -> None:
+        content = """# Material decision
+
+The product owner explicitly approved this change after a cohort reached 7.9%.
+
+## Quantitative Evidence
+
+- Source: production telemetry
+- Query: weekly conversion report
+- Snapshot: sanitized aggregate results
+- Measured at: `2026-08-08T01:47:00Z`
+"""
+        self.assertEqual(
+            material_approval_evidence_errors(content),
+            (
+                "'- Source:' must contain an inline durable reference",
+                "'- Query:' must contain an inline durable reference",
+                "'- Snapshot:' must contain an inline durable reference",
+            ),
+        )
+
+    def test_quantitative_evidence_rejects_missing_local_artifact(self) -> None:
+        content = """# Material decision
+
+Approved by the project owner after conversion reached 7.9%.
+
+## Quantitative Evidence
+
+- Source: `missing-evidence.md`
+- Query: `missing-evidence.md#query`
+- Snapshot: `missing-evidence.md#snapshot`
+- Measured at: `2026-08-08T01:47:00Z`
+"""
+        record_rel = "docs/release-control/v6/internal/records/example.md"
+        self.assertEqual(
+            material_approval_evidence_errors(content, record_rel=record_rel),
+            (
+                "'- Source:' references missing artifact 'docs/release-control/v6/internal/records/missing-evidence.md'",
+                "'- Query:' references missing artifact 'docs/release-control/v6/internal/records/missing-evidence.md'",
+                "'- Snapshot:' references missing artifact 'docs/release-control/v6/internal/records/missing-evidence.md'",
+            ),
+        )
+
+    def test_quantitative_evidence_accepts_complete_provenance(self) -> None:
+        content = """# Material decision
+
+The product owner explicitly approved this change after a cohort reached 7.9%.
+
+## Quantitative Evidence
+
+- Source: `pulse-pro:license-server/telemetry.sqlite`
+- Query: `scripts/report.py --as-of 2026-08-08`
+- Snapshot: `records/report-2026-08-08.json`
+- Measured at: `2026-08-08T01:47:00Z`
+"""
+        self.assertEqual(material_approval_evidence_errors(content), ())
+
+    def test_tracked_material_approval_records_have_reproducible_provenance(self) -> None:
+        failures: list[str] = []
+        for rel in tracked_release_control_records():
+            errors = material_approval_evidence_errors(read(rel), record_rel=rel)
+            failures.extend(f"{rel}: {error}" for error in errors)
+        self.assertEqual(failures, [], "\n".join(failures))
 
 
 if __name__ == "__main__":

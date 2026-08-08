@@ -2852,7 +2852,7 @@ change beyond the shutdown defect.
 
 `internal/monitoring/business_estate.go` holds the single definition of the
 business-scale estate thresholds (>=5 PVE nodes, >=10 Docker hosts, or >=3
-VMware hosts, from the 2026-08-07 telemetry segmentation): exported constants,
+VMware hosts): exported constants,
 `BusinessScaleEstateCounts`, and `InstallSnapshotCounts.BusinessScaleEstate`.
 Both consumers delegate here rather than restating numbers: the authenticated
 session-capability surface behind the in-product business-estate card
@@ -2865,3 +2865,8 @@ counts-derived method is pinned by
 by `TestContract_BusinessScaleEstateThresholds` in `internal/api`; the
 `pkg/server` wiring is pinned by
 `TestTelemetrySnapshotDerivesBusinessEstateFromAggregateCounts`.
+These thresholds are product segmentation constants only. They must not be
+described as conversion evidence or as project-owner approval for the
+commercial surface without a durable source, exact query, sanitized snapshot,
+measurement time, and separate owner-confirmation record. The 2026-08-08
+evidence audit records why the earlier causal wording does not meet that bar.
