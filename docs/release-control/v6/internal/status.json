@@ -9177,21 +9177,7 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [
-    {
-      "id": "installer-origin-019fde93-lane-l16",
-      "agent_id": "installer-origin-019fde93",
-      "summary": "Harden PVE/PBS token-bearing install commands through the canonical trust-aware request-origin resolver and add endpoint-specific adversarial proof.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-08-08T09:11:11Z",
-      "heartbeat_at": "2026-08-08T09:11:11Z",
-      "expires_at": "2026-08-08T17:11:11Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L16"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [
     {
       "id": "self-hosted-commercial-surfaces-owner-approval",
