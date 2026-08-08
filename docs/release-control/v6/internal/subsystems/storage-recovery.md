@@ -4947,6 +4947,18 @@ No request-derived origin is written to storage/recovery records, and tenant
 workspace preservation or recovery flows that copy `system.json` remain
 outside this URL trust boundary.
 
+`Router.hostedMode` now reaches the config-owned setup boundary explicitly.
+Hosted PVE/PBS setup artifacts require a canonically valid authoritative
+`AgentConnectURL` or explicit `PublicURL` before the short-lived setup token is
+created; missing, auto-detected, or invalid configuration leaves the setup-token
+map empty. The adjacent password-driven PBS path resolves the same target
+before deriving its Pulse-managed token label or contacting PBS, so failure
+cannot leave a remote PBS token or a partially configured PBS instance. This
+changes no backup, restore, datastore, protection, or recovery authority.
+`TestContract_HostedInstallerOriginsFailClosedAtRouter` proves the no-state
+failure cases and follows successful PVE/PBS artifacts through rendered script
+delivery under hostile direct and forwarded request evidence.
+
 The shared `frontend-modern/src/App.tsx` shell boundary this subsystem consumes
 gained one authority gate on its global banner block. The banners rendered
 above the authenticated shell (security, demo, commercial migration, update,

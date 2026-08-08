@@ -1858,6 +1858,21 @@ contract proof is
 `internal/api/contract_test.go`, including direct execution of the PVE/PBS
 `POST /api/agent-install-command` handler with a newly minted token.
 
+Hosted fail-closed behavior is now enforced at the registered config routes,
+not only inside the router-owned resolver. `Router.hostedMode` is immutable
+input to `ConfigHandlers`; hosted config-owned consumers validate the selected
+`AgentConnectURL` or explicit `PublicURL` through the canonical Pulse URL
+validator and never accept an auto-detected URL, direct Host, or forwarded
+origin as a substitute. PVE/PBS API-token issuance, setup-token issuance, and
+password-driven PBS token-label creation all occur only after that resolution
+succeeds. `TestContract_HostedInstallerOriginsFailClosedAtRouter` proves that
+missing or invalid hosted configuration returns 503 without an API-token
+record, setup-token record, PBS request, or PBS instance mutation, while a
+valid configured URL remains authoritative under hostile direct, trusted-
+forwarded, and untrusted-forwarded request evidence. The same test follows the
+returned setup artifact through the public script route so the rendered
+token-bearing shell body remains bound to the configured origin.
+
 ### The global security banner no longer scores a truncated status payload
 
 `/api/security/status` in `internal/api/router_routes_auth_security.go` returns

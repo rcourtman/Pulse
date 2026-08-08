@@ -558,6 +558,11 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		} else if req.Password != "" {
 			// Using password authentication - try to create a token via API
 			// This enables turnkey setup for Docker/containerized PBS
+			pulseURL := resolveConfigAgentInstallBaseURL(r, h.getConfig(r.Context()), h.hostedMode)
+			if pulseURL == "" {
+				writeConfigAgentInstallBaseURLUnavailable(w)
+				return
+			}
 			pbsUser = req.User
 			if pbsUser != "" && !strings.Contains(pbsUser, "@") {
 				pbsUser = pbsUser + "@pbs" // Default to @pbs realm if not specified
@@ -581,7 +586,6 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 				// Fallback to password auth
 				pbsPassword = req.Password
 			} else {
-				pulseURL := resolveConfiguredPublicBaseURL(r, h.getConfig(r.Context()), false)
 				tokenName := buildPulseMonitorTokenName(pulseURL)
 
 				tokenID, tokenSecret, err := pbsClient.SetupMonitoringAccess(context.Background(), tokenName)

@@ -196,6 +196,7 @@ type ConfigHandlers struct {
 	stateMu       sync.RWMutex
 	mtPersistence *config.MultiTenantPersistence
 	mtMonitor     *monitoring.MultiTenantMonitor
+	hostedMode    bool
 	// Default-org runtime fields used when tenant-specific state is unavailable.
 	defaultConfig      *config.Config
 	defaultPersistence *config.ConfigPersistence
@@ -217,7 +218,7 @@ type ConfigHandlers struct {
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
-func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenantMonitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler, reloadSystemSettingsFunc func()) *ConfigHandlers {
+func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.MultiTenantMonitor, reloadFunc func() error, wsHub *websocket.Hub, guestMetadataHandler *GuestMetadataHandler, reloadSystemSettingsFunc func(), hostedMode bool) *ConfigHandlers {
 	// Initialize with default-org values from multi-tenant managers when available.
 	var defaultConfig *config.Config
 	var defaultMonitor *monitoring.Monitor
@@ -240,6 +241,7 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 	h := &ConfigHandlers{
 		mtPersistence:            mtp,
 		mtMonitor:                mtm,
+		hostedMode:               hostedMode,
 		defaultConfig:            defaultConfig,
 		defaultMonitor:           defaultMonitor,
 		defaultPersistence:       defaultPersistence,

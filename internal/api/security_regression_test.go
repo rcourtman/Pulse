@@ -4620,7 +4620,7 @@ func TestSSHKeyGenerationBlockedInContainer(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	handler := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
+	handler := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {}, false)
 	keys := handler.getOrGenerateSSHKeys()
 	if keys.SensorsPublicKey != "" {
 		t.Fatalf("expected empty key when container SSH generation is blocked")

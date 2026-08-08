@@ -64,6 +64,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/singleflight"
 )
@@ -429,7 +430,7 @@ func (r *Router) setupRoutes() {
 	guestMetadataHandler := NewGuestMetadataHandler(r.multiTenant)
 	dockerMetadataHandler := NewDockerMetadataHandler(r.multiTenant)
 	hostMetadataHandler := NewHostMetadataHandler(r.multiTenant)
-	r.configHandlers = NewConfigHandlers(r.multiTenant, r.mtMonitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings)
+	r.configHandlers = NewConfigHandlers(r.multiTenant, r.mtMonitor, r.reloadFunc, r.wsHub, guestMetadataHandler, r.reloadSystemSettings, r.hostedMode)
 	if r.monitor != nil {
 		r.configHandlers.SetMonitor(r.monitor)
 		r.bindDefaultMetadataStores(r.monitor)
@@ -10975,10 +10976,18 @@ func resolveConfiguredPublicBaseURL(req *http.Request, cfg *config.Config, hoste
 	// A canonical externally-reachable URL must be configured via PublicURL / AgentConnectURL.
 	if hostedMode {
 		if agentConnectURL := strings.TrimSpace(cfg.AgentConnectURL); agentConnectURL != "" {
-			return strings.TrimRight(agentConnectURL, "/")
+			normalized, err := securityutil.NormalizePulseHTTPBaseURL(agentConnectURL)
+			if err != nil {
+				return ""
+			}
+			return strings.TrimRight(normalized.String(), "/")
 		}
-		if publicURL := strings.TrimSpace(cfg.PublicURL); publicURL != "" {
-			return strings.TrimRight(publicURL, "/")
+		if publicURL := strings.TrimSpace(cfg.PublicURL); publicURL != "" && !cfg.PublicURLAutoDetected {
+			normalized, err := securityutil.NormalizePulseHTTPBaseURL(publicURL)
+			if err != nil {
+				return ""
+			}
+			return strings.TrimRight(normalized.String(), "/")
 		}
 		return ""
 	}

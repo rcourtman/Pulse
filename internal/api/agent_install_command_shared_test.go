@@ -277,10 +277,10 @@ func TestResolveConfigAgentInstallBaseURL(t *testing.T) {
 	req.Host = "127.0.0.1:7655"
 	req.Header.Set("X-Forwarded-Proto", "https")
 
-	require.Equal(t, "https://agents.example.com", resolveConfigAgentInstallBaseURL(req, cfg))
+	require.Equal(t, "https://agents.example.com", resolveConfigAgentInstallBaseURL(req, cfg, false))
 
 	cfg.AgentConnectURL = ""
-	require.Equal(t, "https://public.example.com", resolveConfigAgentInstallBaseURL(req, cfg))
+	require.Equal(t, "https://public.example.com", resolveConfigAgentInstallBaseURL(req, cfg, false))
 }
 
 func TestResolveConfigAgentInstallBaseURL_PreservesConfiguredPublicSchemeOnLoopback(t *testing.T) {
@@ -291,7 +291,7 @@ func TestResolveConfigAgentInstallBaseURL_PreservesConfiguredPublicSchemeOnLoopb
 	req := httptest.NewRequest("POST", "/api/agent-install-command", nil)
 	req.Host = "127.0.0.1:7655"
 
-	require.Equal(t, "https://public.example.com/base", resolveConfigAgentInstallBaseURL(req, cfg))
+	require.Equal(t, "https://public.example.com/base", resolveConfigAgentInstallBaseURL(req, cfg, false))
 }
 
 func TestResolveConfigAgentInstallBaseURL_UsesConfiguredPublicURLForIPv6Loopback(t *testing.T) {
@@ -302,7 +302,7 @@ func TestResolveConfigAgentInstallBaseURL_UsesConfiguredPublicURLForIPv6Loopback
 	req := httptest.NewRequest("POST", "/api/agent-install-command", nil)
 	req.Host = "[::1]:7655"
 
-	require.Equal(t, "https://public.example.com", resolveConfigAgentInstallBaseURL(req, cfg))
+	require.Equal(t, "https://public.example.com", resolveConfigAgentInstallBaseURL(req, cfg, false))
 }
 
 func TestIssueAndPersistAgentInstallToken(t *testing.T) {

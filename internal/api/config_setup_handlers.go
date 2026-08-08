@@ -705,6 +705,11 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		return
 	}
 	req.Host = normalizedHost
+	pulseURL := resolveConfigAgentInstallBaseURL(r, h.getConfig(r.Context()), h.hostedMode)
+	if pulseURL == "" {
+		writeConfigAgentInstallBaseURLUnavailable(w)
+		return
+	}
 
 	// Generate a temporary setup token for setup-script bootstrap transport.
 	token := h.generateSetupTokenRecord()
@@ -729,7 +734,6 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		Msg("Generated temporary setup token")
 
 	// Build the canonical bootstrap artifact for setup-script transport.
-	pulseURL := resolveConfiguredPublicBaseURL(r, h.getConfig(r.Context()), false)
 	artifact := buildSetupScriptInstallArtifact(
 		pulseURL,
 		req.Type,
@@ -2480,6 +2484,11 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 
 	cfg := h.getConfig(r.Context())
 	persistence := h.getPersistence(r.Context())
+	baseURL := resolveConfigAgentInstallBaseURL(r, cfg, h.hostedMode)
+	if baseURL == "" {
+		writeConfigAgentInstallBaseURLUnavailable(w)
+		return
+	}
 
 	rawToken := ""
 	if authConfiguredForAgentLifecycle(cfg) {
@@ -2511,7 +2520,6 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 		}
 	}
 
-	baseURL := resolveConfigAgentInstallBaseURL(r, cfg)
 	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
 		BaseURL:            baseURL,
 		Token:              rawToken,

@@ -347,6 +347,10 @@ func buildSetupScriptInstallArtifact(baseURL string, installType string, host st
 	}
 }
 
-func resolveConfigAgentInstallBaseURL(req *http.Request, cfg *config.Config) string {
-	return resolveConfiguredPublicBaseURL(req, cfg, false)
+func resolveConfigAgentInstallBaseURL(req *http.Request, cfg *config.Config, hostedMode bool) string {
+	return resolveConfiguredPublicBaseURL(req, cfg, hostedMode)
+}
+
+func writeConfigAgentInstallBaseURLUnavailable(w http.ResponseWriter) {
+	http.Error(w, "A valid external Pulse URL is required", http.StatusServiceUnavailable)
 }

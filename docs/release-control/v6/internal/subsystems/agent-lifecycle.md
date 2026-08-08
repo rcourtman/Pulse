@@ -5856,6 +5856,24 @@ is the routed lifecycle/API proof and invokes the actual
 `POST /api/agent-install-command` PVE/PBS handler so every asserted target is
 paired with the fresh token returned by that endpoint.
 
+Hosted lifecycle callers now receive the runtime mode from
+`Router.hostedMode` through `ConfigHandlers`; they no longer call the shared
+resolver with a self-hosted constant. In hosted mode, a non-empty
+`AgentConnectURL` remains authoritative and an explicit `PublicURL` remains
+the fallback, but the selected value must pass the canonical Pulse HTTP base
+URL validator. An invalid authoritative value, an auto-detected `PublicURL`,
+or missing configuration fails closed without consulting direct or forwarded
+request authority. Config-owned PVE/PBS install commands and setup-script
+bootstrap artifacts resolve that target before creating an API or setup token,
+and password-driven PBS setup resolves it before contacting PBS to derive or
+create the managed token label. `TestContract_HostedInstallerOriginsFailClosedAtRouter`
+exercises those registered routes for PVE and PBS with hostile direct Host,
+untrusted and trusted forwarded headers, missing/invalid configuration,
+configured URL success, rendered setup-script delivery, and zero token/state
+mutation on failure. The self-hosted precedence and validated live-origin
+fallback remain covered by
+`TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
+
 ### Runtime branding stays outside agent lifecycle authority
 
 The authenticated `GET /api/runtime/branding` presentation endpoint is an

@@ -5242,6 +5242,15 @@ domain used through a reverse proxy, and present request auto-detection as a
 fallback rather than implying the field affects notifications alone. The
 settings architecture proof pins that copy, and the responsive browser receipt
 proves the label and helper text remain readable without horizontal overflow.
+For hosted runtimes this is also a fail-closed artifact contract: the backend
+accepts only a canonically valid authoritative agent-connect URL or explicit
+Public URL and does not substitute auto-detection, direct Host, or forwarded
+headers. Existing setup/install error presentation must therefore retain the
+backend failure and offer configuration recovery rather than synthesizing a
+copyable command or download from local form state. No frontend runtime file
+changes in this slice; the registered-route proof is
+`TestContract_HostedInstallerOriginsFailClosedAtRouter`, while the existing
+settings architecture proof continues to own the Public URL guidance.
 `frontend-modern/src/utils/discoveryPresentation.ts` now owns the
 customer-facing discovery-section framing copy, scan-scope labels, subnet
 guidance, command-execution settings targets, API Access handoff labels, and

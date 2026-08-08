@@ -2246,6 +2246,14 @@ setup-script artifacts, deployment payloads, onboarding, and security status
 adds no inventory scan, persistence read, metrics fan-out, or background work.
 The trusted-proxy CIDR cache remains process-local, and the resolver's request
 cost is bounded by the small authority/header inputs.
+Hosted config-owned callers add one constant-size configured-URL validation
+before any token mutation. Missing, auto-detected, or invalid hosted
+configuration exits before API-token persistence, setup-token insertion, PBS
+network I/O, or instance persistence; successful PVE/PBS command and
+setup-artifact generation performs no additional scan or fan-out. Router-level
+proof lives in `TestContract_HostedInstallerOriginsFailClosedAtRouter`, and the
+self-hosted request-origin matrix remains in
+`TestContract_RequestOriginCannotRetargetTokenBearingCommands`.
 
 ### Runtime branding remains a bounded bootstrap read
 

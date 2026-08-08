@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22918,6 +22919,253 @@ func TestContract_RequestOriginCannotRetargetTokenBearingCommands(t *testing.T) 
 			t.Fatalf("setup artifact retained attacker-controlled origin bytes: %#v", artifact)
 		}
 	})
+}
+
+func TestContract_HostedInstallerOriginsFailClosedAtRouter(t *testing.T) {
+	const adminToken = "hosted-installer-admin.12345678"
+
+	type originHeaders struct {
+		host             string
+		remoteAddr       string
+		trustedProxyCIDR string
+		forwardedHost    string
+		forwardedProto   string
+	}
+
+	newHostedRouter := func(t *testing.T, publicURL string, autoDetected bool, agentConnectURL string, headers originHeaders) (*Router, *config.Config) {
+		t.Helper()
+		t.Setenv("PULSE_HOSTED_MODE", "true")
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", headers.trustedProxyCIDR)
+		resetTrustedProxyCIDRsForTests()
+
+		adminRecord := newTokenRecord(t, adminToken, []string{config.ScopeSettingsWrite}, nil)
+		cfg := newTestConfigWithTokens(t, adminRecord)
+		cfg.FrontendPort = 7655
+		cfg.PublicURL = publicURL
+		cfg.PublicURLAutoDetected = autoDetected
+		cfg.AgentConnectURL = agentConnectURL
+		router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+		if !router.hostedMode || router.configHandlers == nil || !router.configHandlers.hostedMode {
+			t.Fatal("Router hosted mode was not propagated into ConfigHandlers")
+		}
+		return router, cfg
+	}
+
+	doRequest := func(t *testing.T, router *Router, method string, target string, body string, headers originHeaders, authenticated bool) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, target, strings.NewReader(body))
+		req.Host = headers.host
+		req.RemoteAddr = headers.remoteAddr
+		if headers.forwardedHost != "" {
+			req.Header.Set("X-Forwarded-Host", headers.forwardedHost)
+		}
+		if headers.forwardedProto != "" {
+			req.Header.Set("X-Forwarded-Proto", headers.forwardedProto)
+		}
+		if authenticated {
+			req.Header.Set("Authorization", "Bearer "+adminToken)
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	failureCases := []struct {
+		name            string
+		publicURL       string
+		publicAuto      bool
+		agentConnectURL string
+		headers         originHeaders
+	}{
+		{
+			name: "missing URL ignores direct Host and untrusted forwarded headers",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:       "auto-detected URL is not explicit hosted configuration",
+			publicURL:  "https://auto-detected.example",
+			publicAuto: true,
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+		{
+			name:      "invalid URL ignores trusted forwarded headers",
+			publicURL: "http://configured.example:7655",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "https",
+			},
+		},
+		{
+			name:            "invalid AgentConnectURL does not fall through to PublicURL",
+			publicURL:       "https://configured.example",
+			agentConnectURL: "https://user@agent-attacker.example",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "https",
+			},
+		},
+	}
+
+	for _, tc := range failureCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, installType := range []string{"pve", "pbs"} {
+				t.Run(installType+" install command", func(t *testing.T) {
+					router, cfg := newHostedRouter(t, tc.publicURL, tc.publicAuto, tc.agentConnectURL, tc.headers)
+					rec := doRequest(t, router, http.MethodPost, "/api/agent-install-command", fmt.Sprintf(`{"type":%q}`, installType), tc.headers, true)
+					if rec.Code != http.StatusServiceUnavailable {
+						t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+					}
+					if len(cfg.APITokens) != 1 {
+						t.Fatalf("API token record count = %d, want original admin record only", len(cfg.APITokens))
+					}
+					if strings.Contains(rec.Body.String(), "attacker") {
+						t.Fatalf("failure response retained attacker origin: %q", rec.Body.String())
+					}
+				})
+			}
+
+			t.Run("setup artifacts", func(t *testing.T) {
+				router, cfg := newHostedRouter(t, tc.publicURL, tc.publicAuto, tc.agentConnectURL, tc.headers)
+				for _, installType := range []string{"pve", "pbs"} {
+					rec := doRequest(t, router, http.MethodPost, "/api/setup-script-url", fmt.Sprintf(`{"type":%q,"host":%q}`, installType, installType+"1.local"), tc.headers, true)
+					if rec.Code != http.StatusServiceUnavailable {
+						t.Fatalf("%s status = %d, want %d: %s", installType, rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+					}
+					router.configHandlers.codeMutex.RLock()
+					setupTokenCount := len(router.configHandlers.setupTokens)
+					router.configHandlers.codeMutex.RUnlock()
+					if setupTokenCount != 0 {
+						t.Fatalf("%s setup token count = %d, want 0", installType, setupTokenCount)
+					}
+					if len(cfg.APITokens) != 1 {
+						t.Fatalf("%s API token record count = %d, want original admin record only", installType, len(cfg.APITokens))
+					}
+				}
+			})
+
+			t.Run("PBS token label", func(t *testing.T) {
+				var pbsRequests atomic.Int64
+				pbsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					pbsRequests.Add(1)
+					http.Error(w, "PBS must not be contacted without a safe hosted origin", http.StatusInternalServerError)
+				}))
+				defer pbsServer.Close()
+
+				router, cfg := newHostedRouter(t, tc.publicURL, tc.publicAuto, tc.agentConnectURL, tc.headers)
+				body := fmt.Sprintf(`{"name":"pbs1","type":"pbs","host":%q,"user":"root@pam","password":"secret"}`, pbsServer.URL)
+				rec := doRequest(t, router, http.MethodPost, "/api/config/nodes", body, tc.headers, true)
+				if rec.Code != http.StatusServiceUnavailable {
+					t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+				}
+				if got := pbsRequests.Load(); got != 0 {
+					t.Fatalf("PBS received %d requests before hosted origin validation, want 0", got)
+				}
+				if len(cfg.PBSInstances) != 0 {
+					t.Fatalf("PBS instance count = %d, want 0", len(cfg.PBSInstances))
+				}
+			})
+		})
+	}
+
+	successCases := []struct {
+		name            string
+		agentConnectURL string
+		headers         originHeaders
+	}{
+		{
+			name: "configured URL defeats direct Host and untrusted forwarded headers",
+			headers: originHeaders{
+				host:           "direct-attacker.example",
+				remoteAddr:     "198.51.100.20:41000",
+				forwardedHost:  "forwarded-attacker.example",
+				forwardedProto: "http",
+			},
+		},
+		{
+			name:            "AgentConnectURL defeats direct Host and trusted forwarded headers",
+			agentConnectURL: "https://agents.configured.example/",
+			headers: originHeaders{
+				host:             "direct-attacker.example",
+				remoteAddr:       "192.0.2.44:41000",
+				trustedProxyCIDR: "192.0.2.0/24",
+				forwardedHost:    "trusted-forwarded-attacker.example",
+				forwardedProto:   "http",
+			},
+		},
+	}
+
+	for _, tc := range successCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wantBaseURL := "https://configured.example"
+			if tc.agentConnectURL != "" {
+				wantBaseURL = "https://agents.configured.example"
+			}
+
+			for _, installType := range []string{"pve", "pbs"} {
+				t.Run(installType, func(t *testing.T) {
+					router, cfg := newHostedRouter(t, "https://configured.example/", false, tc.agentConnectURL, tc.headers)
+					rec := doRequest(t, router, http.MethodPost, "/api/agent-install-command", fmt.Sprintf(`{"type":%q}`, installType), tc.headers, true)
+					if rec.Code != http.StatusOK {
+						t.Fatalf("install status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+					}
+					var response AgentInstallCommandResponse
+					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+						t.Fatalf("decode install response: %v", err)
+					}
+					if response.Token == "" || !strings.Contains(response.Command, response.Token) || !strings.Contains(response.Command, wantBaseURL+"/install.sh") {
+						t.Fatalf("install response did not bind fresh token to configured URL %q: %#v", wantBaseURL, response)
+					}
+					if strings.Contains(response.Command, "attacker") || len(cfg.APITokens) != 2 {
+						t.Fatalf("install response or token records drifted: command=%q records=%d", response.Command, len(cfg.APITokens))
+					}
+				})
+			}
+
+			for _, installType := range []string{"pve", "pbs"} {
+				t.Run(installType+" setup artifact", func(t *testing.T) {
+					router, _ := newHostedRouter(t, "https://configured.example/", false, tc.agentConnectURL, tc.headers)
+					rec := doRequest(t, router, http.MethodPost, "/api/setup-script-url", fmt.Sprintf(`{"type":%q,"host":%q}`, installType, installType+"1.local"), tc.headers, true)
+					if rec.Code != http.StatusOK {
+						t.Fatalf("artifact status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+					}
+					var artifact setupScriptInstallArtifact
+					if err := json.Unmarshal(rec.Body.Bytes(), &artifact); err != nil {
+						t.Fatalf("decode setup artifact: %v", err)
+					}
+					if artifact.SetupToken == "" || !strings.HasPrefix(artifact.DownloadURL, wantBaseURL+"/api/setup-script?") || strings.Contains(artifact.Command, "attacker") {
+						t.Fatalf("setup artifact did not bind fresh token to configured URL %q: %#v", wantBaseURL, artifact)
+					}
+
+					download, err := url.Parse(artifact.DownloadURL)
+					if err != nil {
+						t.Fatalf("parse download URL: %v", err)
+					}
+					downloadRec := doRequest(t, router, http.MethodGet, download.RequestURI(), "", tc.headers, false)
+					if downloadRec.Code != http.StatusOK {
+						t.Fatalf("setup script status = %d, want %d: %s", downloadRec.Code, http.StatusOK, downloadRec.Body.String())
+					}
+					if !strings.Contains(downloadRec.Body.String(), wantBaseURL) || !strings.Contains(downloadRec.Body.String(), artifact.SetupToken) || strings.Contains(downloadRec.Body.String(), "attacker") {
+						t.Fatalf("rendered setup script did not preserve configured token target")
+					}
+				})
+			}
+		})
+	}
 }
 
 // Issue1649 regression coverage. Docker update (and every other typed) action

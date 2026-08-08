@@ -27,7 +27,7 @@ func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 	if cfg.DataPath == "" {
 		cfg.DataPath = t.TempDir()
 	}
-	h := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
+	h := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {}, false)
 	h.defaultConfig = cfg
 	h.defaultPersistence = config.NewConfigPersistence(cfg.DataPath)
 	monitor, _, _ := newTestMonitor(t)
