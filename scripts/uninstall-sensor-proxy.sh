@@ -15,10 +15,12 @@ CONFIG_DIR="${PULSE_SENSOR_PROXY_CONFIG_DIR:-/etc/pulse-sensor-proxy}"
 LOG_DIR="${PULSE_SENSOR_PROXY_LOG_DIR:-/var/log/pulse/sensor-proxy}"
 SERVICE_USER="${PULSE_SENSOR_PROXY_SERVICE_USER:-pulse-sensor-proxy}"
 AUTHORIZED_KEYS_PATH="${PULSE_SENSOR_PROXY_AUTHORIZED_KEYS_PATH:-/root/.ssh/authorized_keys}"
+SSH_KNOWN_HOSTS_PATH="${PULSE_SENSOR_PROXY_SSH_KNOWN_HOSTS_PATH:-}"
 
 QUIET=false
 PURGE=false
 REMOVE_PROXMOX_ACCESS=false
+LOCAL_ONLY=false
 
 print_info() {
     if [[ "$QUIET" != "true" ]]; then
@@ -46,8 +48,14 @@ Options:
   --uninstall              Accepted for compatibility with old instructions.
   --purge                  Remove persisted proxy state, config, logs, and service user/group.
   --remove-proxmox-access  Remove pulse-monitor@pam API tokens/user after cleanup.
+  --local-only             Clean only this host; run once on every cluster node.
+  --ssh-known-hosts PATH   Use only this provisioned known_hosts file for remote cluster cleanup.
   --quiet                  Reduce informational output.
   --help                   Show this help text.
+
+Remote cluster cleanup never enrolls unknown SSH host keys. Without
+--ssh-known-hosts, OpenSSH's configured user and system known_hosts files are
+used. Unknown or changed host keys fail the remote cleanup.
 EOF
 }
 
@@ -190,17 +198,36 @@ PY
 
 cleanup_remote_authorized_keys() {
     local host="$1"
+    local known_hosts_path=""
+    local ssh_options=(
+        -o StrictHostKeyChecking=yes
+        -o UpdateHostKeys=no
+        -o BatchMode=yes
+        -o ConnectTimeout=5
+    )
     local remote_cmd='set -eu
 auth="/root/.ssh/authorized_keys"
 if [ -f "$auth" ]; then
     sed -i -e "/# pulse-managed-key$/d" -e "/# pulse-proxy-key$/d" "$auth"
 fi'
 
-    if ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 root@"$host" "$remote_cmd" >/dev/null 2>&1; then
+    if [[ -n "$SSH_KNOWN_HOSTS_PATH" ]]; then
+        known_hosts_path=$(resolve_path "$SSH_KNOWN_HOSTS_PATH")
+        if [[ ! -f "$known_hosts_path" || ! -r "$known_hosts_path" || ! -s "$known_hosts_path" ]]; then
+            print_warn "Provisioned SSH known_hosts file is missing, unreadable, or empty: ${known_hosts_path}"
+            return 1
+        fi
+        ssh_options+=(
+            -o "UserKnownHostsFile=${known_hosts_path}"
+            -o GlobalKnownHostsFile=none
+        )
+    fi
+
+    if ssh "${ssh_options[@]}" root@"$host" "$remote_cmd" >/dev/null 2>&1; then
         print_success "Removed legacy Pulse SSH key entries from ${host}"
         return 0
     fi
-    print_warn "Unable to remove legacy Pulse SSH key entries from ${host}; clean up /root/.ssh/authorized_keys manually if needed"
+    print_warn "Unable to verify ${host}'s SSH host key or remove its legacy Pulse SSH key entries; provision trusted known_hosts data or clean up /root/.ssh/authorized_keys locally"
     return 1
 }
 
@@ -208,6 +235,11 @@ cleanup_cluster_authorized_keys() {
     local host=""
     local saw_nodes=false
     local status=0
+
+    if [[ "$LOCAL_ONLY" == "true" ]]; then
+        cleanup_local_authorized_keys
+        return 0
+    fi
 
     while IFS= read -r host; do
         [[ -z "$host" ]] && continue
@@ -410,6 +442,8 @@ PY
 }
 
 main() {
+    local cluster_key_cleanup_status=0
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --uninstall)
@@ -421,6 +455,28 @@ main() {
                 ;;
             --remove-proxmox-access)
                 REMOVE_PROXMOX_ACCESS=true
+                shift
+                ;;
+            --local-only)
+                LOCAL_ONLY=true
+                shift
+                ;;
+            --ssh-known-hosts)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    printf '%s\n' '--ssh-known-hosts requires a non-empty path' >&2
+                    usage >&2
+                    exit 1
+                fi
+                SSH_KNOWN_HOSTS_PATH="$2"
+                shift 2
+                ;;
+            --ssh-known-hosts=*)
+                SSH_KNOWN_HOSTS_PATH="${1#*=}"
+                if [[ -z "$SSH_KNOWN_HOSTS_PATH" ]]; then
+                    printf '%s\n' '--ssh-known-hosts requires a non-empty path' >&2
+                    usage >&2
+                    exit 1
+                fi
                 shift
                 ;;
             --quiet)
@@ -441,11 +497,15 @@ main() {
 
     print_info "Starting legacy pulse-sensor-proxy cleanup"
     disable_legacy_units
-    cleanup_cluster_authorized_keys || true
+    cleanup_cluster_authorized_keys || cluster_key_cleanup_status=$?
     cleanup_stale_sensor_proxy_mounts
     remove_legacy_files
     remove_proxmox_access
     systemctl_if_available daemon-reload
+    if (( cluster_key_cleanup_status != 0 )); then
+        print_warn "Local cleanup completed, but one or more remote cluster nodes still require trusted, local cleanup"
+        return "$cluster_key_cleanup_status"
+    fi
     print_success "Legacy pulse-sensor-proxy cleanup complete"
 }
 

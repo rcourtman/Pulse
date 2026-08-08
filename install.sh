@@ -5380,7 +5380,7 @@ cleanup_local_sensor_proxy() {
     echo "Removed legacy pulse-sensor-proxy footprint from this host."
     echo "If this host belongs to a Proxmox cluster, run the full cleanup on the"
     echo "other nodes (and to remove the pulse-monitor@pam API user):"
-    echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access"
+    echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
 }
 
 # Uninstall function

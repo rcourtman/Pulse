@@ -843,6 +843,32 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_sensor_proxy_uninstall_change_uses_trust_policy(self):
+        required = infer_impacted_subsystems(["scripts/uninstall-sensor-proxy.sh"])
+        self.assertEqual(set(required), {"deployment-installability"})
+
+        installability = required["deployment-installability"]
+        self.assertEqual(
+            installability["touched_runtime_files"],
+            ["scripts/uninstall-sensor-proxy.sh"],
+        )
+        self.assertEqual(
+            installability["verification_requirements"],
+            [
+                {
+                    "id": "legacy-sensor-proxy-cleanup",
+                    "label": "legacy sensor-proxy cleanup trust proof",
+                    "touched_runtime_files": ["scripts/uninstall-sensor-proxy.sh"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "scripts/installtests/uninstall_sensor_proxy_test.go",
+                        "scripts/release_control/ssh_host_key_policy_test.py",
+                    ],
+                }
+            ],
+        )
+
     def test_docker_entrypoint_change_uses_container_entrypoint_policy(self):
         required = infer_impacted_subsystems(["docker-entrypoint.sh"])
         self.assertEqual(set(required), {"monitoring"})

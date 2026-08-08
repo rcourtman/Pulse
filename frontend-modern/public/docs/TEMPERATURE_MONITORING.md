@@ -108,14 +108,22 @@ If you still have the old sensor proxy installed from prior releases, remove it 
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
-  sudo bash -s -- --uninstall --purge
+  sudo bash -s -- --uninstall --purge --local-only
 ```
+
+`--local-only` avoids cluster SSH entirely; run the command once on every
+Proxmox node that carried the proxy. For one cluster-wide pass instead, omit
+`--local-only`. Remote nodes must already have trusted host keys in root's
+normal OpenSSH user/system known_hosts files, or supply a separately
+provisioned file with `--ssh-known-hosts /path/to/known_hosts`. The helper never
+accepts or enrolls an unknown host key, and a missing or changed key makes the
+remote portion fail after local cleanup completes.
 
 If you also want to remove the old `pulse-monitor@pam` API user and tokens before re-adding the node, include `--remove-proxmox-access`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
-  sudo bash -s -- --uninstall --purge --remove-proxmox-access
+  sudo bash -s -- --uninstall --purge --remove-proxmox-access --local-only
 ```
 
 Reinstalling or upgrading the Pulse container does **not** remove the sensor proxy from the host — they are separate installations. If you skip this cleanup, the selfheal timer will keep running and may generate recurring `TASK ERROR` entries in the Proxmox task log.

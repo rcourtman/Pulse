@@ -102,6 +102,7 @@ TLS floor in the dynamic config.
 49. `install.sh`
 50. `scripts/install.ps1`
 51. `scripts/install.sh`
+52. `scripts/uninstall-sensor-proxy.sh`
 52. `scripts/install-mcp.sh`
 53. `scripts/install-mcp.ps1`
 55. `scripts/pulse-auto-update.sh`
@@ -535,7 +536,7 @@ upgrade, update, release, or artifact-selection behavior.
    published, `docs/MSP.md` and its shipped frontend copy must fail closed and
    describe evaluation onboarding as request-assisted rather than directing
    operators to execute mutable source as root.
-3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
+3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, legacy sensor-proxy cleanup, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `scripts/uninstall-sensor-proxy.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
    Canonical server deployment paths also stamp the privacy-bounded outbound
    telemetry deployment label without changing runtime behavior: the image
    defaults to `container_other`, repo-root Compose overrides it to
@@ -1186,12 +1187,14 @@ upgrade, update, release, or artifact-selection behavior.
 1. Leaving deployment bootstrap, installer, or update-runtime files unowned under broad monitoring or generic API ownership
 2. Duplicating deployment-type update planning, installer release resolution, or updater handoff behavior outside the canonical update engine and installer scripts
 3. Treating update transport as payload-only contract work when it also defines live deployment and upgrade behavior
+4. Disabling SSH host-key verification, enrolling unknown keys, or hiding remote trust failures in unattended legacy cleanup
 
 ## Completion Obligations
 
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery across Linux and FreeBSD/rc.d, including single-dash v5 agent flags, non-procfs process inspection, and the rule that upgraded service args use `--token-file` instead of raw `--token`.
+   Legacy sensor-proxy cleanup changes must keep `scripts/installtests/uninstall_sensor_proxy_test.go` covering strict host-key options, explicit known_hosts isolation, missing or mismatched trust failure, and the SSH-free local-only path, while `scripts/release_control/ssh_host_key_policy_test.py` continues to ban verification bypasses repo-wide.
 4. Keep stable and prerelease packet lineage explicit when `docs/releases/` or
    `VERSION` changes: preserve already-shipped RC packets under dedicated
    historical filenames before reusing canonical stable names, keep
@@ -2308,8 +2311,18 @@ in root's `authorized_keys` — through one installer-owned
 no proxy was installed). The aggressive cluster-wide authorized_keys removal and
 `pulse-monitor@pam` API-user deletion stay behind the explicit standalone
 `scripts/uninstall-sensor-proxy.sh`, which the installer only prints a pointer
-to. `scripts/installtests/root_install_sh_test.go` is the owned proof surface
-for that local sensor-proxy cleanup.
+to. The standalone helper's documented run-on-each-node path uses
+`--local-only` and never invokes SSH. Its optional cluster-wide path must use
+`StrictHostKeyChecking=yes` with OpenSSH's already-provisioned trust sources or
+an explicit non-empty `--ssh-known-hosts` file isolated from global trust; it
+must set `UpdateHostKeys=no` rather than mutate trust during uninstall, never
+enroll an unknown key, and missing, unreadable, empty, or mismatched
+trust must make the remote portion fail after local cleanup completes.
+`scripts/installtests/root_install_sh_test.go` is the owned proof surface for
+the root installer's local sensor-proxy cleanup;
+`scripts/installtests/uninstall_sensor_proxy_test.go` and
+`scripts/release_control/ssh_host_key_policy_test.py` own the standalone
+helper's trust and behavior proof.
 That same server-installer boundary also owns release trust fail-closed: the
 root `install.sh`, its generated update helper, and
 `scripts/pulse-auto-update.sh` must verify downloaded release tarballs and

@@ -3621,6 +3621,29 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_sensor_proxy_uninstall_to_trust_proof(self) -> None:
+        result = lookup_paths(["scripts/uninstall-sensor-proxy.sh"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        match = file_entry["matches"][0]
+        self.assertEqual(match["lane_context"]["lane_id"], "L1")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "legacy-sensor-proxy-cleanup",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "scripts/installtests/uninstall_sensor_proxy_test.go",
+                "scripts/release_control/ssh_host_key_policy_test.py",
+            ],
+        )
+
     def test_lookup_paths_assigns_control_plane_rollout_command_to_deployment_installability(self) -> None:
         result = lookup_paths(["cmd/pulse-control-plane/main.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

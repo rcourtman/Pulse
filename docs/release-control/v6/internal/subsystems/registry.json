@@ -4209,6 +4209,7 @@
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
         "scripts/trigger-stable-patch.sh",
+        "scripts/uninstall-sensor-proxy.sh",
         "scripts/validate-release.sh",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
@@ -4456,6 +4457,20 @@
               "internal/api/relay_hosted_runtime_test.go",
               "tests/integration/tests/08-cloud-hosting.spec.ts",
               "tests/integration/tests/09-cloud-billing-lifecycle.spec.ts"
+            ]
+          },
+          {
+            "id": "legacy-sensor-proxy-cleanup",
+            "label": "legacy sensor-proxy cleanup trust proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/uninstall-sensor-proxy.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/uninstall_sensor_proxy_test.go",
+              "scripts/release_control/ssh_host_key_policy_test.py"
             ]
           },
           {

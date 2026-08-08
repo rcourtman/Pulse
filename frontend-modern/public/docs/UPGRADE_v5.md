@@ -61,10 +61,15 @@ The `pulse-sensor-proxy` from v4 is no longer needed — temperature monitoring 
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | \
-  sudo bash -s -- --uninstall --purge
+  sudo bash -s -- --uninstall --purge --local-only
 ```
 
 If you deleted the old node from Pulse and want the cleanup to also remove the old `pulse-monitor@pam` API user and tokens before reinstalling, add `--remove-proxmox-access`.
+
+Run the local-only command on every Proxmox node that carried the proxy. The
+optional cluster-wide mode uses strict OpenSSH host-key verification and
+requires already-provisioned user/system known_hosts trust (or an explicit
+`--ssh-known-hosts /path/to/known_hosts` file); it never accepts unknown keys.
 
 See the [Legacy Cleanup](TEMPERATURE_MONITORING.md#legacy-cleanup-if-upgrading) section in the temperature monitoring docs for the full cleanup details.
 

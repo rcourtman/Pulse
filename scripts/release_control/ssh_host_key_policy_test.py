@@ -60,6 +60,17 @@ class SSHHostKeyPolicyTest(unittest.TestCase):
         self.assertIn("UpdateHostKeys=yes", script)
         self.assertIn("UserKnownHostsFile=$SSH_KNOWN_HOSTS_FILE", script)
 
+    def test_sensor_proxy_uninstall_fails_closed_or_stays_local(self) -> None:
+        script = (REPO_ROOT / "scripts" / "uninstall-sensor-proxy.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("StrictHostKeyChecking=no", script)
+        self.assertIn("StrictHostKeyChecking=yes", script)
+        self.assertIn("UpdateHostKeys=no", script)
+        self.assertIn('UserKnownHostsFile=${known_hosts_path}', script)
+        self.assertIn("GlobalKnownHostsFile=none", script)
+        self.assertIn("--ssh-known-hosts", script)
+        self.assertIn("--local-only", script)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -912,6 +912,9 @@ func TestRootInstallUninstallCleansLegacySensorProxy(t *testing.T) {
 	if !strings.Contains(string(out), "uninstall-sensor-proxy.sh") {
 		t.Fatalf("expected pointer to standalone cluster cleanup script, got:\n%s", out)
 	}
+	if !strings.Contains(string(out), "--local-only") {
+		t.Fatalf("expected standalone cleanup pointer to avoid unprovisioned cluster SSH, got:\n%s", out)
+	}
 
 	// Presence-gated: a host with no sensor-proxy footprint is a silent no-op.
 	empty := t.TempDir()
