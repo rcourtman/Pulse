@@ -128,8 +128,10 @@ uses the scoped token. The scoped token passed the provider's active-token
 verification and successfully read the current Pages project inventory. The
 invalidated global key was removed from the protected local credential source,
 which now retains only the scoped-token path and non-secret account metadata.
-No replacement global key was retrieved or persisted.
+No replacement global key was retrieved or persisted. A later local diagnostic
+rendered the scoped token outside its protected source, so that replacement is
+being rotated before the prerelease gate can close.
 
-Disposition: provider `revoked`; replacement `validated`.
+Disposition: provider `revoked`; replacement pending scoped-token rotation.
 
 No history rewrite was performed or is required for provider containment.
