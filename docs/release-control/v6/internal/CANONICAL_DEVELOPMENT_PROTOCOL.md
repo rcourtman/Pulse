@@ -147,6 +147,11 @@ linkage, typed decision records, and derived evidence health. It also enforces
 canonical list ordering inside `status.json` so repo scope, lanes, readiness
 assertions, evidence references, and decision timelines do not drift into
 noisy, hand-arranged variants.
+Release gates with typed closure contracts are fail-closed: a raw `passed`
+status cannot become effective until the audit verifies complete subject
+coverage, required record evidence at the gate's minimum tier, and any
+contract-specific consistency rules. Prose-only closure is never sufficient
+for such a gate.
 `scripts/release_control/registry_audit.py --check` is the machine audit entry
 point for validating subsystem ownership, proof routing, registry lane
 bindings, canonical ordering for unordered registry lists, and path-policy

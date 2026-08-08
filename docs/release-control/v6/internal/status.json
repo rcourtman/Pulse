@@ -8009,6 +8009,54 @@
       ]
     },
     {
+      "id": "historical-credential-containment",
+      "summary": "Contain every historically reachable credential identity across Pulse and Pulse Pro before prerelease: record authoritative provider revocation, expiry, decommissioning, or fresh inventory absence plus replacement-deployment or verified-retirement evidence for every redacted subject. Repository prose, approval, current-value differences, and optional history rewriting cannot close this gate.",
+      "owner": "release-owner-and-provider-owners",
+      "blocking_level": "rc-ready",
+      "minimum_evidence_tier": "production-observed",
+      "status": "owner-action",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L1",
+        "L2",
+        "L14"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/historical-credential-containment-open-2026-08-08.md",
+          "kind": "file",
+          "evidence_tier": "production-observed"
+        }
+      ],
+      "closure_contract": {
+        "kind": "historical-credential-containment",
+        "subject_ids": [
+          "PBS-01",
+          "PBS-02",
+          "PRO-CLOUDFLARE-01",
+          "PRO-DIGITALOCEAN-01",
+          "PRO-LICENSE-ADMIN-01",
+          "PRO-RESEND-01",
+          "PRO-STRIPE-WEBHOOK-01",
+          "PULSE-01",
+          "PULSE-02",
+          "PULSE-03",
+          "PULSE-04",
+          "PXM-01",
+          "PXM-02",
+          "SLACK-01",
+          "TELEGRAM-01"
+        ],
+        "provider_closure_records": [],
+        "replacement_deployment_records": [],
+        "history_rewrite": {
+          "blocking": false,
+          "status": "optional-after-containment"
+        }
+      }
+    },
+    {
       "id": "hosted-signup-billing-replay",
       "summary": "Confirm hosted signup, org provisioning, billing-admin visibility, and webhook replay succeed in the real checkout path.",
       "owner": "project-owner",

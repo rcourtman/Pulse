@@ -735,6 +735,7 @@ func TestV6ControlDocsReferenceCanonicalDevelopmentProtocol(t *testing.T) {
 	matrix := readRepoFile(t, "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
 	assertContainsAll(t, "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md", matrix, []string{
 		"status.json.release_gates",
+		"historical-credential-containment",
 		"hosted-signup-billing-replay",
 		"paid-feature-entitlement-gating",
 		"rc-to-ga-promotion-readiness",
@@ -772,6 +773,14 @@ func TestStatusSchemaExistsAndDeclaresTypedStatusContract(t *testing.T) {
 		"\"proof_type\"",
 		"\"open_decision\"",
 		"\"resolved_decision\"",
+		"\"owner-action\"",
+		"\"release_gate_closure_contract\"",
+		"\"historical-credential-containment\"",
+		"\"credential_provider_closure_record\"",
+		"\"credential_replacement_deployment_record\"",
+		"\"provider_closure_records\"",
+		"\"replacement_deployment_records\"",
+		"\"optional-after-containment\"",
 		"\"lane_ids\"",
 		"\"direct-repo-sessions\"",
 		"\"const\": \"bounded-residual\"",

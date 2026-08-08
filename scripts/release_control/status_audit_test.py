@@ -156,6 +156,57 @@ def work_claim(
     }
 
 
+def credential_containment_contract(
+    *,
+    subject_id: str = "REDACTED-01",
+    complete: bool = False,
+) -> dict[str, object]:
+    contract: dict[str, object] = {
+        "kind": "historical-credential-containment",
+        "subject_ids": [subject_id],
+        "provider_closure_records": [],
+        "replacement_deployment_records": [],
+        "history_rewrite": {
+            "blocking": False,
+            "status": "optional-after-containment",
+        },
+    }
+    if complete:
+        contract["provider_closure_records"] = [
+            {
+                "subject_id": subject_id,
+                "disposition": "revoked",
+                "recorded_at": "2026-08-08T09:00:00Z",
+                "verifier": "security-verifier",
+                "evidence": [
+                    {
+                        "repo": "pulse",
+                        "path": "docs/provider-closure.md",
+                        "kind": "file",
+                        "evidence_tier": "production-observed",
+                    }
+                ],
+            }
+        ]
+        contract["replacement_deployment_records"] = [
+            {
+                "subject_id": subject_id,
+                "disposition": "validated",
+                "recorded_at": "2026-08-08T09:15:00Z",
+                "verifier": "deployment-verifier",
+                "evidence": [
+                    {
+                        "repo": "pulse",
+                        "path": "docs/replacement-validation.md",
+                        "kind": "file",
+                        "evidence_tier": "production-observed",
+                    }
+                ],
+            }
+        ]
+    return contract
+
+
 def non_completed_target_id(*preferred_ids: str) -> str:
     candidate_ids = preferred_ids or ("v6-ga-promotion", "v6-product-lane-expansion")
     for target_id in candidate_ids:
@@ -338,6 +389,32 @@ class StatusAuditTest(unittest.TestCase):
         args = parse_args(["--check", "--staged"])
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
+
+    def test_status_schema_types_fail_closed_credential_containment(self) -> None:
+        schema = status_audit.DEFAULT_STATUS_SCHEMA_CONTRACT["schema"]
+        definitions = schema["$defs"]
+        self.assertIn("owner-action", definitions["release_gate"]["properties"]["status"]["enum"])
+        self.assertEqual(
+            definitions["release_gate"]["properties"]["closure_contract"]["$ref"],
+            "#/$defs/release_gate_closure_contract",
+        )
+        closure = definitions["release_gate_closure_contract"]
+        self.assertEqual(
+            closure["properties"]["kind"]["const"], "historical-credential-containment"
+        )
+        self.assertEqual(
+            set(closure["required"]),
+            {
+                "kind",
+                "subject_ids",
+                "provider_closure_records",
+                "replacement_deployment_records",
+                "history_rewrite",
+            },
+        )
+        history_rewrite = definitions["credential_history_rewrite_posture"]["properties"]
+        self.assertIs(history_rewrite["blocking"]["const"], False)
+        self.assertEqual(history_rewrite["status"]["const"], "optional-after-containment")
 
     def test_audit_status_payload_resolves_sibling_repos_from_linked_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -590,6 +667,99 @@ class StatusAuditTest(unittest.TestCase):
                 },
             )
             self.assertEqual(report["readiness"]["current_target_workstreams"], [])
+
+    def test_rc_ready_gate_owner_action_blocks_prerelease(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(base_payload(release_gate_status="owner-action"))
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["repo_ready"])
+            self.assertFalse(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            self.assertEqual(report["release_gates"][0]["effective_status"], "owner-action")
+            self.assertIn(RC_RELEASE_GATES_BLOCKER, report["readiness"]["rc_blockers"])
+
+    def test_credential_containment_cannot_be_closed_by_prose_evidence_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+
+            payload = base_payload()
+            gate = payload["release_gates"][0]
+            gate["minimum_evidence_tier"] = "production-observed"
+            gate["evidence"][0]["evidence_tier"] = "production-observed"
+            gate["closure_contract"] = credential_containment_contract()
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertFalse(report["summary"]["rc_ready"])
+            self.assertFalse(report["summary"]["release_ready"])
+            credential_gate = report["release_gates"][0]
+            self.assertEqual(credential_gate["status"], "passed")
+            self.assertEqual(credential_gate["effective_status"], "closure-incomplete")
+            self.assertFalse(credential_gate["closure_contract_complete"])
+            self.assertEqual(credential_gate["closure_subject_count"], 1)
+            self.assertEqual(credential_gate["provider_closure_count"], 0)
+            self.assertEqual(credential_gate["replacement_deployment_count"], 0)
+            self.assertEqual(
+                credential_gate["missing_provider_closure_subject_ids"], ["REDACTED-01"]
+            )
+            self.assertEqual(
+                credential_gate["missing_replacement_deployment_subject_ids"], ["REDACTED-01"]
+            )
+            self.assertFalse(credential_gate["history_rewrite_blocking"])
+            pretty = render_pretty(report)
+            self.assertIn("effective=closure-incomplete", pretty)
+            self.assertIn("provider=0/1 replacement=0/1", pretty)
+            self.assertIn("history_rewrite_blocking=False", pretty)
+
+    def test_credential_containment_passes_only_with_complete_typed_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pulse = Path(tmp) / "pulse"
+            pulse.mkdir()
+            write_file(pulse, "docs/lane-proof.md")
+            write_file(pulse, "docs/proof_test.go")
+            write_file(pulse, "docs/hybrid_test.go")
+            write_file(pulse, "docs/provider-closure.md")
+            write_file(pulse, "docs/replacement-validation.md")
+
+            payload = base_payload()
+            gate = payload["release_gates"][0]
+            gate["minimum_evidence_tier"] = "production-observed"
+            gate["evidence"][0]["evidence_tier"] = "production-observed"
+            gate["closure_contract"] = credential_containment_contract(complete=True)
+
+            with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
+                "status_audit.load_subsystem_rules",
+                return_value=[],
+            ):
+                report = audit_status_payload(payload)
+
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["summary"]["rc_ready"])
+            credential_gate = report["release_gates"][0]
+            self.assertEqual(credential_gate["effective_status"], "passed")
+            self.assertTrue(credential_gate["closure_contract_complete"])
+            self.assertEqual(credential_gate["provider_closure_count"], 1)
+            self.assertEqual(credential_gate["replacement_deployment_count"], 1)
 
     def test_release_ready_gate_pending_blocks_only_release_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

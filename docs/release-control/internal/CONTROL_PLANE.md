@@ -63,6 +63,12 @@ model that active and future release profiles reuse.
    must declare the minimum evidence tier needed for closure, and the audit
    layer must treat lower-tier evidence as rehearsal only rather than as
    high-confidence completion.
+   When a gate carries a typed closure contract, raw `passed` status and prose
+   evidence are also insufficient: the audit must keep the gate blocking until
+   every required typed record is present, independently verified, and at the
+   gate's minimum tier. Destructive history remediation must remain a separate
+   nonblocking action when containment, rather than history shape, is the
+   release truth.
 10. Direction changes must be normalized.
    When the user states a durable product truth or changes the current product
    priority, the agent must classify that direction as a readiness assertion,

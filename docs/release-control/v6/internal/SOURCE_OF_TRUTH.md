@@ -300,6 +300,13 @@ Assertion design rules:
    High-risk release gates must declare the minimum evidence tier required for
    closure, and rehearsal evidence below that tier must remain blocking even
    when a dated record already exists.
+   A gate with a typed closure contract must additionally satisfy every
+   machine-audited record requirement. Narrative approval, a generic dated
+   record, or raw `passed` status cannot override missing typed evidence.
+   Historical credential containment requires provider/control-plane closure
+   plus replacement-deployment or verified-retirement evidence per redacted
+   subject; optional history rewriting stays separate and nonblocking after
+   containment.
 8. When a user states a durable product truth, normalize it into a readiness
    assertion, release gate, or open decision rather than leaving it as chat.
 9. Treat casual user language about consistency, seamlessness, drift, bypass

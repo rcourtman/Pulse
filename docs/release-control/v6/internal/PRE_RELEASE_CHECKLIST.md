@@ -13,9 +13,11 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - `status.json` is no longer overclaiming threshold-unmet gates as passed.
-- There are no remaining `rc-ready` high-risk release-gate blockers, and the
-  explicit `rc-publication-judgment` was approved on 2026-04-09 for the first
-  governed Pulse v6 RC.
+- Historical credential containment is an `owner-action` `rc-ready` gate across
+  Pulse and Pulse Pro. It remains blocked at zero of fifteen provider-closure
+  records and zero of fifteen replacement-deployment or verified-retirement
+  records. The separate self-hosted commercial owner decision also remains
+  open.
 - The latest RC publication judgment packet is
   `docs/release-control/v6/internal/records/rc-publication-judgment-packet-2026-04-09.md`.
   It now records approval, not a proof blocker.
@@ -37,6 +39,10 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - High-risk release confidence now lives in `docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
 ## Promotion Policy
+- [ ] Confirm `python3 scripts/release_control/status_audit.py --check --pretty`
+  reports the `historical-credential-containment` gate as effectively passed,
+  with complete provider and replacement record coverage. A raw `passed`
+  value, prose approval, or optional history rewrite is insufficient.
 - [ ] For a routine stable patch, run `./scripts/trigger-stable-patch.sh --dry-run <version>` from the exact pushed candidate SHA, wait for the whole run including `Verify Current Stable Demo Path (No Mutation)` to pass, then run `./scripts/trigger-stable-patch.sh <version>` once.
 - [ ] Confirm a routine stable patch has no same-version RC and no diff in the RC-required authentication/tenant, licensing/billing, persisted-data/migration, relay/mobile-trust, or installer/update/rollback boundaries. Otherwise use RC promotion or record the emergency hotfix reason.
 - [ ] Treat `Release Activation Commit Verdict` as the irreversible GitHub release result, and follow its exact linked `Release Convergence` run until `Customer Promotion Convergence Verdict` is green. A red convergence run is retriable customer-surface debt, not evidence that the committed release returned to draft.

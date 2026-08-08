@@ -168,6 +168,19 @@ def _blocker_detail(
         detail["highest_evidence_tier"] = item["highest_evidence_tier"]
     if "minimum_evidence_tier" in item:
         detail["minimum_evidence_tier"] = item["minimum_evidence_tier"]
+    if item.get("closure_contract_kind"):
+        detail["closure_contract_kind"] = item["closure_contract_kind"]
+        detail["closure_contract_complete"] = item["closure_contract_complete"]
+        detail["closure_subject_count"] = item["closure_subject_count"]
+        detail["provider_closure_count"] = item["provider_closure_count"]
+        detail["replacement_deployment_count"] = item["replacement_deployment_count"]
+        detail["missing_provider_closure_subject_ids"] = list(
+            item["missing_provider_closure_subject_ids"]
+        )
+        detail["missing_replacement_deployment_subject_ids"] = list(
+            item["missing_replacement_deployment_subject_ids"]
+        )
+        detail["history_rewrite_blocking"] = item["history_rewrite_blocking"]
     return detail
 
 
@@ -1275,13 +1288,34 @@ def validate_release_gates(
             valid_evidence_tiers=valid_evidence_tiers,
             errors=errors,
         )
+        closure_report = validate_release_gate_closure_contract(
+            raw.get("closure_contract"),
+            context=f"{context}.closure_contract",
+            active_repos=active_repos,
+            allowed_kinds=allowed_kinds,
+            valid_evidence_tiers=valid_evidence_tiers,
+            minimum_evidence_tier=minimum_evidence_tier,
+            errors=errors,
+        )
+        highest_evidence_tier = _highest_evidence_tier(
+            [
+                tier
+                for tier in [
+                    evidence_report["highest_evidence_tier"],
+                    closure_report["highest_evidence_tier"],
+                ]
+                if tier
+            ]
+        )
         evidence_threshold_met = _evidence_tier_meets_minimum(
-            evidence_report["highest_evidence_tier"],
+            highest_evidence_tier,
             minimum_evidence_tier,
         )
         if status == "passed":
-            if not evidence_report["all_evidence_present"]:
+            if not evidence_report["all_evidence_present"] or not closure_report["all_evidence_present"]:
                 effective_status = "evidence-missing"
+            elif closure_report["declared"] and not closure_report["complete"]:
+                effective_status = "closure-incomplete"
             elif not evidence_threshold_met:
                 effective_status = "threshold-unmet"
             else:
@@ -1292,7 +1326,9 @@ def validate_release_gates(
         if gate_id and summary and owner and blocking_level and minimum_evidence_tier and status and verification_doc:
             repo_ids = _derived_repo_ids_for_lane_refs(lane_refs, lane_repo_ids=lane_repo_ids)
             repo_ids = sorted(
-                set(repo_ids) | {repo for repo, _, _ in evidence_report["evidence_refs"]},
+                set(repo_ids)
+                | {repo for repo, _, _ in evidence_report["evidence_refs"]}
+                | {repo for repo, _, _ in closure_report["evidence_refs"]},
                 key=_repo_sort_key,
             )
             records.append(
@@ -1306,11 +1342,28 @@ def validate_release_gates(
                     "effective_status": effective_status,
                     "verification_doc": verification_doc,
                     "lane_ids": lane_refs,
-                    "all_evidence_present": evidence_report["all_evidence_present"],
-                    "evidence_count": len(evidence_report["resolved_evidence"]),
-                    "highest_evidence_tier": evidence_report["highest_evidence_tier"],
+                    "all_evidence_present": evidence_report["all_evidence_present"]
+                    and closure_report["all_evidence_present"],
+                    "evidence_count": len(evidence_report["resolved_evidence"])
+                    + closure_report["evidence_count"],
+                    "highest_evidence_tier": highest_evidence_tier,
                     "evidence_threshold_met": evidence_threshold_met,
-                    "missing_evidence": evidence_report["missing_evidence"],
+                    "missing_evidence": evidence_report["missing_evidence"]
+                    + closure_report["missing_evidence"],
+                    "closure_contract_kind": closure_report["kind"],
+                    "closure_contract_complete": closure_report["complete"],
+                    "closure_subject_count": closure_report["subject_count"],
+                    "provider_closure_count": closure_report["provider_closure_count"],
+                    "replacement_deployment_count": closure_report[
+                        "replacement_deployment_count"
+                    ],
+                    "missing_provider_closure_subject_ids": closure_report[
+                        "missing_provider_closure_subject_ids"
+                    ],
+                    "missing_replacement_deployment_subject_ids": closure_report[
+                        "missing_replacement_deployment_subject_ids"
+                    ],
+                    "history_rewrite_blocking": closure_report["history_rewrite_blocking"],
                     "repo_ids": repo_ids,
                     "cross_repo": len(repo_ids) > 1,
                 }
@@ -1322,6 +1375,205 @@ def validate_release_gates(
             errors.append("status.json release_gates must be sorted by id")
 
     return records
+
+
+def validate_release_gate_closure_contract(
+    raw_contract: Any,
+    *,
+    context: str,
+    active_repos: set[str],
+    allowed_kinds: set[str],
+    valid_evidence_tiers: set[str],
+    minimum_evidence_tier: str | None,
+    errors: list[str],
+) -> dict[str, Any]:
+    empty_report = {
+        "declared": False,
+        "kind": None,
+        "complete": True,
+        "all_evidence_present": True,
+        "evidence_count": 0,
+        "evidence_refs": [],
+        "missing_evidence": [],
+        "highest_evidence_tier": None,
+        "subject_count": 0,
+        "provider_closure_count": 0,
+        "replacement_deployment_count": 0,
+        "missing_provider_closure_subject_ids": [],
+        "missing_replacement_deployment_subject_ids": [],
+        "history_rewrite_blocking": None,
+    }
+    if raw_contract is None:
+        return empty_report
+    if not isinstance(raw_contract, dict):
+        errors.append(f"{context} must be an object when declared")
+        return {**empty_report, "declared": True, "complete": False}
+
+    kind = _require_string(raw_contract, "kind", errors, context=context)
+    if kind and kind != "historical-credential-containment":
+        errors.append(
+            f"{context}.kind must be 'historical-credential-containment', got {kind!r}"
+        )
+    subject_ids = _require_string_list(raw_contract, "subject_ids", errors, context=context)
+    if not subject_ids:
+        errors.append(f"{context}.subject_ids must be a non-empty list")
+    if len(subject_ids) != len(set(subject_ids)):
+        errors.append(f"{context}.subject_ids must not contain duplicates")
+    if subject_ids != sorted(subject_ids):
+        errors.append(f"{context}.subject_ids must be sorted lexicographically")
+    subject_id_set = set(subject_ids)
+
+    valid_provider_dispositions = {"revoked", "inventory-absent", "expired", "decommissioned"}
+    valid_replacement_dispositions = {"validated", "not-applicable-retired"}
+
+    def validate_records(
+        field: str,
+        *,
+        valid_dispositions: set[str],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        raw_records = raw_contract.get(field)
+        if not isinstance(raw_records, list):
+            errors.append(f"{context}.{field} must be a list")
+            return [], []
+        records: list[dict[str, Any]] = []
+        evidence_reports: list[dict[str, Any]] = []
+        for index, raw_record in enumerate(raw_records):
+            record_context = f"{context}.{field}[{index}]"
+            if not isinstance(raw_record, dict):
+                errors.append(f"{record_context} must be an object")
+                continue
+            subject_id = _require_string(raw_record, "subject_id", errors, context=record_context)
+            disposition = _require_string(raw_record, "disposition", errors, context=record_context)
+            recorded_at = _require_string(raw_record, "recorded_at", errors, context=record_context)
+            verifier = _require_string(raw_record, "verifier", errors, context=record_context)
+            if subject_id and subject_id not in subject_id_set:
+                errors.append(f"{record_context} references unknown subject_id {subject_id!r}")
+            if disposition and disposition not in valid_dispositions:
+                errors.append(f"{record_context} has invalid disposition {disposition!r}")
+            if recorded_at and not TIMESTAMP_RE.fullmatch(recorded_at):
+                errors.append(f"{record_context}.recorded_at must be an RFC3339 timestamp")
+            evidence_report = audit_evidence_refs(
+                raw_record.get("evidence"),
+                context=record_context,
+                active_repos=active_repos,
+                allowed_kinds=allowed_kinds,
+                valid_evidence_tiers=valid_evidence_tiers,
+                errors=errors,
+            )
+            record_tier_met = _evidence_tier_meets_minimum(
+                evidence_report["highest_evidence_tier"], minimum_evidence_tier
+            )
+            if subject_id and disposition and recorded_at and verifier:
+                records.append(
+                    {
+                        "subject_id": subject_id,
+                        "disposition": disposition,
+                        "record_tier_met": record_tier_met,
+                        "all_evidence_present": evidence_report["all_evidence_present"],
+                    }
+                )
+                evidence_reports.append(evidence_report)
+        record_ids = [record["subject_id"] for record in records]
+        if len(record_ids) != len(set(record_ids)):
+            errors.append(f"{context}.{field} must not contain duplicate subject_id records")
+        if record_ids != sorted(record_ids):
+            errors.append(f"{context}.{field} must be sorted by subject_id")
+        return records, evidence_reports
+
+    provider_records, provider_evidence = validate_records(
+        "provider_closure_records", valid_dispositions=valid_provider_dispositions
+    )
+    replacement_records, replacement_evidence = validate_records(
+        "replacement_deployment_records", valid_dispositions=valid_replacement_dispositions
+    )
+
+    provider_by_subject = {record["subject_id"]: record for record in provider_records}
+    replacement_by_subject = {record["subject_id"]: record for record in replacement_records}
+    for subject_id, replacement_record in replacement_by_subject.items():
+        if replacement_record["disposition"] != "not-applicable-retired":
+            continue
+        provider_record = provider_by_subject.get(subject_id)
+        if provider_record and provider_record["disposition"] != "decommissioned":
+            errors.append(
+                f"{context}.replacement_deployment_records subject {subject_id!r} may use "
+                "'not-applicable-retired' only with provider disposition 'decommissioned'"
+            )
+
+    history_rewrite = raw_contract.get("history_rewrite")
+    history_rewrite_valid = False
+    history_rewrite_blocking: bool | None = None
+    if not isinstance(history_rewrite, dict):
+        errors.append(f"{context}.history_rewrite must be an object")
+    else:
+        history_rewrite_blocking = history_rewrite.get("blocking")
+        history_rewrite_status = history_rewrite.get("status")
+        if history_rewrite_blocking is not False:
+            errors.append(f"{context}.history_rewrite.blocking must be false")
+        if history_rewrite_status != "optional-after-containment":
+            errors.append(
+                f"{context}.history_rewrite.status must be 'optional-after-containment'"
+            )
+        history_rewrite_valid = (
+            history_rewrite_blocking is False
+            and history_rewrite_status == "optional-after-containment"
+        )
+
+    provider_ids = set(provider_by_subject)
+    replacement_ids = set(replacement_by_subject)
+    missing_provider_ids = sorted(subject_id_set - provider_ids)
+    missing_replacement_ids = sorted(subject_id_set - replacement_ids)
+    all_record_evidence = provider_evidence + replacement_evidence
+    complete = (
+        kind == "historical-credential-containment"
+        and bool(subject_ids)
+        and not missing_provider_ids
+        and not missing_replacement_ids
+        and provider_ids == subject_id_set
+        and replacement_ids == subject_id_set
+        and all(record["all_evidence_present"] and record["record_tier_met"] for record in provider_records)
+        and all(
+            record["all_evidence_present"] and record["record_tier_met"]
+            for record in replacement_records
+        )
+        and all(
+            record["disposition"] != "not-applicable-retired"
+            or provider_by_subject.get(record["subject_id"], {}).get("disposition") == "decommissioned"
+            for record in replacement_records
+        )
+        and history_rewrite_valid
+    )
+    return {
+        "declared": True,
+        "kind": kind,
+        "complete": complete,
+        "all_evidence_present": all(
+            report["all_evidence_present"] for report in all_record_evidence
+        ),
+        "evidence_count": sum(len(report["resolved_evidence"]) for report in all_record_evidence),
+        "evidence_refs": [
+            evidence_ref
+            for report in all_record_evidence
+            for evidence_ref in report["evidence_refs"]
+        ],
+        "missing_evidence": [
+            missing
+            for report in all_record_evidence
+            for missing in report["missing_evidence"]
+        ],
+        "highest_evidence_tier": _highest_evidence_tier(
+            [
+                report["highest_evidence_tier"]
+                for report in all_record_evidence
+                if report["highest_evidence_tier"]
+            ]
+        ),
+        "subject_count": len(subject_ids),
+        "provider_closure_count": len(provider_ids),
+        "replacement_deployment_count": len(replacement_ids),
+        "missing_provider_closure_subject_ids": missing_provider_ids,
+        "missing_replacement_deployment_subject_ids": missing_replacement_ids,
+        "history_rewrite_blocking": history_rewrite_blocking,
+    }
 
 
 def validate_proof_commands(raw_commands: Any, *, context: str, errors: list[str]) -> list[dict[str, Any]]:
@@ -3178,6 +3430,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def render_pretty(report: dict[str, Any]) -> str:
     lines: list[str] = []
+
+    def append_closure_summary(gate: dict[str, Any], *, indent: str) -> None:
+        if not gate.get("closure_contract_kind"):
+            return
+        lines.append(
+            f"{indent}closure={gate['closure_contract_kind']} "
+            f"complete={gate['closure_contract_complete']} "
+            f"provider={gate['provider_closure_count']}/{gate['closure_subject_count']} "
+            f"replacement={gate['replacement_deployment_count']}/{gate['closure_subject_count']} "
+            f"history_rewrite_blocking={gate['history_rewrite_blocking']}"
+        )
     control_plane = report.get("control_plane", {})
     if control_plane:
         active_target = control_plane.get("active_target", {})
@@ -3380,6 +3643,7 @@ def render_pretty(report: dict[str, Any]) -> str:
                 f"repos={','.join(gate['repo_ids']) or '-'} "
                 f"lanes={','.join(gate['lane_ids']) or '-'}"
             )
+            append_closure_summary(gate, indent="    ")
     readiness = report.get("readiness", {})
     overclosed_release_gates = readiness.get("overclosed_release_gates", [])
     if overclosed_release_gates:
@@ -3434,6 +3698,7 @@ def render_pretty(report: dict[str, Any]) -> str:
                     f"subsystems={','.join(subsystem_ids) or '-'} "
                     f"repos={','.join(gate['repo_ids']) or '-'}"
                 )
+                append_closure_summary(gate, indent="      ")
     current_target_workstreams = readiness.get("current_target_workstreams", [])
     if current_target_workstreams:
         lines.append("current_target_workstreams:")
@@ -3505,6 +3770,7 @@ def render_pretty(report: dict[str, Any]) -> str:
                     f"repos={','.join(gate['repo_ids']) or '-'} "
                     f"lanes={','.join(gate['lane_ids']) or '-'}"
                 )
+                append_closure_summary(gate, indent="      ")
     if readiness.get("release_blockers"):
         lines.append("release_blockers:")
         for blocker in readiness["release_blockers"]:
@@ -3538,6 +3804,7 @@ def render_pretty(report: dict[str, Any]) -> str:
                     f"repos={','.join(gate['repo_ids']) or '-'} "
                     f"lanes={','.join(gate['lane_ids']) or '-'}"
                 )
+                append_closure_summary(gate, indent="      ")
     if report.get("warnings"):
         lines.append("warnings:")
         for warning in report["warnings"]:

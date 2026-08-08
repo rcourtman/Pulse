@@ -411,6 +411,12 @@ TLS-unverified receipts leave the claim at `implemented` or
 10. For v6 GA, attach the dated RC issue-closure record for the candidate so
     the final issue set and its dispositions are explicit in the promotion
     packet rather than implied.
+11. Attach the sanitized historical-credential containment closure packet.
+    Every declared Pulse and Pulse Pro redacted subject must have typed
+    provider/control-plane closure plus replacement-deployment or
+    verified-retirement evidence at the governed minimum tier. A raw gate
+    status, narrative approval, current-value difference, or optional history
+    rewrite cannot substitute for those records.
 
 ## Authority
 

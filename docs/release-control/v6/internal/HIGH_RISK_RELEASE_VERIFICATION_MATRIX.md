@@ -25,6 +25,50 @@ Companion drill:
   `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`
   and attach the resulting record to the applicable gate evidence.
 
+## Gate: `historical-credential-containment`
+
+- Why this is risky:
+  Historically reachable credential identities remain a live release-security
+  risk until the owning provider or control plane proves each old identity
+  dead. A different current value, a repository-secret timestamp, a successful
+  request with a replacement, or an approval paragraph does not establish
+  revocation.
+- Governed evidence surfaces:
+  `docs/release-control/v6/internal/status.json`
+  `docs/release-control/v6/internal/records/historical-credential-containment-open-2026-08-08.md`
+  `pulse-pro/docs/credential-containment-runbook.md`
+- Automated governance proof:
+  `python3 scripts/release_control/status_audit_test.py`
+  `python3 scripts/release_control/status_audit.py --check --pretty`
+- Owner action:
+  1. Execute the approved provider and deployment procedures without reading,
+     testing, printing, or comparing a historical credential.
+  2. For every redacted `closure_contract.subject_ids` entry, record one
+     authoritative provider/control-plane disposition and one
+     replacement-deployment validation or verified-retirement disposition.
+  3. Keep provider object identifiers and operational exports in the approved
+     restricted evidence location; commit only reviewed, sanitized evidence
+     references and metadata.
+  4. Have an independent verifier record each typed row at the required
+     `production-observed` evidence tier.
+  5. Run the status audit and confirm provider and replacement coverage both
+     equal the declared subject count before changing the gate to `passed`.
+- Pass when:
+  The typed closure contract covers every declared redacted subject exactly
+  once in both record sets, every record has present production-observed
+  evidence and a verifier timestamp, any `not-applicable-retired` replacement
+  row is paired with provider-side decommissioning, and the audit derives
+  `closure_contract_complete=true`.
+- Block release if:
+  Any subject is missing either record, evidence is missing or below the
+  required tier, provider death is inferred only from prose/current-value
+  differences/timestamps, or a retired replacement row lacks decommissioning
+  proof. Setting the raw gate status to `passed` while closure is incomplete
+  derives `closure-incomplete` and remains prerelease-blocking.
+- History rewrite:
+  Optional destructive history remediation is explicitly nonblocking and may
+  start only after containment. It cannot close or substitute for this gate.
+
 ## Gate: `hosted-signup-billing-replay`
 
 - Why this is risky:

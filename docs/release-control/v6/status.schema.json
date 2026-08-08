@@ -864,6 +864,7 @@
           "enum": [
             "pending",
             "blocked",
+            "owner-action",
             "passed"
           ]
         },
@@ -886,6 +887,150 @@
           "items": {
             "$ref": "#/$defs/evidence_reference"
           }
+        },
+        "closure_contract": {
+          "$ref": "#/$defs/release_gate_closure_contract"
+        }
+      }
+    },
+    "release_gate_closure_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "subject_ids",
+        "provider_closure_records",
+        "replacement_deployment_records",
+        "history_rewrite"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "historical-credential-containment"
+        },
+        "subject_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "provider_closure_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/credential_provider_closure_record"
+          }
+        },
+        "replacement_deployment_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/credential_replacement_deployment_record"
+          }
+        },
+        "history_rewrite": {
+          "$ref": "#/$defs/credential_history_rewrite_posture"
+        }
+      }
+    },
+    "credential_provider_closure_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_id",
+        "disposition",
+        "recorded_at",
+        "verifier",
+        "evidence"
+      ],
+      "properties": {
+        "subject_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "revoked",
+            "inventory-absent",
+            "expired",
+            "decommissioned"
+          ]
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$"
+        },
+        "verifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "credential_replacement_deployment_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_id",
+        "disposition",
+        "recorded_at",
+        "verifier",
+        "evidence"
+      ],
+      "properties": {
+        "subject_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "validated",
+            "not-applicable-retired"
+          ]
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$"
+        },
+        "verifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence_reference"
+          }
+        }
+      }
+    },
+    "credential_history_rewrite_posture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blocking",
+        "status"
+      ],
+      "properties": {
+        "blocking": {
+          "type": "boolean",
+          "const": false
+        },
+        "status": {
+          "type": "string",
+          "const": "optional-after-containment"
         }
       }
     },

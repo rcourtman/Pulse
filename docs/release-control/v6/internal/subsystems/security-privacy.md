@@ -608,8 +608,26 @@ tokens, and path-normalization variants.
     `public` payload as authoritative for `hasAuthentication` only; only a
     `privileged` payload supports the full assessment. Absent posture fields
     must not be read as disabled controls.
+15. Historical credential containment remains release governance, not a prose
+    security sign-off. Keep the rc-ready release gate fail-closed until every
+    redacted Pulse and Pulse Pro subject has typed provider/control-plane
+    closure plus replacement-deployment or verified-retirement evidence at the
+    required tier. Keep optional history rewriting separate and nonblocking
+    after containment.
 
 ## Current State
+
+### Historical credential containment is prerelease-blocking
+
+The `historical-credential-containment` release gate now owns the cross-repo
+containment boundary for the stable redacted Pulse identities and the redacted
+Pulse Pro credential roles. Its `owner-action` state blocks `rc_ready`, and the
+status audit refuses to make a raw `passed` state effective until both typed
+record sets cover every declared subject with production-observed evidence.
+The opening sanitized inventory is recorded in
+`docs/release-control/v6/internal/records/historical-credential-containment-open-2026-08-08.md`.
+History rewrite remains an optional post-containment operation and cannot
+satisfy the gate.
 
 ### Custom metric source authority is local-only and fail-closed
 
